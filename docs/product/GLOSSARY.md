@@ -33,7 +33,11 @@ the unit of participant confirmation and of dispute** — established by the app
 
 **Set** — a group of legs won under the format's set structure. In scope from the start.
 
-**Match** — the full contest between two participants under one format, composed of legs (and sets).
+**Match** — the full contest between two **competitors** under one format, composed of legs (and sets).
+
+**Competitor** — the entity that contests a match: a **Player**, a **Pair**, or a **Team**. Rating is
+always a property of the *player*, never of the competitor; a team rating would be a separately
+specified derived aggregate and does not yet exist.
 
 **Bust** — a visit that cannot legally be scored: it takes the remaining score below zero, leaves 1
 under double-out, or reaches exactly zero on a number the out-rule cannot finish. The remaining score
@@ -163,8 +167,16 @@ product**, including notifications and coaching insight.
 **Draw** — the assignment of entrants to bracket slots. Reversible only through a recorded
 correction.
 
-**Slot** — a bracket position, which may hold a player, be undetermined, be a bye, or be vacated by
-walkover or withdrawal. These are four different facts and must not share a rendering.
+**Slot** — a bracket position in a tournament, which may hold a competitor, be undetermined, be a
+bye, or be vacated by walkover or withdrawal. These are five different facts and must not share a
+rendering.
+
+**Fixture** — a scheduled meeting between two competitors in a league division. **Not a slot**: it has
+no parent-child dependency, carries a rearrangement lifecycle, can be *awarded* with no match played,
+and aggregates into a table rather than advancing a competitor.
+
+**Awarded** — a fixture outcome decided by the organiser without play. A distinct, auditable outcome
+type, never a synthetic scoreline.
 
 ## Development
 
