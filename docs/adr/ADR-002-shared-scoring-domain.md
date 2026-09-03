@@ -1,0 +1,72 @@
+# ADR-002 — Shared deterministic scoring domain
+
+**Status:** DEFERRED, with explicit criteria and a defined spike · **Date:** 2026-09-03
+
+This is the single decision that forces a rewrite if made wrongly, which is why it is not being made
+on the strength of an argument alone.
+
+## Context
+
+The scoring engine must produce identical results on iOS, Android and server validation. Two Gate 0
+specialists reached opposite conclusions:
+
+- The **mobile review** recommends three native implementations governed by a conformance corpus,
+  with rule *data* generated into all three languages. It rejects a shared Kotlin core on toolchain
+  burden, iOS debuggability, and the observation that agents debug Gradle and cross-compilation
+  failures badly.
+- The **backend review** recommends a shared Kotlin Multiplatform module, arguing it collapses the
+  drift surface from three implementations to one.
+
+Both are right about their own risk. Divergence in the *sequence-level* rules — throw order after a
+set boundary, undo-after-checkout, correcting a visit three legs back — would be a **player-facing
+integrity failure**, not merely a bug. Equally, a toolchain that blocks an iOS release during a
+tournament weekend is a real operational risk for a one-person team.
+
+## Decision
+
+**Defer the choice. Build the common prefix now.**
+
+Two things are prerequisites of *both* paths and are started immediately:
+
+1. **A pure, dependency-free, value-typed engine module** — no floating point, no clock access, no
+   randomness, no I/O, no exceptions for control flow. Integer arithmetic only. A small public API of
+   immutable structs and enums, which keeps the interop surface trivial if a shared core is later
+   adopted.
+2. **The versioned conformance corpus** specified in
+   [`../architecture/CONFORMANCE_CORPUS.md`](../architecture/CONFORMANCE_CORPUS.md). The corpus, not
+   any shared code, is the contract — and it is what makes a later replacement provably correct.
+
+## What this deferral honestly costs
+
+The corpus is a genuine common prefix and is never wasted. The engine module is *mostly* common. The
+**rule-table generator is not** — it is only needed on the three-implementation path. That is the
+real, acknowledged cost of deferring, and it is small relative to choosing wrongly.
+
+## Kill criteria — correctness, not ergonomics
+
+The spike must test the thing that actually decides this, not re-litigate a settled argument. Build
+time and debuggability are the grounds on which the mobile review already rejected a shared core;
+measuring them again decides nothing.
+
+**Migrate to a single shared core if either holds:**
+
+- **two or more genuine cross-platform divergences reach a human-tested build**, or
+- **the rule surface grows past X01 plus sets** (pairs, team formats, league variants, deciding-leg
+  rules).
+
+**Stay on three native implementations otherwise.** Under either outcome the corpus proves the
+result correct, which is why it is built first.
+
+## Consequences
+
+- No implementation is blocked: engine work starts immediately under constraints both paths share.
+- Every visit recorded from the first release is covered by the corpus, so no match carries unknown
+  provenance.
+- A divergence detector is available cheaply in production: every sync command carries the client's
+  computed outcome and engine version, the server recomputes, and a mismatch appends the server's
+  outcome and raises an alert. This turns the residual risk into a monitored metric.
+
+## Revisit trigger
+
+The kill criteria above, evaluated at every release. Also revisit if a fourth consumer appears (a web
+scorer), in which case add a target to a shared core rather than a fourth hand-written implementation.
