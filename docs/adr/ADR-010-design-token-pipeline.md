@@ -33,8 +33,13 @@ file is ever hand-edited.**
 ## CI gates
 
 1. Regenerate and fail on any diff — **a hand-edited platform token file breaks the build.**
-2. **Regenerate the contrast matrix and fail on any regression** against the committed baseline. This
-   is cheap and would have caught both the invisible focus ring and the failing live status.
+2. **Regenerate the contrast matrix and fail against absolute thresholds** — 4.5:1 for text, 3:1 for
+   boundaries and focus — **with a dated, itemised exception list**, not an open-ended baseline.
+
+   A regression gate against the current baseline would have *frozen* the 21 known failures rather
+   than caught them, including `live` on its own surface at 4.38:1. Each exception names the pair, the
+   ratio, and the design commission that will resolve it. An exception without a commission fails the
+   build.
 3. Reject raw colour values and off-scale font sizes in all three platform sources.
 4. Fail if any semantic token lacks a dark-mode value.
 
@@ -52,7 +57,10 @@ exist on either native platform.
 
 - Fonts are embedded per platform, not fetched at runtime; the design system says so itself, and a
   CDN reference also leaks user IPs on every launch.
-- The generated CSS keeps the web and organiser surface byte-comparable to the approved export.
+- The generated CSS reproduces the approved export's **structure and semantics** — not its bytes.
+  Byte-comparability was revision 1's stated consequence and it is incompatible with this record's
+  own gates: the export contains 48 dead tokens, 16 raw colour values and 10 off-scale font sizes,
+  all of which gate 3 rejects.
 
 ## Revisit trigger
 

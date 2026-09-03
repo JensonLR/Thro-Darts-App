@@ -58,8 +58,12 @@ pollute leg-difference tie-breaks and reward an unplayed match in any rating mod
 
 ## Consequences that must be built in from the start
 
-**Byes are computed, never carried by the UI.** For N entrants and bracket size B = 2^⌈log₂N⌉:
-byes = B − N, preliminary matches = (N − byes) / 2. The approved design gets this wrong (74 entrants
+**Byes are computed, never carried by the UI.** For N entrants and bracket size B — the next power of
+two at or above N — byes = B − N and preliminary matches = (N − byes) / 2.
+
+**Compute B by bit length, never by `2^ceil(log2(N))`.** Floating-point `log2` returns values very
+slightly above the integer for exact powers of two, which silently doubles the bracket for the exact
+inputs most likely to occur (64, 128, 256). The approved design gets this wrong (74 entrants
 shown as "10 byes" where 10 is the preliminary-match count and the true bye count is 54), which is
 exactly why the domain owns the arithmetic. Property test: for all N in 2…1024, the identity holds
 and every entrant appears exactly once.

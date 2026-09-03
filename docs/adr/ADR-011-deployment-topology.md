@@ -52,8 +52,39 @@ three times, assert one event and identical responses including rejections); the
 guard** (run the statistics suite against a corpus with zero dart rows and assert every dart-level
 metric reports unavailable); the API contract diff; the token and contrast gates from ADR-010;
 formatting, linting and static analysis; secret and dependency scanning; a money-type guard
-forbidding floating point in payment and scoring paths; and voice lints — no emoji in user-facing
+forbidding floating point in payment and scoring paths; **the pseudonymisation gate** — assert that
+every read model, export and public page can be regenerated from the pseudonymised source, which is
+what makes the design's deletion promise structural rather than a matter of discipline; and voice
+lints — no emoji in user-facing
 strings, and all user-facing text in a central catalogue so the product can be renamed.
+
+## Read-model rebuilds in production
+
+ADR-004 tests rebuildability by truncating and replaying. **That is a test procedure, not a production
+one** — a rebuild taking tens of minutes would be an outage of the organiser console.
+
+Read models carry a `projection_version`. A rebuild writes a **new version alongside the live one**
+and switches reads atomically when it completes; the old version is dropped after a hold period. No
+truncation of a live read model, ever.
+
+## The organiser console
+
+Served by the same application and the same container image, so the console's version cannot drift
+from the API it calls. No separate origin, which also avoids a second deployment pipeline and the
+cross-origin, cookie-domain and content-security surface that comes with one.
+
+## Tests that cannot run in CI
+
+Two properties this architecture depends on are not testable by a build server, and an unowned manual
+test is a test that runs once:
+
+- **Power-cut durability** on both reference devices — kill the process mid-visit, and cut power
+  mid-visit. **Every release candidate.**
+- **Two-device offline sync**, including the fully-contested case. **Every release candidate**, using
+  the environment-suffixed builds installed side by side.
+
+Both have a written procedure and a named device inventory. A release candidate without them is not a
+release candidate.
 
 ## Cost
 

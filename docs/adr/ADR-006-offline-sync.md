@@ -16,8 +16,18 @@ acknowledged.** Paint optimistically first; acknowledge only once durable. Rende
 persisting second loses a dart on any crash between, and the player will not notice until the scores
 disagree with the board.
 
-**Durability must be configured explicitly.** SQLite and Room default to a mode that survives process
-death but **not power loss**. Losing an acknowledged competitive visit has no repair path, so the
+**Durability must be configured explicitly, and the defaults differ by platform** — a distinction
+worth naming, because it points at different knobs. Room uses write-ahead logging with a relaxed sync
+that survives process death but **not power loss**. Stock SQLite on iOS defaults differently again,
+and — critically — **`fsync` on Apple platforms does not flush the drive's write cache**; that
+requires `PRAGMA fullfsync` and `checkpoint_fullfsync`, which default to off. Raising one sync
+setting is not sufficient on iOS.
+
+**This must be measured before the client architecture is fixed.** A true storage barrier per visit
+on low-end hardware can exceed the 20 ms budget in `LATENCY_BUDGETS.md`, and the stated fallback — a
+raw append-only journal with the database demoted to a projection — is a second storage engine on
+both clients, not a tweak. Measure durability latency on both reference devices in week one; if the
+budget and the durability rule conflict, **the durability rule wins** and the budget is restated. Losing an acknowledged competitive visit has no repair path, so the
 setting is raised and validated with real kill tests and power-cut tests on device — not assumed.
 
 The half-typed entry buffer is **UI draft state in a separate non-evidence table**. It must never be
@@ -28,10 +38,26 @@ foldable into the journal.
 A single writer is not sufficient on its own, because the approved dispute screen shows a per-leg
 `Confirmed` column authored by the participant who scored nothing.
 
-1. **A scoped offline scoring grant**, issued by the server at match-open — the moment the design
-   already draws ("Both players must confirm before scoring opens"). Server-authored, device-held,
-   and **valid without a network at scoring time**. This is what makes authority compatible with
-   offline scoring rather than contradicting it.
+1. **A scoped offline scoring grant**, issued by the server, held on the device, and **valid without
+   a network at scoring time**. This is what makes authority compatible with offline scoring rather
+   than contradicting it.
+
+   **Issued at check-in, not at match-open.** Match-open is the moment the design draws ("Both
+   players must confirm before scoring opens") — but nothing guarantees a network at that moment, and
+   a player arriving at a dead-signal venue must still be able to score. Check-in is inherently
+   online (it is how the organiser knows who is present), so grants for a player's whole event are
+   pre-issued there. Match-open then confirms participation locally.
+
+   **Lifetime: the competition session plus 24 hours**, renewed opportunistically whenever the device
+   has signal. A tournament day is ten hours or more, so anything shorter fails the case this exists
+   for. **Grants are revocable**, and an organiser reassigning a scorer revokes the old one.
+
+   **This is a deliberate, bounded exception to ADR-008's rule that permissions are never carried on
+   the client**, and the exposure is stated rather than hidden: a revoked scorer retains the ability
+   to *record* evidence on that device until the grant expires or the device reaches the network.
+   The mitigation is that recording is not the same as being believed — evidence recorded under a
+   revoked grant is accepted into the log, flagged, and routed to organiser review rather than
+   silently trusted. Evidence is never destroyed for an authorization reason.
 2. **Per-device evidence streams**, gapless per `(aggregate, device)`, never discarded and never
    deduplicated across devices. Two streams for one match is *corroboration*; divergence is a dispute.
 3. **Per-leg participant attestation** as a first-class event, authored by the non-scoring
@@ -62,8 +88,12 @@ which costs a permission and a privacy declaration for no first-release benefit.
    match finalised.
 6. **Compare the client's computed outcome.** A mismatch appends the server's outcome and raises an
    engine-divergence alert carrying both outcomes and both engine versions.
-7. **Append**, relying on the unique constraint; retry the read-validate-append cycle on conflict.
-8. **Write the receipt in the same transaction.**
+7. **Append**, relying on the `(match_id, device_id, device_seq)` uniqueness; **take a savepoint
+   first**, because a unique violation aborts the enclosing transaction and the retry must not lose
+   the receipt lookup. Roll back to the savepoint, re-read, revalidate, retry, bounded.
+8. **Write the receipt in the same transaction.** If the *receipt* key itself conflicts, that is a
+   concurrent duplicate of the same command: re-read it and return the stored response, never an
+   error.
 
 **Never accept an asserted result.** A client cannot say "I won 5–3"; the server derives the outcome
 from the visit stream. And the honest limit must be stated in the API contract: the server validates

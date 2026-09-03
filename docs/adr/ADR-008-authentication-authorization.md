@@ -49,6 +49,18 @@ That negation is the conflict-of-interest rule, and naive role-based access cont
 it. Organiser conflict of interest is not hypothetical here — it is structurally certain, because the
 same people organise and play.
 
+**Engine: relationship tuples in Postgres, evaluated by a single in-process decision point.** Not a
+dedicated authorization service. A separate engine would add a second datastore and a second
+durability domain against ADR-003's central argument, and the relation set here is small and
+slow-changing. The negation the conflict-of-interest rule needs is a query, not a product feature.
+
+**The cost of that choice, stated:** recursive relation resolution on every request, inside a 150 ms
+command budget. Mitigated by caching a subject's resolved relations for a **short, explicitly bounded
+window (30 seconds)**, invalidated eagerly on any role-change event. That window is the honest
+version of "permissions are never carried in the token" — they are not carried by the *client*, which
+is the property that matters, and a 30-second server-side cache is bounded and revocable in a way a
+token is not.
+
 **Enforcement:** one central decision point resolving `(subject, action, object)` before any handler
 runs, deny by default, no ambient admin bypass. **Permissions are resolved per request, never carried
 in the token**, or a removed organiser keeps power until expiry.
@@ -61,6 +73,14 @@ the other leak and must filter on the caller's relation, not on a client-supplie
 **Hidden UI is never sufficient.** Both clients are native, the API is the real surface, and
 offline-first *requires* the client to contain the complete command vocabulary in order to construct
 valid events with no server present. Hiding an action removes a hint, not a capability.
+
+## The offline grant is a bounded exception
+
+ADR-006 issues a device-held scoring grant valid without a network. That is, precisely, a permission
+carried on the client — the thing this record otherwise forbids. It is an exception, not an
+oversight, and it is bounded: it authorises **recording evidence only**, never reading another
+player's data, never an organiser action. Evidence recorded under a revoked grant is accepted and
+flagged for review rather than trusted or destroyed. See ADR-006 for lifetime and revocation.
 
 ## Age as an authorization dimension
 

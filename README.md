@@ -21,16 +21,17 @@ The product exists to help a player answer four questions:
 
 ## Current state — read this first
 
-This repository is at **Gate 0: foundation ingestion**. There is no product code yet, and
-that is deliberate. The build follows a gated process in which foundations are established
-and challenged before features are written.
+This repository is at **Gate 1: architecture**, with Gate 0 closed. The build follows a gated
+process in which foundations are established and challenged before features are written — each
+gate is attacked by a hostile critic, and Gate 0's and Gate 1's first drafts were both rejected
+and corrected rather than defended.
 
 | | |
 |---|---|
 | Repository at session start | Empty — no branches, no commits, no prior code. Greenfield. |
 | Design authority | Recovered and committed — see `docs/design/` |
-| Architecture | Not yet decided — Gate 1 |
-| Product code | None yet |
+| Architecture | 15 decision records, hostile-reviewed and corrected |
+| Product code | Scoring rule tables and conformance corpus — generated, verified, in CI |
 
 **Nothing in this repository should be described as production ready.** Claims of
 readiness, test coverage, security, offline reliability or rating validity are only made

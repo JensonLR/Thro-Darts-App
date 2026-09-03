@@ -19,9 +19,14 @@ the toolchain can catch mistakes in, ecosystem, testing, observability, operatio
 scaling, and code-sharing with native clients.
 
 - **TypeScript/Node** — best single-language story (server plus the organiser web console) and the
-  largest agent training corpus. But `number` is IEEE-754 and `JSON.parse` yields floats by default,
-  so every money and score boundary needs a guard against a constraint we are told never to violate.
-  No structural sharing with native clients.
+  largest agent training corpus. Loses on sum types and exhaustiveness for a closed rules algebra,
+  and shares nothing structurally with the native clients.
+
+  *A correction to revision 1*, which also argued that IEEE-754 numbers were disqualifying. That was
+  padding: every quantity here — scores, visit totals, leg counts, pence — is a small integer
+  represented exactly, and the engine emits no floating point at all by design. The sum-types
+  argument is genuine and sufficient; the numeric one was not, and it was being used to dismiss the
+  option that would have unified the console.
 - **Go** — the best pure operations story. But no sum types and no exhaustiveness checking, and the
   zero value makes an invalid leg state silently constructible. Wrong tool for a closed algebra.
 - **Kotlin/JVM** — sealed interfaces, data classes and exhaustive `when` give a compiler-checked
@@ -58,7 +63,19 @@ surface, where TypeScript would have unified it.
 
 **This is accepted with a mandatory mitigation, not waved away:** the organiser client's types and
 API surface are generated from an OpenAPI schema emitted by the server, and the generation is gated
-in CI, so the contract is machine-checked rather than hand-maintained. Secondary costs: the JVM's
+in CI, so the contract is machine-checked rather than hand-maintained.
+
+**That mitigation is itself unproven and must be proved before this record is relied upon.** The
+chosen server framework has no first-party route-derived schema generation, so the schema is either
+hand-maintained (which defeats the point) or produced by a plugin. **Acceptance condition: generate
+a working client for three endpoints from a server-emitted schema, in CI, within the first week.** If
+that takes more than two days, the mitigation is fiction and this record reopens while doing so is
+still free.
+
+*A note on the concession above:* revision 1 called the organiser console possibly "the larger half"
+of the engineering surface. The only measurement available contradicts that — the organiser kit is
+roughly 1,900 lines against 4,300 for the participant kit, and 9 screens of 42. The concession was
+generous rather than accurate; the risk is real but smaller than stated. Secondary costs: the JVM's
 memory footprint makes the cheapest hosting tier awkward, and the agent training corpus for this
 framework combination is thinner than for Node — expect more correction on plumbing, though not on
 domain code, where Kotlin is the strongest verified language available.
