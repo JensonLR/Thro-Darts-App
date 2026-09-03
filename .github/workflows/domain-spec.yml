@@ -1,0 +1,33 @@
+name: domain-spec
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+
+jobs:
+  conformance:
+    name: Scoring rules and conformance corpus
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      # The corpus is generated, never hand-edited. A drifted committed corpus fails here.
+      - name: Rule tables and vectors are not stale
+        run: |
+          python3 packages/domain-spec/generate.py
+          git diff --exit-code -- packages/domain-spec/rule-tables.json packages/domain-spec/vectors/
+
+      # Property tests against independent darts facts, plus the exhaustive transition space.
+      - name: Validate corpus (exhaustive)
+        run: |
+          python3 packages/domain-spec/generate.py --full
+          python3 packages/domain-spec/validate.py
+
+      # No engine implementations exist yet. When they do, each platform runs the corpus here
+      # as a required check, and any divergence fails the build.
+      - name: Platform conformance
+        run: echo "No engine implementations yet — see docs/adr/ADR-002-shared-scoring-domain.md"

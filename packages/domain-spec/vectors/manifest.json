@@ -1,0 +1,22 @@
+{
+  "specVersion": "1.0.0",
+  "files": {
+    "bust-rules.jsonl": {
+      "cases": 24,
+      "sha256": "a66b276b018ecc4d7edb0bd44c95cb5ae485fb7fc281e64ef145e659940368a6"
+    },
+    "checkouts.jsonl": {
+      "cases": 26,
+      "sha256": "9479bf7023e81f6d3a644bdec912e440da97c8d8fae22eaafe91fec82c0b6e23"
+    },
+    "leg-rotation.jsonl": {
+      "cases": 2,
+      "sha256": "8a2a6264a6f90e508e6a1858f930360ce101b691760009b6431c0debdafadae6"
+    },
+    "adversarial.jsonl": {
+      "cases": 3,
+      "sha256": "04a6e51f27e74f87d8047781720c83afd8a22cce2593632d0c6d944c7f07dee1"
+    }
+  },
+  "totalCases": 55
+}
