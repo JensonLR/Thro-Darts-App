@@ -104,6 +104,35 @@ results at a reduced factor rather than excluding them, is a policy change plus 
 — which the architecture supports by design, because rating is a replayable projection. **No migration,
 no data loss, and historical ratings can be re-derived under the new rule.**
 
+### Amendment — the participant confirmation surface does not exist
+
+**Added after hostile architecture review, which was right to catch this.**
+
+PD-002 requires evidence to reach `participant-confirmed`. Verified by reading all 33 participant
+screens: **there is no way for a player to confirm a result.** The match result screen's only action
+is "Back to tournament" — no confirm, no attest, no dispute. The "confirm" affordances that do exist
+are for *match-ready* ("Both players must confirm before scoring opens") and for *check-in*, neither
+of which attests to a result.
+
+The only attestation surface in the entire design is the **organiser's** per-leg `Confirmed` column,
+which reads from an event no participant client can author.
+
+**What this changes.** The decision stands, but its first-release path is different from what the
+record implied:
+
+- **Organiser-confirmed is authorable today.** The organiser kit has result verification and a bulk
+  "Confirm all THRØ-recorded" action. So in an organised competition — which is the flagship slice —
+  evidence reaches the eligibility floor through the organiser, without any new design.
+- **Player-to-player confirmation is not authorable at all** until the surface is designed. So a
+  casual or league match with no organiser present has no route to eligibility in the first release.
+
+**Consequence, stated plainly:** with the design as it stands, results outside an organised
+competition would not rate. That is a narrower product than "THRØ rates your darts", and it is a
+direct argument for commissioning the participant attestation surface early rather than treating it
+as a later refinement.
+
+**Added to the design commissions** as the item that gates this decision's full value.
+
 ### Escalate back to the founder if
 
 Field evidence shows a material share of competitive matches never receiving a second confirmation.

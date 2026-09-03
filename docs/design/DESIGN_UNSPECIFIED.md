@@ -1,6 +1,6 @@
 # What the approved design system does not specify
 
-Twenty-four behaviours that production needs and the approved system does not define. **None of
+Twenty-five behaviours that production needs and the approved system does not define. **None of
 these may be invented by engineering** — each is a design decision with brand or accessibility
 consequences. Where implementation is blocked on one, say so and escalate rather than choosing.
 
@@ -32,41 +32,50 @@ Sourced by reading the whole export: 61 components, 33 participant screens, 9 or
    "Sign-in method · Passkey". Passkey *recovery* and the organiser-verified **identity-claim** flow
    are the two highest-risk flows in the product and neither is drawn.
 
+7. **Participant result attestation.** There is no way for a player to confirm, or contest, a
+   result. The match result screen's only action is "Back to tournament". The organiser's per-leg
+   `Confirmed` column reads from an event no participant client can author, so the trust model's
+   `participant-confirmed` state is currently unreachable from the participant app.
+
+   **This gates rating eligibility** (decision PD-002): without it, only organiser-confirmed results
+   can rate, so anything outside an organised competition does not count. It is the single highest-
+   value item on this list.
+
 ## State and component gaps
 
-7. **The `quarantined` verification state.** The trust model needs it; `VerificationState`
+8. **The `quarantined` verification state.** The trust model needs it; `VerificationState`
    implements eight states and does not include it.
-8. **A `Stat` variant for unavailable or bounded values.** `Stat` accepts only label/value/delta/unit.
+9. **A `Stat` variant for unavailable or bounded values.** `Stat` accepts only label/value/delta/unit.
    Without an "unavailable" and an "approximate" rendering, statistics that cannot be honestly
    computed have nowhere truthful to go.
-9. **A pending / not-yet-eligible rating state.** The result screen shows rating movement beside a
+10. **A pending / not-yet-eligible rating state.** The result screen shows rating movement beside a
    verified badge only. There is no way to say *"your rating has not moved yet, because this result
    is not yet eligible"* — which will be the majority case at launch.
-10. **An offline-completed result state.** The result screen shows only the happy path (verified +
+11. **An offline-completed result state.** The result screen shows only the happy path (verified +
     synced). A match completed offline must honestly render as self-reported and queued.
-11. **A whole-match-contested dispute state.** The dispute screen's copy and its four actions assume
+12. **A whole-match-contested dispute state.** The dispute screen's copy and its four actions assume
     a dispute narrowed to one leg. Two players scoring the same match offline produces a fully
     contested match, which has no representation.
-12. **`bye` and `walkover` states on `TournamentProgress`**, which supports only won/lost/active/future.
-13. **Loading state for any screen.** `LoadingState` exists and is used by none of the 42 screens.
-14. **Disabled appearance** beyond a flat opacity multiplier (which produces real contrast failures).
-15. **`Dialog` and `Sheet` modal behaviour** — scrim, focus trap, dismissal, initial focus.
+13. **`bye` and `walkover` states on `TournamentProgress`**, which supports only won/lost/active/future.
+14. **Loading state for any screen.** `LoadingState` exists and is used by none of the 42 screens.
+15. **Disabled appearance** beyond a flat opacity multiplier (which produces real contrast failures).
+16. **`Dialog` and `Sheet` modal behaviour** — scrim, focus trap, dismissal, initial focus.
     `--color-scrim` is defined and unused; both currently claim `aria-modal` without being modal.
-16. **`DataTable` sort, pagination, empty, loading and error states.**
-17. **Invalid and impossible score feedback**, and remaining-score validation, on the keypad.
-18. **Multi-series charts, axes, y-scale policy and a data-table alternative.** `TrendChart`
+17. **`DataTable` sort, pagination, empty, loading and error states.**
+18. **Invalid and impossible score feedback**, and remaining-score validation, on the keypad.
+19. **Multi-series charts, axes, y-scale policy and a data-table alternative.** `TrendChart`
     auto-scales with no axis, so a 3-point and a 300-point rating change render identically.
 
 ## Behaviour and platform
 
-19. **Whether a user-selectable dark mode exists**, or dark is purely contextual. There is no
+20. **Whether a user-selectable dark mode exists**, or dark is purely contextual. There is no
     `prefers-color-scheme` block, and the organiser sidebar uses a second, hardcoded dark mechanism.
-20. **Whether the organiser has a dark theme** — it runs in the venue, often on a laptop in a dim hall.
-21. **Increased-contrast and reduced-transparency variants.** Given the boundary failures, an
+21. **Whether the organiser has a dark theme** — it runs in the venue, often on a laptop in a dim hall.
+22. **Increased-contrast and reduced-transparency variants.** Given the boundary failures, an
     increased-contrast variant is genuinely needed.
-22. **Landscape orientation for scoring.**
-23. **Truncation policy for long player, venue and team names.** Only 8 of 61 components handle overflow.
-24. **Haptics** — nothing is specified for the scoring keypad, where it matters most.
+23. **Landscape orientation for scoring.**
+24. **Truncation policy for long player, venue and team names.** Only 8 of 61 components handle overflow.
+25. **Haptics** — nothing is specified for the scoring keypad, where it matters most.
 
 Also outstanding, and smaller: **the brand assets** (`logo-chalk.svg` and `mark-chalk.svg` are both
 referenced throughout and neither was exported); the **icon legibility floor** (a 2px stroke on a 24
