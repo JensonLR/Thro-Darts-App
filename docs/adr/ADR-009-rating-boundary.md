@@ -18,8 +18,20 @@ mutated number, and the rating module never writes to match or trust.**
 
 ```
 rating.snapshot(player_id, model_id, model_version, parameter_hash, scale_epoch,
-                as_of_evidence_seq, rating, confidence, matches_counted, computed_at, published bool)
+                as_of_commit_xid, as_of_global_seq,        -- the evidence watermark: a PAIR
+                rating, confidence, matches_counted, computed_at, published bool)
 ```
+
+**The watermark is a composite, not a scalar.** Revision 1 wrote `as_of_evidence_seq`, presupposing a
+single global evidence sequence. ADR-004 has no such thing: `global_seq` alone is unsafe to order by
+(it is assigned at insert, not commit), and per-device sequences are not comparable across devices.
+Cross-device order is `(commit_xid, global_seq)`, so reproducibility — the primary key of the whole
+rating programme — requires both columns.
+
+**`RatingEvidenceView` is owned by `rating`.** It spans data from `match`, `trust` and `competition`,
+which under ADR-005 it may not join to directly; it is assembled from those modules' published
+projections. To make it deterministic to rebuild despite those projections lagging independently, the
+view is materialised **as of a stated watermark pair** and never "as of now".
 
 Four consequences follow from that row shape.
 

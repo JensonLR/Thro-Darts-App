@@ -18,7 +18,7 @@ pipelines, N observability setups, and the loss of the single transaction ADR-00
 |---|---|
 | **identity** | Accounts, credentials, devices, consent, display names — **all personal data** |
 | **competition** | Venues, boards, teams, leagues, divisions, seasons, fixtures, events, entries, check-in, draws, brackets |
-| **match** | The match aggregate and its evidence streams. **The only module that may append to the evidence log.** |
+| **match** | The match aggregate and its evidence streams. **The only module that may append *match-aggregate* streams.** |
 | **trust** | Evidence states, per-leg confirmations, disputes, adjudications, quarantine |
 | **rating** | Rating, form, rank, confidence, model versions, snapshots. **Pure downstream consumer** |
 | **live** | Subscriptions, board state, match queue, calling, presence |
@@ -30,6 +30,26 @@ tractable, and it is why `identity` is a module rather than a table.
 
 `rating` never writes to `match` or `trust`. That one-way dependency is what makes it safely
 re-runnable, which ADR-009 requires.
+
+### Who may append to the evidence log
+
+Revision 1 stated that `match` was the *only* module permitted to append. That was false the moment
+ADR-006 made per-leg attestation a first-class event (owned by `trust`) and ADR-009 made eligibility
+changes events (owned by `rating`) — and it was one of the three walls this record calls
+unrecoverable, so leaving it wrong would have meant punching a hole in the wall on day one.
+
+**The corrected rule: a module may append only to streams it owns.**
+
+| Stream | Owner |
+|---|---|
+| Match evidence — visits, legs, corrections | `match` |
+| Attestations, disputes, adjudications, quarantine | `trust` |
+| Eligibility decisions, rating computations | `rating` |
+| Competition lifecycle — draws, check-in, board assignment | `competition` |
+
+Each lives in its owning module's schema. `evidence.event` is `match`'s table, not a shared log —
+which is also why ADR-004 keys it by `match_id` rather than a generic stream identifier. Cross-module
+reads go through published projections, as everywhere else.
 
 ## The rules that make it modular rather than aspirational
 

@@ -1,6 +1,6 @@
 # ADR-002 — Shared deterministic scoring domain
 
-**Status:** DEFERRED, with explicit criteria and a defined spike · **Date:** 2026-09-03
+**Status:** DEFERRED, with explicit criteria · **Date:** 2026-09-03 (revision 2)
 
 This is the single decision that forces a rewrite if made wrongly, which is why it is not being made
 on the strength of an argument alone.
@@ -42,6 +42,21 @@ The corpus is a genuine common prefix and is never wasted. The engine module is 
 **rule-table generator is not** — it is only needed on the three-implementation path. That is the
 real, acknowledged cost of deferring, and it is small relative to choosing wrongly.
 
+## The spike, actually defined
+
+Revision 1's status line claimed "a defined spike" and then defined none — no scope, no owner, no
+budget, no exit condition. Hostile review was right to call that a false claim about the document's
+own contents. Defined now:
+
+**Scope.** Port the pure engine module to a second platform behind the conformance corpus, and run
+the corpus on both. Nothing else — no UI, no persistence, no networking.
+**Exit condition.** The corpus passes identically on both platforms, and the cost of the *second*
+rule change (not the first) is measured.
+**Budget.** Two days. If the toolchain has not produced a passing corpus run in two days, that is
+itself the answer.
+**What it must not test.** Build times and debugger ergonomics. Those were the grounds on which a
+shared core was rejected a priori, so measuring them again decides nothing.
+
 ## Kill criteria — correctness, not ergonomics
 
 The spike must test the thing that actually decides this, not re-litigate a settled argument. Build
@@ -53,6 +68,19 @@ measuring them again decides nothing.
 - **two or more genuine cross-platform divergences reach a human-tested build**, or
 - **the rule surface grows past X01 plus sets** (pairs, team formats, league variants, deciding-leg
   rules).
+
+**Two honest problems with these criteria**, raised by hostile review and accepted:
+
+*The second is already tripped.* ADR-012 models pairs and team fixtures now, and the corpus already
+carries set structure. Read strictly, the criterion fires today. It is therefore restated as:
+**the rule surface growing past X01, sets and pairs** — team fixtures being a competitor-resolution
+concern (ADR-012) rather than a scoring-rule concern.
+
+*The first is a lagging indicator.* It fires only once all implementations exist, which is when
+migrating is most expensive. It is retained because there is no leading indicator available, but it
+is deliberately paired with a **numeric threshold set now rather than later**: the divergence-alert
+rate is instrumented from the first release, and **any** divergence in the first 500 rated matches
+triggers the review, not two.
 
 **Stay on three native implementations otherwise.** Under either outcome the corpus proves the
 result correct, which is why it is built first.
