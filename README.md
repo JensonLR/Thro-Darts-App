@@ -40,13 +40,15 @@ where evidence exists to support them.
 
 ```
 docs/
-  adr/            Architecture decision records
-  architecture/   System architecture and domain models
-  design/         Design authority — provenance and the extracted design system
+  architecture/   Conformance corpus spec, latency budgets
+  design/         Design authority — provenance, inventory, contrast matrix,
+                  token health, what the system does not specify
     extracted/    Token layer, 61 components, 33 participant + 9 organiser screens
-  product/        Product definition, glossary, open decisions
-  runbooks/       Operational runbooks
+  product/        Glossary, open decisions, rating research harness
+FOUNDATION_ACCEPTANCE.md   Gate 0 report
 ```
+
+`docs/adr/` and `docs/runbooks/` will appear when Gate 1 produces their first entries.
 
 ## Design authority
 
