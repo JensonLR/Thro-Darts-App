@@ -1,0 +1,352 @@
+/* THRØ product type families.
+   Archivo Variable  — interface + editorial
+   IBM Plex Sans Condensed — sport data / numerals
+   Served from the Google Fonts CDN. Production (iOS/Android) must embed the
+   binaries locally; see handoff/TYPOGRAPHY_TOKENS.md. No silent substitution. */
+/* vietnamese */
+
+/* latin-ext */
+
+/* latin */
+
+/* vietnamese */
+
+/* latin-ext */
+
+/* latin */
+
+/* vietnamese */
+
+/* latin-ext */
+
+/* latin */
+
+/* vietnamese */
+
+/* latin-ext */
+
+/* latin */
+
+/* vietnamese */
+
+/* latin-ext */
+
+/* latin */
+
+/* cyrillic-ext */
+
+/* vietnamese */
+
+/* latin-ext */
+
+/* latin */
+
+/* cyrillic-ext */
+
+/* vietnamese */
+
+/* latin-ext */
+
+/* latin */
+
+/* cyrillic-ext */
+
+/* vietnamese */
+
+/* latin-ext */
+
+/* latin */
+
+
+
+:root{
+/* ---- Brand palette (canonical, do not mutate) ---- */
+--thro-chalk:#F7F6F2;
+--thro-chalk-raised:#FFFFFF;
+--thro-chalk-sunken:#EFEDE7;
+--thro-chalk-hairline:#DFDCD3;
+--thro-ink:#101211;
+--thro-ink-raised:#1B1F1D;
+--thro-ink-sunken:#080A09;
+--thro-ink-hairline:#2C312E;
+--thro-green:#0F3D2E;
+--thro-green-deep:#174F3C;
+--thro-green-tint:#E6EDE9;
+--thro-green-onink:#57A385;
+--thro-pewter:#717875; /* icons, dividers, 18px+ only — 4.2:1 on Chalk */
+--thro-pewter-light:#9CA29F;
+--thro-pewter-dark:#565C59;
+--thro-bronze:#A8753B;
+--thro-bronze-tint:#F2E9DD;
+--thro-bronze-onink:#C9975C;
+--thro-white:#FFFFFF;
+
+/* ---- Semantic status hues ---- */
+--thro-success:#1E6B47;
+--thro-warning:#8A5A0B;
+--thro-error:#8C1D18;
+--thro-info:#1F5470;
+--thro-live:#C8371F;
+--thro-pending:#6C6250;
+--thro-offline:#565C59;
+--thro-verified:#0F3D2E;
+--thro-disputed:#8A4B17;
+
+/* ---- Semantic aliases: LIGHT (default, primary experience) ---- */
+--color-background-primary:var(--thro-chalk);
+--color-background-secondary:var(--thro-chalk-sunken);
+--color-background-raised:var(--thro-chalk-raised);
+--color-background-inverse:var(--thro-ink);
+--color-background-brand:var(--thro-green);
+--color-background-brand-subtle:var(--thro-green-tint);
+--color-surface-primary:var(--thro-chalk-raised);
+--color-surface-secondary:var(--thro-chalk-sunken);
+--color-surface-focus:var(--thro-ink);
+--color-surface-brand:var(--thro-green);
+--color-text-primary:var(--thro-ink);
+--color-text-secondary:#5C6360; /* pewter-dark — 5.7:1 on Chalk, safe for 13px */
+--color-text-tertiary:#6B726F; /* 4.6:1 on Chalk — non-critical support only */
+--color-text-inverse:var(--thro-chalk);
+--color-text-inverse-secondary:#A7ADAA;
+--color-text-brand:var(--thro-green);
+--color-text-achievement:var(--thro-bronze);
+--color-border-default:var(--thro-chalk-hairline);
+--color-border-strong:#C3BFB4;
+--color-border-focus:var(--thro-ink);
+--color-border-brand:var(--thro-green);
+--color-border-inverse:var(--thro-ink-hairline);
+--color-status-success:var(--thro-success);
+--color-status-warning:var(--thro-warning);
+--color-status-error:var(--thro-error);
+--color-status-info:var(--thro-info);
+--color-status-live:var(--thro-live);
+--color-status-pending:var(--thro-pending);
+--color-status-offline:var(--thro-offline);
+--color-status-verified:var(--thro-verified);
+--color-status-disputed:var(--thro-disputed);
+--color-status-success-surface:#E4EFE9;
+--color-status-warning-surface:#F6EEDC;
+--color-status-error-surface:#F5E5E3;
+--color-status-info-surface:#E3ECF1;
+--color-status-live-surface:#FBE7E2;
+--color-status-neutral-surface:var(--thro-chalk-sunken);
+--color-chart-primary:var(--thro-green);
+--color-chart-secondary:var(--thro-pewter);
+--color-chart-reference:var(--thro-chalk-hairline);
+--color-chart-positive:var(--thro-success);
+--color-chart-negative:var(--thro-error);
+--color-focus-ring:var(--thro-green-deep);
+--color-scrim:rgba(16,18,17,0.48);
+}
+
+/* ---- Semantic aliases: DARK (scoring, live, venues, broadcast) ---- */
+[data-theme="dark"]{
+--color-background-primary:var(--thro-ink);
+--color-background-secondary:var(--thro-ink-raised);
+--color-background-raised:var(--thro-ink-raised);
+--color-background-inverse:var(--thro-chalk);
+--color-background-brand:var(--thro-green-deep);
+--color-background-brand-subtle:#152E25;
+--color-surface-primary:var(--thro-ink-raised);
+--color-surface-secondary:var(--thro-ink-sunken);
+--color-surface-focus:var(--thro-chalk);
+--color-surface-brand:var(--thro-green-deep);
+--color-text-primary:var(--thro-chalk);
+--color-text-secondary:#A7ADAA;
+--color-text-tertiary:#7C8380;
+--color-text-inverse:var(--thro-ink);
+--color-text-inverse-secondary:var(--thro-pewter);
+--color-text-brand:var(--thro-green-onink);
+--color-text-achievement:var(--thro-bronze-onink);
+--color-border-default:var(--thro-ink-hairline);
+--color-border-strong:#3E443F;
+--color-border-focus:var(--thro-chalk);
+--color-border-brand:var(--thro-green-onink);
+--color-border-inverse:var(--thro-chalk-hairline);
+--color-status-success:#4FB183;
+--color-status-warning:#DFA53A;
+--color-status-error:#E8756A;
+--color-status-info:#6FB2D6;
+--color-status-live:#F0654B;
+--color-status-pending:#B3A98F;
+--color-status-offline:#9CA29F;
+--color-status-verified:#57A385;
+--color-status-disputed:#DE9557;
+--color-status-success-surface:#12291F;
+--color-status-warning-surface:#2C2314;
+--color-status-error-surface:#2E1815;
+--color-status-info-surface:#152730;
+--color-status-live-surface:#31170F;
+--color-status-neutral-surface:#22261F;
+--color-chart-primary:var(--thro-green-onink);
+--color-chart-secondary:#7C8380;
+--color-chart-reference:#2C312E;
+--color-chart-positive:#4FB183;
+--color-chart-negative:#E8756A;
+--color-focus-ring:var(--thro-green-onink);
+--color-scrim:rgba(8,10,9,0.64);
+}
+
+:root{
+--font-ui:"Archivo","Archivo Variable",system-ui,-apple-system,"Segoe UI",sans-serif;
+--font-sport:"IBM Plex Sans Condensed","Archivo",system-ui,sans-serif;
+
+/* families by role */
+--typography-family-ui:var(--font-ui);
+--typography-family-sport:var(--font-sport);
+
+/* weights */
+--font-weight-regular:400;
+--font-weight-medium:500;
+--font-weight-semibold:600;
+--font-weight-bold:700;
+--font-weight-extrabold:800;
+
+/* size / line-height / tracking triplets (px == pt at 1x) */
+--typography-sport-hero-size:72px;
+--typography-sport-hero-line:68px;
+--typography-sport-hero-tracking:-0.02em;
+--typography-score-hero-size:96px;
+--typography-score-hero-line:88px;
+--typography-score-hero-tracking:-0.03em;
+--typography-rating-hero-size:56px;
+--typography-rating-hero-line:54px;
+--typography-rating-hero-tracking:-0.02em;
+--typography-display-size:40px;
+--typography-display-line:42px;
+--typography-display-tracking:-0.015em;
+--typography-heading-1-size:32px;
+--typography-heading-1-line:36px;
+--typography-heading-2-size:25px;
+--typography-heading-2-line:30px;
+--typography-heading-3-size:21px;
+--typography-heading-3-line:26px;
+--typography-body-large-size:18px;
+--typography-body-large-line:26px;
+--typography-body-default-size:17px;
+--typography-body-default-line:25px;
+--typography-label-default-size:15px;
+--typography-label-default-line:20px;
+--typography-label-strong-size:14px;
+--typography-label-strong-line:18px;
+--typography-metadata-size:13px;
+--typography-metadata-line:17px;
+--typography-eyebrow-size:13px;
+--typography-eyebrow-line:16px;
+--typography-eyebrow-tracking:0.09em;
+--typography-numeric-feature:"tnum" 1,"lnum" 1; /* @kind other */
+}
+
+:root{
+--spacing-1:4px;
+--spacing-2:8px;
+--spacing-3:12px;
+--spacing-4:16px;
+--spacing-5:20px;
+--spacing-6:24px;
+--spacing-7:32px;
+--spacing-8:40px;
+--spacing-9:48px;
+--spacing-10:64px;
+--spacing-11:96px;
+
+/* semantic */
+--space-gutter-ios:20px;
+--space-gutter-android:16px;
+--space-screen-gutter:var(--space-gutter-ios);
+--space-section-gap:32px;
+--space-group-gap:16px;
+--space-row-gap:12px;
+--space-inline-gap:8px;
+--space-control-pad-x:20px;
+--space-control-pad-y:14px;
+--touch-target-minimum:44px;
+--touch-target-scoring:64px;
+}
+
+:root{
+--radius-none:0px;
+--radius-small:2px;
+--radius-medium:6px;
+--radius-large:10px;
+--radius-xlarge:14px;
+--radius-pill:999px;
+--radius-circle:50%;
+/* semantic */
+--radius-control:var(--radius-medium);
+--radius-field:var(--radius-medium);
+--radius-card:var(--radius-large);
+--radius-sheet:var(--radius-xlarge);
+--radius-status:var(--radius-pill);
+--radius-keypad:var(--radius-large);
+}
+
+:root{
+--border-width-hairline:1px;
+--border-width-strong:2px;
+--border-width-focus:2px;
+--border-hairline:var(--border-width-hairline) solid var(--color-border-default);
+--border-strong:var(--border-width-strong) solid var(--color-border-strong);
+--border-brand:var(--border-width-strong) solid var(--color-border-brand);
+--rule-section:var(--border-width-hairline) solid var(--color-border-default);
+--focus-ring-width:2px;
+--focus-ring-offset:2px;
+}
+
+:root{
+/* THRØ is a flat, structural system. Elevation is rare and never decorative. */
+--elevation-0:none;
+--elevation-1:0 1px 0 0 var(--color-border-default);
+--elevation-2:0 2px 8px rgba(16,18,17,0.06);
+--elevation-3:0 8px 24px rgba(16,18,17,0.10);
+--elevation-sheet:0 -8px 32px rgba(16,18,17,0.14);
+--elevation-nav:0 -1px 0 0 var(--color-border-default);
+}
+[data-theme="dark"]{
+--elevation-1:0 1px 0 0 var(--color-border-default);
+--elevation-2:0 2px 8px rgba(0,0,0,0.40);
+--elevation-3:0 8px 24px rgba(0,0,0,0.55);
+--elevation-sheet:0 -8px 32px rgba(0,0,0,0.6);
+}
+
+:root{
+/* SET → THROW → IMPACT → RESOLVE */
+--motion-duration-instant:80ms; /* @kind other */
+--motion-duration-fast:140ms; /* @kind other */
+--motion-duration-standard:220ms; /* @kind other */
+--motion-duration-emphasis:340ms; /* @kind other */
+--motion-duration-resolve:480ms; /* @kind other */
+--motion-easing-set:cubic-bezier(0.32,0.72,0,1); /* @kind other */
+--motion-easing-throw:cubic-bezier(0.2,0.9,0.1,1); /* @kind other */
+--motion-easing-impact:cubic-bezier(0.16,1,0.3,1); /* @kind other */
+--motion-easing-resolve:cubic-bezier(0.4,0,0.2,1); /* @kind other */
+--motion-easing-exit:cubic-bezier(0.4,0,1,1); /* @kind other */
+--motion-travel-small:6px; /* @kind other */
+--motion-travel-medium:12px; /* @kind other */
+--motion-travel-large:24px; /* @kind other */
+--motion-scale-impact:1.02; /* @kind other */
+}
+@media (prefers-reduced-motion:reduce){
+:root{
+--motion-duration-instant:0ms; /* @kind other */
+--motion-duration-fast:0ms; /* @kind other */
+--motion-duration-standard:0ms; /* @kind other */
+--motion-duration-emphasis:0ms; /* @kind other */
+--motion-duration-resolve:0ms; /* @kind other */
+--motion-travel-small:0px; /* @kind other */
+--motion-travel-medium:0px; /* @kind other */
+--motion-travel-large:0px; /* @kind other */
+--motion-scale-impact:1; /* @kind other */
+}
+}
+
+*,*::before,*::after{box-sizing:border-box}
+body{margin:0;background:var(--color-background-primary);color:var(--color-text-primary);font-family:var(--font-ui);font-size:var(--typography-body-default-size);line-height:var(--typography-body-default-line);-webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility}
+a{color:var(--color-text-brand);text-decoration:none;border-bottom:1px solid color-mix(in oklab,var(--color-text-brand) 35%,transparent)}
+a:hover{color:var(--thro-green-deep);border-bottom-color:var(--thro-green-deep)}
+h1,h2,h3,h4,p{margin:0}
+button{font-family:inherit}
+.thro-sport{font-family:var(--font-sport);font-variant-numeric:tabular-nums lining-nums;font-feature-settings:"tnum" 1,"lnum" 1}
+.thro-eyebrow{font-family:var(--font-ui);font-size:var(--typography-eyebrow-size);line-height:var(--typography-eyebrow-line);letter-spacing:var(--typography-eyebrow-tracking);text-transform:uppercase;font-weight:var(--font-weight-semibold);color:var(--color-text-secondary)}
+.thro-num{font-variant-numeric:tabular-nums lining-nums}
+:focus-visible{outline:var(--focus-ring-width) solid var(--color-focus-ring);outline-offset:var(--focus-ring-offset)}
