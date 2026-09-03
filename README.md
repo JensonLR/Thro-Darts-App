@@ -40,6 +40,7 @@ where evidence exists to support them.
 
 ```
 docs/
+  adr/           Architecture decision records
   architecture/   Conformance corpus spec, latency budgets
   design/         Design authority — provenance, inventory, contrast matrix,
                   token health, what the system does not specify
@@ -48,7 +49,7 @@ docs/
 FOUNDATION_ACCEPTANCE.md   Gate 0 report
 ```
 
-`docs/adr/` and `docs/runbooks/` will appear when Gate 1 produces their first entries.
+`docs/runbooks/` will appear when there is something to operate.
 
 ## Design authority
 

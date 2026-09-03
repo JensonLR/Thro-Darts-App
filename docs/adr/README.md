@@ -17,6 +17,7 @@ a guess wearing a suit.
 | [009](ADR-009-rating-boundary.md) | Rating service boundary | Accepted |
 | [010](ADR-010-design-token-pipeline.md) | Design token pipeline | Accepted |
 | [011](ADR-011-deployment-topology.md) | Deployment topology and environments | Accepted |
+| [012](ADR-012-competition-model.md) | Competition model: competitor, competition, fixture | Accepted |
 
 ## Standing constraint on all of them
 
