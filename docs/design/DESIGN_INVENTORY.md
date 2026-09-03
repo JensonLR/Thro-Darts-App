@@ -58,13 +58,17 @@ Navigation is removed during active scoring and immersive states.
 **9 organiser screens.** A separate large-screen shell with a sidebar and an
 organisation/role footer. Organiser workflows are not forced into participant mobile UI.
 
-## Icon set — 0 icons
+## Icon set — 70 icons
 
+Generated from Lucide (MIT licence), delivered as inner SVG markup only; `Icon.jsx`
+supplies the 24×24 viewBox, 2px stroke and round caps. Licence is permissive and poses
+no packaging obstacle for iOS, Android or web.
 
+`accessibility`, `arrow-down`, `arrow-left`, `arrow-right`, `arrow-up`, `award`, `bell`, `bell-ring`, `calendar`, `chart-no-axes-column`, `check`, `chevron-down`, `chevron-left`, `chevron-right`, `chevron-up`, `circle`, `circle-alert`, `circle-check`, `circle-dot`, `circle-question-mark`, `circle-slash`, `circle-user`, `circle-x`, `clipboard-check`, `clock`, `cloud-check`, `cloud-off`, `compass`, `ellipsis`, `eye`, `eye-off`, `file-pen`, `flag`, `gavel`, `git-fork`, `globe`, `grid-2x2`, `heart`, `house`, `info`, `lightbulb`, `list-ordered`, `loader`, `lock`, `log-out`, `map-pin`, `minus`, `move-right`, `pencil-line`, `play`, `plus`, `radio`, `refresh-cw`, `rotate-ccw`, `search`, `settings`, `share`, `shield`, `shield-check`, `smartphone`, `target`, `trending-up`, `triangle-alert`, `trophy`, `undo-2`, `user`, `users`, `video`, `wifi-off`, `x`
 
 ## Totals
 
 - **61** components
 - **33** participant screens
 - **9** organiser screens
-- **0** icons
+- **70** icons
