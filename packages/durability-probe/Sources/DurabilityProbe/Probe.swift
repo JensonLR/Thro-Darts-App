@@ -251,7 +251,9 @@ public enum Probe {
         return samples
     }
 
-    private static func exec(_ handle: OpaquePointer, _ sql: String) throws {
+    // Internal rather than private: KillProbe configures the same pragmas on the same handle,
+    // and a second copy of this would be a second place for the pragma order to drift.
+    static func exec(_ handle: OpaquePointer, _ sql: String) throws {
         var error: UnsafeMutablePointer<CChar>?
         if sqlite3_exec(handle, sql, nil, nil, &error) != SQLITE_OK {
             let message = error.map { String(cString: $0) } ?? "unknown"

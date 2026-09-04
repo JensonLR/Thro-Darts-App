@@ -130,11 +130,35 @@ One limit of the probe itself, worth stating so the numbers are not over-read: *
 latency, not durability.** The guard test proves the pragmas changed the system's behaviour; it does
 not prove the write reached NAND. Apple SSDs with power-loss-protected caches can acknowledge a
 flush quickly and honestly, and a drive that lied about it would look identical here. Only the
-power-cut test distinguishes those two, which is why this ADR asks for one and why the probe alone
-cannot close the requirement.
+power-cut test distinguishes those two, which is why this ADR asks for one and why neither the probe
+nor the kill test below can close the requirement.
 
-**Still outstanding: the SE-class iPhone run, the Android reference device, and the kill and
-power-cut tests.**
+### Kill test — passing on the flagship
+
+The process is `SIGKILL`ed mid-transaction while writing visits under `synchronous=FULL` +
+`fullfsync`, then the journal is reopened and compared against the acknowledgements the console
+recorded before the kill.
+
+| device | date | acknowledged | integrity | holes | verdict |
+|---|---|---|---|---|---|
+| `iPhone15,3`, iOS 26.1 (23B85) | 2026-09-04 | 1523 | ok | none | **PASS — nothing acknowledged was lost** |
+
+`SIGKILL` rather than `exit()`, because `exit()` runs atexit handlers and flushes buffers — exactly
+what a crash does not do, so a kill test built on it tests the happy path and passes when it should
+not. The run is automated end to end (`scripts/run-kill-test-on-device.sh`), because ADR-011 asks for
+it on every release candidate and a test needing someone to tap a phone in the right order at the
+right moment is a test that gets skipped under deadline.
+
+**This is the weaker of the two tests ADR-006 asks for, and it does not stand in for the other.**
+Process death leaves the kernel, the filesystem and the drive running, so anything SQLite handed to
+the kernel still lands. This test would pass on `synchronous=NORMAL` — the configuration this ADR
+exists to reject. It says the journal is not corrupted by a crash and that no acknowledged visit
+vanished. It says nothing about whether `fullfsync` reaches NAND, which is the entire question.
+Reporting a green kill test as durability would be the same error as reporting the CI latency
+figure as the budget answer.
+
+**Still outstanding: the SE-class iPhone run, the Android reference device, and the power-cut
+test.**
 `docs/runbooks/DURABILITY_MEASUREMENT.md` is the procedure; `ProbeView` is a one-tap front end so the
 run does not require setting up a test target. Record device model and OS version with the numbers —
 without those the figures are unattributable and cannot be compared to a later run.
