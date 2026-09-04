@@ -125,6 +125,11 @@ public class Attestations(private val connection: Connection) {
             .filterValues { it.size >= legsPlayed && legsPlayed > 0 }
             .map { (actor, list) -> Confirmation(actor, list.maxOf { it.at }) }
 
+        // Disputes and quarantine are read from the store rather than passed in, so that no caller
+        // can assemble a provenance that omits them and get a friendlier answer.
+        val disputes = openDisputes(matchId)
+        val quarantine = activeQuarantine(matchId)
+
         return Provenance(
             matchId = matchId,
             outcomeType = outcome,
@@ -132,7 +137,58 @@ public class Attestations(private val connection: Connection) {
             enteredBy = match.homeId,
             participants = match.participants,
             confirmations = complete,
+            disputes = disputes,
+            corrections = correctionCount(matchId),
+            quarantine = quarantine,
         )
+    }
+
+    private fun openDisputes(matchId: UUID): List<thro.trust.Dispute> {
+        val out = mutableListOf<thro.trust.Dispute>()
+        connection.prepareStatement(
+            "SELECT raised_by, raised_at, leg_ordinal, resolved_at FROM trust.dispute WHERE match_id = ?",
+        ).use { ps ->
+            ps.setObject(1, matchId)
+            ps.executeQuery().use { rs ->
+                while (rs.next()) {
+                    out += thro.trust.Dispute(
+                        raisedBy = rs.getObject("raised_by") as UUID,
+                        raisedAt = rs.getTimestamp("raised_at").toInstant(),
+                        legOrdinal = rs.getObject("leg_ordinal") as Int?,
+                        resolvedAt = rs.getTimestamp("resolved_at")?.toInstant(),
+                    )
+                }
+            }
+        }
+        return out
+    }
+
+    private fun activeQuarantine(matchId: UUID): thro.trust.Quarantine? {
+        connection.prepareStatement(
+            """
+            SELECT reason, applied_at, lifted_at FROM trust.quarantine
+             WHERE match_id = ? ORDER BY applied_at DESC LIMIT 1
+            """.trimIndent(),
+        ).use { ps ->
+            ps.setObject(1, matchId)
+            ps.executeQuery().use { rs ->
+                if (!rs.next()) return null
+                return thro.trust.Quarantine(
+                    reason = rs.getString("reason"),
+                    at = rs.getTimestamp("applied_at").toInstant(),
+                    liftedAt = rs.getTimestamp("lifted_at")?.toInstant(),
+                )
+            }
+        }
+    }
+
+    private fun correctionCount(matchId: UUID): Int {
+        connection.prepareStatement(
+            "SELECT count(*) FROM evidence.event WHERE match_id = ? AND event_type = 'VisitCorrected'",
+        ).use { ps ->
+            ps.setObject(1, matchId)
+            ps.executeQuery().use { rs -> rs.next(); return rs.getInt(1) }
+        }
     }
 
     private fun legsIn(matchId: UUID): Int {
