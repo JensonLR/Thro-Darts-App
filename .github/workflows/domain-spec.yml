@@ -132,3 +132,9 @@ jobs:
       # or if a colour pair falls below threshold without a recorded, dated exception.
       - name: Tokens are current and contrast holds
         run: python3 packages/design-tokens/build.py --check
+
+      # Every defect found in the approved components so far was found by reading them. This is the
+      # ratchet: known findings are recorded in the baseline against the commission that will fix
+      # them, and anything NEW fails — so a re-export of the design system cannot regress silently.
+      - name: Design components have no new findings
+        run: python3 docs/design/audit_components.py --check

@@ -1,0 +1,65 @@
+{
+  "componentCount": 61,
+  "findings": [
+    {
+      "component": "scoring/TurnIndicator.jsx",
+      "rule": "colour-literal",
+      "detail": "colour literal outside the token layer: rgba(247,246,242,0.6)"
+    },
+    {
+      "component": "scoring/LegState.jsx",
+      "rule": "dark-default-no-background",
+      "detail": "defaults theme='dark' but paints no background \u2014 chalk on chalk at 1.00:1 off-cascade"
+    },
+    {
+      "component": "scoring/RemainingScore.jsx",
+      "rule": "dark-default-no-background",
+      "detail": "defaults theme='dark' but paints no background \u2014 chalk on chalk at 1.00:1 off-cascade"
+    },
+    {
+      "component": "scoring/ScoreHero.jsx",
+      "rule": "dark-default-no-background",
+      "detail": "defaults theme='dark' but paints no background \u2014 chalk on chalk at 1.00:1 off-cascade"
+    },
+    {
+      "component": "scoring/SetState.jsx",
+      "rule": "dark-default-no-background",
+      "detail": "defaults theme='dark' but paints no background \u2014 chalk on chalk at 1.00:1 off-cascade"
+    },
+    {
+      "component": "scoring/TurnIndicator.jsx",
+      "rule": "dart-level-evidence",
+      "detail": "renders per-dart state the app cannot know mid-visit"
+    },
+    {
+      "component": "forms/SearchField.jsx",
+      "rule": "focus-suppressed",
+      "detail": "outline:none with no replacement focus indicator"
+    },
+    {
+      "component": "forms/TextField.jsx",
+      "rule": "focus-suppressed",
+      "detail": "outline:none with no replacement focus indicator"
+    },
+    {
+      "component": "rating/FormIndicator.jsx",
+      "rule": "numeric-font-size",
+      "detail": "hardcoded fontSize (12) \u2014 does not scale with Dynamic Type"
+    },
+    {
+      "component": "development/PathwayStep.jsx",
+      "rule": "small-touch-target",
+      "detail": "interactive component with minHeight 32 \u2014 below the 44px minimum"
+    },
+    {
+      "component": "forms/FilterChip.jsx",
+      "rule": "small-touch-target",
+      "detail": "interactive component with minHeight 36 \u2014 below the 44px minimum"
+    },
+    {
+      "component": "forms/SegmentedControl.jsx",
+      "rule": "small-touch-target",
+      "detail": "interactive component with minHeight 40 \u2014 below the 44px minimum"
+    }
+  ]
+}

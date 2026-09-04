@@ -17,6 +17,12 @@ Sourced by reading the whole export: 61 components, 33 participant screens, 9 or
    keypad used one-handed at speed, the absence of a pressed state is a functional defect: the
    player gets no confirmation a score registered. Note the focus ring currently fails contrast on
    brand and ink surfaces (see `CONTRAST_MATRIX.md`), so this needs a solution, not just a colour.
+
+   **Worse than absent in two places.** `TextField` and `SearchField` set `outline: 'none'` on the
+   input itself and supply no replacement — no focus box-shadow, no focus border, no handler. They
+   do not omit a focus state; they remove the one the platform provided. A keyboard or
+   switch-control user gets no visible focus at all, on the two components where entering text is
+   the entire purpose. Found by `audit_components.py`, which now fails CI on any new instance.
 3. **Organiser layout and breakpoint contract.** The organiser CSS classes have no definitions:
    no sidebar width, content max-width, column ratios, grid gutters, breakpoints, or minimum
    supported width. The screens are readable as composition but not reproducible as layout.
@@ -82,3 +88,32 @@ referenced throughout and neither was exported); the **icon legibility floor** (
 grid rendered at 13–14px); **RTL and bidirectional layout**; **Snackbar timing, position, stacking
 and dismissal**; and **font substitution behaviour** on load failure, given that "no silent
 substitution" is stated but no fallback behaviour is defined.
+
+
+## Found mechanically, 2026-09-04
+
+`audit_components.py` was written because every finding above was found by reading the components,
+and nothing re-checked them. It reports 12 findings across the 61 components and holds them as a
+baseline, so a re-export cannot regress silently.
+
+Six were already known. **Six were not:**
+
+| Component | Finding |
+|---|---|
+| `forms/TextField` | suppresses the focus ring with no replacement |
+| `forms/SearchField` | suppresses the focus ring with no replacement |
+| `rating/FormIndicator` | hardcodes `fontSize: 12` — does not scale with Dynamic Type |
+| `scoring/TurnIndicator` | colour literal `rgba(247,246,242,0.6)` outside the token layer |
+| `forms/FilterChip` | interactive, `minHeight: 36` — below the 44px minimum |
+| `forms/SegmentedControl` | interactive, `minHeight: 40` — below the 44px minimum |
+| `development/PathwayStep` | interactive, `minHeight: 32` — below the 44px minimum |
+
+The three sub-minimum targets each carry an `onClick` and `cursor: pointer` on the element whose
+height is short, so they are real targets rather than decorative rules — checked individually rather
+than inferred from the pattern.
+
+The colour literal matters beyond itself: the contrast matrix is computed from the token layer, so a
+literal is a colour no contrast check has ever seen.
+
+**None of these were fixed here.** The design system is source-precedence rank 3 and the founder's to
+change; the audit reports and CI holds the line, but the export is not edited.

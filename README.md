@@ -54,6 +54,7 @@ database.
 | Schema and privileges | 71 property assertions against a real PostgreSQL |
 | Command path | 9 integration suites, 132 properties end to end against a real PostgreSQL |
 | Design tokens | 50 contrast pairs, absolute thresholds, 0 unrecorded breaches |
+| Design components | 61 components audited mechanically against a baseline ratchet |
 
 **Nothing here is production ready**, and no claim of security, offline reliability or rating
 validity is made anywhere in this repository. There is no client application, no HTTP layer and no deployment — the command path is a tested
@@ -103,6 +104,7 @@ swift test --package-path packages/engine-swift   # needs a Swift toolchain
 gradle -p packages/authz test
 gradle -p packages/rating test
 python3 packages/design-tokens/build.py --check
+python3 docs/design/audit_components.py --check
 
 # these need a PostgreSQL 16; set PGHOST, and PGPORT/PGUSER/PGDATABASE if not the defaults
 export PGHOST=localhost
