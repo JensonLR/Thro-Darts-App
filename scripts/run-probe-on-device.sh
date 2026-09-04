@@ -59,10 +59,14 @@ for d in devices:
         continue
     if d.get("connectionProperties", {}).get("tunnelState") == "unavailable":
         continue
-    print("%s\t%s\t%s" % (
+    # productType ("iPhone14,5") rather than the marketing name: ADR-006 records hardware
+    # identifiers raw, because that is the string a later reader can compare unambiguously.
+    print("%s\t%s\t%s\t%s\t%s" % (
         d.get("identifier", ""),
-        props.get("name", "?"),
+        hw.get("productType", "?"),
+        hw.get("marketingName", "?"),
         props.get("osVersionNumber", "?"),
+        props.get("osBuildUpdate", "?"),
     ))
     break
 PY
@@ -78,14 +82,19 @@ PY
 Then run this script again."
 
 DEVICE_ID="$(printf '%s' "$UDID" | cut -f1)"
-DEVICE_NAME="$(printf '%s' "$UDID" | cut -f2)"
-DEVICE_OS="$(printf '%s' "$UDID" | cut -f3)"
+DEVICE_MODEL="$(printf '%s' "$UDID" | cut -f2)"
+DEVICE_NAME="$(printf '%s' "$UDID" | cut -f3)"
+DEVICE_OS="$(printf '%s' "$UDID" | cut -f4)"
+DEVICE_BUILD="$(printf '%s' "$UDID" | cut -f5)"
 
-echo "    found: $DEVICE_NAME  (iOS $DEVICE_OS)"
+ATTRIBUTION="$DEVICE_MODEL ($DEVICE_NAME), iOS $DEVICE_OS (build $DEVICE_BUILD)"
+
+echo "    found: $ATTRIBUTION"
 echo
-echo "    Record this with the numbers. ADR-006 is explicit that a latency without its hardware"
-echo "    is not evidence:"
-echo "        device: $DEVICE_NAME, iOS $DEVICE_OS"
+echo "    Copy this down. ADR-006 is explicit that a latency without its hardware is not"
+echo "    evidence, and it records the raw identifier rather than the marketing name:"
+echo
+echo "        $ATTRIBUTION"
 echo
 
 # ---------------------------------------------------------------------------
@@ -152,5 +161,5 @@ durability rule wins and the budget is restated. Record what the phone reports e
 Recording it, with the hardware, in the "Measurement status" section of
 docs/adr/ADR-006-offline-sync.md:
 
-    device: $DEVICE_NAME, iOS $DEVICE_OS
+    $ATTRIBUTION
 EOF
