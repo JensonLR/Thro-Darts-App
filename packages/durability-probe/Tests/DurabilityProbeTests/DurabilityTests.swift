@@ -21,12 +21,9 @@ final class DurabilityTests: XCTestCase {
         print("  budget (LATENCY_BUDGETS.md): P95 ≤ 20 ms, P99 ≤ 50 ms")
         #if os(iOS)
         print("  running on: iOS — this is the number that counts")
-        #elseif os(macOS)
+        #else
         print("  running on: macOS — INDICATIVE ONLY. ADR-006 requires both reference devices,")
         print("              because fsync on Apple platforms behaves differently per device class.")
-        #else
-        print("  running on: a non-Apple platform — fullfsync is a no-op here, so the strongest")
-        print("              configuration is NOT actually stronger. Treat as a smoke test only.")
         #endif
         print("")
         print(String(format: "  %-58s %8s %8s %8s %8s   %s",
@@ -52,9 +49,6 @@ final class DurabilityTests: XCTestCase {
     /// free — so a strongest-configuration median at or below the relaxed one means the pragmas did
     /// not take effect and the whole measurement is worthless.
     func testTheBarrierIsActuallyHappening() throws {
-        #if !os(macOS) && !os(iOS)
-        throw XCTSkip("fullfsync is Apple-only; this guard cannot mean anything elsewhere")
-        #else
         let relaxed = try Probe.measure(Durability.candidates[0], visits: 100)
         let strongest = try Probe.measure(Durability.candidates[2], visits: 100)
         print(String(format: "  relaxed P50 %.3f ms vs full+fullfsync P50 %.3f ms",
@@ -64,7 +58,6 @@ final class DurabilityTests: XCTestCase {
             "forcing a real barrier was not slower than not forcing one — the pragmas did not take, "
             + "so every number this probe reports is meaningless"
         )
-        #endif
     }
 
     func testPercentilesAreSamplesThatActuallyOccurred() {
