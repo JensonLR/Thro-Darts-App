@@ -424,9 +424,10 @@ def main():
                     fh.write(json.dumps({"remaining": rem, "visitTotal": vt, "outRule": "double",
                                          "effect": eff, "reason": reason, "newRemaining": new},
                                         separators=(",", ":")) + "\n"); n += 1
-        files["core-transitions.jsonl"] = {"cases": n,
-                                           "sha256": hashlib.sha256(p.read_bytes()).hexdigest()}
-        total += n
+        # Deliberately excluded from the manifest and the total: it is regenerated in CI rather
+        # than committed (8.6 MB), so counting it would make the committed manifest churn on every
+        # full run and turn the staleness gate into noise.
+        print(f"exhaustive transition table: {n} cases (not committed)")
 
     (OUT / "vectors" / "manifest.json").write_text(json.dumps(
         {"specVersion": SPEC_VERSION, "files": files, "totalCases": total}, indent=2) + "\n")

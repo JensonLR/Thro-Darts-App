@@ -31,6 +31,7 @@ class ConformanceTest {
         val failures = mutableListOf<String>()
 
         for (file in files) {
+            if (file.name == "core-transitions.jsonl") continue   // handled by its own test
             file.forEachLine { line ->
                 if (line.isNotBlank()) {
                     cases++
@@ -156,6 +157,65 @@ class ConformanceTest {
             alternation = if (f.opt("alternateStart")?.str() == "perSet") Alternation.PER_SET
                           else Alternation.PER_LEG,
         )
+    }
+
+    /**
+     * The exhaustive transition table, when CI has generated it. Every reachable remaining against
+     * every achievable visit total — the strongest available evidence that this engine and the
+     * generator agree, since neither produced the other's expected values.
+     */
+    @Test
+    fun `engine reproduces the exhaustive transition table when present`() {
+        val file = File(vectors, "core-transitions.jsonl")
+        if (!file.exists()) {
+            println("exhaustive table absent (run generate.py --full) — skipped")
+            return
+        }
+        val a = PlayerId("A")
+        val b = PlayerId("B")
+        var checked = 0
+        val failures = mutableListOf<String>()
+        file.forEachLine { line ->
+            if (line.isNotBlank()) {
+                val r = parseJson(line).obj()
+                val remaining = r.getValue("remaining").int()
+                val visitTotal = r.getValue("visitTotal").int()
+                val base = MatchState.start(
+                    MatchFormat(
+                        startingScore = 501, inRule = InRule.STRAIGHT, outRule = OutRule.DOUBLE,
+                        legs = Structure(StructureMode.FIRST_TO, 5), throwFirst = a,
+                    ),
+                    a, b,
+                )
+                val state = base.copy(remaining = base.remaining + (a to remaining))
+                val outcome = Engine.apply(state, Command.RecordVisit(a, visitTotal))
+                val wantEffect = r.getValue("effect").str()
+                val wantReason = r.opt("reason")?.str()
+                val wantRemaining = r.getValue("newRemaining").int()
+                when (outcome) {
+                    is Outcome.Rejected ->
+                        if (wantEffect != "rejected" || wantReason != outcome.reason.name) {
+                            failures += "rem=$remaining vt=$visitTotal: rejected ${outcome.reason} != $wantEffect/$wantReason"
+                        }
+                    is Outcome.Accepted -> {
+                        val got = effectName(outcome.effect)
+                        val gotRemaining = outcome.state.remaining.getValue(a)
+                        if (got != wantEffect && !(got == "match_won" && wantEffect == "leg_won")) {
+                            failures += "rem=$remaining vt=$visitTotal: effect $got != $wantEffect"
+                        } else if (wantReason != null && wantReason != outcome.bustReason?.name) {
+                            failures += "rem=$remaining vt=$visitTotal: reason ${outcome.bustReason} != $wantReason"
+                        } else if (wantEffect != "leg_won" && gotRemaining != wantRemaining) {
+                            failures += "rem=$remaining vt=$visitTotal: remaining $gotRemaining != $wantRemaining"
+                        }
+                    }
+                }
+                checked++
+            }
+        }
+        println("exhaustive transitions verified against the engine: $checked")
+        if (failures.isNotEmpty()) {
+            fail("${failures.size} exhaustive failures:\n  " + failures.take(15).joinToString("\n  "))
+        }
     }
 
     @Test
