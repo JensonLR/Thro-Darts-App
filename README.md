@@ -71,6 +71,7 @@ organised competition can be rated.
 packages/
   domain-spec/    Rule tables and the conformance corpus, derived from the dartboard
   engine/         The deterministic scoring engine (Kotlin, zero dependencies)
+  engine-swift/   The same engine in Swift — ADR-002's spike, same corpus
   statistics/     Figures that say when they cannot be computed honestly
   competition/    Bracket structure — byes, rounds, walkovers
   trust/          Provenance, derived verification, rating eligibility, reconciliation
@@ -97,6 +98,7 @@ gradle -p packages/engine check
 gradle -p packages/statistics test
 gradle -p packages/competition test
 gradle -p packages/trust test
+swift test --package-path packages/engine-swift   # needs a Swift toolchain
 gradle -p packages/authz test
 gradle -p packages/rating test
 python3 packages/design-tokens/build.py --check
