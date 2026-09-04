@@ -30,22 +30,28 @@ database.
 |---|---|---|
 | 0 | Foundation ingestion | Closed — design authority recovered and inspected |
 | 1 | Architecture | Closed — 15 decision records, hostile-reviewed and corrected |
-| 2 | Repository foundation | Event schema with 21 property tests against a real Postgres |
+| 2 | Repository foundation | Event schema and the command path, proved against a real Postgres |
 | 3 | Design ingestion | Token pipeline generating Swift, Kotlin and CSS from one source |
 | 4 | Competitive core | Scoring engine passing 86,000 exhaustive transitions |
-| 5+ | Offline match, vertical slice, trust, rating | Not started |
+| 5 | Offline match lifecycle | **Blocked** — needs iOS and Android toolchains |
+| 6 | Vertical slice | **Blocked** — needs the authentication surface (B4) |
+| 7+ | Trust, rating, organiser, live | Not started |
 
 **What is verified, and how:**
 
 | | |
 |---|---|
-| Scoring rules | 396 property checks against independent darts facts |
-| Scoring engine | 86,000 exhaustive transitions + 58 corpus cases, 0 failures |
+| Scoring rules | 395 property checks against independent darts facts |
+| Scoring engine | 86,000 exhaustive transitions + 58 corpus cases |
+| Statistics honesty | 14 tests — an uncomputable figure says so; an approximate one is never a point value |
+| Competition structure | 13 tests — bracket identities exhaustive for every field size to 1024 |
 | Event schema | 21 property assertions against a real PostgreSQL |
+| Command path | 14 integrity properties, end to end against a real PostgreSQL |
 | Design tokens | 50 contrast pairs, absolute thresholds, 0 unrecorded breaches |
 
 **Nothing here is production ready**, and no claim of security, offline reliability or rating
-validity is made anywhere in this repository. There is no client, no API surface, and no deployment.
+validity is made anywhere in this repository. There is no client application, no HTTP layer and no deployment — the command path is a tested
+handler, not a running service.
 Claims are made only where evidence exists — see [`FOUNDATION_ACCEPTANCE.md`](FOUNDATION_ACCEPTANCE.md).
 
 **Two decisions are recorded as taken on delegated authority** ([`docs/product/DECISIONS.md`](docs/product/DECISIONS.md)),
