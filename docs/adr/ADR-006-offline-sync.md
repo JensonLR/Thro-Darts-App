@@ -47,7 +47,8 @@ Two runs exist, both on Macs, 200 visits per configuration, milliseconds.
 | `synchronous=FULL` + `fullfsync`, WAL | 1.01 | 2.01 | 5.45 | 19.78 |
 | `synchronous=FULL` + `fullfsync`, rollback journal | 3.77 | 7.20 | 16.33 | 20.60 |
 
-**MacBook Air, Apple Silicon, local NVMe** (two consecutive runs, showing the spread):
+**MacBook Air, Apple Silicon, local NVMe** — `Mac17,3`, macOS 26.6.2 (build 25G83), two
+consecutive runs, showing the spread:
 
 | configuration | P50 | P95 | P99 | worst |
 |---|---|---|---|---|
@@ -57,6 +58,9 @@ Two runs exist, both on Macs, 200 visits per configuration, milliseconds.
 | `synchronous=FULL` + `fullfsync`, rollback journal | 1.35 / 1.36 | 1.56 / 1.72 | 2.31 / 2.33 | 4.61 / 2.68 |
 
 Reproducible to within a few hundredths across runs, so the probe is not measuring noise.
+
+The hardware identifier is recorded raw rather than as a marketing name, because `Mac17,3` is what
+`sysctl -n hw.model` returns and is the thing a later reader can compare against unambiguously.
 
 The probe asserts that forcing the barrier is slower than not forcing it — CI measured 0.01 ms
 against 1.17 ms, the MacBook Air 0.01 ms against 0.38 and 0.45 ms. Without that check a run where
