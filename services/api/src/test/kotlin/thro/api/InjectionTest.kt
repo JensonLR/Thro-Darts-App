@@ -25,30 +25,9 @@ import thro.engine.StructureMode
  */
 class InjectionTest {
 
-    private val host = System.getenv("PGHOST").orEmpty()
-    private val configured = host.isNotBlank()
+    private val configured = TestDatabase.configured
 
-    private fun migrated(): Connection {
-        val port = System.getenv("PGPORT") ?: "5432"
-        val db = System.getenv("PGDATABASE") ?: "postgres"
-        val user = System.getenv("PGUSER") ?: "postgres"
-        val c = DriverManager.getConnection("jdbc:postgresql://$host:$port/$db", user, "")
-        c.createStatement().use { st ->
-            for (s in listOf("evidence", "trust", "rating", "read")) {
-                st.execute("DROP SCHEMA IF EXISTS $s CASCADE")
-            }
-            for (r in listOf("thro_owner", "app_match", "app_trust", "app_rating", "app_read")) {
-                st.execute("DROP ROLE IF EXISTS $r")
-            }
-        }
-        val dir = generateSequence(File(".").absoluteFile) { it.parentFile }
-            .map { File(it, "services/api/migrations") }
-            .firstOrNull { it.isDirectory } ?: File("migrations")
-        dir.listFiles { f -> f.extension == "sql" }?.sortedBy { it.name }?.forEach { f ->
-            c.createStatement().use { it.execute(f.readText()) }
-        }
-        return c
-    }
+    private fun migrated(): Connection = TestDatabase.migrated()
 
     private fun format(first: String) = MatchFormat(
         startingScore = 501,

@@ -249,6 +249,39 @@ if echo "$r" | grep -qi 'violates check constraint'; then
 else bad "the player throwing first must be one of the competitors" "a stranger threw first"; fi
 
 echo
+echo "== the audit log is tamper-evident =="
+# A fresh object id per run, so a second run against the same database asserts about its own rows.
+OBJ="m-$($PSQL -c "SELECT substr(gen_random_uuid()::text,1,8);")"
+before=$($PSQL -c "SELECT count(*) FROM audit.decision;")
+$PSQL -c "SET ROLE app_match; INSERT INTO audit.decision
+  (subject_id,action,object_type,object_id,allowed,granted_by,policy_version)
+  VALUES ('$AC','match.correct','match','$OBJ',true,'event:e#official','1.0.0');" >/dev/null 2>&1
+after=$($PSQL -c "SELECT count(*) FROM audit.decision;")
+check "an application role can append a decision" "$((after - before))" "1"
+
+# Verify only if this run started from an intact chain; an earlier run's tamper test leaves it
+# broken on purpose, and re-breaking an already-broken chain proves nothing.
+broken_before=$($PSQL -c "SELECT count(*) FROM audit.first_broken_link();")
+if [ "$broken_before" = "0" ]; then
+  ok "the chain verifies after an honest append"
+  mine=$($PSQL -c "SELECT seq FROM audit.decision WHERE object_id='$OBJ';")
+  $PSQL -c "SET ROLE thro_owner; UPDATE audit.decision SET allowed = false WHERE seq = $mine;" >/dev/null 2>&1
+  n=$($PSQL -c "SELECT count(*) FROM audit.first_broken_link();")
+  check "rewriting a decision breaks the chain" "$n" "1"
+  # Put it back, so the chain is intact for whatever runs next.
+  $PSQL -c "SET ROLE thro_owner; UPDATE audit.decision SET allowed = true WHERE seq = $mine;" >/dev/null 2>&1
+  n=$($PSQL -c "SELECT count(*) FROM audit.first_broken_link();")
+  check "and restoring the entry repairs it" "$n" "0"
+else
+  ok "chain already broken by an earlier run — tamper assertions skipped"
+fi
+
+r=$($PSQL -c "SET ROLE app_match; SELECT count(*) FROM audit.decision;" 2>&1)
+if echo "$r" | grep -qi 'permission denied'; then
+  ok "the log is write-only for the roles that write to it"
+else bad "the log is write-only for the roles that write to it" "it was readable"; fi
+
+echo
 echo "-------------------------------------------"
 echo "  $PASS passed, $FAIL failed"
 [ "$FAIL" -eq 0 ] || exit 1

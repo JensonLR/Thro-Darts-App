@@ -19,40 +19,9 @@ import kotlin.test.assertTrue
  */
 class CommandHandlerTest {
 
-    private val host = System.getenv("PGHOST").orEmpty()
-    private val configured = host.isNotBlank()
+    private val configured = TestDatabase.configured
 
-    private fun connect(): Connection {
-        val port = System.getenv("PGPORT") ?: "5432"
-        val db = System.getenv("PGDATABASE") ?: "postgres"
-        val user = System.getenv("PGUSER") ?: "postgres"
-        val url = if (host.startsWith("/")) {
-            "jdbc:postgresql://localhost:$port/$db?socketFactory=org.newsclub.net.unix.AFUNIXSocketFactory"
-        } else {
-            "jdbc:postgresql://$host:$port/$db"
-        }
-        return DriverManager.getConnection(url, user, "")
-    }
-
-    private fun migrated(): Connection {
-        val c = connect()
-        c.createStatement().use { st ->
-            st.execute("DROP SCHEMA IF EXISTS evidence CASCADE")
-            st.execute("DROP SCHEMA IF EXISTS trust CASCADE")
-            st.execute("DROP SCHEMA IF EXISTS rating CASCADE")
-            st.execute("DROP SCHEMA IF EXISTS read CASCADE")
-            for (r in listOf("thro_owner", "app_match", "app_trust", "app_rating", "app_read")) {
-                st.execute("DROP ROLE IF EXISTS $r")
-            }
-        }
-        val dir = generateSequence(File(".").absoluteFile) { it.parentFile }
-            .map { File(it, "services/api/migrations") }
-            .firstOrNull { it.isDirectory } ?: File("migrations")
-        dir.listFiles { f -> f.extension == "sql" }?.sortedBy { it.name }?.forEach { f ->
-            c.createStatement().use { it.execute(f.readText()) }
-        }
-        return c
-    }
+    private fun migrated(): Connection = TestDatabase.migrated()
 
     private fun cmd(
         match: UUID, device: UUID, seq: Long, player: String, total: Int,

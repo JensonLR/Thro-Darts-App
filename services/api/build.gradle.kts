@@ -6,6 +6,7 @@ repositories { mavenCentral() }
 dependencies {
     implementation("thro-engine:thro-engine")
     implementation("thro-statistics:thro-statistics")
+    implementation("thro-authz:thro-authz")
     implementation("org.postgresql:postgresql:42.7.4")
     testImplementation(kotlin("test"))
 }
