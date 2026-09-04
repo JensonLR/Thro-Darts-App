@@ -1,6 +1,7 @@
-# THRØ API — schema
+# THRØ API
 
-Migrations and the property tests that hold them honest.
+The command path — the one route by which competitive evidence enters the system — plus the
+migrations and property tests that hold it honest.
 
 ## Running the tests locally
 
@@ -39,3 +40,42 @@ The suite covers the properties that would be unrecoverable if wrong:
 `thro_owner` owns every object and is used only by migrations. The application roles own nothing —
 which matters because a table's owner can `TRUNCATE` it regardless of what has been revoked, so
 ownership separation is what makes the append-only guarantee real rather than decorative.
+
+
+## The command handler
+
+Everything the architecture claims about integrity converges on one function. A client's assertion
+of an outcome is never trusted: the server rehydrates the match from **its own** event log,
+revalidates through the same engine the client ran, and appends *its* result.
+
+```
+1  idempotency      a replay returns the stored response, including a stored refusal
+2  sequence gap     refused with the expected value, never applied past
+3  rehydrate        fold this device's own stream — accounts are never merged here
+4  revalidate       the engine decides, not the client
+5  append + receipt in ONE transaction
+```
+
+Step 5 is not a detail. Written as two transactions, a crash between them either double-applies a
+visit or loses the receipt, and both corrupt a match.
+
+### What the integration tests prove
+
+Run against a real PostgreSQL, because a mocked event store cannot tell you that a replayed command
+created a second event — which is exactly the failure that would corrupt a match.
+
+| | |
+|---|---|
+| A replayed command is not re-applied, and creates no second event | |
+| A sequence gap is refused with the expected value, and writes nothing | |
+| An unreachable visit total is refused and **produces no evidence** | |
+| A visit from the wrong player is refused | |
+| A second device can author the same match, and each account stays separately readable | |
+| **The server derives the outcome rather than trusting the client's claim** | |
+
+14 properties, run end to end.
+
+```bash
+export PGHOST=… PGPORT=… PGUSER=… PGDATABASE=…
+gradle test        # skips cleanly, rather than passing silently, when no database is configured
+```

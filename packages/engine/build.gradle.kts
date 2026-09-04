@@ -1,5 +1,8 @@
 plugins { kotlin("jvm") version "2.0.21" }
 
+group = "thro-engine"
+version = "1.1.0"
+
 repositories { mavenCentral() }
 
 dependencies {

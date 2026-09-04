@@ -33,3 +33,32 @@ jobs:
       # that the append-only guarantee survives a table created by a later migration.
       - name: Schema properties
         run: bash services/api/test/schema_properties.sh
+
+  command-path:
+    name: Command path integrity
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_HOST_AUTH_METHOD: trust
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd pg_isready --health-interval 5s
+          --health-timeout 5s --health-retries 10
+    env:
+      PGHOST: localhost
+      PGPORT: "5432"
+      PGUSER: postgres
+      PGDATABASE: postgres
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with: { distribution: temurin, java-version: "21" }
+      - uses: gradle/actions/setup-gradle@v4
+      # End-to-end: idempotency, gapless sequences, engine revalidation, two-device corroboration,
+      # and that the server derives the outcome rather than trusting the client.
+      - name: Command path
+        working-directory: services/api
+        run: gradle test --no-daemon
