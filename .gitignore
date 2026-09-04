@@ -11,3 +11,10 @@ __pycache__/
 
 # Local scratch. Nothing here is an artifact.
 *.log
+
+# SwiftPM build products and local package state.
+.build/
+.swiftpm/
+
+# Xcode local user state.
+xcuserdata/

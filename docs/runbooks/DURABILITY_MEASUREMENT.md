@@ -53,82 +53,61 @@ table is meaningless. It fails loudly rather than printing a reassuring table.
 This same command runs in CI on macOS on every push, so if it fails here and passes there, the
 difference is your machine and worth saying so.
 
-## Part 3 — The number that counts (Xcode, on a real phone)
+## Part 3 — The number that counts (on a real phone)
 
-### 3a. Make a place for the app to live
+The app project already exists at `~/Thro Darts App/ThroProbe`, already links the probe, and already
+signs against the right team. It is built and installed by one script, not by the Xcode GUI: every
+failure then prints in full rather than appearing as a red badge next to a dropdown, and the second
+reference device gets measured exactly the same way as the first.
 
-1. Open **Xcode**.
-2. **Create New Project…**
-3. Choose **iOS** along the top, then **App**. Click **Next**.
-4. Product Name: `ThroProbe`
-5. Organisation Identifier: a domain you control, reversed and lowercase — `com.thro`. (Bundle
-   identifiers are conventionally all lowercase. This app never leaves the device, so the value only
-   has to be unique to you.)
-6. Interface: **SwiftUI**. Language: **Swift**.
-7. **Storage: `None`.** Not SwiftData, not Core Data. Both stand up their own SQLite stack inside
-   the app process, and this app exists to measure SQLite write latency — a second SQLite client in
-   the process being measured is a confounding variable for no benefit. They also generate
-   boilerplate in `ContentView.swift` that step 3c deletes.
-8. **Testing System: `None`.** The alternatives generate test targets inside `ThroProbe` that this
-   procedure never runs — the probe package's tests live in the package and run from Terminal
-   (Part 2), not from this app.
-9. Leave **Host in CloudKit** unticked. Click **Next**.
-7. Save it in `~/Documents` (**not** inside the Thro-Darts-App folder). Click **Create**.
+### 3a. Prepare the phone
 
-### 3b. Point it at the probe
+This is the only part nobody can do for you, and it is what everything else waits on.
 
-1. Menu bar: **File → Add Package Dependencies…**
-2. Bottom-left of that window: **Add Local…**
-3. Navigate to `Documents/Thro-Darts-App/packages/durability-probe` and click **Add Package**.
-4. When it asks which target to add it to, choose **ThroProbe**. Click **Add Package**.
+1. Plug the iPhone into the Mac with a cable.
+2. Unlock it. If it asks **Trust This Computer?**, tap **Trust** and enter the passcode.
+3. On the iPhone: **Settings → Privacy & Security → Developer Mode → on**, then restart when it
+   asks. Developer Mode only appears once a Mac running Xcode has been connected, so if you cannot
+   find it, do step 1 first and look again.
 
-### 3c. Two lines of code
+To confirm the Mac can see it:
 
-In the left sidebar click **ContentView.swift**. Select everything (⌘A) and replace it with:
-
-```swift
-import SwiftUI
-import DurabilityProbe
-
-struct ContentView: View {
-    var body: some View { ProbeView() }
-}
+```bash
+xcrun devicectl list devices
 ```
 
-### 3d. Let Xcode sign it
+Your iPhone should be listed. If it says `No devices found.`, the steps above are not finished —
+nothing later will work, and the error you will get is Apple's misleading
+`Your team has no devices from which to generate a provisioning profile`, which reads like a signing
+problem and is not one.
 
-You need an Apple ID; a free one works for running on your own device.
+### 3b. Build, install, launch
 
-1. **Xcode → Settings… → Accounts →** the **+** button → **Apple ID** → sign in.
-2. Close Settings.
-3. In the left sidebar click the blue **ThroProbe** at the very top.
-4. Click the **Signing & Capabilities** tab.
-5. Tick **Automatically manage signing**, and pick your name in the **Team** dropdown.
+```bash
+cd ~/Documents/Thro-Darts-App
+./scripts/run-probe-on-device.sh
+```
 
-### 3e. Put it on the phone
+That registers the phone, mints a development provisioning profile, builds, installs and launches.
+A free Apple ID is enough to run on your own device.
 
-1. Plug the iPhone in with a cable. Unlock it. Tap **Trust** if it asks.
-2. On the iPhone: **Settings → Privacy & Security → Developer Mode → on**, then restart the phone
-   when it asks. (iOS 16 and later. It only appears once a Mac with Xcode has been connected.)
-3. Back in Xcode, at the top of the window there is a dropdown that probably says a simulator name.
-   Click it and pick **your iPhone** under "Devices".
-4. Press the **▶︎ Play** button (or ⌘R).
-5. First run only: the phone will refuse to open it. On the iPhone go to
-   **Settings → General → VPN & Device Management**, tap your Apple ID, tap **Trust**. Then press
-   Play again.
+Two failures are worth knowing in advance, because both have opaque errors:
 
-### 3f. Take the measurement
+| What you see | What it means |
+|---|---|
+| Apple reports the bundle identifier is already taken | Identifiers are globally unique across every Apple developer account. Re-run with `PROBE_BUNDLE_ID=com.yourname.throprobe ./scripts/run-probe-on-device.sh`. The app never ships, so any unique value is fine. |
+| Installs, then refuses to open | One-time trust step. On the iPhone: **Settings → General → VPN & Device Management → tap your Apple ID → Trust**. Then tap the app icon directly. |
 
-1. The app opens with one button. Put the phone down — do not keep the screen busy.
+### 3c. Take the measurement
+
+1. The app opens with one button. Put the phone down — do not keep the screen busy. The probe is
+   timing storage barriers, and scrolling during the run measures something else.
 2. Tap **Run the probe**. It takes maybe 30 seconds.
 3. Screenshot the four rows, or read them out.
 
 > **Do not use the Simulator for this.** Simulator storage is your Mac's SSD. The app will warn you
 > in orange if it detects one. A simulator number is not a weaker version of the answer — it is an
 > answer to a different question.
-
----
-
 ## What we are looking for
 
 Four configurations, weakest to strongest. The one that decides this is
@@ -148,3 +127,47 @@ The numbers go into ADR-006 **with the device and iOS version they came from**. 
 its hardware is not evidence, and the next person to read that record needs to know whether it was
 measured on a current phone or a five-year-old one — because the five-year-old one is the case that
 matters in a pub.
+
+## Appendix — recreating the Xcode project from scratch
+
+Only needed if `~/Thro Darts App/ThroProbe` is lost, or when standing the probe up on a second
+Mac. The existing project is already correct; do not redo this to fix a failure.
+
+Xcode → **Create New Project…** → **iOS** → **App**, then:
+
+1. Open **Xcode**.
+2. **Create New Project…**
+3. Choose **iOS** along the top, then **App**. Click **Next**.
+4. Product Name: `ThroProbe`
+5. Organisation Identifier: a domain you control, reversed and lowercase — `com.thro`. (Bundle
+   identifiers are conventionally all lowercase. This app never leaves the device, so the value only
+   has to be unique to you.)
+6. Interface: **SwiftUI**. Language: **Swift**.
+7. **Storage: `None`.** Not SwiftData, not Core Data. Both stand up their own SQLite stack inside
+   the app process, and this app exists to measure SQLite write latency — a second SQLite client in
+   the process being measured is a confounding variable for no benefit. They also generate
+   boilerplate in `ContentView.swift` that step 3c deletes.
+8. **Testing System: `None`.** The alternatives generate test targets inside `ThroProbe` that this
+   procedure never runs — the probe package's tests live in the package and run from Terminal
+   (Part 2), not from this app.
+9. Leave **Host in CloudKit** unticked. Click **Next**.
+7. Save it in `~/Documents` (**not** inside the Thro-Darts-App folder). Click **Create**.
+
+Then **File → Add Package Dependencies… → Add Local…**, choose
+`Documents/Thro-Darts-App/packages/durability-probe`, and add it to the **ThroProbe** target.
+Replace the whole of `ContentView.swift` with:
+
+```swift
+import SwiftUI
+import DurabilityProbe
+
+struct ContentView: View {
+    var body: some View { ProbeView() }
+}
+```
+
+Finally set the deployment target to **iOS 16.0**. Xcode defaults it to the current SDK (26.5 at
+the time of writing), which would make the app installable only on a recent flagship — and
+`LATENCY_BUDGETS.md` names an iPhone SE-class device as a reference device precisely because
+benchmarking on a Pro model is self-deception. `DurabilityProbe` declares `.iOS(.v16)`, so 16.0
+is the package's own floor.
