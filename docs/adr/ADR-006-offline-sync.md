@@ -157,8 +157,37 @@ vanished. It says nothing about whether `fullfsync` reaches NAND, which is the e
 Reporting a green kill test as durability would be the same error as reporting the CI latency
 figure as the budget answer.
 
+### Force-restart does not substitute for a power cut — measured, not assumed
+
+The obvious way to approximate a power cut on an iPhone is a force-restart, since the battery cannot
+be pulled. It was run as a control under **`relaxed`** — WAL with `synchronous=NORMAL`, the
+configuration whose own label reads *survives process death, **not** power loss* — with the writer
+still committing at the moment the device went down:
+
+| device | configuration | acknowledged | survived | integrity | lost |
+|---|---|---|---|---|---|
+| `iPhone15,3`, iOS 26.6.1 (23G83) | WAL, `synchronous=NORMAL` | 9446 | 9446 | ok | **0** |
+
+**The control failed to fail**, and that is the finding. If the weakest configuration survives a
+force-restart intact, the method cannot distinguish it from the strongest, so no force-restart
+result is evidence about the barrier — a green run under `fullfsync` would be a reassuring number
+that means nothing. A force-restart is a controlled reset: the storage controller stays powered,
+in-flight writes complete, and the ten seconds the gesture takes already exceeds the kernel's
+dirty-page flush interval. There is no window to catch.
+
+This narrows what the outstanding requirement actually needs. It is not "try harder on the iPhone";
+it is hardware whose power can genuinely be interrupted — the `~£150 A-series Android` this ADR
+already requires, run from a removable battery or a switched bench supply. One acquisition closes
+both the Android latency run and the power-cut test, which is an argument for getting that device
+early rather than last.
+
+Note also that the device was updated from iOS 26.1 (23B85) to 26.6.1 (23G83) partway through this
+session. The latency figures and the kill test above were taken on 26.1 and are attributed to it;
+the force-restart control was taken on 26.6.1. Neither is invalidated, but they are not the same
+system and a later comparison must not treat them as one.
+
 **Still outstanding: the SE-class iPhone run, the Android reference device, and the power-cut
-test.**
+test — which now has a known method requirement rather than an open question.**
 `docs/runbooks/DURABILITY_MEASUREMENT.md` is the procedure; `ProbeView` is a one-tap front end so the
 run does not require setting up a test target. Record device model and OS version with the numbers —
 without those the figures are unattributable and cannot be compared to a later run.

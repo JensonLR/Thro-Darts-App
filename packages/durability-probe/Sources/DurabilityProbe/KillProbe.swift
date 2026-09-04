@@ -340,25 +340,33 @@ extension KillProbe {
             let configuration = Durability.candidates[
                 min(max(index, 0), Durability.candidates.count - 1)
             ]
-            do {
-                try writeUntilKilled(
-                    configuration,
-                    killAfterMs: killAfterMs,
-                    fresh: args.contains("--fresh"),
-                    maxVisits: maxVisits,
-                    throttleMicroseconds: throttleUs
-                )
-            } catch {
-                print("KILLTEST-WRITE-ERROR \(error)")
-                fflush(stdout)
-                exit(1)
+            // On a background queue, and returning so the UI comes up.
+            //
+            // Running this loop inline was killing the test. iOS gives an app about twenty seconds
+            // to finish launching, and a write loop in App.init() never lets SwiftUI present a
+            // scene — so the watchdog sent SIGKILL at roughly eighteen seconds every time, which
+            // read like the device restarting and was nothing of the sort. The writer has to be a
+            // background thread of a properly launched app, not a hijacked launch.
+            DispatchQueue.global(qos: .userInitiated).async {
+                do {
+                    try writeUntilKilled(
+                        configuration,
+                        killAfterMs: killAfterMs,
+                        fresh: args.contains("--fresh"),
+                        maxVisits: maxVisits,
+                        throttleMicroseconds: throttleUs
+                    )
+                } catch {
+                    print("KILLTEST-WRITE-ERROR \(error)")
+                    fflush(stdout)
+                    exit(1)
+                }
             }
-            // writeUntilKilled only returns if the writer stopped early, which is itself a result
-            // worth surfacing rather than falling through into the UI.
-            exit(1)
+            keepScreenAwake()
+            return
         }
 
-        if let i = args.firstIndex(of: "--kill-test-inspect") {
+        if args.firstIndex(of: "--kill-test-inspect") != nil {
             // Trim before parsing. `devicectl --console` relays the device's stdout with CRLF line
             // endings, so a sequence number scraped out of that log arrives here as "1840\r" and
             // Int() returns nil for it.
@@ -367,6 +375,7 @@ extension KillProbe {
             // FAIL on a run whose journal was in fact intact — a false failure on a durability test,
             // which is the one direction of error that must never be quiet. An argument that was
             // supplied and cannot be understood is an error, not an absence.
+            let i = args.firstIndex(of: "--kill-test-inspect")!
             var lastAck: Int? = nil
             if args.count > i + 1, !args[i + 1].hasPrefix("--") {
                 let raw = args[i + 1].trimmingCharacters(in: .whitespacesAndNewlines)
@@ -389,5 +398,24 @@ extension KillProbe {
                 exit(1)
             }
         }
+    }
+}
+
+#if canImport(UIKit)
+import UIKit
+#endif
+
+extension KillProbe {
+    /// Stops the screen locking during a restart test.
+    ///
+    /// iOS suspends a backgrounded app, and a suspended writer stops writing — which leaves the
+    /// journal fully flushed again and the restart with nothing to catch. The test needs the app
+    /// awake and committing right up to the moment the device goes down.
+    static func keepScreenAwake() {
+        #if canImport(UIKit) && !os(watchOS)
+        DispatchQueue.main.async {
+            UIApplication.shared.isIdleTimerDisabled = true
+        }
+        #endif
     }
 }

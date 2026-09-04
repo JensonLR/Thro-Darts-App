@@ -14,7 +14,7 @@ for the hard one.
 | Survives if data reached | The kernel | **The NAND itself** |
 | Would pass on `synchronous=NORMAL` | **Yes** | No |
 | Automatable | Yes | No — needs hands |
-| Status | **Automated and passing** | **Outstanding** |
+| Status | **Automated and passing** | **Outstanding** — force-restart tried, does not discriminate |
 
 The row that matters is the fourth. A green kill test says almost nothing about the pragma this
 whole exercise is about, because `fullfsync` exists to push data past the drive's write cache and
@@ -70,47 +70,54 @@ reported durable is gone, which is the failure ADR-006 has no repair path for.
 
 ---
 
-## Part 2 — The power-cut test (manual, still outstanding)
+## Part 2 — The power-cut test (still outstanding, and force-restart will not substitute)
 
-This is the one that decides whether `fullfsync` is doing what it claims. It cannot be automated:
-the device has to actually lose power, and no software running on that device can arrange to be
-alive afterwards to tell you what happened.
+This is the test that decides whether `fullfsync` does what it claims. It cannot be automated: the
+device has to actually lose power, and nothing running on that device can be alive afterwards to
+report what happened.
 
-An iPhone cannot have its battery pulled. The available approximations, weakest first:
+### Force-restart was tried and does not work. Do not repeat it.
 
-1. **Force-restart** (Volume Up, Volume Down, hold Side until the Apple logo). This is closer to a
-   kernel panic than a power cut — the hardware stays powered and the drive can still flush its
-   cache. Better than the kill test, still not the real event.
-2. **Run the battery to zero** while writing. A genuine power loss, but slow and awkward to arrange
-   repeatedly, and iOS shuts down deliberately at its cutoff rather than dying abruptly.
-3. **Android reference device with a removable battery, or a dev board.** The only way to get a
-   truly abrupt cut. If the answer matters at the level of certainty ADR-006 implies, this is what
-   provides it, and it is a reason to test the Android device early rather than last.
+An iPhone's battery cannot be pulled, so the obvious approximation is a force-restart (Volume Up,
+Volume Down, hold Side). It was attempted four times on `iPhone15,3`. The fourth was methodologically
+clean — the writer was demonstrably still committing when the device went down, the connection
+dropping mid-stream with no termination message — and it was run under **`relaxed`** as a control,
+the configuration whose own label reads *survives process death, **not** power loss*:
 
-### Procedure
+| device | date | configuration | acknowledged | survived | integrity | lost |
+|---|---|---|---|---|---|---|
+| `iPhone15,3`, iOS 26.6.1 (23G83) | 2026-09-04 | WAL, `synchronous=NORMAL` (relaxed) | 9446 | 9446 | ok | **0** |
 
-1. Plug in and trust the device. Note the model identifier and OS build.
-2. Start a long write run, so the kill lands mid-transaction rather than between transactions:
-   ```bash
-   ./scripts/run-kill-test-on-device.sh 2 600000
-   ```
-   Leave it writing. Acknowledgements stream to the console; **keep that console output** — it is
-   the record of what was acknowledged, and it is the only ground truth you will have afterwards.
-3. Cut power by whichever method above you are using, while writes are in flight.
-4. Restart the device, then:
-   ```bash
-   xcrun devicectl device process launch --device <id> --console com.thro.ThroProbe \
-     --kill-test-inspect <last acknowledged sequence from step 2>
-   ```
-5. Record the report verbatim, with the device identifier, the OS build, and which cut method was
-   used. A power-cut result without its method is not comparable to any other run.
+**The control failed to fail.** The weakest configuration lost nothing, so a force-restart on this
+hardware does not reach the layer this question is about. It cannot discriminate between `relaxed`
+and `fullfsync`, and therefore no force-restart result — including a green one under `fullfsync` —
+is evidence about the durability barrier. Running the strong configuration afterwards would produce
+a reassuring tick that means nothing, which is worse than no result.
 
-**If it fails**, that is a real result and the most valuable one this project can produce. It means
-`fullfsync` is not reaching NAND on that hardware, and ADR-006 is explicit about what follows: the
-durability rule wins and the budget is restated. Record it exactly as measured. Do not re-run until
-it passes and report that.
+Why it does not work is worth stating so nobody re-derives it: a force-restart is a controlled reset,
+not a power cut. The storage controller stays powered across it and in-flight writes complete, and
+the ten seconds the button gesture takes is already longer than the kernel's dirty-page flush
+interval. There is no window to catch.
 
----
+### What an actual answer requires
+
+Hardware whose power can be genuinely interrupted mid-write:
+
+1. **An Android reference device with a removable battery**, or one that can be run from a bench
+   supply that is switched off. This is also the `~£150 A-series Android` the budget document already
+   requires for latency, so one acquisition closes two outstanding items.
+2. **A dev board** (Raspberry Pi or similar) running the same SQLite pragmas against comparable flash.
+   Not either reference device, so a weaker attribution — but it answers the pragma question, which
+   is the part that generalises.
+
+Procedure once such hardware exists: write continuously with the throttled writer so unflushed
+commits always exist, cut power mid-write, restore power, then compare the journal against the last
+acknowledgement that reached the host. `KillProbe` already does all of this; only the interruption
+method changes.
+
+**If it fails**, that is the most valuable result this project can produce: it means `fullfsync` is
+not reaching NAND on that hardware, and ADR-006 is explicit that the durability rule wins and the
+budget is restated. Record it exactly as measured.
 
 ## Device inventory
 
@@ -119,9 +126,9 @@ ADR-011 requires a **named device inventory** — an unowned test is a test that
 
 | role | device | OS | status |
 |---|---|---|---|
-| iOS, flagship | `iPhone15,3` — iPhone 14 Pro Max | iOS 26.1 (23B85) | available; kill test passing |
+| iOS, flagship | `iPhone15,3` — iPhone 14 Pro Max | iOS 26.1 (23B85), updated mid-session to 26.6.1 (23G83) | the only device available; kill test passing |
 | iOS, SE-class reference | *not yet named* | | **needed** — `LATENCY_BUDGETS.md` names an iPhone SE-class device as the reference, and says benchmarking on a Pro model is self-deception |
-| Android, ~£150 A-series reference | *not yet named* | | **needed** — unmeasured; no Android toolchain is installed on the build Mac |
+| Android, ~£150 A-series reference | *not yet named* | | **needed, and now the priority** — unmeasured, no Android toolchain on the build Mac, and it is the only realistic route to a genuine power-cut test as well as the Android latency figure |
 
 The two unnamed rows are why this document is not finished. Neither the latency measurement nor the
 power-cut test is closed until they exist.
