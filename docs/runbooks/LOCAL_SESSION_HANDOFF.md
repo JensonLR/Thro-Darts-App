@@ -1,5 +1,18 @@
 # Handoff to a local Claude Code session on macOS
 
+> **Resolved on 2026-09-04.** The measurement this handoff exists to obtain has been taken:
+> `iPhone15,3` (iPhone 14 Pro Max), iOS 26.1, two consecutive runs, recorded in the "Measurement
+> status" section of `docs/adr/ADR-006-offline-sync.md`. The deciding row measured P95 1.64 / 1.60 ms
+> against the 20 ms budget, so SQLite stays the journal.
+>
+> The document is kept because the same handoff is still needed for what remains — the SE-class
+> iPhone, the Android reference device, and the kill and power-cut tests — and because the setup
+> notes below are what made the run possible. Two things it got wrong are worth knowing: the Xcode
+> project is at `~/Thro Darts App/ThroProbe`, not `~/Documents`, and the blockage was never signing.
+> It was that no phone was plugged in; Apple reports that as "Your team has no devices from which to
+> generate a provisioning profile", which reads like a signing error. `scripts/run-probe-on-device.sh`
+> now checks for the phone first and drives the whole run from the command line.
+
 The remote session that built this branch runs in a Linux container. It has no Swift toolchain, no
 Xcode, and no access to the founder's Mac — it can only see what is pasted into the chat. That is
 fine for everything up to here, and useless for the one task that remains: taking the durability

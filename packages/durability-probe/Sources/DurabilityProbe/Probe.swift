@@ -260,3 +260,42 @@ public enum Probe {
         }
     }
 }
+
+extension Probe {
+
+    /// Print the measured table to stdout, in the same shape the package's tests print on a Mac.
+    ///
+    /// This exists so an on-device run can be captured verbatim rather than read off the screen:
+    /// ADR-006 records these figures as evidence, and a hand-copied percentile is not evidence of
+    /// the same quality as a captured one. It reports, and nothing else — no thresholds are
+    /// applied here that are not already in `ProbeResult.meetsBudget`.
+    public static func printReport(_ results: [ProbeResult]) {
+        print("")
+        print("THRO-PROBE-BEGIN")
+        // Pad in Swift rather than with a %-56@ format width: on Apple platforms String(format:)
+        // ignores field widths for %@, so the format-string version silently produces a ragged
+        // table that is fiddly to read off a phone.
+        func column(_ text: String) -> String {
+            text.count >= 56 ? text : text + String(repeating: " ", count: 56 - text.count)
+        }
+
+        print("  " + column("configuration")
+              + ["P50", "P95", "P99", "worst"].map { $0.leftPadded(to: 7) }.joined()
+              + "  budget")
+        for r in results {
+            let cells = [r.p50, r.p95, r.p99, r.worst]
+                .map { String(format: "%.2f", $0).leftPadded(to: 7) }
+                .joined()
+            print("  " + column(r.configuration.label) + cells
+                  + "  " + (r.meetsBudget ? "meets" : "EXCEEDS"))
+        }
+        print("THRO-PROBE-END")
+        print("")
+    }
+}
+
+private extension String {
+    func leftPadded(to width: Int) -> String {
+        count >= width ? self : String(repeating: " ", count: width - count) + self
+    }
+}

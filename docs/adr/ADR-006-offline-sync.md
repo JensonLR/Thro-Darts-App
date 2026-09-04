@@ -30,13 +30,14 @@ both clients, not a tweak. Measure durability latency on both reference devices 
 budget and the durability rule conflict, **the durability rule wins** and the budget is restated. Losing an acknowledged competitive visit has no repair path, so the
 setting is raised and validated with real kill tests and power-cut tests on device — not assumed.
 
-### Measurement status — indicative only, the required measurement is still outstanding
+### Measurement status — measured on a phone; the SE-class and Android runs are still outstanding
 
 `packages/durability-probe` implements the measurement: it writes synthetic visits, one durable
 transaction each, under every candidate configuration and reports the distribution. It runs in CI on
 macOS on every push, which is what stops it rotting; it is **not** the measurement this ADR asks for.
 
-Two runs exist, both on Macs, 200 visits per configuration, milliseconds.
+Three machines have been measured, 200 visits per configuration, milliseconds. The two Macs are
+indicative only. The phone is the first figure here that bears on the decision.
 
 **GitHub `macos-latest`, arm64, virtualised:**
 
@@ -59,12 +60,28 @@ consecutive runs, showing the spread:
 
 Reproducible to within a few hundredths across runs, so the probe is not measuring noise.
 
-The hardware identifier is recorded raw rather than as a marketing name, because `Mac17,3` is what
-`sysctl -n hw.model` returns and is the thing a later reader can compare against unambiguously.
+**iPhone 14 Pro Max — `iPhone15,3`, iOS 26.1**, on-device, two consecutive runs, phone idle and
+face-down:
+
+| configuration | P50 | P95 | P99 | worst |
+|---|---|---|---|---|
+| relaxed — survives process death, **not** power loss | 0.02 / 0.03 | 0.04 / 0.05 | 0.06 / 0.07 | 0.08 / 0.12 |
+| `synchronous=FULL`, no Apple barrier | 0.09 / 0.09 | 0.12 / 0.13 | 0.22 / 0.19 | 0.28 / 0.25 |
+| `synchronous=FULL` + `fullfsync`, WAL | 0.70 / 0.65 | 1.64 / 1.60 | 1.98 / 1.87 | 2.08 / 2.18 |
+| `synchronous=FULL` + `fullfsync`, rollback journal | 3.33 / 3.26 | 5.14 / 5.37 | 5.55 / 6.08 | 5.76 / 6.84 |
+
+The deciding row reproduces to within 0.04 ms at P95 across the two runs. These figures were
+captured from the device console rather than transcribed from the screen, so they are the numbers
+the phone actually produced.
+
+The hardware identifier is recorded raw rather than as a marketing name, because `Mac17,3` and
+`iPhone15,3` are what `sysctl -n hw.model` and `devicectl` return, and are the thing a later reader
+can compare against unambiguously.
 
 The probe asserts that forcing the barrier is slower than not forcing it — CI measured 0.01 ms
-against 1.17 ms, the MacBook Air 0.01 ms against 0.38 and 0.45 ms. Without that check a run where
-the pragmas were silently ignored would report excellent numbers and mean nothing.
+against 1.17 ms, the MacBook Air 0.01 ms against 0.38 and 0.45 ms, the iPhone 0.02 and 0.03 ms
+against 0.70 and 0.65 ms. Without that check a run where the pragmas were silently ignored would
+report excellent numbers and mean nothing.
 
 **CI is roughly 3x slower than the real machine** (P95 2.01 ms against 0.55–0.73 ms), which is the
 useful direction: the CI job is a conservative proxy for a Mac rather than an optimistic one, so a
@@ -78,12 +95,36 @@ Two things this does support:
   is the entire cost of being right.
 - **WAL over rollback journal**, by about 3.5× at P95 under the same barrier.
 
-What it does **not** support is any conclusion about the budget. This is a datacentre SSD under a
-hypervisor. The ADR asks for **both reference devices**, and the number that decides the client
-architecture is the one from a phone — where the storage controller, the filesystem and the thermal
-state are all different, and where `fullfsync` is doing something a server-class drive can absorb
-and a phone may not. Treating the table above as the answer would be exactly the mistake this ADR
-exists to prevent.
+### The decision this ADR was waiting for
+
+The row that decides it is `synchronous=FULL` + `fullfsync` on WAL, and on the phone it measures
+**P95 1.64 and 1.60 ms against a budget of 20 ms** — inside it by roughly twelve times. Every
+configuration measured on the phone meets the budget, including the rollback journal.
+
+**SQLite stays the journal.** The fallback this ADR describes — a raw append-only write-ahead file
+with the database demoted to a projection, a second storage engine on both clients — is not
+required. The client architecture is unblocked to the extent that one device can unblock it.
+
+Two properties of the phone's numbers are worth keeping:
+
+- **The phone sits between the two Macs**: slower than the MacBook Air (P95 0.55–0.73 ms), faster
+  than virtualised CI (2.01 ms). The pessimism in the CI figure was in the useful direction, as
+  assumed above.
+- **Its tail is far tighter than CI's.** The worst single write on the phone was 2.18 ms; on CI it
+  was 19.78 ms, a whisker under the budget. Whatever produces CI's long tail is a property of the
+  hypervisor and not of iOS, which is worth knowing before anyone treats a CI regression in the
+  worst column as a device problem.
+
+What this does **not** close:
+
+- **This is a flagship.** `LATENCY_BUDGETS.md` names the reference devices as an iPhone SE-class
+  device and a ~£150 A-series Android, and says in terms that benchmarking on a Pro model is
+  self-deception. An iPhone 14 Pro Max is precisely the phone that warning is about. The result is
+  real and it is strong, but the SE-class figure is the one with authority and it does not exist
+  yet. Twelve times of headroom makes it unlikely that the SE-class run overturns this — and
+  "unlikely" is a prediction, not a measurement, which is the distinction this ADR exists to
+  enforce.
+- **The Android reference device has not been measured at all.**
 
 One limit of the probe itself, worth stating so the numbers are not over-read: **it measures
 latency, not durability.** The guard test proves the pragmas changed the system's behaviour; it does
@@ -92,7 +133,8 @@ flush quickly and honestly, and a drive that lied about it would look identical 
 power-cut test distinguishes those two, which is why this ADR asks for one and why the probe alone
 cannot close the requirement.
 
-**Still outstanding: the on-device run on both reference devices, and the kill and power-cut tests.**
+**Still outstanding: the SE-class iPhone run, the Android reference device, and the kill and
+power-cut tests.**
 `docs/runbooks/DURABILITY_MEASUREMENT.md` is the procedure; `ProbeView` is a one-tap front end so the
 run does not require setting up a test target. Record device model and OS version with the numbers —
 without those the figures are unattributable and cannot be compared to a later run.

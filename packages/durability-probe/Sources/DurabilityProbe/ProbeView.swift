@@ -109,6 +109,12 @@ public struct ProbeView: View {
                     }
                 }
             }
+            // Also emit the table to stdout. The numbers go into ADR-006 as evidence, and reading
+            // sixteen figures off a phone screen by hand is a transcription error waiting to
+            // happen. `devicectl device process launch --console` captures this, so the recorded
+            // figures are the ones the device actually produced.
+            Probe.printReport(collected)
+
             DispatchQueue.main.async {
                 results = collected
                 running = false
