@@ -33,20 +33,26 @@ database.
 | 2 | Repository foundation | Event schema and the command path, proved against a real Postgres |
 | 3 | Design ingestion | Token pipeline generating Swift, Kotlin and CSS from one source |
 | 4 | Competitive core | Scoring engine passing 86,000 exhaustive transitions |
-| 5 | Offline match lifecycle | **Blocked** — needs iOS and Android toolchains |
-| 6 | Vertical slice | **Blocked** — needs the authentication surface (B4) |
-| 7+ | Trust, rating, organiser, live | Not started |
+| 5 | Offline match lifecycle | Domain core closed — grants, per-device streams, reconciliation. **On-device journal blocked**, needs iOS and Android toolchains |
+| 6 | Vertical slice | **Blocked** — needs the authentication *surface* (B4). ADR-008's mechanism is built |
+| 7 | Trust and provenance | Closed — attestation, disputes, adjudication, quarantine, eligibility |
+| 8 | Rating | Architecture closed — a replayable projection. **The model is OD-001 and stays open** |
+| 9 | Organiser | Correction and adjudication closed, both under the conflict-of-interest rule |
+| 10+ | Live, notifications, payments | Not started — each waits on a product decision |
 
 **What is verified, and how:**
 
 | | |
 |---|---|
-| Scoring rules | 395 property checks against independent darts facts |
-| Scoring engine | 86,000 exhaustive transitions + 58 corpus cases |
-| Statistics honesty | 14 tests — an uncomputable figure says so; an approximate one is never a point value |
+| Scoring rules | 436 property checks against independent darts facts |
+| Scoring engine | 86,000 exhaustive transitions + 64 corpus cases |
+| Statistics honesty | 20 tests — an uncomputable figure says so; an approximate one is never a point value |
+| Trust and eligibility | 30 tests — a label can never disagree with the provenance under it |
+| Authorization | 21 tests — the conflict-of-interest rule, and age as a dimension |
+| Rating projection | 14 tests — reproducible from a watermark pair; OD-001 stays open |
 | Competition structure | 13 tests — bracket identities exhaustive for every field size to 1024 |
-| Event schema | 21 property assertions against a real PostgreSQL |
-| Command path | 14 integrity properties, end to end against a real PostgreSQL |
+| Schema and privileges | 71 property assertions against a real PostgreSQL |
+| Command path | 9 integration suites, 132 properties end to end against a real PostgreSQL |
 | Design tokens | 50 contrast pairs, absolute thresholds, 0 unrecorded breaches |
 
 **Nothing here is production ready**, and no claim of security, offline reliability or rating
