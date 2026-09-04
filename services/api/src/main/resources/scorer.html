@@ -291,8 +291,10 @@ function askConfirmation(leg){
     '<div class="confirmcard" role="dialog" aria-modal="true" aria-labelledby="cfTitle">' +
       '<h2 id="cfTitle">Leg ' + leg + '</h2>' +
       '<p><strong>' + who + '</strong>, do you agree with how leg ' + leg + ' was scored? ' +
-      'Confirming is what lets this match count toward a rating. It stands in the record either way.</p>' +
+      'Confirming is what lets this match count toward a rating. It stands in the record either way, ' +
+      'and you can confirm later — the next leg does not wait for this.</p>' +
       '<div class="confirmrow">' +
+        '<button class="secondary" id="cfLater">Not now</button>' +
         '<button class="secondary" id="cfNo">Disagree</button>' +
         '<button class="enter" id="cfYes">Confirm</button>' +
       '</div></div>';
@@ -305,6 +307,12 @@ function askConfirmation(leg){
   };
   el.querySelector("#cfYes").onclick = () => send(true);
   el.querySelector("#cfNo").onclick = () => send(false);
+  // PD-002 is explicit that confirmation is ASYNCHRONOUS — it can arrive hours later, when either
+  // player next reaches a network. A prompt that blocks the next leg until someone answers
+  // contradicts the decision it implements, and at a real board the opponent is often not holding
+  // the phone. Deferring costs the match nothing except, for now, its rating eligibility.
+  el.querySelector("#cfLater").onclick = () => el.remove();
+  el.addEventListener("click", (e) => { if (e.target === el) el.remove(); });
   pendingLeg = null;
 }
 
