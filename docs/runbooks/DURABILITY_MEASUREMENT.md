@@ -69,8 +69,9 @@ difference is your machine and worth saying so.
    the app process, and this app exists to measure SQLite write latency — a second SQLite client in
    the process being measured is a confounding variable for no benefit. They also generate
    boilerplate in `ContentView.swift` that step 3c deletes.
-8. Testing System: either option is fine. It creates a test target inside `ThroProbe`, which this
-   procedure never uses — the probe package brings its own tests.
+8. **Testing System: `None`.** The alternatives generate test targets inside `ThroProbe` that this
+   procedure never runs — the probe package's tests live in the package and run from Terminal
+   (Part 2), not from this app.
 9. Leave **Host in CloudKit** unticked. Click **Next**.
 7. Save it in `~/Documents` (**not** inside the Thro-Darts-App folder). Click **Create**.
 
