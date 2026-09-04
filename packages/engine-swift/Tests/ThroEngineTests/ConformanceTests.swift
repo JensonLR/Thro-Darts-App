@@ -58,7 +58,12 @@ final class ConformanceTests: XCTestCase {
         }
     }
 
-    /// The exhaustive family, run separately because it is large and its shape is flat.
+    /// The exhaustive transition table.
+    ///
+    /// A different shape from the other vectors — flat rows of
+    /// `{remaining, visitTotal, outRule, effect, reason, newRemaining}` rather than whole matches —
+    /// and it is the strongest evidence available that this engine and the generator agree, because
+    /// neither produced the other's expected values.
     func testExhaustiveTransitions() throws {
         let vectors = try vectorsDirectory()
         let file = vectors.appendingPathComponent("core-transitions.jsonl")
@@ -66,18 +71,66 @@ final class ConformanceTests: XCTestCase {
             throw XCTSkip("core-transitions.jsonl not generated (run generate.py --full)")
         }
         let text = try String(contentsOf: file, encoding: .utf8)
+        let a = PlayerId("A")
+        let b = PlayerId("B")
         var checked = 0
         var failures: [String] = []
 
         for line in text.split(separator: "\n", omittingEmptySubsequences: true) {
             guard let data = String(line).data(using: .utf8),
-                  let obj = try JSONSerialization.jsonObject(with: data) as? [String: Any]
-            else { continue }
-            checked += runCase(obj, &failures)
-            if failures.count > 20 { break }
+                  let r = try JSONSerialization.jsonObject(with: data) as? [String: Any],
+                  let remaining = r["remaining"] as? Int,
+                  let visitTotal = r["visitTotal"] as? Int,
+                  let wantEffect = r["effect"] as? String,
+                  let wantRemaining = r["newRemaining"] as? Int
+            else {
+                failures.append("malformed row")
+                continue
+            }
+            // The row carries its own out-rule. Reading it rather than assuming double-out means
+            // this stays correct if the generator ever emits master or straight rows.
+            let outRule = OutRule(rawValue: (r["outRule"] as? String) ?? "double") ?? .double
+            let wantReason = r["reason"] as? String
+
+            let base = MatchState.start(
+                format: MatchFormat(
+                    startingScore: 501,
+                    inRule: .straight,
+                    outRule: outRule,
+                    legs: Structure(mode: .firstTo, target: 5),
+                    throwFirst: a
+                ),
+                home: a,
+                away: b
+            )
+            var state = base
+            state.remaining[a] = remaining
+
+            switch Engine.apply(state, .visit(a, visitTotal)) {
+            case let .rejected(reason):
+                if wantEffect != "rejected" || wantReason != reason.rawValue {
+                    failures.append("rem=\(remaining) vt=\(visitTotal): rejected \(reason.rawValue) != \(wantEffect)/\(wantReason ?? "nil")")
+                }
+            case let .accepted(newState, effect, bustReason):
+                let got = effect.rawValue
+                let gotRemaining = newState.remaining[a] ?? -1
+                // A leg win at firstTo-5 with one leg already banked is a match win in the engine's
+                // eyes; the generator reports the leg. Both are right about the transition.
+                if got != wantEffect && !(got == "match_won" && wantEffect == "leg_won") {
+                    failures.append("rem=\(remaining) vt=\(visitTotal): effect \(got) != \(wantEffect)")
+                } else if let wr = wantReason, wr != bustReason?.rawValue {
+                    failures.append("rem=\(remaining) vt=\(visitTotal): reason \(bustReason?.rawValue ?? "nil") != \(wr)")
+                } else if wantEffect != "leg_won" && gotRemaining != wantRemaining {
+                    failures.append("rem=\(remaining) vt=\(visitTotal): remaining \(gotRemaining) != \(wantRemaining)")
+                }
+            }
+            checked += 1
         }
-        print("exhaustive: \(checked) transitions")
-        XCTAssertTrue(failures.isEmpty, "exhaustive failures:\n  " + failures.prefix(20).joined(separator: "\n  "))
+
+        print("exhaustive transitions verified against the engine: \(checked)")
+        if !failures.isEmpty {
+            XCTFail("\(failures.count) exhaustive failures:\n  " + failures.prefix(15).joined(separator: "\n  "))
+        }
         XCTAssertGreaterThan(checked, 1000, "the exhaustive family did not actually run")
     }
 

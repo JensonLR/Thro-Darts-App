@@ -181,9 +181,17 @@ class ConformanceTest {
                 val r = parseJson(line).obj()
                 val remaining = r.getValue("remaining").int()
                 val visitTotal = r.getValue("visitTotal").int()
+                // The row carries its own out-rule. Reading it rather than assuming double-out
+                // means this stays correct if the generator ever emits master or straight rows —
+                // and keeps the Kotlin and Swift runners testing the same thing.
+                val outRule = when (r.opt("outRule")?.str()) {
+                    "master" -> OutRule.MASTER
+                    "straight" -> OutRule.STRAIGHT
+                    else -> OutRule.DOUBLE
+                }
                 val base = MatchState.start(
                     MatchFormat(
-                        startingScore = 501, inRule = InRule.STRAIGHT, outRule = OutRule.DOUBLE,
+                        startingScore = 501, inRule = InRule.STRAIGHT, outRule = outRule,
                         legs = Structure(StructureMode.FIRST_TO, 5), throwFirst = a,
                     ),
                     a, b,
