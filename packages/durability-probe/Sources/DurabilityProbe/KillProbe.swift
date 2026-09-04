@@ -52,10 +52,17 @@ public enum KillProbe {
     /// The kill fires from a background thread after `killAfterMs`, so it lands wherever the writer
     /// happens to be, usually inside a transaction. That is the case worth testing: a torn write,
     /// not a clean stop between two of them.
+    /// `maxVisits` caps the journal size. Under `relaxed` the writer manages well over a hundred
+    /// thousand commits a minute, and an unbounded run produced a 270,000-row, 18 MB journal whose
+    /// `integrity_check` took long enough on device to trip the iOS launch watchdog — the inspect
+    /// phase never reported. The cap keeps the journal small enough to adjudicate quickly while
+    /// still leaving writes in flight when the device goes down, which is the only property the
+    /// test actually needs.
     public static func writeUntilKilled(
         _ configuration: Durability,
         killAfterMs: Int,
-        fresh: Bool
+        fresh: Bool,
+        maxVisits: Int = 20_000
     ) throws {
         if fresh { removeJournal() }
 
@@ -117,7 +124,7 @@ public enum KillProbe {
         matchId.withCString { matchC in
             occurredAt.withCString { occurredC in
                 var seq = startSeq
-                while true {
+                while seq - startSeq < maxVisits {
                     seq += 1
                     sqlite3_reset(stmt)
                     sqlite3_clear_bindings(stmt)
@@ -137,6 +144,12 @@ public enum KillProbe {
                     print("KILLTEST-ACK \(seq)")
                     fflush(stdout)
                 }
+                // The cap is reached but the process must stay alive: the event under test is the
+                // device going down, and an app that has already exited cannot demonstrate anything
+                // about it.
+                print("KILLTEST-CAP-REACHED \(seq)")
+                fflush(stdout)
+                while true { Thread.sleep(forTimeInterval: 1) }
             }
         }
 
@@ -307,6 +320,9 @@ extension KillProbe {
         if let i = args.firstIndex(of: "--kill-test-write") {
             let index = args.count > i + 1 ? Int(args[i + 1]) ?? 2 : 2
             let killAfterMs = args.count > i + 2 ? Int(args[i + 2]) ?? 1500 : 1500
+            let maxVisits = args.firstIndex(of: "--max-visits").flatMap { j in
+                args.count > j + 1 ? Int(args[j + 1]) : nil
+            } ?? 20_000
             let configuration = Durability.candidates[
                 min(max(index, 0), Durability.candidates.count - 1)
             ]
@@ -314,7 +330,8 @@ extension KillProbe {
                 try writeUntilKilled(
                     configuration,
                     killAfterMs: killAfterMs,
-                    fresh: args.contains("--fresh")
+                    fresh: args.contains("--fresh"),
+                    maxVisits: maxVisits
                 )
             } catch {
                 print("KILLTEST-WRITE-ERROR \(error)")
