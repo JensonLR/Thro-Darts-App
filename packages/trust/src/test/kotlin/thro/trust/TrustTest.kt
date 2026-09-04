@@ -53,7 +53,7 @@ class TrustTest {
         // the attack PD-002 exists to close.
         val p = prov(confirmations = listOf(Confirmation(alice, now)))
         assertEquals(Attestation.SELF_REPORTED, p.attestation)
-        assertEquals(1, p.participantConfirmations)
+        assertEquals(1, p.participantConfirmations, "alice is one backer, not two")
     }
 
     @Test
@@ -72,6 +72,15 @@ class TrustTest {
     @Test
     fun `both competitors agreeing is participant-confirmed`() {
         assertEquals(Attestation.PARTICIPANT_CONFIRMED, prov(confirmations = bothConfirmed()).attestation)
+    }
+
+    @Test
+    fun `the opponent alone confirming is enough, because entering is asserting`() {
+        // The ordinary flow: alice scores the whole match, bob confirms. Two distinct people stand
+        // behind the result, and asking alice to also agree with what she typed adds nothing.
+        val p = prov(confirmations = listOf(Confirmation(bob, now)))
+        assertEquals(Attestation.PARTICIPANT_CONFIRMED, p.attestation)
+        assertEquals(setOf(alice, bob), p.backers)
     }
 
     @Test

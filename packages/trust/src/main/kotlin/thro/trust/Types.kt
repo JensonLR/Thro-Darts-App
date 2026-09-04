@@ -99,7 +99,27 @@ public enum class VerificationState {
             CORRECTED -> "This result was corrected."
         }
 
-    public companion object
+    public companion object {
+        /**
+         * Derives the design's label from provenance.
+         *
+         * Order matters, and it is not the ladder. The first three answers are about the result's
+         * *state* and outrank its quality: a disputed result is disputed however well it was
+         * captured, and showing "Recorded in THRØ and confirmed by the organiser" on a result a
+         * player is actively contesting would be true and useless.
+         */
+        public fun of(p: Provenance): VerificationState = when {
+            p.hasOpenDispute -> DISPUTED
+            p.corrections > 0 -> CORRECTED
+            p.awaitingConfirmation -> PENDING
+            p.organiserConfirmed && p.captureChannel == CaptureChannel.THRO_LIVE -> THRO_VERIFIED
+            p.organiserConfirmed -> ORGANISER_CONFIRMED
+            p.captureChannel == CaptureChannel.THRO_LIVE &&
+                p.attestation >= Attestation.PARTICIPANT_CONFIRMED -> THRO_RECORDED
+            p.attestation >= Attestation.PARTICIPANT_CONFIRMED -> PARTICIPANT_CONFIRMED
+            else -> SELF_REPORTED
+        }
+    }
 }
 
 /** A participant's assertion that the recorded result is wrong. Localises to a leg. */
@@ -156,10 +176,23 @@ public data class Provenance(
     /** True while THRØ is still waiting for a confirmation it expects. */
     val awaitingConfirmation: Boolean = false,
 ) {
-    /** How many of the two competitors are recorded as agreeing. */
-    public val participantConfirmations: Int
-        get() = confirmations.filter { !it.isOrganiser }.map { it.actorId }
-            .filter { it in participants }.distinct().size
+    /**
+     * The distinct competitors who stand behind this result.
+     *
+     * The player who **entered** it is one of them: entering a result is asserting it, which is
+     * precisely what `self-reported` means. Counting them again when they tap confirm would let
+     * one player manufacture corroboration alone, so this is a set and not a tally.
+     *
+     * In the ordinary flow one player scores the match and the other confirms — two distinct
+     * backers, and the result is participant-confirmed without the scorer being asked to agree
+     * with themselves.
+     */
+    public val backers: Set<UUID>
+        get() = (setOf(enteredBy) + confirmations.filter { !it.isOrganiser }.map { it.actorId })
+            .filter { it in participants }.toSet()
+
+    /** How many of the competitors stand behind it. */
+    public val participantConfirmations: Int get() = backers.size
 
     public val organiserConfirmed: Boolean
         get() = confirmations.any { it.isOrganiser }
@@ -178,7 +211,7 @@ public data class Provenance(
     public val attestation: Attestation
         get() = when {
             organiserConfirmed -> Attestation.ORGANISER_CONFIRMED
-            participantConfirmations >= participants.size && participants.isNotEmpty() ->
+            participants.isNotEmpty() && backers.containsAll(participants) ->
                 Attestation.PARTICIPANT_CONFIRMED
             else -> Attestation.SELF_REPORTED
         }

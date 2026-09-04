@@ -28,7 +28,10 @@ import java.util.concurrent.ConcurrentHashMap
  */
 public object PlaytestServer {
 
-    private data class Registered(val home: String, val away: String, val device: UUID)
+    private data class Registered(
+        val home: String, val away: String, val device: UUID,
+        val homeId: UUID = UUID.randomUUID(), val awayId: UUID = UUID.randomUUID(),
+    )
 
     private val matches = ConcurrentHashMap<UUID, Registered>()
 
@@ -93,6 +96,10 @@ public object PlaytestServer {
                 ex.requestMethod == "POST" && path.isEmpty() -> createMatch(conn, body)
                 ex.requestMethod == "POST" && path.endsWith("/visit") ->
                     recordVisit(conn, UUID.fromString(path.removeSuffix("/visit")), body)
+                ex.requestMethod == "POST" && path.endsWith("/attest") ->
+                    attest(conn, UUID.fromString(path.removeSuffix("/attest")), body)
+                ex.requestMethod == "GET" && path.endsWith("/trust") ->
+                    Attestations(conn).eligibility(UUID.fromString(path.removeSuffix("/trust")))
                 ex.requestMethod == "GET" && path.endsWith("/stats") ->
                     matchStats(conn, UUID.fromString(path.removeSuffix("/stats")))
                 ex.requestMethod == "GET" && path.isNotEmpty() ->
@@ -111,7 +118,7 @@ public object PlaytestServer {
         val id = UUID.randomUUID()
         val homeId = UUID.randomUUID()
         val awayId = UUID.randomUUID()
-        matches[id] = Registered(home, away, UUID.randomUUID())
+        matches[id] = Registered(home, away, UUID.randomUUID(), homeId, awayId)
         // The aggregate is the authority on who is playing; the in-memory registry is only a
         // convenience for this harness. Opening the match is what makes any evidence possible.
         Matches(conn).open(id, homeId, awayId, home, away, playtestFormat(PlayerId(home)))
@@ -157,6 +164,31 @@ public object PlaytestServer {
      * Both competitors' figures, each carrying its own basis. Derived by replaying the log through
      * the engine — nothing is stored, so this cannot drift from the evidence it is computed from.
      */
+    /**
+     * The non-scoring participant confirms, or refuses, a leg.
+     *
+     * This is what raises a result from self-reported to participant-confirmed, and under PD-002 it
+     * is the difference between a result that moves a rating and one that only stands in the record.
+     */
+    private fun attest(conn: Connection, matchId: UUID, body: String): String {
+        val reg = matches[matchId] ?: throw IllegalArgumentException("unknown match")
+        val leg = field(body, "leg")?.toIntOrNull() ?: throw IllegalArgumentException("leg required")
+        val who = field(body, "player") ?: throw IllegalArgumentException("player required")
+        val attested = field(body, "attested") != "false"
+        val participant = if (who == reg.home) reg.homeId else reg.awayId
+        // A separate device id per attesting player: the confirming participant is not the scorer,
+        // and merging their streams would lose exactly the corroboration this exists to create.
+        val device = UUID.nameUUIDFromBytes("attest:$matchId:$who".toByteArray())
+        val seq = nextSeq(conn, matchId, device)
+        val r = Attestations(conn).attest(matchId, leg, participant, attested, device, seq)
+        return when (r) {
+            is Attestations.Result.Recorded ->
+                """{"result":"recorded","leg":${r.legOrdinal},"attested":${r.attested},""" +
+                    """"trust":${Attestations(conn).eligibility(matchId)}}"""
+            is Attestations.Result.Refused -> """{"result":"refused","reason":${quote(r.why)}}"""
+        }
+    }
+
     private fun matchStats(conn: Connection, matchId: UUID): String {
         val reg = matches[matchId] ?: throw IllegalArgumentException("unknown match")
         val proj = StatsProjection(conn)

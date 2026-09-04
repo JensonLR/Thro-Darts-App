@@ -1,31 +1,6 @@
 package thro.trust
 
 /**
- * Derives the design's verification label from provenance.
- *
- * Order matters, and it is not the ladder. The first three answers are about the result's *state*
- * and outrank its quality: a disputed result is disputed however well it was captured, and showing
- * "Recorded in THRØ and confirmed by the organiser" on a result a player is actively contesting
- * would be true and useless.
- */
-public fun VerificationState.Companion.of(p: Provenance): VerificationState = when {
-    p.hasOpenDispute -> VerificationState.DISPUTED
-    p.corrections > 0 -> VerificationState.CORRECTED
-    p.awaitingConfirmation -> VerificationState.PENDING
-    p.organiserConfirmed && p.captureChannel == CaptureChannel.THRO_LIVE ->
-        VerificationState.THRO_VERIFIED
-    p.organiserConfirmed -> VerificationState.ORGANISER_CONFIRMED
-    p.captureChannel == CaptureChannel.THRO_LIVE &&
-        p.attestation >= Attestation.PARTICIPANT_CONFIRMED -> VerificationState.THRO_RECORDED
-    p.attestation >= Attestation.PARTICIPANT_CONFIRMED -> VerificationState.PARTICIPANT_CONFIRMED
-    else -> VerificationState.SELF_REPORTED
-}
-
-/** Kotlin needs a companion to hang [of] on. */
-public val VerificationState.Companion.states: List<VerificationState>
-    get() = VerificationState.entries
-
-/**
  * Which outcome types may inform the rating model, and which may establish a rating.
  *
  * Configurable rather than hardwired, per ADR-014 and the open-decisions discipline: the rating

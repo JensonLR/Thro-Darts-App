@@ -94,6 +94,17 @@ input{
   border:1px solid var(--color-border-default);border-radius:6px;width:100%
 }
 .hide{display:none!important}
+/* Trust is evidence quality, never prestige, so it is stated plainly and never decorated. */
+.trust{font-size:11px;letter-spacing:.06em;text-transform:uppercase;opacity:.7;text-align:center;
+  max-width:150px;line-height:1.3}
+.confirm{position:fixed;inset:0;background:rgba(0,0,0,.72);display:flex;align-items:center;
+  justify-content:center;padding:var(--spacing-5);z-index:20}
+.confirmcard{background:var(--thro-ink-raised);border:1px solid var(--color-border-default);
+  border-radius:12px;padding:var(--spacing-5);max-width:340px;width:100%}
+.confirmcard h2{font-size:19px;font-weight:700;margin-bottom:var(--spacing-2)}
+.confirmcard p{font-size:14px;opacity:.8;line-height:1.45;margin-bottom:var(--spacing-4)}
+.confirmrow{display:flex;gap:var(--spacing-2)}
+.confirmrow button{flex:1}
 .stats{position:fixed;inset:0;background:var(--thro-ink);overflow-y:auto;
   padding:var(--spacing-5);z-index:10}
 /* Secondary actions still meet the 44px minimum target; only the scoring keys get the 64px one. */
@@ -140,6 +151,7 @@ input{
       <div style="display:flex;flex-direction:column;align-items:center;gap:6px">
         <div class="sport legscore" id="legScore">0–0</div>
         <button class="secondary" id="showStats">Stats</button>
+        <div class="trust" id="trust" role="status" aria-live="polite"></div>
       </div>
       <div class="player away" id="pAway">
         <div class="name" id="nAway">Away</div>
@@ -227,6 +239,9 @@ function setEntry(v){
 }
 
 async function submit(total, dartsUsed, dartsAtDouble){
+  // Captured before the visit is applied: after it, the thrower has already rotated.
+  const thrower = S.state.thrower;
+  const legBefore = S.state.currentLeg;
   const r = await post("/api/match/"+S.matchId+"/visit",
     {player:S.state.thrower, visitTotal:total,
      dartsUsed:dartsUsed ?? null, dartsAtDouble:dartsAtDouble ?? null});
@@ -253,9 +268,51 @@ async function submit(total, dartsUsed, dartsAtDouble){
   } else if (o.effect === "leg_won" || o.effect === "match_won"){
     m.className = "msg ok";
     m.textContent = o.effect === "match_won" ? "Match won." : "Leg won.";
+    // The leg that was just won is the one the OTHER player is asked to confirm. Under PD-002 a
+    // result nobody else stands behind still counts in the record but never moves a rating.
+    pendingLeg = legBefore;
+    legWinner = thrower;
   } else { m.className="msg"; m.textContent = ""; }
   setEntry("");
   render(r.state);
+  if (pendingLeg) askConfirmation(pendingLeg);
+}
+
+let pendingLeg = null;
+let legWinner = null;
+
+// The confirming player is the one who did NOT throw the winning darts. Asking the scorer to
+// confirm their own leg would be the self-confirmation the trust model explicitly refuses to count.
+function askConfirmation(leg){
+  const who = legWinner === S.state.home ? S.state.away : S.state.home;
+  const el = document.createElement("div");
+  el.className = "confirm";
+  el.innerHTML =
+    '<div class="confirmcard" role="dialog" aria-modal="true" aria-labelledby="cfTitle">' +
+      '<h2 id="cfTitle">Leg ' + leg + '</h2>' +
+      '<p><strong>' + who + '</strong>, do you agree with how leg ' + leg + ' was scored? ' +
+      'Confirming is what lets this match count toward a rating. It stands in the record either way.</p>' +
+      '<div class="confirmrow">' +
+        '<button class="secondary" id="cfNo">Disagree</button>' +
+        '<button class="enter" id="cfYes">Confirm</button>' +
+      '</div></div>';
+  document.body.appendChild(el);
+  const send = async (attested) => {
+    const r = await post("/api/match/" + S.matchId + "/attest",
+                         {leg: leg, player: who, attested: attested});
+    if (r.trust) renderTrust(r.trust);
+    el.remove();
+  };
+  el.querySelector("#cfYes").onclick = () => send(true);
+  el.querySelector("#cfNo").onclick = () => send(false);
+  pendingLeg = null;
+}
+
+function renderTrust(t){
+  const el = $("trust");
+  if (!el || !t) return;
+  el.textContent = t.eligible ? "Counts toward rating" : "Not yet rateable";
+  el.title = t.verificationLabel || "";
 }
 
 // Two different questions, asked when they actually apply.
