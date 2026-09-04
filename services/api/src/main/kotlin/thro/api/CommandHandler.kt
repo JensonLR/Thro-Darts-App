@@ -1,6 +1,7 @@
 package thro.api
 
 import java.sql.Connection
+import java.time.Instant
 import java.util.UUID
 import thro.engine.Command
 import thro.engine.Effect
@@ -82,7 +83,15 @@ public class CommandHandler(private val connection: Connection) {
                 return CommandResult.Replayed(it)
             }
 
-            // 2. Gapless per-device sequence. A gap means the device is missing events, so the
+            // 2. Authority (ADR-006 step 2). This ANNOTATES the evidence; it never gates it. A
+            //    revoked or expired grant still records — evidence is not destroyed for an
+            //    authorization reason, because the dispute that needs it is the one in which
+            //    someone's authority was contested. Unsound authority is routed to review instead.
+            val (authority, grantId) = Grants(connection).authorityFor(
+                cmd.matchId, cmd.actorId, cmd.deviceId, Instant.parse(cmd.occurredAt),
+            )
+
+            // 3. Gapless per-device sequence. A gap means the device is missing events, so the
             //    server refuses rather than applying past it and silently reordering evidence.
             val expected = nextSeqFor(cmd.matchId, cmd.deviceId)
             if (cmd.deviceSeq != expected) {
@@ -90,10 +99,10 @@ public class CommandHandler(private val connection: Connection) {
                 return CommandResult.Gap(expected)
             }
 
-            // 3. Rehydrate from the server's own log. The client's view is not consulted.
+            // 4. Rehydrate from the server's own log. The client's view is not consulted.
             val state = rehydrate(cmd.matchId, cmd.deviceId, PlayerId(home), PlayerId(away))
 
-            // 4. Revalidate through the same engine the client ran.
+            // 5. Revalidate through the same engine the client ran.
             val outcome = Engine.apply(
                 state,
                 Command.RecordVisit(
@@ -110,9 +119,9 @@ public class CommandHandler(private val connection: Connection) {
                 )
             }
 
-            // 5. A refusal is recorded as a receipt but produces no evidence: it did not happen.
+            // 6. A refusal is recorded as a receipt but produces no evidence: it did not happen.
             if (result is CommandResult.Applied) {
-                appendEvent(cmd, result)
+                appendEvent(cmd, result, authority, grantId)
             }
             writeReceipt(cmd, result)
             connection.commit()
@@ -187,7 +196,12 @@ public class CommandHandler(private val connection: Connection) {
         }
     }
 
-    private fun appendEvent(cmd: VisitCommand, applied: CommandResult.Applied) {
+    private fun appendEvent(
+        cmd: VisitCommand,
+        applied: CommandResult.Applied,
+        authority: Authority,
+        grantId: UUID?,
+    ) {
         val payload = buildString {
             append("{")
             append("\"player\":\"").append(cmd.player).append("\",")
@@ -201,8 +215,9 @@ public class CommandHandler(private val connection: Connection) {
             """
             INSERT INTO evidence.event
               (event_id, match_id, device_id, device_seq, event_type, schema_version,
-               engine_version, correlation_id, actor_id, actor_role, occurred_at, occurred_tz, payload)
-            VALUES (?, ?, ?, ?, 'VisitRecorded', 1, ?, ?, ?, ?, ?::timestamptz, ?, ?::jsonb)
+               engine_version, correlation_id, actor_id, actor_role, occurred_at, occurred_tz,
+               payload, authority, grant_id)
+            VALUES (?, ?, ?, ?, 'VisitRecorded', 1, ?, ?, ?, ?, ?::timestamptz, ?, ?::jsonb, ?, ?)
             """.trimIndent(),
         ).use { ps ->
             ps.setObject(1, UUID.randomUUID())
@@ -216,6 +231,8 @@ public class CommandHandler(private val connection: Connection) {
             ps.setString(9, cmd.occurredAt)
             ps.setString(10, cmd.occurredTz)
             ps.setString(11, payload)
+            ps.setString(12, authority.name.lowercase())
+            ps.setObject(13, grantId)
             ps.executeUpdate()
         }
     }

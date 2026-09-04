@@ -152,6 +152,63 @@ if echo "$r" | grep -qi 'violates check constraint'; then
 else bad "more than three darts at a double is rejected" "4 was accepted"; fi
 
 echo
+echo "== scoring grants =="
+EV=$($PSQL -c "SELECT gen_random_uuid();")
+AC=$($PSQL -c "SELECT gen_random_uuid();")
+DV=$($PSQL -c "SELECT gen_random_uuid();")
+GR=$($PSQL -c "SELECT gen_random_uuid();")
+$PSQL -c "SET ROLE app_trust; INSERT INTO trust.scoring_grant
+  (grant_id,event_id,actor_id,device_id,actor_role,expires_at)
+  VALUES ('$GR','$EV','$AC','$DV','participant', now() + interval '34 hours');" >/dev/null 2>&1
+n=$($PSQL -c "SELECT count(*) FROM trust.scoring_grant WHERE grant_id='$GR';")
+check "the trust role can issue a grant" "$n" "1"
+
+# The command path reads authority on every visit, so it must be able to see grants.
+n=$($PSQL -c "SET ROLE app_match; SELECT count(*) FROM trust.scoring_grant WHERE grant_id='$GR';" 2>&1)
+check "the match role can read authority" "$n" "1"
+
+r=$($PSQL -c "SET ROLE app_match; DELETE FROM trust.scoring_grant WHERE grant_id='$GR';" 2>&1)
+if echo "$r" | grep -qi 'permission denied'; then
+  ok "no role may delete a grant"
+else bad "no role may delete a grant" "delete was permitted"; fi
+
+# Two live grants for one scope would make "which authority was this under" unanswerable.
+r=$($PSQL -c "SET ROLE app_trust; INSERT INTO trust.scoring_grant
+  (grant_id,event_id,actor_id,device_id,actor_role,expires_at)
+  VALUES (gen_random_uuid(),'$EV','$AC','$DV','participant', now() + interval '34 hours');" 2>&1)
+if echo "$r" | grep -qi 'duplicate key\|unique constraint'; then
+  ok "an actor cannot hold two live grants for one scope"
+else bad "an actor cannot hold two live grants for one scope" "a second live grant was accepted"; fi
+
+$PSQL -c "SET ROLE app_trust; UPDATE trust.scoring_grant
+  SET revoked_at = now(), revoked_by = '$AC', revoked_reason = 'test'
+  WHERE grant_id='$GR';" >/dev/null 2>&1
+d=$($PSQL -c "SELECT revoked_at IS NOT NULL FROM trust.scoring_grant WHERE grant_id='$GR';")
+check "a grant can be revoked" "$d" "t"
+
+r=$($PSQL -c "SET ROLE app_trust; UPDATE trust.scoring_grant SET revoked_at = NULL, revoked_by = NULL
+  WHERE grant_id='$GR';" 2>&1)
+if echo "$r" | grep -qi 'cannot be undone'; then
+  ok "a revocation cannot be undone"
+else bad "a revocation cannot be undone" "un-revoking was permitted"; fi
+
+r=$($PSQL -c "SET ROLE app_trust; UPDATE trust.scoring_grant SET expires_at = now() - interval '1 hour'
+  WHERE grant_id='$GR';" 2>&1)
+if echo "$r" | grep -qi 'cannot be moved backward'; then
+  ok "expiry cannot be moved backward"
+else bad "expiry cannot be moved backward" "retroactive expiry was permitted"; fi
+
+# Evidence records the authority it was written under, and anything but 'granted' needs review.
+r=$($PSQL -c "SET ROLE app_match; INSERT INTO evidence.event
+  (event_id,match_id,device_id,device_seq,event_type,schema_version,correlation_id,actor_id,
+   actor_role,occurred_at,occurred_tz,payload,authority)
+  VALUES (gen_random_uuid(),'$M','$DA',900,'VisitRecorded',1,gen_random_uuid(),'$AC',
+   'participant', now(),'Europe/London','{}'::jsonb,'nonsense');" 2>&1)
+if echo "$r" | grep -qi 'violates check constraint'; then
+  ok "an unknown authority value is rejected"
+else bad "an unknown authority value is rejected" "'nonsense' was accepted"; fi
+
+echo
 echo "-------------------------------------------"
 echo "  $PASS passed, $FAIL failed"
 [ "$FAIL" -eq 0 ] || exit 1
