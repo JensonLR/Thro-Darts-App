@@ -211,11 +211,66 @@ public enum KillProbe {
         return Report(opened: true, integrity: integrity, maxSeq: maxSeq, rowCount: rowCount, holes: holes)
     }
 
-    /// Prints the surviving state, and the verdict against a known last acknowledgement.
+    /// The pass rule, in one place.
     ///
-    /// `lastAck` comes from the console record of the killed run. The invariant is one-directional:
-    /// the journal may legitimately hold *more* than we saw acknowledged, because the kill can
-    /// discard a buffered acknowledgement for a write that did land. It may never hold less.
+    /// It used to live in two, and they disagreed. `printReport` compared `lastAck` against
+    /// `maxSeq` alone and printed PASS; the exit path additionally required `report.healthy`,
+    /// which includes the holes. So a journal with a hole below `maxSeq`, and an acknowledgement
+    /// the surviving tail satisfies, printed
+    ///
+    ///     verdict           PASS — nothing acknowledged was lost
+    ///
+    /// to the console while exiting 2. A hole IS a lost acknowledgement: the writer reached a
+    /// higher sequence, so the missing one had already returned from `sqlite3_step` and been
+    /// reported durable. The runbook's stated pass condition says "no holes in the sequence" and
+    /// the printed verdict did not check it.
+    ///
+    /// That is a false PASS on a durability test, and worse than the false FAIL this file already
+    /// fixed once: a false failure gets investigated, a false pass gets believed.
+    public enum Verdict: Equatable {
+        case pass(String)
+        case fail(String)
+
+        public var isPass: Bool {
+            if case .pass = self { return true }
+            return false
+        }
+
+        public var line: String {
+            switch self {
+            case .pass(let why): return "PASS — \(why)"
+            case .fail(let why): return "FAIL — \(why)"
+            }
+        }
+    }
+
+    /// Adjudicates a reopened journal against the acknowledgements the console recorded.
+    ///
+    /// One-directional on purpose: the journal may legitimately hold *more* than was seen
+    /// acknowledged, because SIGKILL discards a buffered acknowledgement for a write that did land.
+    /// It may never hold less, and it may never have a gap.
+    public static func verdict(_ report: Report, lastAck: Int?) -> Verdict {
+        guard report.opened else {
+            return .fail("the journal could not be reopened after the kill")
+        }
+        guard report.integrity == "ok" else {
+            return .fail("integrity_check reported: \(report.integrity)")
+        }
+        if !report.holes.isEmpty {
+            let named = report.holes.prefix(20).map(String.init).joined(separator: ",")
+            let more = report.holes.count > 20 ? " (first 20 of \(report.holes.count))" : ""
+            return .fail("\(report.holes.count) acknowledged visit(s) missing from the sequence: \(named)\(more)")
+        }
+        if let lastAck, lastAck > report.maxSeq {
+            return .fail("\(lastAck - report.maxSeq) acknowledged visit(s) missing: "
+                         + "console recorded \(lastAck), journal holds \(report.maxSeq)")
+        }
+        return lastAck == nil
+            ? .pass("journal intact and contiguous (no acknowledgement record supplied)")
+            : .pass("nothing acknowledged was lost")
+    }
+
+    /// Prints the surviving state and the verdict.
     public static func printReport(_ report: Report, lastAck: Int?) {
         print("")
         print("KILLTEST-REPORT-BEGIN")
@@ -225,16 +280,9 @@ public enum KillProbe {
         print("  rows              \(report.rowCount)")
         print("  holes             \(report.holes.isEmpty ? "none" : report.holes.prefix(20).map(String.init).joined(separator: ","))")
         if let lastAck {
-            let lost = lastAck - report.maxSeq
             print("  last acknowledged \(lastAck)")
-            print("  verdict           " + (lost <= 0
-                ? "PASS — nothing acknowledged was lost"
-                : "FAIL — \(lost) acknowledged visit(s) missing"))
-        } else {
-            print("  verdict           " + (report.healthy
-                ? "journal intact and contiguous (no acknowledgement record supplied)"
-                : "PROBLEM — see integrity_check and holes"))
         }
+        print("  verdict           \(verdict(report, lastAck: lastAck).line)")
         print("KILLTEST-REPORT-END")
         print("")
         fflush(stdout)
@@ -300,7 +348,9 @@ extension KillProbe {
             do {
                 let report = try inspect()
                 printReport(report, lastAck: lastAck)
-                exit(report.healthy && (lastAck.map { $0 <= report.maxSeq } ?? true) ? 0 : 2)
+                // Same rule the console printed, so the exit code and the human-readable
+                // line can never disagree again.
+                exit(verdict(report, lastAck: lastAck).isPass ? 0 : 2)
             } catch {
                 print("KILLTEST-INSPECT-ERROR \(error)")
                 fflush(stdout)

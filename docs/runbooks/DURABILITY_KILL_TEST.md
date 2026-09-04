@@ -29,7 +29,11 @@ cd ~/Documents/Thro-Darts-App
 ./scripts/run-kill-test-on-device.sh
 ```
 
-Connect and trust the iPhone first; `scripts/run-probe-on-device.sh` documents that setup. Optional
+Connect and trust the iPhone first; `scripts/run-probe-on-device.sh` documents that setup. The
+app must call `KillProbe.runFromLaunchArgumentsIfRequested()` from its `@main` struct's `init` —
+`docs/runbooks/DURABILITY_MEASUREMENT.md` gives that file in full. Without it the app ignores the
+launch arguments, comes up showing the ordinary probe screen, and this script waits for
+acknowledgements that never arrive. Optional
 arguments are the configuration index (0–3 into `Durability.candidates`, default 2 — the real Apple
 barrier) and how long to write before the kill in milliseconds (default 1500).
 

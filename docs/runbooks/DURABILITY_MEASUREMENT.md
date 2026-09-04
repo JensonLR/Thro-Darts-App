@@ -151,7 +151,7 @@ Xcode → **Create New Project…** → **iOS** → **App**, then:
    procedure never runs — the probe package's tests live in the package and run from Terminal
    (Part 2), not from this app.
 9. Leave **Host in CloudKit** unticked. Click **Next**.
-7. Save it in `~/Documents` (**not** inside the Thro-Darts-App folder). Click **Create**.
+10. Save it in `~/Documents` (**not** inside the Thro-Darts-App folder). Click **Create**.
 
 Then **File → Add Package Dependencies… → Add Local…**, choose
 `Documents/Thro-Darts-App/packages/durability-probe`, and add it to the **ThroProbe** target.
@@ -165,6 +165,32 @@ struct ContentView: View {
     var body: some View { ProbeView() }
 }
 ```
+
+Then open `ThroProbeApp.swift` — the file with `@main` on it — and add the `init`:
+
+```swift
+import SwiftUI
+import DurabilityProbe
+
+@main
+struct ThroProbeApp: App {
+    init() {
+        // Before any UI. The kill test (docs/runbooks/DURABILITY_KILL_TEST.md) is driven by launch
+        // arguments, and its write phase never returns — it SIGKILLs the process on purpose.
+        // Without this call the kill-test script launches the app, the app shows the ordinary probe
+        // screen, and the script waits for acknowledgements that are never coming.
+        KillProbe.runFromLaunchArgumentsIfRequested()
+    }
+
+    var body: some Scene {
+        WindowGroup { ContentView() }
+    }
+}
+```
+
+These two files are the entire app. They live outside this repository, in the Xcode project, which
+is why they are written out here in full: without them the repository describes a test it cannot
+actually run.
 
 Finally set the deployment target to **iOS 16.0**. Xcode defaults it to the current SDK (26.5 at
 the time of writing), which would make the app installable only on a recent flagship — and
