@@ -84,6 +84,8 @@ public object PlaytestServer {
                 ex.requestMethod == "POST" && path.isEmpty() -> createMatch(body)
                 ex.requestMethod == "POST" && path.endsWith("/visit") ->
                     recordVisit(conn, UUID.fromString(path.removeSuffix("/visit")), body)
+                ex.requestMethod == "GET" && path.endsWith("/stats") ->
+                    matchStats(conn, UUID.fromString(path.removeSuffix("/stats")))
                 ex.requestMethod == "GET" && path.isNotEmpty() ->
                     matchState(conn, UUID.fromString(path))
                 else -> """{"error":"not found"}"""
@@ -134,6 +136,17 @@ public object PlaytestServer {
             is CommandResult.Replayed -> """{"result":"replayed"}"""
         }
         return """{"outcome":$outcome,"state":${stateJson(conn, matchId, reg)}}"""
+    }
+
+    /**
+     * Both competitors' figures, each carrying its own basis. Derived by replaying the log through
+     * the engine — nothing is stored, so this cannot drift from the evidence it is computed from.
+     */
+    private fun matchStats(conn: Connection, matchId: UUID): String {
+        val reg = matches[matchId] ?: throw IllegalArgumentException("unknown match")
+        val proj = StatsProjection(conn)
+        return """{"home":${proj.summaryFor(matchId, reg.device, reg.home, reg.away, reg.home)},""" +
+            """"away":${proj.summaryFor(matchId, reg.device, reg.home, reg.away, reg.away)}}"""
     }
 
     private fun matchState(conn: Connection, matchId: UUID): String {

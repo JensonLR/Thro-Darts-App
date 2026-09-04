@@ -52,16 +52,24 @@ public sealed interface CommandResult {
     public data class Gap(val expectedSeq: Long) : CommandResult
 }
 
+/**
+ * Fixed for now; a real deployment pins the ruleset onto the match when it is opened.
+ *
+ * Defined once and shared with the statistics projection: a projection that replayed the log under
+ * a different format would derive different remainings from the same events, and the figures would
+ * disagree with the scoreboard that produced them.
+ */
+internal fun playtestFormat(home: PlayerId): MatchFormat = MatchFormat(
+    startingScore = 501,
+    inRule = InRule.STRAIGHT,
+    outRule = OutRule.DOUBLE,
+    legs = Structure(StructureMode.FIRST_TO, 5),
+    throwFirst = home,
+)
+
 public class CommandHandler(private val connection: Connection) {
 
-    /** Fixed for now; a real deployment pins the ruleset onto the match at open. */
-    private fun formatFor(home: PlayerId): MatchFormat = MatchFormat(
-        startingScore = 501,
-        inRule = InRule.STRAIGHT,
-        outRule = OutRule.DOUBLE,
-        legs = Structure(StructureMode.FIRST_TO, 5),
-        throwFirst = home,
-    )
+    private fun formatFor(home: PlayerId): MatchFormat = playtestFormat(home)
 
     public fun handle(cmd: VisitCommand, home: String, away: String): CommandResult {
         val previousAutoCommit = connection.autoCommit

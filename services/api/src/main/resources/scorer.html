@@ -94,6 +94,19 @@ input{
   border:1px solid var(--color-border-default);border-radius:6px;width:100%
 }
 .hide{display:none!important}
+.stats{position:fixed;inset:0;background:var(--thro-ink);overflow-y:auto;
+  padding:var(--spacing-5);z-index:10}
+.statsbar{display:flex;align-items:center;justify-content:space-between;gap:var(--spacing-4);
+  margin-bottom:var(--spacing-4)}
+.statgrid{display:grid;grid-template-columns:1fr 1fr;gap:var(--spacing-3);margin-bottom:var(--spacing-5)}
+.stat{padding:var(--spacing-3);border:1px solid rgba(255,255,255,.14);border-radius:8px}
+.stat .k{font-size:12px;letter-spacing:.06em;text-transform:uppercase;opacity:.72;margin-bottom:4px}
+.stat .v{font-family:var(--font-sport,inherit);font-size:26px;line-height:1.1}
+/* A bounded figure is a range and is never rendered as a point value. */
+.stat.bounded .v{font-size:20px}
+.stat.unavailable .v{font-size:15px;opacity:.72;font-family:var(--font-ui,inherit)}
+.stat .n{font-size:12px;opacity:.66;margin-top:6px;line-height:1.35}
+.stat .basis{font-size:11px;letter-spacing:.08em;text-transform:uppercase;opacity:.55;margin-top:6px}
 </style>
 </head>
 <body>
@@ -143,8 +156,17 @@ input{
     <div class="quick" id="quick"></div>
     <div class="grid" id="digits"></div>
     <button class="enter" id="enter" disabled>Enter score</button>
+    <button class="label" id="showStats" style="width:100%">Statistics so far</button>
   </div>
 </div>
+
+<section class="stats hide" id="stats" aria-labelledby="statsHeading">
+  <div class="statsbar">
+    <div class="eyebrow" id="statsHeading">Statistics</div>
+    <button class="label" id="closeStats" aria-label="Close statistics">Close</button>
+  </div>
+  <div id="statsBody"></div>
+</section>
 
 <script>
 const S = { matchId:null, entry:"", state:null };
@@ -302,6 +324,53 @@ clear.setAttribute("aria-label","Clear the entry");
 clear.onclick = () => setEntry("");
 $("digits").appendChild(clear);
 $("enter").onclick = enter;
+
+// The figures come from the server, which derives them by replaying the log through the engine.
+// Nothing is computed here: a statistic invented by the client would have no evidence behind it.
+const LABELS = {
+  threeDartAverage:"3-dart average", firstNineAverage:"First 9 average",
+  checkoutPercentage:"Checkout %", doublesAttempted:"Doubles thrown at",
+  highestCheckout:"Highest checkout", maximums:"180s", hundredPlus:"100+",
+  oneFortyPlus:"140+", bestLegInVisits:"Best leg (visits)",
+  finishRateFromCheckable:"Finish rate from a finish"
+};
+const PCT = new Set(["checkoutPercentage","finishRateFromCheckable"]);
+
+function statCard(key, st){
+  const cls = st.basis === "EXACT" ? "" : st.basis === "BOUNDED" ? "bounded" : "unavailable";
+  const unit = PCT.has(key) ? "%" : "";
+  let v;
+  if (st.basis === "EXACT") v = st.value + unit;
+  else if (st.basis === "BOUNDED") v = st.lower + unit + " – " + st.upper + unit;
+  else v = "Not available";
+  const basis = st.basis === "EXACT" ? "Exact"
+              : st.basis === "BOUNDED" ? "Range — the exact figure is not known"
+              : "";
+  return '<div class="stat ' + cls + '">' +
+           '<div class="k">' + LABELS[key] + '</div>' +
+           '<div class="v">' + v + '</div>' +
+           (basis ? '<div class="basis">' + basis + '</div>' : '') +
+           (st.note ? '<div class="n">' + st.note + '</div>' : '') +
+         '</div>';
+}
+
+function renderStats(all){
+  const side = (name, figures) =>
+    '<div class="eyebrow" style="margin-bottom:var(--spacing-3)">' + name + '</div>' +
+    '<div class="statgrid">' +
+      Object.keys(LABELS).map(k => figures[k] ? statCard(k, figures[k]) : "").join("") +
+    '</div>';
+  $("statsBody").innerHTML =
+    side(S.state.home, all.home) + side(S.state.away, all.away);
+}
+
+$("showStats").onclick = async () => {
+  const r = await fetch("/api/match/" + S.matchId + "/stats").then(x => x.json());
+  if (r.error){ $("statsBody").textContent = r.error; }
+  else renderStats(r);
+  $("stats").classList.remove("hide");
+};
+$("closeStats").onclick = () => $("stats").classList.add("hide");
 </script>
 </body>
 </html>

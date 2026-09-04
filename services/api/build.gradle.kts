@@ -2,6 +2,7 @@ plugins { kotlin("jvm") version "2.0.21" }
 repositories { mavenCentral() }
 dependencies {
     implementation("thro-engine:thro-engine")
+    implementation("thro-statistics:thro-statistics")
     implementation("org.postgresql:postgresql:42.7.4")
     testImplementation(kotlin("test"))
 }

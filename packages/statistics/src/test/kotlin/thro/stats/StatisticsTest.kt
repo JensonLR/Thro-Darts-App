@@ -31,6 +31,22 @@ class StatisticsTest {
     )
 
     @Test
+    fun `doubles attempted does not report a partial count as a match total`() {
+        // Two visits stood on a finish; only one said how many darts it threw at a double. The
+        // recorded sum is 2, but the match total is not 2 — reporting it as exact would state a
+        // partial count as a fact.
+        val visits = listOf(
+            v(1, 1, 20, 3, 40, 20, atDouble = 2),               // recorded
+            v(1, 2, 20, 2, 20, 0, won = true, atDouble = null), // on a finish, did not say
+        )
+        val s = Statistics.doublesAttempted(visits, checkable)
+        assertEquals(Basis.BOUNDED, s.basis)
+        assertEquals(3.0, s.lower)   // the winning visit threw at least one
+        assertEquals(5.0, s.upper)   // and at most three
+        assertNull(s.value, "a bounded figure must not also carry a point value")
+    }
+
+    @Test
     fun `a bounded checkout percentage can never exceed 100 percent`() {
         // A leg-winning visit whose attempts went unrecorded still counts as a hit. If the bound
         // ignores that it also threw at least one dart at a double, the numerator grows while the
@@ -142,8 +158,8 @@ class StatisticsTest {
             v(1, 1, 20, 3, 40, 20, atDouble = 1),
             v(1, 2, 20, 2, 20, 0, won = true, atDouble = 2),
         )
-        assertEquals(3.0, Statistics.doublesAttempted(visits).value)
-        assertEquals(Basis.EXACT, Statistics.doublesAttempted(visits).basis)
+        assertEquals(3.0, Statistics.doublesAttempted(visits, checkable).value)
+        assertEquals(Basis.EXACT, Statistics.doublesAttempted(visits, checkable).basis)
     }
 
     @Test
@@ -285,7 +301,7 @@ class StatisticsTest {
     fun `every unavailable statistic explains itself in words a player can act on`() {
         val unavailable = listOf(
             Statistics.checkoutPercentage(emptyList(), checkable),
-            Statistics.doublesAttempted(emptyList()),
+            Statistics.doublesAttempted(emptyList(), checkable),
             Statistics.threeDartAverage(emptyList()),
         )
         for (s in unavailable) {

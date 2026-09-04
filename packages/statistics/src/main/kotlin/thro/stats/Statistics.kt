@@ -234,12 +234,32 @@ public object Statistics {
         checkoutPercentage(visits, checkable)
 
     /** Total darts thrown at a double. Exact over the visits that recorded it. */
-    public fun doublesAttempted(visits: List<VisitRecord>): Stat {
-        val recorded = visits.filter { it.dartsAtDouble != null }
+    /**
+     * How many darts were thrown at a double.
+     *
+     * This needs [checkable] to be honest. Without it the only available answer is "how many were
+     * *recorded*", and reporting that as exact would state a match total that is really a partial
+     * count — the precise confusion PD-001 exists to prevent. Knowing which visits stood on a
+     * finish is what separates "did not attempt" from "did not say".
+     */
+    public fun doublesAttempted(visits: List<VisitRecord>, checkable: Set<Int>): Stat {
+        val onAFinish = visits.filter { it.remainingBefore in checkable }
+        val recorded = onAFinish.filter { it.dartsAtDouble != null }
         if (recorded.isEmpty()) {
             return Stat.unavailable("No visit has recorded its darts at a double.")
         }
-        return Stat.exact(recorded.sumOf { it.dartsAtDouble ?: 0 }.toDouble(), recorded.size)
+        val known = recorded.sumOf { it.dartsAtDouble ?: 0 }
+        val unknownVisits = onAFinish.size - recorded.size
+        if (unknownVisits == 0) return Stat.exact(known.toDouble(), recorded.size)
+        // an unrecorded visit threw at least one dart at a double if it won the leg, at most three
+        val floor = known + onAFinish.count { it.dartsAtDouble == null && it.wonLeg }
+        return Stat.bounded(
+            lower = floor.toDouble(),
+            upper = (known + unknownVisits * 3).toDouble(),
+            n = recorded.size,
+            note = "$unknownVisits visit(s) on a finish did not record their darts at a double, " +
+                "so the total is at least $floor and at most ${known + unknownVisits * 3}.",
+        )
     }
 
     /**

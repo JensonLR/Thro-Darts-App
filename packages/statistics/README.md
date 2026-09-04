@@ -34,6 +34,12 @@ Every figure therefore carries *how it was arrived at*, not just a number:
 | Finish rate from a checkable position | **Exact** — a *visit-level* measure, and not checkout percentage |
 | Checkout % | **Exact** where attempts were recorded; **bounded** where some were not |
 | Doubles hit rate | The same quantity under its other name |
+| Doubles thrown at | **Exact** when every checkable visit recorded; otherwise **bounded** |
+
+Both figures that count double attempts take the checkout set as an argument. Without it they can
+only answer "how many were *recorded*", and a partial count reported as a match total is the same
+dishonesty in smaller print: knowing which visits stood on a finish is what separates "did not
+attempt" from "did not say".
 
 ## Why checkout percentage is computable after all
 

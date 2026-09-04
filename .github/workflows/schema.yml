@@ -58,7 +58,8 @@ jobs:
         with: { distribution: temurin, java-version: "21" }
       - uses: gradle/actions/setup-gradle@v4
       # End-to-end: idempotency, gapless sequences, engine revalidation, two-device corroboration,
-      # and that the server derives the outcome rather than trusting the client.
-      - name: Command path
+      # that the server derives the outcome rather than trusting the client, and that the
+      # statistics projection derives the same figures as a leg computed by hand.
+      - name: Command path and statistics projection
         working-directory: services/api
         run: gradle test --no-daemon
