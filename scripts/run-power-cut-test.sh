@@ -77,7 +77,7 @@ xcrun devicectl device install app --device "$DEVICE_ID" \
 WRITE_LOG="$WORK/write-config${CONFIG_INDEX}.log"
 rm -f "$WRITE_LOG"
 nohup xcrun devicectl device process launch --device "$DEVICE_ID" --console "$BUNDLE_ID" \
-  --kill-test-write "$CONFIG_INDEX" 3600000 --fresh --max-visits "${MAX_VISITS:-20000}" > "$WRITE_LOG" 2>&1 &
+  --kill-test-write "$CONFIG_INDEX" 3600000 --fresh --max-visits "${MAX_VISITS:-40000}" --throttle-us "${THROTTLE_US:-8000}" > "$WRITE_LOG" 2>&1 &
 WRITER_PID=$!
 
 echo "==> Waiting for writes to start"

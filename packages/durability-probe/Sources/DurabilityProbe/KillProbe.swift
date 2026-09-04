@@ -62,7 +62,8 @@ public enum KillProbe {
         _ configuration: Durability,
         killAfterMs: Int,
         fresh: Bool,
-        maxVisits: Int = 20_000
+        maxVisits: Int = 20_000,
+        throttleMicroseconds: UInt32 = 0
     ) throws {
         if fresh { removeJournal() }
 
@@ -143,6 +144,7 @@ public enum KillProbe {
                     // follows the flush, and this print is the acknowledgement.
                     print("KILLTEST-ACK \(seq)")
                     fflush(stdout)
+                    if throttleMicroseconds > 0 { usleep(throttleMicroseconds) }
                 }
                 // The cap is reached but the process must stay alive: the event under test is the
                 // device going down, and an app that has already exited cannot demonstrate anything
@@ -323,6 +325,18 @@ extension KillProbe {
             let maxVisits = args.firstIndex(of: "--max-visits").flatMap { j in
                 args.count > j + 1 ? Int(args[j + 1]) : nil
             } ?? 20_000
+            // Throttling is what makes a restart test mean anything. `synchronous=NORMAL` does not
+            // fsync, but the kernel flushes dirty pages on its own schedule anyway — within tens of
+            // seconds. So a journal that stopped growing minutes ago is fully on disk by the time
+            // anyone finishes a three-button restart gesture, and the restart then demonstrates
+            // nothing: there was no unflushed data left to lose.
+            //
+            // Writing continuously at a modest rate keeps fresh, unflushed commits present at every
+            // instant, so whenever the device goes down there is something at risk. The cap alone
+            // was the bug: it stopped the writer and let the kernel catch up.
+            let throttleUs = args.firstIndex(of: "--throttle-us").flatMap { j in
+                args.count > j + 1 ? UInt32(args[j + 1]) : nil
+            } ?? 0
             let configuration = Durability.candidates[
                 min(max(index, 0), Durability.candidates.count - 1)
             ]
@@ -331,7 +345,8 @@ extension KillProbe {
                     configuration,
                     killAfterMs: killAfterMs,
                     fresh: args.contains("--fresh"),
-                    maxVisits: maxVisits
+                    maxVisits: maxVisits,
+                    throttleMicroseconds: throttleUs
                 )
             } catch {
                 print("KILLTEST-WRITE-ERROR \(error)")
