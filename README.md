@@ -72,6 +72,7 @@ packages/
   domain-spec/    Rule tables and the conformance corpus, derived from the dartboard
   engine/         The deterministic scoring engine (Kotlin, zero dependencies)
   engine-swift/   The same engine in Swift — ADR-002's spike, same corpus
+  durability-probe/  Measures the cost of ADR-006's durability rule, on device
   statistics/     Figures that say when they cannot be computed honestly
   competition/    Bracket structure — byes, rounds, walkovers
   trust/          Provenance, derived verification, rating eligibility, reconciliation
