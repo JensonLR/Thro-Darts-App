@@ -21,36 +21,65 @@ The product exists to help a player answer four questions:
 
 ## Current state — read this first
 
-This repository is at **Gate 1: architecture**, with Gate 0 closed. The build follows a gated
-process in which foundations are established and challenged before features are written — each
-gate is attacked by a hostile critic, and Gate 0's and Gate 1's first drafts were both rejected
-and corrected rather than defended.
+The build follows a gated process in which foundations are established and **attacked** before
+features are written. Gate 0's and Gate 1's first drafts were both rejected by hostile review and
+corrected rather than defended — in Gate 1's case after the defect was reproduced against a live
+database.
+
+| Gate | | |
+|---|---|---|
+| 0 | Foundation ingestion | Closed — design authority recovered and inspected |
+| 1 | Architecture | Closed — 15 decision records, hostile-reviewed and corrected |
+| 2 | Repository foundation | Event schema with 21 property tests against a real Postgres |
+| 3 | Design ingestion | Token pipeline generating Swift, Kotlin and CSS from one source |
+| 4 | Competitive core | Scoring engine passing 86,000 exhaustive transitions |
+| 5+ | Offline match, vertical slice, trust, rating | Not started |
+
+**What is verified, and how:**
 
 | | |
 |---|---|
-| Repository at session start | Empty — no branches, no commits, no prior code. Greenfield. |
-| Design authority | Recovered and committed — see `docs/design/` |
-| Architecture | 15 decision records, hostile-reviewed and corrected |
-| Product code | Scoring rule tables and conformance corpus — generated, verified, in CI |
+| Scoring rules | 396 property checks against independent darts facts |
+| Scoring engine | 86,000 exhaustive transitions + 58 corpus cases, 0 failures |
+| Event schema | 21 property assertions against a real PostgreSQL |
+| Design tokens | 50 contrast pairs, absolute thresholds, 0 unrecorded breaches |
 
-**Nothing in this repository should be described as production ready.** Claims of
-readiness, test coverage, security, offline reliability or rating validity are only made
-where evidence exists to support them.
+**Nothing here is production ready**, and no claim of security, offline reliability or rating
+validity is made anywhere in this repository. There is no client, no API surface, and no deployment.
+Claims are made only where evidence exists — see [`FOUNDATION_ACCEPTANCE.md`](FOUNDATION_ACCEPTANCE.md).
+
+**Two decisions are recorded as taken on delegated authority** ([`docs/product/DECISIONS.md`](docs/product/DECISIONS.md)),
+each with its reversal path. Two remain open and need design work only the founder can commission:
+the authentication surface, and participant result confirmation — without which nothing outside an
+organised competition can be rated.
 
 ## Repository layout
 
 ```
+packages/
+  domain-spec/    Rule tables and the conformance corpus, derived from the dartboard
+  engine/         The deterministic scoring engine (Kotlin, zero dependencies)
+  design-tokens/  One token source generating Swift, Kotlin and CSS
+services/
+  api/            Migrations and event-model property tests
 docs/
-  adr/           Architecture decision records
+  adr/            15 architecture decision records
   architecture/   Conformance corpus spec, latency budgets
   design/         Design authority — provenance, inventory, contrast matrix,
                   token health, what the system does not specify
     extracted/    Token layer, 61 components, 33 participant + 9 organiser screens
-  product/        Glossary, open decisions, rating research harness
+  product/        Glossary, decisions taken, decisions open, rating research harness
 FOUNDATION_ACCEPTANCE.md   Gate 0 report
 ```
 
-`docs/runbooks/` will appear when there is something to operate.
+## Running the checks
+
+```bash
+python3 packages/domain-spec/generate.py --full && python3 packages/domain-spec/validate.py
+cd packages/engine && gradle check
+bash services/api/test/schema_properties.sh      # needs a Postgres 16
+python3 packages/design-tokens/build.py --check
+```
 
 ## Design authority
 
