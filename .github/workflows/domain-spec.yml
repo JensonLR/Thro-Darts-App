@@ -51,6 +51,20 @@ jobs:
         working-directory: packages/engine
         run: gradle check --no-daemon
 
+  statistics:
+    name: Statistics honesty
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with: { distribution: temurin, java-version: "21" }
+      - uses: gradle/actions/setup-gradle@v4
+      # Asserts that a statistic which cannot be honestly computed says so, and that an approximate
+      # one never presents itself as a point value.
+      - name: Statistics
+        working-directory: packages/statistics
+        run: gradle test --no-daemon
+
   tokens:
     name: Design tokens and contrast
     runs-on: ubuntu-latest
