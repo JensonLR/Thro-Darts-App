@@ -79,6 +79,20 @@ jobs:
         working-directory: packages/trust
         run: gradle test --no-daemon
 
+  authz:
+    name: Authorization and conflict of interest
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with: { distribution: temurin, java-version: "21" }
+      - uses: gradle/actions/setup-gradle@v4
+      # Asserts the conflict-of-interest rule: an official may correct any match except one they
+      # are playing in — the negation role-based access control cannot express.
+      - name: Authorization
+        working-directory: packages/authz
+        run: gradle test --no-daemon
+
   competition:
     name: Competition structure
     runs-on: ubuntu-latest
