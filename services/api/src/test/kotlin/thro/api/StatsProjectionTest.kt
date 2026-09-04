@@ -55,6 +55,10 @@ class StatsProjectionTest {
         val match = UUID.randomUUID()
         val device = UUID.randomUUID()
         var seq = 0L
+        Matches(c).open(
+            match, UUID.randomUUID(), UUID.randomUUID(), "Home", "Away",
+            playtestFormat(thro.engine.PlayerId("Home")),
+        )
 
         // Home: 501 -180-> 321 -180-> 141 -101-> 40 -20-> 20 -20-> 0
         //   141, 40 and 20 are all checkout numbers, so all three visits began on a finish.

@@ -51,6 +51,9 @@ public sealed interface CommandResult {
     /** A replay. The stored response is returned verbatim, including a stored refusal. */
     public data class Replayed(val stored: String) : CommandResult
     public data class Gap(val expectedSeq: Long) : CommandResult
+
+    /** The match does not exist, or the command names someone who is not playing in it. */
+    public data class NotThisMatch(val reason: String) : CommandResult
 }
 
 /**
@@ -72,7 +75,20 @@ public class CommandHandler(private val connection: Connection) {
 
     private fun formatFor(home: PlayerId): MatchFormat = playtestFormat(home)
 
-    public fun handle(cmd: VisitCommand, home: String, away: String): CommandResult {
+    /**
+     * @param home ignored except as a fallback for a match that predates the aggregate. The
+     *   participant set comes from the store; see [handle].
+     */
+    public fun handle(cmd: VisitCommand, home: String, away: String): CommandResult = handle(cmd)
+
+    /**
+     * ADR-006's server algorithm, with ADR-008's participant check ahead of it.
+     *
+     * Nothing about who is playing is taken from the caller. The highest-value attack in the
+     * product is posting an event that carries a stranger's match id, and the only defence that
+     * actually works is loading the aggregate and asking it.
+     */
+    public fun handle(cmd: VisitCommand): CommandResult {
         val previousAutoCommit = connection.autoCommit
         connection.autoCommit = false
         try {
@@ -81,6 +97,23 @@ public class CommandHandler(private val connection: Connection) {
             storedReceipt(cmd)?.let {
                 connection.commit()
                 return CommandResult.Replayed(it)
+            }
+
+            // 1b. The aggregate decides who is playing. A command naming anyone else is not a
+            //     rules violation to be recorded — it is evidence aimed at a match its author is
+            //     not in, so it produces no evidence at all.
+            val match = Matches(connection).load(cmd.matchId)
+            if (match == null) {
+                val r = CommandResult.NotThisMatch("no such match")
+                writeReceipt(cmd, r)
+                connection.commit()
+                return r
+            }
+            if (match.idFor(cmd.player) == null) {
+                val r = CommandResult.NotThisMatch("that player is not in this match")
+                writeReceipt(cmd, r)
+                connection.commit()
+                return r
             }
 
             // 2. Authority (ADR-006 step 2). This ANNOTATES the evidence; it never gates it. A
@@ -100,7 +133,7 @@ public class CommandHandler(private val connection: Connection) {
             }
 
             // 4. Rehydrate from the server's own log. The client's view is not consulted.
-            val state = rehydrate(cmd.matchId, cmd.deviceId, PlayerId(home), PlayerId(away))
+            val state = rehydrate(cmd.matchId, cmd.deviceId, match)
 
             // 5. Revalidate through the same engine the client ran.
             val outcome = Engine.apply(
@@ -136,15 +169,17 @@ public class CommandHandler(private val connection: Connection) {
 
     /** Read-only replay, for surfaces that need current state without submitting a command. */
     public fun replayFor(matchId: UUID, deviceId: UUID, home: String, away: String): MatchState =
-        rehydrate(matchId, deviceId, PlayerId(home), PlayerId(away))
+        rehydrate(matchId, deviceId, requireNotNull(Matches(connection).load(matchId)) { "no such match" })
 
     /**
      * Rehydrates by folding this device's own stream. Each device's account is separate — the
      * difference between two accounts of one match is the signal a dispute is built on, so they are
      * never merged here.
      */
-    private fun rehydrate(matchId: UUID, deviceId: UUID, home: PlayerId, away: PlayerId): MatchState {
-        var state = MatchState.start(formatFor(home), home, away)
+    private fun rehydrate(matchId: UUID, deviceId: UUID, match: MatchAggregate): MatchState {
+        var state = MatchState.start(
+            match.format, PlayerId(match.homeName), PlayerId(match.awayName),
+        )
         connection.prepareStatement(
             """
             SELECT payload->>'player' AS player,
@@ -243,6 +278,8 @@ public class CommandHandler(private val connection: Connection) {
                 Triple("accepted", result.reason,
                     "{\"effect\":\"${result.effect}\",\"deviceSeq\":${result.deviceSeq}}")
             is CommandResult.Refused -> Triple("rejected", result.reason, "{\"reason\":\"${result.reason}\"}")
+            is CommandResult.NotThisMatch ->
+                Triple("rejected", "NOT_THIS_MATCH", "{\"reason\":\"${result.reason}\"}")
             else -> Triple("rejected", "UNEXPECTED", "{}")
         }
         connection.prepareStatement(

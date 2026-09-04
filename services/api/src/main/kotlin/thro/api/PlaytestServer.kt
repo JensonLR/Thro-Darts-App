@@ -9,6 +9,7 @@ import java.net.InetSocketAddress
 import java.sql.Connection
 import java.sql.DriverManager
 import java.util.UUID
+import thro.engine.PlayerId
 import java.util.concurrent.ConcurrentHashMap
 
 /**
@@ -89,7 +90,7 @@ public object PlaytestServer {
             val path = ex.requestURI.path.removePrefix("/api/match").trim('/')
             val body = ex.requestBody.readBytes().decodeToString()
             val response = when {
-                ex.requestMethod == "POST" && path.isEmpty() -> createMatch(body)
+                ex.requestMethod == "POST" && path.isEmpty() -> createMatch(conn, body)
                 ex.requestMethod == "POST" && path.endsWith("/visit") ->
                     recordVisit(conn, UUID.fromString(path.removeSuffix("/visit")), body)
                 ex.requestMethod == "GET" && path.endsWith("/stats") ->
@@ -104,11 +105,16 @@ public object PlaytestServer {
         }
     }
 
-    private fun createMatch(body: String): String {
+    private fun createMatch(conn: Connection, body: String): String {
         val home = field(body, "home") ?: "Home"
         val away = field(body, "away") ?: "Away"
         val id = UUID.randomUUID()
+        val homeId = UUID.randomUUID()
+        val awayId = UUID.randomUUID()
         matches[id] = Registered(home, away, UUID.randomUUID())
+        // The aggregate is the authority on who is playing; the in-memory registry is only a
+        // convenience for this harness. Opening the match is what makes any evidence possible.
+        Matches(conn).open(id, homeId, awayId, home, away, playtestFormat(PlayerId(home)))
         return """{"matchId":"$id","home":${quote(home)},"away":${quote(away)}}"""
     }
 
@@ -133,7 +139,6 @@ public object PlaytestServer {
                 occurredAt = java.time.OffsetDateTime.now().toString(),
                 occurredTz = java.time.ZoneId.systemDefault().id,
             ),
-            reg.home, reg.away,
         )
         val outcome = when (result) {
             is CommandResult.Applied ->
@@ -142,6 +147,8 @@ public object PlaytestServer {
             is CommandResult.Refused -> """{"result":"refused","reason":${quote(result.reason)}}"""
             is CommandResult.Gap -> """{"result":"gap","expected":${result.expectedSeq}}"""
             is CommandResult.Replayed -> """{"result":"replayed"}"""
+            is CommandResult.NotThisMatch ->
+                """{"result":"not_this_match","reason":${quote(result.reason)}}"""
         }
         return """{"outcome":$outcome,"state":${stateJson(conn, matchId, reg)}}"""
     }

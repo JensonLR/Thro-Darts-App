@@ -82,6 +82,12 @@ class CommandHandlerTest {
         val match = UUID.randomUUID()
         val devA = UUID.randomUUID()
         val devB = UUID.randomUUID()
+        // The store is now the authority on who is playing (ADR-008), so a match must be opened
+        // before any evidence about it can exist.
+        Matches(c).open(
+            match, UUID.randomUUID(), UUID.randomUUID(), "A", "B",
+            playtestFormat(thro.engine.PlayerId("A")),
+        )
         var passed = 0
 
         fun check(name: String, cond: Boolean) {

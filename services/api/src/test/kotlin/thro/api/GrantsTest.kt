@@ -100,6 +100,8 @@ class GrantsTest {
         // --- a live grant ---------------------------------------------------------------------
         run {
             val match = UUID.randomUUID(); val device = UUID.randomUUID(); val actor = UUID.randomUUID()
+            Matches(c).open(match, UUID.randomUUID(), UUID.randomUUID(), "Home", "Away",
+                playtestFormat(thro.engine.PlayerId("Home")))
             grants.issue(event, actor, device, "participant", sessionEndsAt = sessionEndsAt, issuedBy = organiser)
             check("a granted visit is applied", visit(match, device, actor, 1, 60, Instant.now()) is CommandResult.Applied)
             check("and is recorded as granted", authorityOf(match, device) == "granted")
@@ -108,6 +110,8 @@ class GrantsTest {
         // --- no grant at all ------------------------------------------------------------------
         run {
             val match = UUID.randomUUID(); val device = UUID.randomUUID(); val actor = UUID.randomUUID()
+            Matches(c).open(match, UUID.randomUUID(), UUID.randomUUID(), "Home", "Away",
+                playtestFormat(thro.engine.PlayerId("Home")))
             check("an ungranted visit is still applied", visit(match, device, actor, 1, 60, Instant.now()) is CommandResult.Applied)
             check("and is flagged ungranted", authorityOf(match, device) == "ungranted")
             check("the evidence exists", eventCount(match) == 1)
@@ -116,6 +120,8 @@ class GrantsTest {
         // --- revoked before the visit ----------------------------------------------------------
         run {
             val match = UUID.randomUUID(); val device = UUID.randomUUID(); val actor = UUID.randomUUID()
+            Matches(c).open(match, UUID.randomUUID(), UUID.randomUUID(), "Home", "Away",
+                playtestFormat(thro.engine.PlayerId("Home")))
             val g = grants.issue(event, actor, device, "participant", sessionEndsAt = sessionEndsAt, issuedBy = organiser)
             grants.revoke(g, organiser, "scorer reassigned")
             val at = Instant.now().plusSeconds(60)
@@ -127,6 +133,8 @@ class GrantsTest {
         // --- revoked, but the visit happened before the revocation -----------------------------
         run {
             val match = UUID.randomUUID(); val device = UUID.randomUUID(); val actor = UUID.randomUUID()
+            Matches(c).open(match, UUID.randomUUID(), UUID.randomUUID(), "Home", "Away",
+                playtestFormat(thro.engine.PlayerId("Home")))
             val before = Instant.now().minus(2, ChronoUnit.HOURS)
             val g = grants.issue(event, actor, device, "participant", sessionEndsAt = sessionEndsAt, issuedBy = organiser)
             grants.revoke(g, organiser, "reassigned after the fact")
@@ -140,6 +148,8 @@ class GrantsTest {
         // --- a stale journal replayed weeks later (ADR-006's named failure) ---------------------
         run {
             val match = UUID.randomUUID(); val device = UUID.randomUUID(); val actor = UUID.randomUUID()
+            Matches(c).open(match, UUID.randomUUID(), UUID.randomUUID(), "Home", "Away",
+                playtestFormat(thro.engine.PlayerId("Home")))
             grants.issue(event, actor, device, "participant", sessionEndsAt = Instant.now(), issuedBy = organiser)
             val weeksLater = Instant.now().plus(30, ChronoUnit.DAYS)
             check(
