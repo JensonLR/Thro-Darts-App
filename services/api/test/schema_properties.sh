@@ -282,6 +282,87 @@ if echo "$r" | grep -qi 'permission denied'; then
 else bad "the log is write-only for the roles that write to it" "it was readable"; fi
 
 echo
+echo "== rating is a projection, and OD-001 stays open =="
+PL=$($PSQL -c "SELECT gen_random_uuid();")
+
+# At launch this table is empty on purpose: every player provisional, nothing published.
+n=$($PSQL -c "SELECT count(*) FROM rating.published_model;")
+check "no rating model is published" "$n" "0"
+
+r=$($PSQL -c "SET ROLE app_rating; INSERT INTO rating.snapshot
+  (player_id,model_id,model_version,parameter_hash,scale_epoch,as_of_commit_xid,as_of_global_seq,
+   rating,confidence,matches_counted,published)
+  VALUES ('$PL','candidate','1.0.0','h',1,'100'::xid8,1, 1500, 0.9, 20, true);" 2>&1)
+if echo "$r" | grep -qi 'violates foreign key'; then
+  ok "a snapshot cannot be published under a model that is not published"
+else bad "a snapshot cannot be published under a model that is not published" "it was accepted"; fi
+
+$PSQL -c "SET ROLE app_rating; INSERT INTO rating.snapshot
+  (player_id,model_id,model_version,parameter_hash,scale_epoch,as_of_commit_xid,as_of_global_seq,
+   rating,confidence,matches_counted,published)
+  VALUES ('$PL','candidate','1.0.0','h',1,'100'::xid8,1, NULL, 0.4, 4, false);" >/dev/null 2>&1
+d=$($PSQL -c "SELECT coalesce(rating::text,'NULL') FROM rating.snapshot WHERE player_id='$PL';")
+check "a shadow candidate stores a provisional snapshot with no rating" "$d" "NULL"
+
+r=$($PSQL -c "SET ROLE app_rating; INSERT INTO rating.snapshot
+  (player_id,model_id,model_version,parameter_hash,scale_epoch,as_of_commit_xid,as_of_global_seq,
+   rating,confidence,matches_counted,published)
+  VALUES (gen_random_uuid(),'c','1','h',1,'100'::xid8,1, NULL, 0.5, 1, true);" 2>&1)
+if echo "$r" | grep -qi 'violates'; then
+  ok "a published snapshot must carry an actual rating"
+else bad "a published snapshot must carry an actual rating" "a published em dash was accepted"; fi
+
+r=$($PSQL -c "SET ROLE app_rating; INSERT INTO rating.ledger
+  (ledger_id,player_id,model_id,at_commit_xid,at_global_seq,cause,delta)
+  VALUES (gen_random_uuid(),'$PL','c','100'::xid8,1,'match',5.0);" 2>&1)
+if echo "$r" | grep -qi 'violates check constraint'; then
+  ok "a match ledger line must name its match"
+else bad "a match ledger line must name its match" "an anonymous match line was accepted"; fi
+
+r=$($PSQL -c "SET ROLE app_match; SELECT count(*) FROM rating.snapshot;" 2>&1)
+if echo "$r" | grep -qi 'permission denied'; then
+  ok "the match module cannot see rating state"
+else bad "the match module cannot see rating state" "it was readable"; fi
+
+echo
+echo "== a module may append only to the streams it owns =="
+r=$($PSQL -c "SET ROLE app_trust; INSERT INTO evidence.event
+  (event_id,match_id,device_id,device_seq,event_type,schema_version,correlation_id,actor_id,
+   actor_role,occurred_at,occurred_tz,payload)
+  VALUES (gen_random_uuid(),'$M','$DA',801,'VisitRecorded',1,gen_random_uuid(),gen_random_uuid(),
+   'participant',now(),'Europe/London','{}'::jsonb);" 2>&1)
+if echo "$r" | grep -qi 'that stream belongs to app_match'; then
+  ok "trust cannot append match evidence"
+else bad "trust cannot append match evidence" "$(echo "$r" | head -1)"; fi
+
+r=$($PSQL -c "SET ROLE app_match; INSERT INTO evidence.event
+  (event_id,match_id,device_id,device_seq,event_type,schema_version,correlation_id,actor_id,
+   actor_role,occurred_at,occurred_tz,payload)
+  VALUES (gen_random_uuid(),'$M','$DA',802,'LegAttested',1,gen_random_uuid(),gen_random_uuid(),
+   'participant',now(),'Europe/London','{}'::jsonb);" 2>&1)
+if echo "$r" | grep -qi 'that stream belongs to app_trust'; then
+  ok "match cannot append an attestation on a participant's behalf"
+else bad "match cannot append an attestation on a participant's behalf" "$(echo "$r" | head -1)"; fi
+
+r=$($PSQL -c "SET ROLE app_rating; INSERT INTO evidence.event
+  (event_id,match_id,device_id,device_seq,event_type,schema_version,correlation_id,actor_id,
+   actor_role,occurred_at,occurred_tz,payload)
+  VALUES (gen_random_uuid(),'$M','$DA',803,'VisitRecorded',1,gen_random_uuid(),gen_random_uuid(),
+   'system',now(),'Europe/London','{}'::jsonb);" 2>&1)
+if echo "$r" | grep -qi 'permission denied'; then
+  ok "rating cannot write to the evidence log at all"
+else bad "rating cannot write to the evidence log at all" "$(echo "$r" | head -1)"; fi
+
+r=$($PSQL -c "SET ROLE app_match; INSERT INTO evidence.event
+  (event_id,match_id,device_id,device_seq,event_type,schema_version,correlation_id,actor_id,
+   actor_role,occurred_at,occurred_tz,payload)
+  VALUES (gen_random_uuid(),'$M','$DA',804,'SomethingInvented',1,gen_random_uuid(),
+   gen_random_uuid(),'system',now(),'Europe/London','{}'::jsonb);" 2>&1)
+if echo "$r" | grep -qi 'every stream must have a named owner'; then
+  ok "an event type nobody owns is refused"
+else bad "an event type nobody owns is refused" "$(echo "$r" | head -1)"; fi
+
+echo
 echo "-------------------------------------------"
 echo "  $PASS passed, $FAIL failed"
 [ "$FAIL" -eq 0 ] || exit 1

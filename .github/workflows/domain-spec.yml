@@ -93,6 +93,20 @@ jobs:
         working-directory: packages/authz
         run: gradle test --no-daemon
 
+  rating:
+    name: Rating projection and OD-001 guard
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with: { distribution: temurin, java-version: "21" }
+      - uses: gradle/actions/setup-gradle@v4
+      # Asserts a replay is reproducible from a watermark PAIR, that the ledger reconciles exactly,
+      # and that no unvalidated model can be published while OD-001 is open.
+      - name: Rating
+        working-directory: packages/rating
+        run: gradle test --no-daemon
+
   competition:
     name: Competition structure
     runs-on: ubuntu-latest

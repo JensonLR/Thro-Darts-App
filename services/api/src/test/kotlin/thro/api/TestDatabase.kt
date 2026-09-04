@@ -22,7 +22,7 @@ public object TestDatabase {
     /** Every schema the migrations create. Dropping them all is what makes a run repeatable. */
     private val schemas = listOf("evidence", "trust", "rating", "read", "audit")
 
-    private val roles = listOf("thro_owner", "app_match", "app_trust", "app_rating", "app_read")
+    private val roles = listOf("thro_owner", "app_match", "app_trust", "app_rating", "app_read", "app_competition")
 
     public fun migrated(): Connection {
         val port = System.getenv("PGPORT") ?: "5432"
