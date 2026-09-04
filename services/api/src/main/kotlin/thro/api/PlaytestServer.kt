@@ -2,6 +2,9 @@ package thro.api
 
 import com.sun.net.httpserver.HttpExchange
 import com.sun.net.httpserver.HttpServer
+import java.io.FileDescriptor
+import java.io.FileOutputStream
+import java.io.PrintStream
 import java.net.InetSocketAddress
 import java.sql.Connection
 import java.sql.DriverManager
@@ -30,6 +33,11 @@ public object PlaytestServer {
 
     @JvmStatic
     public fun main(args: Array<String>) {
+        // The JVM picks stdout's charset from the launching console, which mangles the Ø in the
+        // product name to a question mark on a non-UTF-8 terminal. The name does not change to
+        // suit a terminal.
+        System.setOut(PrintStream(FileOutputStream(FileDescriptor.out), true, "UTF-8"))
+
         val port = (System.getenv("PORT") ?: "8080").toInt()
         val conn = connect()
         migrate(conn)

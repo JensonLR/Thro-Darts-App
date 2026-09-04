@@ -82,10 +82,35 @@ FOUNDATION_ACCEPTANCE.md   Gate 0 report
 
 ```bash
 python3 packages/domain-spec/generate.py --full && python3 packages/domain-spec/validate.py
-cd packages/engine && gradle check
-bash services/api/test/schema_properties.sh      # needs a Postgres 16
+gradle -p packages/engine check
+gradle -p packages/statistics test
+gradle -p packages/competition test
 python3 packages/design-tokens/build.py --check
+
+# these need a PostgreSQL 16; set PGHOST, and PGPORT/PGUSER/PGDATABASE if not the defaults
+export PGHOST=localhost
+bash services/api/test/schema_properties.sh
+gradle -p services/api test
 ```
+
+The database-backed checks skip cleanly and say so when `PGHOST` is unset, rather than
+passing silently.
+
+## Playing a match
+
+There is a playtest harness — the real engine and the real command path behind a browser,
+so the competitive core can be played before the clients exist. It is **not the product**:
+online only, no accounts, no rating, and it says so at the top of every screen.
+
+```bash
+PGHOST=localhost gradle -p services/api run
+```
+
+Then open `http://localhost:8080`. Enter a visit total the way a chalker would; the app asks
+for darts at a double whenever the player **began** the visit on a finish, whether or not they
+took it, and additionally for darts used on the visit that wins a leg. Leaving a prompt blank
+records *unknown*, which is a different fact from zero — **Stats** in the header then shows the
+figure as a range instead of a number.
 
 ## Design authority
 

@@ -1,4 +1,7 @@
-plugins { kotlin("jvm") version "2.0.21" }
+plugins {
+    kotlin("jvm") version "2.0.21"
+    application
+}
 repositories { mavenCentral() }
 dependencies {
     implementation("thro-engine:thro-engine")
@@ -15,4 +18,16 @@ tasks.test {
     environment("PGPORT", System.getenv("PGPORT") ?: "")
     environment("PGUSER", System.getenv("PGUSER") ?: "")
     environment("PGDATABASE", System.getenv("PGDATABASE") ?: "")
+}
+
+// `gradle -p services/api run` starts the playtest harness. The database settings come from the
+// environment so that no connection detail is ever committed.
+application {
+    mainClass.set("thro.api.PlaytestServer")
+}
+tasks.named<JavaExec>("run") {
+    standardInput = System.`in`
+    for (v in listOf("PGHOST", "PGPORT", "PGUSER", "PGDATABASE", "PORT")) {
+        System.getenv(v)?.let { environment(v, it) }
+    }
 }
