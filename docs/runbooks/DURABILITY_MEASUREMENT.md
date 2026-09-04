@@ -61,8 +61,17 @@ difference is your machine and worth saying so.
 2. **Create New Project…**
 3. Choose **iOS** along the top, then **App**. Click **Next**.
 4. Product Name: `ThroProbe`
-5. Organisation Identifier: anything unique, e.g. `com.jenson`
-6. Interface: **SwiftUI**. Language: **Swift**. Leave the rest alone. Click **Next**.
+5. Organisation Identifier: a domain you control, reversed and lowercase — `com.thro`. (Bundle
+   identifiers are conventionally all lowercase. This app never leaves the device, so the value only
+   has to be unique to you.)
+6. Interface: **SwiftUI**. Language: **Swift**.
+7. **Storage: `None`.** Not SwiftData, not Core Data. Both stand up their own SQLite stack inside
+   the app process, and this app exists to measure SQLite write latency — a second SQLite client in
+   the process being measured is a confounding variable for no benefit. They also generate
+   boilerplate in `ContentView.swift` that step 3c deletes.
+8. Testing System: either option is fine. It creates a test target inside `ThroProbe`, which this
+   procedure never uses — the probe package brings its own tests.
+9. Leave **Host in CloudKit** unticked. Click **Next**.
 7. Save it in `~/Documents` (**not** inside the Thro-Darts-App folder). Click **Create**.
 
 ### 3b. Point it at the probe
