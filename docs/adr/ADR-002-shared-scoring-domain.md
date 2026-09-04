@@ -1,6 +1,6 @@
 # ADR-002 — Shared deterministic scoring domain
 
-**Status:** DEFERRED, with explicit criteria · **Date:** 2026-09-03 (revision 2)
+**Status:** DEFERRED, with explicit criteria · **Spike run 2026-09-04, half of its exit condition met** · **Date:** 2026-09-03 (revision 2)
 
 This is the single decision that forces a rewrite if made wrongly, which is why it is not being made
 on the strength of an argument alone.
@@ -56,6 +56,48 @@ rule change (not the first) is measured.
 itself the answer.
 **What it must not test.** Build times and debugger ergonomics. Those were the grounds on which a
 shared core was rejected a priori, so measuring them again decides nothing.
+
+## Spike result — 2026-09-04
+
+**Ported.** `packages/engine-swift` is the pure engine in Swift, 218 lines of state machine, with
+the rule tables generated into it by the same enumeration that produces the Kotlin tables. CI fails
+on a stale generated copy, so no platform can drift by hand-editing its own checkout set.
+
+**Corpus outcome — the exit condition, met:**
+
+| | Kotlin | Swift |
+|---|---|---|
+| Hand-shaped corpus | 64 cases, 393 commands | 64 cases, 393 commands |
+| Exhaustive transitions | 86,000 | 86,000 |
+| Divergences | — | **0** |
+
+The Swift engine passed the entire corpus on the first run that reached the compiler. Two defects
+were found before that, and both are worth recording because neither was a scoring bug: enum cases
+cannot carry default parameter values in Swift, and the exhaustive vector family has a different
+shape from the rest of the corpus, which the first runner read wrongly.
+
+### What this does NOT settle
+
+The exit condition has two halves and this is one of them. **The cost of the *second* rule change
+was not measured**, because no second rule change has happened. The spike therefore says the two
+implementations *can* agree; it says nothing about what keeping them agreeing costs over time, which
+is the thing that actually decides this record.
+
+It is also the most favourable possible conditions for agreement: the Swift was written by reading
+the Kotlin line by line, deliberately preserving even the order of its checks, because that order
+decides the answer in several places. A port written from the specification instead of from the
+other implementation would be a harder and more honest test — and is what the next rule change will
+accidentally provide.
+
+### Standing position
+
+Neither kill criterion has fired: no divergence has reached a human-tested build, and the rule
+surface has not grown past X01, sets and pairs. **Three native implementations stand**, with the
+corpus as the contract, per the criteria below. That is the ADR's own answer to this evidence, not a
+new decision.
+
+One thing the spike did change: the rule-table generator, listed above as the acknowledged cost of
+deferring, now emits Swift as well as Kotlin. That cost has been paid and is no longer hypothetical.
 
 ## Kill criteria — correctness, not ergonomics
 

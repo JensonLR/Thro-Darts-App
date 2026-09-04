@@ -45,7 +45,7 @@ database.
 | | |
 |---|---|
 | Scoring rules | 436 property checks against independent darts facts |
-| Scoring engine | 86,000 exhaustive transitions + 64 corpus cases |
+| Scoring engine | 86,000 exhaustive transitions + 64 corpus cases, **on two independent implementations** |
 | Statistics honesty | 20 tests — an uncomputable figure says so; an approximate one is never a point value |
 | Trust and eligibility | 30 tests — a label can never disagree with the provenance under it |
 | Authorization | 21 tests — the conflict-of-interest rule, and age as a dimension |
