@@ -63,11 +63,16 @@ public sealed interface Command {
      * @param dartsUsed how many darts the visit consumed. Only ever ambiguous on a visit that wins
      *   a leg, so it may be null (unknown) or 3 on any other visit. Null means *unknown* — never
      *   zero, and never inferred.
+     * @param dartsAtDouble how many of those darts were thrown at a double. Asked on **every** visit
+     *   that began on a checkout number, not only on one that finished: a player who was on a finish
+     *   and missed still attempted doubles, and those attempts are what make checkout percentage
+     *   computable at all. Null means unknown; 0 means genuinely none were thrown.
      */
     public data class RecordVisit(
         val player: PlayerId,
         val visitTotal: Int,
         val dartsUsed: Int? = null,
+        val dartsAtDouble: Int? = null,
     ) : Command
 }
 
@@ -75,6 +80,7 @@ public enum class RejectionReason {
     IMPOSSIBLE_VISIT_TOTAL,
     VISIT_TOTAL_OUT_OF_RANGE,
     DARTS_USED_INVALID,
+    DARTS_AT_DOUBLE_INVALID,
     NOT_YOUR_TURN,
     MATCH_COMPLETE,
 }

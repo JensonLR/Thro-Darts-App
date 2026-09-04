@@ -31,9 +31,24 @@ Every figure therefore carries *how it was arrived at*, not just a number:
 | Best leg | **Exact in visits.** In darts it is not computable, so it is not claimed |
 | First 9 average | **Exact**, with the excluded legs disclosed |
 | 3-dart average | **Exact** when the winning visit recorded its darts; otherwise **bounded** |
-| Finish rate from a checkable position | **Exact** — and *not* checkout percentage |
-| Checkout % | **Unavailable.** Needs doubles attempted |
-| Doubles hit rate | **Unavailable.** Purely dart-level |
+| Finish rate from a checkable position | **Exact** — a *visit-level* measure, and not checkout percentage |
+| Checkout % | **Exact** where attempts were recorded; **bounded** where some were not |
+| Doubles hit rate | The same quantity under its other name |
+
+## Why checkout percentage is computable after all
+
+An earlier version of this layer reported it as permanently unavailable. That was wrong, and the
+reason is worth keeping: the capture rule was too narrow, not the maths.
+
+Darts thrown at a double are recorded on **every visit that began on a finish** — not only on one
+that ended in a checkout. A player on 40 who throws a single 20 and misses has attempted a double.
+Asking only on a successful checkout does not merely lose that attempt; it **biases the figure
+upward**, because every recorded attempt succeeded and every miss is invisible. A partial
+denominator is worse than an absent one, because it looks like a real number.
+
+The trigger is verified rather than assumed: enumeration over the whole range shows that "a double
+could have been thrown at during this visit" is exactly equivalent to "the remaining at the start of
+the visit is a checkout number".
 
 ## Two things the tests are really checking
 
@@ -43,8 +58,13 @@ cannot render it as a single number by accident. The tests assert the exact figu
 that interval.
 
 **That assuming three darts is not harmless.** A 501 leg won in 13 darts, scored as though it took
-15, understates the average by more than 20%. That is the whole argument for capturing one extra
-field per leg.
+15, understates the average by more than 20%. That is the whole argument for capturing the dart
+count on a checkout.
+
+**That the narrow capture rule inflates checkout percentage.** One test takes a match, removes the
+attempts from the visits that did not finish, and asserts the resulting figure can no longer be
+reported as a point value at all — and that its upper bound exceeds the truth by exactly the
+overstatement the old rule would have published.
 
 A bust visit consumed three darts and scored nothing, so it stays in the denominator and correctly
 drags the average down. Implementations that discard busts inflate every average they produce.

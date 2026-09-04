@@ -113,7 +113,18 @@ for fname, meta in manifest["files"].items():
                 check(f"{c['id']} rejects wrong thrower",
                       exp["result"] == "rejected" and exp.get("reason") == "NOT_YOUR_TURN")
                 continue
-            eff, reason, new = classify(rem[cmd["player"]], cmd["visitTotal"], out_rule)
+            before = rem[cmd["player"]]
+            eff, reason, new = classify(before, cmd["visitTotal"], out_rule)
+            dad, du = cmd.get("dartsAtDouble"), cmd.get("dartsUsed")
+            if eff != "rejected" and dad is not None:
+                bad = (not (0 <= dad <= 3)) or (du is not None and dad > du) \
+                    or (dad > 0 and before not in CHECKOUTS[out_rule]) \
+                    or (eff == "leg_won" and out_rule == "double" and dad < 1)
+                if bad:
+                    check(f"{c['id']} seq{cmd['seq']} darts-at-double rejection agrees",
+                          exp["result"] == "rejected"
+                          and exp.get("reason") == "DARTS_AT_DOUBLE_INVALID")
+                    continue
             if eff == "rejected":
                 check(f"{c['id']} seq{cmd['seq']} rejection agrees",
                       exp["result"] == "rejected" and exp.get("reason") == reason)

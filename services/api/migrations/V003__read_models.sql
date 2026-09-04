@@ -5,6 +5,11 @@
 -- An earlier design put derived visit state inside the append-only schema, where it could be neither
 -- corrected nor rebuilt.
 
+-- Run as the owner role so that the default privileges established in V001 govern
+-- every table created here. Without this the tables belong to whoever ran the
+-- migration, and future-table protection silently does not apply.
+SET ROLE thro_owner;
+
 CREATE TABLE read.visit (
   projection_version int    NOT NULL,
   visit_id        uuid      NOT NULL,
@@ -61,3 +66,7 @@ GRANT SELECT, INSERT, UPDATE, DELETE ON read.visit, read.leg TO app_read;
 GRANT SELECT ON read.visit, read.leg TO app_match, app_trust, app_rating;
 GRANT SELECT, INSERT ON trust.leg_attestation, trust.eligibility TO app_trust;
 GRANT SELECT ON trust.leg_attestation, trust.eligibility TO app_match, app_rating, app_read;
+
+-- Leave the session as it was found: a migration runner may share one connection
+-- across files, and a leaked role would silently change who owns what comes next.
+RESET ROLE;

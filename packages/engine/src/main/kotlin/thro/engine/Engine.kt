@@ -31,10 +31,23 @@ public object Engine {
         if (cmd.dartsUsed != null && cmd.dartsUsed !in 1..3) {
             return Outcome.Rejected(RejectionReason.DARTS_USED_INVALID)
         }
+        if (cmd.dartsAtDouble != null && cmd.dartsAtDouble !in 0..3) {
+            return Outcome.Rejected(RejectionReason.DARTS_AT_DOUBLE_INVALID)
+        }
+        if (cmd.dartsAtDouble != null && cmd.dartsUsed != null && cmd.dartsAtDouble > cmd.dartsUsed) {
+            return Outcome.Rejected(RejectionReason.DARTS_AT_DOUBLE_INVALID)
+        }
 
         val before = state.remaining.getValue(cmd.player)
         val left = before - cmd.visitTotal
         val checkouts = RuleTables.checkouts(state.format.outRule)
+
+        // A double can only be attempted from a remaining that is finishable within the visit —
+        // verified by enumeration to be exactly the checkout set. Claiming attempts from anywhere
+        // else is not a mis-key, it is evidence that cannot have happened.
+        if ((cmd.dartsAtDouble ?: 0) > 0 && before !in checkouts) {
+            return Outcome.Rejected(RejectionReason.DARTS_AT_DOUBLE_INVALID)
+        }
 
         // Bust, in order. The third condition is the one implementations drop: reaching exactly
         // zero on a number the out-rule cannot finish.
@@ -77,6 +90,13 @@ public object Engine {
             )
         }
 
+        // Under double-out the winning dart is by definition a double, so a finish that claims no
+        // double attempt contradicts itself.
+        if (state.format.outRule == OutRule.DOUBLE &&
+            cmd.dartsAtDouble != null && cmd.dartsAtDouble < 1
+        ) {
+            return Outcome.Rejected(RejectionReason.DARTS_AT_DOUBLE_INVALID)
+        }
         return winLeg(state, cmd.player)
     }
 

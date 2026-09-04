@@ -108,6 +108,7 @@ public object PlaytestServer {
         val total = field(body, "visitTotal")?.toIntOrNull()
             ?: return """{"error":"visitTotal required"}"""
         val darts = field(body, "dartsUsed")?.toIntOrNull()
+        val atDouble = field(body, "dartsAtDouble")?.toIntOrNull()
 
         val handler = CommandHandler(conn)
         // The next sequence is derived server-side here because the browser holds no journal. A
@@ -118,7 +119,8 @@ public object PlaytestServer {
                 commandId = UUID.randomUUID(), matchId = matchId, deviceId = reg.device,
                 deviceSeq = seq, actorId = UUID.randomUUID(), actorRole = "participant",
                 correlationId = UUID.randomUUID(), player = player, visitTotal = total,
-                dartsUsed = darts, occurredAt = java.time.OffsetDateTime.now().toString(),
+                dartsUsed = darts, dartsAtDouble = atDouble,
+                occurredAt = java.time.OffsetDateTime.now().toString(),
                 occurredTz = java.time.ZoneId.systemDefault().id,
             ),
             reg.home, reg.away,

@@ -13,15 +13,22 @@ bad()  { FAIL=$((FAIL+1)); printf '  \033[31mFAIL\033[0m  %s — %s\n' "$1" "$2"
 check(){ if [ "$2" = "$3" ]; then ok "$1"; else bad "$1" "expected [$3] got [$2]"; fi; }
 
 echo "== migrations =="
-for f in "$(dirname "$0")"/../migrations/V*.sql; do
-  out=$($PSQL -f "$f" 2>&1); rc=$?
-  if [ $rc -eq 0 ] && ! echo "$out" | grep -qi '^ERROR'; then ok "applied $(basename "$f")"
-  else bad "applied $(basename "$f")" "$(echo "$out" | grep -i ERROR | head -1)"; fi
-done
+already=$($PSQL -c "SELECT count(*) FROM information_schema.schemata WHERE schema_name='evidence';")
+if [ "$already" = "0" ]; then
+  for f in "$(dirname "$0")"/../migrations/V*.sql; do
+    out=$($PSQL -f "$f" 2>&1); rc=$?
+    if [ $rc -eq 0 ] && ! echo "$out" | grep -qi '^ERROR'; then ok "applied $(basename "$f")"
+    else bad "applied $(basename "$f")" "$(echo "$out" | grep -i ERROR | head -1)"; fi
+  done
+else
+  ok "schema already present — migrations skipped"
+fi
 
-M=11111111-1111-1111-1111-111111111111
-DA=aaaaaaaa-0000-0000-0000-00000000000a
-DB=bbbbbbbb-0000-0000-0000-00000000000b
+# Fresh identifiers per run, so the suite is idempotent. CI always gets a clean database, but a
+# test that only passes on a clean database is a test that stops being run locally.
+M=$($PSQL -c "SELECT gen_random_uuid();")
+DA=$($PSQL -c "SELECT gen_random_uuid();")
+DB=$($PSQL -c "SELECT gen_random_uuid();")
 ins() { # match, device, seq
   $PSQL -c "INSERT INTO evidence.event
     (event_id,match_id,device_id,device_seq,event_type,schema_version,correlation_id,
@@ -62,12 +69,14 @@ for op in "UPDATE evidence.event SET event_type='tampered'" \
     else bad "$label" "${r:-succeeded}"; fi
   fi
 done
-n=$($PSQL -c "SELECT count(*) FROM evidence.event;")
+n=$($PSQL -c "SELECT count(*) FROM evidence.event WHERE match_id='$M';")
 check "the log survived every attempt" "$n" "4"
 
 echo
 echo "== a table added by a FUTURE migration inherits the revocation =="
+$PSQL -c "SET ROLE thro_owner; DROP TABLE IF EXISTS evidence.late_arrival;" >/dev/null
 $PSQL -c "SET ROLE thro_owner; CREATE TABLE evidence.late_arrival(id int PRIMARY KEY, v int);" >/dev/null
+$PSQL -c "SET ROLE thro_owner; GRANT SELECT, INSERT ON evidence.late_arrival TO app_match;" >/dev/null
 $PSQL -c "SET ROLE thro_owner; INSERT INTO evidence.late_arrival VALUES (1,180);" >/dev/null
 r=$($PSQL -c "SET ROLE app_match; UPDATE evidence.late_arrival SET v=1;" 2>&1)
 if echo "$r" | grep -qi 'permission denied'; then ok "UPDATE on a later table is denied by default privileges"
@@ -77,7 +86,7 @@ check "the later table's data is intact" "$v" "180"
 
 echo
 echo "== idempotency =="
-CMD=cccccccc-0000-0000-0000-00000000000c
+CMD=$($PSQL -c "SELECT gen_random_uuid();")
 $PSQL -c "INSERT INTO evidence.command_receipt(device_id,client_command_id,match_id,outcome,response_body)
           VALUES ('$DA','$CMD','$M','accepted','{\"streamSeq\":3}');" >/dev/null
 r=$($PSQL -c "INSERT INTO evidence.command_receipt(device_id,client_command_id,match_id,outcome,response_body)
@@ -103,7 +112,7 @@ echo "== nullable darts_used means unknown, never zero =="
 $PSQL -c "INSERT INTO read.visit(projection_version,visit_id,match_id,leg_ordinal,visit_ordinal,
           thrower_id,visit_total,darts_used,bust,checkout,remaining_after)
           VALUES (1,gen_random_uuid(),'$M',1,1,gen_random_uuid(),100,NULL,false,false,401);" >/dev/null
-d=$($PSQL -c "SELECT coalesce(darts_used::text,'NULL') FROM read.visit LIMIT 1;")
+d=$($PSQL -c "SELECT coalesce(darts_used::text,'NULL') FROM read.visit WHERE match_id='$M' LIMIT 1;")
 check "darts_used stores NULL rather than a default" "$d" "NULL"
 r=$($PSQL -c "INSERT INTO read.visit(projection_version,visit_id,match_id,leg_ordinal,visit_ordinal,
               thrower_id,visit_total,darts_used,bust,checkout,remaining_after)
@@ -115,6 +124,32 @@ r=$($PSQL -c "INSERT INTO read.visit(projection_version,visit_id,match_id,leg_or
               VALUES (1,gen_random_uuid(),'$M',1,3,gen_random_uuid(),181,3,false,false,0);" 2>&1)
 if echo "$r" | grep -qi 'violates check constraint'; then ok "a visit total above 180 is rejected"
 else bad "a visit total above 180 is rejected" "181 was accepted"; fi
+
+echo
+echo "== the append-only guarantee rests on ownership, so assert it =="
+o=$($PSQL -c "SELECT tableowner FROM pg_tables WHERE schemaname='evidence' AND tablename='event';")
+check "the event log is owned by the migration role, not the app" "$o" "thro_owner"
+o=$($PSQL -c "SELECT count(*) FROM pg_tables WHERE schemaname IN ('evidence','read','trust')
+              AND tableowner <> 'thro_owner';")
+check "no table in the guarded schemas is owned by anyone else" "$o" "0"
+
+echo
+echo "== darts at a double =="
+$PSQL -c "SET ROLE app_read; UPDATE read.visit SET darts_at_double = 1 WHERE match_id='$M';" >/dev/null 2>&1
+d=$($PSQL -c "SELECT coalesce(darts_at_double::text,'NULL') FROM read.visit WHERE match_id='$M' LIMIT 1;")
+check "darts_at_double is recorded" "$d" "1"
+r=$($PSQL -c "SET ROLE app_read; INSERT INTO read.visit(projection_version,visit_id,match_id,leg_ordinal,
+     visit_ordinal,thrower_id,visit_total,darts_used,darts_at_double,bust,checkout,remaining_after)
+     VALUES (1,gen_random_uuid(),'$M',9,1,gen_random_uuid(),40,1,2,false,true,0);" 2>&1)
+if echo "$r" | grep -qi 'violates check constraint'; then
+  ok "more darts at a double than darts thrown is rejected"
+else bad "more darts at a double than darts thrown is rejected" "2-of-1 was accepted"; fi
+r=$($PSQL -c "SET ROLE app_read; INSERT INTO read.visit(projection_version,visit_id,match_id,leg_ordinal,
+     visit_ordinal,thrower_id,visit_total,darts_used,darts_at_double,bust,checkout,remaining_after)
+     VALUES (1,gen_random_uuid(),'$M',9,2,gen_random_uuid(),40,3,4,false,true,0);" 2>&1)
+if echo "$r" | grep -qi 'violates check constraint'; then
+  ok "more than three darts at a double is rejected"
+else bad "more than three darts at a double is rejected" "4 was accepted"; fi
 
 echo
 echo "-------------------------------------------"

@@ -30,17 +30,26 @@ val determinismGuard by tasks.registering {
     group = "verification"
     val srcDir = file("src/main/kotlin")
     doLast {
+        // Matched as whole identifiers, not substrings: an earlier version flagged `dartsAtDouble`
+        // as floating point, which is the kind of false positive that gets a guard switched off.
         val banned = listOf(
-            "currentTimeMillis" to "wall clock", "nanoTime" to "clock", "Instant.now" to "clock",
-            "Random" to "randomness", "Double" to "floating point", "Float" to "floating point",
-            "java.io" to "I/O", "java.nio" to "I/O", "readLine" to "I/O",
+            Regex("""\bcurrentTimeMillis\b""") to "wall clock",
+            Regex("""\bnanoTime\b""") to "clock",
+            Regex("""\bInstant\.now\b""") to "clock",
+            Regex("""\bRandom\b""") to "randomness",
+            Regex("""\bDouble\b""") to "floating point",
+            Regex("""\bFloat\b""") to "floating point",
+            Regex("""\bjava\.n?io\b""") to "I/O",
+            Regex("""\breadLine\b""") to "I/O",
         )
         val violations = mutableListOf<String>()
         srcDir.walkTopDown().filter { it.extension == "kt" }.forEach { f ->
             f.readLines().forEachIndexed { i, line ->
                 val code = line.substringBefore("//")
-                banned.forEach { (needle, why) ->
-                    if (code.contains(needle)) violations += "${f.name}:${i + 1} uses $needle ($why)"
+                banned.forEach { (pattern, why) ->
+                    if (pattern.containsMatchIn(code)) {
+                        violations += "${f.name}:${i + 1} uses ${pattern.pattern} ($why)"
+                    }
                 }
             }
         }

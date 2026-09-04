@@ -65,6 +65,7 @@ class ConformanceTest {
                     player = PlayerId(cmd.getValue("player").str()),
                     visitTotal = cmd.getValue("visitTotal").int(),
                     dartsUsed = cmd.opt("dartsUsed")?.int(),
+                    dartsAtDouble = cmd.opt("dartsAtDouble")?.int(),
                 ),
             )
             val seq = cmd.getValue("seq").int()
@@ -220,7 +221,7 @@ class ConformanceTest {
 
     @Test
     fun `rule tables match the generated spec version`() {
-        assertEquals("1.1.0", RuleTables.SPEC_VERSION)
+        assertEquals("1.2.0", RuleTables.SPEC_VERSION)
         assertEquals(180, RuleTables.MAX_VISIT_TOTAL)
         assertEquals(170, RuleTables.checkouts(OutRule.DOUBLE).max())
         assertEquals(180, RuleTables.checkouts(OutRule.MASTER).max())

@@ -56,7 +56,13 @@ public data class Stat(
     }
 }
 
-/** One recorded visit. [dartsUsed] null means unknown — never zero, never inferred. */
+/**
+ * One recorded visit. Null means **unknown** — never zero, never inferred.
+ *
+ * @param dartsAtDouble how many darts were thrown at a double. Recorded on every visit that began
+ *   on a finish, whether or not it ended in one: a player on 40 who throws a single 20 and misses
+ *   has attempted a double, and it is those attempts that make checkout percentage computable.
+ */
 public data class VisitRecord(
     val legOrdinal: Int,
     val visitOrdinal: Int,
@@ -66,6 +72,7 @@ public data class VisitRecord(
     val remainingBefore: Int,
     val remainingAfter: Int,
     val wonLeg: Boolean,
+    val dartsAtDouble: Int? = null,
 )
 
 public object Statistics {
@@ -170,22 +177,70 @@ public object Statistics {
     // ---------------------------------------------------------------- not computable, and said so
 
     /**
-     * Checkout percentage needs doubles attempted. Nothing in a visit total distinguishes one dart
-     * thrown at a double from three, so this cannot be computed — and a figure presented under this
-     * name without dart-level evidence would be fabricated.
+     * Doubles hit as a percentage of doubles thrown at — the broadcast definition.
+     *
+     * A visit total alone cannot supply this, but a scorer can: when a player is on a finish, the
+     * app asks how many darts went at a double, whether or not they took it. That single question
+     * is the whole difference between this being computable and not.
+     *
+     * Under double-out every leg is won on a double, so hits equal legs won and the only unknown is
+     * attempts. Where a checkable visit did not record its attempts the figure is **bounded**, not
+     * guessed: unrecorded attempts can only lower the true percentage, so the recorded figure is
+     * its upper bound.
      */
-    public fun checkoutPercentage(evidenceLevel: EvidenceLevel): Stat = when (evidenceLevel) {
-        EvidenceLevel.VISIT_TOTAL -> Stat.unavailable(
-            "Checkout percentage needs to know how many darts were thrown at a double. " +
-                "This match recorded visit totals, so it cannot be calculated.",
-        )
-        EvidenceLevel.DART_LEVEL -> Stat.unavailable(
-            "Dart-level scoring is not yet available.",
-        )
+    public fun checkoutPercentage(visits: List<VisitRecord>, checkable: Set<Int>): Stat {
+        val onAFinish = visits.filter { it.remainingBefore in checkable }
+        if (onAFinish.isEmpty()) {
+            return Stat.unavailable("No visit has yet begun on a finishable number.")
+        }
+        val recorded = onAFinish.filter { it.dartsAtDouble != null }
+        if (recorded.isEmpty()) {
+            return Stat.unavailable(
+                "No visit recorded how many darts were thrown at a double, so checkout " +
+                    "percentage cannot be calculated for this match.",
+            )
+        }
+        val hits = visits.count { it.wonLeg }
+        val known = recorded.sumOf { it.dartsAtDouble ?: 0 }
+        val unknownVisits = onAFinish.size - recorded.size
+        if (known == 0) {
+            return Stat.unavailable("No darts have yet been thrown at a double.")
+        }
+        if (unknownVisits == 0) {
+            return Stat(
+                basis = Basis.EXACT,
+                value = hits.toDouble() * 100 / known,
+                evidenceLevel = EvidenceLevel.DART_LEVEL,
+                sampleSize = known,
+            )
+        }
+        // Bound the unrecorded attempts from both sides. An unrecorded visit threw at most three
+        // darts at a double; and under double-out one that *won* threw at least one, since the
+        // winning dart is itself a double. Without that second fact the upper bound can exceed
+        // 100%: a leg-winning visit whose attempts went unrecorded would count in the numerator
+        // while contributing nothing to the denominator.
+        val unrecordedWins = onAFinish.count { it.dartsAtDouble == null && it.wonLeg }
+        return Stat.bounded(
+            lower = hits.toDouble() * 100 / (known + unknownVisits * 3),
+            upper = hits.toDouble() * 100 / (known + unrecordedWins),
+            n = known,
+            note = "$unknownVisits visit(s) on a finish did not record their darts at a double, " +
+                "so the exact figure lies in this range.",
+        ).copy(evidenceLevel = EvidenceLevel.DART_LEVEL)
     }
 
-    /** Purely dart-level. No approximation exists, so none is offered. */
-    public fun doublesHitRate(evidenceLevel: EvidenceLevel): Stat = checkoutPercentage(evidenceLevel)
+    /** The same quantity under its other common name. */
+    public fun doublesHitRate(visits: List<VisitRecord>, checkable: Set<Int>): Stat =
+        checkoutPercentage(visits, checkable)
+
+    /** Total darts thrown at a double. Exact over the visits that recorded it. */
+    public fun doublesAttempted(visits: List<VisitRecord>): Stat {
+        val recorded = visits.filter { it.dartsAtDouble != null }
+        if (recorded.isEmpty()) {
+            return Stat.unavailable("No visit has recorded its darts at a double.")
+        }
+        return Stat.exact(recorded.sumOf { it.dartsAtDouble ?: 0 }.toDouble(), recorded.size)
+    }
 
     /**
      * The fewest visits taken to win a leg. Best leg *in darts* is not computable without the

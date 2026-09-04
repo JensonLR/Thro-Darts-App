@@ -9,24 +9,44 @@ is part of the record.
 
 ---
 
-## PD-001 — Statistics honesty, and capturing darts-used
+## PD-001 — Statistics honesty, and capturing darts at a double
+
+> **Revised on founder correction.** The first version asked for the dart count **only on a visit
+> that won a leg**, and concluded from that that checkout percentage was permanently uncomputable.
+> That conclusion was wrong, and it was wrong because the capture rule was too narrow: a player who
+> is on a finish and *misses* has still thrown darts at a double. Asking only on a successful
+> checkout never records those attempts, so the denominator is missing — not unknowable.
+>
+> Every premium darts scorer asks on the miss as well. Corrected below.
 
 **Resolves blocker B1.** Taken on delegated authority. **Reversible via configuration and copy.**
 
 ### Decided
 
-1. **Capture `dartsUsed ∈ {1,2,3}` on the leg-winning visit only.** One tap per leg, roughly five per
-   match. It is optional: absent means unknown, never inferred.
-2. **The following are exact and ship as exact:** 180s, 140+ and 100+ counts, highest checkout, leg
+1. **Capture darts at a double on every visit that *began* on a finish** — whether or not it ended in
+   one. The trigger is verified rather than assumed: enumeration shows that "a double could have
+   been thrown at during this visit" is exactly equivalent to "the remaining at the start of the
+   visit is a checkout number", with no exceptions across the whole range.
+2. **Capture `dartsUsed ∈ {1,2,3}` additionally on a visit that wins the leg**, since that is the
+   only visit whose total dart count is ambiguous. The two are independent: finishing 100 as
+   T20 then D20 is two darts with one at a double; missing twice first is three darts with three at
+   a double. Neither number implies the other.
+
+   Both are optional. Absent means **unknown** — never zero, never inferred.
+3. **The following are exact and ship as exact:** 180s, 140+ and 100+ counts, highest checkout, leg
    win rate, deciding-leg percentage, and — with `dartsUsed` — 3-dart average and best leg in darts.
-3. **First 9 average ships with a disclosed denominator**, excluding legs that did not reach nine
+4. **First 9 average ships with a disclosed denominator**, excluding legs that did not reach nine
    darts, and the exclusion is stated rather than hidden.
-4. **Checkout % is not shipped under that name.** It is replaced by **finish rate from a checkable
-   position**: legs won on the first visit that opened on a finishable number, over all such
-   opportunities. Exactly computable from visit totals, genuinely informative, and a different
-   quantity — so it carries a different name and a different API field.
-5. **Doubles hit rate is withheld** until a dart-level capture mode exists. It is not approximated.
-6. **Every statistic crosses the API as `{value, basis, evidenceLevel, sampleSize}`** where basis is
+5. **Checkout percentage ships, and is exact** where the attempts were recorded — doubles hit over
+   doubles thrown at, the broadcast definition. Under double-out every leg is won on a double, so
+   hits equal legs won and attempts are the only unknown. Where some checkable visit did not record
+   its attempts the figure is **bounded, not guessed**: unrecorded attempts can only lower the true
+   percentage, so the recorded figure is its upper bound.
+6. **Doubles hit rate is the same quantity** under its other name, and ships on the same basis.
+7. **Finish rate from a checkable position is retained as a separate measure** — legs won over
+   visits that opened on a finish. It is a *visit-level* measure where checkout percentage is
+   dart-level; they are both real and they are not the same number.
+8. **Every statistic crosses the API as `{value, basis, evidenceLevel, sampleSize}`** where basis is
    `EXACT`, `BOUNDED` or `UNAVAILABLE`. A statistic that cannot be computed says so.
 
 ### Why
@@ -45,15 +65,22 @@ The design has already reached the honest framing itself — the Coach surface s
 
 ### What it costs
 
-One extra tap per leg at the board, and a `Stat` variant that can render an unavailable value (a
-design commission). Two figures currently on the approved surfaces change: one is renamed, one is
-withheld. The **broadcast overlay** is affected, since it carries both for both players.
+More taps than the first version: one question on every visit that opens on a finish, and two on a
+visit that wins the leg. In a typical leg that is one or two extra prompts, not five.
+
+**Whether that breaks the rhythm at a real board is the open question**, and it is the main thing
+the playtest harness exists to answer. If it does, the fallback is not to guess — it is to record
+fewer attempts and let the figure report as bounded, which the statistics layer already does.
+
+A `Stat` variant that can render bounded and unavailable values is still required (a design
+commission). No figure is now withheld outright.
 
 ### How to reverse
 
-Points 4 and 5 are copy and API-field decisions with no schema consequence. Point 1 is a nullable
-column that exists whether or not the client prompts for it — turning the prompt off is a flag.
-Nothing here requires a migration to undo.
+Both captured fields are nullable columns that exist whether or not the client prompts for them, so
+turning either prompt off is a capability flag (ADR-014) and not a migration. Statistics degrade
+from exact to bounded to unavailable as the evidence thins, which is the behaviour the layer was
+built for. Nothing here requires a migration to undo.
 
 ---
 

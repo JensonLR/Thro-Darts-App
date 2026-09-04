@@ -8,7 +8,8 @@ Several decisions are described elsewhere as "configurable", and that word was d
 unexamined work. Hostile review noticed that between them they amount to a versioned-policy
 subsystem that no record defined:
 
-- **PD-001 / B1** — whether the client prompts for `darts_used`, and which statistics are shown.
+- **PD-001 / B1** — whether the client prompts for `darts_used` and `darts_at_double`, and which
+  statistics are shown.
 - **PD-002 / B2** — the rating eligibility rule.
 - **ADR-009** — which rating model is published, and the scale epoch.
 - **ADR-012** — per-competition tie-break chains and per-round format overrides.

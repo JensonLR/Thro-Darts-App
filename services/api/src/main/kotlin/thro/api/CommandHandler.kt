@@ -34,6 +34,9 @@ public data class VisitCommand(
     val player: String,
     val visitTotal: Int,
     val dartsUsed: Int?,
+    /** Darts thrown at a double. Recorded on every visit that began on a finish, not only one that
+     *  ended in one — see PD-001. Null means unknown, never zero. */
+    val dartsAtDouble: Int? = null,
     val occurredAt: String,
     val occurredTz: String,
     /** What the client's engine computed. Cross-checked, never trusted. */
@@ -85,7 +88,9 @@ public class CommandHandler(private val connection: Connection) {
             // 4. Revalidate through the same engine the client ran.
             val outcome = Engine.apply(
                 state,
-                Command.RecordVisit(PlayerId(cmd.player), cmd.visitTotal, cmd.dartsUsed),
+                Command.RecordVisit(
+                    PlayerId(cmd.player), cmd.visitTotal, cmd.dartsUsed, cmd.dartsAtDouble,
+                ),
             )
 
             val result = when (outcome) {
@@ -127,7 +132,8 @@ public class CommandHandler(private val connection: Connection) {
             """
             SELECT payload->>'player' AS player,
                    (payload->>'visitTotal')::int AS visit_total,
-                   payload->>'dartsUsed' AS darts_used
+                   payload->>'dartsUsed' AS darts_used,
+                   payload->>'dartsAtDouble' AS darts_at_double
             FROM evidence.event
             WHERE match_id = ? AND device_id = ? AND event_type = 'VisitRecorded'
             ORDER BY device_seq
@@ -143,6 +149,7 @@ public class CommandHandler(private val connection: Connection) {
                             PlayerId(rs.getString("player")),
                             rs.getInt("visit_total"),
                             rs.getString("darts_used")?.toIntOrNull(),
+                            rs.getString("darts_at_double")?.toIntOrNull(),
                         ),
                     )
                     if (outcome is Outcome.Accepted) state = outcome.state
@@ -178,6 +185,7 @@ public class CommandHandler(private val connection: Connection) {
             append("\"player\":\"").append(cmd.player).append("\",")
             append("\"visitTotal\":").append(cmd.visitTotal).append(",")
             append("\"dartsUsed\":").append(cmd.dartsUsed?.toString() ?: "null").append(",")
+            append("\"dartsAtDouble\":").append(cmd.dartsAtDouble?.toString() ?: "null").append(",")
             append("\"effect\":\"").append(applied.effect).append("\"")
             append("}")
         }

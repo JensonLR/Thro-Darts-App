@@ -198,9 +198,10 @@ function setEntry(v){
   $("enter").disabled = v === "" || (S.state && !!S.state.winner);
 }
 
-async function submit(total, dartsUsed){
+async function submit(total, dartsUsed, dartsAtDouble){
   const r = await post("/api/match/"+S.matchId+"/visit",
-    {player:S.state.thrower, visitTotal:total, dartsUsed:dartsUsed ?? null});
+    {player:S.state.thrower, visitTotal:total,
+     dartsUsed:dartsUsed ?? null, dartsAtDouble:dartsAtDouble ?? null});
   const m = $("msg");
   if (r.error){ m.className="msg error"; m.textContent = r.error; return; }
   const o = r.outcome;
@@ -211,7 +212,8 @@ async function submit(total, dartsUsed){
       VISIT_TOTAL_OUT_OF_RANGE: "A visit cannot exceed 180.",
       NOT_YOUR_TURN: "It is not that player's turn.",
       MATCH_COMPLETE: "The match is already complete.",
-      DARTS_USED_INVALID: "Only a leg-winning visit can use fewer than three darts."
+      DARTS_USED_INVALID: "Only a leg-winning visit can use fewer than three darts.",
+      DARTS_AT_DOUBLE_INVALID: "That number of darts at a double is not possible from this score."
     }[o.reason] || o.reason;
   } else if (o.effect === "bust"){
     m.className = "msg error";
@@ -228,27 +230,57 @@ async function submit(total, dartsUsed){
   render(r.state);
 }
 
-// A leg-winning visit is the only one whose dart count is ambiguous, so it is the only one we ask
-// about. One tap per leg is what makes the three-dart average exact rather than roughly 13% low.
+// Two different questions, asked when they actually apply.
+//
+// Darts AT A DOUBLE is asked on every visit that BEGAN on a finish, whether or not it ended in one:
+// a player on 40 who throws a single 20 and misses has attempted a double, and if that attempt is
+// never recorded the checkout percentage computed from the log is silently inflated.
+//
+// Darts USED is asked only when the visit wins the leg, because that is the only visit whose dart
+// count is ambiguous — every other visit throws three.
 async function enter(){
   const total = parseInt(S.entry, 10);
   if (isNaN(total)) return;
+  await commit(total);
+}
+
+async function commit(total){
   const throwerIsHome = S.state.thrower === S.state.home;
   const rem = throwerIsHome ? S.state.remainingHome : S.state.remainingAway;
+  const wasOnAFinish = checkable(rem);
+  const finished = rem - total === 0 && wasOnAFinish;
+
   let darts = null;
-  if (rem - total === 0 && checkable(rem)){
-    const answer = prompt("How many darts did that checkout take? (1, 2 or 3)", "3");
-    if (answer === null) return;
-    const n = parseInt(answer, 10);
-    darts = (n >= 1 && n <= 3) ? n : null;   // unknown stays unknown; it is never inferred
+  let atDouble = null;
+
+  if (finished){
+    darts = ask("Darts used to check out?", [1,2,3], 3);
+    if (darts === undefined) return;                       // cancelled: record nothing
+    const opts = [1,2,3].filter(n => darts === null || n <= darts);
+    atDouble = ask("Darts thrown at a double?", opts, Math.min(1, darts || 1));
+    if (atDouble === undefined) return;
+  } else if (wasOnAFinish){
+    atDouble = ask("Darts thrown at a double?", [0,1,2,3], 0);
+    if (atDouble === undefined) return;
   }
-  await submit(total, darts);
+  await submit(total, darts, atDouble);
+}
+
+// Returns a number, or null for "unknown" — which is recorded as unknown and never inferred.
+// Returns undefined if the player cancels, in which case nothing is submitted at all.
+function ask(question, options, preset){
+  const answer = prompt(question + " (" + options.join("/") + ", or leave blank if unsure)",
+                        String(preset));
+  if (answer === null) return undefined;
+  if (answer.trim() === "") return null;
+  const n = parseInt(answer, 10);
+  return options.includes(n) ? n : null;
 }
 
 const quick = [180,140,100,60,45,26];
 quick.forEach(q => {
   const b = document.createElement("button");
-  b.textContent = q; b.onclick = () => submit(q, null);
+  b.textContent = q; b.onclick = () => commit(q);
   $("quick").appendChild(b);
 });
 [1,2,3,4,5,6,7,8,9].forEach(d => {
@@ -259,7 +291,7 @@ quick.forEach(q => {
 });
 const miss = document.createElement("button");
 miss.className = "label"; miss.textContent = "Miss";
-miss.onclick = () => submit(0, null);
+miss.onclick = () => commit(0);
 $("digits").appendChild(miss);
 const zero = document.createElement("button");
 zero.textContent = "0"; zero.onclick = () => setEntry((S.entry + "0").slice(0,3));

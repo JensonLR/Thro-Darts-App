@@ -5,6 +5,11 @@
 -- must permit both devices to write their own gapless sequence. An earlier design keyed on
 -- (stream_id, stream_seq) and rejected the second device outright.
 
+-- Run as the owner role so that the default privileges established in V001 govern
+-- every table created here. Without this the tables belong to whoever ran the
+-- migration, and future-table protection silently does not apply.
+SET ROLE thro_owner;
+
 CREATE TABLE evidence.event (
   event_id          uuid        PRIMARY KEY,
   match_id          uuid        NOT NULL,
@@ -53,3 +58,7 @@ GRANT SELECT, INSERT ON evidence.event, evidence.command_receipt
   TO app_match, app_trust, app_rating, app_read;
 REVOKE UPDATE, DELETE, TRUNCATE ON evidence.event, evidence.command_receipt
   FROM app_match, app_trust, app_rating, app_read;
+
+-- Leave the session as it was found: a migration runner may share one connection
+-- across files, and a leaked role would silently change who owns what comes next.
+RESET ROLE;

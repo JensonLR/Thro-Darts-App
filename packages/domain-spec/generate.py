@@ -19,7 +19,7 @@ import json, os, sys, itertools, hashlib
 from pathlib import Path
 
 OUT = Path(__file__).parent
-SPEC_VERSION = "1.1.0"
+SPEC_VERSION = "1.2.0"
 
 # ---------------------------------------------------------------- the dartboard
 SINGLES  = set(range(1, 21))
@@ -145,10 +145,11 @@ def case(cid, desc, commands, expect, format_=None):
             "setup": {"format": format_ or fmt(), "players": [{"id": "A"}, {"id": "B"}]},
             "commands": commands, "expect": expect}
 
-def visit(seq, player, total, darts=None):
+def visit(seq, player, total, darts=None, at_double=None):
     c = {"seq": seq, "id": f"01J{seq:029d}", "type": "RecordVisit",
          "player": player, "visitTotal": total}
     if darts is not None: c["dartsUsed"] = darts
+    if at_double is not None: c["dartsAtDouble"] = at_double
     return c
 
 def simulate(commands, format_):
@@ -165,9 +166,24 @@ def simulate(commands, format_):
         p = c["player"]
         if p != thrower:
             outcomes.append({"seq": c["seq"], "result": "rejected", "reason": "NOT_YOUR_TURN"}); continue
-        eff, reason, new = classify(rem[p], c["visitTotal"], out_rule)
+        before = rem[p]
+        eff, reason, new = classify(before, c["visitTotal"], out_rule)
         if eff == "rejected":
             outcomes.append({"seq": c["seq"], "result": "rejected", "reason": reason}); continue
+        dad = c.get("dartsAtDouble")
+        du = c.get("dartsUsed")
+        bad_dad = None
+        if dad is not None:
+            if not (0 <= dad <= 3): bad_dad = "DARTS_AT_DOUBLE_INVALID"
+            elif du is not None and dad > du: bad_dad = "DARTS_AT_DOUBLE_INVALID"
+            # a double can only be attempted from a finishable remaining — verified by enumeration
+            # to be exactly the checkout set
+            elif dad > 0 and before not in CHECKOUTS[out_rule]: bad_dad = "DARTS_AT_DOUBLE_INVALID"
+            # under double-out the winning dart IS a double, so a finish claiming none contradicts
+            elif eff == "leg_won" and out_rule == "double" and dad < 1:
+                bad_dad = "DARTS_AT_DOUBLE_INVALID"
+        if bad_dad:
+            outcomes.append({"seq": c["seq"], "result": "rejected", "reason": bad_dad}); continue
         rem[p] = new
         if eff == "leg_won":
             legs[p] += 1
@@ -327,6 +343,55 @@ def build_match_vectors():
                           cmds, simulate(cmds, f), f))
     return cases
 
+def build_double_attempt_vectors():
+    """Darts thrown at a double, recorded on EVERY visit that began on a finish — not only on one
+    that finished. A player on 40 who throws a single 20 and misses has attempted a double, and
+    without that attempt recorded, checkout percentage cannot be computed at all."""
+    cases, f = [], fmt()
+    # on a finish, missed it: the case the earlier rule never asked about
+    cmds, seq = setup_cmds(40)
+    if cmds:
+        cmds = cmds + [visit(seq, "A", 20, 3, at_double=1)]
+        cases.append(case("double-attempt.on-a-finish-missed",
+                          "On 40, threw a single 20 and missed the double. One attempt, no checkout.",
+                          cmds, simulate(cmds, f), f))
+    # on a finish, hit it
+    cmds, seq = setup_cmds(40)
+    if cmds:
+        cmds = cmds + [visit(seq, "A", 40, 1, at_double=1)]
+        cases.append(case("double-attempt.on-a-finish-hit",
+                          "On 40, hit the double with the first dart. One attempt, one checkout.",
+                          cmds, simulate(cmds, f), f))
+    # two attempts then a hit
+    cmds, seq = setup_cmds(40)
+    if cmds:
+        cmds = cmds + [visit(seq, "A", 40, 3, at_double=3)]
+        cases.append(case("double-attempt.three-attempts-one-hit",
+                          "On 40, missed twice before hitting. Three attempts, one checkout.",
+                          cmds, simulate(cmds, f), f))
+    # claiming an attempt from a remaining no double can be reached from
+    cmds, seq = setup_cmds(180)
+    if cmds:
+        cmds = cmds + [visit(seq, "A", 60, 3, at_double=1)]
+        cases.append(case("double-attempt.impossible-from-this-remaining",
+                          "No double can be reached from 180 within one visit, so an attempt is refused.",
+                          cmds, simulate(cmds, f), f))
+    # more attempts than darts thrown
+    cmds, seq = setup_cmds(40)
+    if cmds:
+        cmds = cmds + [visit(seq, "A", 40, 1, at_double=2)]
+        cases.append(case("double-attempt.more-attempts-than-darts",
+                          "Two attempts cannot fit in one dart.",
+                          cmds, simulate(cmds, f), f))
+    # a double-out finish claiming no double attempt contradicts itself
+    cmds, seq = setup_cmds(40)
+    if cmds:
+        cmds = cmds + [visit(seq, "A", 40, 1, at_double=0)]
+        cases.append(case("double-attempt.finish-claiming-no-double",
+                          "A double-out finish must have thrown at a double.",
+                          cmds, simulate(cmds, f), f))
+    return cases
+
 def build_adversarial_vectors():
     cases, f = [], fmt()
     cmds = [visit(1, "A", 501, 3)]
@@ -409,6 +474,7 @@ def main():
                         ("checkouts.jsonl", build_checkout_vectors()),
                         ("leg-rotation.jsonl", build_rotation_vectors()),
                         ("match-completion.jsonl", build_match_vectors()),
+                        ("double-attempts.jsonl", build_double_attempt_vectors()),
                         ("adversarial.jsonl", build_adversarial_vectors())):
         p, n = write_jsonl(name, cases); total += n
         files[name] = {"cases": n,

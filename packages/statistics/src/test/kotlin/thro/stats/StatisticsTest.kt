@@ -17,7 +17,11 @@ class StatisticsTest {
     private fun v(
         leg: Int, ord: Int, total: Int, darts: Int? = 3,
         before: Int, after: Int, won: Boolean = false, bust: Boolean = false,
-    ) = VisitRecord(leg, ord, total, darts, bust, before, after, won)
+        atDouble: Int? = null,
+    ) = VisitRecord(leg, ord, total, darts, bust, before, after, won, atDouble)
+
+    /** Double-out checkout numbers: everything to 170 except the seven bogeys. */
+    private val checkable = (2..170).toSet() - setOf(159, 162, 163, 165, 166, 168, 169)
 
     /** A 501 leg won in 15 darts: 180, 180, 141 with the last visit using all three darts. */
     private fun nineDartLeg(darts: Int? = 3) = listOf(
@@ -27,18 +31,119 @@ class StatisticsTest {
     )
 
     @Test
-    fun `checkout percentage is never fabricated from visit totals`() {
-        val s = Statistics.checkoutPercentage(EvidenceLevel.VISIT_TOTAL)
+    fun `a bounded checkout percentage can never exceed 100 percent`() {
+        // A leg-winning visit whose attempts went unrecorded still counts as a hit. If the bound
+        // ignores that it also threw at least one dart at a double, the numerator grows while the
+        // denominator does not, and the upper bound climbs past 100% — a figure the quantity
+        // cannot take. Under double-out the winning dart IS a double, so that attempt is known to
+        // have happened even when its count was not recorded.
+        val visits = listOf(
+            v(1, 1, 20, 3, 40, 20, atDouble = 1),              // recorded miss
+            v(1, 2, 20, 2, 20, 0, won = true, atDouble = null), // won, attempts unrecorded
+            v(2, 1, 40, 2, 40, 0, won = true, atDouble = null), // won, attempts unrecorded
+        )
+        val s = Statistics.checkoutPercentage(visits, checkable)
+        assertEquals(Basis.BOUNDED, s.basis)
+        assertNotNull(s.upper)
+        assertTrue(s.upper!! <= 100.0, "upper bound was ${s.upper}%")
+        assertTrue(s.lower!! <= s.upper!!, "bounds inverted")
+    }
+
+    @Test
+    fun `bounds hold across every mixture of recorded and unrecorded attempts`() {
+        // Exhaustive over small shapes: whatever the unrecorded visits actually threw, the true
+        // percentage must lie inside the reported interval, and the interval must stay in range.
+        var checked = 0
+        for (wins in 0..3) for (misses in 0..3) for (unrecordedWins in 0..wins) {
+            val recordedWins = wins - unrecordedWins
+            val visits = buildList {
+                repeat(recordedWins) { add(v(it + 1, 1, 40, 2, 40, 0, won = true, atDouble = 1)) }
+                repeat(unrecordedWins) { add(v(100 + it, 1, 40, 2, 40, 0, won = true)) }
+                repeat(misses) { add(v(200 + it, 1, 20, 3, 40, 20, atDouble = 1)) }
+            }
+            val s = Statistics.checkoutPercentage(visits, checkable)
+            if (s.basis == Basis.UNAVAILABLE) continue
+            checked++
+            val lo = s.lower ?: s.value!!
+            val hi = s.upper ?: s.value!!
+            assertTrue(hi <= 100.0 + 1e-9, "upper $hi% out of range for w=$wins m=$misses u=$unrecordedWins")
+            assertTrue(lo >= 0.0, "lower $lo% out of range")
+            assertTrue(lo <= hi + 1e-9, "bounds inverted for w=$wins m=$misses u=$unrecordedWins")
+            // the truth, for every attempt count the unrecorded visits could have had
+            val known = recordedWins + misses
+            for (extra in unrecordedWins..(unrecordedWins * 3)) {
+                val truth = wins.toDouble() * 100 / (known + extra)
+                assertTrue(
+                    truth in (lo - 1e-9)..(hi + 1e-9),
+                    "true $truth% escapes [$lo, $hi] for w=$wins m=$misses u=$unrecordedWins extra=$extra",
+                )
+            }
+        }
+        assertTrue(checked > 20, "only $checked shapes exercised")
+    }
+
+    @Test
+    fun `checkout percentage counts attempts from visits that did NOT finish`() {
+        // This is the correction that makes the figure computable at all. A player on 40 who throws
+        // a single 20 and misses has attempted a double; asking only on a successful checkout would
+        // never record it, and the percentage would be silently inflated.
+        val visits = listOf(
+            v(1, 1, 180, 3, 501, 321),
+            v(1, 2, 180, 3, 321, 141),
+            v(1, 3, 101, 3, 141, 40, atDouble = 0),   // 141 is itself a finish; set up instead
+            v(1, 4, 20, 3, 40, 20, atDouble = 1),      // on a finish, missed
+            v(1, 5, 20, 2, 20, 0, won = true, atDouble = 2),  // on a finish, hit on the second
+        )
+        val s = Statistics.checkoutPercentage(visits, checkable)
+        assertEquals(Basis.EXACT, s.basis)
+        assertEquals(EvidenceLevel.DART_LEVEL, s.evidenceLevel)
+        // one leg won from three darts thrown at a double
+        assertTrue(abs(s.value!! - 100.0 / 3) < 0.001, "got ${s.value}")
+        assertEquals(3, s.sampleSize)
+    }
+
+    @Test
+    fun `asking only on a successful checkout would overstate the percentage`() {
+        val full = listOf(
+            v(1, 1, 180, 3, 501, 321), v(1, 2, 180, 3, 321, 141),
+            v(1, 3, 101, 3, 141, 40, atDouble = 0),
+            v(1, 4, 20, 3, 40, 20, atDouble = 1),
+            v(1, 5, 20, 2, 20, 0, won = true, atDouble = 1),
+        )
+        // the same match, if the missed attempt had never been asked about
+        val winnerOnly = full.map { if (it.wonLeg) it else it.copy(dartsAtDouble = null) }
+        val honest = Statistics.checkoutPercentage(full, checkable).value!!
+        val inflated = Statistics.checkoutPercentage(winnerOnly, checkable)
+        // the incomplete version cannot report a point value at all — it is bounded
+        assertEquals(Basis.BOUNDED, inflated.basis)
+        assertNull(inflated.value)
+        // and its upper bound is exactly the overstatement the old rule would have published
+        assertTrue(inflated.upper!! > honest, "${inflated.upper} should exceed $honest")
+        assertTrue(honest >= inflated.lower!! && honest <= inflated.upper!!)
+    }
+
+    @Test
+    fun `a match that recorded no double attempts says so rather than guessing`() {
+        val visits = listOf(
+            v(1, 1, 180, 3, 501, 321),
+            v(1, 2, 101, 3, 321, 220),
+            v(1, 3, 180, 3, 220, 40),
+            v(1, 4, 40, 1, 40, 0, won = true),   // finished, but attempts never recorded
+        )
+        val s = Statistics.checkoutPercentage(visits, checkable)
         assertEquals(Basis.UNAVAILABLE, s.basis)
         assertNull(s.value)
-        assertNotNull(s.note)
-        // the explanation must be usable by a player, not a code
         assertTrue(s.note!!.contains("darts were thrown at a double"))
     }
 
     @Test
-    fun `doubles hit rate is never fabricated either`() {
-        assertEquals(Basis.UNAVAILABLE, Statistics.doublesHitRate(EvidenceLevel.VISIT_TOTAL).basis)
+    fun `doubles attempted is exact over the visits that recorded it`() {
+        val visits = listOf(
+            v(1, 1, 20, 3, 40, 20, atDouble = 1),
+            v(1, 2, 20, 2, 20, 0, won = true, atDouble = 2),
+        )
+        assertEquals(3.0, Statistics.doublesAttempted(visits).value)
+        assertEquals(Basis.EXACT, Statistics.doublesAttempted(visits).basis)
     }
 
     @Test
@@ -147,8 +252,12 @@ class StatisticsTest {
         assertEquals(Basis.EXACT, s.basis)
         assertEquals(2, s.sampleSize)
         assertEquals(50.0, s.value)
-        // and it must remain a different quantity from the thing it replaces
-        assertEquals(Basis.UNAVAILABLE, Statistics.checkoutPercentage(EvidenceLevel.VISIT_TOTAL).basis)
+        // it remains a DIFFERENT quantity from checkout percentage: this counts visits that opened
+        // on a finish, that counts darts thrown at a double. Both are real; they are not the same.
+        val withAttempts = visits.map { if (it.remainingBefore in checkable) it.copy(dartsAtDouble = 3) else it }
+        val co = Statistics.checkoutPercentage(withAttempts, checkable)
+        assertEquals(Basis.EXACT, co.basis)
+        assertTrue(abs(co.value!! - s.value!!) > 1.0, "the two measures should not coincide here")
     }
 
     @Test
@@ -175,8 +284,8 @@ class StatisticsTest {
     @Test
     fun `every unavailable statistic explains itself in words a player can act on`() {
         val unavailable = listOf(
-            Statistics.checkoutPercentage(EvidenceLevel.VISIT_TOTAL),
-            Statistics.doublesHitRate(EvidenceLevel.VISIT_TOTAL),
+            Statistics.checkoutPercentage(emptyList(), checkable),
+            Statistics.doublesAttempted(emptyList()),
             Statistics.threeDartAverage(emptyList()),
         )
         for (s in unavailable) {
