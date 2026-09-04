@@ -363,6 +363,48 @@ if echo "$r" | grep -qi 'every stream must have a named owner'; then
 else bad "an event type nobody owns is refused" "$(echo "$r" | head -1)"; fi
 
 echo
+echo "== identity, and age as a dimension that cannot be forgotten =="
+ACC=$($PSQL -c "SELECT gen_random_uuid();")
+$PSQL -c "SET ROLE app_competition; INSERT INTO identity.account (account_id, display_name)
+  VALUES ('$ACC','A Player');" >/dev/null 2>&1
+d=$($PSQL -c "SELECT age_band FROM identity.account WHERE account_id='$ACC';")
+check "an account without a stated age is 'unknown', not null" "$d" "unknown"
+
+r=$($PSQL -c "SET ROLE app_competition; UPDATE identity.account SET age_band = NULL WHERE account_id='$ACC';" 2>&1)
+if echo "$r" | grep -qi 'null value\|not-null'; then
+  ok "the band cannot be set to null"
+else bad "the band cannot be set to null" "null was accepted"; fi
+
+r=$($PSQL -c "SET ROLE app_competition; UPDATE identity.account SET age_band='teenager' WHERE account_id='$ACC';" 2>&1)
+if echo "$r" | grep -qi 'violates check constraint'; then
+  ok "an unmodelled band is refused"
+else bad "an unmodelled band is refused" "'teenager' was accepted"; fi
+
+r=$($PSQL -c "SET ROLE app_competition; UPDATE identity.account
+  SET age_assurance='verified' WHERE account_id='$ACC';" 2>&1)
+if echo "$r" | grep -qi 'violates check constraint'; then
+  ok "an unknown band cannot carry assurance"
+else bad "an unknown band cannot carry assurance" "unknown+verified was accepted"; fi
+
+# Personal data is confined to the identity module, which is what makes export and deletion answerable.
+for role in app_match app_trust app_rating; do
+  r=$($PSQL -c "SET ROLE $role; SELECT count(*) FROM identity.account;" 2>&1)
+  if echo "$r" | grep -qi 'permission denied'; then
+    ok "$role cannot read personal data"
+  else bad "$role cannot read personal data" "it was readable"; fi
+done
+
+DEV=$($PSQL -c "SELECT gen_random_uuid();")
+$PSQL -c "SET ROLE app_competition; INSERT INTO identity.device (device_id, account_id)
+  VALUES ('$DEV','$ACC');" >/dev/null 2>&1
+$PSQL -c "SET ROLE app_competition; UPDATE identity.device
+  SET revoked_at = now(), revoked_reason='lost' WHERE device_id='$DEV';" >/dev/null 2>&1
+r=$($PSQL -c "SET ROLE app_competition; UPDATE identity.device SET revoked_at = NULL WHERE device_id='$DEV';" 2>&1)
+if echo "$r" | grep -qi 'cannot be undone'; then
+  ok "a device revocation cannot be undone"
+else bad "a device revocation cannot be undone" "un-revoking was permitted"; fi
+
+echo
 echo "-------------------------------------------"
 echo "  $PASS passed, $FAIL failed"
 [ "$FAIL" -eq 0 ] || exit 1

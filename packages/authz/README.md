@@ -47,6 +47,24 @@ else's authority away, so it is small enough to hold in your head.
   only operable thing to tell someone. A bare 403 is not.
 - **Cycles terminate**, and an object with no parents inherits nothing.
 
+## Age is a dimension, not a policy
+
+ADR-008 calls this the retrofit-killer: visibility rules written without an age dimension mean
+re-auditing every endpoint and every public page later. So `SubjectAttributes` is a parameter of
+**every** decision rather than a lookup inside some of them, and attaching an age requirement to an
+action later needs no change at any call site. A test asserts exactly that.
+
+Only the minor/adult distinction is modelled, because it is the one every safeguarding regime
+shares. The thresholds, the evidence that establishes them, and what each unlocks are **OD-010** —
+to be researched against primary sources. Nothing here is a legal conclusion, and **no action
+carries an age requirement by default**: inventing restrictions while that decision is open would be
+as wrong as omitting the dimension, in the opposite direction.
+
+`UNKNOWN` is a band, never an absence. A nullable band is one that gets forgotten in a condition; an
+explicit unknown has to be handled, and is handled as the most restrictive case — the safe direction
+when what you do not know is whether you are dealing with a child. An age requirement is always a
+further restriction and never a substitute for a relationship.
+
 ## Not in here
 
 Permissions are resolved per request and never carried by the client or embedded in a token — a

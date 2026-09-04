@@ -59,11 +59,33 @@ public class Authorizer(
     private val tuples: TupleSource,
     private val hierarchy: Hierarchy,
     private val rules: Map<String, Rule>,
+    /**
+     * Age requirements by action. Empty by default: an action carries one only when it is
+     * deliberately attached, because OD-010 is open and inventing restrictions would be as wrong
+     * as omitting the dimension.
+     */
+    private val ageRequirements: Map<String, AgeRequirement> = emptyMap(),
 ) {
 
-    /** Resolves `(subject, action, object)`. An action with no rule is denied, not allowed. */
-    public fun check(subject: Subject, action: String, obj: ObjectRef): Decision {
+    /**
+     * Resolves `(subject, action, object)`. An action with no rule is denied, not allowed.
+     *
+     * [attributes] carries the age dimension. It is a parameter of every decision rather than a
+     * lookup inside some of them, which is what stops the dimension being forgotten: adding an age
+     * rule to an action later requires no change at any call site.
+     */
+    public fun check(
+        subject: Subject,
+        action: String,
+        obj: ObjectRef,
+        attributes: SubjectAttributes = SubjectAttributes(),
+    ): Decision {
         val rule = rules[action] ?: return Decision.DENY
+        ageRequirements[action]?.let { requirement ->
+            if (!requirement.isSatisfiedBy(attributes)) {
+                return Decision(false, excludedBy = "age:${attributes.ageBand.name.lowercase()}")
+            }
+        }
         return evaluate(subject, rule, obj)
     }
 
