@@ -175,10 +175,17 @@ import DurabilityProbe
 @main
 struct ThroProbeApp: App {
     init() {
-        // Before any UI. The kill test (docs/runbooks/DURABILITY_KILL_TEST.md) is driven by launch
-        // arguments, and its write phase never returns — it SIGKILLs the process on purpose.
-        // Without this call the kill-test script launches the app, the app shows the ordinary probe
-        // screen, and the script waits for acknowledgements that are never coming.
+        // Before any UI, and it returns promptly on purpose.
+        //
+        // The kill test (docs/runbooks/DURABILITY_KILL_TEST.md) is driven by launch arguments.
+        // Its write phase starts a background writer and returns so that SwiftUI can present a
+        // scene: iOS allows an app roughly twenty seconds to finish launching, and an earlier
+        // version that looped here never let the launch complete, so the watchdog SIGKILLed the
+        // writer at about eighteen seconds every time — which looked exactly like the device
+        // restarting and was nothing of the sort.
+        //
+        // Without this call the script launches the app, the app comes up showing the ordinary
+        // probe screen, and the script waits for acknowledgements that are never coming.
         KillProbe.runFromLaunchArgumentsIfRequested()
     }
 
