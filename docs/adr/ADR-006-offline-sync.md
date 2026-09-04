@@ -30,6 +30,45 @@ both clients, not a tweak. Measure durability latency on both reference devices 
 budget and the durability rule conflict, **the durability rule wins** and the budget is restated. Losing an acknowledged competitive visit has no repair path, so the
 setting is raised and validated with real kill tests and power-cut tests on device — not assumed.
 
+### Measurement status — indicative only, the required measurement is still outstanding
+
+`packages/durability-probe` implements the measurement: it writes synthetic visits, one durable
+transaction each, under every candidate configuration and reports the distribution. It runs in CI on
+macOS on every push, which is what stops it rotting; it is **not** the measurement this ADR asks for.
+
+Latest CI run (GitHub `macos-latest`, arm64, 200 visits per configuration, milliseconds):
+
+| configuration | P50 | P95 | P99 | worst |
+|---|---|---|---|---|
+| relaxed — survives process death, **not** power loss | 0.01 | 0.05 | 0.08 | 0.19 |
+| `synchronous=FULL`, no Apple barrier | 0.30 | 0.41 | 0.52 | 0.63 |
+| `synchronous=FULL` + `fullfsync`, WAL | 1.01 | 2.01 | 5.45 | 19.78 |
+| `synchronous=FULL` + `fullfsync`, rollback journal | 3.77 | 7.20 | 16.33 | 20.60 |
+
+The probe asserts that forcing the barrier is slower than not forcing it (relaxed P50 0.01 ms
+against 1.17 ms) — without that check a run where the pragmas were silently ignored would report
+excellent numbers and mean nothing.
+
+Two things this does support:
+
+- **The barrier is real and its cost is measurable**, roughly two orders of magnitude over the
+  relaxed setting. Row 2 is the one this ADR was written to catch: `synchronous=FULL` on its own
+  costs 0.30 ms and looks durable. It is not, on Apple platforms, and the gap between rows 2 and 3
+  is the entire cost of being right.
+- **WAL over rollback journal**, by about 3.5× at P95 under the same barrier.
+
+What it does **not** support is any conclusion about the budget. This is a datacentre SSD under a
+hypervisor. The ADR asks for **both reference devices**, and the number that decides the client
+architecture is the one from a phone — where the storage controller, the filesystem and the thermal
+state are all different, and where `fullfsync` is doing something a server-class drive can absorb
+and a phone may not. Treating the table above as the answer would be exactly the mistake this ADR
+exists to prevent.
+
+**Still outstanding: the on-device run on both reference devices, and the kill and power-cut tests.**
+`docs/runbooks/DURABILITY_MEASUREMENT.md` is the procedure; `ProbeView` is a one-tap front end so the
+run does not require setting up a test target. Record device model and OS version with the numbers —
+without those the figures are unattributable and cannot be compared to a later run.
+
 The half-typed entry buffer is **UI draft state in a separate non-evidence table**. It must never be
 foldable into the journal.
 

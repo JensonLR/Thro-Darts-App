@@ -35,7 +35,23 @@ This runs on the Mac. It is **indicative only** — a Mac SSD is not a phone, an
 behaviour differs by device class — but if it errors, we find that out in one minute instead of
 after twenty minutes of Xcode setup.
 
-You should see a table of four configurations with P50/P95/P99 columns.
+You should see a table of four configurations with P50/P95/P99 columns, and four passing tests.
+Roughly this shape — your numbers will differ, the ordering should not:
+
+```
+  configuration                                            P50    P95    P99  worst   budget
+  relaxed (survives process death, NOT power loss)        0.01   0.05   0.08   0.19   meets
+  synchronous=FULL, no Apple barrier                      0.30   0.41   0.52   0.63   meets
+  synchronous=FULL + fullfsync (the real barrier)         1.01   2.01   5.45  19.78   meets
+  rollback journal + FULL + fullfsync                     3.77   7.20  16.33  20.60   meets
+```
+
+Rows must get slower going down. One of the four tests exists to check exactly that: if forcing the
+barrier is not slower than not forcing it, the pragmas were silently ignored and every number in the
+table is meaningless. It fails loudly rather than printing a reassuring table.
+
+This same command runs in CI on macOS on every push, so if it fails here and passes there, the
+difference is your machine and worth saying so.
 
 ## Part 3 — The number that counts (Xcode, on a real phone)
 
