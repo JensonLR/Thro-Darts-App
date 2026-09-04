@@ -112,6 +112,10 @@ public class CommandHandler(private val connection: Connection) {
         }
     }
 
+    /** Read-only replay, for surfaces that need current state without submitting a command. */
+    public fun replayFor(matchId: UUID, deviceId: UUID, home: String, away: String): MatchState =
+        rehydrate(matchId, deviceId, PlayerId(home), PlayerId(away))
+
     /**
      * Rehydrates by folding this device's own stream. Each device's account is separate — the
      * difference between two accounts of one match is the signal a dispute is built on, so they are
