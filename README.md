@@ -85,6 +85,7 @@ python3 packages/domain-spec/generate.py --full && python3 packages/domain-spec/
 gradle -p packages/engine check
 gradle -p packages/statistics test
 gradle -p packages/competition test
+gradle -p packages/trust test
 python3 packages/design-tokens/build.py --check
 
 # these need a PostgreSQL 16; set PGHOST, and PGPORT/PGUSER/PGDATABASE if not the defaults

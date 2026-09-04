@@ -65,6 +65,20 @@ jobs:
         working-directory: packages/statistics
         run: gradle test --no-daemon
 
+  trust:
+    name: Trust, provenance and rating eligibility
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with: { distribution: temurin, java-version: "21" }
+      - uses: gradle/actions/setup-gradle@v4
+      # Asserts that a trust label can never disagree with the provenance under it, and that one
+      # player's unilateral claim never moves a rating (PD-002).
+      - name: Trust
+        working-directory: packages/trust
+        run: gradle test --no-daemon
+
   competition:
     name: Competition structure
     runs-on: ubuntu-latest

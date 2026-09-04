@@ -55,7 +55,13 @@ approved threshold**. The provisional → established transition, and how uncert
 with inactivity, are part of OD-001.
 
 ## OD-005 — Dart-level evidence capture requirements
-**Status:** OPEN · **Impact:** competitive integrity, statistics honesty, product
+**Status:** DECIDED — see PD-001 · **Impact:** competitive integrity, statistics honesty, product
+
+**Resolved by the founder.** The capture rule is: ask for darts at a double on every visit that
+*began* on a checkout number, whether or not it ended in one, and additionally for darts used on a
+visit that wins a leg. An earlier reading asked only on a successful checkout, which would have
+recorded every hit and no miss — biasing checkout percentage upward rather than merely leaving it
+uncomputable. The original text of this decision is kept below for the record.
 
 The approved scoring flow captures **visit totals only**. This is correct and deliberate:
 THRØ must never invent dart-level evidence. The open question is which *additional
@@ -129,3 +135,35 @@ available in this environment.
 The working product name remains THRØ and must not be changed during implementation. A
 future rename has been discussed. Working assumption: keep the name centralised (branding
 and copy constants) and out of business logic, so a rename stays manageable.
+
+## OD-013 — Whether a retirement may inform a rating
+**Status:** OPEN · **Impact:** rating credibility, player fairness
+
+PD-002 settles the eligibility floor as `participant-confirmed` and says `outcome_type` must be
+`played`. It does not name **`retired`**, which is the one genuinely arguable outcome: darts were
+thrown and a real performance exists, but the match did not finish, so the sample is truncated in a
+way that correlates with the very thing a rating measures — a player retiring while losing is not
+the same event as one retiring while winning.
+
+**Resolved for now by:** excluding it. `EligibilityPolicy.informing` defaults to `played` alone, so
+the conservative reading is what ships. Admitting retirements is a policy value plus a rating
+recomputation, which the architecture supports because rating is a replayable projection.
+
+**Must not be decided by:** an implementation quietly adding `RETIRED` to the default policy because
+it felt reasonable. That is how this register gets bypassed.
+
+## OD-014 — Whether capture channel and attestation stay collapsed in the design enum
+**Status:** ASSUMED · **Impact:** design fidelity, trust semantics
+
+The approved `VerificationState` has eight labels, and two of them answer different questions:
+`thro-recorded` describes **how the result was captured**, while `participant-confirmed` describes
+**who attested to it**. A match scored live in THRØ by one player and never confirmed by the other
+is `thro-recorded` under a naive reading, yet nobody has corroborated it.
+
+**Working assumption:** the domain models the two axes separately (`CaptureChannel` and
+`Attestation`) and *derives* the design's single label from them, so the approved surface is
+unchanged while eligibility is decided on the axis that actually bears on it. Rating eligibility
+reads attestation, never the label.
+
+**Escalate if:** the design intends `thro-recorded` to imply corroboration, which would make it a
+higher trust claim than the domain can support.
