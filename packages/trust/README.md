@@ -54,6 +54,31 @@ hardcoded predicate. The defaults are the conservative reading of PD-002 — `pl
 policy that would let an outcome *establish* a rating it may not even *inform* is refused at
 construction.
 
+## Reconciling two offline accounts
+
+Both players score the whole match offline; two independent accounts arrive. They are reconciled at
+**outcome level** — winner and per-player leg scores — and **never by digest equality**.
+
+The reason is a specific, ordinary failure: a scorer mis-keys a visit and corrects it. That leaves
+two rows in one journal for one throw, so the journals differ while the two people agree completely
+about the match. A digest comparison would raise a dispute out of a typo. The test that pins this
+asserts the digests differ *first*, so the distinction is demonstrated rather than claimed.
+
+A visit-level diff is produced only to **explain** a mismatch the outcome comparison already found.
+It is deliberately a simple positional alignment: guessing at an alignment between two disagreeing
+stories is how a reconciliation starts inventing a third one.
+
+Accounts are never merged. Three results:
+
+| | Means |
+|---|---|
+| `Corroborated` | both devices derive the same outcome — the strongest evidence THRØ has |
+| `Uncorroborated` | only one device has an account |
+| `Contested` | the devices disagree; carries every account plus the explanation |
+
+`Contested` is the whole-match-contested state ADR-006 predicted and the approved design does not
+currently draw.
+
 ```bash
 gradle -p packages/trust test
 ```
