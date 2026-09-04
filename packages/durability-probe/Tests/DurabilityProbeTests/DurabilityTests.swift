@@ -11,7 +11,7 @@ import XCTest
 final class DurabilityTests: XCTestCase {
 
     func testReportDurabilityLatency() throws {
-        var results: [Measurement] = []
+        var results: [ProbeResult] = []
         for configuration in Durability.candidates {
             results.append(try Probe.measure(configuration, visits: 200))
         }
@@ -62,7 +62,7 @@ final class DurabilityTests: XCTestCase {
 
     func testPercentilesAreSamplesThatActuallyOccurred() {
         // Nearest-rank, not interpolation: a reported P99 must be a latency something really took.
-        let m = Measurement(
+        let m = ProbeResult(
             configuration: Durability.candidates[0],
             samplesMs: [1, 2, 3, 4, 5, 6, 7, 8, 9, 100]
         )

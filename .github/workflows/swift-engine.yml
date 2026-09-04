@@ -34,3 +34,19 @@ jobs:
         run: |
           python3 packages/domain-spec/generate.py --full
           swift test --package-path packages/engine-swift
+
+  durability-probe:
+    name: Durability probe compiles and runs
+    # macOS, because the probe links SQLite3 directly and measures `fullfsync`, neither of which
+    # exists on Linux. This job is here because the package previously had NO compile check
+    # anywhere — it was excluded from CI as "Apple-only", so a type-name collision with
+    # Foundation.Measurement reached a person's machine before anything caught it. A package
+    # nothing builds is a package that is broken and does not know it.
+    #
+    # The numbers this produces are a CI runner's disk and answer nothing about a phone. The point
+    # is that it BUILDS and the probe runs end to end.
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build and run
+        run: swift test --package-path packages/durability-probe

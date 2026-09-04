@@ -61,7 +61,13 @@ public struct Durability: Sendable, CustomStringConvertible {
     ]
 }
 
-public struct Measurement {
+/// One configuration's result.
+///
+/// Named ProbeResult rather than Measurement deliberately: `Foundation.Measurement<UnitType>`
+/// exists, and any file that imports XCTest or Foundation gets an ambiguous type lookup instead of
+/// a helpful error. Deceptively cheap mistake — it cost a round trip to a machine with a Swift
+/// toolchain, because nothing here could compile it.
+public struct ProbeResult {
     public let configuration: Durability
     /// Every sample, in milliseconds, so a caller can compute whatever it needs.
     public let samplesMs: [Double]
@@ -94,7 +100,7 @@ public enum Probe {
     ///
     /// One transaction per visit on purpose: that is what the durability rule costs. Batching would
     /// produce a much prettier number that describes a system which loses darts.
-    public static func measure(_ configuration: Durability, visits: Int = 200) throws -> Measurement {
+    public static func measure(_ configuration: Durability, visits: Int = 200) throws -> ProbeResult {
         let path = NSTemporaryDirectory() + "thro-durability-\(UUID().uuidString).sqlite"
         defer {
             try? FileManager.default.removeItem(atPath: path)
@@ -170,7 +176,7 @@ public enum Probe {
             samples.append(Double(elapsedNs) / 1_000_000.0)
         }
 
-        return Measurement(configuration: configuration, samplesMs: samples)
+        return ProbeResult(configuration: configuration, samplesMs: samples)
     }
 
     private static func bindText(_ stmt: OpaquePointer, _ index: Int32, _ value: String) {

@@ -61,8 +61,11 @@ swift test --package-path packages/durability-probe
 
 **Apple platforms only.** The probe links SQLite3 directly, which SwiftPM does not vend on Linux,
 and `fullfsync` is Apple-specific regardless — a Linux number would not be a weaker version of this
-answer, it would be an answer to a different question. That is also why this package has no CI job:
-the only machines that can answer it are the reference devices.
+answer, it would be an answer to a different question. The *measurement* can only come from a reference device — but a macOS CI job builds the package and
+runs the probe on every push, because the alternative turned out badly: with no compile check
+anywhere, a type named `Measurement` collided with `Foundation.Measurement` and reached a person's
+machine before anything caught it. A package nothing builds is a package that is broken and does not
+know it. CI numbers are a runner's disk and answer nothing; CI compiling is the point.
 
 ## What the tests assert, and what they do not
 

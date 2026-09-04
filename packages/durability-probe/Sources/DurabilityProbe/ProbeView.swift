@@ -1,4 +1,5 @@
 #if canImport(SwiftUI)
+import Foundation
 import SwiftUI
 
 /// A one-tap front end for the probe.
@@ -8,7 +9,7 @@ import SwiftUI
 /// way to read them off a phone.
 public struct ProbeView: View {
 
-    @State private var results: [Measurement] = []
+    @State private var results: [ProbeResult] = []
     @State private var running = false
     @State private var progress = ""
     @State private var failure: String?
@@ -66,7 +67,7 @@ public struct ProbeView: View {
                             .foregroundStyle(r.meetsBudget ? .green : .red)
                     }
                     .padding()
-                    .background(.quaternary, in: RoundedRectangle(cornerRadius: 10))
+                    .background(Color.secondary.opacity(0.12), in: RoundedRectangle(cornerRadius: 10))
                 }
 
                 if !results.isEmpty {
@@ -97,7 +98,7 @@ public struct ProbeView: View {
         // Off the main thread: each configuration issues 200 real storage barriers, and blocking
         // the UI would make a slow device look like a hung app.
         DispatchQueue.global(qos: .userInitiated).async {
-            var collected: [Measurement] = []
+            var collected: [ProbeResult] = []
             for configuration in Durability.candidates {
                 DispatchQueue.main.async { progress = "measuring \(configuration.label)…" }
                 do {
