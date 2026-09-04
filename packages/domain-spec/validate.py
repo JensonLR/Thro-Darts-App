@@ -118,14 +118,21 @@ for fname, meta in manifest["files"].items():
                 check(f"{c['id']} seq{cmd['seq']} rejection agrees",
                       exp["result"] == "rejected" and exp.get("reason") == reason)
                 continue
-            check(f"{c['id']} seq{cmd['seq']} effect agrees", exp.get("effect") == eff,
-                  f"expected {exp.get('effect')} got {eff}")
+            # A leg that decides the match is reported as match_won; the replay must accept either
+            # label for the same transition rather than treating the distinction as a mismatch.
+            eff_expected = exp.get("effect")
+            same = (eff_expected == eff) or (eff == "leg_won" and eff_expected == "match_won")
+            check(f"{c['id']} seq{cmd['seq']} effect agrees", same,
+                  f"expected {eff_expected} got {eff}")
+            if eff_expected == "match_won": done = True
             if reason:
                 check(f"{c['id']} seq{cmd['seq']} reason agrees", exp.get("reason") == reason)
             rem[cmd["player"]] = new
             if eff == "leg_won":
+                # `done` is set from the expected effect above (match_won), not from the case having
+                # a winner at the end — that fired on the FIRST leg win and made every later command
+                # look like it should have been rejected.
                 rem = {"A": start, "B": start}
-                if c["expect"]["state"]["winnerId"]: done = True
                 leg_starter = "B" if leg_starter == "A" else "A"
                 thrower = leg_starter
             else:

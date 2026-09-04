@@ -27,7 +27,26 @@ jobs:
           python3 packages/domain-spec/generate.py --full
           python3 packages/domain-spec/validate.py
 
-      # No engine implementations exist yet. When they do, each platform runs the corpus here
-      # as a required check, and any divergence fails the build.
-      - name: Platform conformance
-        run: echo "No engine implementations yet — see docs/adr/ADR-002-shared-scoring-domain.md"
+  engine:
+    name: Engine conformance and properties
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with: { distribution: temurin, java-version: "21" }
+      - uses: gradle/actions/setup-gradle@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.11" }
+
+      # The rule tables are generated into the engine. A stale committed copy fails here, so no
+      # platform can drift from the spec by hand-editing its own values.
+      - name: Generated rule tables are not stale
+        run: |
+          python3 packages/domain-spec/generate.py
+          git diff --exit-code -- packages/engine/src/main/kotlin/thro/engine/RuleTables.kt
+
+      # Runs the conformance corpus against the engine, the exhaustive property tests, and the
+      # determinism guard that forbids a clock, randomness, floating point or I/O in the engine.
+      - name: Conformance, properties and determinism
+        working-directory: packages/engine
+        run: gradle check --no-daemon

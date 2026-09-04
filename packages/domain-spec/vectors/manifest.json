@@ -1,22 +1,26 @@
 {
-  "specVersion": "1.0.0",
+  "specVersion": "1.1.0",
   "files": {
     "bust-rules.jsonl": {
       "cases": 24,
-      "sha256": "a66b276b018ecc4d7edb0bd44c95cb5ae485fb7fc281e64ef145e659940368a6"
+      "sha256": "4cd5338ec0a7d67d398e35a609d8da994f82251269bf5d1f892db12a6cb36558"
     },
     "checkouts.jsonl": {
       "cases": 26,
-      "sha256": "9479bf7023e81f6d3a644bdec912e440da97c8d8fae22eaafe91fec82c0b6e23"
+      "sha256": "7dbcf4324fd96bb714e8109864699569685c83dd9f7281f2290bd943b9f895a3"
     },
     "leg-rotation.jsonl": {
       "cases": 2,
-      "sha256": "8a2a6264a6f90e508e6a1858f930360ce101b691760009b6431c0debdafadae6"
+      "sha256": "52afca78ad8f69570a2adcbb017c2c1bef05b14e4466872826c33ce4964b5f8a"
+    },
+    "match-completion.jsonl": {
+      "cases": 3,
+      "sha256": "477c69cfa88a7ab08bb0f2d7c1c80478ef577309a4babf28cf2e6c222daa43b2"
     },
     "adversarial.jsonl": {
       "cases": 3,
-      "sha256": "04a6e51f27e74f87d8047781720c83afd8a22cce2593632d0c6d944c7f07dee1"
+      "sha256": "91ccdc291b51597b592b0b5772fcb4e98e2b4c60896eb0708215e021743ac7d1"
     }
   },
-  "totalCases": 55
+  "totalCases": 58
 }

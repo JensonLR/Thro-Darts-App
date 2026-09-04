@@ -72,8 +72,15 @@ Load-bearing decisions in that shape:
 - **Per-command outcomes are asserted, not just final state.** Rejections are part of the contract —
   the approved UI renders them ("Bust. Score restored to 186. Wilson to throw.").
 - **`reason` is a closed, versioned vocabulary** shared by engine, API and UI copy:
-  `REMAINDER_ONE`, `BELOW_ZERO`, `NOT_CHECKOUT_POSSIBLE`, `IMPOSSIBLE_VISIT_TOTAL`, `NOT_YOUR_TURN`,
-  `MATCH_COMPLETE`, `DUPLICATE_COMMAND`, `DARTS_USED_INVALID`.
+  `REMAINDER_ONE`, `BELOW_ZERO`, `NOT_CHECKOUT_POSSIBLE`, `VISIT_TOTAL_OUT_OF_RANGE`,
+  `IMPOSSIBLE_VISIT_TOTAL`, `NOT_YOUR_TURN`, `MATCH_COMPLETE`, `DUPLICATE_COMMAND`,
+  `DARTS_USED_INVALID`.
+
+  `VISIT_TOTAL_OUT_OF_RANGE` and `IMPOSSIBLE_VISIT_TOTAL` are deliberately separate. A total above
+  180 is not a plausible input at all and suggests a client defect or tampering; a total like 163 is
+  plausible and is almost always a mis-key. They deserve different messages to the player and carry
+  different integrity signals. The distinction was added in specVersion 1.1.0 — as a single change to
+  the spec, the generator and the implementation, per the governance rule below.
 - **Every command carries a client-generated ULID**, so idempotency is a first-class testable
   property: replaying a command id is a no-op returning the identical outcome.
 - **No floating point anywhere.** Averages and percentages are not engine output; they belong to a
