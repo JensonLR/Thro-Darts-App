@@ -65,9 +65,14 @@ organised competition can be rated.
 packages/
   domain-spec/    Rule tables and the conformance corpus, derived from the dartboard
   engine/         The deterministic scoring engine (Kotlin, zero dependencies)
+  statistics/     Figures that say when they cannot be computed honestly
+  competition/    Bracket structure — byes, rounds, walkovers
+  trust/          Provenance, derived verification, rating eligibility, reconciliation
+  authz/          Relationship-based authorization, and age as a dimension
+  rating/         Rating as a versioned replayable projection
   design-tokens/  One token source generating Swift, Kotlin and CSS
 services/
-  api/            Migrations and event-model property tests
+  api/            Migrations, the command path, and the playtest harness
 docs/
   adr/            15 architecture decision records
   architecture/   Conformance corpus spec, latency budgets
@@ -166,3 +171,37 @@ These constraints shape the architecture and are not open to convenience:
 THRØ speaks as a competition official: calm, specific, factual, British English. No emoji
 in product UI. No hype. A player at any level is told where they are and what would help —
 never that they are bad.
+
+## What is enforced, and where
+
+The competitive properties are not conventions. Each one is asserted by something that fails when it
+is removed.
+
+| Property | Enforced by |
+|---|---|
+| A visit total can be achieved with three darts | Engine, against a corpus derived from the dartboard |
+| Two devices may both author one match | `UNIQUE (match_id, device_id, device_seq)` |
+| Evidence is never edited or deleted | Append-only grants, including on tables added by later migrations |
+| Evidence exists only for a real match | Foreign key to the match aggregate |
+| Who is playing cannot be rewritten | No application role holds `UPDATE` on `evidence.match` |
+| A module appends only to streams it owns | Trigger mapping each event type to its owning role |
+| Authority is recorded, never used to destroy evidence | `authority` column; a revoked scorer's visit still writes |
+| A revocation cannot be undone | Trigger on `trust.scoring_grant` and `identity.device` |
+| An official cannot correct their own match | `Rule.Except` in the one decision point, before any handler |
+| Every decision is on the record | Hash chain computed by the database, not the application |
+| The audit log cannot be read by its writers | `REVOKE SELECT` from every appending role |
+| One player's word never moves a rating | `EligibilityPolicy.minimumAttestation` (PD-002) |
+| No unvalidated rating model can be published | `Publication.check`, plus a singleton table |
+| A statistic that cannot be computed says so | `Basis.EXACT` / `BOUNDED` / `UNAVAILABLE` |
+| Personal data lives in one place | `identity` schema; match, trust and rating cannot read it |
+| Age is available at every decision | A parameter of `Authorizer.check`, not a lookup inside it |
+
+## What is deliberately not decided here
+
+`docs/product/OPEN_DECISIONS.md` is the register. The two that shape the most code:
+
+- **OD-001 — the rating model.** No model in this repository claims to be validated, and a test
+  fails if one ever does. Every player is provisional and nothing is published.
+- **OD-010 — safeguarding obligations.** The age *dimension* exists at every decision; no action
+  carries an age requirement, because the thresholds are a legal question this repository does not
+  answer.
