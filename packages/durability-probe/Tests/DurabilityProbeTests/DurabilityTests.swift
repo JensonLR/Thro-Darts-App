@@ -10,6 +10,15 @@ import XCTest
 /// the barrier is not happening and every number is meaningless.
 final class DurabilityTests: XCTestCase {
 
+    /// Runs before the report (XCTest orders by name) so that a failure in the measurement itself
+    /// is distinguishable from a failure in reporting it.
+    func testOneDurableWriteLands() throws {
+        let result = try Probe.measure(Durability.candidates[2], visits: 5)
+        XCTAssertEqual(result.samplesMs.count, 5, "a sample per committed visit")
+        XCTAssertTrue(result.samplesMs.allSatisfy { $0 > 0 }, "a durable commit cannot take zero time")
+        // Probe.measure counts the rows before returning, so reaching here means they landed.
+    }
+
     func testReportDurabilityLatency() throws {
         var results: [ProbeResult] = []
         for configuration in Durability.candidates {
@@ -26,13 +35,13 @@ final class DurabilityTests: XCTestCase {
         print("              because fsync on Apple platforms behaves differently per device class.")
         #endif
         print("")
-        print(String(format: "  %-58s %8s %8s %8s %8s   %s",
-                     "configuration", "P50", "P95", "P99", "worst", "budget"))
+        print("  " + pad("configuration", 58) + padLeft("P50", 9) + padLeft("P95", 9)
+              + padLeft("P99", 9) + padLeft("worst", 9) + "   budget")
         for r in results {
-            print(String(format: "  %-58s %8.2f %8.2f %8.2f %8.2f   %s",
-                         String(r.configuration.label.prefix(58)),
-                         r.p50, r.p95, r.p99, r.worst,
-                         r.meetsBudget ? "meets" : "EXCEEDS"))
+            print("  " + pad(r.configuration.label, 58)
+                  + padLeft(fixed(r.p50), 9) + padLeft(fixed(r.p95), 9)
+                  + padLeft(fixed(r.p99), 9) + padLeft(fixed(r.worst), 9)
+                  + "   " + (r.meetsBudget ? "meets" : "EXCEEDS"))
         }
         print("")
         print("  If the strongest configuration exceeds the budget, ADR-006 is explicit about which")
@@ -51,8 +60,7 @@ final class DurabilityTests: XCTestCase {
     func testTheBarrierIsActuallyHappening() throws {
         let relaxed = try Probe.measure(Durability.candidates[0], visits: 100)
         let strongest = try Probe.measure(Durability.candidates[2], visits: 100)
-        print(String(format: "  relaxed P50 %.3f ms vs full+fullfsync P50 %.3f ms",
-                     relaxed.p50, strongest.p50))
+        print("  relaxed P50 \(fixed(relaxed.p50)) ms vs full+fullfsync P50 \(fixed(strongest.p50)) ms")
         XCTAssertGreaterThan(
             strongest.p50, relaxed.p50,
             "forcing a real barrier was not slower than not forcing one — the pragmas did not take, "
@@ -72,4 +80,27 @@ final class DurabilityTests: XCTestCase {
         XCTAssertEqual(m.worst, 100)
         XCTAssertFalse(m.meetsBudget, "a 100 ms P99 must not read as meeting a 50 ms budget")
     }
+
+    // Column alignment done by hand rather than with String(format:).
+    //
+    // `String(format: "%-58s", someSwiftString)` is what this file used to do, and it is a crash,
+    // not a cosmetic mistake: %s takes a C `char *`, a Swift String reaches the formatter as a
+    // bridged NSString object pointer, and short literals are tagged pointers whose tag bits make
+    // them invalid addresses. Dereferencing one segfaults the whole test process before a single
+    // number is printed. %@ is the correct specifier for a String; not needing one at all is
+    // better still.
+    private func pad(_ value: String, _ width: Int) -> String {
+        value.count >= width
+            ? String(value.prefix(width))
+            : value + String(repeating: " ", count: width - value.count)
+    }
+
+    private func padLeft(_ value: String, _ width: Int) -> String {
+        value.count >= width
+            ? String(value.suffix(width))
+            : String(repeating: " ", count: width - value.count) + value
+    }
+
+    /// `%f` with a Double is a correct use of String(format:) — the argument really is a C double.
+    private func fixed(_ value: Double) -> String { String(format: "%.2f", value) }
 }

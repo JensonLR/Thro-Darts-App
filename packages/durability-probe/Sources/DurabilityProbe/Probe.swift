@@ -101,6 +101,8 @@ public enum Probe {
     /// One transaction per visit on purpose: that is what the durability rule costs. Batching would
     /// produce a much prettier number that describes a system which loses darts.
     public static func measure(_ configuration: Durability, visits: Int = 200) throws -> ProbeResult {
+        precondition(visits > 0, "a measurement of zero visits is not a measurement")
+
         let path = NSTemporaryDirectory() + "thro-durability-\(UUID().uuidString).sqlite"
         defer {
             try? FileManager.default.removeItem(atPath: path)
@@ -111,6 +113,8 @@ public enum Probe {
 
         var db: OpaquePointer?
         guard sqlite3_open(path, &db) == SQLITE_OK, let handle = db else {
+            // sqlite3_open allocates a handle even on most failures, and it has to be closed.
+            if let leaked = db { sqlite3_close(leaked) }
             throw ProbeError.sqlite("could not open \(path)")
         }
         defer { sqlite3_close(handle) }
@@ -148,42 +152,103 @@ public enum Probe {
 
         let matchId = UUID().uuidString
         let occurredAt = ISO8601DateFormatter().string(from: Date())
-        var samples: [Double] = []
-        samples.reserveCapacity(visits)
 
-        for seq in 1...visits {
-            let commandId = UUID().uuidString
-            let start = DispatchTime.now()
-
-            try exec(handle, "BEGIN IMMEDIATE;")
-            sqlite3_reset(stmt)
-            sqlite3_clear_bindings(stmt)
-            sqlite3_bind_int64(stmt, 1, Int64(seq))
-            bindText(stmt, 2, commandId)
-            bindText(stmt, 3, matchId)
-            bindText(stmt, 4, seq % 2 == 0 ? "Home" : "Away")
-            sqlite3_bind_int(stmt, 5, Int32(60))
-            sqlite3_bind_null(stmt, 6)
-            sqlite3_bind_null(stmt, 7)
-            bindText(stmt, 8, occurredAt)
-            guard sqlite3_step(stmt) == SQLITE_DONE else {
-                throw ProbeError.sqlite("insert failed: \(String(cString: sqlite3_errmsg(handle)))")
+        // Every text parameter is bound with SQLITE_STATIC — a genuine null destructor — against a
+        // buffer whose lifetime we control, which is why the constants are hoisted into these
+        // nested closures rather than bound from a Swift String at the call site.
+        //
+        // The alternative, SQLITE_TRANSIENT, has no spelling in Swift that is not
+        // `unsafeBitCast(-1, to: sqlite3_destructor_type.self)`: bit-casting an integer into a C
+        // function pointer. That is undefined behaviour anywhere, and specifically hazardous on
+        // arm64e, where function pointers are signed and an unauthenticated one may not survive the
+        // crossing intact. Passing a Swift String straight to a `const char *` parameter has the
+        // same shape of problem from the other end — the bridged buffer is guaranteed only for the
+        // duration of that one call.
+        let samples = try matchId.withCString { matchC -> [Double] in
+            try occurredAt.withCString { occurredC -> [Double] in
+                try "Home".withCString { homeC -> [Double] in
+                    try "Away".withCString { awayC -> [Double] in
+                        try writeVisits(
+                            handle: handle, stmt: stmt, visits: visits,
+                            matchC: matchC, occurredC: occurredC, homeC: homeC, awayC: awayC
+                        )
+                    }
+                }
             }
-            // COMMIT is where the barrier happens, so it is inside the timed region.
-            try exec(handle, "COMMIT;")
+        }
 
-            let elapsedNs = DispatchTime.now().uptimeNanoseconds - start.uptimeNanoseconds
-            samples.append(Double(elapsedNs) / 1_000_000.0)
+        // A probe that timed transactions which wrote nothing would report beautiful numbers for a
+        // system that loses every dart, so the rows are counted before any of this is reported.
+        let written = try count(handle, "SELECT count(*) FROM journal;")
+        guard written == visits else {
+            throw ProbeError.sqlite("journal holds \(written) rows after \(visits) committed visits")
         }
 
         return ProbeResult(configuration: configuration, samplesMs: samples)
     }
 
-    private static func bindText(_ stmt: OpaquePointer, _ index: Int32, _ value: String) {
-        // SQLITE_TRANSIENT: SQLite copies the bytes, which it must, because the Swift string may be
-        // gone before the statement runs.
-        let transient = unsafeBitCast(-1, to: sqlite3_destructor_type.self)
-        sqlite3_bind_text(stmt, index, value, -1, transient)
+    private static func count(_ handle: OpaquePointer, _ sql: String) throws -> Int {
+        var statement: OpaquePointer?
+        guard sqlite3_prepare_v2(handle, sql, -1, &statement, nil) == SQLITE_OK, let stmt = statement else {
+            throw ProbeError.sqlite("prepare failed: \(String(cString: sqlite3_errmsg(handle)))")
+        }
+        defer { sqlite3_finalize(stmt) }
+        guard sqlite3_step(stmt) == SQLITE_ROW else {
+            throw ProbeError.sqlite("\(sql) returned no row")
+        }
+        return Int(sqlite3_column_int64(stmt, 0))
+    }
+
+    /// The timed loop. Takes the constant text parameters as pointers whose lifetime the caller
+    /// guarantees for the whole call.
+    private static func writeVisits(
+        handle: OpaquePointer,
+        stmt: OpaquePointer,
+        visits: Int,
+        matchC: UnsafePointer<CChar>,
+        occurredC: UnsafePointer<CChar>,
+        homeC: UnsafePointer<CChar>,
+        awayC: UnsafePointer<CChar>
+    ) throws -> [Double] {
+        var samples: [Double] = []
+        samples.reserveCapacity(visits)
+
+        for seq in 1...visits {
+            // Generating the identifier is not part of what durability costs, so it is not timed.
+            let commandId = UUID().uuidString
+
+            let elapsedNs: UInt64 = try commandId.withCString { commandC -> UInt64 in
+                let start = DispatchTime.now()
+
+                try exec(handle, "BEGIN IMMEDIATE;")
+                sqlite3_reset(stmt)
+                sqlite3_bind_int64(stmt, 1, Int64(seq))
+                sqlite3_bind_text(stmt, 2, commandC, -1, nil)   // SQLITE_STATIC
+                sqlite3_bind_text(stmt, 3, matchC, -1, nil)
+                sqlite3_bind_text(stmt, 4, seq % 2 == 0 ? homeC : awayC, -1, nil)
+                sqlite3_bind_int(stmt, 5, Int32(60))
+                sqlite3_bind_null(stmt, 6)
+                sqlite3_bind_null(stmt, 7)
+                sqlite3_bind_text(stmt, 8, occurredC, -1, nil)
+                guard sqlite3_step(stmt) == SQLITE_DONE else {
+                    throw ProbeError.sqlite("insert failed: \(String(cString: sqlite3_errmsg(handle)))")
+                }
+                // COMMIT is where the barrier happens, so it is inside the timed region.
+                try exec(handle, "COMMIT;")
+
+                let ns = DispatchTime.now().uptimeNanoseconds - start.uptimeNanoseconds
+
+                // Drop the statement's hold on commandC before this closure — and the buffer with
+                // it — goes out of scope. With SQLITE_STATIC the pointer is the binding.
+                sqlite3_reset(stmt)
+                sqlite3_clear_bindings(stmt)
+                return ns
+            }
+
+            samples.append(Double(elapsedNs) / 1_000_000.0)
+        }
+
+        return samples
     }
 
     private static func exec(_ handle: OpaquePointer, _ sql: String) throws {
