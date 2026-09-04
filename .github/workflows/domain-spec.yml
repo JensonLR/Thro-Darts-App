@@ -50,3 +50,15 @@ jobs:
       - name: Conformance, properties and determinism
         working-directory: packages/engine
         run: gradle check --no-daemon
+
+  tokens:
+    name: Design tokens and contrast
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.11" }
+      # Fails if any platform token file is stale — a hand-edited platform file breaks the build —
+      # or if a colour pair falls below threshold without a recorded, dated exception.
+      - name: Tokens are current and contrast holds
+        run: python3 packages/design-tokens/build.py --check
