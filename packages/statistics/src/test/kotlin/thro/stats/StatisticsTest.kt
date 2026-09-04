@@ -31,6 +31,21 @@ class StatisticsTest {
     )
 
     @Test
+    fun `never standing on a finish is reported differently from not having said`() {
+        // A player who was never on a finish threw no darts at a double. Telling them their
+        // attempts "were not recorded" describes missing evidence that does not exist.
+        val neverOnAFinish = listOf(v(1, 1, 60, 3, 501, 441), v(1, 2, 60, 3, 441, 381))
+        val a = Statistics.doublesAttempted(neverOnAFinish, checkable)
+        assertEquals(Basis.UNAVAILABLE, a.basis)
+        assertTrue(a.note!!.contains("finishable"), "wrong reason given: ${a.note}")
+
+        val onAFinishButSilent = listOf(v(1, 1, 20, 3, 40, 20))
+        val b = Statistics.doublesAttempted(onAFinishButSilent, checkable)
+        assertEquals(Basis.UNAVAILABLE, b.basis)
+        assertTrue(b.note!!.contains("recorded"), "wrong reason given: ${b.note}")
+    }
+
+    @Test
     fun `doubles attempted does not report a partial count as a match total`() {
         // Two visits stood on a finish; only one said how many darts it threw at a double. The
         // recorded sum is 2, but the match total is not 2 — reporting it as exact would state a

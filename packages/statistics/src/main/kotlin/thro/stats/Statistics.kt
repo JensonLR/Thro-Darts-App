@@ -246,7 +246,15 @@ public object Statistics {
         val onAFinish = visits.filter { it.remainingBefore in checkable }
         val recorded = onAFinish.filter { it.dartsAtDouble != null }
         if (recorded.isEmpty()) {
-            return Stat.unavailable("No visit has recorded its darts at a double.")
+            // Two different reasons, and telling a player the wrong one is its own small lie:
+            // never having stood on a finish is a fact about the match, not missing evidence.
+            return Stat.unavailable(
+                if (onAFinish.isEmpty()) {
+                    "No visit has yet begun on a finishable number, so no double has been thrown at."
+                } else {
+                    "No visit has recorded its darts at a double."
+                },
+            )
         }
         val known = recorded.sumOf { it.dartsAtDouble ?: 0 }
         val unknownVisits = onAFinish.size - recorded.size

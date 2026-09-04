@@ -96,6 +96,10 @@ input{
 .hide{display:none!important}
 .stats{position:fixed;inset:0;background:var(--thro-ink);overflow-y:auto;
   padding:var(--spacing-5);z-index:10}
+/* Secondary actions still meet the 44px minimum target; only the scoring keys get the 64px one. */
+.secondary{min-height:var(--touch-target-minimum);font-family:var(--font-ui);font-size:13px;
+  font-weight:700;letter-spacing:.06em;text-transform:uppercase;padding:0 var(--spacing-4);
+  background:var(--color-surface-secondary)}
 .statsbar{display:flex;align-items:center;justify-content:space-between;gap:var(--spacing-4);
   margin-bottom:var(--spacing-4)}
 .statgrid{display:grid;grid-template-columns:1fr 1fr;gap:var(--spacing-3);margin-bottom:var(--spacing-5)}
@@ -133,7 +137,10 @@ input{
         <div class="name" id="nHome">Home</div>
         <div class="legs"><span class="sport" id="lHome">0</span> legs</div>
       </div>
-      <div class="sport legscore" id="legScore">0–0</div>
+      <div style="display:flex;flex-direction:column;align-items:center;gap:6px">
+        <div class="sport legscore" id="legScore">0–0</div>
+        <button class="secondary" id="showStats">Stats</button>
+      </div>
       <div class="player away" id="pAway">
         <div class="name" id="nAway">Away</div>
         <div class="legs"><span class="sport" id="lAway">0</span> legs</div>
@@ -156,14 +163,13 @@ input{
     <div class="quick" id="quick"></div>
     <div class="grid" id="digits"></div>
     <button class="enter" id="enter" disabled>Enter score</button>
-    <button class="label" id="showStats" style="width:100%">Statistics so far</button>
   </div>
 </div>
 
 <section class="stats hide" id="stats" aria-labelledby="statsHeading">
   <div class="statsbar">
     <div class="eyebrow" id="statsHeading">Statistics</div>
-    <button class="label" id="closeStats" aria-label="Close statistics">Close</button>
+    <button class="secondary" id="closeStats" aria-label="Close statistics">Close</button>
   </div>
   <div id="statsBody"></div>
 </section>
