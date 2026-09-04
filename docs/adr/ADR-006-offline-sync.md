@@ -36,7 +36,9 @@ setting is raised and validated with real kill tests and power-cut tests on devi
 transaction each, under every candidate configuration and reports the distribution. It runs in CI on
 macOS on every push, which is what stops it rotting; it is **not** the measurement this ADR asks for.
 
-Latest CI run (GitHub `macos-latest`, arm64, 200 visits per configuration, milliseconds):
+Two runs exist, both on Macs, 200 visits per configuration, milliseconds.
+
+**GitHub `macos-latest`, arm64, virtualised:**
 
 | configuration | P50 | P95 | P99 | worst |
 |---|---|---|---|---|
@@ -45,14 +47,29 @@ Latest CI run (GitHub `macos-latest`, arm64, 200 visits per configuration, milli
 | `synchronous=FULL` + `fullfsync`, WAL | 1.01 | 2.01 | 5.45 | 19.78 |
 | `synchronous=FULL` + `fullfsync`, rollback journal | 3.77 | 7.20 | 16.33 | 20.60 |
 
-The probe asserts that forcing the barrier is slower than not forcing it (relaxed P50 0.01 ms
-against 1.17 ms) — without that check a run where the pragmas were silently ignored would report
-excellent numbers and mean nothing.
+**MacBook Air, Apple Silicon, local NVMe** (two consecutive runs, showing the spread):
+
+| configuration | P50 | P95 | P99 | worst |
+|---|---|---|---|---|
+| relaxed | 0.01 / 0.01 | 0.01 / 0.02 | 0.03 / 0.04 | 0.04 / 0.04 |
+| `synchronous=FULL`, no Apple barrier | 0.06 / 0.06 | 0.07 / 0.08 | 0.09 / 0.10 | 0.11 / 0.15 |
+| `synchronous=FULL` + `fullfsync`, WAL | 0.42 / 0.43 | 0.73 / 0.55 | 0.97 / 0.63 | 1.07 / 0.68 |
+| `synchronous=FULL` + `fullfsync`, rollback journal | 1.35 / 1.36 | 1.56 / 1.72 | 2.31 / 2.33 | 4.61 / 2.68 |
+
+Reproducible to within a few hundredths across runs, so the probe is not measuring noise.
+
+The probe asserts that forcing the barrier is slower than not forcing it — CI measured 0.01 ms
+against 1.17 ms, the MacBook Air 0.01 ms against 0.38 and 0.45 ms. Without that check a run where
+the pragmas were silently ignored would report excellent numbers and mean nothing.
+
+**CI is roughly 3x slower than the real machine** (P95 2.01 ms against 0.55–0.73 ms), which is the
+useful direction: the CI job is a conservative proxy for a Mac rather than an optimistic one, so a
+regression that pushes the barrier cost up will show there first.
 
 Two things this does support:
 
 - **The barrier is real and its cost is measurable**, roughly two orders of magnitude over the
-  relaxed setting. Row 2 is the one this ADR was written to catch: `synchronous=FULL` on its own
+  relaxed setting on CI and forty times on local hardware. Row 2 is the one this ADR was written to catch: `synchronous=FULL` on its own
   costs 0.30 ms and looks durable. It is not, on Apple platforms, and the gap between rows 2 and 3
   is the entire cost of being right.
 - **WAL over rollback journal**, by about 3.5× at P95 under the same barrier.
@@ -63,6 +80,13 @@ architecture is the one from a phone — where the storage controller, the files
 state are all different, and where `fullfsync` is doing something a server-class drive can absorb
 and a phone may not. Treating the table above as the answer would be exactly the mistake this ADR
 exists to prevent.
+
+One limit of the probe itself, worth stating so the numbers are not over-read: **it measures
+latency, not durability.** The guard test proves the pragmas changed the system's behaviour; it does
+not prove the write reached NAND. Apple SSDs with power-loss-protected caches can acknowledge a
+flush quickly and honestly, and a drive that lied about it would look identical here. Only the
+power-cut test distinguishes those two, which is why this ADR asks for one and why the probe alone
+cannot close the requirement.
 
 **Still outstanding: the on-device run on both reference devices, and the kill and power-cut tests.**
 `docs/runbooks/DURABILITY_MEASUREMENT.md` is the procedure; `ProbeView` is a one-tap front end so the
