@@ -12,7 +12,10 @@ jobs:
     # The engine is pure value types with no Apple frameworks, so it builds and runs the corpus on
     # Linux. That matters: a scoring core verifiable only on a Mac is one that gets verified once,
     # not on every push. The macOS build is a separate concern, for the app rather than the engine.
-    container: swift:6.0-jammy
+    # Noble (24.04), not jammy (22.04): actions/setup-python installs a CPython built against
+    # GLIBC 2.38, which jammy's 2.35 cannot load. The failure is a linker error from python3, not
+    # from Swift, and it is worth naming here because the next person to pin a container will hit it.
+    container: swift:6.0-noble
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
