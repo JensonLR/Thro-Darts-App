@@ -8,6 +8,7 @@ dependencies {
     implementation("thro-statistics:thro-statistics")
     implementation("thro-authz:thro-authz")
     implementation("thro-trust:thro-trust")
+    implementation("thro-competition:thro-competition")
     implementation("org.postgresql:postgresql:42.7.4")
     testImplementation(kotlin("test"))
 }
