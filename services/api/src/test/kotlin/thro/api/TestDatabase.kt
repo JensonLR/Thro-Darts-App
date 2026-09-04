@@ -20,7 +20,7 @@ public object TestDatabase {
     public val configured: Boolean get() = host.isNotBlank()
 
     /** Every schema the migrations create. Dropping them all is what makes a run repeatable. */
-    private val schemas = listOf("evidence", "trust", "rating", "read", "audit")
+    private val schemas = listOf("evidence", "trust", "rating", "read", "audit", "authz")
 
     private val roles = listOf("thro_owner", "app_match", "app_trust", "app_rating", "app_read", "app_competition")
 
