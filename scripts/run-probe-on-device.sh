@@ -104,19 +104,30 @@ echo
 # without opening Xcode. A free Apple ID is enough to run on your own device.
 
 echo "==> Building and signing"
+# Build OUTSIDE the repository, deliberately. ~/Documents is an iCloud Drive "Desktop &
+# Documents" folder on this Mac, and iCloud's file provider stamps com.apple.FinderInfo onto
+# directories it manages. codesign refuses to sign a bundle carrying Finder information:
+#
+#     ThroProbe.app: resource fork, Finder information, or similar detritus not allowed
+#
+# Scrubbing with `xattr -cr` after the fact races the sync daemon, which is free to re-add the
+# attribute between the scrub and the signature. Building where iCloud is not watching removes
+# the cause instead of fighting the symptom.
+DERIVED="$HOME/Library/Developer/Xcode/DerivedData/ThroProbe-cli"
+
 BUILD_ARGS=(
   -project "$PROJECT"
   -scheme "$SCHEME"
   -configuration Debug
   -destination "id=$DEVICE_ID"
   -allowProvisioningUpdates
-  -derivedDataPath build/device
+  -derivedDataPath "$DERIVED"
 )
 [ -n "${PROBE_BUNDLE_ID:-}" ] && BUILD_ARGS+=(PRODUCT_BUNDLE_IDENTIFIER="$PROBE_BUNDLE_ID")
 
 xcodebuild "${BUILD_ARGS[@]}" build
 
-APP="$(find build/device/Build/Products/Debug-iphoneos -maxdepth 1 -name '*.app' -print -quit)"
+APP="$(find "$DERIVED/Build/Products/Debug-iphoneos" -maxdepth 1 -name '*.app' -print -quit)"
 [ -n "$APP" ] || die "build reported success but produced no .app"
 
 BUNDLE_ID="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$APP/Info.plist")"
