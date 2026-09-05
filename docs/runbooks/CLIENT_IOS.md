@@ -21,25 +21,107 @@
 | `packages/client-ios` → `ThroApp` | Home, tabs, the root view | compiles for macOS and the iOS simulator on every push; drawn, not tested |
 | `apps/ios/ThroDarts.xcodeproj` | the app target: thirteen lines that mount `ThroApp` | `xcodebuild` for the iOS simulator, every push |
 
-## Running it on the phone
+## Running it on the phone, step by step
 
-```bash
-cd ~/Thro\ Darts\ App          # or wherever the checkout is
-git pull
-open apps/ios/ThroDarts.xcodeproj
-```
+Written for someone who has never used Xcode. The phone has already run the durability probe, so the
+Mac, the cable, the Apple ID and the phone's Developer Mode are all known to work; nothing below asks
+for anything new.
 
-1. In Xcode, select the `ThroDarts` target → **Signing & Capabilities**. Choose your **Team** (the
-   personal team is fine). If Xcode says the bundle identifier `app.thro.darts` is taken, change it
-   to anything under your own identifier; nothing depends on it.
-2. Plug the phone in and unlock it. Choose it in the run destination menu at the top of the window.
-   If Xcode says *"Your team has no devices from which to generate a provisioning profile"*, the
-   phone is not connected or not trusted — that message is not about signing.
-3. **Run** (⌘R). The first time, the phone will refuse to open the app until you trust the developer:
-   Settings → General → VPN & Device Management → your Apple ID → Trust.
+### 1. Get the latest code
 
-Or, without a phone: choose any iPhone simulator as the destination and Run. That is exactly what CI
-does (`xcodebuild -scheme ThroDarts -destination 'generic/platform=iOS Simulator'`).
+1. Open **Terminal** (press ⌘ Space, type `Terminal`, press Return).
+2. Go to the checkout. It is normally here — if not, `ls ~ ~/Documents | grep -i thro` finds it:
+   ```bash
+   cd ~/"Thro Darts App"
+   ```
+3. Check the branch: `git status` should say `On branch claude/thro-production-build-je2mkf`. If it
+   names a different branch: `git checkout claude/thro-production-build-je2mkf`.
+4. Fetch everything new: `git pull`.
+5. Open the app project — **this one, not ThroProbe**:
+   ```bash
+   open apps/ios/ThroDarts.xcodeproj
+   ```
+   Xcode opens. The window title reads **ThroDarts**. If it reads ThroProbe, close that window and
+   run the command again.
+
+### 2. Tell Xcode who signs it (first time only)
+
+6. Wait for the small status area at the top of the window to finish *Resolving Package Graph*; a
+   few seconds. Xcode is reading the four local packages.
+7. In the left-hand column, click the very top item — the blue project icon labelled **ThroDarts**.
+8. In the middle of the window, under the heading **TARGETS**, click **ThroDarts** (the row with the
+   app icon). Not the row under PROJECT.
+9. Click the **Signing & Capabilities** tab along the top of that panel.
+10. **Automatically manage signing** should be ticked. In the **Team** menu choose your own name —
+    the *Personal Team* you used for ThroProbe.
+11. If red text appears saying the bundle identifier is not available, click into **Bundle
+    Identifier**, replace `app.thro.darts` with `com.thro.ThroDarts` (your ThroProbe identifier used
+    `com.thro`, so this will be free), and press Return. The red text goes away.
+
+### 3. Run it
+
+12. Unlock the phone and plug it in. If the phone asks whether to trust this computer, tap **Trust**.
+13. At the top centre of the Xcode window is the run destination: it reads **ThroDarts ▸ something**.
+    Click the *something* and choose your iPhone by name from the list. Not a simulator.
+14. Press **⌘R** (or the ▶ button at the top left). The first build compiles four packages and takes
+    a minute or two. The status area shows *Building…* then *Running ThroDarts on <your phone>*.
+15. If Xcode says Developer Mode is disabled: on the phone, Settings → Privacy & Security →
+    Developer Mode → on, then let the phone restart, and press ⌘R again.
+16. If the phone shows *Untrusted Developer* when the app tries to open: Settings → General → VPN &
+    Device Management → tap your Apple ID → **Trust**, then open the app from the home screen. This
+    is the same certificate ThroProbe used, so it is probably already trusted.
+17. The app opens on **Home**: a light screen, a yellow *Fonts not embedded* notice, *No matches yet*
+    and a **Start match** button, with a tab bar along the bottom.
+
+### 4. The first-run test plan
+
+Everything below is what the tests assert; the phone is the first place anyone watches it happen.
+
+- **Start match** → *Match setup* (dark). Type two names, keep **501**, choose **Bo3**, pick who
+  throws first, **Continue**. *Match ready* shows both players and the format; **Start scoring**.
+- **A refusal.** Tap **1 7 9** then **Enter 179**. A red bar says *179 cannot be scored with three
+  darts.* and nothing else changes. The undo key clears the entry.
+- **A normal visit.** Tap the **180** quick key. The remaining drops, the turn indicator names the
+  other player. Give them a **60**.
+- **A finish position.** Give the first player another **180** (321 → 141). A *Checkout available*
+  card appears and the remaining turns brand-green. Give the second player **60**.
+- **The first question.** For the first player tap **1 0 0**, **Enter**. Instead of the keypad:
+  *Darts thrown at a double?* with 0 / 1 / 2 / 3 — because 141 was a finish, even though this visit
+  did not take it. Tap **0**. Remaining 41.
+- **A bust.** Second player: any total. First player: tap **6 0**, **Enter**. It asks the double
+  question first (41 is a finish); answer, and the score shows in red as *Bust — score restored*
+  with *Bust. Score restored to 41. <name> to throw.* The keypad's next tap clears the red.
+- **The finish.** Second player again; then first player **4 1**, **Enter**. *Darts used to check
+  out?* → tap **2**. *Darts thrown at a double?* now offers only 1 / 2 → tap **1**. The bar says
+  *Leg 1 to <name>. <other> to throw.* and the legs read 1–0.
+- **Kill it mid-leg.** Swipe up from the bottom and pause, swipe the app away, open it again. Home
+  lists the match as *In progress*; tap it → *Match ready* → **Continue scoring** → the same score
+  and the same player to throw. That is the journal doing its job.
+- **Finish the match** (first to two legs in Bo3) → *Result*: *<name> wins*, the legs, six figures
+  per player, **Not rated**, **Self-reported** with its explanation, and the line saying the result
+  has not left the phone. **Done** returns Home, where the match is listed with its legs.
+- The back chevron leaves scoring at any point; nothing is lost.
+
+### 5. What to send back
+
+Screenshots of Home, setup, scoring in its normal state, the checkout card, a question card, the
+bust, and the result — into `docs/runbooks/screenshots/` — plus the phone's exact model and iOS
+version (Settings → General → About → *Model Name* and *iOS Version*). Where the phone disagrees
+with this document, the phone is right.
+
+### If something goes wrong
+
+| Xcode says | Do |
+|---|---|
+| *Could not resolve package dependencies* | File → Packages → **Reset Package Caches**, then ⌘R |
+| *No such module 'ThroApp'* | Product → **Clean Build Folder** (⇧⌘K), then ⌘R |
+| *Signing for "ThroDarts" requires a development team* | Step 10 was skipped |
+| *Your team has no devices from which to generate a provisioning profile* | The phone is not connected or not trusted; it is not a signing problem |
+| *Unable to install… device is locked* | Unlock the phone, ⌘R again |
+| Any other red error | Copy the red text in full and send it; do not guess at it |
+
+Without a phone: choose any iPhone simulator as the destination at step 13 and press ⌘R. That is
+exactly what CI does (`xcodebuild -scheme ThroDarts -destination 'generic/platform=iOS Simulator'`).
 
 ## What you will see
 
