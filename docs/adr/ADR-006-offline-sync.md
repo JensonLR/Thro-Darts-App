@@ -101,6 +101,14 @@ the report file the app now writes; the founder read the screen. Every configura
 screen-read result and nothing more — no figure from it is entered, because sixteen numbers copied
 by eye are not the grade of evidence this table holds.
 
+A second such run, later on 2026-09-05, arrived as a screenshot of the probe screen: every
+configuration again "meets the budget", and the deciding row (WAL + `fullfsync`) showed P50 0.86,
+P95 1.81, P99 2.38, worst 2.93 ms — the same order as the two console-captured runs and inside the
+budget by about eleven times. The device and iOS version are not in the frame, so they are not
+asserted here, and for the same reason as above the figures stay out of the table. The probe now
+writes its report block to the app's container; the next run that is pulled from there rather than
+photographed can be entered.
+
 **CI is roughly 3x slower than the real machine** (P95 2.01 ms against 0.55–0.73 ms), which is the
 useful direction: the CI job is a conservative proxy for a Mac rather than an optimistic one, so a
 regression that pushes the barrier cost up will show there first.
