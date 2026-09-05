@@ -254,7 +254,8 @@ public enum StatPresentation {
     public static func line(_ label: String, _ stat: Stat, kind: Kind) -> StatLine {
         switch stat.basis {
         case .exact:
-            return StatLine(label: label, value: format(stat.value ?? 0, kind), note: nil)
+            // Exact can still carry a disclosure — a first nine that excludes legs ended before nine darts.
+            return StatLine(label: label, value: format(stat.value ?? 0, kind), note: stat.note)
         case .bounded:
             let lower = format(stat.lower ?? 0, kind), upper = format(stat.upper ?? 0, kind)
             return StatLine(label: label, value: "\(lower)–\(upper)",

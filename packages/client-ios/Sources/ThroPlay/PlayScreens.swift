@@ -106,9 +106,9 @@ public struct MatchSetupScreen: View {
                     ThroTextField("Home player", text: $home, placeholder: "Name")
                     ThroTextField("Away player", text: $away, placeholder: "Name")
                     ThroDivider()
-                    choice("Game", SegmentedControl([.init(301, "301"), .init(501, "501"), .init(701, "701")], selection: $game))
-                    choice("Length", SegmentedControl([.init(3, "Bo3"), .init(5, "Bo5"), .init(7, "Bo7"), .init(9, "Bo9")], selection: $length))
-                    choice("Throws first", SegmentedControl([.init(Seat.home, homeName), .init(Seat.away, awayName)], selection: $first))
+                    choice("Game", SegmentedControl([(301, "301"), (501, "501"), (701, "701")], selection: $game))
+                    choice("Length", SegmentedControl([(3, "Bo3"), (5, "Bo5"), (7, "Bo7"), (9, "Bo9")], selection: $length))
+                    choice("Throws first", SegmentedControl([(Seat.home, homeName), (Seat.away, awayName)], selection: $first))
                     ThroDivider()
                     HStack(alignment: .top, spacing: 10) {
                         Icon(.info, size: 16).foregroundStyle(ThroColor.colorTextSecondary).padding(.top, 2)

@@ -234,6 +234,9 @@ final class MatchSessionTests: XCTestCase {
                        StatLine(label: "Checkout %", value: "30%–50%", note: "Two attempts were not recorded."))
         XCTAssertEqual(StatPresentation.line("180s", .exact(3, n: 20), kind: .count),
                        StatLine(label: "180s", value: "3", note: nil))
+        let disclosed = Stat(basis: .exact, value: 95.0, sampleSize: 2, note: "1 leg(s) ended before nine darts and are excluded.")
+        XCTAssertEqual(StatPresentation.line("First 9", disclosed, kind: .average).note,
+                       "1 leg(s) ended before nine darts and are excluded.", "an exact figure keeps its disclosure")
         let unavailable = StatPresentation.line("Checkout %", .unavailable("No darts at a double were recorded for this player."), kind: .percent)
         XCTAssertEqual(unavailable.value, "—")
         XCTAssertEqual(unavailable.note, "No darts at a double were recorded for this player.")

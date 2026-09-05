@@ -75,6 +75,11 @@ public struct SegmentedControl<ID: Hashable>: View {
         self._selection = selection
     }
 
+    /// `SegmentedControl([(301, "301"), (501, "501")], selection: $game)`.
+    public init(_ pairs: [(ID, String)], selection: Binding<ID>) {
+        self.init(pairs.map { Item($0.0, $0.1) }, selection: selection)
+    }
+
     public var body: some View {
         HStack(spacing: 2) {
             ForEach(items) { item in
@@ -186,7 +191,7 @@ public struct PlayerIdentity: View {
     private var initialsMark: some View {
         Text(player.initials)
             .thro(ThroTypeRole(family: .sport, size: (mark * 0.38).rounded(), lineHeight: (mark * 0.38).rounded(),
-                               weight: .bold, relativeTo: .caption1, tabularNumerals: true))
+                               weight: .bold, relativeTo: .caption, tabularNumerals: true))
             .foregroundStyle(ThroColor.colorTextSecondary)
             .frame(width: mark, height: mark)
             .background(Circle().fill(ThroColor.colorSurfaceSecondary))
