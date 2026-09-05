@@ -30,13 +30,24 @@ for anything new.
 ### 1. Get the latest code
 
 1. Open **Terminal** (press ⌘ Space, type `Terminal`, press Return).
-2. Go to the checkout. It is normally here — if not, `ls ~ ~/Documents | grep -i thro` finds it:
+2. Find the checkout. `~/Thro Darts App` holds the ThroProbe Xcode project and is **not** the git
+   clone — `git status` there says *not a git repository*. Look for the clone:
    ```bash
-   cd ~/"Thro Darts App"
+   ls -d ~/Thro-Darts-App ~/Documents/Thro-Darts-App 2>/dev/null
    ```
-3. Check the branch: `git status` should say `On branch claude/thro-production-build-je2mkf`. If it
-   names a different branch: `git checkout claude/thro-production-build-je2mkf`.
-4. Fetch everything new: `git pull`.
+3. If a path printed, use it and bring it up to date:
+   ```bash
+   cd ~/Documents/Thro-Darts-App        # or whichever path printed
+   git checkout claude/thro-production-build-je2mkf
+   git pull
+   ```
+   If nothing printed, clone afresh — the repository is public, so no login is needed:
+   ```bash
+   cd ~
+   git clone -b claude/thro-production-build-je2mkf https://github.com/JensonLR/Thro-Darts-App.git
+   cd Thro-Darts-App
+   ```
+4. `git status` should now say `On branch claude/thro-production-build-je2mkf`.
 5. Open the app project — **this one, not ThroProbe**:
    ```bash
    open apps/ios/ThroDarts.xcodeproj
