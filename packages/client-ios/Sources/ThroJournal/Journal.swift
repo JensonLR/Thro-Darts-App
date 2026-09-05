@@ -157,6 +157,20 @@ public struct ReplayedVisit: Equatable, Sendable {
     public let remainingAfter: Int
     public let bust: Bool
     public let wonLeg: Bool
+
+    public init(seat: Seat, legOrdinal: Int, visitOrdinal: Int, visitTotal: Int, dartsUsed: Int?, dartsAtDouble: Int?,
+                remainingBefore: Int, remainingAfter: Int, bust: Bool, wonLeg: Bool) {
+        self.seat = seat
+        self.legOrdinal = legOrdinal
+        self.visitOrdinal = visitOrdinal
+        self.visitTotal = visitTotal
+        self.dartsUsed = dartsUsed
+        self.dartsAtDouble = dartsAtDouble
+        self.remainingBefore = remainingBefore
+        self.remainingAfter = remainingAfter
+        self.bust = bust
+        self.wonLeg = wonLeg
+    }
 }
 
 public final class Journal {

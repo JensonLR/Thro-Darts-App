@@ -70,3 +70,18 @@ jobs:
         run: swift package --package-path packages/client-ios resolve
       - name: Build and test
         run: swift test --package-path packages/client-ios
+
+  ios-app:
+    name: iOS app builds for the simulator
+    # The Xcode project is a few lines that mount ThroApp from packages/client-ios. `swift test` on
+    # macOS proves the packages compile for macOS; only xcodebuild against the iOS SDK proves they
+    # compile for the phone, where SwiftUI's availability differs. Unsigned, because CI has no team;
+    # the founder's Mac signs it.
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build for the simulator
+        run: |
+          xcodebuild -project apps/ios/ThroDarts.xcodeproj -scheme ThroDarts \
+            -destination 'generic/platform=iOS Simulator' -configuration Debug \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO -quiet build

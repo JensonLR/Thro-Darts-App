@@ -19,10 +19,13 @@ let package = Package(
     products: [
         .library(name: "ThroDesign", targets: ["ThroDesign"]),
         .library(name: "ThroJournal", targets: ["ThroJournal"]),
+        .library(name: "ThroPlay", targets: ["ThroPlay"]),
+        .library(name: "ThroApp", targets: ["ThroApp"]),
     ],
     dependencies: [
         .package(path: "../design-tokens"),
         .package(path: "../engine-swift"),
+        .package(path: "../statistics-swift"),
     ],
     targets: [
         // The approved design system as SwiftUI: typography, icons, and the components the Play and
@@ -43,5 +46,38 @@ let package = Package(
             path: "Sources/ThroJournal"
         ),
         .testTarget(name: "ThroJournalTests", dependencies: ["ThroJournal"], path: "Tests/ThroJournalTests"),
+
+        // The Play slice: match setup, ready, scoring and result for a match scored on this device.
+        // The session (engine → journal → screen, in that order) is plain Swift and tested without
+        // SwiftUI; the screens only draw it.
+        .target(
+            name: "ThroPlay",
+            dependencies: [
+                "ThroDesign", "ThroJournal",
+                .product(name: "ThroTokens", package: "design-tokens"),
+                .product(name: "ThroEngine", package: "engine-swift"),
+                .product(name: "ThroStatistics", package: "statistics-swift"),
+            ],
+            path: "Sources/ThroPlay"
+        ),
+        .testTarget(
+            name: "ThroPlayTests",
+            dependencies: [
+                "ThroPlay", "ThroJournal",
+                .product(name: "ThroEngine", package: "engine-swift"),
+                .product(name: "ThroStatistics", package: "statistics-swift"),
+            ],
+            path: "Tests/ThroPlayTests"
+        ),
+
+        // The app shell: Home, the tab bar, and the root view the Xcode app target mounts.
+        .target(
+            name: "ThroApp",
+            dependencies: [
+                "ThroDesign", "ThroJournal", "ThroPlay",
+                .product(name: "ThroTokens", package: "design-tokens"),
+            ],
+            path: "Sources/ThroApp"
+        ),
     ]
 )

@@ -41,6 +41,7 @@ public enum ThroIcon: String, CaseIterable, Sendable {
     case refreshCw = "refresh-cw"
     case trophy
     case user
+    case circleAlert = "circle-alert"
 
     /// The inner SVG markup, verbatim from the export.
     var markup: String {
@@ -77,6 +78,8 @@ public enum ThroIcon: String, CaseIterable, Sendable {
         case .refreshCw: return #"<path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"></path><path d="M21 3v5h-5"></path><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"></path><path d="M8 16H3v5"></path>"#
         case .trophy: return #"<path d="M10 14.66V17a1 1 0 0 1-1 1 2 2 0 0 0-2 2v2"></path><path d="M14 14.66V17a1 1 0 0 0 1 1 2 2 0 0 1 2 2v2"></path><path d="M17.916 10H19.5A2.5 2.5 0 0 0 22 7.5V5a1 1 0 0 0-1-1h-3"></path><path d="M4 22h16"></path><path d="M6 9a6 6 0 0 0 12 0V3a1 1 0 0 0-1-1H7a1 1 0 0 0-1 1z"></path><path d="M6.084 10H4.5A2.5 2.5 0 0 1 2 7.5V5a1 1 0 0 1 1-1h3"></path>"#
         case .user: return #"<path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle>"#
+        // Lucide draws circle-alert with two <line> elements; these paths are the same strokes.
+        case .circleAlert: return #"<circle cx="12" cy="12" r="10"></circle><path d="M12 8v4"></path><path d="M12 16h.01"></path>"#
         }
     }
 }
