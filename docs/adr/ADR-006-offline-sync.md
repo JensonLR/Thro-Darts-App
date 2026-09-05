@@ -123,6 +123,20 @@ configuration measured on the phone meets the budget, including the rollback jou
 with the database demoted to a projection, a second storage engine on both clients — is not
 required. The client architecture is unblocked to the extent that one device can unblock it.
 
+**Fixed, 2026-09-05.** The founder directed the client build on the strength of this measurement,
+and the journal this ADR describes now exists: `packages/client-ios/Sources/ThroJournal`. It runs
+under exactly the measured configuration — WAL, `synchronous=FULL`, `fullfsync`,
+`checkpoint_fullfsync` — and reads every pragma back on open, refusing to run if the database
+reports anything else, because `PRAGMA journal_mode` does not fail when it cannot switch. It is
+append-only by trigger, sequenced per (match, device), and replayed through the engine, throwing on
+a row the engine rejects. The scoring session applies a visit only after the journal has committed
+it (`MatchSession.submit`). The module graph gives it no path to a network.
+
+What that fixes is the *storage* of the client architecture, on the one device measured. The
+caveats above stand and are not softened by the code existing: the SE-class iPhone and the Android
+reference device are unmeasured, the power-cut test is outstanding, and the app has been built and
+tested on CI but not yet run on a phone.
+
 Two properties of the phone's numbers are worth keeping:
 
 - **The phone sits between the two Macs**: slower than the MacBook Air (P95 0.55–0.73 ms), faster

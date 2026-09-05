@@ -33,8 +33,8 @@ database.
 | 2 | Repository foundation | Event schema and the command path, proved against a real Postgres |
 | 3 | Design ingestion | Token pipeline generating Swift, Kotlin and CSS from one source |
 | 4 | Competitive core | Scoring engine passing 86,000 exhaustive transitions |
-| 5 | Offline match lifecycle | Domain core closed — grants, per-device streams, reconciliation. **On-device journal blocked**, needs iOS and Android toolchains |
-| 6 | Vertical slice | **Blocked** — needs the authentication *surface* (B4). ADR-008's mechanism is built |
+| 5 | Offline match lifecycle | Domain core closed — grants, per-device streams, reconciliation. On-device journal built on iOS under the measured configuration (`ThroJournal`); Android not started |
+| 6 | Vertical slice | An iOS slice exists for a match between two people on one phone — setup, scoring, result, journaled. **The slice with identity is still blocked** on the authentication *surface* (B4); ADR-008's mechanism is built |
 | 7 | Trust and provenance | Closed — attestation, disputes, adjudication, quarantine, eligibility |
 | 8 | Rating | Architecture closed — a replayable projection. **The model is OD-001 and stays open** |
 | 9 | Organiser | Correction and adjudication closed, both under the conflict-of-interest rule |
@@ -55,10 +55,15 @@ database.
 | Command path | 9 integration suites, 132 properties end to end against a real PostgreSQL |
 | Design tokens | 50 contrast pairs, absolute thresholds, 0 unrecorded breaches |
 | Design components | 61 components audited mechanically against a baseline ratchet |
+| Statistics honesty, Swift | The same 20 tests, ported case for case, on Linux |
+| On-device journal | 11 tests — configuration read back on open, append-only by trigger, replay throws on a corrupt row |
+| Scoring session | 16 tests — every PD-001 branch; engine → journal commit → screen, never another order. **Written, not yet run by CI** |
+| iOS app | A CI job builds it for the simulator; **that job has not yet run** (Actions stopped starting jobs — see the runbook). **Not yet run on a phone** |
 
 **Nothing here is production ready**, and no claim of security, offline reliability or rating
-validity is made anywhere in this repository. There is no client application, no HTTP layer and no deployment — the command path is a tested
-handler, not a running service.
+validity is made anywhere in this repository. There is an iOS client that scores a match between two people on
+one phone and keeps it there — its journal built and tested on CI, its screens **not yet verified by CI and not yet run on a phone** ([`docs/runbooks/CLIENT_IOS.md`](docs/runbooks/CLIENT_IOS.md)).
+It talks to nothing. There is no HTTP layer and no deployment — the command path is a tested handler, not a running service.
 Claims are made only where evidence exists — see [`FOUNDATION_ACCEPTANCE.md`](FOUNDATION_ACCEPTANCE.md).
 
 **Two decisions are recorded as taken on delegated authority** ([`docs/product/DECISIONS.md`](docs/product/DECISIONS.md)),
@@ -75,11 +80,15 @@ packages/
   engine-swift/   The same engine in Swift — ADR-002's spike, same corpus
   durability-probe/  Measures the cost of ADR-006's durability rule, on device
   statistics/     Figures that say when they cannot be computed honestly
+  statistics-swift/  The same figures in Swift, the same twenty tests
+  client-ios/     The iOS client as packages: ThroDesign, ThroJournal, ThroPlay, ThroApp
   competition/    Bracket structure — byes, rounds, walkovers
   trust/          Provenance, derived verification, rating eligibility, reconciliation
   authz/          Relationship-based authorization, and age as a dimension
   rating/         Rating as a versioned replayable projection
   design-tokens/  One token source generating Swift, Kotlin and CSS
+apps/
+  ios/            The Xcode app target — a few lines that mount ThroApp
 services/
   api/            Migrations, the command path, and the playtest harness
 docs/
@@ -89,6 +98,7 @@ docs/
                   token health, what the system does not specify
     extracted/    Token layer, 61 components, 33 participant + 9 organiser screens
   product/        Glossary, decisions taken, decisions open, rating research harness
+  runbooks/       Durability measurement and kill test; running the iOS client
 FOUNDATION_ACCEPTANCE.md   Gate 0 report
 ```
 
@@ -101,6 +111,10 @@ gradle -p packages/statistics test
 gradle -p packages/competition test
 gradle -p packages/trust test
 swift test --package-path packages/engine-swift   # needs a Swift toolchain
+swift test --package-path packages/statistics-swift
+swift test --package-path packages/client-ios      # macOS: design, journal and scoring-session tests
+xcodebuild -project apps/ios/ThroDarts.xcodeproj -scheme ThroDarts \
+  -destination 'generic/platform=iOS Simulator' CODE_SIGNING_ALLOWED=NO build
 gradle -p packages/authz test
 gradle -p packages/rating test
 python3 packages/design-tokens/build.py --check
@@ -206,6 +220,9 @@ is removed.
 | A statistic that cannot be computed says so | `Basis.EXACT` / `BOUNDED` / `UNAVAILABLE` |
 | Personal data lives in one place | `identity` schema; match, trust and rating cannot read it |
 | Age is available at every decision | A parameter of `Authorizer.check`, not a lookup inside it |
+| A visit is durable before it is shown | `MatchSession.submit`: engine decides, journal commits, then the state changes |
+| The journal runs only under the configuration that was measured | `Journal.verifyInForce` reads every pragma back on open and refuses anything else |
+| Scoring has no compile-time path to a network | The client package graph has no network target to depend on |
 
 ## What is deliberately not decided here
 

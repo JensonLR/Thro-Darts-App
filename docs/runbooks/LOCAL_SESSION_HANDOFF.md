@@ -1,5 +1,47 @@
 # Handoff to a local Claude Code session on macOS
 
+> **Superseded in part on 2026-09-05.** The founder has directed the build of the iOS client, and
+> it exists: `packages/client-ios` (design system, journal, Play slice, app shell) and an Xcode app at
+> `apps/ios/ThroDarts.xcodeproj`. The journal is verified on CI; the screens and the app project are
+> not, because GitHub Actions stopped starting jobs at that push (see CLIENT_IOS.md). None of it has run
+> on a phone. The
+> local session's job now is in **"Now: run the app"** below. The "What NOT to do" rule against
+> building the client is void; the rest of the rules stand.
+
+## Now: run the app
+
+```
+The iOS client has been built on the remote branch. Its journal is green on macOS CI; its screens, app
+shell and Xcode project are NOT verified, because GitHub Actions stopped starting jobs when they were
+pushed (private repository, zero-millisecond failures on every workflow — check Settings → Billing for
+the Actions minutes and spending limit). You are the compiler now: run
+  swift test --package-path packages/client-ios
+  xcodebuild -project apps/ios/ThroDarts.xcodeproj -scheme ThroDarts -destination 'generic/platform=iOS Simulator' CODE_SIGNING_ALLOWED=NO build
+first, fix what fails (the code was written blind against the verified packages' API), commit the
+fixes, and only then run it on the phone. Nobody has run it on a phone. Do that, then record what you saw.
+
+1. git pull. Read docs/runbooks/CLIENT_IOS.md end to end — it says what should appear on each screen.
+2. open apps/ios/ThroDarts.xcodeproj. Set the team under Signing & Capabilities; change the bundle
+   identifier from app.thro.darts if Xcode reports a collision. Plug the phone in, select it, Run.
+   Prefer `xcodebuild -allowProvisioningUpdates -destination 'id=<device udid>'` if the GUI fights you;
+   `xcrun devicectl list devices` shows whether the phone is visible.
+3. Play a full best-of-3 between two names. Deliberately: type 179 (must be refused), bust from a
+   finish (must ask darts at a double first, then restore the score), finish a leg (must ask darts
+   used, then darts at a double), press Not sure once (the result's checkout % must then be a range or
+   unavailable, never a point value), kill the app mid-match from the app switcher and reopen it (Home
+   must list the match as In progress and resume it at the same score).
+4. Screenshot Home, setup, scoring (standard, checkout, bust, a PD-001 question) and the result. Put
+   them in docs/runbooks/screenshots/ and reference them from CLIENT_IOS.md.
+5. Where the phone disagrees with CLIENT_IOS.md, the phone is right: fix the document, and fix the
+   code where the behaviour is wrong. Anything the design does not specify goes in the runbook's
+   table, not into an invented decision.
+6. Commit and push to claude/thro-production-build-je2mkf with the device model and iOS version in
+   the message.
+
+Do not embed the fonts: the licence (B3) is not confirmed. Do not add sync, attestation, a rating,
+or sign-in — none of those decisions have been taken. Do not rename the product.
+```
+
 > **Resolved on 2026-09-04.** The measurement this handoff exists to obtain has been taken:
 > `iPhone15,3` (iPhone 14 Pro Max), iOS 26.1, two consecutive runs, recorded in the "Measurement
 > status" section of `docs/adr/ADR-006-offline-sync.md`. The deciding row measured P95 1.64 / 1.60 ms
@@ -107,8 +149,8 @@ claude/thro-production-build-je2mkf.
 
 ## What NOT to do
 
-- Do NOT start building the iOS client application. ADR-006 forbids fixing the client architecture
-  until this measurement exists. Getting the measurement is the whole job.
+- ~~Do NOT start building the iOS client application.~~ Void since 2026-09-05: the measurement
+  exists, the founder directed the build, and the client is in `packages/client-ios`.
 - Do NOT start new feature work. The build is at a deliberate stopping point: everything specified
   in the ADRs that does not need a founder decision or a mobile toolchain is built and green.
 - Five decisions are blocked on the founder and must not be invented: B3 (design commissions), B4
