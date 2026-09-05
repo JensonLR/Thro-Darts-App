@@ -18,9 +18,11 @@ let package = Package(
     platforms: [.iOS(.v16), .macOS(.v13)],
     products: [
         .library(name: "ThroDesign", targets: ["ThroDesign"]),
+        .library(name: "ThroJournal", targets: ["ThroJournal"]),
     ],
     dependencies: [
         .package(path: "../design-tokens"),
+        .package(path: "../engine-swift"),
     ],
     targets: [
         // The approved design system as SwiftUI: typography, icons, and the components the Play and
@@ -31,5 +33,15 @@ let package = Package(
             path: "Sources/ThroDesign"
         ),
         .testTarget(name: "ThroDesignTests", dependencies: ["ThroDesign"], path: "Tests/ThroDesignTests"),
+
+        // ADR-006's on-device journal: SQLite under the measured durability configuration, verified
+        // in force on every open, append-only by trigger, replayed through the engine. Reaches the
+        // engine and the system SQLite and nothing else — no design, no network.
+        .target(
+            name: "ThroJournal",
+            dependencies: [.product(name: "ThroEngine", package: "engine-swift")],
+            path: "Sources/ThroJournal"
+        ),
+        .testTarget(name: "ThroJournalTests", dependencies: ["ThroJournal"], path: "Tests/ThroJournalTests"),
     ]
 )
