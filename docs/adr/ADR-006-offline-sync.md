@@ -94,6 +94,13 @@ The report the app prints now carries the same comparison as a `THRO-PROBE-GUARD
 shows it in red when it fails; the recorded run predates that. Without such a check a run where the
 pragmas were silently ignored would report excellent numbers and mean nothing.
 
+One run has since been taken under the guard: 2026-09-05, the same `iPhone15,3` on iOS 26.6.1
+(23G83). No cable was attached, so nothing captured the block, and the build on the phone predated
+the report file the app now writes; the founder read the screen. Every configuration reported
+"meets the budget" and no `GUARD FAILED` text appeared. That is recorded here as a qualitative,
+screen-read result and nothing more — no figure from it is entered, because sixteen numbers copied
+by eye are not the grade of evidence this table holds.
+
 **CI is roughly 3x slower than the real machine** (P95 2.01 ms against 0.55–0.73 ms), which is the
 useful direction: the CI job is a conservative proxy for a Mac rather than an optimistic one, so a
 regression that pushes the barrier cost up will show there first.

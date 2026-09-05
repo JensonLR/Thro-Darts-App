@@ -104,7 +104,20 @@ Two failures are worth knowing in advance, because both have opaque errors:
 1. The app opens with one button. Put the phone down — do not keep the screen busy. The probe is
    timing storage barriers, and scrolling during the run measures something else.
 2. Tap **Run the probe**. It takes maybe 30 seconds.
-3. Screenshot the four rows, or read them out.
+3. The console capture from `run-probe-on-device.sh` is the evidence. The app also appends the same
+   block, verbatim, to `Documents/thro-probe-report.txt` in its container, so a run taken with no
+   cable attached is not lost — pull it when there is one:
+
+   ```bash
+   xcrun devicectl device copy from --device <id> --domain-type appDataContainer \
+     --domain-identifier com.thro.ThroProbe --source Documents/thro-probe-report.txt \
+     --destination ./thro-probe-report.txt
+   ```
+
+   Numbers read off the screen are a lower grade of evidence than captured ones — sixteen figures
+   copied by hand — and go into ADR-006 labelled as screen-read until the pulled block replaces
+   them. The screen shows the same attribution line and checkpoint figure the block carries, and
+   red `GUARD FAILED` text if the pragmas did not take effect, in which case nothing on it counts.
 
 > **Do not use the Simulator for this.** Simulator storage is your Mac's SSD. The app will warn you
 > in orange if it detects one. A simulator number is not a weaker version of the answer — it is an

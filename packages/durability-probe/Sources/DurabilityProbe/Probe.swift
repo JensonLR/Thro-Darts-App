@@ -406,6 +406,44 @@ extension Probe {
     /// the same quality as a captured one. It reports, and nothing else — no thresholds are
     /// applied here that are not already in `ProbeResult.meetsBudget`.
     public static func printReport(_ results: [ProbeResult]) {
+        print(reportText(results))
+        fflush(stdout)
+    }
+
+    /// Where the app keeps every block it has printed, one after another, so a run taken with no
+    /// cable attached — nothing capturing stdout — is still recoverable verbatim later:
+    ///
+    ///     xcrun devicectl device copy from --device <id> --domain-type appDataContainer \
+    ///       --domain-identifier com.thro.ThroProbe --source Documents/thro-probe-report.txt \
+    ///       --destination ./thro-probe-report.txt
+    ///
+    /// Numbers read off the screen are evidence of a lower grade than captured ones; this is what
+    /// turns a screen-read run back into a captured one.
+    public static func reportFilePath() -> String {
+        let documents = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
+        return documents.appendingPathComponent("thro-probe-report.txt").path
+    }
+
+    /// Appends the block for `results`, stamped, to the report file. Returns the path written.
+    @discardableResult
+    public static func saveReport(_ results: [ProbeResult], to path: String = reportFilePath()) throws -> String {
+        let stamp = ISO8601DateFormatter().string(from: Date())
+        let text = "THRO-PROBE-RUN \(stamp)\n" + reportText(results) + "\n"
+        if let handle = FileHandle(forWritingAtPath: path) {
+            defer { handle.closeFile() }
+            handle.seekToEndOfFile()
+            handle.write(Data(text.utf8))
+        } else {
+            try text.write(toFile: path, atomically: true, encoding: .utf8)
+        }
+        return path
+    }
+
+    /// The captured block as text: attribution, table, incompleteness, guard.
+    public static func reportText(_ results: [ProbeResult]) -> String {
+        var out: [String] = []
+        func print(_ line: String) { out.append(line) }
+
         print("")
         print("THRO-PROBE-BEGIN")
         print("  " + environmentLine(visits: results.first?.samplesMs.count))
@@ -438,6 +476,7 @@ extension Probe {
         }
         print("THRO-PROBE-END")
         print("")
+        return out.joined(separator: "\n")
     }
 }
 

@@ -148,3 +148,22 @@ final class PrintedReportTests: XCTestCase {
         XCTAssertEqual(results.count, Durability.candidates.count)
     }
 }
+
+final class SavedReportTests: XCTestCase {
+    func testTheReportFileAccumulatesRunsVerbatim() throws {
+        let path = NSTemporaryDirectory() + "thro-report-\(UUID().uuidString).txt"
+        defer { try? FileManager.default.removeItem(atPath: path) }
+        let results = try Durability.candidates.map { try Probe.measure($0, visits: 5) }
+
+        try Probe.saveReport(results, to: path)
+        try Probe.saveReport(results, to: path)
+
+        let text = try String(contentsOfFile: path, encoding: .utf8)
+        XCTAssertEqual(text.components(separatedBy: "THRO-PROBE-RUN ").count - 1, 2, "one stamp per run")
+        XCTAssertEqual(text.components(separatedBy: "THRO-PROBE-BEGIN").count - 1, 2)
+        XCTAssertTrue(text.contains("THRO-PROBE-ENV model="))
+        XCTAssertTrue(text.contains("THRO-PROBE-GUARD"))
+        XCTAssertEqual(text, text, "the file holds exactly what printReport prints, plus stamps")
+        XCTAssertTrue(text.contains(Probe.reportText(results)), "the saved block is the printed block, verbatim")
+    }
+}

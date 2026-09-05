@@ -13,6 +13,7 @@ public struct ProbeView: View {
     @State private var running = false
     @State private var progress = ""
     @State private var failure: String?
+    @State private var savedTo: String?
 
     public init() {}
 
@@ -61,6 +62,9 @@ public struct ProbeView: View {
                             stat("P95", r.p95)
                             stat("P99", r.p99)
                             stat("worst", r.worst)
+                            if let checkpoint = r.checkpointMs {
+                                stat("ckpt", checkpoint)
+                            }
                         }
                         Text(r.meetsBudget ? "meets the budget" : "EXCEEDS the budget")
                             .font(.caption.bold())
@@ -81,6 +85,18 @@ public struct ProbeView: View {
                     )
                     .font(.footnote.bold())
                     .foregroundStyle(.red)
+                }
+
+                if !results.isEmpty {
+                    // The attribution ADR-006 insists on, on the screen the numbers are read from.
+                    Text(Probe.environmentLine(visits: results.first?.samplesMs.count))
+                        .font(.caption2.monospaced())
+                        .foregroundStyle(.secondary)
+                    if let savedTo {
+                        Text("Saved verbatim to \(URL(fileURLWithPath: savedTo).lastPathComponent) in the app's Documents — pull it with a cable rather than copying these by hand.")
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                    }
                 }
 
                 if !results.isEmpty {
@@ -131,9 +147,17 @@ public struct ProbeView: View {
             // happen. `devicectl device process launch --console` captures this, so the recorded
             // figures are the ones the device actually produced.
             Probe.printReport(collected)
+            // And to a file in the app's container, so a run taken with no cable attached can be
+            // pulled later verbatim instead of being read off the screen.
+            var saved: String?
+            do { saved = try Probe.saveReport(collected) } catch {
+                print("THRO-PROBE-ERROR could not save the report: \(error)")
+                fflush(stdout)
+            }
 
             DispatchQueue.main.async {
                 results = collected
+                savedTo = saved
                 running = false
                 progress = ""
             }
