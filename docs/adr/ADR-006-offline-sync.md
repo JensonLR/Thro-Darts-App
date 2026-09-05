@@ -58,7 +58,12 @@ consecutive runs, showing the spread:
 | `synchronous=FULL` + `fullfsync`, WAL | 0.42 / 0.43 | 0.73 / 0.55 | 0.97 / 0.63 | 1.07 / 0.68 |
 | `synchronous=FULL` + `fullfsync`, rollback journal | 1.35 / 1.36 | 1.56 / 1.72 | 2.31 / 2.33 | 4.61 / 2.68 |
 
-Reproducible to within a few hundredths across runs, so the probe is not measuring noise.
+The P50 column reproduces to a hundredth of a millisecond across the two runs. The tail does not:
+the deciding row's P95 moved by 0.18 ms between them and its worst by 0.39 ms, and the rollback
+row's worst by 1.93 ms. What reproduces is the median and the ordering between configurations —
+which is what the guard test checks and what the decision below rests on. The tail of a
+two-hundred-sample run on a laptop is noise, and this machine's P95 is quoted as a range further
+down for exactly that reason.
 
 **iPhone 14 Pro Max — `iPhone15,3`, iOS 26.1**, on-device, two consecutive runs, phone idle and
 face-down:
@@ -78,10 +83,16 @@ The hardware identifier is recorded raw rather than as a marketing name, because
 `iPhone15,3` are what `sysctl -n hw.model` and `devicectl` return, and are the thing a later reader
 can compare against unambiguously.
 
-The probe asserts that forcing the barrier is slower than not forcing it — CI measured 0.01 ms
-against 1.17 ms, the MacBook Air 0.01 ms against 0.38 and 0.45 ms, the iPhone 0.02 and 0.03 ms
-against 0.70 and 0.65 ms. Without that check a run where the pragmas were silently ignored would
-report excellent numbers and mean nothing.
+The package's tests assert that forcing the barrier is slower than not forcing it — in that
+guard's own 100-visit runs, CI measured 0.01 ms against 1.17 ms and the MacBook Air 0.01 ms against
+0.38 and 0.45 ms. **That assertion did not run on the phone.** It lives in XCTest, the app carries
+no test bundle, and `ProbeView` measured and displayed. The first version of this paragraph quoted
+iPhone guard figures of 0.02 and 0.03 ms against 0.70 and 0.65 ms; those are the P50 column of the
+table above, checked by eye for ordering, not the guard's output. The ordering does hold, by a
+factor of more than twenty, but a reader should know it was read off a table rather than asserted.
+The report the app prints now carries the same comparison as a `THRO-PROBE-GUARD` line and the view
+shows it in red when it fails; the recorded run predates that. Without such a check a run where the
+pragmas were silently ignored would report excellent numbers and mean nothing.
 
 **CI is roughly 3x slower than the real machine** (P95 2.01 ms against 0.55–0.73 ms), which is the
 useful direction: the CI job is a conservative proxy for a Mac rather than an optimistic one, so a
@@ -139,9 +150,13 @@ The process is `SIGKILL`ed mid-transaction while writing visits under `synchrono
 `fullfsync`, then the journal is reopened and compared against the acknowledgements the console
 recorded before the kill.
 
-| device | date | acknowledged | integrity | holes | verdict |
-|---|---|---|---|---|---|
-| `iPhone15,3`, iOS 26.1 (23B85) | 2026-09-04 | 1523 | ok | none | **PASS — nothing acknowledged was lost** |
+| device | date | acknowledged | max seq | rows | holes | integrity | verdict |
+|---|---|---|---|---|---|---|---|
+| `iPhone15,3`, iOS 26.1 (23B85) | 2026-09-04 | 1523 | 1524 | 1524 | none | ok | **PASS — nothing acknowledged was lost** |
+
+The journal finishing one ahead of the console record is expected, not a discrepancy: `SIGKILL`
+discards buffered stdout, so a write can land without its acknowledgement escaping. The comparison
+is one-directional for that reason — ahead is normal, behind is the failure with no repair path.
 
 `SIGKILL` rather than `exit()`, because `exit()` runs atexit handlers and flushes buffers — exactly
 what a crash does not do, so a kill test built on it tests the happy path and passes when it should
@@ -164,9 +179,18 @@ be pulled. It was run as a control under **`relaxed`** — WAL with `synchronous
 configuration whose own label reads *survives process death, **not** power loss* — with the writer
 still committing at the moment the device went down:
 
-| device | configuration | acknowledged | survived | integrity | lost |
-|---|---|---|---|---|---|
-| `iPhone15,3`, iOS 26.6.1 (23G83) | WAL, `synchronous=NORMAL` | 9446 | 9446 | ok | **0** |
+| device | configuration | acknowledged | max seq | rows | holes | integrity | lost |
+|---|---|---|---|---|---|---|---|
+| `iPhone15,3`, iOS 26.6.1 (23G83) | WAL, `synchronous=NORMAL` | 9446 | 9446 | 9446 | none | ok | **0** |
+
+Adjudicated under the same rule as the kill test — `KillProbe.verdict`, run on the Mac over the
+pulled journal with its `-wal` sidecar present — which requires the row count to equal the highest
+sequence and enumerates any gap, not merely that the tail reached the last acknowledgement. Worth
+saying because the script that produced this run carried its own shell copy of the rule at the time,
+and that copy checked the tail only; review found it, the copy was removed, and the pulled journal
+was re-adjudicated under the single rule with the result above. The row count and hole scan had also
+been run by hand on the day, so the recorded figures were never wrong — but the instrument that
+produced them could have been, which is the same thing over a long enough run.
 
 **The control failed to fail**, and that is the finding. If the weakest configuration survives a
 force-restart intact, the method cannot distinguish it from the strongest, so no force-restart

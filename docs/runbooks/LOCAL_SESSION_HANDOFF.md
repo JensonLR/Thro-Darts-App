@@ -48,7 +48,8 @@ ADR-006 will not let the client architecture be fixed until the durability laten
 write has been MEASURED on a physical iOS device. That measurement does not exist yet, and it is the
 only thing blocking Gate 5. It cannot be reasoned about, only measured, and not on a Mac.
 
-`packages/durability-probe` is that measurement. It compiles and its four tests pass — verified both
+`packages/durability-probe` is that measurement. It compiles and its tests pass (four at the time of
+this handoff; more since) — verified both
 on this Mac and on macOS CI. Part 2 of docs/runbooks/DURABILITY_MEASUREMENT.md (running it on the
 Mac) is DONE and its numbers are already recorded in ADR-006 as indicative only.
 

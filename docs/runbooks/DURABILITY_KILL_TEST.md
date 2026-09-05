@@ -26,41 +26,86 @@ process death never threatens that cache. Do not let a passing kill test be repo
 
 ```bash
 cd ~/Documents/Thro-Darts-App
-./scripts/run-kill-test-on-device.sh
+./scripts/run-kill-test-on-device.sh [configurationIndex] [killAfterMs]
 ```
 
-Connect and trust the iPhone first; `scripts/run-probe-on-device.sh` documents that setup. The
-app must call `KillProbe.runFromLaunchArgumentsIfRequested()` from its `@main` struct's `init` —
+Connect and trust the iPhone first; `scripts/run-probe-on-device.sh` documents that setup. The app
+must call `KillProbe.runFromLaunchArgumentsIfRequested()` from its `@main` struct's `init` —
 `docs/runbooks/DURABILITY_MEASUREMENT.md` gives that file in full. Without it the app ignores the
 launch arguments, comes up showing the ordinary probe screen, and this script waits for
-acknowledgements that never arrive. Optional
-arguments are the configuration index (0–3 into `Durability.candidates`, default 2 — the real Apple
-barrier) and how long to write before the kill in milliseconds (default 1500).
+acknowledgements that never arrive.
 
-**What it does.** Writes visits to a journal in the app's Documents directory, one durable
-transaction each, printing and flushing an acknowledgement after every commit. A background thread
-then sends `SIGKILL` to the process, which lands wherever the writer happens to be — usually inside
-a transaction, which is the case worth testing. The app is relaunched, reopens that same journal and
-reports what survived.
+Arguments: the configuration index (0–3 into `Durability.candidates`, default 2 — the real Apple
+barrier) and how long to write before the kill, in milliseconds (default 1500). `PROBE_PROJECT`
+points at the Xcode project if it is not at `~/Thro Darts App/ThroProbe`; `PROBE_BUNDLE_ID` changes
+the bundle identifier, applied at build time so the app that is built is the one that is launched.
+
+**What it does.** Builds the `adjudicate` executable from the probe package, builds and installs
+the app, then launches it with `--kill-test-write <index> <ms> --fresh --max-visits 5000000`. The
+app writes visits to a journal in its Documents directory, one durable transaction each, printing
+and flushing an acknowledgement after every commit; a background thread sends `SIGKILL` to the
+process after the delay, which lands wherever the writer happens to be — usually inside a
+transaction, which is the case worth testing. The script then pulls the journal off the device —
+main file, `-wal`, `-shm` and `-journal` — and adjudicates it on the Mac.
 
 `SIGKILL`, not `exit()`. `exit()` runs atexit handlers and flushes buffers, which is precisely what
 a crash does not do; a kill test built on it quietly tests the happy path.
 
-**Pass condition.** `integrity_check ok`, no holes in the sequence, and the highest sequence in the
-journal at least as high as the last acknowledgement seen on the console.
+**The app's launch flags**, for anyone driving it by hand:
 
-That last comparison is one-directional on purpose. `SIGKILL` discards buffered stdout, so a write
+| flag | default | meaning |
+|---|---|---|
+| `--kill-test-write <index> <ms>` | required | configuration and kill delay; both must be present and readable |
+| `--fresh` | off | delete any existing journal first |
+| `--max-visits N` | 20000 | journal size cap. Reaching it makes the writer idle, and an idle writer voids the run (below) — the scripts set it far beyond what their windows can reach |
+| `--throttle-us N` | 0 | microseconds between visits. The power-cut script sets 8000; zero is refused there, because an unthrottled writer hits any cap in seconds |
+| `--kill-test-inspect [seq]` | — | adjudicate the app's own journal on the device. The scripts do not use this: they pull and adjudicate on the Mac |
+
+An unreadable value is an error, not a default: the app prints `KILLTEST-ARGS-ERROR` and exits 1.
+It also echoes `KILLTEST-CONFIG …` with what it is actually running, so a log whose numbers look
+wrong can be checked against the configuration that produced them.
+
+**Pass condition** — one rule, `KillProbe.verdict`, applied by the `adjudicate` executable to the
+pulled journal:
+
+1. the writer was still committing when the kill landed — a `KILLTEST-CAP-REACHED` or
+   `KILLTEST-WRITE-ERROR` marker in the log voids the run, because a writer that had stopped left
+   the kernel time to flush and the kill then put nothing at risk;
+2. `integrity_check ok`;
+3. no holes in the sequence, and the row count equals the highest sequence;
+4. the highest sequence in the journal is at least the last acknowledgement seen on the console.
+
+Three outcomes, with distinct exit codes: **PASS** (0), **FAIL** (2) — an acknowledged visit is
+missing, a gap, or a corrupt journal — and **VOID** (3), which means the run measured nothing: the
+writer was idle, or the journal is absent or empty. Void is not a pass. A journal that is not there
+opens as an empty database, and an empty database passes `integrity_check` with zero rows and zero
+holes, so without the third outcome "nothing was measured" came out as "nothing was lost".
+
+The fourth comparison is one-directional on purpose. `SIGKILL` discards buffered stdout, so a write
 can land without its acknowledgement ever reaching the console — the journal legitimately running
 *ahead* of the console record is normal and expected. Running *behind* it means a write that was
 reported durable is gone, which is the failure ADR-006 has no repair path for.
 
-> A note for whoever maintains this. The first version of this script reported FAIL on a run whose
-> journal was perfectly intact: `devicectl --console` relays device output with CRLF endings, the
-> sequence number was scraped out as `1840\r`, Swift's `Int()` returned nil for it, and the missing
-> acknowledgement was silently treated as "none supplied". A false failure on a durability test is
-> the worst available outcome — it either causes a panic about data loss that did not happen, or
-> trains people to disbelieve the test. The parser now rejects an unreadable argument loudly instead
-> of degrading to nil, and the script strips CR at the boundary. Keep both.
+> Notes for whoever maintains this, because each of these was a real bug and each produced a
+> confident wrong answer.
+>
+> *CRLF.* `devicectl --console` relays device output with CRLF endings. The sequence number was
+> scraped out as `1840\r`, Swift's `Int()` returned nil for it, and the missing acknowledgement
+> was silently treated as "none supplied" — a FAIL over an intact journal. The parser now trims
+> before parsing and rejects what it cannot read; the scripts strip the CR at the boundary.
+>
+> *The sidecar.* In WAL mode recent commits live in the `-wal` file and nowhere else. A pull of the
+> main database alone reported 269,811 rows for a journal that held 270,779 — "967 acknowledged
+> visits lost", none of which had been. The scripts pull all four files and refuse to adjudicate a
+> WAL-mode journal without its sidecar; `adjudicate` warns when one is absent, checked *before*
+> the file is opened, because SQLite creates an empty sidecar on open and a check made afterwards
+> always finds one.
+>
+> *Two copies of the rule.* The pass rule was implemented in `printReport` and again in the exit
+> path, and they disagreed about holes — a journal with a gap printed PASS while exiting 2. Then the
+> power-cut script grew a third copy in shell, `LOST=$(( LAST_ACK - MAXSEQ ))`, which checked the
+> tail and nothing else. There is now one function, and every script reaches it through
+> `adjudicate`. A false failure gets investigated; a false pass gets believed.
 
 ### Result on file
 
@@ -110,10 +155,31 @@ Hardware whose power can be genuinely interrupted mid-write:
    Not either reference device, so a weaker attribution — but it answers the pragma question, which
    is the part that generalises.
 
-Procedure once such hardware exists: write continuously with the throttled writer so unflushed
-commits always exist, cut power mid-write, restore power, then compare the journal against the last
-acknowledgement that reached the host. `KillProbe` already does all of this; only the interruption
-method changes.
+Procedure once such hardware exists — the same three steps `scripts/run-power-cut-test.sh`
+automates for an iPhone, done by hand where `devicectl` does not apply:
+
+1. **Write continuously, throttled, and keep the console.** Launch the app with
+   `--kill-test-write <index> 3600000 --fresh --throttle-us 8000 --max-visits 100000` and capture
+   its stdout on the host. The acknowledgements are the only ground truth that survives the cut;
+   the throttle is what guarantees unflushed commits exist at every instant; the cap must not be
+   reached before the cut (a `KILLTEST-CAP-REACHED` or `KILLTEST-WRITE-ERROR` line voids the run).
+2. **Cut power mid-write.** Then restore it, and confirm the device came back on the same OS build
+   it started on — an update in between voids the run.
+3. **Pull the journal and adjudicate it on the host.** All four files: `thro-kill-test.sqlite`,
+   `-wal`, `-shm`, `-journal`. Then
+
+   ```bash
+   swift run --package-path packages/durability-probe adjudicate <pulled/journal.sqlite> <last KILLTEST-ACK on the console>
+   ```
+
+   which applies `KillProbe.verdict` — integrity, row count against highest sequence, holes, and
+   the tail against the console — and exits 0 for PASS, 2 for FAIL, 3 for VOID. Do not query the
+   pulled file with anything else first: the first thing to open a WAL-mode database checkpoints
+   its sidecar into the main file, and a hand query before the adjudicator is how a run gets
+   adjudicated twice against different files.
+
+Run configuration 0 first. If the weakest setting survives the cut, the interruption is not
+reaching the layer under test and a pass under configuration 2 is not evidence.
 
 **If it fails**, that is the most valuable result this project can produce: it means `fullfsync` is
 not reaching NAND on that hardware, and ADR-006 is explicit that the durability rule wins and the

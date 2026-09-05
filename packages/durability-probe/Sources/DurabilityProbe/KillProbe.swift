@@ -30,49 +30,52 @@ public enum KillProbe {
     }
 
     public static func removeJournal() {
+        removeJournal(at: journalPath())
+    }
+
+    public static func removeJournal(at path: String) {
         for suffix in ["", "-wal", "-shm", "-journal"] {
-            try? FileManager.default.removeItem(atPath: journalPath() + suffix)
+            try? FileManager.default.removeItem(atPath: path + suffix)
         }
     }
 
     // MARK: - Phase one: write until killed
 
-    /// Writes visits under `configuration` and terminates the process partway through.
+    /// Writes up to `maxVisits` visits to the journal at `path`, one durable transaction each,
+    /// printing and flushing an acknowledgement after every commit. Returns the last sequence
+    /// written once the cap is reached. Throws if a write fails.
+    ///
+    /// The loop is factored out of `writeUntilKilled` so its two terminal states can be tested in a
+    /// process that is not about to be killed: reaching the cap, and a write failing. A write
+    /// failure used to `return` from the loop, fall through to a clean `sqlite3_close` — which
+    /// checkpoints the WAL and flushes everything the configuration under test had left in the
+    /// kernel — and let `writeUntilKilled` return normally, so nothing upstream noticed and the
+    /// scheduled kill later landed on a journal that had been fully quiesced for most of a
+    /// minute. A run like that adjudicates as a clean pass and tests nothing. Now it throws.
     ///
     /// Every acknowledged sequence number is printed and the stream flushed immediately, because
     /// SIGKILL discards whatever is still sitting in the stdout buffer. An acknowledgement we fail
     /// to record makes the test under-claim rather than over-claim — the safe direction — but it
     /// also makes it blunt, and the flush costs nothing next to a storage barrier.
-    ///
-    /// SIGKILL rather than `exit()` on purpose. `exit()` runs atexit handlers and flushes buffers,
-    /// which is precisely what a crash does not do; it would quietly test the happy path. SIGKILL
-    /// cannot be caught or ignored, so the process stops between two instructions with no
-    /// opportunity to tidy up — which is the event being simulated.
-    ///
-    /// The kill fires from a background thread after `killAfterMs`, so it lands wherever the writer
-    /// happens to be, usually inside a transaction. That is the case worth testing: a torn write,
-    /// not a clean stop between two of them.
-    /// `maxVisits` caps the journal size. Under `relaxed` the writer manages well over a hundred
-    /// thousand commits a minute, and an unbounded run produced a 270,000-row, 18 MB journal whose
-    /// `integrity_check` took long enough on device to trip the iOS launch watchdog — the inspect
-    /// phase never reported. The cap keeps the journal small enough to adjudicate quickly while
-    /// still leaving writes in flight when the device goes down, which is the only property the
-    /// test actually needs.
-    public static func writeUntilKilled(
+    @discardableResult
+    public static func writeVisits(
+        at path: String,
         _ configuration: Durability,
-        killAfterMs: Int,
-        fresh: Bool,
-        maxVisits: Int = 20_000,
-        throttleMicroseconds: UInt32 = 0
-    ) throws {
-        if fresh { removeJournal() }
+        maxVisits: Int,
+        throttleMicroseconds: UInt32
+    ) throws -> Int {
+        precondition(maxVisits > 0, "a write phase of zero visits acknowledges nothing")
 
-        let path = journalPath()
         var db: OpaquePointer?
         guard sqlite3_open(path, &db) == SQLITE_OK, let handle = db else {
             if let leaked = db { sqlite3_close(leaked) }
             throw ProbeError.sqlite("could not open \(path)")
         }
+        // Closed on every exit. On the failure path this checkpoints whatever was in the WAL,
+        // which is exactly the flush the test is trying to avoid — but a run whose writer failed is
+        // void regardless (the scripts refuse to adjudicate one), so leaving the handle open would
+        // buy nothing and would leak a connection in every test that exercises this path.
+        defer { sqlite3_close(handle) }
 
         try Probe.exec(handle, "PRAGMA fullfsync = \(configuration.fullFsync ? 1 : 0);")
         try Probe.exec(handle, "PRAGMA checkpoint_fullfsync = \(configuration.checkpointFullFsync ? 1 : 0);")
@@ -95,18 +98,12 @@ public enum KillProbe {
         // journal extends it rather than colliding on the primary key.
         var startSeq = 0
         var countStmt: OpaquePointer?
-        if sqlite3_prepare_v2(handle, "SELECT IFNULL(MAX(device_seq), 0) FROM journal;", -1, &countStmt, nil) == SQLITE_OK,
-           let cs = countStmt {
-            if sqlite3_step(cs) == SQLITE_ROW { startSeq = Int(sqlite3_column_int64(cs, 0)) }
-            sqlite3_finalize(cs)
+        guard sqlite3_prepare_v2(handle, "SELECT IFNULL(MAX(device_seq), 0) FROM journal;", -1, &countStmt, nil) == SQLITE_OK,
+              let cs = countStmt else {
+            throw ProbeError.sqlite("could not read the journal's highest sequence: \(String(cString: sqlite3_errmsg(handle)))")
         }
-
-        let deadline = DispatchTime.now() + .milliseconds(killAfterMs)
-        DispatchQueue.global(qos: .userInitiated).asyncAfter(deadline: deadline) {
-            print("KILLTEST-KILLING-NOW")
-            fflush(stdout)
-            kill(getpid(), SIGKILL)
-        }
+        if sqlite3_step(cs) == SQLITE_ROW { startSeq = Int(sqlite3_column_int64(cs, 0)) }
+        sqlite3_finalize(cs)
 
         var statement: OpaquePointer?
         let insert = """
@@ -116,14 +113,15 @@ public enum KillProbe {
         guard sqlite3_prepare_v2(handle, insert, -1, &statement, nil) == SQLITE_OK, let stmt = statement else {
             throw ProbeError.sqlite("prepare failed: \(String(cString: sqlite3_errmsg(handle)))")
         }
+        defer { sqlite3_finalize(stmt) }
 
         let matchId = UUID().uuidString
         let occurredAt = ISO8601DateFormatter().string(from: Date())
 
         // Same SQLITE_STATIC discipline as Probe: bind against buffers whose lifetime we control,
         // never a bridged Swift String, and never a bit-cast SQLITE_TRANSIENT.
-        matchId.withCString { matchC in
-            occurredAt.withCString { occurredC in
+        return try matchId.withCString { matchC -> Int in
+            try occurredAt.withCString { occurredC -> Int in
                 var seq = startSeq
                 while seq - startSeq < maxVisits {
                     seq += 1
@@ -135,9 +133,10 @@ public enum KillProbe {
                     sqlite3_bind_text(stmt, 4, occurredC, -1, nil)
 
                     if sqlite3_step(stmt) != SQLITE_DONE {
-                        print("KILLTEST-WRITE-ERROR \(String(cString: sqlite3_errmsg(handle)))")
+                        let message = String(cString: sqlite3_errmsg(handle))
+                        print("KILLTEST-WRITE-ERROR seq \(seq): \(message)")
                         fflush(stdout)
-                        return
+                        throw ProbeError.sqlite("write failed at seq \(seq): \(message)")
                     }
                     // Acknowledged only now: sqlite3_step has returned, so the durable write this
                     // configuration promises has completed. ADR-006's rule is that acknowledgement
@@ -146,17 +145,58 @@ public enum KillProbe {
                     fflush(stdout)
                     if throttleMicroseconds > 0 { usleep(throttleMicroseconds) }
                 }
-                // The cap is reached but the process must stay alive: the event under test is the
-                // device going down, and an app that has already exited cannot demonstrate anything
-                // about it.
-                print("KILLTEST-CAP-REACHED \(seq)")
-                fflush(stdout)
-                while true { Thread.sleep(forTimeInterval: 1) }
+                return seq
             }
         }
+    }
 
-        sqlite3_finalize(stmt)
-        sqlite3_close(handle)
+    /// Writes visits under `configuration` and terminates the process partway through.
+    ///
+    /// SIGKILL rather than `exit()` on purpose. `exit()` runs atexit handlers and flushes buffers,
+    /// which is precisely what a crash does not do; it would quietly test the happy path. SIGKILL
+    /// cannot be caught or ignored, so the process stops between two instructions with no
+    /// opportunity to tidy up — which is the event being simulated.
+    ///
+    /// The kill fires from a background thread after `killAfterMs`, so it lands wherever the writer
+    /// happens to be, usually inside a transaction. That is the case worth testing: a torn write,
+    /// not a clean stop between two of them.
+    ///
+    /// `maxVisits` caps the journal size. Under `relaxed` the writer manages well over a hundred
+    /// thousand commits a minute, and an unbounded run produced a 270,000-row, 18 MB journal whose
+    /// `integrity_check` took long enough on device to trip the iOS launch watchdog. But the cap
+    /// is a size limit, not a stopping point the test tolerates: once it is reached the writer is
+    /// idle, the kernel flushes everything within tens of seconds, and a kill or restart landing
+    /// after that has nothing at risk. `KILLTEST-CAP-REACHED` is printed for exactly that reason,
+    /// and the scripts treat a run that printed it as void.
+    ///
+    /// Never returns. The cap path parks the process so the terminating event still lands on a
+    /// live app; the failure path throws so the caller can report it and stop.
+    public static func writeUntilKilled(
+        _ configuration: Durability,
+        killAfterMs: Int,
+        fresh: Bool,
+        maxVisits: Int = 20_000,
+        throttleMicroseconds: UInt32 = 0
+    ) throws -> Never {
+        if fresh { removeJournal() }
+
+        let deadline = DispatchTime.now() + .milliseconds(killAfterMs)
+        DispatchQueue.global(qos: .userInitiated).asyncAfter(deadline: deadline) {
+            print("KILLTEST-KILLING-NOW")
+            fflush(stdout)
+            kill(getpid(), SIGKILL)
+        }
+
+        let reached = try writeVisits(
+            at: journalPath(), configuration,
+            maxVisits: maxVisits, throttleMicroseconds: throttleMicroseconds
+        )
+
+        // The cap is reached but the process must stay alive: the event under test is the device
+        // going down, and an app that has already exited cannot demonstrate anything about it.
+        print("KILLTEST-CAP-REACHED \(reached)")
+        fflush(stdout)
+        while true { Thread.sleep(forTimeInterval: 1) }
     }
 
     // MARK: - Phase two: what survived
@@ -169,14 +209,43 @@ public enum KillProbe {
         /// Sequence numbers missing from 1...maxSeq. A hole means a write that was reported
         /// durable is not there, which is the failure this test exists to catch.
         public let holes: [Int]
+        /// False when the file opened but holds no `journal` table. `sqlite3_open` creates an
+        /// empty database where none existed, and an empty database passes `integrity_check`, so
+        /// without this flag "the journal is not there" is indistinguishable from "the journal
+        /// survived with nothing in it" — and both used to adjudicate as a pass.
+        public var tableFound: Bool = true
+        /// `PRAGMA journal_mode` as the file reports it. Printed so a reader can tell whether a
+        /// missing `-wal` sidecar matters for this journal.
+        public var journalMode: String = "unknown"
 
         public var contiguous: Bool { holes.isEmpty && rowCount == maxSeq }
-        public var healthy: Bool { opened && integrity == "ok" && contiguous }
+        public var healthy: Bool { opened && integrity == "ok" && tableFound && rowCount > 0 && contiguous }
     }
 
-    /// Reopens the journal after the kill and reports what is actually in it.
+    /// Whether a non-empty `-wal` sidecar sits alongside the journal at `path`.
+    ///
+    /// Ask this BEFORE opening the database. SQLite creates an empty sidecar the moment a
+    /// connection reads a WAL-mode file, so an existence check made afterwards always says yes.
+    /// Non-empty is the test that matters: a zero-length sidecar holds no commits.
+    public static func hasWalSidecar(at path: String) -> Bool {
+        let attributes = try? FileManager.default.attributesOfItem(atPath: path + "-wal")
+        let size = (attributes?[.size] as? NSNumber)?.intValue ?? 0
+        return size > 0
+    }
+
+    /// Reopens the app's own journal after the kill and reports what is actually in it.
     public static func inspect() throws -> Report {
-        let path = journalPath()
+        try inspect(at: journalPath())
+    }
+
+    /// Inspects a journal at an arbitrary path — a copy pulled off a device, for instance.
+    ///
+    /// The caller is responsible for the `-wal` sidecar being alongside the file. In WAL mode the
+    /// most recent commits live there and nowhere else; inspecting the main database on its own
+    /// once reported 269,811 rows for a journal that held 270,779, and turned that into a
+    /// confident, entirely false "967 acknowledged visits lost". `journalMode` is reported so a
+    /// caller can notice when that sidecar was needed.
+    public static func inspect(at path: String) throws -> Report {
         var db: OpaquePointer?
         guard sqlite3_open(path, &db) == SQLITE_OK, let handle = db else {
             if let leaked = db { sqlite3_close(leaked) }
@@ -184,24 +253,27 @@ public enum KillProbe {
         }
         defer { sqlite3_close(handle) }
 
+        func scalarText(_ sql: String) -> String? {
+            var stmt: OpaquePointer?
+            guard sqlite3_prepare_v2(handle, sql, -1, &stmt, nil) == SQLITE_OK, let s = stmt else { return nil }
+            defer { sqlite3_finalize(s) }
+            guard sqlite3_step(s) == SQLITE_ROW, let text = sqlite3_column_text(s, 0) else { return nil }
+            return String(cString: text)
+        }
+
         // integrity_check is what distinguishes "we lost the tail" from "the file is damaged".
         // A torn write that corrupts the b-tree is a different and worse failure than one that
         // simply did not land, and the report should not blur them.
-        var integrity = "unknown"
-        var integrityStmt: OpaquePointer?
-        if sqlite3_prepare_v2(handle, "PRAGMA integrity_check;", -1, &integrityStmt, nil) == SQLITE_OK,
-           let istmt = integrityStmt {
-            if sqlite3_step(istmt) == SQLITE_ROW, let text = sqlite3_column_text(istmt, 0) {
-                integrity = String(cString: text)
-            }
-            sqlite3_finalize(istmt)
-        }
+        let integrity = scalarText("PRAGMA integrity_check;") ?? "unknown"
+        let journalMode = scalarText("PRAGMA journal_mode;") ?? "unknown"
 
         var maxSeq = 0
         var rowCount = 0
+        var tableFound = false
         var aggStmt: OpaquePointer?
         if sqlite3_prepare_v2(handle, "SELECT IFNULL(MAX(device_seq), 0), COUNT(*) FROM journal;", -1, &aggStmt, nil) == SQLITE_OK,
            let astmt = aggStmt {
+            tableFound = true
             if sqlite3_step(astmt) == SQLITE_ROW {
                 maxSeq = Int(sqlite3_column_int64(astmt, 0))
                 rowCount = Int(sqlite3_column_int64(astmt, 1))
@@ -223,7 +295,10 @@ public enum KillProbe {
             holes = (1...max(maxSeq, 1)).filter { !present.contains($0) }
         }
 
-        return Report(opened: true, integrity: integrity, maxSeq: maxSeq, rowCount: rowCount, holes: holes)
+        var report = Report(opened: true, integrity: integrity, maxSeq: maxSeq, rowCount: rowCount, holes: holes)
+        report.tableFound = tableFound
+        report.journalMode = journalMode
+        return report
     }
 
     /// The pass rule, in one place.
@@ -242,9 +317,18 @@ public enum KillProbe {
     ///
     /// That is a false PASS on a durability test, and worse than the false FAIL this file already
     /// fixed once: a false failure gets investigated, a false pass gets believed.
+    ///
+    /// The shell scripts then grew a *third* copy of the rule — `LOST=$(( LAST_ACK - MAXSEQ ))` —
+    /// with the same omission. They now run this function through the `adjudicate` executable
+    /// instead, so there is nowhere left for the rule to drift.
     public enum Verdict: Equatable {
         case pass(String)
         case fail(String)
+        /// Nothing to adjudicate: the journal is absent or empty, so the run measured nothing.
+        /// Distinct from both outcomes on purpose — "no visits were lost" is not a true statement
+        /// about a run in which no visits were written, and reporting it as one is the false pass
+        /// this file keeps having to remove.
+        case void(String)
 
         public var isPass: Bool {
             if case .pass = self { return true }
@@ -255,6 +339,17 @@ public enum KillProbe {
             switch self {
             case .pass(let why): return "PASS — \(why)"
             case .fail(let why): return "FAIL — \(why)"
+            case .void(let why): return "VOID — \(why)"
+            }
+        }
+
+        /// 0 pass, 2 fail, 3 void. Distinct so a script can tell "lost data" from "measured
+        /// nothing" without parsing prose.
+        public var exitCode: Int32 {
+            switch self {
+            case .pass: return 0
+            case .fail: return 2
+            case .void: return 3
             }
         }
     }
@@ -277,8 +372,17 @@ public enum KillProbe {
             return .fail("\(report.holes.count) acknowledged visit(s) missing from the sequence: \(named)\(more)")
         }
         if let lastAck, lastAck > report.maxSeq {
+            if !report.tableFound {
+                return .fail("the journal table is gone entirely: console recorded \(lastAck) acknowledgement(s)")
+            }
             return .fail("\(lastAck - report.maxSeq) acknowledged visit(s) missing: "
                          + "console recorded \(lastAck), journal holds \(report.maxSeq)")
+        }
+        guard report.tableFound else {
+            return .void("no journal table at this path — the journal is absent or was never written, so this run measured nothing")
+        }
+        guard report.rowCount > 0 else {
+            return .void("the journal is empty — nothing was acknowledged, so there is nothing to adjudicate")
         }
         return lastAck == nil
             ? .pass("journal intact and contiguous (no acknowledgement record supplied)")
@@ -290,6 +394,8 @@ public enum KillProbe {
         print("")
         print("KILLTEST-REPORT-BEGIN")
         print("  opened            \(report.opened)")
+        print("  journal table     \(report.tableFound ? "found" : "MISSING")")
+        print("  journal_mode      \(report.journalMode)")
         print("  integrity_check   \(report.integrity)")
         print("  max device_seq    \(report.maxSeq)")
         print("  rows              \(report.rowCount)")
@@ -304,7 +410,106 @@ public enum KillProbe {
     }
 }
 
+// MARK: - Launch arguments
+
 extension KillProbe {
+
+    /// What a launch asked for. Parsed separately from acting on it so the parser can be tested
+    /// against the exact inputs that have gone wrong before.
+    public enum LaunchCommand: Equatable {
+        /// No kill-test flag present: bring up the ordinary probe UI.
+        case none
+        case write(configurationIndex: Int, killAfterMs: Int, fresh: Bool, maxVisits: Int, throttleMicroseconds: UInt32)
+        case inspect(lastAck: Int?)
+        /// Something was supplied and could not be understood. Never a default.
+        case invalid(String)
+    }
+
+    ///     --kill-test-write <configurationIndex> <killAfterMs> [--fresh] [--max-visits N] [--throttle-us N]
+    ///     --kill-test-inspect [lastAcknowledgedSeq]
+    ///
+    /// Strict on purpose. The first version of the inspect path took `Int("1840\r")` — which is
+    /// what a sequence number scraped out of `devicectl --console` looks like, CR and all — as
+    /// nil, and treated the missing value as "no acknowledgement record supplied". That printed a
+    /// FAIL for a journal that was perfectly intact. The write path kept the same shape for longer:
+    /// an unreadable `--throttle-us` silently became 0, which is the value that makes a restart
+    /// test meaningless, and nothing in the log said so.
+    ///
+    /// So: every numeric value is trimmed before parsing, and an argument that was supplied and
+    /// cannot be understood is an error, not an absence. Absent optional flags take documented
+    /// defaults; absent required values do not.
+    public static func parseLaunchArguments(_ args: [String]) -> LaunchCommand {
+        let writeIndex = args.firstIndex(of: "--kill-test-write")
+        let inspectIndex = args.firstIndex(of: "--kill-test-inspect")
+
+        switch (writeIndex, inspectIndex) {
+        case (nil, nil):
+            return .none
+        case (.some, .some):
+            return .invalid("--kill-test-write and --kill-test-inspect are mutually exclusive")
+        case (.some(let i), nil):
+            return parseWrite(args, at: i)
+        case (nil, .some(let i)):
+            return parseInspect(args, at: i)
+        }
+    }
+
+    private static func value(_ args: [String], after index: Int) -> String? {
+        guard args.count > index + 1 else { return nil }
+        let raw = args[index + 1].trimmingCharacters(in: .whitespacesAndNewlines)
+        return raw.hasPrefix("--") ? nil : raw
+    }
+
+    private static func parseWrite(_ args: [String], at i: Int) -> LaunchCommand {
+        guard let indexText = value(args, after: i) else {
+            return .invalid("--kill-test-write needs a configuration index")
+        }
+        guard let index = Int(indexText) else {
+            return .invalid("unparseable configuration index '\(args[i + 1])'")
+        }
+        guard Durability.candidates.indices.contains(index) else {
+            return .invalid("configuration index \(index) is out of range 0...\(Durability.candidates.count - 1)")
+        }
+        guard let killText = value(args, after: i + 1) else {
+            return .invalid("--kill-test-write needs a kill delay in milliseconds after the index")
+        }
+        guard let killAfterMs = Int(killText), killAfterMs > 0 else {
+            return .invalid("unparseable kill delay '\(args[i + 2])'")
+        }
+
+        var maxVisits = 20_000
+        if let j = args.firstIndex(of: "--max-visits") {
+            guard let text = value(args, after: j) else { return .invalid("--max-visits needs a value") }
+            guard let n = Int(text), n > 0 else { return .invalid("unparseable --max-visits '\(args[j + 1])'") }
+            maxVisits = n
+        }
+
+        var throttle: UInt32 = 0
+        if let j = args.firstIndex(of: "--throttle-us") {
+            guard let text = value(args, after: j) else { return .invalid("--throttle-us needs a value") }
+            guard let n = UInt32(text) else { return .invalid("unparseable --throttle-us '\(args[j + 1])'") }
+            throttle = n
+        }
+
+        return .write(
+            configurationIndex: index,
+            killAfterMs: killAfterMs,
+            fresh: args.contains("--fresh"),
+            maxVisits: maxVisits,
+            throttleMicroseconds: throttle
+        )
+    }
+
+    private static func parseInspect(_ args: [String], at i: Int) -> LaunchCommand {
+        guard args.count > i + 1, !args[i + 1].hasPrefix("--") else {
+            return .inspect(lastAck: nil)
+        }
+        let raw = args[i + 1].trimmingCharacters(in: .whitespacesAndNewlines)
+        guard let parsed = Int(raw), parsed >= 0 else {
+            return .invalid("unparseable acknowledgement '\(args[i + 1])'")
+        }
+        return .inspect(lastAck: parsed)
+    }
 
     /// Runs a kill-test phase if the process was launched for one, otherwise returns and lets the
     /// normal UI come up.
@@ -313,18 +518,23 @@ extension KillProbe {
     /// requires this on every release candidate, and a test that needs someone to tap a phone in a
     /// particular order at a particular moment is a test that gets skipped under deadline — which
     /// is exactly the release where it would have mattered.
-    ///
-    ///     --kill-test-write <configurationIndex> <killAfterMs> [--fresh]
-    ///     --kill-test-inspect [lastAcknowledgedSeq]
     public static func runFromLaunchArgumentsIfRequested() {
-        let args = CommandLine.arguments
+        switch parseLaunchArguments(CommandLine.arguments) {
+        case .none:
+            return
 
-        if let i = args.firstIndex(of: "--kill-test-write") {
-            let index = args.count > i + 1 ? Int(args[i + 1]) ?? 2 : 2
-            let killAfterMs = args.count > i + 2 ? Int(args[i + 2]) ?? 1500 : 1500
-            let maxVisits = args.firstIndex(of: "--max-visits").flatMap { j in
-                args.count > j + 1 ? Int(args[j + 1]) : nil
-            } ?? 20_000
+        case .invalid(let message):
+            print("KILLTEST-ARGS-ERROR \(message)")
+            fflush(stdout)
+            exit(1)
+
+        case .write(let index, let killAfterMs, let fresh, let maxVisits, let throttleUs):
+            let configuration = Durability.candidates[index]
+            // Echo what will actually run, so a log whose numbers look wrong can be checked against
+            // the configuration that produced them instead of the one someone meant to pass.
+            print("KILLTEST-CONFIG index=\(index) killAfterMs=\(killAfterMs) fresh=\(fresh) "
+                  + "maxVisits=\(maxVisits) throttleUs=\(throttleUs)")
+            fflush(stdout)
             // Throttling is what makes a restart test mean anything. `synchronous=NORMAL` does not
             // fsync, but the kernel flushes dirty pages on its own schedule anyway — within tens of
             // seconds. So a journal that stopped growing minutes ago is fully on disk by the time
@@ -332,27 +542,19 @@ extension KillProbe {
             // nothing: there was no unflushed data left to lose.
             //
             // Writing continuously at a modest rate keeps fresh, unflushed commits present at every
-            // instant, so whenever the device goes down there is something at risk. The cap alone
-            // was the bug: it stopped the writer and let the kernel catch up.
-            let throttleUs = args.firstIndex(of: "--throttle-us").flatMap { j in
-                args.count > j + 1 ? UInt32(args[j + 1]) : nil
-            } ?? 0
-            let configuration = Durability.candidates[
-                min(max(index, 0), Durability.candidates.count - 1)
-            ]
-            // On a background queue, and returning so the UI comes up.
+            // instant, so whenever the device goes down there is something at risk.
             //
-            // Running this loop inline was killing the test. iOS gives an app about twenty seconds
-            // to finish launching, and a write loop in App.init() never lets SwiftUI present a
-            // scene — so the watchdog sent SIGKILL at roughly eighteen seconds every time, which
-            // read like the device restarting and was nothing of the sort. The writer has to be a
-            // background thread of a properly launched app, not a hijacked launch.
+            // On a background queue, and returning so the UI comes up. Running this loop inline
+            // was killing the test: iOS gives an app about twenty seconds to finish launching, and
+            // a write loop in App.init() never lets SwiftUI present a scene — so the watchdog sent
+            // SIGKILL at roughly eighteen seconds every time, which read like the device restarting
+            // and was nothing of the sort.
             DispatchQueue.global(qos: .userInitiated).async {
                 do {
                     try writeUntilKilled(
                         configuration,
                         killAfterMs: killAfterMs,
-                        fresh: args.contains("--fresh"),
+                        fresh: fresh,
                         maxVisits: maxVisits,
                         throttleMicroseconds: throttleUs
                     )
@@ -364,34 +566,14 @@ extension KillProbe {
             }
             keepScreenAwake()
             return
-        }
 
-        if args.firstIndex(of: "--kill-test-inspect") != nil {
-            // Trim before parsing. `devicectl --console` relays the device's stdout with CRLF line
-            // endings, so a sequence number scraped out of that log arrives here as "1840\r" and
-            // Int() returns nil for it.
-            //
-            // Silently treating that as "no acknowledgement record supplied" is how this reported a
-            // FAIL on a run whose journal was in fact intact — a false failure on a durability test,
-            // which is the one direction of error that must never be quiet. An argument that was
-            // supplied and cannot be understood is an error, not an absence.
-            let i = args.firstIndex(of: "--kill-test-inspect")!
-            var lastAck: Int? = nil
-            if args.count > i + 1, !args[i + 1].hasPrefix("--") {
-                let raw = args[i + 1].trimmingCharacters(in: .whitespacesAndNewlines)
-                guard let parsed = Int(raw) else {
-                    print("KILLTEST-INSPECT-ERROR unparseable acknowledgement '\(args[i + 1])'")
-                    fflush(stdout)
-                    exit(1)
-                }
-                lastAck = parsed
-            }
+        case .inspect(let lastAck):
             do {
                 let report = try inspect()
                 printReport(report, lastAck: lastAck)
-                // Same rule the console printed, so the exit code and the human-readable
-                // line can never disagree again.
-                exit(verdict(report, lastAck: lastAck).isPass ? 0 : 2)
+                // Same rule the console printed, so the exit code and the human-readable line
+                // can never disagree again.
+                exit(verdict(report, lastAck: lastAck).exitCode)
             } catch {
                 print("KILLTEST-INSPECT-ERROR \(error)")
                 fflush(stdout)

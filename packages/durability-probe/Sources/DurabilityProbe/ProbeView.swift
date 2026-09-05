@@ -70,6 +70,19 @@ public struct ProbeView: View {
                     .background(Color.secondary.opacity(0.12), in: RoundedRectangle(cornerRadius: 10))
                 }
 
+                if let guardResult = Probe.barrierGuard(results), !guardResult.holds {
+                    Label(
+                        "GUARD FAILED. Forcing the barrier (P50 "
+                        + String(format: "%.2f", guardResult.barrierP50)
+                        + " ms) was not slower than not forcing it (P50 "
+                        + String(format: "%.2f", guardResult.relaxedP50)
+                        + " ms). The pragmas did not take effect; every number above is meaningless.",
+                        systemImage: "xmark.octagon.fill"
+                    )
+                    .font(.footnote.bold())
+                    .foregroundStyle(.red)
+                }
+
                 if !results.isEmpty {
                     Text("The row that decides this is the one with fullfsync. On Apple platforms "
                          + "fsync does not flush the drive's write cache, so synchronous=FULL alone "

@@ -23,7 +23,10 @@ and `checkpoint_fullfsync`, both of which default to off, so raising `synchronou
 sufficient on iOS. A macOS run is reassuring and irrelevant; ADR-006 asks for **both reference
 devices**.
 
-The probe prints which platform it ran on and labels a non-iOS run as indicative only.
+On the Mac the test run labels itself indicative only. On the phone the view warns in orange if it
+is running in the Simulator, and the printed report carries a `THRO-PROBE-GUARD` line that fails
+loudly if the real-barrier configuration was not slower than the relaxed one — the check the
+package's tests apply on a Mac, which a phone with no test bundle would otherwise never run.
 
 ## The four configurations
 
@@ -42,16 +45,27 @@ produce a much prettier number describing a system that loses darts.
 
 ## Running it
 
-On a device, which is the only run that counts:
+The measurement, on a phone — the only run that counts:
 
 ```bash
-xcodebuild test \
-  -scheme DurabilityProbe \
-  -destination 'platform=iOS,name=<your device>' \
-  -workspace packages/durability-probe
+./scripts/run-probe-on-device.sh
 ```
 
-Or open `packages/durability-probe/Package.swift` in Xcode, choose a device, and run the tests.
+That builds, signs, installs and launches a one-button app that wraps `ProbeView`; tap the button
+and read the four rows off the console. `docs/runbooks/DURABILITY_MEASUREMENT.md` is the procedure,
+written for someone who has never opened Xcode, including how to create the wrapper app.
+
+The kill test ADR-011 requires on every release candidate, and the force-restart procedure:
+
+```bash
+./scripts/run-kill-test-on-device.sh
+./scripts/run-power-cut-test.sh 0     # then 2
+```
+
+Both pull the journal off the device and adjudicate it on the Mac through one pass rule,
+`KillProbe.verdict`, via the `adjudicate` executable in this package. See
+`docs/runbooks/DURABILITY_KILL_TEST.md` — including why a force-restart on an iPhone turned out not
+to substitute for a power cut.
 
 A quick indicative run on the Mac itself:
 
@@ -61,11 +75,12 @@ swift test --package-path packages/durability-probe
 
 **Apple platforms only.** The probe links SQLite3 directly, which SwiftPM does not vend on Linux,
 and `fullfsync` is Apple-specific regardless — a Linux number would not be a weaker version of this
-answer, it would be an answer to a different question. The *measurement* can only come from a reference device — but a macOS CI job builds the package and
-runs the probe on every push, because the alternative turned out badly: with no compile check
-anywhere, a type named `Measurement` collided with `Foundation.Measurement` and reached a person's
-machine before anything caught it. A package nothing builds is a package that is broken and does not
-know it. CI numbers are a runner's disk and answer nothing; CI compiling is the point.
+answer, it would be an answer to a different question. The *measurement* can only come from a
+reference device — but a macOS CI job builds the package and runs the probe on every push, because
+the alternative turned out badly: with no compile check anywhere, a type named `Measurement`
+collided with `Foundation.Measurement` and reached a person's machine before anything caught it. A
+package nothing builds is a package that is broken and does not know it. CI numbers are a runner's
+disk and answer nothing; CI compiling is the point.
 
 ## What the tests assert, and what they do not
 

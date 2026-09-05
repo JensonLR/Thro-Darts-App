@@ -17,9 +17,17 @@ let package = Package(
     platforms: [.iOS(.v16), .macOS(.v13)],
     products: [
         .library(name: "DurabilityProbe", targets: ["DurabilityProbe"]),
+        // Adjudicates a journal pulled off a device, so the kill and power-cut scripts run the one
+        // pass rule in KillProbe.verdict instead of each carrying a copy in shell.
+        .executable(name: "adjudicate", targets: ["adjudicate"]),
     ],
     targets: [
         .target(name: "DurabilityProbe", path: "Sources/DurabilityProbe"),
+        .executableTarget(
+            name: "adjudicate",
+            dependencies: ["DurabilityProbe"],
+            path: "Sources/adjudicate"
+        ),
         .testTarget(
             name: "DurabilityProbeTests",
             dependencies: ["DurabilityProbe"],

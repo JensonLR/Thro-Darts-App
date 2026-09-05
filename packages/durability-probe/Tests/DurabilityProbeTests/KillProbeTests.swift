@@ -159,11 +159,19 @@ final class KillProbeTests: XCTestCase {
         XCTAssertTrue(verdict.line.contains("integrity_check"), "got: \(verdict.line)")
     }
 
-    func testEmptyJournalReportsNothingRatherThanCrashing() throws {
+    /// The journal is not there at all. `sqlite3_open` creates an empty database in its place, an
+    /// empty database passes `integrity_check`, and a report of 0 rows / 0 holes clears every guard
+    /// in the pass rule. So "nothing was measured" came out as "nothing was lost", exit 0. A run
+    /// that acknowledged nothing has no verdict to give, and must say so.
+    func testEmptyJournalIsNotAPass() throws {
         let report = try KillProbe.inspect()
 
         XCTAssertEqual(report.maxSeq, 0)
         XCTAssertEqual(report.rowCount, 0)
         XCTAssertEqual(report.holes, [])
+        XCTAssertFalse(KillProbe.verdict(report, lastAck: nil).isPass,
+                       "an absent journal must not adjudicate as a pass")
+        XCTAssertFalse(KillProbe.verdict(report, lastAck: 0).isPass,
+                       "an empty journal with nothing acknowledged has nothing to pass")
     }
 }

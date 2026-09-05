@@ -35,7 +35,8 @@ This runs on the Mac. It is **indicative only** — a Mac SSD is not a phone, an
 behaviour differs by device class — but if it errors, we find that out in one minute instead of
 after twenty minutes of Xcode setup.
 
-You should see a table of four configurations with P50/P95/P99 columns, and four passing tests.
+You should see a table of four configurations with P50/P95/P99 columns, and the package's tests
+all passing.
 Roughly this shape — your numbers will differ, the ordering should not:
 
 ```
@@ -146,12 +147,17 @@ Xcode → **Create New Project…** → **iOS** → **App**, then:
 7. **Storage: `None`.** Not SwiftData, not Core Data. Both stand up their own SQLite stack inside
    the app process, and this app exists to measure SQLite write latency — a second SQLite client in
    the process being measured is a confounding variable for no benefit. They also generate
-   boilerplate in `ContentView.swift` that step 3c deletes.
+   boilerplate in `ContentView.swift` that the replacement below removes.
 8. **Testing System: `None`.** The alternatives generate test targets inside `ThroProbe` that this
    procedure never runs — the probe package's tests live in the package and run from Terminal
    (Part 2), not from this app.
 9. Leave **Host in CloudKit** unticked. Click **Next**.
-10. Save it in `~/Documents` (**not** inside the Thro-Darts-App folder). Click **Create**.
+10. Save it in `~/Thro Darts App` — outside the repository. That is where all three scripts look
+    for it (`~/Thro Darts App/ThroProbe/ThroProbe.xcodeproj`); put it anywhere else and set
+    `PROBE_PROJECT=/path/to/ThroProbe.xcodeproj` when running them. The scripts build into
+    `~/Library/Developer/Xcode/DerivedData`, not beside the project, because `~/Documents` is an
+    iCloud Drive folder on this Mac and `codesign` refuses a bundle carrying iCloud's Finder
+    metadata. Click **Create**.
 
 Then **File → Add Package Dependencies… → Add Local…**, choose
 `Documents/Thro-Darts-App/packages/durability-probe`, and add it to the **ThroProbe** target.

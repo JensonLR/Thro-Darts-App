@@ -265,6 +265,41 @@ public enum Probe {
 
 extension Probe {
 
+    /// The guard the package's own tests apply on a Mac, made available to the device run.
+    ///
+    /// `testTheBarrierIsActuallyHappening` asserts that forcing a real storage barrier is slower
+    /// than not forcing one — if it is not, the pragmas did not take effect and every number is
+    /// meaningless. That assertion lives in XCTest, and the phone runs no XCTest: the app was built
+    /// with Testing System: None, and `ProbeView` calls `Probe.measure` and displays. So the one
+    /// run that decides the architecture was the only one of the three the guard never covered,
+    /// and the ADR's first record of it said otherwise. This is the same comparison, on the same
+    /// two configurations, over the results the device actually produced.
+    public struct BarrierGuard: Equatable {
+        public let relaxedP50: Double
+        public let barrierP50: Double
+        /// True when the real barrier's median is strictly slower than the relaxed one's.
+        public var holds: Bool { barrierP50 > relaxedP50 }
+        public var line: String {
+            let r = String(format: "%.2f", relaxedP50)
+            let b = String(format: "%.2f", barrierP50)
+            return holds
+                ? "THRO-PROBE-GUARD ok: fullfsync P50 \(b) ms > relaxed P50 \(r) ms"
+                : "THRO-PROBE-GUARD FAILED: fullfsync P50 \(b) ms is not slower than relaxed P50 \(r) ms"
+                  + " — the pragmas did not take effect and every row above is meaningless"
+        }
+    }
+
+    /// Nil when the results do not include both the relaxed and the real-barrier configuration.
+    public static func barrierGuard(_ results: [ProbeResult]) -> BarrierGuard? {
+        let relaxedLabel = Durability.candidates[0].label
+        let barrierLabel = Durability.candidates[2].label
+        guard let relaxed = results.first(where: { $0.configuration.label == relaxedLabel }),
+              let barrier = results.first(where: { $0.configuration.label == barrierLabel }) else {
+            return nil
+        }
+        return BarrierGuard(relaxedP50: relaxed.p50, barrierP50: barrier.p50)
+    }
+
     /// Print the measured table to stdout, in the same shape the package's tests print on a Mac.
     ///
     /// This exists so an on-device run can be captured verbatim rather than read off the screen:
@@ -290,6 +325,9 @@ extension Probe {
                 .joined()
             print("  " + column(r.configuration.label) + cells
                   + "  " + (r.meetsBudget ? "meets" : "EXCEEDS"))
+        }
+        if let guardResult = barrierGuard(results) {
+            print("  " + guardResult.line)
         }
         print("THRO-PROBE-END")
         print("")
