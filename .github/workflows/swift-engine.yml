@@ -35,6 +35,11 @@ jobs:
           python3 packages/domain-spec/generate.py --full
           swift test --package-path packages/engine-swift
 
+      # The statistics layer, dependency-free like the engine, held to the same twenty honesty
+      # assertions as the Kotlin original — on Linux, on every push.
+      - name: Statistics honesty, Swift
+        run: swift test --package-path packages/statistics-swift
+
   durability-probe:
     name: Durability probe compiles and runs
     # macOS, because the probe links SQLite3 directly and measures `fullfsync`, neither of which
@@ -50,3 +55,18 @@ jobs:
       - uses: actions/checkout@v4
       - name: Build and run
         run: swift test --package-path packages/durability-probe
+
+  client-ios:
+    name: iOS client packages build and test
+    # macOS, because these are SwiftUI and an asset catalogue. This job exists for the same reason
+    # the durability probe's does: a package nothing builds is broken and does not know it, and
+    # this session cannot compile Swift itself. The design tokens are consumed straight from the
+    # generator's output directory, so this also proves that `build.py --check` and the Swift
+    # consumer agree on the same files.
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Resolve the local package graph
+        run: swift package --package-path packages/client-ios resolve
+      - name: Build and test
+        run: swift test --package-path packages/client-ios
