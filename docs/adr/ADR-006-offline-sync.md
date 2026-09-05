@@ -153,6 +153,11 @@ recorded before the kill.
 | device | date | acknowledged | max seq | rows | holes | integrity | verdict |
 |---|---|---|---|---|---|---|---|
 | `iPhone15,3`, iOS 26.1 (23B85) | 2026-09-04 | 1523 | 1524 | 1524 | none | ok | **PASS — nothing acknowledged was lost** |
+| `iPhone15,3`, iOS 26.6.1 (23G83) | 2026-09-05 | 1107 | 1108 | 1108 | none | ok | **PASS — nothing acknowledged was lost** |
+
+The second row is the first run through the instrument as it stands after review — journal pulled
+off the device with its sidecar and adjudicated on the Mac through `KillProbe.verdict` — and on the
+OS build the device was updated to mid-session, so the two rows are two systems, not a repeat.
 
 The journal finishing one ahead of the console record is expected, not a discrepancy: `SIGKILL`
 discards buffered stdout, so a write can land without its acknowledgement escaping. The comparison

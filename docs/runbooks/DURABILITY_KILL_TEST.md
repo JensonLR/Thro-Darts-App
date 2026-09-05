@@ -109,9 +109,13 @@ reported durable is gone, which is the failure ADR-006 has no repair path for.
 
 ### Result on file
 
-| device | date | configuration | acknowledged | integrity | holes | verdict |
-|---|---|---|---|---|---|---|
-| `iPhone15,3` (iPhone 14 Pro Max), iOS 26.1 (23B85) | 2026-09-04 | `synchronous=FULL` + `fullfsync`, WAL | 1523 | ok | none | **PASS** |
+| device | date | configuration | acknowledged | max seq | rows | holes | integrity | verdict |
+|---|---|---|---|---|---|---|---|---|
+| `iPhone15,3` (iPhone 14 Pro Max), iOS 26.1 (23B85) | 2026-09-04 | `synchronous=FULL` + `fullfsync`, WAL | 1523 | 1524 | 1524 | none | ok | **PASS** |
+| `iPhone15,3` (iPhone 14 Pro Max), iOS 26.6.1 (23G83) | 2026-09-05 | `synchronous=FULL` + `fullfsync`, WAL | 1107 | 1108 | 1108 | none | ok | **PASS** |
+
+The second run is the pipeline above — pull with sidecar, adjudicate on the Mac — exercised end to
+end after the review that removed the shell copy of the pass rule.
 
 ---
 
