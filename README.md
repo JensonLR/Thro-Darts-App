@@ -57,12 +57,12 @@ database.
 | Design components | 61 components audited mechanically against a baseline ratchet |
 | Statistics honesty, Swift | The same 20 tests, ported case for case, on Linux |
 | On-device journal | 11 tests — configuration read back on open, append-only by trigger, replay throws on a corrupt row |
-| Scoring session | 16 tests — every PD-001 branch; engine → journal commit → screen, never another order. **Written, not yet run by CI** |
-| iOS app | A CI job builds it for the simulator; **that job has not yet run** (Actions stopped starting jobs — see the runbook). **Not yet run on a phone** |
+| Scoring session | 16 tests — every PD-001 branch; engine → journal commit → screen, never another order |
+| iOS app | Builds for the iOS simulator on every push that touches it. **Not yet run on a phone** |
 
 **Nothing here is production ready**, and no claim of security, offline reliability or rating
 validity is made anywhere in this repository. There is an iOS client that scores a match between two people on
-one phone and keeps it there — its journal built and tested on CI, its screens **not yet verified by CI and not yet run on a phone** ([`docs/runbooks/CLIENT_IOS.md`](docs/runbooks/CLIENT_IOS.md)).
+one phone and keeps it there — built and tested on CI, **not yet run on a phone** ([`docs/runbooks/CLIENT_IOS.md`](docs/runbooks/CLIENT_IOS.md)).
 It talks to nothing. There is no HTTP layer and no deployment — the command path is a tested handler, not a running service.
 Claims are made only where evidence exists — see [`FOUNDATION_ACCEPTANCE.md`](FOUNDATION_ACCEPTANCE.md).
 

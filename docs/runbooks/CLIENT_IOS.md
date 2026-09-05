@@ -1,15 +1,12 @@
 # Running the iOS client
 
-> **Verification status, 2026-09-05.** Up to the journal (commit `c87459b`) every package compiled and
-> every test passed on macOS CI. The Play slice, the app shell and the Xcode project (commit `518c252`)
-> are **not verified by CI**: at that push GitHub Actions stopped starting jobs for this private
-> repository — every workflow, every job, zero milliseconds, no runner — which is what an exhausted
-> Actions minutes allowance or spending limit looks like (macOS runners bill at ten times). Until CI
-> runs again or the Mac runs the commands under "Checking it yourself", treat that code as written, not
-> proven; it was written against the compiled API of the verified packages and reviewed adversarially,
-> and that is not the same thing. **Nobody has yet run this app on a phone.** The first run is the
-> founder's, on the Mac with the phone plugged in; the local session records what it saw (screenshots go
-> in `docs/runbooks/screenshots/`) and corrects this document where the phone disagrees with it.
+> **Verification status, 2026-09-05 (commit `e797458`).** Every package compiles and every test passes
+> on macOS CI — 40 tests: 13 design, 11 journal, 16 scoring session — and the Xcode app builds for the
+> iOS simulator on CI with Xcode 26.6, on every push that touches them. **Nobody has yet run this app
+> on a phone.** The first run is the founder's, on the Mac with the phone plugged in; the local session
+> records what it saw (screenshots go in `docs/runbooks/screenshots/`) and corrects this document where
+> the phone disagrees with it. Until then, everything below "What you will see" is what the code does
+> and what its tests hold, not what anyone has watched it do.
 
 ## What exists
 
@@ -20,9 +17,9 @@
 | `packages/statistics-swift` | the statistics layer, honest about its basis | twenty tests on Linux, every push |
 | `packages/client-ios` → `ThroDesign` | the approved components as SwiftUI | tests on macOS, every push |
 | `packages/client-ios` → `ThroJournal` | the on-device journal (ADR-006) | eleven tests on macOS, every push |
-| `packages/client-ios` → `ThroPlay` | setup, ready, scoring, result | sixteen session tests, **not yet run by CI** (see status) |
-| `packages/client-ios` → `ThroApp` | Home, tabs, the root view | **not yet compiled by CI**; drawn, not tested |
-| `apps/ios/ThroDarts.xcodeproj` | the app target: thirteen lines that mount `ThroApp` | a CI `xcodebuild` job exists and **has not yet run** |
+| `packages/client-ios` → `ThroPlay` | setup, ready, scoring, result | sixteen session tests on macOS, every push |
+| `packages/client-ios` → `ThroApp` | Home, tabs, the root view | compiles for macOS and the iOS simulator on every push; drawn, not tested |
+| `apps/ios/ThroDarts.xcodeproj` | the app target: thirteen lines that mount `ThroApp` | `xcodebuild` for the iOS simulator, every push |
 
 ## Running it on the phone
 
@@ -41,8 +38,8 @@ open apps/ios/ThroDarts.xcodeproj
 3. **Run** (⌘R). The first time, the phone will refuse to open the app until you trust the developer:
    Settings → General → VPN & Device Management → your Apple ID → Trust.
 
-Or, without a phone: choose any iPhone simulator as the destination and Run. That is exactly what the CI
-job does (`xcodebuild -scheme ThroDarts -destination 'generic/platform=iOS Simulator'`), once it runs.
+Or, without a phone: choose any iPhone simulator as the destination and Run. That is exactly what CI
+does (`xcodebuild -scheme ThroDarts -destination 'generic/platform=iOS Simulator'`).
 
 ## What you will see
 

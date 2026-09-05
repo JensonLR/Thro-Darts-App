@@ -2,23 +2,17 @@
 
 > **Superseded in part on 2026-09-05.** The founder has directed the build of the iOS client, and
 > it exists: `packages/client-ios` (design system, journal, Play slice, app shell) and an Xcode app at
-> `apps/ios/ThroDarts.xcodeproj`. The journal is verified on CI; the screens and the app project are
-> not, because GitHub Actions stopped starting jobs at that push (see CLIENT_IOS.md). None of it has run
-> on a phone. The
+> `apps/ios/ThroDarts.xcodeproj`, all green on CI (40 package tests on macOS; the app built for the iOS
+> simulator). None of it has run on a phone. The
 > local session's job now is in **"Now: run the app"** below. The "What NOT to do" rule against
 > building the client is void; the rest of the rules stand.
 
 ## Now: run the app
 
 ```
-The iOS client has been built on the remote branch. Its journal is green on macOS CI; its screens, app
-shell and Xcode project are NOT verified, because GitHub Actions stopped starting jobs when they were
-pushed (private repository, zero-millisecond failures on every workflow — check Settings → Billing for
-the Actions minutes and spending limit). You are the compiler now: run
-  swift test --package-path packages/client-ios
-  xcodebuild -project apps/ios/ThroDarts.xcodeproj -scheme ThroDarts -destination 'generic/platform=iOS Simulator' CODE_SIGNING_ALLOWED=NO build
-first, fix what fails (the code was written blind against the verified packages' API), commit the
-fixes, and only then run it on the phone. Nobody has run it on a phone. Do that, then record what you saw.
+The iOS client has been built on the remote branch and is green on CI: 40 package tests on macOS
+(design, journal, scoring session) and an xcodebuild of the app for the iOS simulator, on every push.
+Nobody has run it on a phone. Do that, then record what you saw.
 
 1. git pull. Read docs/runbooks/CLIENT_IOS.md end to end — it says what should appear on each screen.
 2. open apps/ios/ThroDarts.xcodeproj. Set the team under Signing & Capabilities; change the bundle
