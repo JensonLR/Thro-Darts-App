@@ -77,8 +77,21 @@ public struct ProbeResult {
     public var p99: Double { percentile(0.99) }
     public var worst: Double { samplesMs.max() ?? 0 }
 
+    /// How long an explicit WAL checkpoint took after the visits, in milliseconds; nil for the
+    /// rollback-journal configuration, which has no WAL to checkpoint.
+    ///
+    /// Two hundred visits never reach SQLite's automatic checkpoint threshold, so the WAL grows
+    /// and is checkpointed at close — untimed. That meant `checkpoint_fullfsync`, one of the two
+    /// pragmas ADR-006 names, was set by every configuration and exercised by none, and the visit
+    /// that pays for a checkpoint in production appeared in no reported distribution. This is that
+    /// cost, measured once per configuration under its own pragmas.
+    public var checkpointMs: Double? = nil
+
     /// LATENCY_BUDGETS.md: event flushed to durable storage, P95 ≤ 20 ms, P99 ≤ 50 ms.
-    public var meetsBudget: Bool { p95 <= 20.0 && p99 <= 50.0 }
+    ///
+    /// No samples is not within budget. Every percentile of an empty result is 0.00, and 0.00 is
+    /// under any budget, so a result that measured nothing used to print "meets".
+    public var meetsBudget: Bool { !samplesMs.isEmpty && p95 <= 20.0 && p99 <= 50.0 }
 
     private func percentile(_ q: Double) -> Double {
         guard !samplesMs.isEmpty else { return 0 }
@@ -119,11 +132,7 @@ public enum Probe {
         }
         defer { sqlite3_close(handle) }
 
-        // Order matters: fullfsync must be set before the journal mode change that fsyncs.
-        try exec(handle, "PRAGMA fullfsync = \(configuration.fullFsync ? 1 : 0);")
-        try exec(handle, "PRAGMA checkpoint_fullfsync = \(configuration.checkpointFullFsync ? 1 : 0);")
-        try exec(handle, "PRAGMA journal_mode = \(configuration.journalMode);")
-        try exec(handle, "PRAGMA synchronous = \(configuration.synchronous);")
+        try configure(handle, configuration)
 
         // The journal is append-only and carries the command, not a projection of it.
         try exec(handle, """
@@ -184,7 +193,16 @@ public enum Probe {
             throw ProbeError.sqlite("journal holds \(written) rows after \(visits) committed visits")
         }
 
-        return ProbeResult(configuration: configuration, samplesMs: samples)
+        var result = ProbeResult(configuration: configuration, samplesMs: samples)
+        if configuration.journalMode.uppercased() == "WAL" {
+            // TRUNCATE: checkpoint everything and reset the WAL, which is the checkpoint that
+            // pays the full price — and, with checkpoint_fullfsync on, the barrier this
+            // configuration promises for it.
+            let start = DispatchTime.now()
+            try exec(handle, "PRAGMA wal_checkpoint(TRUNCATE);")
+            result.checkpointMs = Double(DispatchTime.now().uptimeNanoseconds - start.uptimeNanoseconds) / 1_000_000
+        }
+        return result
     }
 
     private static func count(_ handle: OpaquePointer, _ sql: String) throws -> Int {
@@ -251,8 +269,56 @@ public enum Probe {
         return samples
     }
 
-    // Internal rather than private: KillProbe configures the same pragmas on the same handle,
-    // and a second copy of this would be a second place for the pragma order to drift.
+    /// Applies a configuration's pragmas and then reads every one of them back.
+    ///
+    /// `PRAGMA journal_mode = WAL` does not fail when it cannot switch — it returns a row naming
+    /// the mode the database is actually in, and `sqlite3_exec` with no callback throws that row
+    /// away. So a refused change (an in-memory database, a read-only file, a build that ignores
+    /// the pragma) left every pragma call reporting success and the measurement reporting numbers
+    /// for a configuration that was not in force. The read-back makes that a thrown error with
+    /// both values in it. The barrier guard would catch a gross version of this after the fact;
+    /// this catches the exact one before a single visit is timed.
+    ///
+    /// Internal rather than private: KillProbe configures the same pragmas on the same handle,
+    /// and a second copy of this would be a second place for the pragma order to drift.
+    static func configure(_ handle: OpaquePointer, _ configuration: Durability) throws {
+        // Order matters: fullfsync must be set before the journal mode change that fsyncs.
+        try exec(handle, "PRAGMA fullfsync = \(configuration.fullFsync ? 1 : 0);")
+        try exec(handle, "PRAGMA checkpoint_fullfsync = \(configuration.checkpointFullFsync ? 1 : 0);")
+        try exec(handle, "PRAGMA journal_mode = \(configuration.journalMode);")
+        try exec(handle, "PRAGMA synchronous = \(configuration.synchronous);")
+        try verifyInForce(handle, configuration)
+    }
+
+    /// The value SQLite reports for `PRAGMA <name>;`, as text.
+    static func pragmaValue(_ handle: OpaquePointer, _ name: String) -> String? {
+        var stmt: OpaquePointer?
+        guard sqlite3_prepare_v2(handle, "PRAGMA \(name);", -1, &stmt, nil) == SQLITE_OK, let s = stmt else { return nil }
+        defer { sqlite3_finalize(s) }
+        guard sqlite3_step(s) == SQLITE_ROW, let text = sqlite3_column_text(s, 0) else { return nil }
+        return String(cString: text)
+    }
+
+    static func verifyInForce(_ handle: OpaquePointer, _ configuration: Durability) throws {
+        // PRAGMA synchronous reads back as a number: OFF 0, NORMAL 1, FULL 2, EXTRA 3.
+        let synchronousNumbers = ["OFF": "0", "NORMAL": "1", "FULL": "2", "EXTRA": "3"]
+        let expected: [(String, String)] = [
+            ("journal_mode", configuration.journalMode.lowercased()),
+            ("synchronous", synchronousNumbers[configuration.synchronous.uppercased()] ?? configuration.synchronous),
+            ("fullfsync", configuration.fullFsync ? "1" : "0"),
+            ("checkpoint_fullfsync", configuration.checkpointFullFsync ? "1" : "0"),
+        ]
+        for (name, want) in expected {
+            let got = pragmaValue(handle, name)?.lowercased() ?? "(no value)"
+            guard got == want else {
+                throw ProbeError.sqlite(
+                    "PRAGMA \(name) requested \(want) but the database reports \(got) — "
+                    + "the configuration '\(configuration.label)' is not in force, so nothing measured under it means anything"
+                )
+            }
+        }
+    }
+
     static func exec(_ handle: OpaquePointer, _ sql: String) throws {
         var error: UnsafeMutablePointer<CChar>?
         if sqlite3_exec(handle, sql, nil, nil, &error) != SQLITE_OK {
@@ -289,6 +355,39 @@ extension Probe {
         }
     }
 
+    /// One line that makes a captured report attributable on its own: the raw hardware identifier
+    /// ADR-006 records (`iPhone15,3`, `Mac17,3`), the OS version and build, the sample count, and
+    /// whether this is the Simulator — whose numbers are the Mac's SSD and answer a different
+    /// question. A block of sixteen figures with none of this was pasted into the ADR by hand once;
+    /// the attribution should travel with the numbers.
+    public static func environmentLine(visits: Int?) -> String {
+        #if targetEnvironment(simulator)
+        let simulator = true
+        #else
+        let simulator = false
+        #endif
+        let os = ProcessInfo.processInfo.operatingSystemVersionString
+        let visitsText = visits.map(String.init) ?? "?"
+        return "THRO-PROBE-ENV model=\(hardwareModel()) os=\"\(os)\" visits=\(visitsText) simulator=\(simulator)"
+    }
+
+    /// `hw.model` on macOS (`Mac17,3`); the machine field of `uname` elsewhere (`iPhone15,3`).
+    static func hardwareModel() -> String {
+        #if os(macOS)
+        var size = 0
+        guard sysctlbyname("hw.model", nil, &size, nil, 0) == 0, size > 0 else { return "unknown" }
+        var buffer = [CChar](repeating: 0, count: size)
+        guard sysctlbyname("hw.model", &buffer, &size, nil, 0) == 0 else { return "unknown" }
+        return String(cString: buffer)
+        #else
+        var system = utsname()
+        uname(&system)
+        return withUnsafePointer(to: &system.machine) {
+            $0.withMemoryRebound(to: CChar.self, capacity: Int(_SYS_NAMELEN)) { String(cString: $0) }
+        }
+        #endif
+    }
+
     /// Nil when the results do not include both the relaxed and the real-barrier configuration.
     public static func barrierGuard(_ results: [ProbeResult]) -> BarrierGuard? {
         let relaxedLabel = Durability.candidates[0].label
@@ -309,6 +408,7 @@ extension Probe {
     public static func printReport(_ results: [ProbeResult]) {
         print("")
         print("THRO-PROBE-BEGIN")
+        print("  " + environmentLine(visits: results.first?.samplesMs.count))
         // Pad in Swift rather than with a %-56@ format width: on Apple platforms String(format:)
         // ignores field widths for %@, so the format-string version silently produces a ragged
         // table that is fiddly to read off a phone.
@@ -317,14 +417,21 @@ extension Probe {
         }
 
         print("  " + column("configuration")
-              + ["P50", "P95", "P99", "worst"].map { $0.leftPadded(to: 7) }.joined()
+              + ["P50", "P95", "P99", "worst", "ckpt"].map { $0.leftPadded(to: 7) }.joined()
               + "  budget")
         for r in results {
             let cells = [r.p50, r.p95, r.p99, r.worst]
                 .map { String(format: "%.2f", $0).leftPadded(to: 7) }
                 .joined()
-            print("  " + column(r.configuration.label) + cells
+            let checkpoint = (r.checkpointMs.map { String(format: "%.2f", $0) } ?? "-").leftPadded(to: 7)
+            print("  " + column(r.configuration.label) + cells + checkpoint
                   + "  " + (r.meetsBudget ? "meets" : "EXCEEDS"))
+        }
+        if results.count < Durability.candidates.count {
+            // A configuration that threw used to vanish from this table without a trace, and the
+            // error reached only the screen. The table must say it is short.
+            print("  THRO-PROBE-INCOMPLETE \(results.count) of \(Durability.candidates.count) configurations reported"
+                  + " — see THRO-PROBE-ERROR lines above; do not record this table as complete")
         }
         if let guardResult = barrierGuard(results) {
             print("  " + guardResult.line)

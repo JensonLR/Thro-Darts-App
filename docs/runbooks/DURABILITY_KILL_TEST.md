@@ -70,7 +70,9 @@ pulled journal:
 
 1. the writer was still committing when the kill landed — a `KILLTEST-CAP-REACHED` or
    `KILLTEST-WRITE-ERROR` marker in the log voids the run, because a writer that had stopped left
-   the kernel time to flush and the kill then put nothing at risk;
+   the kernel time to flush and the kill then put nothing at risk — and the kill was the probe's
+   own: `KILLTEST-KILLING-NOW` must precede the signal-9 termination, since the iOS launch watchdog
+   also sends SIGKILL and once did so on every run while looking exactly like this;
 2. `integrity_check ok`;
 3. no holes in the sequence, and the row count equals the highest sequence;
 4. the highest sequence in the journal is at least the last acknowledgement seen on the console.
@@ -184,6 +186,14 @@ automates for an iPhone, done by hand where `devicectl` does not apply:
 
 Run configuration 0 first. If the weakest setting survives the cut, the interruption is not
 reaching the layer under test and a pass under configuration 2 is not evidence.
+
+`scripts/run-power-cut-test.sh` additionally voids a run when the device was absent for fewer than
+three consecutive polls (a `devicectl` hiccup, not a reboot), when the app is still running after
+the device returns (it never restarted), when the device comes back on a different OS build, and
+when the acknowledgement stream stopped more than eight seconds before the drop (the writer was
+suspended or idle, so nothing was at risk). The app also holds a background-task assertion through
+the event, because the restart gesture darkens the screen before the reset and an idle-timer
+assertion alone does not prevent suspension.
 
 **If it fails**, that is the most valuable result this project can produce: it means `fullfsync` is
 not reaching NAND on that hardware, and ADR-006 is explicit that the durability rule wins and the

@@ -161,10 +161,26 @@ cat <<EOF
 EOF
 
 echo "==> Waiting for the device to drop off the bus"
+# Three things are watched at once. Whether the device is gone — for several consecutive polls,
+# because one empty answer from devicectl is a hiccup as often as a reboot, and a reboot keeps the
+# device away for tens of seconds. Whether the writer stopped. And when the acknowledgement stream
+# last grew: a writer that went quiet well before the drop was suspended or idle, the kernel had
+# time to flush, and the restart landed on nothing at risk. The recorded iPhone control could not
+# exclude that; this can.
 DROPPED=0
+ABSENT=0
+DROP_AT=0
+LAST_GROWTH="$(date +%s)"
+LAST_LINES="$(wc -l < "$WRITE_LOG" | tr -d ' ')"
 for _ in $(seq 1 600); do
-  if [ -z "$(device_line)" ]; then DROPPED=1; break; fi
-  # If the writer stops for any reason while we wait, the restart will land on an idle journal.
+  LINES="$(wc -l < "$WRITE_LOG" | tr -d ' ')"
+  if [ "$LINES" != "$LAST_LINES" ]; then LAST_LINES="$LINES"; LAST_GROWTH="$(date +%s)"; fi
+  if [ -z "$(device_line)" ]; then
+    ABSENT=$((ABSENT + 1))
+    if [ "$ABSENT" -ge 3 ]; then DROPPED=1; DROP_AT="$(date +%s)"; break; fi
+  else
+    ABSENT=0
+  fi
   if grep -qE "KILLTEST-CAP-REACHED|KILLTEST-WRITE-ERROR" "$WRITE_LOG" 2>/dev/null; then break; fi
   sleep 1
 done
@@ -177,6 +193,8 @@ grep -q "KILLTEST-WRITE-ERROR" "$WRITE_LOG" \
 grep -q "KILLTEST-CAP-REACHED" "$WRITE_LOG" \
   && void "the writer reached its visit cap ($MAX_VISITS) before the device went down; the journal was idle and flushed. Raise MAX_VISITS or restart sooner."
 [ "$DROPPED" = "1" ] || void "the device never disconnected — no restart was detected"
+STALL=$(( DROP_AT - LAST_GROWTH ))
+[ "$STALL" -le 8 ] || void "the acknowledgement stream stopped ${STALL}s before the device went down — the writer was suspended or idle, the kernel had time to flush, and the restart landed on nothing at risk"
 
 echo "    device went away"
 echo "==> Waiting for it to come back (unlock it when the passcode prompt appears)"
@@ -187,6 +205,11 @@ for _ in $(seq 1 300); do
 done
 [ "$BACK" = "1" ] || die "the device did not come back within 10 minutes."
 echo "    device is back"
+# A reboot ends every process. If the app is still running, the device never restarted and the
+# disconnection was a devicectl hiccup that outlasted the polls.
+if xcrun devicectl device info processes --device "$DEVICE_ID" 2>/dev/null | grep -qi "ThroProbe.app/"; then
+  void "the app is still running on the device, so it never restarted — the disconnection was not a reboot"
+fi
 
 # The build the run was attributed to must be the build it came back on.
 AFTER="$(device_line)"
@@ -194,7 +217,7 @@ AFTER_ATTRIBUTION="$(printf '%s' "$AFTER" | cut -f2), iOS $(printf '%s' "$AFTER"
 [ "$AFTER_ATTRIBUTION" = "$ATTRIBUTION" ] \
   || void "the device came back as '$AFTER_ATTRIBUTION' but the run started on '$ATTRIBUTION' — an OS update happened mid-test"
 
-LAST_ACK="$(grep 'KILLTEST-ACK' "$WRITE_LOG" | tail -1 | awk '{print $2}')"
+LAST_ACK="$({ grep 'KILLTEST-ACK' "$WRITE_LOG" || true; } | tail -1 | awk '{print $2}')"
 [ -n "$LAST_ACK" ] || void "no acknowledgements recorded"
 echo "==> Last acknowledgement that reached the Mac before the restart: $LAST_ACK"
 

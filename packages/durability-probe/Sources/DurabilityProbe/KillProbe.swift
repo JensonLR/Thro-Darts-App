@@ -77,10 +77,7 @@ public enum KillProbe {
         // buy nothing and would leak a connection in every test that exercises this path.
         defer { sqlite3_close(handle) }
 
-        try Probe.exec(handle, "PRAGMA fullfsync = \(configuration.fullFsync ? 1 : 0);")
-        try Probe.exec(handle, "PRAGMA checkpoint_fullfsync = \(configuration.checkpointFullFsync ? 1 : 0);")
-        try Probe.exec(handle, "PRAGMA journal_mode = \(configuration.journalMode);")
-        try Probe.exec(handle, "PRAGMA synchronous = \(configuration.synchronous);")
+        try Probe.configure(handle, configuration)
         try Probe.exec(handle, """
             CREATE TABLE IF NOT EXISTS journal (
               device_seq INTEGER PRIMARY KEY,
@@ -564,7 +561,7 @@ extension KillProbe {
                     exit(1)
                 }
             }
-            keepScreenAwake()
+            keepWritingThroughTheEvent()
             return
 
         case .inspect(let lastAck):
@@ -588,15 +585,29 @@ import UIKit
 #endif
 
 extension KillProbe {
-    /// Stops the screen locking during a restart test.
+    /// Keeps the writer running until the device actually goes down.
     ///
-    /// iOS suspends a backgrounded app, and a suspended writer stops writing — which leaves the
-    /// journal fully flushed again and the restart with nothing to catch. The test needs the app
-    /// awake and committing right up to the moment the device goes down.
-    static func keepScreenAwake() {
+    /// iOS suspends an app that leaves the foreground, and a suspended writer stops writing — which
+    /// leaves the journal fully flushed again and the restart with nothing to catch. Two things are
+    /// needed, and the first version had only the first:
+    ///
+    /// - `isIdleTimerDisabled` stops the auto-lock timer, so an untouched phone does not dim and
+    ///   lock the app into suspension while the operator reads the instructions.
+    /// - A background task assertion keeps the process executing for up to about thirty seconds
+    ///   after it leaves the foreground — which the force-restart gesture itself can cause: the
+    ///   screen goes black during the Side-button hold before the reset happens. Without the
+    ///   assertion the writer could be suspended for those seconds, the kernel could flush, and
+    ///   the restart would land on an idle journal. That window is why the power-cut script also
+    ///   voids a run whose acknowledgement stream stopped well before the device dropped.
+    static func keepWritingThroughTheEvent() {
         #if canImport(UIKit) && !os(watchOS)
         DispatchQueue.main.async {
             UIApplication.shared.isIdleTimerDisabled = true
+            var task = UIBackgroundTaskIdentifier.invalid
+            task = UIApplication.shared.beginBackgroundTask(withName: "thro-kill-test-writer") {
+                UIApplication.shared.endBackgroundTask(task)
+                task = .invalid
+            }
         }
         #endif
     }

@@ -136,6 +136,11 @@ fi
 grep -q "App terminated due to signal 9" "$WORK/write.log" \
   || die "the process did not die by SIGKILL — the kill did not happen, so this run tests nothing.
 $(tail -10 "$WORK/write.log")"
+# Signal 9 alone is not proof the probe's kill fired: the iOS launch watchdog also sends SIGKILL,
+# and once did so at eighteen seconds on every run while looking exactly like this. The kill thread
+# prints and flushes this marker immediately before it pulls the trigger.
+grep -q "KILLTEST-KILLING-NOW" "$WORK/write.log" \
+  || void "the process died by signal 9 but KILLTEST-KILLING-NOW is absent — something other than the probe's own kill (the launch watchdog, most likely) ended it, and that is not the event under test"
 
 # Was the writer still writing when the kill landed? These two markers are printed for exactly
 # this question. A writer that had stopped — cap reached, or a failed write and a clean close —
@@ -145,7 +150,10 @@ grep -q "KILLTEST-WRITE-ERROR" "$WORK/write.log" \
 grep -q "KILLTEST-CAP-REACHED" "$WORK/write.log" \
   && void "the writer hit its visit cap before the kill landed, so the journal had been idle and flushed"
 
-LAST_ACK="$(grep 'KILLTEST-ACK' "$WORK/write.log" | tail -1 | awk '{print $2}')"
+# `grep` exits 1 on no match, and under pipefail that aborts the assignment before the message
+# below can be reached. The `|| true` is what makes "no acknowledgements" a sentence and not a
+# silent exit 1.
+LAST_ACK="$({ grep 'KILLTEST-ACK' "$WORK/write.log" || true; } | tail -1 | awk '{print $2}')"
 [ -n "$LAST_ACK" ] || void "no acknowledgements were recorded; nothing to verify"
 CONFIG_LABEL="$(grep 'KILLTEST-WRITE-BEGIN' "$WORK/write.log" | head -1 | cut -d' ' -f2-)"
 echo "    configuration: $CONFIG_LABEL"

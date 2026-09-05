@@ -94,6 +94,14 @@ Two things are asserted, because they hold everywhere:
   the pragmas did not take effect and every number the probe reports is meaningless.
 - **A reported percentile is a latency something really took** — nearest-rank, never an
   interpolation between two samples that did not occur.
+- **Every pragma is read back after it is set.** `PRAGMA journal_mode = WAL` reports rather than
+  fails when it cannot switch, and `sqlite3_exec` with no callback discards the report; the
+  configuration is verified to be in force before a single visit is timed.
+
+The captured block also carries a `THRO-PROBE-ENV` attribution line, a `ckpt` column with the cost
+of an explicit WAL checkpoint under each configuration's own pragmas (two hundred visits never
+trigger one on their own, so `checkpoint_fullfsync` was otherwise never exercised), a
+`THRO-PROBE-GUARD` line, and a `THRO-PROBE-INCOMPLETE` line if any configuration threw.
 
 ## Recording the result
 

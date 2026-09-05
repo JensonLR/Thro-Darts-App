@@ -117,6 +117,10 @@ public struct ProbeView: View {
                 do {
                     collected.append(try Probe.measure(configuration, visits: 200))
                 } catch {
+                    // To the console as well as the screen: the captured block is the evidence,
+                    // and a configuration missing from it must be missing for a stated reason.
+                    print("THRO-PROBE-ERROR \(configuration.label): \(error)")
+                    fflush(stdout)
                     DispatchQueue.main.async {
                         failure = "\(configuration.label): \(error)"
                     }

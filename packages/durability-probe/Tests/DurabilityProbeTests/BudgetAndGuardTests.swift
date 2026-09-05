@@ -1,4 +1,5 @@
 import XCTest
+import SQLite3
 @testable import DurabilityProbe
 
 /// `meetsBudget` is the "meets"/"EXCEEDS" column in every table ADR-006 records, and the green or
@@ -67,5 +68,83 @@ final class BarrierGuardTests: XCTestCase {
             $0 as? ProbeResult
         }))
         XCTAssertEqual(g, Probe.BarrierGuard(relaxedP50: 0.03, barrierP50: 0.65))
+    }
+}
+
+/// Pragmas are read back after being set, because `PRAGMA journal_mode` reports rather than
+/// fails when it cannot switch, and `sqlite3_exec` with no callback discards the report.
+final class PragmaReadBackTests: XCTestCase {
+
+    func testEveryCandidateConfigurationIsInForceOnAFileDatabase() throws {
+        for configuration in Durability.candidates {
+            let path = NSTemporaryDirectory() + "thro-pragma-\(UUID().uuidString).sqlite"
+            defer { KillProbe.removeJournal(at: path) }
+            var db: OpaquePointer?
+            XCTAssertEqual(sqlite3_open(path, &db), SQLITE_OK)
+            guard let handle = db else { return XCTFail("no handle") }
+            defer { sqlite3_close(handle) }
+            XCTAssertNoThrow(try Probe.configure(handle, configuration), configuration.label)
+            XCTAssertEqual(Probe.pragmaValue(handle, "journal_mode")?.lowercased(), configuration.journalMode.lowercased())
+        }
+    }
+
+    func testARefusedJournalModeIsAnErrorNotASilentSuccess() throws {
+        // An in-memory database cannot enter WAL mode. The pragma does not fail; it reports
+        // "memory". Before the read-back, every pragma call here returned SQLITE_OK and the
+        // measurement would have run under a configuration that was not in force.
+        var db: OpaquePointer?
+        XCTAssertEqual(sqlite3_open(":memory:", &db), SQLITE_OK)
+        guard let handle = db else { return XCTFail("no handle") }
+        defer { sqlite3_close(handle) }
+        XCTAssertThrowsError(try Probe.configure(handle, Durability.candidates[2])) { error in
+            XCTAssertTrue("\(error)".contains("journal_mode"), "\(error)")
+            XCTAssertTrue("\(error)".contains("memory"), "the error must say what the database actually reports: \(error)")
+        }
+    }
+}
+
+final class EmptyResultTests: XCTestCase {
+    func testNoSamplesIsNotWithinBudget() {
+        let empty = ProbeResult(configuration: Durability.candidates[2], samplesMs: [])
+        XCTAssertEqual(empty.p95, 0)
+        XCTAssertFalse(empty.meetsBudget, "a result that measured nothing must not print 'meets'")
+    }
+}
+
+final class CheckpointAndAttributionTests: XCTestCase {
+
+    func testWalConfigurationsReportACheckpointCostAndRollbackDoesNot() throws {
+        for configuration in Durability.candidates {
+            let result = try Probe.measure(configuration, visits: 20)
+            if configuration.journalMode.uppercased() == "WAL" {
+                let ckpt = try XCTUnwrap(result.checkpointMs, configuration.label)
+                XCTAssertGreaterThan(ckpt, 0, "a checkpoint that wrote twenty visits back cannot take zero time")
+            } else {
+                XCTAssertNil(result.checkpointMs, "the rollback journal has no WAL to checkpoint")
+            }
+        }
+    }
+
+    func testTheEnvironmentLineAttributesTheRun() {
+        let line = Probe.environmentLine(visits: 200)
+        XCTAssertTrue(line.hasPrefix("THRO-PROBE-ENV "))
+        XCTAssertTrue(line.contains("visits=200"))
+        XCTAssertTrue(line.contains("simulator="))
+        XCTAssertFalse(line.contains("model=unknown"), line)
+        XCTAssertFalse(line.contains("model= "), "the hardware identifier must not be empty: \(line)")
+    }
+}
+
+final class PrintedReportTests: XCTestCase {
+    /// Drives the same block the phone prints, so its shape is seen on every CI run rather than
+    /// only on a device. (Output is inspected in the log; XCTest does not capture stdout.)
+    func testThePrintedBlockCarriesAttributionCheckpointAndGuard() throws {
+        var results: [ProbeResult] = []
+        for configuration in Durability.candidates {
+            results.append(try Probe.measure(configuration, visits: 20))
+        }
+        Probe.printReport(results)
+        XCTAssertNotNil(Probe.barrierGuard(results))
+        XCTAssertEqual(results.count, Durability.candidates.count)
     }
 }

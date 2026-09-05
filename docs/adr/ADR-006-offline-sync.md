@@ -144,6 +144,24 @@ flush quickly and honestly, and a drive that lied about it would look identical 
 power-cut test distinguishes those two, which is why this ADR asks for one and why neither the probe
 nor the kill test below can close the requirement.
 
+Two further limits of the numbers on file, both found in review of the instrument:
+
+- **They exclude checkpoints.** Two hundred visits never reach SQLite's automatic checkpoint
+  threshold, so the WAL was checkpointed at close, untimed. `checkpoint_fullfsync` — one of the two
+  pragmas this ADR names — was set by every configuration and exercised by none, and the visit that
+  pays for a checkpoint in production appears in no distribution above. The probe now checkpoints
+  explicitly after each configuration's visits and reports that cost as a separate `ckpt` figure;
+  every run recorded here predates it.
+- **P99 over 200 samples is coarse.** Nearest-rank P99 is the 198th-slowest sample, so a stall that
+  occurs once in a hundred visits shows in P99 only when it happens three or more times in a run —
+  about a third of runs. `worst` is the column that catches a rare stall at these sample counts,
+  which is why it is recorded and why the phone's worst of 2.18 ms carries more weight than its
+  P99.
+
+Runs taken from here on also print a `THRO-PROBE-ENV` line — hardware identifier, OS build, visit
+count, and whether the Simulator was involved — inside the captured block, so the attribution this
+ADR insists on travels with the numbers instead of being added by hand.
+
 ### Kill test — passing on the flagship
 
 The process is `SIGKILL`ed mid-transaction while writing visits under `synchronous=FULL` +
@@ -203,6 +221,16 @@ result is evidence about the barrier — a green run under `fullfsync` would be 
 that means nothing. A force-restart is a controlled reset: the storage controller stays powered,
 in-flight writes complete, and the ten seconds the gesture takes already exceeds the kernel's
 dirty-page flush interval. There is no window to catch.
+
+One qualification, found in review and recorded rather than argued away. At the time of that run
+the app held only an idle-timer assertion, which stops auto-lock but not suspension, and the
+gesture darkens the screen before the reset. So the control cannot exclude a few seconds in which
+the app was suspended and the kernel flushed before the device went down. The instrument now holds
+a background-task assertion through the event and the script voids a run whose acknowledgement
+stream stopped more than eight seconds before the device dropped; the recorded run predates both.
+The honest statement is therefore that force-restart *did not* discriminate in the one valid run,
+not that it *cannot* — the hardware recommendation stands either way, and one further iPhone
+control under the current instrument would settle which.
 
 This narrows what the outstanding requirement actually needs. It is not "try harder on the iPhone";
 it is hardware whose power can genuinely be interrupted — the `~£150 A-series Android` this ADR
