@@ -68,17 +68,15 @@ for anything new.
    Xcode opens. The window title reads **ThroDarts**. If it reads ThroProbe, close that window and
    run the command again.
 
-### 2. Tell Xcode who signs it (until the Team ID is in the project)
+### 2. Signing is already set
 
-Choosing a team makes Xcode write `DEVELOPMENT_TEAM = <your Team ID>;` into
-`apps/ios/ThroDarts.xcodeproj/project.pbxproj`. That is a local change to a tracked file, and every
-later `git pull` refuses to run over it — which is how the phone stayed on the 5 September build for a
-day. The lasting fix is to commit that line, so Xcode finds the team already set and changes nothing.
-A Team ID is a public identifier (it is in every provisioning profile), not a secret. To supply it,
-run this before step 1's `git checkout --` and paste the line it prints:
-```bash
-git diff apps/ios/ThroDarts.xcodeproj/project.pbxproj | grep DEVELOPMENT_TEAM
-```
+The founder's Team ID (`2XM324WPD5`, a public identifier that appears in every provisioning profile,
+not a secret) is committed in `project.pbxproj` with automatic signing, since 2026-09-06. Xcode finds
+the team already chosen and changes nothing, so `git pull` stays a plain pull. Before that, choosing
+the team in Xcode wrote the ID into the tracked project file, and every later pull refused to run over
+that local change — which is how the phone stayed on the 5 September build for a day. If Xcode ever
+shows a signing error on a different Mac, the Apple ID that owns that team must be signed in under
+Xcode → Settings → Accounts; nothing in the project needs to change.
 
 6. Wait for the small status area at the top of the window to finish *Resolving Package Graph*; a
    few seconds. Xcode is reading the four local packages.
