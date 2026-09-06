@@ -169,8 +169,10 @@ exactly what CI does (`xcodebuild -scheme ThroDarts -destination 'generic/platfo
   *You* says the profile is not built and carries the export's settings action in its header.
 - **Settings** (from the gear on You). **Appearance: System / Light / Dark** — every screen follows
   it, scoring included (PD-003); **Scoring → Keep screen awake**, on by default as the export's
-  Settings lists it; and a *This build* group stating what is true: matches stay on the device,
-  sending to THRØ is not built, which face the fonts are, no account.
+  Settings lists it; **Opening → Sound** and **Haptic on the strike**, both on by default, with *Play
+  the opening again* (PD-007); and a *This build* group stating what is true: the commit the app was
+  built from, matches stay on the device, sending to THRØ is not built, which face the fonts are, no
+  account.
 - **Match setup** (dark). Two names, then 301 / 501 / 701, Bo3 / Bo5 / Bo7 / Bo9, and who throws
   first. Double out is the only out-rule offered. Empty names become *Home* and *Away*.
 - **Match ready.** The two players, the format as tags, **Start scoring**.
