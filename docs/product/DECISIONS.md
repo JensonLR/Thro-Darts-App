@@ -287,10 +287,12 @@ relevant". **Recorded by:** engineering, the same day.
 1. The mark is a ring with a dart through it, lower-left to upper-right, both ends drawn to a point
    beyond the ring. The wordmark is THRØ with that mark as its Ø. The founder supplied both, in black
    and in the brand green, as images.
-2. The app icon and the launch screen carry the mark alone, in chalk on the brand green — the one
-   composition the export gives it, its Splash screen: a green field, the chalk mark 104 wide, the
-   wordmark beneath. The wordmark is not on the launch screen yet: no vector master of it is in the
-   repository, and letterforms are not reconstructed by hand.
+2. The app icon carries the mark alone, and the launch screen carries the mark with the wordmark
+   28 points beneath it, both in chalk on the brand green — the one composition the export gives them,
+   its Splash screen (mark 104 wide, wordmark 150 wide). The wordmark's letters are Archivo ExtraBold's
+   own outlines, the face the supplied wordmark matches, with the Ø drawn from the mark's geometry at
+   the heavier proportions the wordmark gives it; no master vector file is in the repository, so this
+   is the brand's own face standing in for the founder's file until the file arrives.
 3. Archivo and IBM Plex Sans Condensed are embedded: ten unmodified static faces, the weights the type
    roles use, with each family's licence text beside the files in the bundle. Both families are
    published under the SIL Open Font License, Version 1.1. Its grant, in its own words: "Permission is hereby granted, free of charge, to any person obtaining a copy of the Font Software, to use, study, copy, merge, embed, modify, redistribute, and sell modified and unmodified copies of the Font Software, subject to the following conditions:"
@@ -309,9 +311,11 @@ colourway invented here.
 ### The cost that must be stated plainly
 
 The mark in the repository is a geometric reconstruction measured from the supplied image — ring
-0.364 and 0.250 of the frame, dart half-width 0.040, tips at 0.643 — not the founder's master file.
-It should be replaced by the master when one is added under `docs/design/brand/`, and the icon
-regenerated from it. The dart-flight variant the founder also supplied is not used: the wordmark's Ø
+0.364 and 0.250 of the frame, dart half-width 0.040, tips at 0.643 — not the founder's master file,
+and the wordmark is set from Archivo ExtraBold's outlines on the judgement that the supplied wordmark
+is that face: the forms match, and the letters in the supplied image run a few percent narrower, which
+the founder should confirm or correct on the phone. Both should be replaced by the masters when they
+are added under `docs/design/brand/`, and the icon and launch image regenerated from them. The dart-flight variant the founder also supplied is not used: the wordmark's Ø
 has plain points and the icon follows the wordmark. IBM Plex Sans Condensed stops at Bold, so a heavy
 sport role takes Bold. The licence is quoted, not interpreted: this register records what the text
 grants and what the build does to meet its conditions, and a legal sign-off on THRØ's use remains the
