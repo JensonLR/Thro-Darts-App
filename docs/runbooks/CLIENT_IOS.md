@@ -34,12 +34,17 @@ for anything new.
    ```bash
    ls -d ~/Thro-Darts-App ~/Documents/Thro-Darts-App 2>/dev/null
    ```
-3. If a path printed, use it and bring it up to date:
+3. If a path printed, use it and bring it up to date, then **check you have the newest commit**:
    ```bash
    cd ~/Documents/Thro-Darts-App        # or whichever path printed
    git checkout claude/thro-production-build-je2mkf
-   git pull
+   git pull origin claude/thro-production-build-je2mkf
+   git log -1 --oneline
    ```
+   The last line prints the commit you are about to build. Compare it with the newest commit at the
+   top of the PR's *Commits* tab (https://github.com/JensonLR/Thro-Darts-App/pull/1/commits). If they
+   differ, the pull did not happen — you are in a different folder from the one the pull went to, or
+   `git pull` printed an error above. Paste the whole output back rather than building.
    If nothing printed, clone afresh — the repository is public, so no login is needed:
    ```bash
    cd ~
@@ -47,6 +52,10 @@ for anything new.
    cd Thro-Darts-App
    ```
 4. `git status` should now say `On branch claude/thro-production-build-je2mkf`.
+   **Which build is on the phone right now?** In the app, You → gear → *This build* → **Build** shows
+   the commit the running app was made from (a `+` after it means the checkout had uncommitted
+   changes when it was built). If that row is missing, the phone is running a build older than
+   2026-09-06 and needs the steps above.
 5. Open the app project — **this one, not ThroProbe**:
    ```bash
    open apps/ios/ThroDarts.xcodeproj
@@ -69,6 +78,10 @@ for anything new.
     `com.thro`, so this will be free), and press Return. The red text goes away.
 
 ### 3. Run it
+
+If the app on the phone looks unchanged after a pull, first check Settings → *This build* → **Build**
+against `git log -1 --oneline`. If they differ, go back to step 1. If they match and something still
+looks stale, Product → Clean Build Folder (⇧⌘K), then Run again.
 
 12. Unlock the phone and plug it in. If the phone asks whether to trust this computer, tap **Trust**.
 13. At the top centre of the Xcode window is the run destination: it reads **ThroDarts ▸ something**.
@@ -209,6 +222,14 @@ Still to add: the screenshots themselves into `docs/runbooks/screenshots/`.
 
 **Then the founder decided** (PD-003): the player chooses the appearance. The You tab now carries
 System / Light / Dark; setup and scoring stay dark as drawn.
+
+**Fourth look, 2026-09-06 at 10:43, on commit `e9382ad` still.** Three screenshots — Home with the
+*Fonts not embedded* notice and the 1–1 match from the night before, Settings without the Scoring
+group, the result of the first match — show the phone running the build from the night before: none
+of the four pushes since (the non-scrolling scoring screen, the announcement cards, the fonts, the icon
+and launch screen) had reached it. Nothing from those pushes is verified on a device yet. Step 1 now
+ends with `git log -1 --oneline` so a stale checkout is caught before Xcode opens, and Settings shows
+the build's commit so a screenshot can say what it is of.
 
 **Third run, 2026-09-06, on commit `e9382ad`.** The founder confirmed the retraction, the appearance
 choice on every screen and the Settings screen, and found one thing wrong: with the thrower on a

@@ -300,6 +300,7 @@ public struct SettingsScreen: View {
                             .foregroundStyle(ThroColor.colorTextSecondary)
                     }
                     group("This build") {
+                        SettingsRow(icon: .info, label: "Build", value: BuildInfo.label)
                         SettingsRow(icon: .info, label: "Matches", value: "Stay on this device")
                         SettingsRow(icon: .cloudOff, label: "Sending results to THRØ", value: "Not built")
                         SettingsRow(icon: .info, label: "Fonts", value: ThroFont.customFacesRegistered ? "Embedded" : "System face")
@@ -321,6 +322,20 @@ public struct SettingsScreen: View {
         .padding(.bottom, ThroSpacing.spacing4)
         .padding(.horizontal, ThroSpacing.spaceScreenGutter)
     }
+}
+
+/// What the running app was built from. The Xcode target stamps the short commit into Info.plist in a
+/// script phase — a "+" after it means the checkout had uncommitted changes — so a phone can always
+/// say which build it runs and the runbook can ask. A build without the stamp says so.
+public enum BuildInfo {
+    public static var commit: String {
+        Bundle.main.object(forInfoDictionaryKey: "ThroBuildCommit") as? String ?? "unstamped"
+    }
+    public static var version: String {
+        Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? ""
+    }
+    /// "1.0 · ea67fe6", or just the commit when there is no version.
+    public static var label: String { version.isEmpty ? commit : "\(version) · \(commit)" }
 }
 
 /// One row of the export's Settings: an 18-point icon, the label, the value, a hairline beneath. The

@@ -56,6 +56,7 @@
 				7A5E0000000000000000000B /* Sources */,
 				7A5E0000000000000000000A /* Frameworks */,
 				7A5E00000000000000000005 /* Resources */,
+				7A5E00000000000000000020 /* Stamp the build commit into Info.plist */,
 			);
 			buildRules = (
 			);
@@ -118,6 +119,29 @@
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXResourcesBuildPhase section */
+
+/* Begin PBXShellScriptBuildPhase section */
+		7A5E00000000000000000020 /* Stamp the build commit into Info.plist */ = {
+			isa = PBXShellScriptBuildPhase;
+			alwaysOutOfDate = 1;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+				"$(TARGET_BUILD_DIR)/$(INFOPLIST_PATH)",
+			);
+			name = "Stamp the build commit into Info.plist";
+			outputFileListPaths = (
+			);
+			outputPaths = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "# Settings → This build → Build shows this commit, so a phone can always say what it is running\n# (docs/runbooks/CLIENT_IOS.md, step 1). A \"+\" means the checkout had uncommitted changes.\nset -e\ncd \"$SRCROOT\"\nCOMMIT=$(git rev-parse --short HEAD 2>/dev/null || echo unknown)\nif [ \"$COMMIT\" != unknown ] && ! git diff --quiet HEAD 2>/dev/null; then COMMIT=\"${COMMIT}+\"; fi\nPLIST=\"$TARGET_BUILD_DIR/$INFOPLIST_PATH\"\n/usr/libexec/PlistBuddy -c \"Delete :ThroBuildCommit\" \"$PLIST\" >/dev/null 2>&1 || true\n/usr/libexec/PlistBuddy -c \"Add :ThroBuildCommit string $COMMIT\" \"$PLIST\"\n";
+		};
+/* End PBXShellScriptBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
 		7A5E0000000000000000000B /* Sources */ = {
@@ -204,6 +228,7 @@
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ENABLE_USER_SCRIPT_SANDBOXING = NO;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = Support/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = "THRØ";
@@ -228,6 +253,7 @@
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ENABLE_USER_SCRIPT_SANDBOXING = NO;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = Support/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = "THRØ";
