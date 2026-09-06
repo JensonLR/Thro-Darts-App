@@ -27,6 +27,8 @@ final class LaunchSequenceTests: XCTestCase {
             XCTAssertEqual(seg.progress(at: 0), 1, "\(seg.name) reads complete from the first frame")
         }
         XCTAssertTrue(r.cues.isEmpty, "no motion, nothing to score")
+        XCTAssertFalse(r.isAnimated, "the frame draws no strike, no dust and no pulse")
+        XCTAssertTrue(LaunchTimeline.standard.isAnimated)
         XCTAssertGreaterThan(r.hold.duration, 0.5, "a moment to read the name")
     }
 

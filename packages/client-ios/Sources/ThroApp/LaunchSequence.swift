@@ -45,9 +45,13 @@ public struct LaunchTimeline: Equatable, Sendable {
     /// Reduce Motion: the finished composition from the first frame, a moment to read it, the fade.
     public static let reduced = LaunchTimeline(cuts: [0, 0, 0, 0, 0, 0, 0.60, 0.90])
 
+    /// Whether anything moves. False under Reduce Motion, where every effect is already at rest from
+    /// the first frame: no flight, no strike, no dust, no pulse, no cue.
+    public var isAnimated: Bool { flight.duration > 0 }
+
     /// Sound and haptic cues, by name and time. None under Reduce Motion: no motion, nothing to score.
     public var cues: [LaunchCue] {
-        guard flight.duration > 0 else { return [] }
+        guard isAnimated else { return [] }
         return [LaunchCue(name: "whoosh", at: flight.start),
                 LaunchCue(name: "thud", at: impact.start),
                 LaunchCue(name: "haptic", at: impact.start),
@@ -324,7 +328,7 @@ struct LaunchFrame: View {
         let axis = MarkGeometry.axis
 
         // Impact: a breath of lighter green behind the strike and a shockwave from the point.
-        if sinceImpact >= 0 && sinceImpact < 0.55 {
+        if timeline.isAnimated && sinceImpact >= 0 && sinceImpact < 0.55 {
             let q = sinceImpact / 0.55
             let breath = sin(.pi * q) * 0.9
             let flash = Gradient(colors: [ThroColor.throGreenDeep.opacity(breath), ThroColor.throGreenDeep.opacity(0)])
@@ -338,7 +342,7 @@ struct LaunchFrame: View {
 
         // The ring: blooms clockwise from where the dart crossed it, glows, carries chalk grain, pulses once.
         if pRing > 0 {
-            let pulse = 1 + CGFloat(Easing.damped(sinceRing, amplitude: 0.035, hertz: 5.5, decay: 0.16))
+            let pulse = timeline.isAnimated ? 1 + CGFloat(Easing.damped(sinceRing, amplitude: 0.035, hertz: 5.5, decay: 0.16)) : 1
             let sweep = 360 * pRing
             let arc = geo.ringArc(at: centre, fromDegrees: 315, sweepDegrees: sweep, radiusScale: pulse)
             context.drawLayer { glow in
@@ -419,7 +423,7 @@ struct LaunchFrame: View {
         }
 
         // Dust off the point of impact: thrown outward and falling.
-        if sinceImpact >= 0 && sinceImpact < 0.9 {
+        if timeline.isAnimated && sinceImpact >= 0 && sinceImpact < 0.9 {
             let tipPoint = geo.onAxis(centre, geo.tip)
             for i in 0..<10 {
                 let a = (-80 + Double(i) * 14) * .pi / 180 + atan2(Double(axis.dy), Double(axis.dx))   // a fan around the heading
@@ -441,14 +445,18 @@ struct LaunchFrame: View {
             let baseline = wordTop + wordHeight / 2 + wordC / 2
             let textTop = baseline - fontSize * WordmarkGeometry.ascenderPerEm
             let font = Font.custom("Archivo-ExtraBold", size: fontSize)
-            var x = left
-            for (i, letter) in ["T", "H", "R"].enumerated() {
+            let box = CGSize(width: 10_000, height: 10_000)
+            let word = ["T", "H", "R"]
+            for (i, letter) in word.enumerated() {
                 let q = min(1, max(0, (pResolve - (0.5 + 0.12 * Double(i))) / 0.3))
                 let rise = CGFloat(1 - Easing.set(q)) * 16
                 var glyph = context.resolve(Text(letter).font(font))
+                // The letter sits where it sits in the whole word, so each pair keeps the face's kerning:
+                // its origin is the width of the word up to and including it, less its own width.
+                let upTo = context.resolve(Text(word[...i].joined()).font(font)).measure(in: box).width
+                let x = left + upTo - glyph.measure(in: box).width
                 glyph.shading = .color(chalk.opacity(q))
                 context.draw(glyph, at: CGPoint(x: x, y: textTop + rise), anchor: .topLeading)
-                x += glyph.measure(in: CGSize(width: 1000, height: 1000)).width
             }
             let oAlpha = min(1, max(0, (pResolve - 0.7) / 0.25))
             let oCentre = CGPoint(x: left + wordSize.width + WordmarkGeometry.gap * wordC + WordmarkGeometry.ringOuter * wordC,

@@ -43,24 +43,38 @@ final class LaunchSoundtrack {
 
     /// Cues are named after their sound file's suffix; "haptic" is the strike's impact.
     func schedule(_ cues: [LaunchCue], from start: Date) {
-        #if canImport(UIKit)
-        if haptics { impact.prepare() }
-        #endif
         for cue in cues {
             let delay = max(0, cue.at - Date().timeIntervalSince(start))
             if cue.name == "haptic" {
                 guard haptics else { continue }
-                let item = DispatchWorkItem { [weak self] in
+                // The Taptic Engine is readied half a second ahead, which is as long as it stays ready.
+                later(max(0, delay - 0.5)) { [weak self] in
+                    #if canImport(UIKit)
+                    self?.impact.prepare()
+                    #endif
+                }
+                later(delay) { [weak self] in
                     #if canImport(UIKit)
                     self?.impact.impactOccurred(intensity: 1.0)
                     #endif
                 }
-                pending.append(item)
-                DispatchQueue.main.asyncAfter(deadline: .now() + delay, execute: item)
             } else if let player = players["thro-" + cue.name] {
-                _ = player.play(atTime: player.deviceCurrentTime + delay)
+                // Scheduled on the audio device's own clock, which is exact; if the device has no clock
+                // yet, on the main queue, which is close enough for a cue.
+                let device = player.deviceCurrentTime
+                if device > 0 {
+                    _ = player.play(atTime: device + delay)
+                } else {
+                    later(delay) { _ = player.play() }
+                }
             }
         }
+    }
+
+    private func later(_ delay: TimeInterval, _ work: @escaping () -> Void) {
+        let item = DispatchWorkItem(block: work)
+        pending.append(item)
+        DispatchQueue.main.asyncAfter(deadline: .now() + delay, execute: item)
     }
 
     /// A tap skipped the opening: nothing more is heard.
