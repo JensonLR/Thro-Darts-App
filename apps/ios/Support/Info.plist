@@ -19,8 +19,6 @@
 	<dict>
 		<key>UIColorName</key>
 		<string>LaunchBackground</string>
-		<key>UIImageName</key>
-		<string>LaunchMark</string>
 	</dict>
 </dict>
 </plist>

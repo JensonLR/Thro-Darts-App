@@ -156,9 +156,9 @@ public enum ThroSpacing {
     public static let borderWidthStrong: CGFloat = 2
     public static let focusRingOffset: CGFloat = 2
     public static let focusRingWidth: CGFloat = 2
-    public static let motionTravelLarge: CGFloat = 0
-    public static let motionTravelMedium: CGFloat = 0
-    public static let motionTravelSmall: CGFloat = 0
+    public static let motionTravelLarge: CGFloat = 24
+    public static let motionTravelMedium: CGFloat = 12
+    public static let motionTravelSmall: CGFloat = 6
     public static let radiusCard: CGFloat = 10
     public static let radiusControl: CGFloat = 6
     public static let radiusField: CGFloat = 6
@@ -206,6 +206,23 @@ public enum ThroSpacing {
     public static let typographyRatingHeroLine: CGFloat = 54
     public static let typographyScoreHeroLine: CGFloat = 88
     public static let typographySportHeroLine: CGFloat = 68
+}
+
+/// Motion tokens. Durations in seconds; easings as the four cubic-bezier control values,
+/// for `Animation.timingCurve(_:_:_:_:duration:)`. Under Reduce Motion the token layer sets
+/// every duration to zero; code that animates checks `accessibilityReduceMotion` itself.
+public enum ThroMotion {
+    public static let motionDurationEmphasis: Double = 0.34
+    public static let motionDurationFast: Double = 0.14
+    public static let motionDurationInstant: Double = 0.08
+    public static let motionDurationResolve: Double = 0.48
+    public static let motionDurationStandard: Double = 0.22
+    public static let motionEasingExit: (CGFloat, CGFloat, CGFloat, CGFloat) = (0.4, 0, 1, 1)
+    public static let motionEasingImpact: (CGFloat, CGFloat, CGFloat, CGFloat) = (0.16, 1, 0.3, 1)
+    public static let motionEasingResolve: (CGFloat, CGFloat, CGFloat, CGFloat) = (0.4, 0, 0.2, 1)
+    public static let motionEasingSet: (CGFloat, CGFloat, CGFloat, CGFloat) = (0.32, 0.72, 0, 1)
+    public static let motionEasingThrow: (CGFloat, CGFloat, CGFloat, CGFloat) = (0.2, 0.9, 0.1, 1)
+    public static let motionScaleImpact: CGFloat = 1.02
 }
 
 /// Type roles bind to a text style so Dynamic Type scales them. A fixed-size font

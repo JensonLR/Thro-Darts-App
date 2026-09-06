@@ -25,7 +25,10 @@ OUT = HERE / "generated"
 def lift():
     css = SOURCE_CSS.read_text()
     light, dark = {}, {}
-    for m in re.finditer(r":root\s*\{(.*?)\}", css, re.S):
+    # The reduced-motion media block has a :root of its own; scanning it here would overwrite every
+    # motion token's real value with the zero the block sets. It is read separately below.
+    css_light = re.sub(r"@media\s*\(prefers-reduced-motion:\s*reduce\)\s*\{.*?\}\s*\}", "", css, flags=re.S)
+    for m in re.finditer(r":root\s*\{(.*?)\}", css_light, re.S):
         light.update(dict(re.findall(r"(--[a-z0-9-]+)\s*:\s*([^;]+)", m.group(1))))
     for m in re.finditer(r'\[data-theme="dark"\]\s*\{(.*?)\}', css, re.S):
         dark.update(dict(re.findall(r"(--[a-z0-9-]+)\s*:\s*([^;]+)", m.group(1))))
@@ -167,6 +170,26 @@ def emit_swift(doc):
         m = re.match(r"^(\d+)px$", v)
         if m:
             L.append(f"    public static let {camel(n)}: CGFloat = {m.group(1)}")
+    L.append("}")
+    L.append("")
+    L.append("/// Motion tokens. Durations in seconds; easings as the four cubic-bezier control values,")
+    L.append("/// for `Animation.timingCurve(_:_:_:_:duration:)`. Under Reduce Motion the token layer sets")
+    L.append("/// every duration to zero; code that animates checks `accessibilityReduceMotion` itself.")
+    L.append("public enum ThroMotion {")
+    for n in sorted(doc["tokens"]):
+        t = doc["tokens"][n]["$type"]; v = (lt.get(n) or "").strip()
+        if t == "duration":
+            m = re.match(r"^(\d+)ms$", v)
+            if m:
+                L.append(f"    public static let {camel(n)}: Double = {int(m.group(1)) / 1000:g}")
+        elif t == "cubicBezier":
+            m = re.match(r"^cubic-bezier\(([^)]+)\)$", v)
+            if m:
+                pts = [x.strip() for x in m.group(1).split(",")]
+                if len(pts) == 4:
+                    L.append(f"    public static let {camel(n)}: (CGFloat, CGFloat, CGFloat, CGFloat) = ({', '.join(pts)})")
+        elif n.startswith("--motion-scale"):
+            L.append(f"    public static let {camel(n)}: CGFloat = {v}")
     L.append("}")
     L.append("")
     L.append("/// Type roles bind to a text style so Dynamic Type scales them. A fixed-size font")

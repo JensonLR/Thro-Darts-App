@@ -80,11 +80,26 @@ public struct ThroRootView: View {
     @StateObject private var store: AppStore
     @AppStorage(Appearance.storageKey) private var appearanceRaw: String = Appearance.system.rawValue
     @State private var showingSettings = false
+    /// PD-007: the opening plays once, at cold launch, over whatever the app shows first.
+    @State private var opening = true
 
     public init() { _store = StateObject(wrappedValue: AppStore()) }
     public init(store: AppStore) { _store = StateObject(wrappedValue: store) }
 
     public var body: some View {
+        ZStack {
+            content
+            if opening {
+                LaunchSequenceView {
+                    withAnimation(.easeInOut(duration: LaunchTimeline.standard.exit.duration)) { opening = false }
+                }
+                .transition(.opacity)
+                .zIndex(1)
+            }
+        }
+    }
+
+    @ViewBuilder private var content: some View {
         if let flow = store.flow, let journal = store.journal {
             PlayFlow(journal: journal, resume: resumeId(flow)) {
                 store.flow = nil

@@ -163,20 +163,20 @@
   --elevation-3: 0 8px 24px rgba(16,18,17,0.10);
   --elevation-sheet: 0 -8px 32px rgba(16,18,17,0.14);
   --elevation-nav: 0 -1px 0 0 var(--color-border-default);
-  --motion-duration-instant: 0ms;
-  --motion-duration-fast: 0ms;
-  --motion-duration-standard: 0ms;
-  --motion-duration-emphasis: 0ms;
-  --motion-duration-resolve: 0ms;
+  --motion-duration-instant: 80ms;
+  --motion-duration-fast: 140ms;
+  --motion-duration-standard: 220ms;
+  --motion-duration-emphasis: 340ms;
+  --motion-duration-resolve: 480ms;
   --motion-easing-set: cubic-bezier(0.32,0.72,0,1);
   --motion-easing-throw: cubic-bezier(0.2,0.9,0.1,1);
   --motion-easing-impact: cubic-bezier(0.16,1,0.3,1);
   --motion-easing-resolve: cubic-bezier(0.4,0,0.2,1);
   --motion-easing-exit: cubic-bezier(0.4,0,1,1);
-  --motion-travel-small: 0px;
-  --motion-travel-medium: 0px;
-  --motion-travel-large: 0px;
-  --motion-scale-impact: 1;
+  --motion-travel-small: 6px;
+  --motion-travel-medium: 12px;
+  --motion-travel-large: 24px;
+  --motion-scale-impact: 1.02;
 }
 [data-theme="dark"] {
   --color-background-primary: var(--thro-ink);

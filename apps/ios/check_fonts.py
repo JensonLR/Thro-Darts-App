@@ -68,10 +68,10 @@ for lic, needle in (("OFL-Archivo.txt", "Archivo"), ("OFL-IBMPlex.txt", "IBM")):
             fail(f"{lic} is not the SIL Open Font License 1.1 text for {needle}")
 
 launch = plist.get("UILaunchScreen", {})
+if "UIColorName" not in launch: fail("UILaunchScreen has no UIColorName; the static launch screen is the brand field (PD-007)")
 for key, folder in (("UIColorName", ".colorset"), ("UIImageName", ".imageset")):
-    name = launch.get(key)
-    if not name or not (ASSETS / f"{name}{folder}" / "Contents.json").exists():
-        fail(f"UILaunchScreen.{key} = {name!r} has no {folder} in the asset catalogue")
+    if key in launch and not (ASSETS / f"{launch[key]}{folder}" / "Contents.json").exists():
+        fail(f"UILaunchScreen.{key} = {launch[key]!r} has no {folder} in the asset catalogue")
 icon = ASSETS / "AppIcon.appiconset" / "AppIcon.png"
 if not icon.exists(): fail("AppIcon.png is missing")
 else:

@@ -19,9 +19,8 @@ flight at the tail. The export's Splash screen references these as `assets/mark-
   height between letters, and the Ø from the mark's geometry at the proportions the supplied wordmark
   gives it (ring outer 0.53 and inner 0.30 of the cap height, dart half-width 0.067, tips 0.95 from the
   centre). `python3 docs/design/brand/render_wordmark.py <repo root>` writes `candidates/` — the
-  wordmark as PNG and SVG and a phone-sized preview of the launch screen; with `--launch` it also writes
-  the composed launch image (`LaunchMark.imageset/LaunchMark.pdf`: mark 104 wide, wordmark 150 wide,
-  28 apart, chalk), which is what the app ships.
+  wordmark as PNG and SVG and a phone-sized preview of the Splash composition. The app draws the same
+  geometry live in its opening (`LaunchSequence.swift`, `WordmarkGeometry`); nothing here ships.
 - `thro-mark-green.svg`, `thro-mark-chalk.svg` — the mark reconstruction, for reference and review.
 - `candidates/` — the wordmark reconstruction and the launch-screen preview, for the founder to check.
 
@@ -30,8 +29,15 @@ flight at the tail. The export's Splash screen references these as `assets/mark-
 The wordmark's face is read from the supplied image as Archivo ExtraBold — the brand's own UI family at
 its heavy weight. The forms match (square terminals, the R's straight leg, the H's proportions); the
 letters in the supplied image run a few percent narrower than the static face. The founder confirms or
-corrects this on the phone (runbook, next-run checklist item 8). If the face is wrong, `--launch` is
-not run again and `render_mark.py`'s mark-only launch image goes back in one commit.
+corrects this on the phone (runbook, next-run checklist item 8). If the face is wrong, the opening's
+letters change face in one place.
+
+## The opening
+
+PD-007. The static launch screen is the green field alone; the app's first frames draw the throw that
+is the mark, then settle into the Splash composition. Storyboard, timings and two alternative
+directions are on the design canvas "THRØ Launch Sequence"; the timings and easings in
+`LaunchSequence.swift` are the spec board's and the token layer's.
 
 ## What is not here, and what to do when it is
 

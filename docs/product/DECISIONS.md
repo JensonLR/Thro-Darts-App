@@ -326,3 +326,52 @@ founder's (OD-011).
 Delete `apps/ios/ThroDarts/Fonts` and the `UIAppFonts` entries; the type layer falls back to the
 system face and Home says so. Delete the asset catalogue entries and the two build settings; the icon
 returns to the default.
+
+## PD-007 — The app opens on the throw
+
+**Decided by:** the founder, 2026-09-06 — "I want something really beautiful, dynamic & cool for the
+loading screen of the app using the logo … unique & maybe darts related … utterly beautiful & also
+makes sense for this app", designed on a Claude Design canvas before it was built. **Recorded by:**
+engineering, the same day.
+
+### Decided
+
+1. The static launch screen iOS shows before the app can draw is the brand field alone — `--thro-green`,
+   nothing on it. The app's own first frames continue from it, so there is no jump.
+2. The opening, Direction A of the design canvas "THRØ Launch Sequence": one chalk dart comes in from
+   the lower left along the mark's 45° axis, loops once around the centre leaving the ring as its
+   trail, hooks inward, cuts straight through the centre and lands. Its whole path is the mark. The
+   ring flexes once and the field breathes lighter behind it; then the mark shrinks and rises to its
+   place and THRØ appears beneath it, exactly the export's Splash composition (mark 104 wide, wordmark
+   150 wide, the tagline under), and Home fades up.
+3. Timings are the spec board's: field to 150 ms, approach to 300, loop to 850, strike to 1030, impact
+   to 1150, name to 1600, hold to 2000, cross-fade to 2300. Easings are the token layer's own —
+   `--motion-easing-throw` for the strike, `--motion-easing-impact` for the landing,
+   `--motion-easing-resolve` for the settle — and the flex is twice `--motion-scale-impact`.
+4. Cold launch only; never on return from the background. A tap anywhere skips to Home. With Reduce
+   Motion on, the finished composition shows from the first frame and fades. No sound. No progress
+   indicator: nothing is loading, and the opening is not allowed to pretend otherwise.
+5. Two other directions were sketched beside it on the canvas — B, a scorer's chalk hand drawing the
+   ring; C, the ring as a distant target rushing up from the oche — with their costs stated, so the
+   founder chose from real alternatives. A is built; B and C remain on the canvas.
+
+### Why
+
+The founder asked for it, and asked for it to be designed rather than improvised. The mark is a dart
+frozen mid-throw; showing the throw is the one animation that is about this logo and nothing else.
+
+### The cost that must be stated plainly
+
+Apple's guidance is that a launch screen be the first screen of the app, and an opening of any length
+is a choice against that guidance; this one is 2.3 seconds, skippable, once per cold launch. The
+chalk-dart loop is physically impossible and meant as a drawn gesture, not a simulation. The
+sequence is drawn with the phone's own frames, so what the founder sees is the first time anyone has;
+the storyboard is six still frames, and motion judged from stills is a judgement to confirm on the
+device. The token generator had been emitting every motion token as zero (the reduced-motion block
+overwrote them); that is fixed in the same change, which is why the easings could be the tokens'.
+
+### How to reverse
+
+Delete `opening` from the root view and `LaunchSequence.swift`; the static field remains and Home is
+the first frame. To restore the mark on the static launch screen, add an image set back to
+`UILaunchScreen`.

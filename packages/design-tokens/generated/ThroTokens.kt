@@ -234,9 +234,9 @@ public object ThroSpacing {
     public val borderWidthStrong = 2.dp
     public val focusRingOffset = 2.dp
     public val focusRingWidth = 2.dp
-    public val motionTravelLarge = 0.dp
-    public val motionTravelMedium = 0.dp
-    public val motionTravelSmall = 0.dp
+    public val motionTravelLarge = 24.dp
+    public val motionTravelMedium = 12.dp
+    public val motionTravelSmall = 6.dp
     public val radiusCard = 10.dp
     public val radiusControl = 6.dp
     public val radiusField = 6.dp

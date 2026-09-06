@@ -100,3 +100,11 @@ alpha, so `ThroColor.colorScrim` exists and PD-005's announcement card uses it. 
 still emits hex colours only, so Android has no scrim token yet; it needs an ARGB path before the
 Android client uses one. The contrast matrix does not cover the scrim: it is not a text pair.
 
+## Motion tokens, 2026-09-06
+
+Every motion token had been emitted as zero — durations `0ms`, travel `0px` — because the generator's
+scan of `:root` blocks also matched the `:root` inside the `@media (prefers-reduced-motion: reduce)`
+block, whose zeros then overwrote the real values. The reduced block is now cut out before the light
+scan and read on its own, and Swift gains `ThroMotion`: durations in seconds, the five easings as
+cubic-bezier control values, travel, and the impact scale. The opening (PD-007) is the first consumer.
+Kotlin and the CSS/JSON outputs carry the corrected values too; Kotlin has no motion object yet.

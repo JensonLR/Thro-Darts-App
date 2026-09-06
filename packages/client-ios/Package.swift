@@ -79,5 +79,7 @@ let package = Package(
             ],
             path: "Sources/ThroApp"
         ),
+        .testTarget(name: "ThroAppTests", dependencies: ["ThroApp", .product(name: "ThroTokens", package: "design-tokens")],
+                    path: "Tests/ThroAppTests"),
     ]
 )
