@@ -1,0 +1,171 @@
+name: testflight
+
+# Builds the iOS app for TestFlight and uploads it to App Store Connect, so the founder can install it on
+# the phone from the phone: run this, then open TestFlight. It runs only when asked — never on a push —
+# because every upload is a build the founder will be offered.
+#
+# Two ways to ask:
+#   - Actions → testflight → Run workflow, choosing the branch (github.com in a phone's browser works).
+#   - A comment on the pull request that begins "/testflight", by the repository owner. GitHub only
+#     honours comment triggers from the workflow file on the default branch, so this way works once
+#     this file has been merged.
+#
+# It needs three repository secrets and refuses to start without them, saying so:
+#   ASC_KEY_ID      the App Store Connect API key's ID (ten characters)
+#   ASC_ISSUER_ID   the issuer ID shown on the same page (a UUID)
+#   ASC_KEY_P8      the text of the AuthKey_<KEY_ID>.p8 file, beginning -----BEGIN PRIVATE KEY-----
+# Optionally, if Apple will not let that key create a cloud-managed distribution certificate:
+#   IOS_DIST_P12_BASE64   an Apple Distribution certificate with its private key, exported from Keychain
+#                         Access on the founder's Mac as .p12 and base64-encoded
+#   IOS_DIST_P12_PASSWORD its password
+# docs/runbooks/TESTFLIGHT.md says where each comes from. None of them may ever appear in the repository.
+#
+# Signing: the archive is built unsigned and signed at export by Xcode's automatic signing, using the API
+# key — a cloud-managed Apple Distribution certificate if the key's role allows, the imported .p12 if one
+# was given. The build number is this workflow's run number, so every upload is newer than the last.
+
+on:
+  workflow_dispatch:
+  issue_comment:
+    types: [created]
+
+permissions:
+  contents: read
+  pull-requests: write
+  issues: write
+
+concurrency:
+  group: testflight
+  cancel-in-progress: false
+
+jobs:
+  upload:
+    name: Archive, sign and upload to TestFlight
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.issue.pull_request &&
+       startsWith(github.event.comment.body, '/testflight') &&
+       github.event.comment.author_association == 'OWNER')
+    runs-on: macos-latest
+    timeout-minutes: 45
+    env:
+      ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+      ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+      HAS_P12: ${{ secrets.IOS_DIST_P12_BASE64 != '' }}
+      TEAM_ID: 2XM324WPD5
+    steps:
+      - name: Acknowledge the comment
+        if: github.event_name == 'issue_comment'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh api -X POST "repos/${{ github.repository }}/issues/comments/${{ github.event.comment.id }}/reactions" -f content=rocket >/dev/null
+
+      - name: Find the pull request's head
+        id: head
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if [ "${{ github.event_name }}" = "issue_comment" ]; then
+            sha=$(gh api "repos/${{ github.repository }}/pulls/${{ github.event.issue.number }}" --jq .head.sha)
+          else
+            sha="${{ github.sha }}"
+          fi
+          echo "sha=$sha" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ steps.head.outputs.sha }}
+
+      - name: Refuse without the App Store Connect key
+        env:
+          ASC_KEY_P8: ${{ secrets.ASC_KEY_P8 }}
+        run: |
+          missing=""
+          [ -n "$ASC_KEY_ID" ] || missing="$missing ASC_KEY_ID"
+          [ -n "$ASC_ISSUER_ID" ] || missing="$missing ASC_ISSUER_ID"
+          [ -n "$ASC_KEY_P8" ] || missing="$missing ASC_KEY_P8"
+          if [ -n "$missing" ]; then
+            echo "::error::TestFlight is not configured: missing repository secret(s):$missing. docs/runbooks/TESTFLIGHT.md says where they come from."
+            exit 1
+          fi
+
+      - name: Install the App Store Connect key
+        env:
+          ASC_KEY_P8: ${{ secrets.ASC_KEY_P8 }}
+        run: |
+          mkdir -p ~/private_keys
+          printf '%s\n' "$ASC_KEY_P8" > "$HOME/private_keys/AuthKey_${ASC_KEY_ID}.p8"
+          chmod 600 "$HOME/private_keys/AuthKey_${ASC_KEY_ID}.p8"
+
+      - name: Import the distribution certificate, if one was given
+        if: env.HAS_P12 == 'true'
+        env:
+          P12_BASE64: ${{ secrets.IOS_DIST_P12_BASE64 }}
+          P12_PASSWORD: ${{ secrets.IOS_DIST_P12_PASSWORD }}
+        run: |
+          keychain="$RUNNER_TEMP/thro.keychain-db"
+          password=$(uuidgen)
+          security create-keychain -p "$password" "$keychain"
+          security set-keychain-settings -lut 21600 "$keychain"
+          security unlock-keychain -p "$password" "$keychain"
+          echo "$P12_BASE64" | base64 --decode > "$RUNNER_TEMP/dist.p12"
+          security import "$RUNNER_TEMP/dist.p12" -P "$P12_PASSWORD" -A -t cert -f pkcs12 -k "$keychain"
+          security set-key-partition-list -S apple-tool:,apple: -s -k "$password" "$keychain" >/dev/null
+          security list-keychains -d user -s "$keychain" login.keychain-db
+          rm -f "$RUNNER_TEMP/dist.p12"
+
+      - name: Archive, unsigned
+        run: |
+          xcodebuild -project apps/ios/ThroDarts.xcodeproj -scheme ThroDarts -configuration Release \
+            -destination 'generic/platform=iOS' -archivePath "$RUNNER_TEMP/ThroDarts.xcarchive" \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" \
+            CURRENT_PROJECT_VERSION=${{ github.run_number }} -quiet archive
+
+      - name: Sign and upload to App Store Connect
+        run: |
+          cat > "$RUNNER_TEMP/ExportOptions.plist" <<PLIST
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0"><dict>
+            <key>method</key><string>app-store-connect</string>
+            <key>destination</key><string>upload</string>
+            <key>signingStyle</key><string>automatic</string>
+            <key>teamID</key><string>${TEAM_ID}</string>
+            <key>manageAppVersionAndBuildNumber</key><false/>
+            <key>uploadSymbols</key><true/>
+          </dict></plist>
+          PLIST
+          xcodebuild -exportArchive -archivePath "$RUNNER_TEMP/ThroDarts.xcarchive" \
+            -exportOptionsPlist "$RUNNER_TEMP/ExportOptions.plist" -exportPath "$RUNNER_TEMP/export" \
+            -allowProvisioningUpdates -allowProvisioningDeviceRegistration \
+            -authenticationKeyPath "$HOME/private_keys/AuthKey_${ASC_KEY_ID}.p8" \
+            -authenticationKeyID "$ASC_KEY_ID" -authenticationKeyIssuerID "$ASC_ISSUER_ID"
+
+      - name: Say what was uploaded
+        run: |
+          {
+            echo "## TestFlight build ${{ github.run_number }}"
+            echo
+            echo "- commit \`${{ steps.head.outputs.sha }}\`"
+            echo "- version 0.1 (${{ github.run_number }})"
+            echo "- App Store Connect processes it for a few minutes, then TestFlight offers it."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Reply on the pull request
+        if: github.event_name == 'issue_comment' && always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if [ "${{ job.status }}" = "success" ]; then
+            body="TestFlight build ${{ github.run_number }} uploaded from \`${{ steps.head.outputs.sha }}\`. App Store Connect processes it for a few minutes, then TestFlight offers it."
+          else
+            body="TestFlight build ${{ github.run_number }} did not upload. The log: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          fi
+          gh api -X POST "repos/${{ github.repository }}/issues/${{ github.event.issue.number }}/comments" -f body="$body
+
+          ---
+          _Generated by [Claude Code](https://claude.ai/code)_" >/dev/null
+
+      - name: Remove the key
+        if: always()
+        run: rm -rf "$HOME/private_keys" "$RUNNER_TEMP/thro.keychain-db" "$RUNNER_TEMP/export" 2>/dev/null || true
