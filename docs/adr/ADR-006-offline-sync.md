@@ -104,8 +104,9 @@ by eye are not the grade of evidence this table holds.
 A second such run, later on 2026-09-05, arrived as a screenshot of the probe screen: every
 configuration again "meets the budget", and the deciding row (WAL + `fullfsync`) showed P50 0.86,
 P95 1.81, P99 2.38, worst 2.93 ms — the same order as the two console-captured runs and inside the
-budget by about eleven times. The device and iOS version are not in the frame, so they are not
-asserted here, and for the same reason as above the figures stay out of the table. The probe now
+budget by about eleven times. The founder later named the device: iPhone 14 Pro Max, model
+MQ9P3ZD/A, iOS 26.6.1 — the same `iPhone15,3` as the two console-captured runs. The figures still stay
+out of the table for the provenance reason above. The probe now
 writes its report block to the app's container; the next run that is pulled from there rather than
 photographed can be entered.
 

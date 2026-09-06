@@ -6,12 +6,11 @@ import ThroJournal
 
 // The Play slice for a match scored on this device: setup → ready → scoring → result.
 //
-// Theme follows the export's screen list: scoring and setup are dark (`scoring`, `shadow-setup`),
-// ready and result are light — and light means light, whatever the phone's own appearance setting,
-// because the export draws those screens light and has no dark variant of them (the first run on a
-// phone in dark mode showed a dark Home the design never drew). Each screen sets both the window's
-// preferred scheme and its own environment, and each dark screen paints its own background, because
-// a colour scheme set on a subtree does not paint the window behind it.
+// Theme follows the export's screen list: scoring and setup are dark (`scoring`, `shadow-setup`).
+// Ready and result are drawn light and follow the player's choice (PD-003: System / Light / Dark,
+// set on the You tab). Each screen sets the window's preferred scheme and, when a scheme is chosen,
+// its own environment; each dark screen paints its own background, because a colour scheme set on a
+// subtree does not paint the window behind it.
 //
 // What the export does not draw, and is composed here from its own components rather than invented:
 // a setup for a two-player local match (the export's only setup is Shadow's, which this follows);
@@ -148,6 +147,7 @@ public struct MatchSetupScreen: View {
 /// Also the resume point for a match in progress.
 public struct MatchReadyScreen: View {
     @ObservedObject private var session: MatchSession
+    @AppStorage(Appearance.storageKey) private var appearanceRaw: String = Appearance.system.rawValue
     private let onBack: () -> Void
     private let onStart: () -> Void
 
@@ -186,8 +186,7 @@ public struct MatchReadyScreen: View {
             }
         }
         .background(ThroColor.colorBackgroundPrimary.ignoresSafeArea())
-        .environment(\.colorScheme, .light)
-        .preferredColorScheme(.light)
+        .throAppearance(Appearance(stored: appearanceRaw))
     }
 }
 
@@ -326,6 +325,7 @@ public struct PromptCard: View {
 /// plainly that nothing has left the phone, because no sync exists to queue it for.
 public struct MatchResultScreen: View {
     @ObservedObject private var session: MatchSession
+    @AppStorage(Appearance.storageKey) private var appearanceRaw: String = Appearance.system.rawValue
     private let onDone: () -> Void
     private let onPlayAgain: () -> Void
 
@@ -373,8 +373,7 @@ public struct MatchResultScreen: View {
             }
         }
         .background(ThroColor.colorBackgroundPrimary.ignoresSafeArea())
-        .environment(\.colorScheme, .light)
-        .preferredColorScheme(.light)
+        .throAppearance(Appearance(stored: appearanceRaw))
     }
 
     private func section<Content: View>(@ViewBuilder _ content: () -> Content) -> some View {

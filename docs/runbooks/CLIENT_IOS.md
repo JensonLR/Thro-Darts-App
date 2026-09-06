@@ -3,9 +3,9 @@
 > **Verification status, 2026-09-05.** Every package compiles and every test passes on macOS CI — 40
 > tests: 13 design, 11 journal, 16 scoring session — and the Xcode app builds for the iOS simulator on
 > CI with Xcode 26.6, on every push that touches them. **The app has run on a phone**: the founder's,
-> the evening of 2026-09-05, a full best-of-3 from setup to result, in dark mode, on a 430×932-point
-> iPhone (model and iOS version still to be recorded). Nine screenshots came back; what they showed is
-> under "First run on a phone" below, with the two defects they exposed and what was done about each.
+> the evening of 2026-09-05, a full best-of-3 from setup to result, in dark mode, on an iPhone 14 Pro Max
+> (MQ9P3ZD/A) running iOS 26.6.1. Nine screenshots came back; what they showed is under "First run on
+> a phone" below, with the defects they exposed and what was done about each.
 
 ## What exists
 
@@ -138,8 +138,9 @@ exactly what CI does (`xcodebuild -scheme ThroDarts -destination 'generic/platfo
 - **Home.** A warning that the fonts are not embedded (see below), then *No matches yet* with one
   action: **Start match**. Once matches exist, they are listed under *On this device* with the legs,
   the format, when they started, and *Self-reported* or *In progress*. Tapping one resumes it or
-  opens its result. The tab bar's *Live*, *Discover* and *You* say plainly that they are not in this
-  build.
+  opens its result. The tab bar's *Live* and *Discover* say plainly that they are not in this build;
+  *You* carries the one setting there is — **Appearance: System / Light / Dark** — and says the rest is
+  not built.
 - **Match setup** (dark). Two names, then 301 / 501 / 701, Bo3 / Bo5 / Bo7 / Bo9, and who throws
   first. Double out is the only out-rule offered. Empty names become *Home* and *Away*.
 - **Match ready.** The two players, the format as tags, **Start scoring**.
@@ -162,7 +163,7 @@ exactly what CI does (`xcodebuild -scheme ThroDarts -destination 'generic/platfo
 
 ## First run on a phone
 
-2026-09-05, the founder, dark mode, a 430×932-point iPhone. Setup → ready → scoring → result, a full
+2026-09-05, the founder, dark mode, iPhone 14 Pro Max (MQ9P3ZD/A), iOS 26.6.1. Setup → ready → scoring → result, a full
 best-of-3 ("Man v Woman", 0–2), then Home listing it as *Self-reported*. Screenshots: Play, Home with
 the match *In progress*, scoring with the thrower on 141, the *Darts thrown at a double?* card after a
 100 from 141, a bust from 41 with *Bust. Score restored to 41. Man to throw.*, the result (two screens),
@@ -189,8 +190,10 @@ scoring dark with the back chevron in the header and the remaining, turn indicat
 screen at once; Match ready light with both players, the three format tags and *Start scoring*. All
 three fixes above are confirmed on the device. The status bar text follows each screen's scheme.
 
-Still to record: the phone's model and iOS version (Settings → General → About), and the screenshots
-themselves into `docs/runbooks/screenshots/`.
+Still to add: the screenshots themselves into `docs/runbooks/screenshots/`.
+
+**Then the founder decided** (PD-003): the player chooses the appearance. The You tab now carries
+System / Light / Dark; setup and scoring stay dark as drawn.
 
 ## Where the data is
 
@@ -226,7 +229,7 @@ platform's own behaviour or renders the honest minimum, and says so.
 | 11 Offline-completed result | *Self-reported*; and because no sync exists, the screen says the result has not left the phone rather than showing a *Queued* that promises one. |
 | 15 Disabled | The export's opacity multiplier. |
 | 18 Invalid score feedback | The engine's refusal in the snackbar, in the harness's words. |
-| 20 Dark mode | Dark is contextual as in the export: setup and scoring are dark; every other screen is light **whatever the phone's appearance setting**, because the export draws them light and has no dark variant of them. (The first run, on a phone in dark mode, showed a dark Home the design never drew; that was the platform default, and it was wrong.) |
+| 20 Dark mode | **Decided by the founder (PD-003):** System / Light / Dark on the You tab, governing every screen the export draws light; setup and scoring stay dark as drawn. The dark rendering of the light-drawn screens is the token layer's, unreviewed by design. |
 | 23 Landscape | The Xcode template's orientations are left as they are; the scoring screen has no landscape design. |
 | 24 Truncation | Names truncate with an ellipsis in the header, the identity, and the Home rows. |
 | 25 Haptics | None. |

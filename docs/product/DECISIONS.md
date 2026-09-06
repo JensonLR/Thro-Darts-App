@@ -165,3 +165,36 @@ as a later refinement.
 Field evidence shows a material share of competitive matches never receiving a second confirmation.
 That would mean the floor is costing real competitive history rather than merely delaying it, and the
 trade-off should be re-taken with data.
+
+---
+
+## PD-003 — Appearance is the player's choice
+
+**Founder decision, 2026-09-06.** Not delegated. Resolves `DESIGN_UNSPECIFIED.md` item 20.
+
+### Decided
+
+1. The app offers **System / Light / Dark**, on the You tab, stored on the device.
+2. The choice governs every screen the export draws light: Home, Play, Match ready, Result, You,
+   and the placeholder tabs.
+3. **Match setup and Scoring stay dark** whatever the choice, as the export draws them. Extending the
+   choice to them would need a light scoring screen the export does not have.
+
+### Why
+
+The founder ran the app twice on the same evening — once in dark mode, when the light screens
+followed the phone and rendered dark, and once after they were pinned light — and asked for the
+option to choose.
+
+### The cost that must be stated plainly
+
+The dark rendering of Home, ready, result and You is the token layer's dark values applied to layouts
+the export draws only in light. No designer has looked at those screens in dark. The tokens carry a
+dark value for every semantic colour, so the result is coherent, but it is the tokens' word and not a
+designer's; the contrast matrix covers the pairs, not the compositions.
+
+### How to reverse
+
+Delete `Appearance` and the You tab's control; the screens return to the export's light. Stored
+values are ignored, not migrated.
+

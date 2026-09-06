@@ -78,6 +78,7 @@ public final class AppStore: ObservableObject {
 ///     @main struct ThroDartsApp: App { var body: some Scene { WindowGroup { ThroRootView() } } }
 public struct ThroRootView: View {
     @StateObject private var store: AppStore
+    @AppStorage(Appearance.storageKey) private var appearanceRaw: String = Appearance.system.rawValue
 
     public init() { _store = StateObject(wrappedValue: AppStore()) }
     public init(store: AppStore) { _store = StateObject(wrappedValue: store) }
@@ -94,11 +95,9 @@ public struct ThroRootView: View {
                 BottomBar(selection: store.tab) { store.tab = $0 }
             }
             .background(ThroColor.colorBackgroundPrimary.ignoresSafeArea())
-            // The export draws Home and the tabs light and has no dark variant of them; the phone's
-            // own appearance setting does not change that (DESIGN_UNSPECIFIED #20 is about whether a
-            // user-selectable dark mode should exist, and this build does not decide it).
-            .environment(\.colorScheme, .light)
-            .preferredColorScheme(.light)
+            // PD-003: the player chooses System / Light / Dark on the You tab. Setup and scoring stay
+            // dark as the export draws them; every other screen follows this.
+            .throAppearance(Appearance(stored: appearanceRaw))
         }
     }
 
@@ -113,7 +112,7 @@ public struct ThroRootView: View {
         case .play: PlayLandingScreen(store: store)
         case .live: NotBuiltScreen(title: "Live")
         case .discover: NotBuiltScreen(title: "Discover")
-        case .you: NotBuiltScreen(title: "You")
+        case .you: YouScreen()
         }
     }
 }
@@ -226,6 +225,38 @@ public struct PlayLandingScreen: View {
                     EmptyState(title: "Score a match",
                                message: "Two players, one phone. Every visit is saved to this device before it is shown, so a crash loses nothing.",
                                actionLabel: "Start match") { store.flow = .new }
+                }
+                .padding(.vertical, ThroSpacing.spacing6)
+                .padding(.horizontal, ThroSpacing.spaceScreenGutter)
+            }
+        }
+        .background(ThroColor.colorBackgroundPrimary.ignoresSafeArea())
+    }
+}
+
+/// The You tab: the one setting this build has, then honesty about the rest.
+public struct YouScreen: View {
+    @AppStorage(Appearance.storageKey) private var appearanceRaw: String = Appearance.system.rawValue
+
+    public init() {}
+
+    private var appearance: Binding<Appearance> {
+        Binding(get: { Appearance(stored: appearanceRaw) }, set: { appearanceRaw = $0.rawValue })
+    }
+
+    public var body: some View {
+        VStack(spacing: 0) {
+            TopBar("You", large: true)
+            ScrollView {
+                VStack(alignment: .leading, spacing: ThroSpacing.spacing4) {
+                    SectionHeader("Appearance")
+                    SegmentedControl(Appearance.allCases.map { ($0, $0.label) }, selection: appearance)
+                    Text("Match setup and scoring stay dark, as the design draws them. Every other screen follows this choice.")
+                        .thro(ThroTypography.metadata)
+                        .foregroundStyle(ThroColor.colorTextSecondary)
+                    ThroDivider().padding(.vertical, ThroSpacing.spacing4)
+                    EmptyState(title: "Profile not in this build",
+                               message: "Your profile, rating and passport need THRØ's servers. This build scores matches and keeps them on the device; nothing else is connected yet.")
                 }
                 .padding(.vertical, ThroSpacing.spacing6)
                 .padding(.horizontal, ThroSpacing.spaceScreenGutter)
