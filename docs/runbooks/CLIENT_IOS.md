@@ -182,8 +182,15 @@ What the phone disagreed with, and what changed:
 | on the scoring screen the **checkout card was cut off** and the turn indicator pushed below the keypad | a TopBar above the MatchHeader added 64 points the screen does not have | the TopBar is gone; a 44-point back chevron sits at the header's leading edge; the vertical paddings are the export's own |
 | the loser's *Highest checkout* said *No leg has been won yet, so there is nothing to report* — false on a result where the other player won two | the statistics note was written for one player's log and read as if about the match | both implementations now say *This player has not won a leg, so there is no checkout to report* (and the same for best leg); no test asserted the old words, and the six-word floor still holds |
 
-Still to record from this run: the phone's model and iOS version (Settings → General → About), and
-the screenshots themselves into `docs/runbooks/screenshots/`.
+**Second run, the same night, on commit `690e36d`.** Five screenshots: Home light with the finished
+match listed as *Self-reported*; the result light, *Woman wins* in brand green, the loser's highest
+checkout reading *This player has not won a leg, so there is no checkout to report*; Match setup dark;
+scoring dark with the back chevron in the header and the remaining, turn indicator and keypad all on
+screen at once; Match ready light with both players, the three format tags and *Start scoring*. All
+three fixes above are confirmed on the device. The status bar text follows each screen's scheme.
+
+Still to record: the phone's model and iOS version (Settings → General → About), and the screenshots
+themselves into `docs/runbooks/screenshots/`.
 
 ## Where the data is
 
