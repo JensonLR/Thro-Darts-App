@@ -12,14 +12,46 @@ import AppKit
 ///
 /// The token's own stack is `"Archivo", …, system-ui` for UI text and `"IBM Plex Sans Condensed",
 /// "Archivo", system-ui` for sport figures — so the system face IS the designed fallback. What the
-/// design forbids is *silent* substitution, and the font binaries are deliberately not committed
-/// (licence confirmation is an open B3 item). So this layer does two things: it uses the custom
-/// faces when the app has embedded them, and it says so out loud when it has not.
+/// design forbids is *silent* substitution. The app target embeds ten static faces under the SIL Open
+/// Font License (PD-006); a build without them — a package test, a target that forgot the files —
+/// falls back to the system face and says so out loud rather than substituting quietly.
 public enum ThroFont {
     public static let uiFamily = "Archivo"
     public static let sportFamily = "IBM Plex Sans Condensed"
 
     public enum Family: Equatable, Sendable { case ui, sport }
+
+    /// The embedded faces by PostScript name, one per weight the type roles use, so a weight resolves
+    /// to the face that carries it rather than to whatever the system matches by family. The names are
+    /// the `name` table's (ID 6) of the files in `apps/ios/ThroDarts/Fonts`; `apps/ios/check_fonts.py`
+    /// holds the two in agreement on every push.
+    public static func faceName(_ family: Family, weight: Font.Weight) -> String {
+        switch family {
+        case .ui:
+            switch weight {
+            case .medium: return "Archivo-Medium"
+            case .semibold: return "Archivo-SemiBold"
+            case .bold: return "Archivo-Bold"
+            case .heavy: return "Archivo-ExtraBold"
+            case .black: return "Archivo-Black"
+            default: return "Archivo-Regular"
+            }
+        case .sport:
+            // IBM Plex Sans Condensed stops at Bold; heavy and black take the family's heaviest face.
+            switch weight {
+            case .medium: return "IBMPlexSansCond-Medium"
+            case .semibold: return "IBMPlexSansCond-SemiBold"
+            case .bold, .heavy, .black: return "IBMPlexSansCond-Bold"
+            default: return "IBMPlexSansCond-Regular"
+            }
+        }
+    }
+
+    /// Every face the app embeds, by PostScript name.
+    public static let embeddedFaces: [String] = [
+        "Archivo-Regular", "Archivo-Medium", "Archivo-SemiBold", "Archivo-Bold", "Archivo-ExtraBold", "Archivo-Black",
+        "IBMPlexSansCond-Regular", "IBMPlexSansCond-Medium", "IBMPlexSansCond-SemiBold", "IBMPlexSansCond-Bold",
+    ]
 
     /// True only when BOTH families are registered. Half a type system is not the type system.
     public static var customFacesRegistered: Bool {
@@ -117,8 +149,8 @@ public struct ThroTypeRole: Equatable, Sendable {
         ThroFont.reportSubstitutionIfNeeded()
         let base: Font
         if ThroFont.customFacesRegistered {
-            let name = family == .ui ? ThroFont.uiFamily : ThroFont.sportFamily
-            base = Font.custom(name, size: size, relativeTo: relativeTo).weight(weight)
+            // The weight is in the face's name; asking CoreText to weight a family would let it guess.
+            base = Font.custom(ThroFont.faceName(family, weight: weight), size: size, relativeTo: relativeTo)
         } else {
             base = Font.system(size: ThroFont.scaled(size, relativeTo: relativeTo), weight: weight)
         }

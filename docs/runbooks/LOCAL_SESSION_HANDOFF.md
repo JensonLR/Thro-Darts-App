@@ -32,8 +32,9 @@ Nobody has run it on a phone. Do that, then record what you saw.
 6. Commit and push to claude/thro-production-build-je2mkf with the device model and iOS version in
    the message.
 
-Do not embed the fonts: the licence (B3) is not confirmed. Do not add sync, attestation, a rating,
-or sign-in — none of those decisions have been taken. Do not rename the product.
+The fonts are embedded under the SIL Open Font License (PD-006); add no faces beyond the ten listed.
+Do not add sync, attestation, a rating, or sign-in — none of those decisions have been taken. Do not
+rename the product.
 ```
 
 > **Resolved on 2026-09-04.** The measurement this handoff exists to obtain has been taken:

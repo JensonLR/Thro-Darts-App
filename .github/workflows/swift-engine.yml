@@ -39,3 +39,5 @@ jobs:
       # assertions as the Kotlin original — on Linux, on every push.
       - name: Statistics honesty, Swift
         run: swift test --package-path packages/statistics-swift
+      - name: Embedded fonts, licences and brand assets agree with the code (PD-006)
+        run: python3 apps/ios/check_fonts.py

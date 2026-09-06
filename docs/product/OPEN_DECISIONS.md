@@ -121,7 +121,16 @@ behaviour from the start.
 **Must not be decided by:** inventing a legal conclusion.
 
 ## OD-011 — Font licensing and packaging
-**Status:** OPEN · **Impact:** legal, design fidelity, performance
+**Status:** RESOLVED for iOS by PD-006 (2026-09-06); the founder's legal sign-off is the one open thread · **Impact:** legal, design fidelity, performance
+
+**Resolved by:** both families are published under the SIL Open Font License, Version 1.1 — Archivo
+by Omnibus-Type, IBM Plex by IBM — and the founder directed that the fonts be used. The iOS app embeds
+ten unmodified static faces with each family's licence text beside them (`apps/ios/ThroDarts/Fonts`),
+which is what the licence's conditions ask; PD-006 quotes them. Android has no client yet. This
+register records the licence's text, not a legal conclusion; a final read by whoever signs for THRØ's
+legal position is the founder's to arrange.
+
+*As first recorded:*
 
 Archivo and IBM Plex Sans Condensed are the approved families. The design kit loads them
 from a CDN-derived bundle; the design system itself states production must embed the

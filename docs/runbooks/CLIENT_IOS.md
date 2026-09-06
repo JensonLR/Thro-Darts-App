@@ -16,9 +16,9 @@
 | `packages/statistics-swift` | the statistics layer, honest about its basis | twenty tests on Linux, every push |
 | `packages/client-ios` → `ThroDesign` | the approved components as SwiftUI | tests on macOS, every push |
 | `packages/client-ios` → `ThroJournal` | the on-device journal (ADR-006), with retractions (PD-004) | fifteen tests on macOS, every push |
-| `packages/client-ios` → `ThroPlay` | setup, ready, scoring, result, undo | twenty-four session tests on macOS, every push |
+| `packages/client-ios` → `ThroPlay` | setup, ready, scoring, result, undo, the bust and leg announcements | twenty-seven session tests on macOS, every push |
 | `packages/client-ios` → `ThroApp` | Home, tabs, You, Settings, the root view | compiles for macOS and the iOS simulator on every push; drawn, not tested |
-| `apps/ios/ThroDarts.xcodeproj` | the app target: thirteen lines that mount `ThroApp` | `xcodebuild` for the iOS simulator, every push |
+| `apps/ios/ThroDarts.xcodeproj` | the app target: thirteen lines that mount `ThroApp`, the ten embedded faces with their licences, the icon and the launch screen (PD-006) | `xcodebuild` for the iOS simulator, every push; `check_fonts.py` on Linux, every push |
 
 ## Running it on the phone, step by step
 
@@ -80,8 +80,10 @@ for anything new.
 16. If the phone shows *Untrusted Developer* when the app tries to open: Settings → General → VPN &
     Device Management → tap your Apple ID → **Trust**, then open the app from the home screen. This
     is the same certificate ThroProbe used, so it is probably already trusted.
-17. The app opens on **Home**: a light screen, a yellow *Fonts not embedded* notice, *No matches yet*
-    and a **Start match** button, with a tab bar along the bottom.
+17. The icon on the home screen is the mark — the ring and dart — in chalk on the brand green, and the
+    launch screen is the same mark on green. The app opens on **Home**: a light screen set in Archivo,
+    *No matches yet* and a **Start match** button, with a tab bar along the bottom. A yellow *Fonts not
+    embedded* notice would mean the faces failed to register; it should not appear.
 
 ### 4. The first-run test plan
 
@@ -135,8 +137,7 @@ exactly what CI does (`xcodebuild -scheme ThroDarts -destination 'generic/platfo
 
 ## What you will see
 
-- **Home.** A warning that the fonts are not embedded (see below), then *No matches yet* with one
-  action: **Start match**. Once matches exist, they are listed under *On this device* with the legs,
+- **Home.** *No matches yet* with one action: **Start match**. Once matches exist, they are listed under *On this device* with the legs,
   the format, when they started, and *Self-reported* or *In progress*. Tapping one resumes it or
   opens its result. The tab bar's *Live* and *Discover* say plainly that they are not in this build;
   *You* says the profile is not built and carries the export's settings action in its header.
@@ -230,6 +231,9 @@ What to check on the next run, in this order:
    puts the keyboard away; so does dragging the form. Please say whether *Next* moved the cursor —
    that is the one behaviour this build could not verify without a device.
 7. With VoiceOver on, a bust: focus lands on the card and it reads as one sentence, then *Continue*.
+8. The home-screen icon and the launch screen: the mark in chalk on green.
+9. The faces: numerals on the scoring screen in IBM Plex Sans Condensed, everything else in Archivo,
+   and no *Fonts not embedded* notice on Home.
 
 ## Where the data is
 
@@ -243,12 +247,21 @@ commit fails, the screen says *Not saved, so not scored* and the state does not 
 
 ## Fonts
 
-Archivo and IBM Plex Sans Condensed are **not embedded**: the licence is open item B3. The type roles
-name the faces; when the faces are not registered, the system face is used and Home shows *Fonts not
-embedded* rather than substituting silently. To embed them once licensed: add the font files to the
-`ThroDarts` target, add `UIAppFonts` (*Fonts provided by application*) with their filenames to the
-target's Info settings, and the notice disappears on its own — `ThroFont.customFacesRegistered`
-asks the system for the faces by family name.
+Archivo and IBM Plex Sans Condensed are **embedded** (PD-006): ten static faces in
+`apps/ios/ThroDarts/Fonts`, the weights the type roles use, with each family's SIL Open Font License
+text beside them, listed under `UIAppFonts` in `apps/ios/Support/Info.plist`. Each type role resolves
+its weight to a named face (`ThroFont.faceName`), and `apps/ios/check_fonts.py` runs on every push and
+fails if the Swift table, the plist, the files and the licences disagree. If the faces ever fail to
+register, the type layer falls back to the system face and Home shows *Fonts not embedded* rather than
+substituting silently. IBM Plex Sans Condensed stops at Bold, so a heavy sport role takes Bold.
+
+## Icon and launch screen
+
+The app icon is the mark in chalk on the brand green, and the launch screen is the same, as the
+export's Splash screen composes it. Both are generated by `docs/design/brand/render_mark.py` from
+geometry measured against the founder's artwork; `docs/design/brand/README.md` says how to replace
+them with the master files when those are added. The wordmark is not on the launch screen: there is no
+vector master of it in the repository, and letterforms are not reconstructed by hand.
 
 ## What the design does not specify, and what this build does about it
 

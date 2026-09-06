@@ -277,3 +277,48 @@ this card dismisses on its button or a tap on the scrim, traps nothing, and anim
 Drop the announcement state and the overlay; the bust and leg information return to the snackbar,
 whose copy is still in `Copy`.
 
+## PD-006 — The mark, the wordmark and the two type families are supplied, and the app carries them
+
+**Decided by:** the founder, 2026-09-06 — "all the fonts logos & designs are all already attached &
+relevant". **Recorded by:** engineering, the same day.
+
+### Decided
+
+1. The mark is a ring with a dart through it, lower-left to upper-right, both ends drawn to a point
+   beyond the ring. The wordmark is THRØ with that mark as its Ø. The founder supplied both, in black
+   and in the brand green, as images.
+2. The app icon and the launch screen carry the mark alone, in chalk on the brand green — the one
+   composition the export gives it, its Splash screen: a green field, the chalk mark 104 wide, the
+   wordmark beneath. The wordmark is not on the launch screen yet: no vector master of it is in the
+   repository, and letterforms are not reconstructed by hand.
+3. Archivo and IBM Plex Sans Condensed are embedded: ten unmodified static faces, the weights the type
+   roles use, with each family's licence text beside the files in the bundle. Both families are
+   published under the SIL Open Font License, Version 1.1. Its grant, in its own words: "Permission is hereby granted, free of charge, to any person obtaining a copy of the Font Software, to use, study, copy, merge, embed, modify, redistribute, and sell modified and unmodified copies of the Font Software, subject to the following conditions:"
+   "1) Neither the Font Software nor any of its individual components, in Original or Modified Versions, may be sold by itself." "2) Original or Modified Versions of the Font Software may be bundled, redistributed and/or sold with any software, provided that each copy contains the above copyright notice and this license." The faces are unmodified and are not sold by themselves.
+4. A weight resolves to a named face, not to the system's guess: the type layer maps each role's
+   weight to a PostScript name (`ThroFont.faceName`), and `apps/ios/check_fonts.py` holds that table
+   equal to the shipped files, their licences and the launch assets on every push.
+
+### Why
+
+The app had shipped with the blank default icon and the system face, each recorded as waiting on the
+founder. The founder supplied the artwork and said the fonts were settled. The Splash screen was the
+only place the export composed the mark, so the icon and the launch screen follow it rather than a
+colourway invented here.
+
+### The cost that must be stated plainly
+
+The mark in the repository is a geometric reconstruction measured from the supplied image — ring
+0.364 and 0.250 of the frame, dart half-width 0.040, tips at 0.643 — not the founder's master file.
+It should be replaced by the master when one is added under `docs/design/brand/`, and the icon
+regenerated from it. The dart-flight variant the founder also supplied is not used: the wordmark's Ø
+has plain points and the icon follows the wordmark. IBM Plex Sans Condensed stops at Bold, so a heavy
+sport role takes Bold. The licence is quoted, not interpreted: this register records what the text
+grants and what the build does to meet its conditions, and a legal sign-off on THRØ's use remains the
+founder's (OD-011).
+
+### How to reverse
+
+Delete `apps/ios/ThroDarts/Fonts` and the `UIAppFonts` entries; the type layer falls back to the
+system face and Home says so. Delete the asset catalogue entries and the two build settings; the icon
+returns to the default.
