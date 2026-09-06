@@ -255,4 +255,90 @@ final class MatchSessionTests: XCTestCase {
         let away = s.statistics(for: .away)
         XCTAssertEqual(away[0].value, "60.0")
     }
+
+    // MARK: undo (PD-004)
+
+    func testTheUndoKeyClearsATypedEntryFirst() throws {
+        let s = try session()
+        s.digit("6")
+        s.undoKey()
+        XCTAssertEqual(s.entry, "")
+        XCTAssertNil(s.retraction)
+    }
+
+    func testTheUndoKeyWithNothingTypedProposesStrikingTheLastVisit() throws {
+        let s = try session()
+        s.quick(60)
+        s.undoKey()
+        XCTAssertEqual(s.retraction, MatchSession.RetractionProposal(seat: .home, visitTotal: 60, restoresTo: 501))
+        s.confirmRetraction()
+        XCTAssertNil(s.retraction)
+        XCTAssertEqual(s.remaining(.home), 501)
+        XCTAssertEqual(s.thrower, .home)
+        XCTAssertTrue(s.visits.isEmpty)
+        XCTAssertEqual(s.notice, MatchSession.Notice(text: "Undone: Jenson's 60. Jenson to throw.", tone: .neutral))
+        XCTAssertEqual(try journal.entries(for: s.record.id).count, 2, "the visit and its retraction both stand in the record")
+    }
+
+    func testUndoWithNoVisitsSaysSo() throws {
+        let s = try session()
+        s.undoKey()
+        XCTAssertNil(s.retraction)
+        XCTAssertEqual(s.notice?.text, "Nothing to undo.")
+    }
+
+    func testKeepingTheVisitChangesNothing() throws {
+        let s = try session()
+        s.quick(60)
+        s.proposeRetraction()
+        s.cancelRetraction()
+        XCTAssertNil(s.retraction)
+        XCTAssertEqual(s.remaining(.home), 441)
+        XCTAssertEqual(try journal.entries(for: s.record.id).count, 1)
+    }
+
+    /// The mis-key that ends a match is the one that most needs undoing.
+    func testUndoReopensAFinishedMatch() throws {
+        let s = try session(legs: 1)
+        bringHomeToAFinish(s)
+        s.digit("1"); s.digit("4"); s.digit("1"); s.enter(); s.answer(3); s.answer(1)
+        XCTAssertTrue(s.isComplete)
+        s.proposeRetraction()
+        s.confirmRetraction()
+        XCTAssertFalse(s.isComplete)
+        XCTAssertEqual(s.remaining(.home), 141)
+        XCTAssertEqual(s.thrower, .home)
+        XCTAssertEqual(s.legsWon(.home), 0)
+    }
+
+    func testTheStatisticsNeverSeeAStruckVisit() throws {
+        let s = try session()
+        s.quick(180)
+        s.proposeRetraction(); s.confirmRetraction()
+        s.quick(60)
+        XCTAssertEqual(s.statistics(for: .home)[3].value, "0", "the struck 180 is not a 180")
+        XCTAssertEqual(s.statistics(for: .home)[0].value, "60.0")
+    }
+
+    func testTheSessionStillAgreesWithTheJournalAfterUndos() throws {
+        let s = try session()
+        bringHomeToAFinish(s)
+        s.proposeRetraction(); s.confirmRetraction()      // strikes away's second 60
+        XCTAssertEqual(s.thrower, .away)
+        s.quick(45)
+        let replayed = try journal.replayVisits(s.record.id)
+        XCTAssertEqual(replayed.visits, s.visits)
+        XCTAssertEqual(replayed.state.remaining, s.state.remaining)
+        XCTAssertEqual(replayed.state.thrower, s.state.thrower)
+    }
+
+    func testNoKeyWorksWhileAnUndoIsProposed() throws {
+        let s = try session()
+        s.quick(60)
+        s.proposeRetraction()
+        s.quick(100); s.digit("5"); s.enter(); s.miss()
+        XCTAssertEqual(s.visits.count, 1)
+        XCTAssertEqual(s.entry, "")
+        XCTAssertNotNil(s.retraction)
+    }
 }

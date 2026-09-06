@@ -22,6 +22,15 @@ public final class MatchSession: ObservableObject {
     /// Set after a bust so the screen can show the restored score in the error colour until the
     /// next key is pressed.
     @Published public private(set) var bust: BustDisplay?
+    /// A proposed undo of the last visit, awaiting the player's confirmation (PD-004).
+    @Published public private(set) var retraction: RetractionProposal?
+
+    public struct RetractionProposal: Equatable, Sendable {
+        public let seat: Seat
+        public let visitTotal: Int
+        /// What the seat's remaining returns to.
+        public let restoresTo: Int
+    }
 
     public struct Notice: Equatable, Sendable {
         public enum Tone: Sendable { case neutral, success, error }
@@ -117,7 +126,7 @@ public final class MatchSession: ObservableObject {
     // MARK: - keypad
 
     public func digit(_ d: String) {
-        guard prompt == nil, !isComplete else { return }
+        guard prompt == nil, retraction == nil, !isComplete else { return }
         bust = nil
         entry = String((entry + d).prefix(3))
     }
@@ -128,19 +137,19 @@ public final class MatchSession: ObservableObject {
     }
 
     public func quick(_ total: Int) {
-        guard prompt == nil else { return }
+        guard prompt == nil, retraction == nil else { return }
         bust = nil
         commit(total)
     }
 
     public func miss() {
-        guard prompt == nil else { return }
+        guard prompt == nil, retraction == nil else { return }
         bust = nil
         commit(0)
     }
 
     public func enter() {
-        guard prompt == nil, let total = Int(entry) else { return }
+        guard prompt == nil, retraction == nil, let total = Int(entry) else { return }
         bust = nil
         commit(total)
     }
@@ -159,6 +168,48 @@ public final class MatchSession: ObservableObject {
 
     /// Cancels the prompt. Nothing is submitted; the entry is kept so it can be corrected.
     public func cancelPrompt() { prompt = nil }
+
+    // MARK: - undo (PD-004)
+
+    /// The keypad's undo key. A typed entry is cleared first; with nothing typed it proposes striking
+    /// the last visit, which the player must confirm.
+    public func undoKey() {
+        guard prompt == nil, retraction == nil else { return }
+        if !entry.isEmpty { clearEntry(); return }
+        proposeRetraction()
+    }
+
+    public func proposeRetraction() {
+        guard prompt == nil, retraction == nil else { return }
+        guard let last = visits.last else {
+            notice = Notice(text: Copy.nothingToUndo, tone: .neutral)
+            return
+        }
+        bust = nil
+        retraction = RetractionProposal(seat: last.seat, visitTotal: last.visitTotal, restoresTo: last.remainingBefore)
+    }
+
+    public func cancelRetraction() { retraction = nil }
+
+    /// Strikes the last visit. The journal commits the retraction first and the state is rebuilt by
+    /// replay — the same order as a visit, for the same reason. A local match needs no one's
+    /// approval; an online match will need the opponent's, and that is not built.
+    public func confirmRetraction() {
+        guard let proposal = retraction else { return }
+        retraction = nil
+        do {
+            try journal.retractLastVisit(in: record.id)
+            let replayed = try journal.replayVisits(record.id)
+            state = replayed.state
+            visits = replayed.visits
+            entry = ""
+            bust = nil
+            notice = Notice(text: Copy.undone(name(proposal.seat), proposal.visitTotal, next: thrower.map(name) ?? ""),
+                            tone: .neutral)
+        } catch {
+            notice = Notice(text: Copy.notSaved(error), tone: .error)
+        }
+    }
 
     // MARK: - the visit
 
@@ -305,5 +356,11 @@ public enum Copy {
 
     public static func notSaved(_ error: Error) -> String {
         "Not saved, so not scored. \(error)"
+    }
+
+    public static let nothingToUndo = "Nothing to undo."
+
+    public static func undone(_ player: String, _ total: Int, next: String) -> String {
+        next.isEmpty ? "Undone: \(player)'s \(total)." : "Undone: \(player)'s \(total). \(next) to throw."
     }
 }

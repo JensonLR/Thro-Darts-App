@@ -21,6 +21,8 @@ public enum JournalError: Error, Equatable, CustomStringConvertible {
     /// so a configuration that is not read back is a configuration that is assumed.
     case configurationNotInForce(pragma: String, wanted: String, got: String)
     case matchNotFound(String)
+    /// An undo was asked for and there is no standing visit to strike.
+    case nothingToRetract
     /// The journal holds a command the engine rejects on replay. That is corruption, and a replay
     /// that shrugged past it would rebuild a match that never happened.
     case replayRejected(seq: Int64, reason: String)
@@ -31,6 +33,7 @@ public enum JournalError: Error, Equatable, CustomStringConvertible {
         case let .configurationNotInForce(p, w, g):
             return "PRAGMA \(p) requested \(w) but the database reports \(g); the measured configuration is not in force"
         case .matchNotFound(let id): return "no match \(id) in this journal"
+        case .nothingToRetract: return "there is no visit to undo"
         case let .replayRejected(seq, reason): return "journal entry \(seq) rejected on replay: \(reason)"
         }
     }
@@ -124,20 +127,29 @@ public struct MatchRecord: Equatable, Sendable {
     public func name(_ seat: Seat) -> String { seat == .home ? homeName : awayName }
 }
 
-/// One committed command.
+/// One committed row: a visit, or a retraction that strikes an earlier visit from the effective
+/// record. The shape is the server's (`AccountedVisit.correctsSeq`): a correction supersedes, it never
+/// deletes, and the struck row stays for an investigator to read. PD-004.
 public struct JournalEntry: Equatable, Sendable {
+    public enum Kind: String, Sendable { case visit, retraction }
+
     public let matchId: MatchId
     public let deviceId: DeviceId
     public let deviceSeq: Int64
     public let commandId: String
+    public let kind: Kind
     public let seat: Seat
     public let visitTotal: Int
     public let dartsUsed: Int?
     public let dartsAtDouble: Int?
+    /// For a retraction: the `deviceSeq` of the visit it strikes.
+    public let correctsSeq: Int64?
     public let occurredAt: Date
 
-    public var command: Command {
-        .recordVisit(player: seat.playerId, visitTotal: visitTotal, dartsUsed: dartsUsed, dartsAtDouble: dartsAtDouble)
+    /// The engine command a visit carries. A retraction carries none; replay skips it and what it struck.
+    public var command: Command? {
+        guard kind == .visit else { return nil }
+        return .recordVisit(player: seat.playerId, visitTotal: visitTotal, dartsUsed: dartsUsed, dartsAtDouble: dartsAtDouble)
     }
 }
 
@@ -234,6 +246,19 @@ public final class Journal {
         return out
     }
 
+    static func columnNames(_ h: OpaquePointer, table: String) throws -> Set<String> {
+        var stmt: OpaquePointer?
+        guard sqlite3_prepare_v2(h, "PRAGMA table_info(\(table));", -1, &stmt, nil) == SQLITE_OK, let st = stmt else {
+            throw JournalError.sqlite("could not read the columns of \(table)")
+        }
+        defer { sqlite3_finalize(st) }
+        var names = Set<String>()
+        while sqlite3_step(st) == SQLITE_ROW {
+            if let c = sqlite3_column_text(st, 1) { names.insert(String(cString: c)) }
+        }
+        return names
+    }
+
     static func pragmaValue(_ h: OpaquePointer, _ name: String) -> String? {
         var stmt: OpaquePointer?
         guard sqlite3_prepare_v2(h, "PRAGMA \(name);", -1, &stmt, nil) == SQLITE_OK, let s = stmt else { return nil }
@@ -265,14 +290,26 @@ public final class Journal {
               device_id       TEXT NOT NULL,
               device_seq      INTEGER NOT NULL,
               command_id      TEXT NOT NULL UNIQUE,
+              kind            TEXT NOT NULL DEFAULT 'visit',
               seat            TEXT NOT NULL,
               visit_total     INTEGER NOT NULL,
               darts_used      INTEGER,
               darts_at_double INTEGER,
+              corrects_seq    INTEGER,
               occurred_at     TEXT NOT NULL,
               PRIMARY KEY (match_id, device_id, device_seq)
             );
             """)
+        // Journals written before corrections existed lack two columns. ADD COLUMN is the one schema
+        // change SQLite makes without rewriting a row, so the append-only triggers below are not
+        // disturbed and every existing visit reads back as kind 'visit'.
+        let columns = try columnNames(h, table: "journal")
+        if !columns.contains("kind") {
+            try exec(h, "ALTER TABLE journal ADD COLUMN kind TEXT NOT NULL DEFAULT 'visit';")
+        }
+        if !columns.contains("corrects_seq") {
+            try exec(h, "ALTER TABLE journal ADD COLUMN corrects_seq INTEGER;")
+        }
         // Append-only, enforced by the database rather than by discipline — the same property the
         // server's grants give evidence.event. Corrections, when they come, are new events.
         try exec(h, """
@@ -370,19 +407,63 @@ public final class Journal {
             // COMMIT is where the barrier happens.
             try Journal.exec(handle, "COMMIT;")
             return JournalEntry(matchId: matchId, deviceId: deviceId, deviceSeq: next, commandId: commandId,
-                                seat: seat, visitTotal: visitTotal, dartsUsed: dartsUsed,
-                                dartsAtDouble: dartsAtDouble, occurredAt: occurredAt)
+                                kind: .visit, seat: seat, visitTotal: visitTotal, dartsUsed: dartsUsed,
+                                dartsAtDouble: dartsAtDouble, correctsSeq: nil, occurredAt: occurredAt)
         } catch {
             try? Journal.exec(handle, "ROLLBACK;")
             throw error
         }
     }
 
-    /// Every committed command for a match, in the order it was committed on this device.
+    /// Strikes the most recent standing visit from the record by appending a retraction that
+    /// supersedes it. Nothing is deleted: the struck row stays, replay skips it, and the statistics
+    /// never see it. Only the last standing visit can be struck; striking again walks one further
+    /// back. PD-004: a local match needs no one's approval for this; an online match will need the
+    /// opponent's, and that flow is not built.
+    @discardableResult
+    public func retractLastVisit(in matchId: MatchId,
+                                 occurredAt: Date = Date(), commandId: String = UUID().uuidString) throws -> JournalEntry {
+        try Journal.exec(handle, "BEGIN IMMEDIATE;")
+        do {
+            let all = try entries(for: matchId)
+            guard let target = Journal.standingVisits(all).last else {
+                throw JournalError.nothingToRetract
+            }
+            var next: Int64 = 1
+            try run("SELECT COALESCE(MAX(device_seq), 0) + 1 FROM journal WHERE match_id = ? AND device_id = ?;",
+                    [.text(matchId.value), .text(deviceId.value)]) { s in
+                next = sqlite3_column_int64(s, 0)
+            }
+            try run("""
+                INSERT INTO journal (match_id, device_id, device_seq, command_id, kind, seat, visit_total,
+                                     darts_used, darts_at_double, corrects_seq, occurred_at)
+                VALUES (?, ?, ?, ?, 'retraction', ?, 0, NULL, NULL, ?, ?);
+                """, [
+                    .text(matchId.value), .text(deviceId.value), .int(next), .text(commandId),
+                    .text(target.seat.rawValue), .int(target.deviceSeq), .text(Journal.iso.string(from: occurredAt)),
+                ])
+            try Journal.exec(handle, "COMMIT;")
+            return JournalEntry(matchId: matchId, deviceId: deviceId, deviceSeq: next, commandId: commandId,
+                                kind: .retraction, seat: target.seat, visitTotal: 0, dartsUsed: nil,
+                                dartsAtDouble: nil, correctsSeq: target.deviceSeq, occurredAt: occurredAt)
+        } catch {
+            try? Journal.exec(handle, "ROLLBACK;")
+            throw error
+        }
+    }
+
+    /// The visits that stand: rows of kind `visit` that no retraction supersedes, in order.
+    public static func standingVisits(_ entries: [JournalEntry]) -> [JournalEntry] {
+        let superseded = Set(entries.compactMap { $0.correctsSeq })
+        return entries.filter { $0.kind == .visit && !superseded.contains($0.deviceSeq) }
+    }
+
+    /// Every committed row for a match — visits and retractions — in the order committed on this device.
     public func entries(for matchId: MatchId) throws -> [JournalEntry] {
         var out: [JournalEntry] = []
         try run("""
-            SELECT match_id, device_id, device_seq, command_id, seat, visit_total, darts_used, darts_at_double, occurred_at
+            SELECT match_id, device_id, device_seq, command_id, seat, visit_total, darts_used, darts_at_double, occurred_at,
+                   kind, corrects_seq
             FROM journal WHERE match_id = ? ORDER BY rowid;
             """, [.text(matchId.value)]) { s in
             out.append(JournalEntry(
@@ -390,10 +471,12 @@ public final class Journal {
                 deviceId: DeviceId(Journal.text(s, 1)),
                 deviceSeq: sqlite3_column_int64(s, 2),
                 commandId: Journal.text(s, 3),
+                kind: JournalEntry.Kind(rawValue: Journal.text(s, 9)) ?? .visit,
                 seat: Seat(rawValue: Journal.text(s, 4)) ?? .home,
                 visitTotal: Int(sqlite3_column_int64(s, 5)),
                 dartsUsed: Journal.optionalInt(s, 6),
                 dartsAtDouble: Journal.optionalInt(s, 7),
+                correctsSeq: sqlite3_column_type(s, 10) == SQLITE_NULL ? nil : sqlite3_column_int64(s, 10),
                 occurredAt: Journal.iso.date(from: Journal.text(s, 8)) ?? Date(timeIntervalSince1970: 0)
             ))
         }
@@ -413,10 +496,12 @@ public final class Journal {
         var visits: [ReplayedVisit] = []
         var ordinal: [Seat: [Int: Int]] = [.home: [:], .away: [:]]   // seat -> leg -> visits so far
 
-        for e in try entries(for: id) {
+        let all = try entries(for: id)
+        for e in Journal.standingVisits(all) {
+            guard let command = e.command else { continue }
             let leg = state.currentLeg
             let before = state.remaining[e.seat.playerId] ?? 0
-            switch Engine.apply(state, e.command) {
+            switch Engine.apply(state, command) {
             case let .accepted(next, effect, _):
                 let n = (ordinal[e.seat]?[leg] ?? 0) + 1
                 ordinal[e.seat]?[leg] = n

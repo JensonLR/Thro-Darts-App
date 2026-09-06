@@ -76,9 +76,9 @@ Sourced by reading the whole export: 61 components, 33 participant screens, 9 or
 
 20. **Whether a user-selectable dark mode exists**, or dark is purely contextual. There is no
     `prefers-color-scheme` block, and the organiser sidebar uses a second, hardcoded dark mechanism.
-    **Decided by the founder, 2026-09-06 (PD-003):** user-selectable System / Light / Dark for the
-    screens the export draws light; setup and scoring stay dark as drawn. The dark rendering of the
-    light-drawn screens is the token layer's, unreviewed by design.
+    **Decided by the founder, 2026-09-06 (PD-003, amended the same day):** user-selectable System /
+    Light / Dark for **every** screen, set in Settings. Each screen's undrawn rendering — dark Home,
+    light scoring — is the token layer's, unreviewed by design.
 21. **Whether the organiser has a dark theme** — it runs in the venue, often on a laptop in a dim hall.
 22. **Increased-contrast and reduced-transparency variants.** Given the boundary failures, an
     increased-contrast variant is genuinely needed.

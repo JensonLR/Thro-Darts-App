@@ -223,12 +223,12 @@ public struct TurnIndicator: View {
 
 /// components/scoring/ScoreKeypad.jsx: six quick totals, nine digits, Miss / 0 / clear, Enter.
 ///
-/// Two readings differ from the JSX and are recorded here rather than hidden. The export's Enter
+/// One reading differs from the JSX and is recorded here rather than hidden. The export's Enter
 /// submits `Number(value || 0)` — an empty entry becomes a scored 0 — and the harness disables Enter
 /// until something is typed; this follows the harness, because a nought recorded by a stray tap is
-/// evidence that did not happen. The undo key is labelled "Undo last score" in the export but every
-/// screen that uses it clears the entry; the journal is append-only and corrections are not built,
-/// so this key clears the entry and says so.
+/// evidence that did not happen. The undo key does what the export labels it: with an entry typed it
+/// clears the entry; with nothing typed it undoes the last visit, as a retraction the journal appends
+/// (PD-004) — the caller decides which, this key only reports the tap.
 public struct ScoreKeypad: View {
     public static let quick: [Int] = [180, 140, 100, 60, 45, 26]
 
@@ -277,7 +277,7 @@ public struct ScoreKeypad: View {
                 key(background: ThroColor.colorSurfaceSecondary, action: onClear) {
                     Icon(.undo2, size: 24)
                 }
-                .accessibilityLabel("Clear entry")
+                .accessibilityLabel("Undo")
             }
             Button(action: onEnter) {
                 Text(value.isEmpty ? "Enter score" : "Enter \(value)")

@@ -42,6 +42,7 @@ public enum ThroIcon: String, CaseIterable, Sendable {
     case trophy
     case user
     case circleAlert = "circle-alert"
+    case settings
 
     /// The inner SVG markup, verbatim from the export.
     var markup: String {
@@ -80,6 +81,7 @@ public enum ThroIcon: String, CaseIterable, Sendable {
         case .user: return #"<path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle>"#
         // Lucide draws circle-alert with two <line> elements; these paths are the same strokes.
         case .circleAlert: return #"<circle cx="12" cy="12" r="10"></circle><path d="M12 8v4"></path><path d="M12 16h.01"></path>"#
+        case .settings: return #"<path d="M9.671 4.136a2.34 2.34 0 0 1 4.659 0 2.34 2.34 0 0 0 3.319 1.915 2.34 2.34 0 0 1 2.33 4.033 2.34 2.34 0 0 0 0 3.831 2.34 2.34 0 0 1-2.33 4.033 2.34 2.34 0 0 0-3.319 1.915 2.34 2.34 0 0 1-4.659 0 2.34 2.34 0 0 0-3.32-1.915 2.34 2.34 0 0 1-2.33-4.033 2.34 2.34 0 0 0 0-3.831A2.34 2.34 0 0 1 6.35 6.051a2.34 2.34 0 0 0 3.319-1.915"></path><circle cx="12" cy="12" r="3"></circle>"#
         }
     }
 }

@@ -1,4 +1,5 @@
 import XCTest
+import SQLite3
 import ThroEngine
 @testable import ThroJournal
 
@@ -221,5 +222,83 @@ final class JournalTests: XCTestCase {
         XCTAssertEqual(f.legs.target, 2)
         XCTAssertEqual(f.throwFirst, Seat.away.playerId)
         XCTAssertEqual(m.initialState.thrower, Seat.away.playerId)
+    }
+
+    // MARK: retractions (PD-004)
+
+    private func threeVisits(_ j: Journal) throws -> MatchRecord {
+        let m = try j.createMatch(NewMatch(homeName: "A", awayName: "B"))
+        try j.append(.visit(Seat.home.playerId, 180), to: m.id)
+        try j.append(.visit(Seat.away.playerId, 60), to: m.id)
+        try j.append(.visit(Seat.home.playerId, 100), to: m.id)
+        return m
+    }
+
+    /// A correction supersedes; it never deletes. The struck row stays for an investigator to read.
+    func testARetractionStrikesTheLastVisitFromReplayButNotFromTheRecord() throws {
+        let j = try open()
+        let m = try threeVisits(j)
+        let r = try j.retractLastVisit(in: m.id)
+        XCTAssertEqual(r.kind, .retraction)
+        XCTAssertEqual(r.correctsSeq, 3)
+        XCTAssertEqual(r.deviceSeq, 4)
+        let all = try j.entries(for: m.id)
+        XCTAssertEqual(all.count, 4, "nothing is deleted")
+        XCTAssertEqual(all.map(\.kind), [.visit, .visit, .visit, .retraction])
+        let replayed = try j.replayVisits(m.id)
+        XCTAssertEqual(replayed.visits.map(\.visitTotal), [180, 60])
+        XCTAssertEqual(replayed.state.remaining[Seat.home.playerId], 321)
+        XCTAssertEqual(replayed.state.thrower, Seat.home.playerId, "the struck visit's thrower is back on")
+    }
+
+    func testRetractingAgainWalksOneFurtherBack() throws {
+        let j = try open()
+        let m = try threeVisits(j)
+        try j.retractLastVisit(in: m.id)
+        let second = try j.retractLastVisit(in: m.id)
+        XCTAssertEqual(second.correctsSeq, 2)
+        XCTAssertEqual(try j.replayVisits(m.id).visits.map(\.visitTotal), [180])
+        XCTAssertEqual(try j.replay(m.id).remaining[Seat.away.playerId], 501)
+    }
+
+    func testRetractingWithNothingStandingThrows() throws {
+        let j = try open()
+        let m = try j.createMatch(NewMatch(homeName: "A", awayName: "B"))
+        XCTAssertThrowsError(try j.retractLastVisit(in: m.id)) { error in
+            XCTAssertEqual(error as? JournalError, .nothingToRetract)
+        }
+        try j.append(.visit(Seat.home.playerId, 60), to: m.id)
+        try j.retractLastVisit(in: m.id)
+        XCTAssertThrowsError(try j.retractLastVisit(in: m.id))
+        XCTAssertEqual(try j.entries(for: m.id).count, 2)
+    }
+
+    /// A journal written before corrections existed — the founder's phone has one — opens, gains the
+    /// two columns, and keeps working, with every old row reading as a visit.
+    func testAJournalFromBeforeCorrectionsIsUpgradedOnOpen() throws {
+        var db: OpaquePointer?
+        XCTAssertEqual(sqlite3_open(path, &db), SQLITE_OK)
+        let old = """
+            CREATE TABLE local_match (match_id TEXT PRIMARY KEY, home_name TEXT NOT NULL, away_name TEXT NOT NULL,
+              starting_score INTEGER NOT NULL, out_rule TEXT NOT NULL, legs_mode TEXT NOT NULL, legs_target INTEGER NOT NULL,
+              throw_first TEXT NOT NULL, started_at TEXT NOT NULL, device_id TEXT NOT NULL);
+            CREATE TABLE journal (match_id TEXT NOT NULL REFERENCES local_match(match_id), device_id TEXT NOT NULL,
+              device_seq INTEGER NOT NULL, command_id TEXT NOT NULL UNIQUE, seat TEXT NOT NULL, visit_total INTEGER NOT NULL,
+              darts_used INTEGER, darts_at_double INTEGER, occurred_at TEXT NOT NULL,
+              PRIMARY KEY (match_id, device_id, device_seq));
+            INSERT INTO local_match VALUES ('old', 'A', 'B', 501, 'double', 'bestOf', 3, 'home', '2026-09-05T00:00:00.000Z', 'test-device');
+            INSERT INTO journal (match_id, device_id, device_seq, command_id, seat, visit_total, occurred_at)
+              VALUES ('old', 'test-device', 1, 'c1', 'home', 60, '2026-09-05T00:00:01.000Z');
+            """
+        XCTAssertEqual(sqlite3_exec(db, old, nil, nil, nil), SQLITE_OK)
+        sqlite3_close(db)
+
+        let j = try open()
+        let entries = try j.entries(for: MatchId("old"))
+        XCTAssertEqual(entries.map(\.kind), [.visit])
+        XCTAssertNil(entries[0].correctsSeq)
+        try j.append(.visit(Seat.away.playerId, 45), to: MatchId("old"))
+        try j.retractLastVisit(in: MatchId("old"))
+        XCTAssertEqual(try j.replayVisits(MatchId("old")).visits.map(\.visitTotal), [60])
     }
 }

@@ -6,17 +6,18 @@ import ThroJournal
 
 // The Play slice for a match scored on this device: setup → ready → scoring → result.
 //
-// Theme follows the export's screen list: scoring and setup are dark (`scoring`, `shadow-setup`).
-// Ready and result are drawn light and follow the player's choice (PD-003: System / Light / Dark,
-// set on the You tab). Each screen sets the window's preferred scheme and, when a scheme is chosen,
-// its own environment; each dark screen paints its own background, because a colour scheme set on a
-// subtree does not paint the window behind it.
+// Theme: every screen follows the player's choice — System / Light / Dark, set in Settings (PD-003,
+// amended by the founder to include setup and scoring). The export draws setup and scoring dark only
+// and the rest light only; the other renderings are the token layer's, unreviewed by design. Each
+// screen sets the window's preferred scheme and, when a scheme is chosen, its own environment, and
+// paints its own background, because a colour scheme set on a subtree does not paint the window
+// behind it.
 //
 // What the export does not draw, and is composed here from its own components rather than invented:
 // a setup for a two-player local match (the export's only setup is Shadow's, which this follows);
-// the PD-001 questions, rendered in the keypad's place; a way to leave the scoring screen (a back
-// chevron at the MatchHeader's leading edge — a TopBar there cost height the screen does not have).
-// Each is listed in docs/runbooks/CLIENT_IOS.md.
+// the PD-001 questions, rendered in the keypad's place; the PD-004 undo confirmation, likewise; a way
+// to leave the scoring screen (a back chevron at the MatchHeader's leading edge — a TopBar there cost
+// height the screen does not have). Each is listed in docs/runbooks/CLIENT_IOS.md.
 
 public struct PlayFlow: View {
     enum Step {
@@ -65,9 +66,9 @@ public struct PlayFlow: View {
         case .scoring(let session):
             ScoringScreen(session: session, onLeave: onExit) { step = .result(session) }
         case .result(let session):
-            MatchResultScreen(session: session, onDone: onExit) {
-                step = .setup(home: session.name(.home), away: session.name(.away))
-            }
+            MatchResultScreen(session: session, onDone: onExit,
+                              onPlayAgain: { step = .setup(home: session.name(.home), away: session.name(.away)) },
+                              onReopen: { step = .scoring(session) })
         }
     }
 }
@@ -77,6 +78,7 @@ public struct PlayFlow: View {
 /// After `shadow-setup`: eyebrow + title, the two players, then segmented choices, an information
 /// row, and one primary action.
 public struct MatchSetupScreen: View {
+    @AppStorage(Appearance.storageKey) private var appearanceRaw: String = Appearance.system.rawValue
     @State private var home: String
     @State private var away: String
     @State private var game: Int = 501
@@ -129,8 +131,7 @@ public struct MatchSetupScreen: View {
             }
         }
         .background(ThroColor.colorBackgroundPrimary.ignoresSafeArea())
-        .environment(\.colorScheme, .dark)
-        .preferredColorScheme(.dark)
+        .throAppearance(Appearance(stored: appearanceRaw))
     }
 
     private func choice<Control: View>(_ label: String, _ control: Control) -> some View {
@@ -197,6 +198,7 @@ public struct MatchReadyScreen: View {
 /// turn indicator, and the keypad — or, when PD-001 has a question, the question in its place.
 public struct ScoringScreen: View {
     @ObservedObject private var session: MatchSession
+    @AppStorage(Appearance.storageKey) private var appearanceRaw: String = Appearance.system.rawValue
     private let onLeave: () -> Void
     private let onComplete: () -> Void
 
@@ -233,15 +235,17 @@ public struct ScoringScreen: View {
             }
             if let prompt = session.prompt {
                 PromptCard(prompt: prompt, onAnswer: session.answer, onCancel: session.cancelPrompt)
+            } else if let proposal = session.retraction {
+                RetractionCard(proposal: proposal, playerName: session.name(proposal.seat),
+                               onConfirm: session.confirmRetraction, onCancel: session.cancelRetraction)
             } else {
                 ScoreKeypad(value: session.entry, disabled: session.isComplete,
                             onDigit: session.digit, onQuick: session.quick,
-                            onMiss: session.miss, onClear: session.clearEntry, onEnter: session.enter)
+                            onMiss: session.miss, onClear: session.undoKey, onEnter: session.enter)
             }
         }
         .background(ThroColor.colorBackgroundPrimary.ignoresSafeArea())
-        .environment(\.colorScheme, .dark)
-        .preferredColorScheme(.dark)
+        .throAppearance(Appearance(stored: appearanceRaw))
         .onReceive(session.$state) { state in
             if state.isComplete { onComplete() }
         }
@@ -318,6 +322,42 @@ public struct PromptCard: View {
     }
 }
 
+/// PD-004's undo, in the keypad's place. Confirming appends a retraction that strikes the visit;
+/// nothing is deleted, and the struck visit stays in the record.
+public struct RetractionCard: View {
+    private let proposal: MatchSession.RetractionProposal
+    private let playerName: String
+    private let onConfirm: () -> Void
+    private let onCancel: () -> Void
+
+    public init(proposal: MatchSession.RetractionProposal, playerName: String,
+                onConfirm: @escaping () -> Void, onCancel: @escaping () -> Void) {
+        self.proposal = proposal
+        self.playerName = playerName
+        self.onConfirm = onConfirm
+        self.onCancel = onCancel
+    }
+
+    public var body: some View {
+        VStack(alignment: .leading, spacing: ThroSpacing.spacing3) {
+            Eyebrow("Undo last visit")
+            Text("Strike \(playerName)'s \(proposal.visitTotal)?")
+                .thro(ThroTypography.heading2)
+                .foregroundStyle(ThroColor.colorTextPrimary)
+            Text("\(playerName) goes back to \(proposal.restoresTo). The visit stays in the record as struck; nothing is deleted.")
+                .thro(ThroTypography.metadata)
+                .foregroundStyle(ThroColor.colorTextSecondary)
+            HStack(spacing: ThroSpacing.spacing2) {
+                ThroButton("Undo", variant: .destructive, size: .large, fullWidth: true, action: onConfirm)
+                ThroButton("Keep", variant: .secondary, size: .large, fullWidth: true, action: onCancel)
+            }
+        }
+        .padding(.vertical, ThroSpacing.spacing4)
+        .padding(.horizontal, ThroSpacing.spaceScreenGutter)
+        .background(ThroColor.colorBackgroundPrimary)
+    }
+}
+
 // MARK: - Result
 
 /// After `result` and `shadow-result`. No RatingMovement (OD-001: no rating model is validated) and
@@ -328,11 +368,14 @@ public struct MatchResultScreen: View {
     @AppStorage(Appearance.storageKey) private var appearanceRaw: String = Appearance.system.rawValue
     private let onDone: () -> Void
     private let onPlayAgain: () -> Void
+    private let onReopen: () -> Void
 
-    public init(session: MatchSession, onDone: @escaping () -> Void, onPlayAgain: @escaping () -> Void) {
+    public init(session: MatchSession, onDone: @escaping () -> Void, onPlayAgain: @escaping () -> Void,
+                onReopen: @escaping () -> Void) {
         self.session = session
         self.onDone = onDone
         self.onPlayAgain = onPlayAgain
+        self.onReopen = onReopen
     }
 
     public var body: some View {
@@ -365,15 +408,25 @@ public struct MatchResultScreen: View {
                             .foregroundStyle(ThroColor.colorTextSecondary)
                     }
                     ThroDivider(inset: ThroSpacing.spaceScreenGutter)
-                    section {
-                        ThroButton("Done", variant: .primary, size: .large, fullWidth: true, action: onDone)
-                        ThroButton("Play again", variant: .secondary, size: .large, fullWidth: true, action: onPlayAgain)
+                    if let proposal = session.retraction {
+                        RetractionCard(proposal: proposal, playerName: session.name(proposal.seat),
+                                       onConfirm: session.confirmRetraction, onCancel: session.cancelRetraction)
+                    } else {
+                        section {
+                            ThroButton("Done", variant: .primary, size: .large, fullWidth: true, action: onDone)
+                            ThroButton("Play again", variant: .secondary, size: .large, fullWidth: true, action: onPlayAgain)
+                            // The mis-key that ends a match is the one that most needs undoing (PD-004).
+                            ThroButton("Undo last visit", variant: .ghost, size: .medium, action: session.proposeRetraction)
+                        }
                     }
                 }
             }
         }
         .background(ThroColor.colorBackgroundPrimary.ignoresSafeArea())
         .throAppearance(Appearance(stored: appearanceRaw))
+        .onReceive(session.$state) { state in
+            if !state.isComplete { onReopen() }
+        }
     }
 
     private func section<Content: View>(@ViewBuilder _ content: () -> Content) -> some View {

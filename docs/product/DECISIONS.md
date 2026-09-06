@@ -195,6 +195,50 @@ designer's; the contrast matrix covers the pairs, not the compositions.
 
 ### How to reverse
 
-Delete `Appearance` and the You tab's control; the screens return to the export's light. Stored
-values are ignored, not migrated.
+Delete `Appearance` and the Settings control; the screens return to the export's light and dark as
+drawn. Stored values are ignored, not migrated.
+
+### Amendment, the same day
+
+The founder extended the choice to **every screen, Match setup and Scoring included**, and moved the
+control into a **Settings** screen reached from the You tab's settings action, as the export places
+it. Point 3 above is void. The cost grows accordingly: a light scoring screen is the token layer's
+light values on a screen the export draws only dark, unreviewed by design.
+
+---
+
+## PD-004 — A mis-keyed visit is corrected by retraction, never by edit
+
+**Founder decision, 2026-09-06.** Not delegated.
+
+### Decided
+
+1. A player can **undo the last visit**. Undoing again walks one further back. The undo is a
+   **retraction event appended to the journal** that supersedes the visit it strikes — the shape the
+   server already gives corrections (`AccountedVisit.correctsSeq`): the struck row is never deleted,
+   replay skips it, the statistics never see it, and an investigator reads both.
+2. In a **local match** — two people, one phone — the undo needs **no one's approval**.
+3. In an **online match**, a retraction is a **proposal until the opponent approves it**. That flow
+   does not exist yet: there are no online matches in the client, and the server's evidence model
+   has `VisitCorrected` (an official's correction) but no participant-proposed, opponent-approved
+   retraction. It is built when sync is.
+4. On the phone: the keypad's undo key clears a typed entry first; with nothing typed it proposes
+   the undo, which the player confirms or keeps. The result screen offers the same, because the
+   mis-key that ends a match is the one that most needs undoing; confirming reopens the match.
+
+### Why
+
+Mis-keys happen at every board. Without a correction path a wrong visit stands for the match, and
+a self-reported result that cannot be corrected is worse evidence, not better.
+
+### The cost that must be stated plainly
+
+A self-reported result with retractions is still self-reported; the retraction changes what the
+record says, not how far it can be trusted. The approval rule for online matches is the whole
+difference between a correction and a rewrite, and it is not built.
+
+### How to reverse
+
+Remove the undo key's second meaning and the result screen's button; the journal's retraction rows
+stay valid and replay keeps honouring them. Nothing in the record has to change.
 

@@ -139,15 +139,20 @@ exactly what CI does (`xcodebuild -scheme ThroDarts -destination 'generic/platfo
   action: **Start match**. Once matches exist, they are listed under *On this device* with the legs,
   the format, when they started, and *Self-reported* or *In progress*. Tapping one resumes it or
   opens its result. The tab bar's *Live* and *Discover* say plainly that they are not in this build;
-  *You* carries the one setting there is — **Appearance: System / Light / Dark** — and says the rest is
-  not built.
+  *You* says the profile is not built and carries the export's settings action in its header.
+- **Settings** (from the gear on You). **Appearance: System / Light / Dark** — every screen follows
+  it, scoring included (PD-003) — and a *This build* group stating what is true: matches stay on the
+  device, sending to THRØ is not built, which face the fonts are, no account.
 - **Match setup** (dark). Two names, then 301 / 501 / 701, Bo3 / Bo5 / Bo7 / Bo9, and who throws
   first. Double out is the only out-rule offered. Empty names become *Home* and *Away*.
 - **Match ready.** The two players, the format as tags, **Start scoring**.
 - **Scoring** (dark). A back chevron and the header with the players and the format; legs and the other player's remaining;
   the thrower's remaining in the 96-point score face; a *Checkout available* card when the thrower is
   on a finish; the turn indicator; the keypad. Quick totals commit at once. Typed totals commit on
-  **Enter**, which stays disabled until something is typed. The undo key clears the entry.
+  **Enter**, which stays disabled until something is typed. The undo key clears the entry; with
+  nothing typed it offers to **undo the last visit** (PD-004): *Strike Man's 100?* with **Undo** and
+  **Keep**. Undoing appends a retraction — the struck visit stays in the record, replay skips it, the
+  statistics never see it — and the score goes back. Undo again to walk further back.
 - **The two questions (PD-001).** When the visit **began on a checkout number**, the keypad is
   replaced by *Darts thrown at a double?* — 0 / 1 / 2 / 3, preset 0 — whether or not the visit
   finished. When the visit **wins the leg**, *Darts used to check out?* — 1 / 2 / 3, preset 3 — comes
@@ -159,7 +164,8 @@ exactly what CI does (`xcodebuild -scheme ThroDarts -destination 'generic/platfo
 - **Result.** *{Winner} wins*, the legs, each player's six figures (3-dart average, first 9,
   checkout %, 180s, highest checkout, 140+) — exact as a number, bounded as a range that says so,
   unavailable as a dash with its reason — then *Not rated*, *Self-reported* with its explanation, and
-  a line saying the result has not left the phone. **Done** or **Play again**.
+  a line saying the result has not left the phone. **Done**, **Play again**, or **Undo last visit** for
+  the mis-key that ended the match, which reopens it.
 
 ## First run on a phone
 
@@ -229,7 +235,7 @@ platform's own behaviour or renders the honest minimum, and says so.
 | 11 Offline-completed result | *Self-reported*; and because no sync exists, the screen says the result has not left the phone rather than showing a *Queued* that promises one. |
 | 15 Disabled | The export's opacity multiplier. |
 | 18 Invalid score feedback | The engine's refusal in the snackbar, in the harness's words. |
-| 20 Dark mode | **Decided by the founder (PD-003):** System / Light / Dark on the You tab, governing every screen the export draws light; setup and scoring stay dark as drawn. The dark rendering of the light-drawn screens is the token layer's, unreviewed by design. |
+| 20 Dark mode | **Decided by the founder (PD-003, amended):** System / Light / Dark in Settings, governing every screen, scoring included. Each screen's undrawn rendering — dark Home, light scoring — is the token layer's, unreviewed by design. |
 | 23 Landscape | The Xcode template's orientations are left as they are; the scoring screen has no landscape design. |
 | 24 Truncation | Names truncate with an ellipsis in the header, the identity, and the Home rows. |
 | 25 Haptics | None. |
@@ -242,6 +248,10 @@ Composed from the export's components because the export does not draw them:
   journal makes leaving safe. (A TopBar above the header was tried first and cost 64 points the
   scoring screen does not have — see the first run.)
 - **Play again** on the result, from the Shadow result.
+- The **undo confirmation** (PD-004), in the keypad's place, from Eyebrow, heading, Button; and
+  **Undo last visit** on the result.
+- A **Settings** screen after the export's own, with only the rows that are true of this build, and
+  the appearance control in place of a row that would go nowhere.
 
 Read differently from the JSX, on purpose: Enter disabled on an empty entry (the export scores 0);
 the undo key clears the entry (the export labels it *Undo last score* and every screen uses it to
@@ -253,8 +263,9 @@ route table exists in this repository.
 
 No network, sync or server calls of any kind — the module graph has no network target, which is how
 LATENCY_BUDGETS.md's structural requirement is enforced. No attestation, no rating (OD-001), no
-identity or sign-in (item 6), no organiser surface, no Live / Discover / You. The app scores a match
-between two people on one phone and keeps it. That is all it claims.
+identity or sign-in (item 6), no organiser surface, no Live / Discover / profile. No online matches,
+so no opponent-approved retraction (PD-004 point 3). The app scores a match between two people on one
+phone, lets them undo a mis-key, and keeps it. That is all it claims.
 
 ## Checking it yourself
 

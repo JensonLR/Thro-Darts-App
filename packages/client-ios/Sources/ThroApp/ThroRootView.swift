@@ -79,6 +79,7 @@ public final class AppStore: ObservableObject {
 public struct ThroRootView: View {
     @StateObject private var store: AppStore
     @AppStorage(Appearance.storageKey) private var appearanceRaw: String = Appearance.system.rawValue
+    @State private var showingSettings = false
 
     public init() { _store = StateObject(wrappedValue: AppStore()) }
     public init(store: AppStore) { _store = StateObject(wrappedValue: store) }
@@ -89,14 +90,16 @@ public struct ThroRootView: View {
                 store.flow = nil
                 store.refresh()
             }
+        } else if showingSettings {
+            SettingsScreen(onBack: { showingSettings = false })
+                .throAppearance(Appearance(stored: appearanceRaw))
         } else {
             VStack(spacing: 0) {
                 tabContent
                 BottomBar(selection: store.tab) { store.tab = $0 }
             }
             .background(ThroColor.colorBackgroundPrimary.ignoresSafeArea())
-            // PD-003: the player chooses System / Light / Dark on the You tab. Setup and scoring stay
-            // dark as the export draws them; every other screen follows this.
+            // PD-003: the player chooses System / Light / Dark in Settings; every screen follows it.
             .throAppearance(Appearance(stored: appearanceRaw))
         }
     }
@@ -112,7 +115,7 @@ public struct ThroRootView: View {
         case .play: PlayLandingScreen(store: store)
         case .live: NotBuiltScreen(title: "Live")
         case .discover: NotBuiltScreen(title: "Discover")
-        case .you: YouScreen()
+        case .you: YouScreen(onSettings: { showingSettings = true })
         }
     }
 }
@@ -234,11 +237,35 @@ public struct PlayLandingScreen: View {
     }
 }
 
-/// The You tab: the one setting this build has, then honesty about the rest.
+/// The You tab. The export's You is a profile with a settings action in its TopBar; this build has
+/// no profile to show and says so, and keeps the action.
 public struct YouScreen: View {
-    @AppStorage(Appearance.storageKey) private var appearanceRaw: String = Appearance.system.rawValue
+    private let onSettings: () -> Void
 
-    public init() {}
+    public init(onSettings: @escaping () -> Void) { self.onSettings = onSettings }
+
+    public var body: some View {
+        VStack(spacing: 0) {
+            TopBar("You", actions: [TopBar.Action(icon: .settings, label: "Settings", action: onSettings)], large: true)
+            ScrollView {
+                EmptyState(title: "Profile not in this build",
+                           message: "Your profile, rating and passport need THRØ's servers. This build scores matches and keeps them on the device; nothing else is connected yet. Settings are behind the gear above.")
+                    .padding(.vertical, ThroSpacing.spacing6)
+                    .padding(.horizontal, ThroSpacing.spaceScreenGutter)
+            }
+        }
+        .background(ThroColor.colorBackgroundPrimary.ignoresSafeArea())
+    }
+}
+
+/// After the export's Settings screen: grouped rows of icon, label and value under section headers.
+/// Only what is true of this build appears — one setting, and the facts of the build. PD-003 puts the
+/// appearance choice here.
+public struct SettingsScreen: View {
+    @AppStorage(Appearance.storageKey) private var appearanceRaw: String = Appearance.system.rawValue
+    private let onBack: () -> Void
+
+    public init(onBack: @escaping () -> Void) { self.onBack = onBack }
 
     private var appearance: Binding<Appearance> {
         Binding(get: { Appearance(stored: appearanceRaw) }, set: { appearanceRaw = $0.rawValue })
@@ -246,23 +273,65 @@ public struct YouScreen: View {
 
     public var body: some View {
         VStack(spacing: 0) {
-            TopBar("You", large: true)
+            TopBar("Settings", onBack: onBack, large: true)
             ScrollView {
-                VStack(alignment: .leading, spacing: ThroSpacing.spacing4) {
-                    SectionHeader("Appearance")
-                    SegmentedControl(Appearance.allCases.map { ($0, $0.label) }, selection: appearance)
-                    Text("Match setup and scoring stay dark, as the design draws them. Every other screen follows this choice.")
-                        .thro(ThroTypography.metadata)
-                        .foregroundStyle(ThroColor.colorTextSecondary)
-                    ThroDivider().padding(.vertical, ThroSpacing.spacing4)
-                    EmptyState(title: "Profile not in this build",
-                               message: "Your profile, rating and passport need THRØ's servers. This build scores matches and keeps them on the device; nothing else is connected yet.")
+                VStack(alignment: .leading, spacing: 0) {
+                    group("Appearance") {
+                        SegmentedControl(Appearance.allCases.map { ($0, $0.label) }, selection: appearance)
+                        Text("Every screen follows this, scoring included. System follows the phone.")
+                            .thro(ThroTypography.metadata)
+                            .foregroundStyle(ThroColor.colorTextSecondary)
+                    }
+                    group("This build") {
+                        SettingsRow(icon: .smartphone, label: "Matches", value: "Stay on this device")
+                        SettingsRow(icon: .cloudOff, label: "Sending results to THRØ", value: "Not built")
+                        SettingsRow(icon: .info, label: "Fonts", value: ThroFont.customFacesRegistered ? "Embedded" : "System face")
+                        SettingsRow(icon: .circleUser, label: "Account and profile", value: "Not built")
+                    }
                 }
-                .padding(.vertical, ThroSpacing.spacing6)
-                .padding(.horizontal, ThroSpacing.spaceScreenGutter)
             }
         }
         .background(ThroColor.colorBackgroundPrimary.ignoresSafeArea())
+    }
+
+    private func group<Content: View>(_ title: String, @ViewBuilder _ content: () -> Content) -> some View {
+        VStack(alignment: .leading, spacing: ThroSpacing.spacing3) {
+            SectionHeader(title)
+            content()
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.top, ThroSpacing.spacing2)
+        .padding(.bottom, ThroSpacing.spacing4)
+        .padding(.horizontal, ThroSpacing.spaceScreenGutter)
+    }
+}
+
+/// One row of the export's Settings: an 18-point icon, the label, the value, a hairline beneath. The
+/// export ends each row with a chevron; a row that goes nowhere does not pretend to.
+public struct SettingsRow: View {
+    private let icon: ThroIcon
+    private let label: String
+    private let value: String?
+
+    public init(icon: ThroIcon, label: String, value: String? = nil) {
+        self.icon = icon
+        self.label = label
+        self.value = value
+    }
+
+    public var body: some View {
+        HStack(spacing: 12) {
+            Icon(icon, size: 18).foregroundStyle(ThroColor.colorTextSecondary)
+            Text(label).thro(ThroTypography.body).foregroundStyle(ThroColor.colorTextPrimary)
+            Spacer(minLength: ThroSpacing.spacing3)
+            if let value {
+                Text(value).thro(ThroTypography.label).foregroundStyle(ThroColor.colorTextSecondary)
+                    .multilineTextAlignment(.trailing)
+            }
+        }
+        .frame(minHeight: 52)
+        .overlay(alignment: .bottom) { Rectangle().fill(ThroColor.colorBorderDefault).frame(height: 1) }
+        .accessibilityElement(children: .combine)
     }
 }
 

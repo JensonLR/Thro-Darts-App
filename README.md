@@ -223,6 +223,7 @@ is removed.
 | A visit is durable before it is shown | `MatchSession.submit`: engine decides, journal commits, then the state changes |
 | The journal runs only under the configuration that was measured | `Journal.verifyInForce` reads every pragma back on open and refuses anything else |
 | Scoring has no compile-time path to a network | The client package graph has no network target to depend on |
+| A mis-keyed visit is corrected, never edited | A retraction row in the append-only journal supersedes it (PD-004); replay skips what it strikes and the struck row stays |
 
 ## What is deliberately not decided here
 
