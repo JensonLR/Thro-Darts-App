@@ -30,6 +30,11 @@ mistakes this snapshot for the live design project.
   plus the navigation model (`app.jsx`).
 - `extracted/ui_kits/thro-organiser/` — **9 organiser screens** (control, boards, queue,
   entries, draw, disputes, verification, league, venue) plus the organiser shell.
+- **Not in the snapshot:** the brand assets the Splash screen references (`assets/mark-chalk.svg`,
+  `assets/logo-chalk.svg`) and the font binaries. The founder supplied the mark and the wordmark as
+  images on 2026-09-06; `docs/design/brand/` holds a geometric reconstruction of the mark and says how
+  to replace it with the master. The fonts were taken from their publishers' repositories under the
+  SIL Open Font License (PD-006).
 
 ## Important limitations — read before relying on this
 

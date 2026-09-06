@@ -1,0 +1,43 @@
+name: swift-engine
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+
+jobs:
+  conformance:
+    name: Swift engine conformance (ADR-002 spike)
+    runs-on: ubuntu-latest
+    # The engine is pure value types with no Apple frameworks, so it builds and runs the corpus on
+    # Linux. That matters: a scoring core verifiable only on a Mac is one that gets verified once,
+    # not on every push. The macOS build is a separate concern, for the app rather than the engine.
+    # Noble (24.04), not jammy (22.04): actions/setup-python installs a CPython built against
+    # GLIBC 2.38, which jammy's 2.35 cannot load. The failure is a linker error from python3, not
+    # from Swift, and it is worth naming here because the next person to pin a container will hit it.
+    container: swift:6.0-noble
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.11" }
+
+      # The rule tables are generated into Swift from the same source as Kotlin's. A stale committed
+      # copy fails here, so no platform can drift by hand-editing its own checkout set.
+      - name: Generated Swift rule tables are not stale
+        run: |
+          python3 packages/domain-spec/generate.py
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
+          git diff --exit-code -- packages/engine-swift/Sources/ThroEngine/RuleTables.swift
+
+      # ADR-002's exit condition: the corpus passes identically on both platforms.
+      - name: Conformance corpus, including the exhaustive family
+        run: |
+          python3 packages/domain-spec/generate.py --full
+          swift test --package-path packages/engine-swift
+
+      # The statistics layer, dependency-free like the engine, held to the same twenty honesty
+      # assertions as the Kotlin original — on Linux, on every push.
+      - name: Statistics honesty, Swift
+        run: swift test --package-path packages/statistics-swift
+      - name: Embedded fonts, licences and brand assets agree with the code (PD-006)
+        run: python3 apps/ios/check_fonts.py

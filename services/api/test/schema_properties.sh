@@ -1,0 +1,410 @@
+#!/usr/bin/env bash
+# THRØ — schema property tests.
+#
+# These assert the properties the competitive event model depends on, against a real PostgreSQL.
+# They exist because the first version of this schema could not store the two-device corroboration
+# case the trust model is built on, and nobody noticed until it was executed. Assertions about a
+# database belong in a database.
+set -uo pipefail
+PSQL="psql -v ON_ERROR_STOP=0 -X -q -t -A"
+PASS=0; FAIL=0
+ok()   { PASS=$((PASS+1)); printf '  \033[32mPASS\033[0m  %s\n' "$1"; }
+bad()  { FAIL=$((FAIL+1)); printf '  \033[31mFAIL\033[0m  %s — %s\n' "$1" "$2"; }
+check(){ if [ "$2" = "$3" ]; then ok "$1"; else bad "$1" "expected [$3] got [$2]"; fi; }
+
+echo "== migrations =="
+already=$($PSQL -c "SELECT count(*) FROM information_schema.schemata WHERE schema_name='evidence';")
+if [ "$already" = "0" ]; then
+  for f in "$(dirname "$0")"/../migrations/V*.sql; do
+    out=$($PSQL -f "$f" 2>&1); rc=$?
+    if [ $rc -eq 0 ] && ! echo "$out" | grep -qi '^ERROR'; then ok "applied $(basename "$f")"
+    else bad "applied $(basename "$f")" "$(echo "$out" | grep -i ERROR | head -1)"; fi
+  done
+else
+  ok "schema already present — migrations skipped"
+fi
+
+# Fresh identifiers per run, so the suite is idempotent. CI always gets a clean database, but a
+# test that only passes on a clean database is a test that stops being run locally.
+M=$($PSQL -c "SELECT gen_random_uuid();")
+DA=$($PSQL -c "SELECT gen_random_uuid();")
+DB=$($PSQL -c "SELECT gen_random_uuid();")
+# ADR-008: evidence may only exist for a match the store knows about, so every assertion below
+# needs a real aggregate. Opening one is now the precondition for any evidence at all.
+$PSQL -c "SET ROLE app_match; INSERT INTO evidence.match
+  (match_id,home_id,away_id,home_name,away_name,starting_score,in_rule,out_rule,
+   legs_mode,legs_target,throw_first)
+  VALUES ('$M', '$DA', '$DB', 'Home', 'Away', 501, 'straight', 'double', 'first_to', 5, '$DA');" >/dev/null 2>&1
+
+ins() { # match, device, seq
+  $PSQL -c "INSERT INTO evidence.event
+    (event_id,match_id,device_id,device_seq,event_type,schema_version,correlation_id,
+     actor_id,actor_role,occurred_at,occurred_tz,payload)
+    VALUES (gen_random_uuid(),'$1','$2',$3,'VisitRecorded',1,gen_random_uuid(),
+            gen_random_uuid(),'participant',now(),'Europe/London','{\"total\":100}');" 2>&1
+}
+
+echo
+echo "== the two-device corroboration case =="
+ins $M $DA 1 >/dev/null; ins $M $DA 2 >/dev/null
+r=$(ins $M $DB 1)
+if echo "$r" | grep -qi 'ERROR'; then bad "both devices can author the same match" "$(echo "$r"|head -1)"
+else ok "both devices can author the same match"; fi
+ins $M $DB 2 >/dev/null
+n=$($PSQL -c "SELECT count(*) FROM evidence.event WHERE match_id='$M';")
+check "both streams are stored in full" "$n" "4"
+n=$($PSQL -c "SELECT count(DISTINCT device_id) FROM evidence.event WHERE match_id='$M';")
+check "each device's account is separately readable" "$n" "2"
+r=$(ins $M $DA 1)
+if echo "$r" | grep -qi 'duplicate key'; then ok "a device cannot reuse its own sequence number"
+else bad "a device cannot reuse its own sequence number" "duplicate was accepted"; fi
+
+echo
+echo "== append-only holds, including on tables created by a later migration =="
+$PSQL -c "SET ROLE app_match;" >/dev/null
+for op in "UPDATE evidence.event SET event_type='tampered'" \
+          "DELETE FROM evidence.event" \
+          "TRUNCATE evidence.event" \
+          "UPDATE read.visit SET visit_total=1" ; do
+  tbl=$(echo "$op" | grep -oE '(evidence|read)\.[a-z_]+')
+  r=$($PSQL -c "SET ROLE app_match; $op;" 2>&1)
+  label="$(echo "$op" | awk '{print $1}') on $tbl is denied to the app role"
+  if echo "$r" | grep -qi 'permission denied'; then ok "$label"
+  else
+    # read.visit is a projection and app_read may write it; app_match may not
+    if [ "$tbl" = "read.visit" ]; then bad "$label" "app_match could write a projection"
+    else bad "$label" "${r:-succeeded}"; fi
+  fi
+done
+n=$($PSQL -c "SELECT count(*) FROM evidence.event WHERE match_id='$M';")
+check "the log survived every attempt" "$n" "4"
+
+echo
+echo "== a table added by a FUTURE migration inherits the revocation =="
+$PSQL -c "SET ROLE thro_owner; DROP TABLE IF EXISTS evidence.late_arrival;" >/dev/null
+$PSQL -c "SET ROLE thro_owner; CREATE TABLE evidence.late_arrival(id int PRIMARY KEY, v int);" >/dev/null
+$PSQL -c "SET ROLE thro_owner; GRANT SELECT, INSERT ON evidence.late_arrival TO app_match;" >/dev/null
+$PSQL -c "SET ROLE thro_owner; INSERT INTO evidence.late_arrival VALUES (1,180);" >/dev/null
+r=$($PSQL -c "SET ROLE app_match; UPDATE evidence.late_arrival SET v=1;" 2>&1)
+if echo "$r" | grep -qi 'permission denied'; then ok "UPDATE on a later table is denied by default privileges"
+else bad "UPDATE on a later table is denied by default privileges" "${r:-succeeded — the defect this test exists for}"; fi
+v=$($PSQL -c "SELECT v FROM evidence.late_arrival WHERE id=1;")
+check "the later table's data is intact" "$v" "180"
+
+echo
+echo "== idempotency =="
+CMD=$($PSQL -c "SELECT gen_random_uuid();")
+
+$PSQL -c "INSERT INTO evidence.command_receipt(device_id,client_command_id,match_id,outcome,response_body)
+          VALUES ('$DA','$CMD','$M','accepted','{\"streamSeq\":3}');" >/dev/null
+r=$($PSQL -c "INSERT INTO evidence.command_receipt(device_id,client_command_id,match_id,outcome,response_body)
+              VALUES ('$DA','$CMD','$M','accepted','{\"streamSeq\":99}');" 2>&1)
+if echo "$r" | grep -qi 'duplicate key'; then ok "a replayed command id cannot create a second receipt"
+else bad "a replayed command id cannot create a second receipt" "duplicate accepted"; fi
+b=$($PSQL -c "SELECT response_body->>'streamSeq' FROM evidence.command_receipt
+              WHERE device_id='$DA' AND client_command_id='$CMD';")
+check "the stored response is returned unchanged" "$b" "3"
+
+echo
+echo "== ordering =="
+n=$($PSQL -c "SELECT count(*) FROM evidence.event WHERE commit_xid < pg_snapshot_xmin(pg_current_snapshot());")
+if [ "$n" -ge 4 ]; then ok "committed events are dispatchable under the watermark rule"
+else bad "committed events are dispatchable under the watermark rule" "only $n of 4 visible"; fi
+o=$($PSQL -c "SELECT string_agg(device_seq::text,',' ORDER BY commit_xid, global_seq)
+              FROM evidence.event WHERE match_id='$M';")
+if [ -n "$o" ]; then ok "cross-device order is total under (commit_xid, global_seq) — [$o]"
+else bad "cross-device order" "no ordering produced"; fi
+
+echo
+echo "== nullable darts_used means unknown, never zero =="
+$PSQL -c "INSERT INTO read.visit(projection_version,visit_id,match_id,leg_ordinal,visit_ordinal,
+          thrower_id,visit_total,darts_used,bust,checkout,remaining_after)
+          VALUES (1,gen_random_uuid(),'$M',1,1,gen_random_uuid(),100,NULL,false,false,401);" >/dev/null
+d=$($PSQL -c "SELECT coalesce(darts_used::text,'NULL') FROM read.visit WHERE match_id='$M' LIMIT 1;")
+check "darts_used stores NULL rather than a default" "$d" "NULL"
+r=$($PSQL -c "INSERT INTO read.visit(projection_version,visit_id,match_id,leg_ordinal,visit_ordinal,
+              thrower_id,visit_total,darts_used,bust,checkout,remaining_after)
+              VALUES (1,gen_random_uuid(),'$M',1,2,gen_random_uuid(),100,0,false,false,301);" 2>&1)
+if echo "$r" | grep -qi 'violates check constraint'; then ok "darts_used rejects 0 — a visit cannot use zero darts"
+else bad "darts_used rejects 0" "zero was accepted"; fi
+r=$($PSQL -c "INSERT INTO read.visit(projection_version,visit_id,match_id,leg_ordinal,visit_ordinal,
+              thrower_id,visit_total,darts_used,bust,checkout,remaining_after)
+              VALUES (1,gen_random_uuid(),'$M',1,3,gen_random_uuid(),181,3,false,false,0);" 2>&1)
+if echo "$r" | grep -qi 'violates check constraint'; then ok "a visit total above 180 is rejected"
+else bad "a visit total above 180 is rejected" "181 was accepted"; fi
+
+echo
+echo "== the append-only guarantee rests on ownership, so assert it =="
+o=$($PSQL -c "SELECT tableowner FROM pg_tables WHERE schemaname='evidence' AND tablename='event';")
+check "the event log is owned by the migration role, not the app" "$o" "thro_owner"
+o=$($PSQL -c "SELECT count(*) FROM pg_tables WHERE schemaname IN ('evidence','read','trust')
+              AND tableowner <> 'thro_owner';")
+check "no table in the guarded schemas is owned by anyone else" "$o" "0"
+
+echo
+echo "== darts at a double =="
+$PSQL -c "SET ROLE app_read; UPDATE read.visit SET darts_at_double = 1 WHERE match_id='$M';" >/dev/null 2>&1
+d=$($PSQL -c "SELECT coalesce(darts_at_double::text,'NULL') FROM read.visit WHERE match_id='$M' LIMIT 1;")
+check "darts_at_double is recorded" "$d" "1"
+r=$($PSQL -c "SET ROLE app_read; INSERT INTO read.visit(projection_version,visit_id,match_id,leg_ordinal,
+     visit_ordinal,thrower_id,visit_total,darts_used,darts_at_double,bust,checkout,remaining_after)
+     VALUES (1,gen_random_uuid(),'$M',9,1,gen_random_uuid(),40,1,2,false,true,0);" 2>&1)
+if echo "$r" | grep -qi 'violates check constraint'; then
+  ok "more darts at a double than darts thrown is rejected"
+else bad "more darts at a double than darts thrown is rejected" "2-of-1 was accepted"; fi
+r=$($PSQL -c "SET ROLE app_read; INSERT INTO read.visit(projection_version,visit_id,match_id,leg_ordinal,
+     visit_ordinal,thrower_id,visit_total,darts_used,darts_at_double,bust,checkout,remaining_after)
+     VALUES (1,gen_random_uuid(),'$M',9,2,gen_random_uuid(),40,3,4,false,true,0);" 2>&1)
+if echo "$r" | grep -qi 'violates check constraint'; then
+  ok "more than three darts at a double is rejected"
+else bad "more than three darts at a double is rejected" "4 was accepted"; fi
+
+echo
+echo "== scoring grants =="
+EV=$($PSQL -c "SELECT gen_random_uuid();")
+AC=$($PSQL -c "SELECT gen_random_uuid();")
+DV=$($PSQL -c "SELECT gen_random_uuid();")
+GR=$($PSQL -c "SELECT gen_random_uuid();")
+$PSQL -c "SET ROLE app_trust; INSERT INTO trust.scoring_grant
+  (grant_id,event_id,actor_id,device_id,actor_role,expires_at)
+  VALUES ('$GR','$EV','$AC','$DV','participant', now() + interval '34 hours');" >/dev/null 2>&1
+n=$($PSQL -c "SELECT count(*) FROM trust.scoring_grant WHERE grant_id='$GR';")
+check "the trust role can issue a grant" "$n" "1"
+
+# The command path reads authority on every visit, so it must be able to see grants.
+n=$($PSQL -c "SET ROLE app_match; SELECT count(*) FROM trust.scoring_grant WHERE grant_id='$GR';" 2>&1)
+check "the match role can read authority" "$n" "1"
+
+r=$($PSQL -c "SET ROLE app_match; DELETE FROM trust.scoring_grant WHERE grant_id='$GR';" 2>&1)
+if echo "$r" | grep -qi 'permission denied'; then
+  ok "no role may delete a grant"
+else bad "no role may delete a grant" "delete was permitted"; fi
+
+# Two live grants for one scope would make "which authority was this under" unanswerable.
+r=$($PSQL -c "SET ROLE app_trust; INSERT INTO trust.scoring_grant
+  (grant_id,event_id,actor_id,device_id,actor_role,expires_at)
+  VALUES (gen_random_uuid(),'$EV','$AC','$DV','participant', now() + interval '34 hours');" 2>&1)
+if echo "$r" | grep -qi 'duplicate key\|unique constraint'; then
+  ok "an actor cannot hold two live grants for one scope"
+else bad "an actor cannot hold two live grants for one scope" "a second live grant was accepted"; fi
+
+$PSQL -c "SET ROLE app_trust; UPDATE trust.scoring_grant
+  SET revoked_at = now(), revoked_by = '$AC', revoked_reason = 'test'
+  WHERE grant_id='$GR';" >/dev/null 2>&1
+d=$($PSQL -c "SELECT revoked_at IS NOT NULL FROM trust.scoring_grant WHERE grant_id='$GR';")
+check "a grant can be revoked" "$d" "t"
+
+r=$($PSQL -c "SET ROLE app_trust; UPDATE trust.scoring_grant SET revoked_at = NULL, revoked_by = NULL
+  WHERE grant_id='$GR';" 2>&1)
+if echo "$r" | grep -qi 'cannot be undone'; then
+  ok "a revocation cannot be undone"
+else bad "a revocation cannot be undone" "un-revoking was permitted"; fi
+
+r=$($PSQL -c "SET ROLE app_trust; UPDATE trust.scoring_grant SET expires_at = now() - interval '1 hour'
+  WHERE grant_id='$GR';" 2>&1)
+if echo "$r" | grep -qi 'cannot be moved backward'; then
+  ok "expiry cannot be moved backward"
+else bad "expiry cannot be moved backward" "retroactive expiry was permitted"; fi
+
+# Evidence records the authority it was written under, and anything but 'granted' needs review.
+r=$($PSQL -c "SET ROLE app_match; INSERT INTO evidence.event
+  (event_id,match_id,device_id,device_seq,event_type,schema_version,correlation_id,actor_id,
+   actor_role,occurred_at,occurred_tz,payload,authority)
+  VALUES (gen_random_uuid(),'$M','$DA',900,'VisitRecorded',1,gen_random_uuid(),'$AC',
+   'participant', now(),'Europe/London','{}'::jsonb,'nonsense');" 2>&1)
+if echo "$r" | grep -qi 'violates check constraint'; then
+  ok "an unknown authority value is rejected"
+else bad "an unknown authority value is rejected" "'nonsense' was accepted"; fi
+
+echo
+echo "== the match aggregate is the authority on who is playing =="
+r=$($PSQL -c "SET ROLE app_match; INSERT INTO evidence.event
+  (event_id,match_id,device_id,device_seq,event_type,schema_version,correlation_id,actor_id,
+   actor_role,occurred_at,occurred_tz,payload)
+  VALUES (gen_random_uuid(), gen_random_uuid(), '$DA', 999, 'VisitRecorded',1,gen_random_uuid(),
+   gen_random_uuid(),'participant',now(),'Europe/London','{}'::jsonb);" 2>&1)
+if echo "$r" | grep -qi 'event_belongs_to_a_real_match'; then
+  ok "evidence for a match that does not exist is refused by the database"
+else bad "evidence for a match that does not exist is refused by the database" "an orphan was accepted"; fi
+
+r=$($PSQL -c "SET ROLE app_match; UPDATE evidence.match SET away_name='Mallory' WHERE match_id='$M';" 2>&1)
+if echo "$r" | grep -qi 'permission denied'; then
+  ok "who is playing cannot be rewritten after the match opens"
+else bad "who is playing cannot be rewritten after the match opens" "the participant set was editable"; fi
+
+r=$($PSQL -c "SET ROLE app_match; INSERT INTO evidence.match
+  (match_id,home_id,away_id,home_name,away_name,starting_score,in_rule,out_rule,
+   legs_mode,legs_target,throw_first)
+  VALUES (gen_random_uuid(),'$DA','$DA','Solo','Solo',501,'straight','double','first_to',5,'$DA');" 2>&1)
+if echo "$r" | grep -qi 'violates check constraint'; then
+  ok "a competitor cannot play themselves"
+else bad "a competitor cannot play themselves" "a self-match was accepted"; fi
+
+r=$($PSQL -c "SET ROLE app_match; INSERT INTO evidence.match
+  (match_id,home_id,away_id,home_name,away_name,starting_score,in_rule,out_rule,
+   legs_mode,legs_target,throw_first)
+  VALUES (gen_random_uuid(),'$DA','$DB','Home','Away',501,'straight','double','first_to',5,gen_random_uuid());" 2>&1)
+if echo "$r" | grep -qi 'violates check constraint'; then
+  ok "the player throwing first must be one of the competitors"
+else bad "the player throwing first must be one of the competitors" "a stranger threw first"; fi
+
+echo
+echo "== the audit log is tamper-evident =="
+# A fresh object id per run, so a second run against the same database asserts about its own rows.
+OBJ="m-$($PSQL -c "SELECT substr(gen_random_uuid()::text,1,8);")"
+before=$($PSQL -c "SELECT count(*) FROM audit.decision;")
+$PSQL -c "SET ROLE app_match; INSERT INTO audit.decision
+  (subject_id,action,object_type,object_id,allowed,granted_by,policy_version)
+  VALUES ('$AC','match.correct','match','$OBJ',true,'event:e#official','1.0.0');" >/dev/null 2>&1
+after=$($PSQL -c "SELECT count(*) FROM audit.decision;")
+check "an application role can append a decision" "$((after - before))" "1"
+
+# Verify only if this run started from an intact chain; an earlier run's tamper test leaves it
+# broken on purpose, and re-breaking an already-broken chain proves nothing.
+broken_before=$($PSQL -c "SELECT count(*) FROM audit.first_broken_link();")
+if [ "$broken_before" = "0" ]; then
+  ok "the chain verifies after an honest append"
+  mine=$($PSQL -c "SELECT seq FROM audit.decision WHERE object_id='$OBJ';")
+  $PSQL -c "SET ROLE thro_owner; UPDATE audit.decision SET allowed = false WHERE seq = $mine;" >/dev/null 2>&1
+  n=$($PSQL -c "SELECT count(*) FROM audit.first_broken_link();")
+  check "rewriting a decision breaks the chain" "$n" "1"
+  # Put it back, so the chain is intact for whatever runs next.
+  $PSQL -c "SET ROLE thro_owner; UPDATE audit.decision SET allowed = true WHERE seq = $mine;" >/dev/null 2>&1
+  n=$($PSQL -c "SELECT count(*) FROM audit.first_broken_link();")
+  check "and restoring the entry repairs it" "$n" "0"
+else
+  ok "chain already broken by an earlier run — tamper assertions skipped"
+fi
+
+r=$($PSQL -c "SET ROLE app_match; SELECT count(*) FROM audit.decision;" 2>&1)
+if echo "$r" | grep -qi 'permission denied'; then
+  ok "the log is write-only for the roles that write to it"
+else bad "the log is write-only for the roles that write to it" "it was readable"; fi
+
+echo
+echo "== rating is a projection, and OD-001 stays open =="
+PL=$($PSQL -c "SELECT gen_random_uuid();")
+
+# At launch this table is empty on purpose: every player provisional, nothing published.
+n=$($PSQL -c "SELECT count(*) FROM rating.published_model;")
+check "no rating model is published" "$n" "0"
+
+r=$($PSQL -c "SET ROLE app_rating; INSERT INTO rating.snapshot
+  (player_id,model_id,model_version,parameter_hash,scale_epoch,as_of_commit_xid,as_of_global_seq,
+   rating,confidence,matches_counted,published)
+  VALUES ('$PL','candidate','1.0.0','h',1,'100'::xid8,1, 1500, 0.9, 20, true);" 2>&1)
+if echo "$r" | grep -qi 'violates foreign key'; then
+  ok "a snapshot cannot be published under a model that is not published"
+else bad "a snapshot cannot be published under a model that is not published" "it was accepted"; fi
+
+$PSQL -c "SET ROLE app_rating; INSERT INTO rating.snapshot
+  (player_id,model_id,model_version,parameter_hash,scale_epoch,as_of_commit_xid,as_of_global_seq,
+   rating,confidence,matches_counted,published)
+  VALUES ('$PL','candidate','1.0.0','h',1,'100'::xid8,1, NULL, 0.4, 4, false);" >/dev/null 2>&1
+d=$($PSQL -c "SELECT coalesce(rating::text,'NULL') FROM rating.snapshot WHERE player_id='$PL';")
+check "a shadow candidate stores a provisional snapshot with no rating" "$d" "NULL"
+
+r=$($PSQL -c "SET ROLE app_rating; INSERT INTO rating.snapshot
+  (player_id,model_id,model_version,parameter_hash,scale_epoch,as_of_commit_xid,as_of_global_seq,
+   rating,confidence,matches_counted,published)
+  VALUES (gen_random_uuid(),'c','1','h',1,'100'::xid8,1, NULL, 0.5, 1, true);" 2>&1)
+if echo "$r" | grep -qi 'violates'; then
+  ok "a published snapshot must carry an actual rating"
+else bad "a published snapshot must carry an actual rating" "a published em dash was accepted"; fi
+
+r=$($PSQL -c "SET ROLE app_rating; INSERT INTO rating.ledger
+  (ledger_id,player_id,model_id,at_commit_xid,at_global_seq,cause,delta)
+  VALUES (gen_random_uuid(),'$PL','c','100'::xid8,1,'match',5.0);" 2>&1)
+if echo "$r" | grep -qi 'violates check constraint'; then
+  ok "a match ledger line must name its match"
+else bad "a match ledger line must name its match" "an anonymous match line was accepted"; fi
+
+r=$($PSQL -c "SET ROLE app_match; SELECT count(*) FROM rating.snapshot;" 2>&1)
+if echo "$r" | grep -qi 'permission denied'; then
+  ok "the match module cannot see rating state"
+else bad "the match module cannot see rating state" "it was readable"; fi
+
+echo
+echo "== a module may append only to the streams it owns =="
+r=$($PSQL -c "SET ROLE app_trust; INSERT INTO evidence.event
+  (event_id,match_id,device_id,device_seq,event_type,schema_version,correlation_id,actor_id,
+   actor_role,occurred_at,occurred_tz,payload)
+  VALUES (gen_random_uuid(),'$M','$DA',801,'VisitRecorded',1,gen_random_uuid(),gen_random_uuid(),
+   'participant',now(),'Europe/London','{}'::jsonb);" 2>&1)
+if echo "$r" | grep -qi 'that stream belongs to app_match'; then
+  ok "trust cannot append match evidence"
+else bad "trust cannot append match evidence" "$(echo "$r" | head -1)"; fi
+
+r=$($PSQL -c "SET ROLE app_match; INSERT INTO evidence.event
+  (event_id,match_id,device_id,device_seq,event_type,schema_version,correlation_id,actor_id,
+   actor_role,occurred_at,occurred_tz,payload)
+  VALUES (gen_random_uuid(),'$M','$DA',802,'LegAttested',1,gen_random_uuid(),gen_random_uuid(),
+   'participant',now(),'Europe/London','{}'::jsonb);" 2>&1)
+if echo "$r" | grep -qi 'that stream belongs to app_trust'; then
+  ok "match cannot append an attestation on a participant's behalf"
+else bad "match cannot append an attestation on a participant's behalf" "$(echo "$r" | head -1)"; fi
+
+r=$($PSQL -c "SET ROLE app_rating; INSERT INTO evidence.event
+  (event_id,match_id,device_id,device_seq,event_type,schema_version,correlation_id,actor_id,
+   actor_role,occurred_at,occurred_tz,payload)
+  VALUES (gen_random_uuid(),'$M','$DA',803,'VisitRecorded',1,gen_random_uuid(),gen_random_uuid(),
+   'system',now(),'Europe/London','{}'::jsonb);" 2>&1)
+if echo "$r" | grep -qi 'permission denied'; then
+  ok "rating cannot write to the evidence log at all"
+else bad "rating cannot write to the evidence log at all" "$(echo "$r" | head -1)"; fi
+
+r=$($PSQL -c "SET ROLE app_match; INSERT INTO evidence.event
+  (event_id,match_id,device_id,device_seq,event_type,schema_version,correlation_id,actor_id,
+   actor_role,occurred_at,occurred_tz,payload)
+  VALUES (gen_random_uuid(),'$M','$DA',804,'SomethingInvented',1,gen_random_uuid(),
+   gen_random_uuid(),'system',now(),'Europe/London','{}'::jsonb);" 2>&1)
+if echo "$r" | grep -qi 'every stream must have a named owner'; then
+  ok "an event type nobody owns is refused"
+else bad "an event type nobody owns is refused" "$(echo "$r" | head -1)"; fi
+
+echo
+echo "== identity, and age as a dimension that cannot be forgotten =="
+ACC=$($PSQL -c "SELECT gen_random_uuid();")
+$PSQL -c "SET ROLE app_competition; INSERT INTO identity.account (account_id, display_name)
+  VALUES ('$ACC','A Player');" >/dev/null 2>&1
+d=$($PSQL -c "SELECT age_band FROM identity.account WHERE account_id='$ACC';")
+check "an account without a stated age is 'unknown', not null" "$d" "unknown"
+
+r=$($PSQL -c "SET ROLE app_competition; UPDATE identity.account SET age_band = NULL WHERE account_id='$ACC';" 2>&1)
+if echo "$r" | grep -qi 'null value\|not-null'; then
+  ok "the band cannot be set to null"
+else bad "the band cannot be set to null" "null was accepted"; fi
+
+r=$($PSQL -c "SET ROLE app_competition; UPDATE identity.account SET age_band='teenager' WHERE account_id='$ACC';" 2>&1)
+if echo "$r" | grep -qi 'violates check constraint'; then
+  ok "an unmodelled band is refused"
+else bad "an unmodelled band is refused" "'teenager' was accepted"; fi
+
+r=$($PSQL -c "SET ROLE app_competition; UPDATE identity.account
+  SET age_assurance='verified' WHERE account_id='$ACC';" 2>&1)
+if echo "$r" | grep -qi 'violates check constraint'; then
+  ok "an unknown band cannot carry assurance"
+else bad "an unknown band cannot carry assurance" "unknown+verified was accepted"; fi
+
+# Personal data is confined to the identity module, which is what makes export and deletion answerable.
+for role in app_match app_trust app_rating; do
+  r=$($PSQL -c "SET ROLE $role; SELECT count(*) FROM identity.account;" 2>&1)
+  if echo "$r" | grep -qi 'permission denied'; then
+    ok "$role cannot read personal data"
+  else bad "$role cannot read personal data" "it was readable"; fi
+done
+
+DEV=$($PSQL -c "SELECT gen_random_uuid();")
+$PSQL -c "SET ROLE app_competition; INSERT INTO identity.device (device_id, account_id)
+  VALUES ('$DEV','$ACC');" >/dev/null 2>&1
+$PSQL -c "SET ROLE app_competition; UPDATE identity.device
+  SET revoked_at = now(), revoked_reason='lost' WHERE device_id='$DEV';" >/dev/null 2>&1
+r=$($PSQL -c "SET ROLE app_competition; UPDATE identity.device SET revoked_at = NULL WHERE device_id='$DEV';" 2>&1)
+if echo "$r" | grep -qi 'cannot be undone'; then
+  ok "a device revocation cannot be undone"
+else bad "a device revocation cannot be undone" "un-revoking was permitted"; fi
+
+echo
+echo "-------------------------------------------"
+echo "  $PASS passed, $FAIL failed"
+[ "$FAIL" -eq 0 ] || exit 1

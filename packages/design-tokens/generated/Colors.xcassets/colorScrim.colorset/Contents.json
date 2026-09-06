@@ -1,0 +1,38 @@
+{
+  "info": {
+    "author": "thro",
+    "version": 1
+  },
+  "colors": [
+    {
+      "idiom": "universal",
+      "color": {
+        "color-space": "srgb",
+        "components": {
+          "red": "0x10",
+          "green": "0x12",
+          "blue": "0x11",
+          "alpha": "0.480"
+        }
+      }
+    },
+    {
+      "idiom": "universal",
+      "appearances": [
+        {
+          "appearance": "luminosity",
+          "value": "dark"
+        }
+      ],
+      "color": {
+        "color-space": "srgb",
+        "components": {
+          "red": "0x08",
+          "green": "0x0A",
+          "blue": "0x09",
+          "alpha": "0.640"
+        }
+      }
+    }
+  ]
+}

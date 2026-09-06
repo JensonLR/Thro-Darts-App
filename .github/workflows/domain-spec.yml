@@ -1,0 +1,140 @@
+name: domain-spec
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+
+jobs:
+  conformance:
+    name: Scoring rules and conformance corpus
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      # The corpus is generated, never hand-edited. A drifted committed corpus fails here.
+      - name: Rule tables and vectors are not stale
+        run: |
+          python3 packages/domain-spec/generate.py
+          git diff --exit-code -- packages/domain-spec/rule-tables.json packages/domain-spec/vectors/
+
+      # Property tests against independent darts facts, plus the exhaustive transition space.
+      - name: Validate corpus (exhaustive)
+        run: |
+          python3 packages/domain-spec/generate.py --full
+          python3 packages/domain-spec/validate.py
+
+  engine:
+    name: Engine conformance and properties
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with: { distribution: temurin, java-version: "21" }
+      - uses: gradle/actions/setup-gradle@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.11" }
+
+      # The rule tables are generated into the engine. A stale committed copy fails here, so no
+      # platform can drift from the spec by hand-editing its own values.
+      - name: Generated rule tables are not stale
+        run: |
+          python3 packages/domain-spec/generate.py
+          git diff --exit-code -- packages/engine/src/main/kotlin/thro/engine/RuleTables.kt
+
+      # Runs the conformance corpus against the engine, the exhaustive property tests, and the
+      # determinism guard that forbids a clock, randomness, floating point or I/O in the engine.
+      - name: Conformance, properties and determinism
+        working-directory: packages/engine
+        run: gradle check --no-daemon
+
+  statistics:
+    name: Statistics honesty
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with: { distribution: temurin, java-version: "21" }
+      - uses: gradle/actions/setup-gradle@v4
+      # Asserts that a statistic which cannot be honestly computed says so, and that an approximate
+      # one never presents itself as a point value.
+      - name: Statistics
+        working-directory: packages/statistics
+        run: gradle test --no-daemon
+
+  trust:
+    name: Trust, provenance and rating eligibility
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with: { distribution: temurin, java-version: "21" }
+      - uses: gradle/actions/setup-gradle@v4
+      # Asserts that a trust label can never disagree with the provenance under it, and that one
+      # player's unilateral claim never moves a rating (PD-002).
+      - name: Trust
+        working-directory: packages/trust
+        run: gradle test --no-daemon
+
+  authz:
+    name: Authorization and conflict of interest
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with: { distribution: temurin, java-version: "21" }
+      - uses: gradle/actions/setup-gradle@v4
+      # Asserts the conflict-of-interest rule: an official may correct any match except one they
+      # are playing in — the negation role-based access control cannot express.
+      - name: Authorization
+        working-directory: packages/authz
+        run: gradle test --no-daemon
+
+  rating:
+    name: Rating projection and OD-001 guard
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with: { distribution: temurin, java-version: "21" }
+      - uses: gradle/actions/setup-gradle@v4
+      # Asserts a replay is reproducible from a watermark PAIR, that the ledger reconciles exactly,
+      # and that no unvalidated model can be published while OD-001 is open.
+      - name: Rating
+        working-directory: packages/rating
+        run: gradle test --no-daemon
+
+  competition:
+    name: Competition structure
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with: { distribution: temurin, java-version: "21" }
+      - uses: gradle/actions/setup-gradle@v4
+      # Asserts the bracket identities exhaustively for every field size to 1024, including the
+      # exact powers of two that a logarithm-based bracket size gets wrong.
+      - name: Competition
+        working-directory: packages/competition
+        run: gradle test --no-daemon
+
+  tokens:
+    name: Design tokens and contrast
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.11" }
+      # Fails if any platform token file is stale — a hand-edited platform file breaks the build —
+      # or if a colour pair falls below threshold without a recorded, dated exception.
+      - name: Tokens are current and contrast holds
+        run: python3 packages/design-tokens/build.py --check
+
+      # Every defect found in the approved components so far was found by reading them. This is the
+      # ratchet: known findings are recorded in the baseline against the commission that will fix
+      # them, and anything NEW fails — so a re-export of the design system cannot regress silently.
+      - name: Design components have no new findings
+        run: python3 docs/design/audit_components.py --check
