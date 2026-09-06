@@ -89,7 +89,7 @@ public object Statistics {
     /** The value finished from, which is the remaining at the start of the winning visit. */
     public fun highestCheckout(visits: List<VisitRecord>): Stat {
         val wins = visits.filter { it.wonLeg }
-        if (wins.isEmpty()) return Stat.unavailable("No leg has been won yet, so there is nothing to report.")
+        if (wins.isEmpty()) return Stat.unavailable("This player has not won a leg, so there is no checkout to report.")
         return Stat.exact(wins.maxOf { it.remainingBefore }.toDouble(), wins.size)
     }
 
@@ -276,7 +276,7 @@ public object Statistics {
      */
     public fun bestLegInVisits(visits: List<VisitRecord>): Stat {
         val wonLegs = visits.filter { it.wonLeg }.map { it.legOrdinal }.toSet()
-        if (wonLegs.isEmpty()) return Stat.unavailable("No leg has been won yet, so there is nothing to report.")
+        if (wonLegs.isEmpty()) return Stat.unavailable("This player has not won a leg, so there is no best leg to report.")
         val counts = visits.filter { it.legOrdinal in wonLegs }.groupingBy { it.legOrdinal }.eachCount()
         return Stat.exact(counts.values.min().toDouble(), wonLegs.size)
     }

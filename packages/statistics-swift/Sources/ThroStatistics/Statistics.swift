@@ -144,7 +144,7 @@ public enum Statistics {
     public static func highestCheckout(_ visits: [VisitRecord]) -> Stat {
         let wins = visits.filter { $0.wonLeg }
         guard let best = wins.map({ $0.remainingBefore }).max() else {
-            return .unavailable("No leg has been won yet, so there is nothing to report.")
+            return .unavailable("This player has not won a leg, so there is no checkout to report.")
         }
         return .exact(Double(best), n: wins.count)
     }
@@ -320,7 +320,7 @@ public enum Statistics {
     public static func bestLegInVisits(_ visits: [VisitRecord]) -> Stat {
         let wonLegs = Set(visits.filter { $0.wonLeg }.map { $0.legOrdinal })
         if wonLegs.isEmpty {
-            return .unavailable("No leg has been won yet, so there is nothing to report.")
+            return .unavailable("This player has not won a leg, so there is no best leg to report.")
         }
         let counts = Dictionary(grouping: visits.filter { wonLegs.contains($0.legOrdinal) }, by: { $0.legOrdinal })
             .mapValues { $0.count }

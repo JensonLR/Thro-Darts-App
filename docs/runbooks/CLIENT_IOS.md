@@ -180,7 +180,7 @@ What the phone disagreed with, and what changed:
 |---|---|---|
 | Home, Play, ready and result rendered **dark** | the phone was in dark mode and those screens followed the system appearance | those screens now set light on both the window and their own environment; the export draws them light and has no dark variant |
 | on the scoring screen the **checkout card was cut off** and the turn indicator pushed below the keypad | a TopBar above the MatchHeader added 64 points the screen does not have | the TopBar is gone; a 44-point back chevron sits at the header's leading edge; the vertical paddings are the export's own |
-| the loser's *Highest checkout* said *No leg has been won yet, so there is nothing to report* — false on a result where the other player won two | the statistics note is written for one player's log and reads as if about the match | **open**: the wording belongs to the statistics layer (Kotlin and Swift, with tests asserting it) and is to be changed in both together |
+| the loser's *Highest checkout* said *No leg has been won yet, so there is nothing to report* — false on a result where the other player won two | the statistics note was written for one player's log and read as if about the match | both implementations now say *This player has not won a leg, so there is no checkout to report* (and the same for best leg); no test asserted the old words, and the six-word floor still holds |
 
 Still to record from this run: the phone's model and iOS version (Settings → General → About), and
 the screenshots themselves into `docs/runbooks/screenshots/`.
