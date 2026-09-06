@@ -3,7 +3,7 @@ import SwiftUI
 import ThroTokens
 @testable import ThroApp
 
-/// PD-007's opening, fourth version: the timeline and its cues, the easings it runs on, the throw as the
+/// PD-007's opening, fifth version: the timeline and its cues, the easings it runs on, the throw as the
 /// camera sees it, the mark's geometry and its change into the wordmark's Ø, the chalk stroke, and the
 /// dart's anatomy — the parts that are plain values. The frame itself is drawn, not tested.
 final class LaunchSequenceTests: XCTestCase {
@@ -107,19 +107,17 @@ final class LaunchSequenceTests: XCTestCase {
         XCTAssertEqual(Throw.targetOffset(0).dx, Throw.farOffset.dx); XCTAssertEqual(Throw.targetOffset(0).dy, Throw.farOffset.dy)
         XCTAssertEqual(Throw.targetOffset(1).dx, 0, accuracy: 1e-9); XCTAssertEqual(Throw.targetOffset(1).dy, 0, accuracy: 1e-9)
         XCTAssertLessThan(Throw.farOffset.dy, 0, "the far light is up the screen")
-        // The camera rolls from a flat throw to the mark's angle and has settled before the strike.
-        XCTAssertEqual(Throw.rollDegrees(0), Throw.cameraRollDegrees)
-        XCTAssertEqual(Throw.rollDegrees(Throw.rollEnd), 0, accuracy: 1e-6)
-        XCTAssertEqual(Throw.rollDegrees(1), 0, accuracy: 1e-6)
-        XCTAssertGreaterThan(Throw.rollDegrees(0.5), 0)
-        // The dart slides in and is in its tracked place by a quarter of the flight; it bobs once; it flies
-        // nose-up and is flat on the axis at the strike.
-        XCTAssertEqual(Throw.entry(0), Throw.entryDistance)
-        XCTAssertEqual(Throw.entry(Throw.entryEnd), 0, accuracy: 1e-9)
-        XCTAssertEqual(Throw.entry(1), 0, accuracy: 1e-9)
+        // The camera catches the dart mid-flight: a smear along its line that is gone by a quarter of the flight.
+        XCTAssertEqual(Throw.smear(0), Throw.smearLength)
+        XCTAssertEqual(Throw.smear(Throw.catchEnd), 0, accuracy: 1e-9)
+        XCTAssertEqual(Throw.smear(1), 0, accuracy: 1e-9)
+        XCTAssertGreaterThan(Throw.smear(0.1), Throw.smear(0.2))
+        // The dart holds a little behind its landed place and closes to it at the strike; it bobs once.
+        XCTAssertEqual(Throw.drift(0), -Throw.driftLength, accuracy: 1e-9)
+        XCTAssertEqual(Throw.drift(1), 0, accuracy: 1e-9)
+        XCTAssertLessThan(Throw.drift(0.5), 0)
+        XCTAssertGreaterThan(Throw.drift(0.9), Throw.drift(0.5))
         XCTAssertEqual(Throw.bob(0), 0, accuracy: 1e-9); XCTAssertEqual(Throw.bob(0.5), 1, accuracy: 1e-9); XCTAssertEqual(Throw.bob(1), 0, accuracy: 1e-9)
-        XCTAssertEqual(Throw.pitch(0), Throw.pitchDegrees * .pi / 180, accuracy: 1e-9)
-        XCTAssertEqual(Throw.pitch(1), 0, accuracy: 1e-9)
     }
 
     func testTheGeometryKeepsTheMeasuredProportionsAndBecomesTheWordmarksO() {
@@ -165,18 +163,29 @@ final class LaunchSequenceTests: XCTestCase {
     }
 
     func testTheDartIsAsLongAsTheBarAndMadeOfFourParts() {
-        XCTAssertEqual(DartAnatomy.needle + DartAnatomy.barrel + DartAnatomy.shaft + DartAnatomy.flight, 1, accuracy: 1e-9)
+        XCTAssertEqual(DartAnatomy.point + DartAnatomy.barrel + DartAnatomy.shaft + DartAnatomy.flight, 1, accuracy: 1e-9)
         let dart = DartAnatomy(length: 200)
         let parts = dart.parts(spin: 0)
-        XCTAssertEqual(parts.needle.boundingRect.width, 0.28 * 200, accuracy: 0.01)
-        XCTAssertEqual(parts.barrel.boundingRect.width, 0.24 * 200, accuracy: 0.01)
-        XCTAssertEqual(parts.shaft.boundingRect.width, 0.20 * 200, accuracy: 0.01)
+        XCTAssertEqual(parts.point.boundingRect.width, 0.24 * 200, accuracy: 0.01)
+        XCTAssertEqual(parts.barrel.boundingRect.width, 0.30 * 200, accuracy: 0.01)
+        XCTAssertEqual(parts.shaft.boundingRect.width, 0.22 * 200, accuracy: 0.01)
         XCTAssertEqual(parts.nearFlights.boundingRect.minX, -200, accuracy: 0.01, "the flights end at the tail")
-        // Seen face-on the near flights are at full width; a quarter roll later they are edge-on and the far pair shows.
-        XCTAssertEqual(parts.nearFlights.boundingRect.height, 2 * 0.085 * 200, accuracy: 0.5)
+        // The barrel is a real barrel: a nose narrower than its grip, the grip at full width, a collar at the rear.
+        XCTAssertEqual(dart.barrelRadius(at: dart.pointEnd, morph: 0), DartAnatomy.barrelNose * 200, accuracy: 1e-6)
+        XCTAssertEqual(dart.barrelRadius(at: dart.pointEnd - 0.5 * (dart.pointEnd - dart.barrelEnd), morph: 0), DartAnatomy.barrelHalf * 200, accuracy: 1e-6)
+        XCTAssertEqual(dart.barrelRadius(at: dart.barrelEnd, morph: 0), DartAnatomy.collarHalf * 200, accuracy: 1e-6)
+        XCTAssertEqual(parts.barrel.boundingRect.height, 2 * DartAnatomy.barrelHalf * 200, accuracy: 0.01)
+        XCTAssertFalse(parts.knurl.isEmpty); XCTAssertFalse(parts.grooves.isEmpty); XCTAssertFalse(parts.highlight.isEmpty)
+        XCTAssertFalse(parts.shade.isEmpty); XCTAssertFalse(parts.collar.isEmpty)
+        // Seen face-on the near flights are at full height and carry the mark; a quarter roll later they are
+        // edge-on and the far pair shows.
+        XCTAssertEqual(parts.nearFlights.boundingRect.height, 2 * 0.105 * 200, accuracy: 2.0)
+        XCTAssertEqual(parts.nearScale, 1, accuracy: 1e-9)
+        XCTAssertFalse(parts.logo.isEmpty, "the flights carry the mark")
         let rolled = dart.parts(spin: .pi / 2)
         XCTAssertTrue(rolled.nearFlights.isEmpty)
-        XCTAssertEqual(rolled.farFlights.boundingRect.height, 2 * 0.085 * 200, accuracy: 0.5)
+        XCTAssertTrue(rolled.logo.isEmpty, "no mark on an edge-on flight")
+        XCTAssertEqual(rolled.farFlights.boundingRect.height, 2 * 0.105 * 200, accuracy: 2.0)
     }
 
     func testTheDartFoldsIntoTheBar() {
@@ -185,13 +194,14 @@ final class LaunchSequenceTests: XCTestCase {
         XCTAssertTrue(bar.nearFlights.isEmpty && bar.farFlights.isEmpty, "the flights fold flat")
         let w = 2 * DartAnatomy.barHalf * 200
         XCTAssertEqual(bar.barrel.boundingRect.height, w, accuracy: 0.01, "the barrel is the bar's width")
-        XCTAssertEqual(bar.needle.boundingRect.height, w, accuracy: 0.01)
+        XCTAssertEqual(bar.point.boundingRect.height, w, accuracy: 0.01)
         XCTAssertEqual(bar.shaft.boundingRect.minX, -200, accuracy: 0.01, "the shaft runs on to the tail")
         XCTAssertTrue(bar.shade.isEmpty, "no roundness on a flat bar")
+        XCTAssertTrue(bar.collar.isEmpty && bar.logo.isEmpty)
         // and the bar's half-width is the mark's, in the dart's own units
         XCTAssertEqual(DartAnatomy.barHalf, 0.040 / (2 * 0.643), accuracy: 1e-9)
         // half-way, the flights are half folded
         let half = dart.parts(spin: 0, morph: 0.5)
-        XCTAssertEqual(half.nearFlights.boundingRect.height, 0.085 * 200, accuracy: 1.0)
+        XCTAssertEqual(half.nearFlights.boundingRect.height, 0.105 * 200, accuracy: 2.0)
     }
 }

@@ -536,3 +536,45 @@ decision and the export is not changed. The final wordmark is drawn live from Ar
 reading that the supplied wordmark is that face, and the mark's ring, at the letters' weight, is the
 measured wordmark Ø rather than the mark's own proportions; the master vector files replace both when
 they arrive. Still a choice against Apple's launch-screen guidance; 4.7 seconds.
+
+### Amendment, the same day — the founder's fourth look, and the fifth version
+
+The founder watched the fourth version on the phone: "The angle needs to be consistent throughout for
+darts flight path it looks awkward how it changes angle mid flight in an unnatural direction. It's much
+better though, let's upgrade & improve it even more to be as engaging & utterly beautiful as possible
+including the design of the dart & every other detail too."
+
+**Decided by the founder:** the dart's angle is constant from the first frame to the strike. The camera
+roll (25° to 0) and the nose-up pitch that flattened onto the axis are gone; the dart flies at the
+mark's 45° throughout. The camera-roll idea was mine and it read as the dart changing direction; it is
+withdrawn.
+
+**Upgraded, every detail:**
+
+1. **The dart is a real dart.** Point 0.24, barrel 0.30, shaft 0.22, flights 0.24 of its length (it
+   had been 0.28 / 0.24 / 0.20 / 0.28, a needle too long and a barrel too short). A fine point with a
+   bright core. A tapered tungsten barrel — a nose narrower than its grip, eleven grip rings, two deeper
+   grooves, a collar where the shaft seats — 0.027 of the length at its widest, slimmer than the 0.036
+   it was. A slim shaft with a ring where the flights seat. Standard flights: a swelling leading edge, a
+   rounded top corner, a near-vertical trailing edge, taller than before (0.105), and carrying the mark
+   as flights carry a maker's mark. The material is the token palette: chalk for the body,
+   chalk-raised for a highlight along the top and the point's core, chalk-hairline for the shaded lower
+   half and the far pair of flights, the field's green for the grip rings and ink for the grooves.
+2. **The catch, not an entrance.** The dart no longer slides in from the corner. The camera catches it
+   mid-flight: it resolves out of a motion smear along its own line — 0.9 of its length at the first
+   frame, gone by a quarter of the flight — already in its place. Then it holds, rolling, with one bob
+   across its line and a slow drift forward (0.06 of its length) that closes at the strike.
+3. **A stage light.** The pool of light on the wall is now the foot of a beam from above — a soft
+   column, 5% chalk at its brightest, blurred — and the chalk dust streaming past is lit brighter
+   inside it. "From the pub board to the world stage" is the tagline; the light is that.
+4. **The speed lines**, thinned: fewer, shorter, fainter, so the rush reads as speed and not as rain.
+
+**Unchanged:** the timing (4.7 seconds), the strike, the ring, the name and the tagline as the finish,
+the sounds, the haptics. Eleven tests hold the timeline, the cues, the throw (the approach's shape
+and ends, the catch's smear, the drift, the bob), the geometry and its mixing, the chalk stroke, and
+the dart — its four parts summing to its length, the barrel's nose, grip and collar radii, the
+flights face-on and edge-on, the mark on the flights, and the fold into the bar.
+
+**Cost.** The dart's design is a drawing in the brand's palette and not a rendering of any product; it
+should not be read as a particular manufacturer's barrel. The beam is a few points of chalk over the
+field and disappears with the light. The phone is still where motion, sound and touch are judged.
