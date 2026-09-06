@@ -7,13 +7,17 @@ import ThroJournal
 // The Play slice for a match scored on this device: setup → ready → scoring → result.
 //
 // Theme follows the export's screen list: scoring and setup are dark (`scoring`, `shadow-setup`),
-// ready and result are light. Dark is applied per screen, and each dark screen paints its own
-// background, because a colour scheme set on a subtree does not paint the window behind it.
+// ready and result are light — and light means light, whatever the phone's own appearance setting,
+// because the export draws those screens light and has no dark variant of them (the first run on a
+// phone in dark mode showed a dark Home the design never drew). Each screen sets both the window's
+// preferred scheme and its own environment, and each dark screen paints its own background, because
+// a colour scheme set on a subtree does not paint the window behind it.
 //
 // What the export does not draw, and is composed here from its own components rather than invented:
 // a setup for a two-player local match (the export's only setup is Shadow's, which this follows);
-// the PD-001 questions, rendered in the keypad's place; a way to leave the scoring screen (a TopBar
-// above the MatchHeader). Each is listed in docs/runbooks/CLIENT_IOS.md.
+// the PD-001 questions, rendered in the keypad's place; a way to leave the scoring screen (a back
+// chevron at the MatchHeader's leading edge — a TopBar there cost height the screen does not have).
+// Each is listed in docs/runbooks/CLIENT_IOS.md.
 
 public struct PlayFlow: View {
     enum Step {
@@ -127,6 +131,7 @@ public struct MatchSetupScreen: View {
         }
         .background(ThroColor.colorBackgroundPrimary.ignoresSafeArea())
         .environment(\.colorScheme, .dark)
+        .preferredColorScheme(.dark)
     }
 
     private func choice<Control: View>(_ label: String, _ control: Control) -> some View {
@@ -181,6 +186,8 @@ public struct MatchReadyScreen: View {
             }
         }
         .background(ThroColor.colorBackgroundPrimary.ignoresSafeArea())
+        .environment(\.colorScheme, .light)
+        .preferredColorScheme(.light)
     }
 }
 
@@ -202,12 +209,12 @@ public struct ScoringScreen: View {
 
     public var body: some View {
         VStack(spacing: 0) {
-            TopBar("Scoring", eyebrow: "Local match", onBack: onLeave)
-            MatchHeader(competition: "\(session.name(.home)) v \(session.name(.away))", format: session.formatLabel)
+            MatchHeader(competition: "\(session.name(.home)) v \(session.name(.away))", format: session.formatLabel,
+                        onBack: onLeave)
             ScrollView {
                 VStack(spacing: 0) {
                     legRow.padding(.top, ThroSpacing.spacing5).padding(.bottom, ThroSpacing.spacing2)
-                    remaining.padding(.vertical, ThroSpacing.spacing2)
+                    remaining.padding(.top, ThroSpacing.spacing2).padding(.bottom, ThroSpacing.spacing1)
                     if session.bust == nil, session.throwerOnAFinish, let seat = session.thrower {
                         CheckoutCard(required: session.remaining(seat), compact: true)
                             .padding(.top, ThroSpacing.spacing2)
@@ -219,10 +226,11 @@ public struct ScoringScreen: View {
                     if let seat = session.thrower {
                         TurnIndicator(player: session.name(seat), dartsThrown: 0, active: true)
                             .padding(.top, ThroSpacing.spacing4)
+                            .padding(.bottom, ThroSpacing.spacing1)
                     }
                 }
                 .padding(.horizontal, ThroSpacing.spaceScreenGutter)
-                .padding(.bottom, ThroSpacing.spacing3)
+                .padding(.bottom, ThroSpacing.spacing1)
             }
             if let prompt = session.prompt {
                 PromptCard(prompt: prompt, onAnswer: session.answer, onCancel: session.cancelPrompt)
@@ -234,6 +242,7 @@ public struct ScoringScreen: View {
         }
         .background(ThroColor.colorBackgroundPrimary.ignoresSafeArea())
         .environment(\.colorScheme, .dark)
+        .preferredColorScheme(.dark)
         .onReceive(session.$state) { state in
             if state.isComplete { onComplete() }
         }
@@ -364,6 +373,8 @@ public struct MatchResultScreen: View {
             }
         }
         .background(ThroColor.colorBackgroundPrimary.ignoresSafeArea())
+        .environment(\.colorScheme, .light)
+        .preferredColorScheme(.light)
     }
 
     private func section<Content: View>(@ViewBuilder _ content: () -> Content) -> some View {

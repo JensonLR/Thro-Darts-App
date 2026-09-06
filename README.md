@@ -58,11 +58,11 @@ database.
 | Statistics honesty, Swift | The same 20 tests, ported case for case, on Linux |
 | On-device journal | 11 tests — configuration read back on open, append-only by trigger, replay throws on a corrupt row |
 | Scoring session | 16 tests — every PD-001 branch; engine → journal commit → screen, never another order |
-| iOS app | Builds for the iOS simulator on every push that touches it. **Not yet run on a phone** |
+| iOS app | Builds for the iOS simulator on every push that touches it. Run on the founder's phone on 2026-09-05 — a full match, setup to result; two layout defects found and fixed the same evening (see the runbook) |
 
 **Nothing here is production ready**, and no claim of security, offline reliability or rating
 validity is made anywhere in this repository. There is an iOS client that scores a match between two people on
-one phone and keeps it there — built and tested on CI, **not yet run on a phone** ([`docs/runbooks/CLIENT_IOS.md`](docs/runbooks/CLIENT_IOS.md)).
+one phone and keeps it there — built and tested on CI and run once on the founder's phone ([`docs/runbooks/CLIENT_IOS.md`](docs/runbooks/CLIENT_IOS.md)).
 It talks to nothing. There is no HTTP layer and no deployment — the command path is a tested handler, not a running service.
 Claims are made only where evidence exists — see [`FOUNDATION_ACCEPTANCE.md`](FOUNDATION_ACCEPTANCE.md).
 

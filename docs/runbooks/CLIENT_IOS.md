@@ -1,12 +1,11 @@
 # Running the iOS client
 
-> **Verification status, 2026-09-05 (commit `e797458`).** Every package compiles and every test passes
-> on macOS CI — 40 tests: 13 design, 11 journal, 16 scoring session — and the Xcode app builds for the
-> iOS simulator on CI with Xcode 26.6, on every push that touches them. **Nobody has yet run this app
-> on a phone.** The first run is the founder's, on the Mac with the phone plugged in; the local session
-> records what it saw (screenshots go in `docs/runbooks/screenshots/`) and corrects this document where
-> the phone disagrees with it. Until then, everything below "What you will see" is what the code does
-> and what its tests hold, not what anyone has watched it do.
+> **Verification status, 2026-09-05.** Every package compiles and every test passes on macOS CI — 40
+> tests: 13 design, 11 journal, 16 scoring session — and the Xcode app builds for the iOS simulator on
+> CI with Xcode 26.6, on every push that touches them. **The app has run on a phone**: the founder's,
+> the evening of 2026-09-05, a full best-of-3 from setup to result, in dark mode, on a 430×932-point
+> iPhone (model and iOS version still to be recorded). Nine screenshots came back; what they showed is
+> under "First run on a phone" below, with the two defects they exposed and what was done about each.
 
 ## What exists
 
@@ -144,7 +143,7 @@ exactly what CI does (`xcodebuild -scheme ThroDarts -destination 'generic/platfo
 - **Match setup** (dark). Two names, then 301 / 501 / 701, Bo3 / Bo5 / Bo7 / Bo9, and who throws
   first. Double out is the only out-rule offered. Empty names become *Home* and *Away*.
 - **Match ready.** The two players, the format as tags, **Start scoring**.
-- **Scoring** (dark). Header with the players and the format; legs and the other player's remaining;
+- **Scoring** (dark). A back chevron and the header with the players and the format; legs and the other player's remaining;
   the thrower's remaining in the 96-point score face; a *Checkout available* card when the thrower is
   on a finish; the turn indicator; the keypad. Quick totals commit at once. Typed totals commit on
   **Enter**, which stays disabled until something is typed. The undo key clears the entry.
@@ -160,6 +159,31 @@ exactly what CI does (`xcodebuild -scheme ThroDarts -destination 'generic/platfo
   checkout %, 180s, highest checkout, 140+) — exact as a number, bounded as a range that says so,
   unavailable as a dash with its reason — then *Not rated*, *Self-reported* with its explanation, and
   a line saying the result has not left the phone. **Done** or **Play again**.
+
+## First run on a phone
+
+2026-09-05, the founder, dark mode, a 430×932-point iPhone. Setup → ready → scoring → result, a full
+best-of-3 ("Man v Woman", 0–2), then Home listing it as *Self-reported*. Screenshots: Play, Home with
+the match *In progress*, scoring with the thrower on 141, the *Darts thrown at a double?* card after a
+100 from 141, a bust from 41 with *Bust. Score restored to 41. Man to throw.*, the result (two screens),
+Home after, and Match setup.
+
+What worked as the tests say: the PD-001 question appearing only when the visit began on a finish;
+the bust restoring the score and rotating the turn; the result's honest figures — a player who never
+reached a finish shows a dash under *Checkout %* with its reason, the other shows 100 % from one
+attempt; *Not rated*; *Self-reported* with its explanation; the match surviving the trip back to Home
+and reopening at the same score.
+
+What the phone disagreed with, and what changed:
+
+| Seen | Cause | Change |
+|---|---|---|
+| Home, Play, ready and result rendered **dark** | the phone was in dark mode and those screens followed the system appearance | those screens now set light on both the window and their own environment; the export draws them light and has no dark variant |
+| on the scoring screen the **checkout card was cut off** and the turn indicator pushed below the keypad | a TopBar above the MatchHeader added 64 points the screen does not have | the TopBar is gone; a 44-point back chevron sits at the header's leading edge; the vertical paddings are the export's own |
+| the loser's *Highest checkout* said *No leg has been won yet, so there is nothing to report* — false on a result where the other player won two | the statistics note is written for one player's log and reads as if about the match | **open**: the wording belongs to the statistics layer (Kotlin and Swift, with tests asserting it) and is to be changed in both together |
+
+Still to record from this run: the phone's model and iOS version (Settings → General → About), and
+the screenshots themselves into `docs/runbooks/screenshots/`.
 
 ## Where the data is
 
@@ -195,7 +219,7 @@ platform's own behaviour or renders the honest minimum, and says so.
 | 11 Offline-completed result | *Self-reported*; and because no sync exists, the screen says the result has not left the phone rather than showing a *Queued* that promises one. |
 | 15 Disabled | The export's opacity multiplier. |
 | 18 Invalid score feedback | The engine's refusal in the snackbar, in the harness's words. |
-| 20 Dark mode | Dark is contextual as in the export: setup and scoring are dark, the rest follow the system appearance. |
+| 20 Dark mode | Dark is contextual as in the export: setup and scoring are dark; every other screen is light **whatever the phone's appearance setting**, because the export draws them light and has no dark variant of them. (The first run, on a phone in dark mode, showed a dark Home the design never drew; that was the platform default, and it was wrong.) |
 | 23 Landscape | The Xcode template's orientations are left as they are; the scoring screen has no landscape design. |
 | 24 Truncation | Names truncate with an ellipsis in the header, the identity, and the Home rows. |
 | 25 Haptics | None. |
@@ -204,8 +228,9 @@ Composed from the export's components because the export does not draw them:
 
 - A **two-player local match setup**, after the export's only setup screen (Shadow's).
 - The **PD-001 questions**, in the keypad's place, from Eyebrow, heading, Button.
-- A **TopBar above the MatchHeader** so a player can leave the scoring screen; the journal makes
-  leaving safe.
+- A **back chevron at the MatchHeader's leading edge** so a player can leave the scoring screen; the
+  journal makes leaving safe. (A TopBar above the header was tried first and cost 64 points the
+  scoring screen does not have — see the first run.)
 - **Play again** on the result, from the Shadow result.
 
 Read differently from the JSX, on purpose: Enter disabled on an empty entry (the export scores 0);

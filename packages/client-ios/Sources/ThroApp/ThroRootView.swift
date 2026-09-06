@@ -94,6 +94,11 @@ public struct ThroRootView: View {
                 BottomBar(selection: store.tab) { store.tab = $0 }
             }
             .background(ThroColor.colorBackgroundPrimary.ignoresSafeArea())
+            // The export draws Home and the tabs light and has no dark variant of them; the phone's
+            // own appearance setting does not change that (DESIGN_UNSPECIFIED #20 is about whether a
+            // user-selectable dark mode should exist, and this build does not decide it).
+            .environment(\.colorScheme, .light)
+            .preferredColorScheme(.light)
         }
     }
 

@@ -124,26 +124,47 @@ public struct LegState: View {
 }
 
 /// components/scoring/MatchHeader.jsx. Board and format are numerals, so they take the sport face.
+///
+/// `onBack` is not in the export: the export's scoring screen has no way out at all. A TopBar above
+/// this header was tried first and cost 64 points the screen does not have on a 430×932 phone — the
+/// checkout card clipped and the turn indicator fell below the keypad. A 44-point chevron at the
+/// header's leading edge costs nothing vertically.
 public struct MatchHeader: View {
     private let competition: String
     private let round: String?
     private let board: String?
     private let format: String?
+    private let onBack: (() -> Void)?
 
-    public init(competition: String, round: String? = nil, board: String? = nil, format: String? = nil) {
+    public init(competition: String, round: String? = nil, board: String? = nil, format: String? = nil,
+                onBack: (() -> Void)? = nil) {
         self.competition = competition
         self.round = round
         self.board = board
         self.format = format
+        self.onBack = onBack
     }
 
     public var body: some View {
-        HStack(alignment: .top, spacing: ThroSpacing.spacing4) {
-            cell("Competition", competition, sport: false)
-                .frame(maxWidth: .infinity, alignment: .leading)
-            if let round { cell("Round", round, sport: false) }
-            if let board { cell("Board", board, sport: true) }
-            if let format { cell("Format", format, sport: true) }
+        HStack(alignment: .center, spacing: ThroSpacing.spacing2) {
+            if let onBack {
+                Button(action: onBack) {
+                    Icon(.chevronLeft, size: 24)
+                        .foregroundStyle(ThroColor.colorTextPrimary)
+                        .frame(width: ThroSpacing.touchTargetMinimum, height: ThroSpacing.touchTargetMinimum)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Back")
+                .padding(.leading, -ThroSpacing.spacing3)
+            }
+            HStack(alignment: .top, spacing: ThroSpacing.spacing4) {
+                cell("Competition", competition, sport: false)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                if let round { cell("Round", round, sport: false) }
+                if let board { cell("Board", board, sport: true) }
+                if let format { cell("Format", format, sport: true) }
+            }
         }
         .padding(.vertical, ThroSpacing.spacing3)
         .padding(.horizontal, ThroSpacing.spaceScreenGutter)
