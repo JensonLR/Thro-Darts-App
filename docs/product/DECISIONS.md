@@ -394,8 +394,9 @@ change of choreography, not of numbers:
    the point, decaying over a quarter second), which is the one motion everyone knows from a board.
    Then the ring blooms clockwise from where the dart crossed it, glowing, with chalk grain fixed to
    it, and pulses once as it closes.
-3. **Slower.** Field to 350 ms, flight to 1150, the strike's beat to 1550, the ring to 2350, the
-   resolve to 3250, a hold to 4100, the cross-fade to 4500. Skippable by a tap at any moment.
+3. **Slower.** Field to 350 ms, flight to 1250, the strike's beat to 1650, the ring to 2450, the
+   resolve to 3350, a hold to 4200, the cross-fade to 4600. The letters wait until the mark has shrunk
+   clear of the word band, so nothing overlaps. Skippable by a tap at any moment.
 4. **Sound.** Three sounds synthesised from the sequence's own physics — a whoosh whose centre rises
    as the dart closes and cuts at impact, a thud with a bright click, two low resonances and fibre
    noise, and a chalk scratch gated like grit — played through the ambient audio session, so the phone's

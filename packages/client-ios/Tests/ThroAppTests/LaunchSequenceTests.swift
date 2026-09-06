@@ -13,8 +13,8 @@ final class LaunchSequenceTests: XCTestCase {
             for (a, b) in zip(s, s.dropFirst()) { XCTAssertEqual(a.end, b.start, "\(a.name) must hand straight to \(b.name)") }
             XCTAssertLessThanOrEqual(timeline.total, 5.0, "an opening is a door, not a wait")
         }
-        XCTAssertEqual(LaunchTimeline.standard.total, 4.50, accuracy: 1e-9)
-        XCTAssertEqual(LaunchTimeline.standard.finishAt, 4.10, accuracy: 1e-9)
+        XCTAssertEqual(LaunchTimeline.standard.total, 4.60, accuracy: 1e-9)
+        XCTAssertEqual(LaunchTimeline.standard.finishAt, 4.20, accuracy: 1e-9)
         // The founder's first verdict was "too fast": the flight alone now lasts longer than the old loop.
         XCTAssertGreaterThanOrEqual(LaunchTimeline.standard.flight.duration, 0.75)
         XCTAssertGreaterThanOrEqual(LaunchTimeline.standard.hold.duration, 0.8)
@@ -62,8 +62,12 @@ final class LaunchSequenceTests: XCTestCase {
                 XCTAssertGreaterThanOrEqual(y, last - 1e-6); last = y
             }
         }
-        // The flight accelerates into the board: most of the distance comes late.
+        // The flight accelerates into the board — most of the distance comes late — but the dart is
+        // never parked: a third of the way through it has covered a fifth of the distance.
         XCTAssertLessThan(Easing.exit(0.5), 0.4)
+        XCTAssertLessThan(Easing.flight(0.5), 0.5)
+        XCTAssertGreaterThan(Easing.flight(0.33), 0.2)
+        XCTAssertEqual(Easing.flight(1), 1, accuracy: 1e-6)
         // The throw curve is front-loaded, as the settle should feel.
         XCTAssertGreaterThan(Easing.throwCurve(0.3), 0.6)
     }

@@ -39,9 +39,9 @@ public struct LaunchTimeline: Equatable, Sendable {
     /// When the root begins the cross-fade to Home.
     public var finishAt: Double { exit.start }
 
-    /// Field to 350 ms; the flight to 1150; the strike's beat to 1550; the ring to 2350; the resolve to
-    /// 3250; the hold to 4100; the cross-fade to 4500.
-    public static let standard = LaunchTimeline(cuts: [0, 0.35, 1.15, 1.55, 2.35, 3.25, 4.10, 4.50])
+    /// Field to 350 ms; the flight to 1250; the strike's beat to 1650; the ring to 2450; the resolve to
+    /// 3350; the hold to 4200; the cross-fade to 4600.
+    public static let standard = LaunchTimeline(cuts: [0, 0.35, 1.25, 1.65, 2.45, 3.35, 4.20, 4.60])
     /// Reduce Motion: the finished composition from the first frame, a moment to read it, the fade.
     public static let reduced = LaunchTimeline(cuts: [0, 0, 0, 0, 0, 0, 0.60, 0.90])
 
@@ -89,6 +89,9 @@ public enum Easing {
     public static func set(_ x: Double) -> Double { cubicBezier(ThroMotion.motionEasingSet, x) }
     /// The exit curve accelerates into its end — which is what a dart does into a board.
     public static func exit(_ x: Double) -> Double { cubicBezier(ThroMotion.motionEasingExit, x) }
+    /// The flight: the exit curve with a third of it linear, so the dart is seen for the whole flight and
+    /// still arrives at full speed.
+    public static func flight(_ x: Double) -> Double { let x = min(1, max(0, x)); return 0.34 * x + 0.66 * exit(x) }
 
     /// A struck thing settling: a damped sine that starts at zero, in the units of `amplitude`.
     public static func damped(_ t: Double, amplitude: Double, hertz: Double, decay: Double) -> Double {
@@ -294,7 +297,7 @@ struct LaunchFrame: View {
     private func draw(in context: inout GraphicsContext, size: CGSize) {
         let chalk = ThroColor.throChalk
         let pField = timeline.field.progress(at: t)
-        let pFlight = Easing.exit(timeline.flight.progress(at: t))
+        let pFlight = Easing.flight(timeline.flight.progress(at: t))
         let pRing = Easing.resolve(timeline.ring.progress(at: t))
         let pResolve = Easing.resolve(timeline.resolve.progress(at: t))
         let sinceImpact = t - timeline.impact.start
@@ -313,7 +316,7 @@ struct LaunchFrame: View {
         let wordHeight = 2 * WordmarkGeometry.tip * wordC * CGFloat(0.5).squareRoot()
         let groupHeight = small.tipToTip + 28 + wordHeight + 20 + 16
         let groupTop = (size.height - groupHeight) / 2
-        let bigCentre = CGPoint(x: size.width / 2, y: size.height * 0.46)
+        let bigCentre = CGPoint(x: size.width / 2, y: size.height * 0.44)
         let smallCentre = CGPoint(x: size.width / 2, y: groupTop + small.tipToTip / 2)
         let geo = MarkGeometry(unit: big.unit + (small.unit - big.unit) * CGFloat(pResolve))
         let centre = CGPoint(x: bigCentre.x + (smallCentre.x - bigCentre.x) * CGFloat(pResolve),
@@ -347,11 +350,11 @@ struct LaunchFrame: View {
             for i in 0..<Int(sweep / 5) {
                 let phi = (315 + Double(i) * 5 + 2.3) * .pi / 180
                 let wobble = CGFloat([0.31, -0.22, 0.12, -0.36, 0.27, -0.08, 0.19, -0.29][i % 8]) * geo.ringWidth
-                let rr = geo.ringCentreRadius * pulse + wobble
+                let rr = geo.ringCentreRadius * pulse + wobble * 0.7
                 let gx = centre.x + rr * CGFloat(cos(phi)), gy = centre.y + rr * CGFloat(sin(phi))
-                let gr = geo.ringWidth * CGFloat([0.09, 0.06, 0.11, 0.05][i % 4])
+                let gr = geo.ringWidth * CGFloat([0.045, 0.03, 0.055, 0.025][i % 4])
                 context.fill(Path(ellipseIn: CGRect(x: gx - gr, y: gy - gr, width: 2 * gr, height: 2 * gr)),
-                             with: .color(ThroColor.throGreen.opacity(0.22)))
+                             with: .color(ThroColor.throGreen.opacity(0.16)))
             }
         }
 
@@ -364,9 +367,11 @@ struct LaunchFrame: View {
         }
         if pFlight > 0 && detailAlpha > 0 {
             let landed = geo.onAxis(centre, geo.tip)
-            let startTip = CGPoint(x: landed.x - axis.dx * (geo.tipToTip + size.width * 0.9),
-                                   y: landed.y - axis.dy * (geo.tipToTip + size.width * 0.9) + size.height * 0.22)
-            let control = CGPoint(x: landed.x - axis.dx * geo.tipToTip * 1.1, y: landed.y - axis.dy * geo.tipToTip * 1.1)
+            // The dart starts with its point just off the lower-left corner, on a gentle arc, so the point
+            // is in frame from a third of the way through the flight.
+            let startTip = CGPoint(x: landed.x - axis.dx * geo.tipToTip * 1.35,
+                                   y: landed.y - axis.dy * geo.tipToTip * 1.35 + size.height * 0.10)
+            let control = CGPoint(x: landed.x - axis.dx * geo.tipToTip * 0.9, y: landed.y - axis.dy * geo.tipToTip * 0.9)
             func bezier(_ s: CGFloat) -> CGPoint {
                 let u = 1 - s
                 return CGPoint(x: u * u * startTip.x + 2 * u * s * control.x + s * s * landed.x,
@@ -429,7 +434,7 @@ struct LaunchFrame: View {
         }
 
         // The name: T, H, R rise into place one after another; the Ø is the mark's own; then the tagline.
-        if pResolve > 0.2 {
+        if pResolve > 0.5 {
             let wordTop = groupTop + small.tipToTip + 28
             let left = (size.width - wordWidth) / 2
             let fontSize = wordC / WordmarkGeometry.capHeightPerEm
@@ -438,14 +443,14 @@ struct LaunchFrame: View {
             let font = Font.custom("Archivo-ExtraBold", size: fontSize)
             var x = left
             for (i, letter) in ["T", "H", "R"].enumerated() {
-                let q = min(1, max(0, (pResolve - (0.2 + 0.13 * Double(i))) / 0.4))
+                let q = min(1, max(0, (pResolve - (0.5 + 0.12 * Double(i))) / 0.3))
                 let rise = CGFloat(1 - Easing.set(q)) * 16
                 var glyph = context.resolve(Text(letter).font(font))
                 glyph.shading = .color(chalk.opacity(q))
                 context.draw(glyph, at: CGPoint(x: x, y: textTop + rise), anchor: .topLeading)
                 x += glyph.measure(in: CGSize(width: 1000, height: 1000)).width
             }
-            let oAlpha = min(1, max(0, (pResolve - 0.55) / 0.35))
+            let oAlpha = min(1, max(0, (pResolve - 0.7) / 0.25))
             let oCentre = CGPoint(x: left + wordSize.width + WordmarkGeometry.gap * wordC + WordmarkGeometry.ringOuter * wordC,
                                   y: baseline - wordC / 2)
             let ro = WordmarkGeometry.ringOuter * wordC, ri = WordmarkGeometry.ringInner * wordC
@@ -461,7 +466,7 @@ struct LaunchFrame: View {
             }
             dart.closeSubpath()
             context.fill(dart, with: .color(chalk.opacity(oAlpha)))
-            let tagQ = min(1, max(0, (pResolve - 0.7) / 0.3))
+            let tagQ = min(1, max(0, (pResolve - 0.85) / 0.15))
             if tagQ > 0 {
                 var tag = context.resolve(Text("FROM THE PUB BOARD TO THE WORLD STAGE")
                     .font(.custom("Archivo-SemiBold", size: 13)).kerning(13 * (0.09 + 0.07 * (1 - tagQ))))
