@@ -209,6 +209,28 @@ Still to add: the screenshots themselves into `docs/runbooks/screenshots/`.
 **Then the founder decided** (PD-003): the player chooses the appearance. The You tab now carries
 System / Light / Dark; setup and scoring stay dark as drawn.
 
+**Third run, 2026-09-06, on commit `e9382ad`.** The founder confirmed the retraction, the appearance
+choice on every screen and the Settings screen, and found one thing wrong: with the thrower on a
+finish the scoring screen scrolled and the checkout card was cropped. Two founder decisions followed
+and are built in the commits after it: the scoring screen no longer scrolls (everything above the
+keypad fits, the checkout card names the fact and not the number, the numeral shrinks before it clips),
+and a bust or a won leg is announced on a card both players see (PD-005).
+
+What to check on the next run, in this order:
+
+1. Scoring with the thrower on a finish: the *Checkout* card, the turn indicator and the keypad all on
+   screen, nothing scrolls.
+2. A bust: the card with the score the player stays on, the reason when there is one (*That leaves 1.*
+   or *N cannot be finished on a double.*), and who throws; the keypad ignores taps until *Continue*
+   or a tap on the dimmed screen.
+3. A won leg: the card with the legs as they stand and who throws first in the next leg.
+4. A won match: no card; the result screen.
+5. Settings → Scoring → *Keep screen awake*: with it on, the phone does not dim during scoring.
+6. Match setup: names capitalise as you type; *Next* on the keyboard moves to the away player; *Done*
+   puts the keyboard away; so does dragging the form. Please say whether *Next* moved the cursor —
+   that is the one behaviour this build could not verify without a device.
+7. With VoiceOver on, a bust: focus lands on the card and it reads as one sentence, then *Continue*.
+
 ## Where the data is
 
 `Application Support/THRO/journal.sqlite` inside the app's container, in WAL mode with

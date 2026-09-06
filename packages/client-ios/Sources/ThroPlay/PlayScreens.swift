@@ -87,9 +87,12 @@ public struct MatchSetupScreen: View {
     @State private var game: Int = 501
     @State private var length: Int = 5
     @State private var first: Seat = .home
+    @FocusState private var focused: NameField?
     private let problem: String?
     private let onBack: () -> Void
     private let onStart: (NewMatch) -> Void
+
+    private enum NameField: Hashable { case home, away }
 
     public init(initialHome: String = "", initialAway: String = "", problem: String? = nil,
                 onBack: @escaping () -> Void, onStart: @escaping (NewMatch) -> Void) {
@@ -111,8 +114,18 @@ public struct MatchSetupScreen: View {
                     if let problem {
                         Snackbar(problem, tone: .error)
                     }
+                    // Platform keyboard behaviour, not design: names capitalise as names, Next moves
+                    // to the away player, Done puts the keyboard away, and so does a drag.
                     ThroTextField("Home player", text: $home, placeholder: "Name")
+                        .modifier(NameEntry())
+                        .focused($focused, equals: .home)
+                        .submitLabel(.next)
+                        .onSubmit { focused = .away }
                     ThroTextField("Away player", text: $away, placeholder: "Name")
+                        .modifier(NameEntry())
+                        .focused($focused, equals: .away)
+                        .submitLabel(.done)
+                        .onSubmit { focused = nil }
                     ThroDivider()
                     choice("Game", SegmentedControl([(301, "301"), (501, "501"), (701, "701")], selection: $game))
                     choice("Length", SegmentedControl([(3, "Bo3"), (5, "Bo5"), (7, "Bo7"), (9, "Bo9")], selection: $length))
@@ -132,6 +145,7 @@ public struct MatchSetupScreen: View {
                 .padding(.vertical, ThroSpacing.spacing6)
                 .padding(.horizontal, ThroSpacing.spaceScreenGutter)
             }
+            .scrollDismissesKeyboard(.interactively)
         }
         .background(ThroColor.colorBackgroundPrimary.ignoresSafeArea())
         .throAppearance(Appearance(stored: appearanceRaw))
@@ -142,6 +156,17 @@ public struct MatchSetupScreen: View {
             Eyebrow(label)
             control
         }
+    }
+}
+
+/// A person's name is typed as one: each word capitalised. iOS only; the Mac has no such keyboard.
+private struct NameEntry: ViewModifier {
+    func body(content: Content) -> some View {
+        #if os(iOS)
+        content.textInputAutocapitalization(.words)
+        #else
+        content
+        #endif
     }
 }
 
@@ -284,6 +309,8 @@ public struct ScoringScreen: View {
                 Text("\(session.name(seat.opponent)) \(session.remaining(seat.opponent))")
                     .thro(ThroTypography.metadata.family(.sport).weight(.semibold))
                     .foregroundStyle(ThroColor.colorTextSecondary)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
             }
         }
     }
@@ -320,56 +347,33 @@ struct AnnouncementOverlay: View {
     let announcement: MatchSession.Announcement
     @ObservedObject var session: MatchSession
     let onContinue: () -> Void
+    @AccessibilityFocusState private var focused: Bool
 
     var body: some View {
         ZStack {
+            // The scrim is a second way to continue for someone who can see it; VoiceOver has the button.
             ThroColor.colorScrim
                 .ignoresSafeArea()
                 .contentShape(Rectangle())
                 .onTapGesture(perform: onContinue)
+                .accessibilityHidden(true)
             card
         }
         .accessibilityAddTraits(.isModal)
+        .onAppear {
+            // After layout, so the element exists to receive focus.
+            DispatchQueue.main.async { focused = true }
+        }
     }
 
     private var card: some View {
         VStack(alignment: .leading, spacing: ThroSpacing.spacing3) {
-            switch announcement {
-            case let .bust(seat, restored, reason, next):
-                Eyebrow("Bust", color: ThroColor.colorStatusError)
-                Text("\(session.name(seat)) stays on")
-                    .thro(ThroTypography.heading3)
-                    .foregroundStyle(ThroColor.colorTextSecondary)
-                Text("\(restored)")
-                    .thro(ThroTypography.sportHero)
-                    .foregroundStyle(ThroColor.colorStatusError)
-                if let reason {
-                    Text(reason)
-                        .thro(ThroTypography.body)
-                        .foregroundStyle(ThroColor.colorTextSecondary)
-                }
-                if let next {
-                    Text("\(session.name(next)) to throw")
-                        .thro(ThroTypography.label.weight(.bold).uppercase(true).tracking(em: 0.04))
-                        .foregroundStyle(ThroColor.colorTextPrimary)
-                }
-            case let .legWon(leg, winner, legsHome, legsAway, next):
-                Eyebrow("Leg \(leg)", color: ThroColor.colorTextBrand)
-                Text("\(session.name(winner)) takes it")
-                    .thro(ThroTypography.heading3)
-                    .foregroundStyle(ThroColor.colorTextSecondary)
-                Text("\(legsHome)–\(legsAway)")
-                    .thro(ThroTypography.sportHero)
-                    .foregroundStyle(ThroColor.colorTextPrimary)
-                Text("\(session.name(.home)) – \(session.name(.away)) · \(session.lengthLabel)")
-                    .thro(ThroTypography.metadata.family(.sport))
-                    .foregroundStyle(ThroColor.colorTextSecondary)
-                if let next {
-                    Text("\(session.name(next)) throws first")
-                        .thro(ThroTypography.label.weight(.bold).uppercase(true).tracking(em: 0.04))
-                        .foregroundStyle(ThroColor.colorTextPrimary)
-                }
+            // One element, read in one breath: "Bust. Alex stays on 141. That leaves 1. Sam to throw."
+            VStack(alignment: .leading, spacing: ThroSpacing.spacing3) {
+                announcementBody
             }
+            .accessibilityElement(children: .combine)
+            .accessibilityFocused($focused)
             ThroButton("Continue", variant: .primary, size: .large, fullWidth: true, action: onContinue)
                 .padding(.top, ThroSpacing.spacing2)
         }
@@ -381,6 +385,45 @@ struct AnnouncementOverlay: View {
         .clipShape(RoundedRectangle(cornerRadius: ThroSpacing.radiusCard))
         .throElevation3()
         .padding(ThroSpacing.spaceScreenGutter)
+    }
+
+    @ViewBuilder private var announcementBody: some View {
+        switch announcement {
+        case let .bust(seat, restored, reason, next):
+            Eyebrow("Bust", color: ThroColor.colorStatusError)
+            Text("\(session.name(seat)) stays on")
+                .thro(ThroTypography.heading3)
+                .foregroundStyle(ThroColor.colorTextSecondary)
+            Text("\(restored)")
+                .thro(ThroTypography.sportHero)
+                .foregroundStyle(ThroColor.colorStatusError)
+            if let reason {
+                Text(reason)
+                    .thro(ThroTypography.body)
+                    .foregroundStyle(ThroColor.colorTextSecondary)
+            }
+            if let next {
+                Text("\(session.name(next)) to throw")
+                    .thro(ThroTypography.label.weight(.bold).uppercase(true).tracking(em: 0.04))
+                    .foregroundStyle(ThroColor.colorTextPrimary)
+            }
+        case let .legWon(leg, winner, legsHome, legsAway, next):
+            Eyebrow("Leg \(leg)", color: ThroColor.colorTextBrand)
+            Text("\(session.name(winner)) takes it")
+                .thro(ThroTypography.heading3)
+                .foregroundStyle(ThroColor.colorTextSecondary)
+            Text("\(legsHome)–\(legsAway)")
+                .thro(ThroTypography.sportHero)
+                .foregroundStyle(ThroColor.colorTextPrimary)
+            Text("\(session.name(.home)) – \(session.name(.away)) · \(session.lengthLabel)")
+                .thro(ThroTypography.metadata.family(.sport))
+                .foregroundStyle(ThroColor.colorTextSecondary)
+            if let next {
+                Text("\(session.name(next)) throws first")
+                    .thro(ThroTypography.label.weight(.bold).uppercase(true).tracking(em: 0.04))
+                    .foregroundStyle(ThroColor.colorTextPrimary)
+            }
+        }
     }
 }
 
