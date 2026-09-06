@@ -103,6 +103,18 @@ def flat(doc, mode):
         raw[n] = val
     return {n: resolve(v, raw) for n, v in raw.items()}
 
+def parse_rgba(v):
+    """`#rrggbb` -> (r, g, b, 1.0); `rgba(r,g,b,a)` -> (r, g, b, a); anything else -> None.
+    The scrim is the one token with alpha, and a scrim emitted without its alpha is a wall."""
+    v = v.strip()
+    if v.startswith("#"):
+        rgb = hex_to_rgb(v)
+        return (*rgb, 1.0) if rgb else None
+    m = re.match(r"^rgba\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*,\s*([0-9.]+)\s*\)$", v)
+    if m:
+        return (int(m.group(1)), int(m.group(2)), int(m.group(3)), float(m.group(4)))
+    return None
+
 def hex_to_rgb(h):
     h = h.strip().lstrip("#")
     if len(h) != 6:
@@ -141,7 +153,7 @@ def emit_swift(doc):
         if doc["tokens"][n]["$type"] != "color":
             continue
         l, d = lt.get(n), dk.get(n)
-        if not l or not l.startswith("#"):
+        if not l or parse_rgba(l) is None:
             continue
         L.append(f'    /// light {l}   dark {d or l}')
         L.append(f'    public static let {camel(n)} = Color("{camel(n)}", bundle: .module)')
@@ -224,12 +236,12 @@ def emit_asset_catalogue(doc):
         if t["$type"] != "color":
             continue
         l = lt.get(n)
-        if not l or not l.startswith("#"):
+        if not l or parse_rgba(l) is None:
             continue
         d = dk.get(n) or l
-        def comps(h):
-            r, g, b = hex_to_rgb(h)
-            return {"red": f"0x{r:02X}", "green": f"0x{g:02X}", "blue": f"0x{b:02X}", "alpha": "1.000"}
+        def comps(v):
+            r, g, b, a = parse_rgba(v)
+            return {"red": f"0x{r:02X}", "green": f"0x{g:02X}", "blue": f"0x{b:02X}", "alpha": f"{a:.3f}"}
         entry = {
             "info": {"author": "thro", "version": 1},
             "colors": [

@@ -38,6 +38,8 @@ public enum ThroColor {
     public static let colorChartSecondary = Color("colorChartSecondary", bundle: .module)
     /// light #174F3C   dark #57A385
     public static let colorFocusRing = Color("colorFocusRing", bundle: .module)
+    /// light rgba(16,18,17,0.48)   dark rgba(8,10,9,0.64)
+    public static let colorScrim = Color("colorScrim", bundle: .module)
     /// light #8A4B17   dark #DE9557
     public static let colorStatusDisputed = Color("colorStatusDisputed", bundle: .module)
     /// light #8C1D18   dark #E8756A

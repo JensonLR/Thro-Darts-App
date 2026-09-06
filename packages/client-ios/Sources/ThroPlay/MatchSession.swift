@@ -24,6 +24,16 @@ public final class MatchSession: ObservableObject {
     @Published public private(set) var bust: BustDisplay?
     /// A proposed undo of the last visit, awaiting the player's confirmation (PD-004).
     @Published public private(set) var retraction: RetractionProposal?
+    /// A bust or a won leg, shown over the scoring screen until someone taps Continue (PD-005).
+    @Published public private(set) var announcement: Announcement?
+
+    public enum Announcement: Equatable, Sendable {
+        /// `restored` is what the seat's remaining went back to; `reason` is the engine's, when it
+        /// gave one beyond "below zero"; `next` is who throws now.
+        case bust(seat: Seat, restored: Int, reason: String?, next: Seat?)
+        /// The leg just decided, the legs as they now stand, and who throws first in the next.
+        case legWon(leg: Int, winner: Seat, legsHome: Int, legsAway: Int, next: Seat?)
+    }
 
     public struct RetractionProposal: Equatable, Sendable {
         public let seat: Seat
@@ -126,33 +136,41 @@ public final class MatchSession: ObservableObject {
     // MARK: - keypad
 
     public func digit(_ d: String) {
-        guard prompt == nil, retraction == nil, !isComplete else { return }
+        guard prompt == nil, retraction == nil, announcement == nil, !isComplete else { return }
         bust = nil
+        notice = nil
         entry = String((entry + d).prefix(3))
     }
 
     public func clearEntry() {
         bust = nil
+        notice = nil
         entry = ""
     }
 
     public func quick(_ total: Int) {
-        guard prompt == nil, retraction == nil else { return }
+        guard prompt == nil, retraction == nil, announcement == nil else { return }
         bust = nil
+        notice = nil
         commit(total)
     }
 
     public func miss() {
-        guard prompt == nil, retraction == nil else { return }
+        guard prompt == nil, retraction == nil, announcement == nil else { return }
         bust = nil
+        notice = nil
         commit(0)
     }
 
     public func enter() {
-        guard prompt == nil, retraction == nil, let total = Int(entry) else { return }
+        guard prompt == nil, retraction == nil, announcement == nil, let total = Int(entry) else { return }
         bust = nil
+        notice = nil
         commit(total)
     }
+
+    /// Dismisses the bust or leg announcement; scoring resumes.
+    public func acknowledge() { announcement = nil }
 
     /// Answers the current prompt. `nil` is "not sure": recorded as unknown, never as zero.
     public func answer(_ value: Int?) {
@@ -174,13 +192,13 @@ public final class MatchSession: ObservableObject {
     /// The keypad's undo key. A typed entry is cleared first; with nothing typed it proposes striking
     /// the last visit, which the player must confirm.
     public func undoKey() {
-        guard prompt == nil, retraction == nil else { return }
+        guard prompt == nil, retraction == nil, announcement == nil else { return }
         if !entry.isEmpty { clearEntry(); return }
         proposeRetraction()
     }
 
     public func proposeRetraction() {
-        guard prompt == nil, retraction == nil else { return }
+        guard prompt == nil, retraction == nil, announcement == nil else { return }
         guard let last = visits.last else {
             notice = Notice(text: Copy.nothingToUndo, tone: .neutral)
             return
@@ -257,15 +275,17 @@ public final class MatchSession: ObservableObject {
             state = next                                      // … then apply
             entry = ""
 
-            let nextName = thrower.map(name) ?? ""
+            notice = nil
             switch effect {
             case .bust:
+                // The restored score stays red on the hero until the next key; the card over it is
+                // for the opponent to see (PD-005).
                 bust = BustDisplay(seat: seat, restored: before)
-                notice = Notice(text: Copy.bust(bustReason, total: total, restored: before, next: nextName), tone: .error)
+                announcement = .bust(seat: seat, restored: before, reason: Copy.bustReason(bustReason, total: total), next: thrower)
             case .leg_won, .set_won:
-                notice = Notice(text: Copy.legWon(leg: leg, by: name(seat), next: nextName), tone: .success)
+                announcement = .legWon(leg: leg, winner: seat, legsHome: legsWon(.home), legsAway: legsWon(.away), next: thrower)
             case .scored, .match_won:
-                notice = nil
+                break
             }
         }
     }
@@ -340,18 +360,13 @@ public enum Copy {
         }
     }
 
-    public static func bust(_ reason: BustReason?, total: Int, restored: Int, next: String) -> String {
-        let why: String
+    /// The engine's reason for a bust when it is more than "below zero", in the harness's words.
+    public static func bustReason(_ reason: BustReason?, total: Int) -> String? {
         switch reason {
-        case .REMAINDER_ONE: why = "Bust — that leaves 1."
-        case .NOT_CHECKOUT_POSSIBLE: why = "Bust — \(total) cannot be finished on a double."
-        case .BELOW_ZERO, .none: why = "Bust."
+        case .REMAINDER_ONE: return "That leaves 1."
+        case .NOT_CHECKOUT_POSSIBLE: return "\(total) cannot be finished on a double."
+        case .BELOW_ZERO, .none: return nil
         }
-        return "\(why) Score restored to \(restored). \(next) to throw."
-    }
-
-    public static func legWon(leg: Int, by winner: String, next: String) -> String {
-        "Leg \(leg) to \(winner). \(next) to throw."
     }
 
     public static func notSaved(_ error: Error) -> String {

@@ -96,8 +96,9 @@ final class MatchSessionTests: XCTestCase {
         XCTAssertEqual(s.visits.last?.wonLeg, true)
         XCTAssertEqual(s.visits.last?.dartsUsed, 3)
         XCTAssertEqual(s.visits.last?.dartsAtDouble, 1)
-        XCTAssertEqual(s.notice?.tone, .success)
-        XCTAssertEqual(s.notice?.text, "Leg 1 to Jenson. Alex to throw.")
+        XCTAssertNil(s.notice)
+        XCTAssertEqual(s.announcement, .legWon(leg: 1, winner: .home, legsHome: 1, legsAway: 0, next: .away),
+                       "the won leg is announced over the screen for both players (PD-005)")
         XCTAssertEqual(s.thrower, .away, "away starts leg 2")
         XCTAssertEqual(s.state.currentLeg, 2)
     }
@@ -170,9 +171,13 @@ final class MatchSessionTests: XCTestCase {
         XCTAssertEqual(s.bust, MatchSession.BustDisplay(seat: .home, restored: 141))
         XCTAssertEqual(s.remaining(.home), 141)
         XCTAssertEqual(s.thrower, .away)
-        XCTAssertEqual(s.notice, MatchSession.Notice(text: "Bust. Score restored to 141. Alex to throw.", tone: .error))
+        XCTAssertNil(s.notice)
+        XCTAssertEqual(s.announcement, .bust(seat: .home, restored: 141, reason: nil, next: .away))
         XCTAssertEqual(s.visits.last?.bust, true)
         XCTAssertEqual(s.visits.last?.remainingAfter, 141)
+        s.acknowledge()
+        XCTAssertNil(s.announcement)
+        XCTAssertEqual(s.bust?.restored, 141, "the red hero stays until the next key")
         s.digit("6")
         XCTAssertNil(s.bust, "the next key clears the bust display")
     }
@@ -183,7 +188,7 @@ final class MatchSessionTests: XCTestCase {
         s.quick(140); s.quick(60)         // home 181
         s.quick(180)                      // 181 - 180 = 1 → REMAINDER_ONE; 181 is not a checkout so no question
         XCTAssertNil(s.prompt)
-        XCTAssertEqual(s.notice?.text, "Bust — that leaves 1. Score restored to 181. Alex to throw.")
+        XCTAssertEqual(s.announcement, .bust(seat: .home, restored: 181, reason: "That leaves 1.", next: .away))
         XCTAssertEqual(s.remaining(.home), 181)
     }
 
@@ -340,5 +345,37 @@ final class MatchSessionTests: XCTestCase {
         XCTAssertEqual(s.visits.count, 1)
         XCTAssertEqual(s.entry, "")
         XCTAssertNotNil(s.retraction)
+    }
+
+    // MARK: announcements (PD-005)
+
+    func testTheKeypadWaitsForTheAnnouncementToBeAcknowledged() throws {
+        let s = try session()
+        bringHomeToAFinish(s)
+        s.quick(180); s.answer(0)                 // bust from 141
+        XCTAssertNotNil(s.announcement)
+        s.quick(60); s.digit("5"); s.enter(); s.miss(); s.undoKey()
+        XCTAssertEqual(s.visits.count, 5, "nothing is scored while the card is up")
+        XCTAssertNil(s.retraction)
+        s.acknowledge()
+        s.quick(60)
+        XCTAssertEqual(s.visits.count, 6)
+    }
+
+    func testARefusalClearsOnTheNextKeyAndTakesNoAnnouncement() throws {
+        let s = try session()
+        s.digit("1"); s.digit("7"); s.digit("9"); s.enter()
+        XCTAssertNotNil(s.notice)
+        XCTAssertNil(s.announcement)
+        s.clearEntry()
+        XCTAssertNil(s.notice)
+    }
+
+    func testAMatchWinIsNotAnnouncedBecauseTheResultScreenIs() throws {
+        let s = try session(legs: 1)
+        bringHomeToAFinish(s)
+        s.digit("1"); s.digit("4"); s.digit("1"); s.enter(); s.answer(3); s.answer(1)
+        XCTAssertTrue(s.isComplete)
+        XCTAssertNil(s.announcement)
     }
 }

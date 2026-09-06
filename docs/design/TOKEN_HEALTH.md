@@ -91,3 +91,12 @@ The approved type scale is: 13, 14, 15, 17, 18, 21, 25, 32, 40, 56, 72, 96px.
 2. Reject raw hex/rgba and off-scale font sizes in all platform sources.
 3. Fail if any semantic token lacks a dark-theme value.
 4. Regenerate `CONTRAST_MATRIX.md` and fail on any regression against its baseline.
+
+## Alpha colours, 2026-09-06
+
+`--color-scrim` is the one token with an alpha channel (`rgba(16,18,17,0.48)` light,
+`rgba(8,10,9,0.64)` dark). The Swift and asset-catalogue emitters now parse `rgba(...)` and carry the
+alpha, so `ThroColor.colorScrim` exists and PD-005's announcement card uses it. The Kotlin emitter
+still emits hex colours only, so Android has no scrim token yet; it needs an ARGB path before the
+Android client uses one. The contrast matrix does not cover the scrim: it is not a text pair.
+

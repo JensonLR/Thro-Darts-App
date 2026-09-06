@@ -263,6 +263,7 @@ public struct YouScreen: View {
 /// appearance choice here.
 public struct SettingsScreen: View {
     @AppStorage(Appearance.storageKey) private var appearanceRaw: String = Appearance.system.rawValue
+    @AppStorage(ScoringPreferences.keepScreenAwakeKey) private var keepScreenAwake: Bool = true
     private let onBack: () -> Void
 
     public init(onBack: @escaping () -> Void) { self.onBack = onBack }
@@ -282,8 +283,24 @@ public struct SettingsScreen: View {
                             .thro(ThroTypography.metadata)
                             .foregroundStyle(ThroColor.colorTextSecondary)
                     }
+                    group("Scoring") {
+                        // The export's Settings lists this row under Scoring, default On. The switch
+                        // is the platform's; the export draws no toggle.
+                        HStack(spacing: 12) {
+                            Icon(.smartphone, size: 18).foregroundStyle(ThroColor.colorTextSecondary)
+                            Toggle(isOn: $keepScreenAwake) {
+                                Text("Keep screen awake").thro(ThroTypography.body).foregroundStyle(ThroColor.colorTextPrimary)
+                            }
+                            .tint(ThroColor.colorSurfaceBrand)
+                        }
+                        .frame(minHeight: 52)
+                        .overlay(alignment: .bottom) { Rectangle().fill(ThroColor.colorBorderDefault).frame(height: 1) }
+                        Text("While scoring, the phone does not sleep between visits.")
+                            .thro(ThroTypography.metadata)
+                            .foregroundStyle(ThroColor.colorTextSecondary)
+                    }
                     group("This build") {
-                        SettingsRow(icon: .smartphone, label: "Matches", value: "Stay on this device")
+                        SettingsRow(icon: .info, label: "Matches", value: "Stay on this device")
                         SettingsRow(icon: .cloudOff, label: "Sending results to THRØ", value: "Not built")
                         SettingsRow(icon: .info, label: "Fonts", value: ThroFont.customFacesRegistered ? "Embedded" : "System face")
                         SettingsRow(icon: .circleUser, label: "Account and profile", value: "Not built")

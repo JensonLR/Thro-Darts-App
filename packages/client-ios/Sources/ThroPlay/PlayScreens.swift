@@ -3,6 +3,9 @@ import ThroTokens
 import ThroDesign
 import ThroEngine
 import ThroJournal
+#if canImport(UIKit)
+import UIKit
+#endif
 
 // The Play slice for a match scored on this device: setup → ready → scoring → result.
 //
@@ -199,6 +202,7 @@ public struct MatchReadyScreen: View {
 public struct ScoringScreen: View {
     @ObservedObject private var session: MatchSession
     @AppStorage(Appearance.storageKey) private var appearanceRaw: String = Appearance.system.rawValue
+    @AppStorage(ScoringPreferences.keepScreenAwakeKey) private var keepScreenAwake: Bool = true
     private let onLeave: () -> Void
     private let onComplete: () -> Void
 
@@ -209,45 +213,65 @@ public struct ScoringScreen: View {
     }
 
     public var body: some View {
-        VStack(spacing: 0) {
-            MatchHeader(competition: "\(session.name(.home)) v \(session.name(.away))", format: session.formatLabel,
-                        onBack: onLeave)
-            ScrollView {
-                VStack(spacing: 0) {
-                    legRow.padding(.top, ThroSpacing.spacing5).padding(.bottom, ThroSpacing.spacing2)
-                    remaining.padding(.top, ThroSpacing.spacing2).padding(.bottom, ThroSpacing.spacing1)
-                    if session.bust == nil, session.throwerOnAFinish, let seat = session.thrower {
-                        CheckoutCard(required: session.remaining(seat), compact: true)
-                            .padding(.top, ThroSpacing.spacing2)
-                    }
-                    if let notice = session.notice {
-                        Snackbar(notice.text, tone: tone(notice.tone))
-                            .padding(.top, ThroSpacing.spacing3)
-                    }
-                    if let seat = session.thrower {
-                        TurnIndicator(player: session.name(seat), dartsThrown: 0, active: true)
-                            .padding(.top, ThroSpacing.spacing4)
-                            .padding(.bottom, ThroSpacing.spacing1)
-                    }
+        ZStack {
+            VStack(spacing: 0) {
+                MatchHeader(competition: "\(session.name(.home)) v \(session.name(.away))", format: session.formatLabel,
+                            onBack: onLeave)
+                // Everything above the keypad shares the height the keypad leaves. Nothing scrolls
+                // and nothing is cut off: when a phone is short, the hero numeral yields first.
+                upper
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+                if let prompt = session.prompt {
+                    PromptCard(prompt: prompt, onAnswer: session.answer, onCancel: session.cancelPrompt)
+                } else if let proposal = session.retraction {
+                    RetractionCard(proposal: proposal, playerName: session.name(proposal.seat),
+                                   onConfirm: session.confirmRetraction, onCancel: session.cancelRetraction)
+                } else {
+                    ScoreKeypad(value: session.entry, disabled: session.isComplete || session.announcement != nil,
+                                onDigit: session.digit, onQuick: session.quick,
+                                onMiss: session.miss, onClear: session.undoKey, onEnter: session.enter)
                 }
-                .padding(.horizontal, ThroSpacing.spaceScreenGutter)
-                .padding(.bottom, ThroSpacing.spacing1)
             }
-            if let prompt = session.prompt {
-                PromptCard(prompt: prompt, onAnswer: session.answer, onCancel: session.cancelPrompt)
-            } else if let proposal = session.retraction {
-                RetractionCard(proposal: proposal, playerName: session.name(proposal.seat),
-                               onConfirm: session.confirmRetraction, onCancel: session.cancelRetraction)
-            } else {
-                ScoreKeypad(value: session.entry, disabled: session.isComplete,
-                            onDigit: session.digit, onQuick: session.quick,
-                            onMiss: session.miss, onClear: session.undoKey, onEnter: session.enter)
+            if let announcement = session.announcement {
+                AnnouncementOverlay(announcement: announcement, session: session, onContinue: session.acknowledge)
             }
         }
         .background(ThroColor.colorBackgroundPrimary.ignoresSafeArea())
         .throAppearance(Appearance(stored: appearanceRaw))
         .onReceive(session.$state) { state in
             if state.isComplete { onComplete() }
+        }
+        .onAppear { setIdleTimer(disabled: keepScreenAwake) }
+        .onDisappear { setIdleTimer(disabled: false) }
+    }
+
+    private var upper: some View {
+        VStack(spacing: 0) {
+            legRow.padding(.top, ThroSpacing.spacing5).padding(.bottom, ThroSpacing.spacing2)
+            remaining
+                .padding(.top, ThroSpacing.spacing2)
+                .padding(.bottom, ThroSpacing.spacing1)
+                .layoutPriority(-1)
+            if session.bust == nil, session.throwerOnAFinish, let seat = session.thrower {
+                // The hero already shows the number in brand green; the card names the fact, as the
+                // export's checkout screen does with its value hidden.
+                CheckoutCard(required: session.remaining(seat), compact: true, hideValue: true)
+                    .padding(.top, ThroSpacing.spacing2)
+            }
+            if let seat = session.thrower {
+                TurnIndicator(player: session.name(seat), dartsThrown: 0, active: true)
+                    .padding(.top, ThroSpacing.spacing4)
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, ThroSpacing.spaceScreenGutter)
+        // A refusal floats over the top of this region and clears on the next key; it takes no height.
+        .overlay(alignment: .top) {
+            if let notice = session.notice {
+                Snackbar(notice.text, tone: tone(notice.tone))
+                    .padding(.horizontal, ThroSpacing.spaceScreenGutter)
+                    .padding(.top, ThroSpacing.spacing2)
+            }
         }
     }
 
@@ -279,6 +303,84 @@ public struct ScoringScreen: View {
         case .success: return .success
         case .error: return .error
         }
+    }
+
+    private func setIdleTimer(disabled: Bool) {
+        #if canImport(UIKit)
+        UIApplication.shared.isIdleTimerDisabled = disabled
+        #endif
+    }
+}
+
+/// PD-005: a bust or a won leg is announced over the scoring screen so both players see it, and
+/// scoring resumes only when someone taps Continue (or the scrim). After the export's Dialog —
+/// raised surface, radius-card, hairline, elevation-3, 340 wide — with the number in the sport hero
+/// face, because the number is what the opponent needs to read from across the oche.
+struct AnnouncementOverlay: View {
+    let announcement: MatchSession.Announcement
+    @ObservedObject var session: MatchSession
+    let onContinue: () -> Void
+
+    var body: some View {
+        ZStack {
+            ThroColor.colorScrim
+                .ignoresSafeArea()
+                .contentShape(Rectangle())
+                .onTapGesture(perform: onContinue)
+            card
+        }
+        .accessibilityAddTraits(.isModal)
+    }
+
+    private var card: some View {
+        VStack(alignment: .leading, spacing: ThroSpacing.spacing3) {
+            switch announcement {
+            case let .bust(seat, restored, reason, next):
+                Eyebrow("Bust", color: ThroColor.colorStatusError)
+                Text("\(session.name(seat)) stays on")
+                    .thro(ThroTypography.heading3)
+                    .foregroundStyle(ThroColor.colorTextSecondary)
+                Text("\(restored)")
+                    .thro(ThroTypography.sportHero)
+                    .foregroundStyle(ThroColor.colorStatusError)
+                if let reason {
+                    Text(reason)
+                        .thro(ThroTypography.body)
+                        .foregroundStyle(ThroColor.colorTextSecondary)
+                }
+                if let next {
+                    Text("\(session.name(next)) to throw")
+                        .thro(ThroTypography.label.weight(.bold).uppercase(true).tracking(em: 0.04))
+                        .foregroundStyle(ThroColor.colorTextPrimary)
+                }
+            case let .legWon(leg, winner, legsHome, legsAway, next):
+                Eyebrow("Leg \(leg)", color: ThroColor.colorTextBrand)
+                Text("\(session.name(winner)) takes it")
+                    .thro(ThroTypography.heading3)
+                    .foregroundStyle(ThroColor.colorTextSecondary)
+                Text("\(legsHome)–\(legsAway)")
+                    .thro(ThroTypography.sportHero)
+                    .foregroundStyle(ThroColor.colorTextPrimary)
+                Text("\(session.name(.home)) – \(session.name(.away)) · \(session.lengthLabel)")
+                    .thro(ThroTypography.metadata.family(.sport))
+                    .foregroundStyle(ThroColor.colorTextSecondary)
+                if let next {
+                    Text("\(session.name(next)) throws first")
+                        .thro(ThroTypography.label.weight(.bold).uppercase(true).tracking(em: 0.04))
+                        .foregroundStyle(ThroColor.colorTextPrimary)
+                }
+            }
+            ThroButton("Continue", variant: .primary, size: .large, fullWidth: true, action: onContinue)
+                .padding(.top, ThroSpacing.spacing2)
+        }
+        .padding(ThroSpacing.spacing6)
+        .frame(maxWidth: 340)
+        .background(ThroColor.colorBackgroundRaised)
+        .overlay(RoundedRectangle(cornerRadius: ThroSpacing.radiusCard)
+            .strokeBorder(ThroColor.colorBorderDefault, lineWidth: ThroSpacing.borderWidthHairline))
+        .clipShape(RoundedRectangle(cornerRadius: ThroSpacing.radiusCard))
+        .throElevation3()
+        .padding(ThroSpacing.spaceScreenGutter)
     }
 }
 

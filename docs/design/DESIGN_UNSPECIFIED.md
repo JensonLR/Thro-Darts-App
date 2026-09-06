@@ -67,6 +67,9 @@ Sourced by reading the whole export: 61 components, 33 participant screens, 9 or
 15. **Disabled appearance** beyond a flat opacity multiplier (which produces real contrast failures).
 16. **`Dialog` and `Sheet` modal behaviour** — scrim, focus trap, dismissal, initial focus.
     `--color-scrim` is defined and unused; both currently claim `aria-modal` without being modal.
+    **Partly decided by the founder, 2026-09-06 (PD-005):** the bust and won-leg card over the scoring
+    screen uses the Dialog surface and `--color-scrim`, dismisses on its button or a scrim tap, traps
+    nothing and animates nothing. Focus trap, initial focus and animation stay open.
 17. **`DataTable` sort, pagination, empty, loading and error states.**
 18. **Invalid and impossible score feedback**, and remaining-score validation, on the keypad.
 19. **Multi-series charts, axes, y-scale policy and a data-table alternative.** `TrendChart`
@@ -82,7 +85,8 @@ Sourced by reading the whole export: 61 components, 33 participant screens, 9 or
 21. **Whether the organiser has a dark theme** — it runs in the venue, often on a laptop in a dim hall.
 22. **Increased-contrast and reduced-transparency variants.** Given the boundary failures, an
     increased-contrast variant is genuinely needed.
-23. **Landscape orientation for scoring.**
+23. **Landscape orientation for scoring.** The app is portrait-only, as every screen in the export is drawn;
+    a landscape scoring screen would need a design.
 24. **Truncation policy for long player, venue and team names.** Only 8 of 61 components handle overflow.
 25. **Haptics** — nothing is specified for the scoring keypad, where it matters most.
 

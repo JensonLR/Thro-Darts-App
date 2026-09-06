@@ -242,3 +242,38 @@ difference between a correction and a rewrite, and it is not built.
 Remove the undo key's second meaning and the result screen's button; the journal's retraction rows
 stay valid and replay keeps honouring them. Nothing in the record has to change.
 
+---
+
+## PD-005 — Busts and won legs are announced to both players
+
+**Founder decision, 2026-09-06.** Not delegated.
+
+### Decided
+
+1. When a visit **busts**, or a **leg is won**, a card appears over the scoring screen and stays until
+   someone taps **Continue** (or the scrim). Scoring is paused while it shows.
+2. The bust card leads with the **score the player is left on**, in the sport hero face, in the
+   error colour — the number the opponent needs to read from across the oche — with the engine's
+   reason when it gives one beyond "below zero", and who throws now.
+3. The leg card leads with the **legs as they now stand**, names the winner, and says who throws
+   first in the next leg.
+4. A **won match** is not announced this way: the result screen is the announcement.
+5. Refusals stay a snackbar over the top of the scoring area, and clear on the next key.
+
+### Why
+
+The phone is one device between two players. A snackbar under the score is for the scorer; the
+opponent, standing at the board, needs a moment and a large number.
+
+### The cost that must be stated plainly
+
+The export has no such card. It is composed from the export's Dialog surface (raised background,
+card radius, hairline, elevation-3, 340 points wide) and its type roles; the scrim is the token
+layer's `--color-scrim`, which the generator now emits. Modal behaviour is DESIGN_UNSPECIFIED item 16;
+this card dismisses on its button or a tap on the scrim, traps nothing, and animates nothing.
+
+### How to reverse
+
+Drop the announcement state and the overlay; the bust and leg information return to the snackbar,
+whose copy is still in `Copy`.
+

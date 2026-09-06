@@ -141,14 +141,18 @@ exactly what CI does (`xcodebuild -scheme ThroDarts -destination 'generic/platfo
   opens its result. The tab bar's *Live* and *Discover* say plainly that they are not in this build;
   *You* says the profile is not built and carries the export's settings action in its header.
 - **Settings** (from the gear on You). **Appearance: System / Light / Dark** — every screen follows
-  it, scoring included (PD-003) — and a *This build* group stating what is true: matches stay on the
-  device, sending to THRØ is not built, which face the fonts are, no account.
+  it, scoring included (PD-003); **Scoring → Keep screen awake**, on by default as the export's
+  Settings lists it; and a *This build* group stating what is true: matches stay on the device,
+  sending to THRØ is not built, which face the fonts are, no account.
 - **Match setup** (dark). Two names, then 301 / 501 / 701, Bo3 / Bo5 / Bo7 / Bo9, and who throws
   first. Double out is the only out-rule offered. Empty names become *Home* and *Away*.
 - **Match ready.** The two players, the format as tags, **Start scoring**.
-- **Scoring** (dark). A back chevron and the header with the players and the format; legs and the other player's remaining;
-  the thrower's remaining in the 96-point score face; a *Checkout available* card when the thrower is
-  on a finish; the turn indicator; the keypad. Quick totals commit at once. Typed totals commit on
+- **Scoring**. A back chevron and the header with the players and the format; legs and the other
+  player's remaining; the thrower's remaining in the 96-point score face, green when they are on a
+  finish, with a *Checkout available* card beneath; the turn indicator; the keypad. Nothing scrolls
+  and nothing is cut off: everything above the keypad shares the height the keypad leaves, and on a
+  short phone the numeral shrinks first. The phone stays awake while this screen is up (Settings →
+  Scoring). Quick totals commit at once. Typed totals commit on
   **Enter**, which stays disabled until something is typed. The undo key clears the entry; with
   nothing typed it offers to **undo the last visit** (PD-004): *Strike Man's 100?* with **Undo** and
   **Keep**. Undoing appends a retraction — the struck visit stays in the record, replay skips it, the
@@ -158,9 +162,13 @@ exactly what CI does (`xcodebuild -scheme ThroDarts -destination 'generic/platfo
   finished. When the visit **wins the leg**, *Darts used to check out?* — 1 / 2 / 3, preset 3 — comes
   first, then darts at a double limited to the darts used. **Not sure** records unknown, never zero.
   **Cancel** submits nothing and keeps the entry.
-- **Refusals** appear in the snackbar with the harness's wording — *179 cannot be scored with three
-  darts.* — and change nothing. **Busts** show the restored score in red, name the reason when the
-  engine gives one, and rotate the turn. A **won leg** announces itself and who throws next.
+- **Refusals** float over the top of the scoring area with the harness's wording — *179 cannot be
+  scored with three darts.* — change nothing, and clear on the next key. **Busts** and **won legs**
+  put a card over the screen for both players (PD-005): the bust card leads with the score the player
+  is left on, in red, with the reason when the engine gives one and who throws now; the leg card
+  leads with the legs as they stand and who throws first next. **Continue** (or a tap on the scrim)
+  resumes scoring; the keypad waits until then. Under the card the restored score stays red on the
+  hero until the next key.
 - **Result.** *{Winner} wins*, the legs, each player's six figures (3-dart average, first 9,
   checkout %, 180s, highest checkout, 140+) — exact as a number, bounded as a range that says so,
   unavailable as a dash with its reason — then *Not rated*, *Self-reported* with its explanation, and
@@ -227,16 +235,17 @@ platform's own behaviour or renders the honest minimum, and says so.
 
 | Item | This build |
 |---|---|
-| 1 Dynamic Type | Type roles scale through `relativeTo`; spacing and radius do not (ADR-010). **No clamps** — at accessibility sizes the 96/88 score face will clip. |
+| 1 Dynamic Type | Type roles scale through `relativeTo`; spacing and radius do not (ADR-010). **No clamps.** The score numeral alone may shrink (to half) when the screen is too short for it, so it never clips or scrolls; that is a floor, not a design. |
 | 2 Pressed / focus | The platform's own. Nothing removed (the export removed the text field's focus ring; SwiftUI's stays). |
-| 5 Safe areas | The platform's: content respects them, only backgrounds paint under them. |
+| 5 Safe areas | The platform's: content respects them, only backgrounds paint under them. The scoring screen is laid out to the height the keypad leaves, so nothing scrolls. |
 | 7 Attestation | Not in the app. The harness asks the non-throwing player to confirm each leg on the same device; the app does not, because a confirmation with no identity behind it is not the participant-confirmed state PD-002 describes. **Every result is self-reported.** |
 | 9 Stat basis | Bounded is a range, unavailable is a dash; the reason is shown in the metadata role beneath. |
 | 11 Offline-completed result | *Self-reported*; and because no sync exists, the screen says the result has not left the phone rather than showing a *Queued* that promises one. |
 | 15 Disabled | The export's opacity multiplier. |
+| 16 Modal behaviour | The bust and leg card (PD-005) uses the Dialog surface and the scrim token; it dismisses on its button or a scrim tap, traps nothing, animates nothing. |
 | 18 Invalid score feedback | The engine's refusal in the snackbar, in the harness's words. |
 | 20 Dark mode | **Decided by the founder (PD-003, amended):** System / Light / Dark in Settings, governing every screen, scoring included. Each screen's undrawn rendering — dark Home, light scoring — is the token layer's, unreviewed by design. |
-| 23 Landscape | The Xcode template's orientations are left as they are; the scoring screen has no landscape design. |
+| 23 Landscape | **Portrait only**, as every screen in the export is drawn. A landscape scoring screen would need a design. |
 | 24 Truncation | Names truncate with an ellipsis in the header, the identity, and the Home rows. |
 | 25 Haptics | None. |
 
@@ -250,8 +259,10 @@ Composed from the export's components because the export does not draw them:
 - **Play again** on the result, from the Shadow result.
 - The **undo confirmation** (PD-004), in the keypad's place, from Eyebrow, heading, Button; and
   **Undo last visit** on the result.
-- A **Settings** screen after the export's own, with only the rows that are true of this build, and
-  the appearance control in place of a row that would go nowhere.
+- A **Settings** screen after the export's own, with only the rows that are true of this build, the
+  appearance control in place of a row that would go nowhere, and the platform's switch for *Keep
+  screen awake* (the export draws no toggle).
+- The **bust and won-leg card** (PD-005), from the Dialog surface, the sport hero face and Button.
 
 Read differently from the JSX, on purpose: Enter disabled on an empty entry (the export scores 0);
 the undo key clears the entry (the export labels it *Undo last score* and every screen uses it to

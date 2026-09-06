@@ -36,6 +36,10 @@ public struct RemainingScore: View {
             Text("\(value)")
                 .thro(ThroTypography.scoreHero)
                 .foregroundStyle(color)
+                // On a phone too short for the 96-point face the numeral shrinks rather than clips
+                // or scrolls (DESIGN_UNSPECIFIED #1 gives no clamp; this is the floor, not a design).
+                .lineLimit(1)
+                .minimumScaleFactor(0.5)
             if let darts {
                 Text(darts)
                     .thro(ThroTypography.label.family(.sport))
