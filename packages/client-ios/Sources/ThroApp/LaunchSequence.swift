@@ -2,21 +2,22 @@ import SwiftUI
 import ThroTokens
 import ThroDesign
 
-// PD-007, third version, after the founder's second look ("better, but improve and upgrade it further;
-// harshly critique it; no regressions"). The app opens on a throw. A faint chalk ring waits on the
-// green as the target, so the eye has somewhere to be before anything moves. A real dart — needle,
-// knurled barrel, shaft, flights — comes in from the lower left on a gentle arc that straightens onto
-// the mark's axis, rolling at a steady rate, its streak stretching with its speed. Its point cuts the
-// chalk ring twice, puffing chalk off it each time and leaving the ring lit where it was cut, and
-// strikes: the frame shakes, the field breathes lighter, a shockwave leaves the point, dust flies, the
-// dart squashes along its length for a few frames and its shaft and flights whip and settle while the
-// barrel stays dead still. The lit cuts spread both ways round the ring until it is whole, glowing,
-// with chalk grain, and it pulses once. Then the dart folds into the mark's bar — flights flat, every
-// part to the bar's width, the shaft run on to the tail — as the mark shrinks and rises to its place;
-// T, H, R rise beneath it one after another; the Ø's own ring draws itself as the big one did and its
-// bar follows; the tagline tracks in; Home fades up. The first frame is the launch screen's flat green,
-// so nothing jumps. Cold launch only; a tap skips; Reduce Motion shows the finished composition and
-// fades, with nothing moving and nothing heard.
+// PD-007, fourth version, after the founder's third look: "the dart should look like its been thrown and is
+// travelling distance via the screen not just coming from corner of the screen, thrown cinematically and
+// reaching its destination then transitioning, keep the cinematic camera angles in mind … a cool
+// transition for the text with the logo as the O … We should have it just go into the full text logo. Then
+// show the sub text then load the app main homepage … the weird circle bit is a bit basic & boring". The
+// opening is a tracking shot. The camera flies with the dart: the dart holds in the middle of the frame in
+// profile — sliding in as the camera catches it, bobbing a little, nose-up and flattening as it arrives,
+// rolling at a steady rate — while the world comes to it: the chalk dust on the wall streams past, the
+// camera rolls from a flat throw to the mark's angle, and the dart's destination — a pool of light on the
+// wall, far and small at first — grows as an approaching thing does. Then the world stops dead: thud, the
+// heavy haptic, the light breathing, the frame shaking, a burst of dust, the dart squashing for a few
+// frames and its flights whipping while the barrel stays still. From the strike, four strokes of chalk
+// run round the light until the ring is whole and the light is spent. Then the mark becomes the name: it
+// shrinks and slides into the last slot of THRØ while T, H, R stamp in beside it, and its ring takes the
+// letters' weight; the tagline tracks in beneath; Home fades up. The first frame is the launch screen's
+// flat green. Cold launch only; a tap skips; Reduce Motion shows the finished composition and fades.
 
 /// The spine of the opening, in seconds from the first frame. Segments are contiguous; effects that
 /// outlive their segment (the quiver, the ring's pulse) run from a segment's boundary on their own clock.
@@ -37,45 +38,47 @@ public struct LaunchTimeline: Equatable, Sendable {
     public let flight: Segment
     public let impact: Segment
     public let ring: Segment
-    public let resolve: Segment
+    public let word: Segment
     public let hold: Segment
     public let exit: Segment
 
-    public var segments: [Segment] { [field, flight, impact, ring, resolve, hold, exit] }
+    public var segments: [Segment] { [field, flight, impact, ring, word, hold, exit] }
     public var total: Double { exit.end }
     /// When the root begins the cross-fade to Home.
     public var finishAt: Double { exit.start }
 
-    /// Field and target to 450 ms; the flight to 1350; the strike's beat to 1750; the ring to 2450;
-    /// the resolve to 3350; the hold to 4200; the cross-fade to 4600.
-    public static let standard = LaunchTimeline(cuts: [0, 0.45, 1.35, 1.75, 2.45, 3.35, 4.20, 4.60])
+    /// The field and the far light to 400 ms; the flight to 1600; the strike's beat to 2000; the ring to
+    /// 2550; the word to 3400; the hold, with the tagline, to 4300; the cross-fade to 4700.
+    public static let standard = LaunchTimeline(cuts: [0, 0.40, 1.60, 2.00, 2.55, 3.40, 4.30, 4.70])
     /// Reduce Motion: the finished composition from the first frame, a moment to read it, the fade.
     public static let reduced = LaunchTimeline(cuts: [0, 0, 0, 0, 0, 0, 0.60, 0.90])
+    /// When T, H and R stamp in, as fractions of the word segment.
+    public static let stampFractions: [Double] = [0.30, 0.45, 0.60]
 
     /// Whether anything moves. False under Reduce Motion, where every effect is already at rest from
     /// the first frame: no flight, no strike, no dust, no pulse, no cue.
     public var isAnimated: Bool { flight.duration > 0 }
 
-    /// Sound and haptic cues, by name and time: the whoosh with the flight, a light tick each time the
-    /// point cuts the chalk ring, the thud and the heavy haptic at the strike, the chalk with the ring.
-    /// None under Reduce Motion: no motion, nothing to score.
+    /// Sound and haptic cues, by name and time: the whoosh with the flight, the thud and the heavy haptic
+    /// at the strike, the chalk with the ring, a firm stamp as each letter lands. None under Reduce
+    /// Motion: no motion, nothing to score.
     public var cues: [LaunchCue] {
         guard isAnimated else { return [] }
-        var cues = [LaunchCue(name: "whoosh", at: flight.start)]
-        for s in FlightPath.nominalCuts {
-            cues.append(LaunchCue(name: "tick", at: flight.start + Easing.flightTime(for: Double(s)) * flight.duration))
+        var cues = [LaunchCue(name: "whoosh", at: flight.start),
+                    LaunchCue(name: "thud", at: impact.start),
+                    LaunchCue(name: "haptic", at: impact.start),
+                    LaunchCue(name: "chalk", at: ring.start)]
+        for fraction in Self.stampFractions {
+            cues.append(LaunchCue(name: "stamp", at: word.start + fraction * word.duration))
         }
-        cues += [LaunchCue(name: "thud", at: impact.start),
-                 LaunchCue(name: "haptic", at: impact.start),
-                 LaunchCue(name: "chalk", at: ring.start)]
         return cues
     }
 
     init(cuts c: [Double]) {
         precondition(c.count == 8, "seven segments need eight cuts")
-        let names = ["field", "flight", "impact", "ring", "resolve", "hold", "exit"]
+        let names = ["field", "flight", "impact", "ring", "word", "hold", "exit"]
         let s = (0..<7).map { Segment(name: names[$0], start: c[$0], end: c[$0 + 1]) }
-        field = s[0]; flight = s[1]; impact = s[2]; ring = s[3]; resolve = s[4]; hold = s[5]; exit = s[6]
+        field = s[0]; flight = s[1]; impact = s[2]; ring = s[3]; word = s[4]; hold = s[5]; exit = s[6]
     }
 }
 
@@ -104,22 +107,10 @@ public enum Easing {
     public static func impact(_ x: Double) -> Double { cubicBezier(ThroMotion.motionEasingImpact, x) }
     public static func resolve(_ x: Double) -> Double { cubicBezier(ThroMotion.motionEasingResolve, x) }
     public static func set(_ x: Double) -> Double { cubicBezier(ThroMotion.motionEasingSet, x) }
-    /// The exit curve accelerates into its end — which is what a dart does into a board.
+    /// The exit curve accelerates into its end.
     public static func exit(_ x: Double) -> Double { cubicBezier(ThroMotion.motionEasingExit, x) }
-    /// The flight: the exit curve with a third of it linear, so the dart is seen for the whole flight and
-    /// still arrives at full speed.
-    public static func flight(_ x: Double) -> Double { let x = min(1, max(0, x)); return 0.34 * x + 0.66 * exit(x) }
-    /// The inverse of `flight`: the fraction of the flight's time at which the dart has covered `s` of
-    /// its path. Found by bisection; the curve is monotone.
-    public static func flightTime(for s: Double) -> Double {
-        let s = min(1, max(0, s))
-        var lo = 0.0, hi = 1.0
-        for _ in 0..<40 {
-            let mid = (lo + hi) / 2
-            if flight(mid) < s { lo = mid } else { hi = mid }
-        }
-        return (lo + hi) / 2
-    }
+    /// 0...1 clamped.
+    public static func unit(_ x: Double) -> Double { min(1, max(0, x)) }
 
     /// A struck thing settling: a damped sine that starts at zero, in the units of `amplitude`.
     public static func damped(_ t: Double, amplitude: Double, hertz: Double, decay: Double) -> Double {
@@ -128,30 +119,51 @@ public enum Easing {
     }
 }
 
-/// The mark's proportions, measured against its frame (docs/design/brand/README.md): ring outer 0.364,
-/// inner 0.250, dart half-width 0.040, tips 0.643, the axis at 45° lower-left to upper-right.
+/// The mark's proportions against its frame, measured from the founder's artwork
+/// (docs/design/brand/README.md): ring outer 0.364, inner 0.250, dart half-width 0.040, tips 0.643, the
+/// axis at 45° lower-left to upper-right. The wordmark's Ø has the letters' weight instead, against the
+/// cap height: ring 0.53 / 0.30, half-width 0.067, tips 0.95 (docs/design/brand/render_wordmark.py). The
+/// mark becomes the Ø by mixing one set of ratios into the other.
 public struct MarkGeometry: Equatable, Sendable {
-    public static let ringOuterRatio: CGFloat = 0.364
-    public static let ringInnerRatio: CGFloat = 0.250
-    public static let halfWidthRatio: CGFloat = 0.040
-    public static let tipRatio: CGFloat = 0.643
+    public struct Ratios: Equatable, Sendable {
+        public let ringOuter: CGFloat
+        public let ringInner: CGFloat
+        public let halfWidth: CGFloat
+        public let tip: CGFloat
+        public static let mark = Ratios(ringOuter: 0.364, ringInner: 0.250, halfWidth: 0.040, tip: 0.643)
+        public static let wordmark = Ratios(ringOuter: 0.53, ringInner: 0.30, halfWidth: 0.067, tip: 0.95)
+    }
+    public static let ringOuterRatio = Ratios.mark.ringOuter
+    public static let ringInnerRatio = Ratios.mark.ringInner
+    public static let halfWidthRatio = Ratios.mark.halfWidth
+    public static let tipRatio = Ratios.mark.tip
 
     public let unit: CGFloat
-    public init(unit: CGFloat) { self.unit = unit }
-    public init(tipToTip span: CGFloat) { unit = span / (2 * MarkGeometry.tipRatio) }
+    public let ratios: Ratios
+    public init(unit: CGFloat, ratios: Ratios = .mark) { self.unit = unit; self.ratios = ratios }
+    public init(tipToTip span: CGFloat, ratios: Ratios = .mark) { unit = span / (2 * ratios.tip); self.ratios = ratios }
 
-    public var ringOuter: CGFloat { Self.ringOuterRatio * unit }
-    public var ringInner: CGFloat { Self.ringInnerRatio * unit }
+    /// Part way from one geometry to another, size and proportions together.
+    public static func mix(_ a: MarkGeometry, _ b: MarkGeometry, _ t: CGFloat) -> MarkGeometry {
+        let t = min(1, max(0, t))
+        func m(_ x: CGFloat, _ y: CGFloat) -> CGFloat { x + (y - x) * t }
+        return MarkGeometry(unit: m(a.unit, b.unit),
+                            ratios: Ratios(ringOuter: m(a.ratios.ringOuter, b.ratios.ringOuter), ringInner: m(a.ratios.ringInner, b.ratios.ringInner),
+                                           halfWidth: m(a.ratios.halfWidth, b.ratios.halfWidth), tip: m(a.ratios.tip, b.ratios.tip)))
+    }
+
+    public var ringOuter: CGFloat { ratios.ringOuter * unit }
+    public var ringInner: CGFloat { ratios.ringInner * unit }
     public var ringCentreRadius: CGFloat { (ringOuter + ringInner) / 2 }
     public var ringWidth: CGFloat { ringOuter - ringInner }
-    public var halfWidth: CGFloat { Self.halfWidthRatio * unit }
-    public var tip: CGFloat { Self.tipRatio * unit }
+    public var halfWidth: CGFloat { ratios.halfWidth * unit }
+    public var tip: CGFloat { ratios.tip * unit }
     public var tipToTip: CGFloat { 2 * tip }
 
     /// The unit vector along the axis, lower-left to upper-right, in a y-down frame.
     public static let axis = CGVector(dx: CGFloat(0.5).squareRoot(), dy: -CGFloat(0.5).squareRoot())
-    /// Where the dart's line meets the ring, as screen angles: it enters at the lower left and leaves
-    /// at the upper right.
+    /// Where the dart's line meets the ring, as screen angles, lower left and upper right: the chalk
+    /// strokes that form the ring start from the dart, both ways round.
     public static let crossingAngles: [Double] = [135, 315]
 
     /// A point `d` along the axis from the centre, offset `v` across it.
@@ -221,70 +233,49 @@ public struct MarkGeometry: Equatable, Sendable {
     }
 }
 
-/// The dart's path through the air: a quadratic curve from just off the lower-left corner that
-/// straightens onto the mark's axis and ends where the point lands.
-public struct FlightPath: Equatable, Sendable {
-    public let start: CGPoint
-    public let control: CGPoint
-    public let end: CGPoint
+/// The throw as the camera sees it, over the flight's time `tau` (0...1), in dart-lengths. The camera
+/// flies with the dart, so the dart holds mid-frame: it slides in as the camera catches it, bobs once
+/// across its line, and flies nose-up, flattening onto the axis as it arrives. The wall comes to it: the
+/// camera rolls from a flat throw to the mark's angle, and the light where the dart is going — far and
+/// small — grows as an approaching thing does, along a power curve, stopping dead at the strike.
+public enum Throw {
+    public static let cameraRollDegrees = 25.0
+    public static let rollStart = 0.20, rollEnd = 0.85
+    public static let approachStart = 0.25, approachPower = 2.4
+    public static let farScale: CGFloat = 0.20
+    /// Where the light waits, from the dart's centre, in dart-lengths.
+    public static let farOffset = CGVector(dx: 0.22, dy: -0.36)
+    public static let entryEnd = 0.25
+    public static let entryDistance: CGFloat = 1.2
+    public static let bobPoints: CGFloat = 12
+    public static let pitchDegrees = 5.0
 
-    /// The point lands at `end` heading along `axis`. It starts 1.35 dart-lengths back along the axis
-    /// and `drop` lower; the curve's control point sits 0.9 dart-lengths back on the axis itself.
-    public init(end: CGPoint, axis: CGVector, tipToTip: CGFloat, drop: CGFloat) {
-        self.end = end
-        start = CGPoint(x: end.x - axis.dx * tipToTip * 1.35, y: end.y - axis.dy * tipToTip * 1.35 + drop)
-        control = CGPoint(x: end.x - axis.dx * tipToTip * 0.9, y: end.y - axis.dy * tipToTip * 0.9)
+    /// How far the wall has come, 0 far to 1 arrived: nothing until the dart has settled in frame, then a
+    /// power curve, slow and then fast, which is how an approaching thing grows.
+    public static func approach(_ tau: Double) -> Double {
+        pow(Easing.unit((tau - approachStart) / (1 - approachStart)), approachPower)
     }
-
-    /// The fractions of the path at which the point cuts the ring, for the nominal layout: a drop of
-    /// 0.26 dart-lengths, which is what the phones this app targets give. The phone's own layout moves
-    /// them by a few thousandths; the haptic ticks use these, the drawing uses its own.
-    public static let nominalCuts: [CGFloat] = {
-        let unit = 1 / (2 * MarkGeometry.tipRatio)
-        let axis = MarkGeometry.axis
-        let centre = CGPoint(x: -axis.dx * MarkGeometry.tipRatio * unit, y: -axis.dy * MarkGeometry.tipRatio * unit)
-        let radius = (MarkGeometry.ringOuterRatio + MarkGeometry.ringInnerRatio) / 2 * unit
-        return FlightPath(end: .zero, axis: axis, tipToTip: 1, drop: 0.26).crossings(centre: centre, radius: radius)
-    }()
-
-    public func point(_ s: CGFloat) -> CGPoint {
-        let u = 1 - s
-        return CGPoint(x: u * u * start.x + 2 * u * s * control.x + s * s * end.x,
-                       y: u * u * start.y + 2 * u * s * control.y + s * s * end.y)
+    /// The camera's roll, degrees, settling to the mark's angle before the strike.
+    public static func rollDegrees(_ tau: Double) -> Double {
+        cameraRollDegrees * (1 - Easing.resolve(Easing.unit((tau - rollStart) / (rollEnd - rollStart))))
     }
-
-    /// The unit tangent: the way the dart points.
-    public func heading(_ s: CGFloat) -> CGVector {
-        let dx = 2 * (1 - s) * (control.x - start.x) + 2 * s * (end.x - control.x)
-        let dy = 2 * (1 - s) * (control.y - start.y) + 2 * s * (end.y - control.y)
-        let len = max(0.001, (dx * dx + dy * dy).squareRoot())
-        return CGVector(dx: dx / len, dy: dy / len)
+    /// How far back along the axis the dart still is from its tracked place, in dart-lengths.
+    public static func entry(_ tau: Double) -> CGFloat {
+        entryDistance * CGFloat(pow(1 - Easing.unit(tau / entryEnd), 3))
     }
-
-    /// Where the path crosses a circle, as fractions of the path in order: the point enters the circle,
-    /// then leaves it. Sampled, then refined by bisection.
-    public func crossings(centre: CGPoint, radius: CGFloat, samples: Int = 96) -> [CGFloat] {
-        func outside(_ s: CGFloat) -> Bool {
-            let p = point(s)
-            return ((p.x - centre.x) * (p.x - centre.x) + (p.y - centre.y) * (p.y - centre.y)).squareRoot() > radius
-        }
-        var out: [CGFloat] = []
-        var prev = outside(0)
-        for i in 1...samples {
-            let s = CGFloat(i) / CGFloat(samples)
-            let now = outside(s)
-            if now != prev {
-                var lo = CGFloat(i - 1) / CGFloat(samples), hi = s
-                for _ in 0..<14 {
-                    let mid = (lo + hi) / 2
-                    if outside(mid) == prev { lo = mid } else { hi = mid }
-                }
-                out.append((lo + hi) / 2)
-            }
-            prev = now
-        }
-        return out
+    /// One rise and fall across the line of flight, 0...1...0.
+    public static func bob(_ tau: Double) -> Double { sin(.pi * Easing.unit(tau)) }
+    /// Nose-up, in radians, flattening onto the axis by the strike.
+    public static func pitch(_ tau: Double) -> Double {
+        pitchDegrees * pow(1 - Easing.unit(tau), 2) * .pi / 180
     }
+    /// Where the light's centre is, from the dart's centre, in dart-lengths.
+    public static func targetOffset(_ tau: Double) -> CGVector {
+        let p = CGFloat(approach(tau))
+        return CGVector(dx: farOffset.dx * (1 - p), dy: farOffset.dy * (1 - p))
+    }
+    /// How large the light is, of its size at the strike.
+    public static func targetScale(_ tau: Double) -> CGFloat { farScale + (1 - farScale) * CGFloat(approach(tau)) }
 }
 
 /// A dart as a dart: needle, knurled barrel, shaft, flights. Lengths are fractions of the whole, which
@@ -384,22 +375,25 @@ public struct DartAnatomy: Equatable, Sendable {
     }
 }
 
-/// The wordmark's Ø has the letters' weight: ring 0.53 / 0.30 of the cap height, dart half-width 0.067,
-/// tips 0.95, 0.10 of the cap height after the R (docs/design/brand/render_wordmark.py).
+/// The wordmark: Archivo ExtraBold's letters, and the Ø's place after them (docs/design/brand/render_wordmark.py).
 public enum WordmarkGeometry {
-    public static let ringOuter: CGFloat = 0.53
-    public static let ringInner: CGFloat = 0.30
-    public static let halfWidth: CGFloat = 0.067
-    public static let tip: CGFloat = 0.95
+    public static let ringOuter = MarkGeometry.Ratios.wordmark.ringOuter
+    public static let ringInner = MarkGeometry.Ratios.wordmark.ringInner
+    public static let halfWidth = MarkGeometry.Ratios.wordmark.halfWidth
+    public static let tip = MarkGeometry.Ratios.wordmark.tip
+    /// The gap after the R, of the cap height.
     public static let gap: CGFloat = 0.10
     /// Archivo ExtraBold's vertical metrics, from the face's own tables.
     public static let capHeightPerEm: CGFloat = 687.0 / 1000.0
     public static let ascenderPerEm: CGFloat = 878.0 / 1000.0
     public static let descenderPerEm: CGFloat = 210.0 / 1000.0
+    /// What the Ø adds to the width of THR, per unit of cap height: the gap, the ring's left half, and
+    /// the upper-right tip beyond it.
+    public static let tailPerCap: CGFloat = gap + ringOuter + tip * CGFloat(0.5).squareRoot()
 }
 
 /// The opening. Draws every frame from a Canvas as a pure function of time; scores it with the
-/// soundtrack and a haptic; a tap finishes it early.
+/// soundtrack and haptics; a tap finishes it early.
 public struct LaunchSequenceView: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @AppStorage(OpeningPreferences.soundKey) private var soundOn: Bool = true
@@ -457,27 +451,24 @@ struct LaunchFrame: View {
 
     /// The numbers that are taste rather than measurement, in one place.
     enum Tune {
-        static let ghostRingWidth: CGFloat = 0.30       // of the ring's width
-        static let ghostRingAlpha = 0.22
         static let grainAlpha = 0.08
-        static let scaleAtEntry: CGFloat = 0.55          // the dart's size where it enters, of its landed size
+        static let grainRun: CGFloat = 900               // how far the wall's dust streams past over the approach, points
+        static let lightRadius: CGFloat = 1.45           // the pool of light, of the ring's outer radius
         static let rollTurns = 1.6                       // over the whole flight, at a steady rate
-        static let streakLags: [Double] = [0.018, 0.036, 0.054]      // one, two, three frames behind
-        static let streakAlphas: [Double] = [0.26, 0.16, 0.08]
         static let squashSeconds = 0.07
         static let squash: CGFloat = 0.035
         static let shakeSeconds = 0.22
-        static let flareHalfSweep = 14.0                 // degrees lit either side of a cut before the bloom
+        static let stampSeconds = 0.18
+        static let taglineSeconds = 0.35                 // into the hold
     }
 
     private func draw(in context: inout GraphicsContext, size: CGSize) {
         let chalk = ThroColor.throChalk
         let animated = timeline.isAnimated
         let pField = timeline.field.progress(at: t)
-        let flightTime = timeline.flight.progress(at: t)
-        let pFlight = Easing.flight(flightTime)
+        let tau = timeline.flight.progress(at: t)
         let pRing = Easing.resolve(timeline.ring.progress(at: t))
-        let pResolve = Easing.resolve(timeline.resolve.progress(at: t))
+        let pWord = Easing.resolve(timeline.word.progress(at: t))
         let sinceImpact = t - timeline.impact.start
         let sinceRing = t - timeline.ring.end
         let axis = MarkGeometry.axis
@@ -491,65 +482,72 @@ struct LaunchFrame: View {
         }
         let canvas = CGRect(origin: .zero, size: size).insetBy(dx: -12, dy: -12)
 
-        // The field: the launch screen's flat green on the first frame, then a vignette deepening the
-        // edges and chalk dust settled on the board, both arriving with the target.
+        // The field, in screen space: the launch screen's flat green on the first frame, then a vignette.
         let vignette = Gradient(colors: [ThroColor.throInk.opacity(0), ThroColor.throInk.opacity(0.38 * pField)])
         context.fill(Path(canvas),
                      with: .radialGradient(vignette, center: CGPoint(x: size.width / 2, y: size.height / 2),
                                            startRadius: min(size.width, size.height) * 0.3, endRadius: max(size.width, size.height) * 0.72))
-        if pField > 0 {
-            context.fill(grain(in: canvas), with: .color(chalk.opacity(Tune.grainAlpha * pField)))
-        }
 
-        // Where the mark is: large and central through the throw, then up to the Splash's place.
-        let big = MarkGeometry(tipToTip: min(size.width * 0.84, 380))
-        let small = MarkGeometry(tipToTip: 104)
-        let (wordC, wordSize, wordWidth) = wordmark(context: context)
-        let wordHeight = 2 * WordmarkGeometry.tip * wordC * CGFloat(0.5).squareRoot()
-        let groupHeight = small.tipToTip + 28 + wordHeight + 20 + 16
-        let groupTop = (size.height - groupHeight) / 2
+        // Layout: the mark large and central through the throw; the name across the width with the mark as
+        // its Ø, which is also the finished composition; the tagline beneath it.
+        let (perCap, extra) = typeMetrics(context)
+        let bigTip = min(size.width * 0.84, 380)
+        let big = MarkGeometry(tipToTip: bigTip)
         let bigCentre = CGPoint(x: size.width / 2, y: size.height * 0.44)
-        let smallCentre = CGPoint(x: size.width / 2, y: groupTop + small.tipToTip / 2)
-        let geo = MarkGeometry(unit: big.unit + (small.unit - big.unit) * CGFloat(pResolve))
-        let centre = CGPoint(x: bigCentre.x + (smallCentre.x - bigCentre.x) * CGFloat(pResolve),
-                             y: bigCentre.y + (smallCentre.y - bigCentre.y) * CGFloat(pResolve))
-        let landed = geo.onAxis(centre, geo.tip)
-        let path = FlightPath(end: landed, axis: axis, tipToTip: geo.tipToTip, drop: size.height * 0.10)
-        // Where and when the point cuts the chalk ring, on the way in and on the way out.
-        var cuts: [(at: CGPoint, when: Double)] = []
+        let wordC = bigTip / (perCap + extra)
+        let wordThr = perCap * wordC
+        let wordLeft = (size.width - bigTip) / 2
+        let baseline = bigCentre.y + wordC / 2
+        let oCentre = CGPoint(x: wordLeft + wordThr + (WordmarkGeometry.gap + WordmarkGeometry.ringOuter) * wordC, y: bigCentre.y)
+        func lerp(_ a: CGPoint, _ b: CGPoint, _ s: CGFloat) -> CGPoint { CGPoint(x: a.x + (b.x - a.x) * s, y: a.y + (b.y - a.y) * s) }
+
+        // The mark's state: big and central through the throw and the bloom; then into the name's last
+        // slot, taking the letters' weight.
+        let q = CGFloat(Easing.unit((pWord - 0.5) / 0.5))
+        let geo = MarkGeometry.mix(MarkGeometry(unit: big.unit + (wordC - big.unit) * CGFloat(pWord)), MarkGeometry(unit: wordC, ratios: .wordmark), q)
+        let centre = lerp(bigCentre, oCentre, CGFloat(pWord))
+        let landed = big.onAxis(bigCentre, big.tip)
+        let L = big.tipToTip
+
+        // The throw: where the light is on its way in, and how big.
+        let p = animated ? Throw.approach(tau) : 1
+        let targetOff = animated ? Throw.targetOffset(tau) : CGVector(dx: 0, dy: 0)
+        let lightC = CGPoint(x: bigCentre.x + targetOff.dx * L, y: bigCentre.y + targetOff.dy * L)
+        let lightS = animated ? Throw.targetScale(tau) : 1
+
+        // The camera rolls from a flat throw to the mark's angle as it nears the wall; the world is drawn inside the roll.
         if animated {
-            for s in path.crossings(centre: centre, radius: geo.ringCentreRadius) {
-                cuts.append((at: path.point(s), when: timeline.flight.start + Easing.flightTime(for: Double(s)) * timeline.flight.duration))
-            }
+            let roll = Throw.rollDegrees(tau) * .pi / 180
+            context.translateBy(x: bigCentre.x, y: bigCentre.y)
+            context.rotate(by: .radians(roll))
+            context.translateBy(x: -bigCentre.x, y: -bigCentre.y)
+        }
+        let world = CGRect(x: -size.width * 0.6, y: -size.height * 0.35, width: size.width * 2.2, height: size.height * 1.7)
+
+        // Chalk dust settled on the wall, streaming past while the camera flies, stopping dead with it.
+        if pField > 0 {
+            let run = Tune.grainRun * CGFloat(p)
+            let before = Tune.grainRun * CGFloat(animated ? Throw.approach(timeline.flight.progress(at: t - 1.0 / 60.0)) : 1)
+            let speed = max(0, (run - before) * 60)
+            grain(&context, in: world, run: run, speed: speed, alpha: pField * (Tune.grainAlpha + 0.05 * Easing.unit(Double(speed) / 900)), colour: chalk)
         }
 
-        // The target: a faint chalk ring, there before the throw so the eye has somewhere to be.
+        // The light: a pool on the wall where the dart is going, far and small at first, growing as the
+        // camera nears, breathing at the strike, spent as the chalk ring takes its place.
         if animated && pRing < 1 {
-            context.stroke(geo.ringArc(at: centre, fromDegrees: 0, sweepDegrees: 360),
-                           with: .color(chalk.opacity(Tune.ghostRingAlpha * pField)),
-                           style: StrokeStyle(lineWidth: geo.ringWidth * Tune.ghostRingWidth, lineCap: .round))
-            // Where the point cut it, the thin chalk line lights at once; the bloom thickens from exactly here.
-            for (i, angle) in MarkGeometry.crossingAngles.enumerated() where i < cuts.count && t >= cuts[i].when {
-                let lit = min(1, (t - cuts[i].when) / 0.12)
-                context.stroke(geo.ringArc(at: centre, fromDegrees: angle - Tune.flareHalfSweep, sweepDegrees: 2 * Tune.flareHalfSweep),
-                               with: .color(chalk.opacity(lit)), style: StrokeStyle(lineWidth: geo.ringWidth * Tune.ghostRingWidth, lineCap: .butt))
-            }
+            let breath = (sinceImpact >= 0 && sinceImpact < 0.55) ? sin(.pi * sinceImpact / 0.55) : 0
+            let strength = (0.55 + 0.45 * p) * pField * (1 - pRing) * (1 + 1.6 * breath)
+            let r = big.ringOuter * Tune.lightRadius * lightS * (1 + 0.5 * CGFloat(breath))
+            let light = Gradient(stops: [.init(color: chalk.opacity(0.10 * strength), location: 0),
+                                         .init(color: ThroColor.throGreenDeep.opacity(0.55 * strength), location: 0.35),
+                                         .init(color: ThroColor.throGreenDeep.opacity(0), location: 1)])
+            context.fill(Path(ellipseIn: CGRect(x: lightC.x - r, y: lightC.y - r, width: 2 * r, height: 2 * r)),
+                         with: .radialGradient(light, center: lightC, startRadius: 0, endRadius: r))
         }
 
-        // Impact: a breath of lighter green behind the strike and a shockwave from the point.
-        if animated && sinceImpact >= 0 && sinceImpact < 0.55 {
-            let q = sinceImpact / 0.55
-            let breath = sin(.pi * q) * 0.9
-            let flash = Gradient(colors: [ThroColor.throGreenDeep.opacity(breath), ThroColor.throGreenDeep.opacity(0)])
-            context.fill(Path(canvas), with: .radialGradient(flash, center: landed, startRadius: 0, endRadius: size.width * 0.75))
-            let r = geo.ringOuter * (0.15 + 1.6 * CGFloat(Easing.impact(q)))
-            context.stroke(Path(ellipseIn: CGRect(x: landed.x - r, y: landed.y - r, width: 2 * r, height: 2 * r)),
-                           with: .color(chalk.opacity(0.35 * (1 - q))), lineWidth: 2.5 * (1 - CGFloat(q)) + 0.5)
-        }
-
-        // The ring: from each cut, two strokes of chalk run both ways round the ring, thinning to a point
-        // at their leading ends, until the four meet and the ring is whole; it glows while it blooms and
-        // pulses once as it closes.
+        // The ring: from the strike, two strokes of chalk run both ways from each side of the dart until the
+        // four meet and the ring is whole; it glows while it blooms and pulses once as it closes; the glow is
+        // gone as the mark sets as type.
         if pRing > 0 {
             let pulse = animated ? 1 + CGFloat(Easing.damped(sinceRing, amplitude: 0.035, hertz: 5.5, decay: 0.16)) : 1
             var ring = Path()
@@ -562,56 +560,41 @@ struct LaunchFrame: View {
             } else {
                 ring = geo.ringShape(at: centre, radiusScale: pulse)
             }
-            // the glow is the bloom's; it fades as the mark settles, so the finished mark is crisp
-            if pResolve < 1 {
+            if pWord < 1 {
                 context.drawLayer { glow in
                     glow.addFilter(.blur(radius: geo.ringWidth * 0.55))
-                    glow.fill(ring, with: .color(chalk.opacity(0.32 * (1 - pResolve))))
-                    glow.stroke(ring, with: .color(chalk.opacity(0.32 * (1 - pResolve))), lineWidth: geo.ringWidth * 0.5)
+                    glow.fill(ring, with: .color(chalk.opacity(0.32 * (1 - pWord))))
+                    glow.stroke(ring, with: .color(chalk.opacity(0.32 * (1 - pWord))), lineWidth: geo.ringWidth * 0.5)
                 }
             }
             context.fill(ring, with: .color(chalk))
         }
 
-        // The dart. In flight it comes in on the arc, grows as it closes, rolls at a steady rate, and streaks
-        // in proportion to its speed. At the strike it squashes for a few frames and its shaft and flights
-        // whip and settle while the barrel stays dead still. Resolving, it folds into the bar.
-        let morph = CGFloat(Easing.resolve(min(1, max(0, pResolve / 0.6))))
-        let detailAlpha = 1 - min(1, max(0, (pResolve - 0.45) / 0.3))
-        let barAlpha = min(1, max(0, (pResolve - 0.35) / 0.3))
+        // The dart: tracked by the camera through the flight, rolling at a steady rate, nose-up and settling;
+        // at the strike it squashes for a few frames and its shaft and flights whip while the barrel stays
+        // dead still; then it folds into the bar as the mark becomes type.
+        let morph = CGFloat(Easing.resolve(Easing.unit(pWord / 0.6)))
+        let detailAlpha = 1 - Easing.unit((pWord - 0.45) / 0.3)
+        let barAlpha = Easing.unit((pWord - 0.35) / 0.3)
         if barAlpha > 0 {
             context.fill(geo.bar(at: centre), with: .color(chalk.opacity(barAlpha)))
         }
-        if pFlight > 0 && detailAlpha > 0 {
+        if tau > 0 && detailAlpha > 0 {
             let anatomy = DartAnatomy(length: geo.tipToTip)
-            func pose(_ s: CGFloat) -> (point: CGPoint, angle: Double, scale: CGFloat) {
-                let p = s < 1 ? path.point(s) : landed
-                let h = s < 1 ? path.heading(s) : axis
-                return (p, Double(atan2(h.dy, h.dx)), Tune.scaleAtEntry + (1 - Tune.scaleAtEntry) * s)
+            var tipPoint: CGPoint
+            var heading = -Double.pi / 4
+            if tau < 1 {
+                let back = Throw.entry(tau) * L
+                let bob = Throw.bobPoints * CGFloat(Throw.bob(tau))
+                let c = CGPoint(x: bigCentre.x - axis.dx * back - across.dx * bob, y: bigCentre.y - axis.dy * back - across.dy * bob)
+                heading = -Double.pi / 4 - Throw.pitch(tau)
+                tipPoint = CGPoint(x: c.x + CGFloat(cos(heading)) * L / 2, y: c.y + CGFloat(sin(heading)) * L / 2)
+            } else {
+                tipPoint = geo.onAxis(centre, geo.tip)
             }
-            // streak: ghosts one, two and three frames behind in time — far apart at speed, bunched when
-            // slow, and catching the dart up in the frames after it stops
-            if animated {
-                for (i, lag) in Tune.streakLags.enumerated() {
-                    let ghostTime = timeline.flight.progress(at: t - lag)
-                    let gs = CGFloat(Easing.flight(ghostTime))
-                    guard gs > 0, gs < 1 else { continue }
-                    let ghost = pose(gs)
-                    var g = context
-                    g.translateBy(x: ghost.point.x, y: ghost.point.y)
-                    g.rotate(by: .radians(ghost.angle))
-                    g.scaleBy(x: ghost.scale, y: ghost.scale)
-                    let parts = anatomy.parts(spin: 2 * .pi * Tune.rollTurns * ghostTime)
-                    let a = Tune.streakAlphas[i] * Double(pFlight)
-                    g.fill(parts.barrel, with: .color(chalk.opacity(a)))
-                    g.fill(parts.nearFlights, with: .color(chalk.opacity(a)))
-                }
-            }
-            let here = pose(CGFloat(pFlight))
             var d = context
-            d.translateBy(x: here.point.x, y: here.point.y)
-            d.rotate(by: .radians(here.angle))
-            d.scaleBy(x: here.scale, y: here.scale)
+            d.translateBy(x: tipPoint.x, y: tipPoint.y)
+            d.rotate(by: .radians(heading))
             var bendShaft = 0.0, bendFlights = 0.0
             if animated && sinceImpact >= 0 {
                 if sinceImpact < Tune.squashSeconds {
@@ -621,7 +604,7 @@ struct LaunchFrame: View {
                 bendShaft = Easing.damped(sinceImpact, amplitude: 5.5 * .pi / 180, hertz: 8, decay: 0.22)
                 bendFlights = Easing.damped(sinceImpact - 0.025, amplitude: 4 * .pi / 180, hertz: 8, decay: 0.22)
             }
-            let parts = anatomy.parts(spin: 2 * .pi * Tune.rollTurns * flightTime, morph: morph)
+            let parts = anatomy.parts(spin: 2 * .pi * Tune.rollTurns * tau, morph: morph)
             // The shaft pivots where it meets the barrel; the flights pivot again where they meet the shaft, a beat behind.
             var shaft = d
             shaft.translateBy(x: anatomy.barrelEnd, y: 0); shaft.rotate(by: .radians(bendShaft)); shaft.translateBy(x: -anatomy.barrelEnd, y: 0)
@@ -637,71 +620,59 @@ struct LaunchFrame: View {
             flights.fill(parts.nearFlights, with: .color(chalk.opacity(0.95 * detailAlpha)))
         }
 
-        // Dust: chalk off the ring where the point cut it, sideways off the line of the throw; and off the
-        // wall where the point struck, thrown forward and falling.
+        // Dust: a burst of chalk off the wall where the point struck, thrown forward and falling.
         if animated {
-            for (i, cut) in cuts.enumerated() {
-                for (j, side) in [across, CGVector(dx: -across.dx, dy: -across.dy)].enumerated() {
-                    puff(&context, at: cut.at, since: t - cut.when, count: 3, seed: 11 + 2 * i + j, life: 0.6,
-                         direction: side, spread: 70, speed: 55 * geo.unit / 260, size: 0.9, colour: chalk)
-                }
-            }
-            puff(&context, at: landed, since: sinceImpact, count: 9, seed: 3, life: 0.9,
-                 direction: axis, spread: 120, speed: 110 * geo.unit / 260, size: 1.2, colour: chalk)
+            puff(&context, at: landed, since: sinceImpact, count: 14, seed: 3, life: 0.9,
+                 direction: axis, spread: 150, speed: 130 * big.unit / 260, size: 1.2, colour: chalk)
         }
 
-        // The name: T, H, R rise into place one after another; the Ø's ring draws itself and its bar
-        // follows; then the tagline.
-        if pResolve > 0.5 {
-            let wordTop = groupTop + small.tipToTip + 28
-            let left = (size.width - wordWidth) / 2
-            let fontSize = wordC / WordmarkGeometry.capHeightPerEm
-            let baseline = wordTop + wordHeight / 2 + wordC / 2
-            let textTop = baseline - fontSize * WordmarkGeometry.ascenderPerEm
-            let font = Font.custom("Archivo-ExtraBold", size: fontSize)
-            let box = CGSize(width: 10_000, height: 10_000)
-            let word = ["T", "H", "R"]
-            for (i, letter) in word.enumerated() {
-                let q = min(1, max(0, (pResolve - (0.5 + 0.1 * Double(i))) / 0.25))
-                let rise = CGFloat(1 - Easing.set(q)) * 16
-                var glyph = context.resolve(Text(letter).font(font))
-                // The letter sits where it sits in the whole word, so each pair keeps the face's kerning:
-                // its origin is the width of the word up to and including it, less its own width.
-                let upTo = context.resolve(Text(word[...i].joined()).font(font)).measure(in: box).width
-                let x = left + upTo - glyph.measure(in: box).width
-                glyph.shading = .color(chalk.opacity(q))
-                context.draw(glyph, at: CGPoint(x: x, y: textTop + rise), anchor: .topLeading)
-            }
-            let oQ = min(1, max(0, (pResolve - 0.7) / 0.25))
-            let oCentre = CGPoint(x: left + wordSize.width + WordmarkGeometry.gap * wordC + WordmarkGeometry.ringOuter * wordC,
-                                  y: baseline - wordC / 2)
-            let ro = WordmarkGeometry.ringOuter * wordC, ri = WordmarkGeometry.ringInner * wordC
-            if oQ > 0 {
-                // the Ø's ring draws itself from the top, clockwise, as the big ring bloomed
-                let oRing = MarkGeometry.arc(centre: oCentre, radius: (ro + ri) / 2, fromDegrees: -90, sweepDegrees: 360 * Easing.set(oQ))
-                context.stroke(oRing, with: .color(chalk), style: StrokeStyle(lineWidth: ro - ri, lineCap: .round))
-            }
-            let oBar = min(1, max(0, (oQ - 0.55) / 0.45))
-            if oBar > 0 {
-                let k = CGFloat(0.5).squareRoot()
-                let L = WordmarkGeometry.tip * wordC, w = WordmarkGeometry.halfWidth * wordC
-                let local: [(CGFloat, CGFloat)] = [(L, 0), (ro, w), (-ro, w), (-L, 0), (-ro, -w), (ro, -w)]
-                var dart = Path()
-                for (i, (u, v)) in local.enumerated() {
-                    let pt = CGPoint(x: oCentre.x + u * k - v * k, y: oCentre.y - u * k - v * k)
-                    if i == 0 { dart.move(to: pt) } else { dart.addLine(to: pt) }
+        // The name, with the mark as its Ø: T, H, R stamp in beside it, a puff of chalk each; then the
+        // tagline tracks in beneath, and this is the finished composition.
+        if pWord > 0 {
+            func stampAt(_ i: Int) -> Double { timeline.word.start + timeline.word.duration * LaunchTimeline.stampFractions[i] }
+            func stampQ(_ i: Int) -> Double { animated ? Easing.unit((t - stampAt(i)) / Tune.stampSeconds) : 1 }
+            let alphas = (0..<3).map { stampQ($0) }
+            let scales = (0..<3).map { animated ? 1 + 0.3 * CGFloat(1 - Easing.set(stampQ($0))) : 1 }
+            let centres = word(&context, capHeight: wordC, left: wordLeft, baseline: baseline, alphas: alphas, scales: scales, colour: chalk)
+            if animated {
+                for (i, c) in centres.enumerated() {
+                    puff(&context, at: CGPoint(x: c.x, y: baseline), since: t - stampAt(i), count: 4, seed: 21 + i, life: 0.5,
+                         direction: CGVector(dx: 0, dy: 1), spread: 170, speed: 40 * wordC / 84, size: 0.9, colour: chalk)
                 }
-                dart.closeSubpath()
-                context.fill(dart, with: .color(chalk.opacity(oBar)))
             }
-            let tagQ = min(1, max(0, (pResolve - 0.85) / 0.15))
+            let tagQ = animated ? Easing.unit((t - timeline.hold.start) / Tune.taglineSeconds) : 1
             if tagQ > 0 {
                 var tag = context.resolve(Text("FROM THE PUB BOARD TO THE WORLD STAGE")
                     .font(.custom("Archivo-SemiBold", size: 13)).kerning(13 * (0.09 + 0.07 * (1 - tagQ))))
                 tag.shading = .color(chalk.opacity(0.72 * tagQ))
-                context.draw(tag, at: CGPoint(x: size.width / 2, y: wordTop + wordHeight + 20), anchor: .top)
+                context.draw(tag, at: CGPoint(x: size.width / 2, y: baseline + 0.45 * wordC), anchor: .top)
             }
         }
+    }
+
+    /// T, H, R at a cap height, each letter where it sits in the whole word so the pairs keep the face's
+    /// kerning, each drawn at its own alpha and scaled about its own centre. Returns the letters' centres.
+    private func word(_ context: inout GraphicsContext, capHeight C: CGFloat, left: CGFloat, baseline: CGFloat,
+                      alphas: [Double], scales: [CGFloat], colour: Color) -> [CGPoint] {
+        let fontSize = C / WordmarkGeometry.capHeightPerEm
+        let font = Font.custom("Archivo-ExtraBold", size: fontSize)
+        let box = CGSize(width: 10_000, height: 10_000)
+        let letters = ["T", "H", "R"]
+        var centres: [CGPoint] = []
+        for (i, letter) in letters.enumerated() {
+            var glyph = context.resolve(Text(letter).font(font))
+            let upTo = context.resolve(Text(letters[...i].joined()).font(font)).measure(in: box).width
+            let width = glyph.measure(in: box).width
+            let cx = left + upTo - width / 2, cy = baseline - C / 2
+            centres.append(CGPoint(x: cx, y: cy))
+            guard alphas[i] > 0 else { continue }
+            var g = context
+            g.translateBy(x: cx, y: cy)
+            g.scaleBy(x: scales[i], y: scales[i])
+            glyph.shading = .color(colour.opacity(alphas[i]))
+            g.draw(glyph, at: CGPoint(x: -width / 2, y: C / 2 - fontSize * WordmarkGeometry.ascenderPerEm), anchor: .topLeading)
+        }
+        return centres
     }
 
     /// A puff of chalk: `count` specks fanned `spread` degrees about `direction`, thrown, slowed by the
@@ -727,27 +698,44 @@ struct LaunchFrame: View {
         }
     }
 
-    /// Chalk dust settled on the board: a fixed scatter of faint specks, the same on every frame.
-    private func grain(in rect: CGRect) -> Path {
-        var p = Path()
-        var rng = Grain(seed: 0x9E37_79B9)
-        let count = min(600, Int(rect.width * rect.height / 900))
-        for _ in 0..<count {
-            let x = rect.minX + rect.width * rng.next(), y = rect.minY + rect.height * rng.next()
-            let r = 0.55 + 0.55 * rng.next()
-            p.addEllipse(in: CGRect(x: x - r, y: y - r, width: 2 * r, height: 2 * r))
+    /// Chalk dust settled on the wall: a fixed scatter of faint specks that streams back along the line of
+    /// the throw as the camera flies (`run` points so far, `speed` points a second), each speck a streak
+    /// in proportion to the speed and a dot at rest.
+    private func grain(_ context: inout GraphicsContext, in rect: CGRect, run: CGFloat, speed: CGFloat, alpha: Double, colour: Color) {
+        let axis = MarkGeometry.axis
+        func wrap(_ x: CGFloat, _ lo: CGFloat, _ hi: CGFloat) -> CGFloat {
+            let span = hi - lo
+            var y = (x - lo).truncatingRemainder(dividingBy: span)
+            if y < 0 { y += span }
+            return lo + y
         }
-        return p
+        var rng = Grain(seed: 0x9E37_79B9)
+        let count = min(420, Int(rect.width * rect.height / 1600))
+        let trail = min(30, speed / 60 * 1.2)
+        var dots = Path(), streaks = Path()
+        for _ in 0..<count {
+            let u = rng.next(), v = rng.next(), r = 0.55 + 0.55 * rng.next()
+            let x = wrap(rect.minX + rect.width * u - axis.dx * run, rect.minX, rect.maxX)
+            let y = wrap(rect.minY + rect.height * v - axis.dy * run, rect.minY, rect.maxY)
+            if trail > 1 {
+                streaks.move(to: CGPoint(x: x, y: y))
+                streaks.addLine(to: CGPoint(x: x + axis.dx * trail, y: y + axis.dy * trail))
+            } else {
+                dots.addEllipse(in: CGRect(x: x - r, y: y - r, width: 2 * r, height: 2 * r))
+            }
+        }
+        if trail > 1 {
+            context.stroke(streaks, with: .color(colour.opacity(alpha)), style: StrokeStyle(lineWidth: 1.6, lineCap: .round))
+        } else {
+            context.fill(dots, with: .color(colour.opacity(alpha)))
+        }
     }
 
-    /// The cap height that makes the wordmark 150 points wide, with the measured width of THR at that size.
-    private func wordmark(context: GraphicsContext) -> (capHeight: CGFloat, thrSize: CGSize, width: CGFloat) {
+    /// The face's measure: the width of THR per unit of cap height, and what the Ø adds after it.
+    private func typeMetrics(_ context: GraphicsContext) -> (perCap: CGFloat, extra: CGFloat) {
         let probe = context.resolve(Text("THR").font(.custom("Archivo-ExtraBold", size: 100)))
-        let probeSize = probe.measure(in: CGSize(width: 10_000, height: 10_000))
-        let perCap = probeSize.width / 100 / WordmarkGeometry.capHeightPerEm
-        let extra = WordmarkGeometry.gap + WordmarkGeometry.ringOuter + WordmarkGeometry.tip * CGFloat(0.5).squareRoot()
-        let cap = 150 / (perCap + extra)
-        return (cap, CGSize(width: perCap * cap, height: probeSize.height / 100 * cap / WordmarkGeometry.capHeightPerEm), 150)
+        let width = probe.measure(in: CGSize(width: 10_000, height: 10_000)).width
+        return (width / 100 / WordmarkGeometry.capHeightPerEm, WordmarkGeometry.tailPerCap)
     }
 }
 

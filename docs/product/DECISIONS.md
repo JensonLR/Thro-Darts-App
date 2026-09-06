@@ -470,3 +470,69 @@ mark's geometry, the path's two cuts, the chalk stroke's taper and the fold.
 The cost, again plainly: still a choice against Apple's launch-screen guidance, still 4.6 seconds,
 still skippable. The browser port used to see the frames is a scratch tool, not part of the app; it
 shares the maths but not the renderer, so the phone is still where the motion is judged.
+
+### Amendment, the same day — the founder's third look, and the fourth version
+
+The founder watched the third version and gave two directions, both decisions about what the opening
+is. First: "the final screen before loading shows the logo then name under with logo as the O which is
+correct but think we need a cool transition for the text with the logo as the O to be the transformation
+after the darts been. think the dart should look like its been thrown and is travelling distance via
+the screen not just coming from corner of the screen, thrown cinematically and reaching its destination
+then transitioning, keep the cinematic camera angles in mind, make it utterly beautiful, incredibly
+precise & entirely unique to the app and brand." Then, on the plan for that: "I dont think we need that
+bit where it goes from the full name to logo above full name under. We should have it just got into the
+full text logo. Then show they sub text then load the app main homepage. dart should really feel like
+its been thrown and is flying then hit with purpose the weird circle bit is a bit basic & boring."
+
+**Decided by the founder:**
+
+1. **The opening ends on the name.** THRØ across the width, with the mark as its Ø, then the tagline
+   beneath it, then Home. The export's Splash composition — the mark above a smaller wordmark — is no
+   longer the opening's last frame; the mark's only place at the end is as the Ø. (Home and the rest of
+   the app are unchanged.)
+2. **No target drawn before the throw.** The faint chalk ring that waited on the field, and the cuts
+   through it, are gone — "the weird circle bit". The dart's destination is a pool of light on the wall.
+3. **The throw is a shot, not an entrance.** The dart must be seen to fly a distance, cinematically, and
+   hit with purpose.
+
+**How the fourth version does it:**
+
+- **A tracking shot.** The camera flies with the dart. The dart holds in the middle of the frame in
+  profile — it slides in over the first quarter of the flight as the camera catches it, bobs once across
+  its line, flies nose-up (5°) and flattens onto the axis as it arrives, and rolls at a steady 1.6 turns
+  — while the world comes to it. The chalk dust settled on the wall streams past, each speck a streak in
+  proportion to the camera's speed, and stops dead at the strike. The camera rolls from a flat throw
+  (25° off the mark's angle) to the mark's 45°, settling before the hit. The pool of light — far, small,
+  up and to the right — grows along a power curve (slow, then fast, as an approaching thing does) and
+  arrives, full size and centred, at the instant of the strike. The flight is 1.2 seconds; the whoosh is
+  1.2 seconds to match.
+- **The strike.** The world stops. Thud and the heavy haptic; the light breathes; the frame shakes along
+  the line of the throw; a burst of fourteen chalk specks off the point; the dart squashes 3.5% for four
+  frames and its shaft and flights whip and settle while the barrel stays dead still. The generic
+  expanding circle of a shockwave is gone.
+- **The ring, earned.** From either side of the dart, four strokes of chalk run round where the light
+  was, thinning at their leading ends, until the ring is whole; the light is spent as they close; the
+  chalk sound; one pulse. The glow fades as the mark becomes type.
+- **The name.** The mark shrinks and slides into the last slot of THRØ, its ring and bar taking the
+  letters' weight (the wordmark's own Ø proportions, mixed in over the second half of the move) while T,
+  H and R stamp in beside it — each landing at 130% and settling to size, a puff of chalk and a firm
+  haptic each. The word spans 84% of the width. The tagline tracks in beneath it over the first third of
+  the hold. That is the finished composition; Home fades up under it.
+- **Timing.** The field and the far light to 400 ms; the flight to 1600; the strike's beat to 2000; the
+  ring to 2550; the word to 3400; the hold, with the tagline, to 4300; the cross-fade to 4700. Total 4.7
+  seconds, skippable. Reduce Motion shows the name and the tagline, still.
+
+**Method, and what it is not.** The choreography was built and judged in a browser port of the frame
+function first — a tracking-shot draft that framed a point ahead of the dart, so the dart's tail was
+off-screen for the whole flight, was caught there and reframed; a first pass at the founder's earlier
+idea, the word printing down under a lifted mark, was built, seen, and then removed on their second
+message. Eleven tests hold the timeline, the cues (whoosh, thud, chalk, three stamps in order), the
+throw as the camera sees it (the approach's shape and ends, the roll settled before the strike, the
+entry, the bob, the pitch), the geometry and its mixing into the wordmark's Ø, the chalk stroke's taper
+and the fold. The frame is drawn, not tested; the phone is where it moves.
+
+**Costs, plainly.** The opening's last frame no longer matches the export's Splash; that is the founder's
+decision and the export is not changed. The final wordmark is drawn live from Archivo ExtraBold on the
+reading that the supplied wordmark is that face, and the mark's ring, at the letters' weight, is the
+measured wordmark Ø rather than the mark's own proportions; the master vector files replace both when
+they arrive. Still a choice against Apple's launch-screen guidance; 4.7 seconds.

@@ -1,4 +1,4 @@
-"""The opening's three sounds, synthesised (PD-007 v2): a whoosh for the flight, a thud for the dart
+"""The opening's three sounds, synthesised (PD-007): a whoosh for the flight (1.2 s, the tracking shot's length), a thud for the dart
 in the board, a chalk scratch for the ring drawing itself. Pure Python, deterministic, 44.1 kHz 16-bit
 mono WAV. These are placeholders in the honest sense — physically shaped, mixed for the sequence, and
 meant to be replaced by recorded foley under the same filenames when the founder has it.
@@ -40,7 +40,7 @@ def noise(n, seed):
 
 def smoothstep(t): t = max(0.0, min(1.0, t)); return t * t * (3 - 2 * t)
 
-def whoosh(duration=0.85):
+def whoosh(duration=1.2):
     """Air past a spinning dart: band-limited noise whose centre sweeps upward as it closes, swelling
     into the moment of impact and cut there."""
     n = int(duration * SR); x = noise(n, 1)

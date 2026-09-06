@@ -14,7 +14,7 @@ public enum OpeningPreferences {
 }
 
 /// Scores the opening: a whoosh for the flight, a thud for the dart in the board, chalk for the ring;
-/// a light haptic tick each time the point cuts the chalk ring and one heavy haptic at the strike. Sound plays through the ambient session, so the phone's silent
+/// one heavy haptic at the strike and a firm one as each letter of the name lands. Sound plays through the ambient session, so the phone's silent
 /// switch silences it and other audio keeps playing. A bundle without the files stays silent.
 final class LaunchSoundtrack {
     private var players: [String: AVAudioPlayer] = [:]
@@ -23,7 +23,7 @@ final class LaunchSoundtrack {
     private var pending: [DispatchWorkItem] = []
     #if canImport(UIKit)
     private let impact = UIImpactFeedbackGenerator(style: .heavy)
-    private let tick = UIImpactFeedbackGenerator(style: .light)
+    private let stamp = UIImpactFeedbackGenerator(style: .rigid)
     #endif
 
     init(sound: Bool, haptics: Bool) {
@@ -42,22 +42,22 @@ final class LaunchSoundtrack {
         }
     }
 
-    /// Cues are named after their sound file's suffix; "tick" and "haptic" are the cuts and the strike.
+    /// Cues are named after their sound file's suffix; "haptic" and "stamp" are touch.
     func schedule(_ cues: [LaunchCue], from start: Date) {
         for cue in cues {
             let delay = max(0, cue.at - Date().timeIntervalSince(start))
-            if cue.name == "haptic" || cue.name == "tick" {
+            if cue.name == "haptic" || cue.name == "stamp" {
                 guard haptics else { continue }
-                let heavy = cue.name == "haptic"
+                let intensity: CGFloat = cue.name == "haptic" ? 1.0 : 0.55
                 // The Taptic Engine is readied half a second ahead, which is as long as it stays ready.
                 later(max(0, delay - 0.5)) { [weak self] in
                     #if canImport(UIKit)
-                    (heavy ? self?.impact : self?.tick)?.prepare()
+                    self?.generator(for: cue.name).prepare()
                     #endif
                 }
                 later(delay) { [weak self] in
                     #if canImport(UIKit)
-                    (heavy ? self?.impact : self?.tick)?.impactOccurred(intensity: heavy ? 1.0 : 0.6)
+                    self?.generator(for: cue.name).impactOccurred(intensity: intensity)
                     #endif
                 }
             } else if let player = players["thro-" + cue.name] {
@@ -72,6 +72,12 @@ final class LaunchSoundtrack {
             }
         }
     }
+
+    #if canImport(UIKit)
+    private func generator(for cue: String) -> UIImpactFeedbackGenerator {
+        cue == "haptic" ? impact : stamp
+    }
+    #endif
 
     private func later(_ delay: TimeInterval, _ work: @escaping () -> Void) {
         let item = DispatchWorkItem(block: work)
