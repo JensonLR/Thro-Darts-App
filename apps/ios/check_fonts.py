@@ -6,7 +6,8 @@ Checks, and fails on the first that does not hold:
   - each face's PostScript name (name table ID 6) is in ThroFont.embeddedFaces, and vice versa;
   - each face's family (name ID 16, else 1) is one of the two families the type layer asks the system for;
   - each family's SIL Open Font License text is beside the files;
-  - the launch screen's colour and image sets exist in the asset catalogue, and the icon is 1024 x 1024 RGB.
+  - the launch screen's colour and image sets exist in the asset catalogue, and the icon is 1024 x 1024 RGB;
+  - the opening's sounds (PD-007) are present as mono 16-bit 44.1 kHz WAVs, named as LaunchSound.swift expects.
 Run from anywhere: python3 apps/ios/check_fonts.py
 """
 import plistlib, pathlib, re, struct, sys
@@ -80,6 +81,22 @@ else:
     if (w, h, depth, ctype) != (1024, 1024, 8, 2):
         fail(f"AppIcon.png is {w}x{h} depth {depth} colour type {ctype}; App Store icons are 1024x1024 RGB without alpha")
 
+SOUNDS = ROOT / "ThroDarts" / "Sounds"
+sound_swift = (REPO / "packages/client-ios/Sources/ThroApp/LaunchSound.swift").read_text()
+m = re.search(r"soundFiles = \[(.*?)\]", sound_swift, re.S)
+expected = re.findall(r'"([^"]+)"', m.group(1)) if m else []
+if not expected: fail("LaunchSound.swift names no sound files")
+for name in expected:
+    p = SOUNDS / f"{name}.wav"
+    if not p.exists(): fail(f"{p.relative_to(REPO)} is missing"); continue
+    d = p.read_bytes()
+    if d[:4] != b"RIFF" or d[8:12] != b"WAVE": fail(f"{name}.wav is not a WAV"); continue
+    channels, rate = struct.unpack("<HI", d[22:28]); bits = struct.unpack("<H", d[34:36])[0]
+    if (channels, rate, bits) != (1, 44100, 16): fail(f"{name}.wav is {channels}ch {rate}Hz {bits}-bit; expected mono 44.1 kHz 16-bit")
+    if len(d) > 400_000: fail(f"{name}.wav is {len(d)} bytes; the opening's sounds stay under 400 KB each")
+present_sounds = sorted(p.stem for p in SOUNDS.glob("*.wav")) if SOUNDS.exists() else []
+for extra in set(present_sounds) - set(expected): fail(f"{extra}.wav ships but nothing plays it")
+
 if failures:
     sys.exit(1)
-print(f"OK: {len(present)} faces listed and shipped, {len(file_faces)} PostScript names agree with ThroFont, licences present, launch assets and icon in place")
+print(f"OK: {len(present)} faces listed and shipped, {len(file_faces)} PostScript names agree with ThroFont, licences present, launch assets and icon in place, {len(expected)} sounds present")

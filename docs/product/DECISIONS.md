@@ -375,3 +375,38 @@ overwrote them); that is fixed in the same change, which is why the easings coul
 Delete `opening` from the root view and `LaunchSequence.swift`; the static field remains and Home is
 the first frame. To restore the mark on the static launch screen, add an image set back to
 `UILaunchScreen`.
+
+### Amendment, the same day — the founder's first look, and the second version
+
+The founder watched the first version on the phone: "too fast & looks very generic & basic / faulty
+in animation, ugly design & overlaps, doesn't look like a dart … needs to feel fluid & dynamic with
+sound when sound is activated … go big or go home". Each point was true, and each is answered by a
+change of choreography, not of numbers:
+
+1. **A dart that is a dart.** Needle, knurled barrel, shaft, flights, drawn as parts. It rolls in
+   flight (the flights foreshorten and the far pair shows), grows as it closes, trails a streak, and
+   comes in on an arc that straightens onto the mark's axis, accelerating into the board on the token
+   layer's exit curve. Its length is the mark's bar, tip to tail, so the landed dart lies exactly where
+   the bar will be.
+2. **The strike first; the ring as its echo.** The loop-then-strike path forced two right-angle
+   corners — that was the faulty motion. Now: thud, a heavy haptic, dust thrown forward and falling,
+   a shockwave, a breath of lighter green; the flights quiver and settle (a damped 6.5 Hz swing about
+   the point, decaying over a quarter second), which is the one motion everyone knows from a board.
+   Then the ring blooms clockwise from where the dart crossed it, glowing, with chalk grain fixed to
+   it, and pulses once as it closes.
+3. **Slower.** Field to 350 ms, flight to 1150, the strike's beat to 1550, the ring to 2350, the
+   resolve to 3250, a hold to 4100, the cross-fade to 4500. Skippable by a tap at any moment.
+4. **Sound.** Three sounds synthesised from the sequence's own physics — a whoosh whose centre rises
+   as the dart closes and cuts at impact, a thud with a bright click, two low resonances and fibre
+   noise, and a chalk scratch gated like grit — played through the ambient audio session, so the phone's
+   silent switch silences them and other audio keeps playing. A Sound switch and a Haptic switch under
+   Settings → Opening, both on by default, and *Play the opening again* there so it can be judged
+   without relaunching. Reduce Motion plays nothing.
+5. The letters T, H, R rise into place one after another; the dart's detail dissolves into the plain
+   bar as the mark shrinks to its place; the tagline tracks in.
+
+The cost, stated plainly: the sounds are synthesised, physically shaped and mixed for the sequence,
+and they are placeholders in the honest sense — recorded foley under the same filenames replaces them
+without a code change. A haptic on the opening is a decision taken here; haptics on the scoring keypad
+remain the founder's open decision. The motion has again been judged from stills and arithmetic; the
+phone is where it moves.

@@ -34,10 +34,18 @@ letters change face in one place.
 
 ## The opening
 
-PD-007. The static launch screen is the green field alone; the app's first frames draw the throw that
-is the mark, then settle into the Splash composition. Storyboard, timings and two alternative
-directions are on the design canvas "THRØ Launch Sequence"; the timings and easings in
-`LaunchSequence.swift` are the spec board's and the token layer's.
+PD-007, second version. The static launch screen is the green field alone; the app's first frames are
+a real dart's throw — flight, strike, quiver — then the ring blooming as its echo, then the settle into
+the Splash composition. Storyboard, timings and two alternative directions are on the design canvas
+"THRØ Launch Sequence"; the timings and easings in `LaunchSequence.swift` are the spec board's and
+the token layer's; the dart's anatomy is `DartAnatomy` there.
+
+- `render_sounds.py` — the opening's three sounds, synthesised in pure Python:
+  `apps/ios/ThroDarts/Sounds/thro-whoosh.wav` (the flight, 0.85 s), `thro-thud.wav` (the dart in the
+  board, 0.75 s), `thro-chalk.wav` (the ring drawing itself, 0.8 s); mono, 16-bit, 44.1 kHz. They are
+  physically shaped and mixed for the sequence, and they are placeholders in the honest sense: drop
+  recorded foley under the same filenames and nothing else changes. `apps/ios/check_fonts.py` checks
+  the three are present and well-formed on every push.
 
 ## What is not here, and what to do when it is
 

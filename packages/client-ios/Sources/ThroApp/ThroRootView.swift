@@ -106,7 +106,8 @@ public struct ThroRootView: View {
                 store.refresh()
             }
         } else if showingSettings {
-            SettingsScreen(onBack: { showingSettings = false })
+            SettingsScreen(onBack: { showingSettings = false },
+                           onReplayOpening: { showingSettings = false; opening = true })
                 .throAppearance(Appearance(stored: appearanceRaw))
         } else {
             VStack(spacing: 0) {
@@ -279,9 +280,15 @@ public struct YouScreen: View {
 public struct SettingsScreen: View {
     @AppStorage(Appearance.storageKey) private var appearanceRaw: String = Appearance.system.rawValue
     @AppStorage(ScoringPreferences.keepScreenAwakeKey) private var keepScreenAwake: Bool = true
+    @AppStorage(OpeningPreferences.soundKey) private var openingSound: Bool = true
+    @AppStorage(OpeningPreferences.hapticsKey) private var openingHaptics: Bool = true
     private let onBack: () -> Void
+    private let onReplayOpening: (() -> Void)?
 
-    public init(onBack: @escaping () -> Void) { self.onBack = onBack }
+    public init(onBack: @escaping () -> Void, onReplayOpening: (() -> Void)? = nil) {
+        self.onBack = onBack
+        self.onReplayOpening = onReplayOpening
+    }
 
     private var appearance: Binding<Appearance> {
         Binding(get: { Appearance(stored: appearanceRaw) }, set: { appearanceRaw = $0.rawValue })
@@ -314,6 +321,19 @@ public struct SettingsScreen: View {
                             .thro(ThroTypography.metadata)
                             .foregroundStyle(ThroColor.colorTextSecondary)
                     }
+                    group("Opening") {
+                        // PD-007 v2: the throw that opens the app, its sound and its haptic. Sound goes
+                        // through the ambient session, so the silent switch always wins.
+                        toggleRow(icon: .info, label: "Sound", isOn: $openingSound)
+                        toggleRow(icon: .smartphone, label: "Haptic on the strike", isOn: $openingHaptics)
+                        if let onReplayOpening {
+                            ThroButton("Play the opening again", variant: .secondary, size: .medium, action: onReplayOpening)
+                                .padding(.top, ThroSpacing.spacing2)
+                        }
+                        Text("The silent switch silences the sound whatever this says. Reduce Motion shows the finished mark instead of the throw.")
+                            .thro(ThroTypography.metadata)
+                            .foregroundStyle(ThroColor.colorTextSecondary)
+                    }
                     group("This build") {
                         SettingsRow(icon: .info, label: "Build", value: BuildInfo.label)
                         SettingsRow(icon: .info, label: "Matches", value: "Stay on this device")
@@ -325,6 +345,18 @@ public struct SettingsScreen: View {
             }
         }
         .background(ThroColor.colorBackgroundPrimary.ignoresSafeArea())
+    }
+
+    private func toggleRow(icon: ThroIcon, label: String, isOn: Binding<Bool>) -> some View {
+        HStack(spacing: 12) {
+            Icon(icon, size: 18).foregroundStyle(ThroColor.colorTextSecondary)
+            Toggle(isOn: isOn) {
+                Text(label).thro(ThroTypography.body).foregroundStyle(ThroColor.colorTextPrimary)
+            }
+            .tint(ThroColor.colorSurfaceBrand)
+        }
+        .frame(minHeight: 52)
+        .overlay(alignment: .bottom) { Rectangle().fill(ThroColor.colorBorderDefault).frame(height: 1) }
     }
 
     private func group<Content: View>(_ title: String, @ViewBuilder _ content: () -> Content) -> some View {
