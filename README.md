@@ -57,12 +57,13 @@ database.
 | Design components | 61 components audited mechanically against a baseline ratchet |
 | Statistics honesty, Swift | The same 20 tests, ported case for case, on Linux |
 | On-device journal | 15 tests — configuration read back on open, append-only by trigger, replay throws on a corrupt row, a retraction supersedes and never deletes, an old journal upgrades on open |
-| Scoring session | 24 tests — every PD-001 branch; engine → journal commit → screen, never another order; undo as a retraction, including of the visit that ended a match |
-| iOS app | Builds for the iOS simulator on every push that touches it. Run on the founder's phone on 2026-09-05 — a full match, setup to result; two layout defects found and fixed the same evening (see the runbook) |
+| Scoring session | 27 tests — every PD-001 branch; engine → journal commit → screen, never another order; undo as a retraction, including of the visit that ended a match; a bust or a won leg holds the keypad until both players have seen it (PD-005) |
+| Type faces | 4 tests — every type role resolves to one of the ten embedded faces; weights the families lack land on their nearest face |
+| iOS app | Builds for the iOS simulator on every push that touches it. Run on the founder's phone three times (2026-09-05 / 06), setup to result, each run's findings fixed and confirmed on the next (see the runbook). Carries the founder's mark as icon and launch screen and embeds the two type families under the SIL Open Font License (PD-006); `apps/ios/check_fonts.py` holds the fonts, licences and assets to the code on every push |
 
 **Nothing here is production ready**, and no claim of security, offline reliability or rating
 validity is made anywhere in this repository. There is an iOS client that scores a match between two people on
-one phone and keeps it there — built and tested on CI and run once on the founder's phone ([`docs/runbooks/CLIENT_IOS.md`](docs/runbooks/CLIENT_IOS.md)).
+one phone and keeps it there — built and tested on CI and run three times on the founder's phone ([`docs/runbooks/CLIENT_IOS.md`](docs/runbooks/CLIENT_IOS.md)).
 It talks to nothing. There is no HTTP layer and no deployment — the command path is a tested handler, not a running service.
 Claims are made only where evidence exists — see [`FOUNDATION_ACCEPTANCE.md`](FOUNDATION_ACCEPTANCE.md).
 
@@ -88,7 +89,7 @@ packages/
   rating/         Rating as a versioned replayable projection
   design-tokens/  One token source generating Swift, Kotlin and CSS
 apps/
-  ios/            The Xcode app target — a few lines that mount ThroApp
+  ios/            The Xcode app target — a few lines that mount ThroApp, plus the icon, launch screen and embedded fonts
 services/
   api/            Migrations, the command path, and the playtest harness
 docs/
