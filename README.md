@@ -63,8 +63,7 @@ database.
 
 **Nothing here is production ready**, and no claim of security, offline reliability or rating
 validity is made anywhere in this repository. There is an iOS client that scores a match between two people on
-one phone and keeps it there — built and tested on CI and run three times on the founder's phone ([`docs/runbooks/CLIENT_IOS.md`](docs/runbooks/CLIENT_IOS.md)).
-- `docs/runbooks/TESTFLIGHT.md` — installing a build on the phone from the phone: TestFlight through CI, the one-time setup, what it does not do.
+one phone and keeps it there — built and tested on CI and run on the founder's phone ([`docs/runbooks/CLIENT_IOS.md`](docs/runbooks/CLIENT_IOS.md)); a TestFlight workflow can put a build on the phone from the phone once the founder's App Store Connect key exists as repository secrets, and has not yet been run against one ([`docs/runbooks/TESTFLIGHT.md`](docs/runbooks/TESTFLIGHT.md)).
 It talks to nothing. There is no HTTP layer and no deployment — the command path is a tested handler, not a running service.
 Claims are made only where evidence exists — see [`FOUNDATION_ACCEPTANCE.md`](FOUNDATION_ACCEPTANCE.md).
 
