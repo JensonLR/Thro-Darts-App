@@ -18,6 +18,8 @@ final class LaunchSequenceTests: XCTestCase {
         // The founder's first verdict was "too fast": the flight alone now lasts longer than the old loop.
         XCTAssertGreaterThanOrEqual(LaunchTimeline.standard.flight.duration, 0.75)
         XCTAssertGreaterThanOrEqual(LaunchTimeline.standard.hold.duration, 0.8)
+        // The target is on screen before the throw, so the eye has somewhere to be.
+        XCTAssertGreaterThanOrEqual(LaunchTimeline.standard.field.duration, 0.4)
     }
 
     func testReduceMotionHasNoMotionAndNoCues() {
@@ -34,16 +36,83 @@ final class LaunchSequenceTests: XCTestCase {
 
     func testCuesLandOnTheirBeatsInsideTheTimeline() {
         let t = LaunchTimeline.standard
-        let cues = Dictionary(uniqueKeysWithValues: t.cues.map { ($0.name, $0.at) })
-        XCTAssertEqual(cues["whoosh"], t.flight.start)
-        XCTAssertEqual(cues["thud"], t.impact.start)
-        XCTAssertEqual(cues["haptic"], t.impact.start)
-        XCTAssertEqual(cues["chalk"], t.ring.start)
+        let cues = Dictionary(grouping: t.cues, by: \.name).mapValues { $0.map(\.at) }
+        XCTAssertEqual(cues["whoosh"], [t.flight.start])
+        XCTAssertEqual(cues["thud"], [t.impact.start])
+        XCTAssertEqual(cues["haptic"], [t.impact.start])
+        XCTAssertEqual(cues["chalk"], [t.ring.start])
+        // The point cuts the chalk ring twice on its way in, a light tick each time, both in the last part
+        // of the flight and before the strike: tick, tick, thud.
+        let ticks = cues["tick"] ?? []
+        XCTAssertEqual(ticks.count, 2)
+        XCTAssertEqual(ticks, ticks.sorted())
+        for tick in ticks {
+            XCTAssertGreaterThan(tick, t.flight.start + t.flight.duration / 2)
+            XCTAssertLessThan(tick, t.impact.start)
+        }
+        XCTAssertLessThan(t.impact.start - ticks[1], 0.15, "the second cut is just before the strike")
         for cue in t.cues { XCTAssertLessThan(cue.at, t.finishAt, "\(cue.name) plays before the cross-fade") }
         // Every sound cue names a file the bundle carries.
-        for cue in t.cues where cue.name != "haptic" {
+        for cue in t.cues where cue.name != "haptic" && cue.name != "tick" {
             XCTAssertTrue(OpeningPreferences.soundFiles.contains("thro-" + cue.name), cue.name)
         }
+    }
+
+    func testTheFlightCurveInvertsAndThePointCutsTheRingTwice() {
+        for i in 0...20 {
+            let x = Double(i) / 20
+            XCTAssertEqual(Easing.flightTime(for: Easing.flight(x)), x, accuracy: 1e-6)
+        }
+        // On the phone's own layout: the point enters the ring at the lower left and leaves it at the
+        // upper right, both before it lands.
+        let geo = MarkGeometry(tipToTip: 361)
+        let centre = CGPoint(x: 215, y: 410)
+        let landed = geo.onAxis(centre, geo.tip)
+        let path = FlightPath(end: landed, axis: MarkGeometry.axis, tipToTip: geo.tipToTip, drop: 93)
+        let cuts = path.crossings(centre: centre, radius: geo.ringCentreRadius)
+        XCTAssertEqual(cuts.count, 2)
+        XCTAssertLessThan(cuts[0], cuts[1])
+        XCTAssertLessThan(cuts[1], 1)
+        let entry = path.point(cuts[0]), exit = path.point(cuts[1])
+        XCTAssertLessThan(entry.x, centre.x); XCTAssertGreaterThan(entry.y, centre.y)
+        XCTAssertGreaterThan(exit.x, centre.x); XCTAssertLessThan(exit.y, centre.y)
+        // and the nominal cuts the haptics use are within a hair of them
+        XCTAssertEqual(FlightPath.nominalCuts.count, 2)
+        for (a, b) in zip(FlightPath.nominalCuts, cuts) { XCTAssertEqual(a, b, accuracy: 0.01) }
+        // the path lands heading along the axis
+        let h = path.heading(1)
+        XCTAssertEqual(h.dx, MarkGeometry.axis.dx, accuracy: 1e-6)
+        XCTAssertEqual(h.dy, MarkGeometry.axis.dy, accuracy: 1e-6)
+    }
+
+    func testAChalkStrokeIsTheRingsWidthAndThinsOnlyAtItsLeadingEnd() {
+        let g = MarkGeometry(tipToTip: 361)
+        let c = CGPoint(x: 200, y: 200)
+        // a full stroke with no taper spans outer to inner radius
+        let whole = g.ringShape(at: c)
+        XCTAssertEqual(whole.boundingRect.width, 2 * g.ringOuter, accuracy: 0.5)
+        // a quarter stroke thinning over its last thirty degrees still starts at full width
+        let stroke = g.ringBand(at: c, fromDegrees: 0, sweepDegrees: 90, taperDegrees: 30)
+        XCTAssertFalse(stroke.isEmpty)
+        XCTAssertEqual(stroke.boundingRect.maxX, c.x + g.ringOuter, accuracy: 0.5, "full width where the stroke begins")
+        XCTAssertLessThan(stroke.boundingRect.maxY, c.y + g.ringOuter - 0.5, "a point, not a full end, where it leads")
+        XCTAssertTrue(g.ringBand(at: c, fromDegrees: 0, sweepDegrees: 0, taperDegrees: 10).isEmpty)
+    }
+
+    func testTheDartFoldsIntoTheBar() {
+        let dart = DartAnatomy(length: 200)
+        let bar = dart.parts(spin: 0.7, morph: 1)
+        XCTAssertTrue(bar.nearFlights.isEmpty && bar.farFlights.isEmpty, "the flights fold flat")
+        let w = 2 * DartAnatomy.barHalf * 200
+        XCTAssertEqual(bar.barrel.boundingRect.height, w, accuracy: 0.01, "the barrel is the bar's width")
+        XCTAssertEqual(bar.needle.boundingRect.height, w, accuracy: 0.01)
+        XCTAssertEqual(bar.shaft.boundingRect.minX, -200, accuracy: 0.01, "the shaft runs on to the tail")
+        XCTAssertTrue(bar.shade.isEmpty, "no roundness on a flat bar")
+        // and the bar's half-width is the mark's, in the dart's own units
+        XCTAssertEqual(DartAnatomy.barHalf, 0.040 / (2 * 0.643), accuracy: 1e-9)
+        // half-way, the flights are half folded
+        let half = dart.parts(spin: 0, morph: 0.5)
+        XCTAssertEqual(half.nearFlights.boundingRect.height, 0.085 * 200, accuracy: 1.0)
     }
 
     func testProgressClampsAndIsLinearWithin() {

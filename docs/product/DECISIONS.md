@@ -411,3 +411,62 @@ and they are placeholders in the honest sense — recorded foley under the same 
 without a code change. A haptic on the opening is a decision taken here; haptics on the scoring keypad
 remain the founder's open decision. The motion has again been judged from stills and arithmetic; the
 phone is where it moves.
+
+### Amendment, the next day — the founder's second look, and the third version
+
+The founder watched the second version on the phone: "Thats better but I think you can improve &
+upgrade it even further. its the first thing people will see opening the app so it needs to be utterly
+beautiful & perfect, keep going until there is no more to work on, dont just be a yes man. harshly
+critique it. no regressions always improvements." The critique was made against the frame function
+and against frames rendered from a line-for-line port of it, at full size, which is where three of the
+faults below were first seen. Each point, and what it became:
+
+1. **The strike hit nothing.** The dart stopped in empty green; there was no target for the eye before
+   the throw and nothing for the point to cut. A faint chalk ring now waits on the field from the first
+   half-second as the target. The point cuts it twice on the way in, at the lower left and the upper
+   right; each cut puffs chalk off the line and lights it where it was cut, and the bloom thickens from
+   exactly those two places, both ways round, until the four strokes meet and the ring is whole.
+2. **The dart was rigid at impact.** It rotated about its point like a stick. Now the barrel stops
+   dead; the shaft pivots where it meets the barrel and the flights pivot again where they meet the
+   shaft, a beat behind (8 Hz, decaying over a fifth of a second); and the whole dart squashes 3.5%
+   along its length for the first four frames.
+3. **Nothing else reacted.** The frame now shakes with the strike, mostly along the line of the throw,
+   four points dying in a fifth of a second.
+4. **The streak was wrong.** The ghosts trailed by a fixed distance, so the blur was the same at any
+   speed and vanished the instant the dart stopped. They now trail by one, two and three frames of
+   time: far apart at speed, bunched when slow, and catching the dart up in the frames after it stops.
+5. **The roll was tied to distance**, so the flights flickered fastest in the last frames. It is now a
+   steady 1.6 turns over the flight.
+6. **The dart became the bar by a plain cross-fade.** It now folds: the flights fold flat, every part
+   narrows to the bar's width, the shaft runs on to the tail and tapers to the bar's point, and only
+   then does the bar take over.
+7. **The bloom looked machined** — round-capped strokes with a dotted grain, which at full size read as
+   glowing sausages with spots. It is now four strokes of chalk that thin to a point at their leading
+   ends, as chalk thins where the stick lifts; the grain is gone; the glow fades through the resolve
+   so the finished mark is crisp. The lit cuts, first drawn at the ring's full width, were near-circles
+   sitting exactly where the dart's body passed and read as glitches; they are thin lengths of the line.
+8. **The Ø just appeared** while the three letters rose. Its ring now draws itself from the top,
+   clockwise, as the big ring bloomed, and its bar follows.
+9. **The R was dimmer than the T.** The letters' stagger ran past the end of the resolve, so the third
+   letter reached 87% opacity and no more — a fault in the build the founder was looking at. The
+   stagger now fits inside the resolve.
+10. **The first frame did not match the launch screen.** The vignette was already part-drawn, a small
+    jump. It fades in with the target, so the first frame is the launch screen's flat green.
+11. **Touch.** A light haptic tick at each cut, then the heavy one at the strike: tick, tick, thud, in
+    the last third of a second of the flight (at 1044 and 1252 ms on the nominal layout). The cut times come from the flight path's own geometry.
+
+Also: the barrel and shaft carry a shadow side for roundness; a fixed scatter of faint chalk dust
+settles on the field; the letters keep the face's kerning; and Reduce Motion is now truly still — the
+strike's flash, its shockwave, the dust and the ring's pulse had been running from their own clocks
+with every segment at zero length, and now run only when the timeline is animated.
+
+Timing: field and target to 450 ms, flight to 1350, the strike's beat to 1750, the ring to 2450, the
+resolve to 3350, the hold to 4200, the cross-fade to 4600 — the same total, a tenth of a second moved
+from the ring to the target. The dart's growth from 55% stays as it was, because the founder called
+the second version better and that is part of what they saw. Eleven tests hold the timeline, the cues
+(tick, tick, thud, in order and before the strike), the easings and the flight curve's inverse, the
+mark's geometry, the path's two cuts, the chalk stroke's taper and the fold.
+
+The cost, again plainly: still a choice against Apple's launch-screen guidance, still 4.6 seconds,
+still skippable. The browser port used to see the frames is a scratch tool, not part of the app; it
+shares the maths but not the renderer, so the phone is still where the motion is judged.

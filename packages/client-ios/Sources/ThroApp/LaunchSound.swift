@@ -13,8 +13,8 @@ public enum OpeningPreferences {
     public static let soundFiles = ["thro-whoosh", "thro-thud", "thro-chalk"]
 }
 
-/// Scores the opening: a whoosh for the flight, a thud for the dart in the board, chalk for the ring,
-/// and one heavy haptic at the strike. Sound plays through the ambient session, so the phone's silent
+/// Scores the opening: a whoosh for the flight, a thud for the dart in the board, chalk for the ring;
+/// a light haptic tick each time the point cuts the chalk ring and one heavy haptic at the strike. Sound plays through the ambient session, so the phone's silent
 /// switch silences it and other audio keeps playing. A bundle without the files stays silent.
 final class LaunchSoundtrack {
     private var players: [String: AVAudioPlayer] = [:]
@@ -23,6 +23,7 @@ final class LaunchSoundtrack {
     private var pending: [DispatchWorkItem] = []
     #if canImport(UIKit)
     private let impact = UIImpactFeedbackGenerator(style: .heavy)
+    private let tick = UIImpactFeedbackGenerator(style: .light)
     #endif
 
     init(sound: Bool, haptics: Bool) {
@@ -41,21 +42,22 @@ final class LaunchSoundtrack {
         }
     }
 
-    /// Cues are named after their sound file's suffix; "haptic" is the strike's impact.
+    /// Cues are named after their sound file's suffix; "tick" and "haptic" are the cuts and the strike.
     func schedule(_ cues: [LaunchCue], from start: Date) {
         for cue in cues {
             let delay = max(0, cue.at - Date().timeIntervalSince(start))
-            if cue.name == "haptic" {
+            if cue.name == "haptic" || cue.name == "tick" {
                 guard haptics else { continue }
+                let heavy = cue.name == "haptic"
                 // The Taptic Engine is readied half a second ahead, which is as long as it stays ready.
                 later(max(0, delay - 0.5)) { [weak self] in
                     #if canImport(UIKit)
-                    self?.impact.prepare()
+                    (heavy ? self?.impact : self?.tick)?.prepare()
                     #endif
                 }
                 later(delay) { [weak self] in
                     #if canImport(UIKit)
-                    self?.impact.impactOccurred(intensity: 1.0)
+                    (heavy ? self?.impact : self?.tick)?.impactOccurred(intensity: heavy ? 1.0 : 0.6)
                     #endif
                 }
             } else if let player = players["thro-" + cue.name] {
