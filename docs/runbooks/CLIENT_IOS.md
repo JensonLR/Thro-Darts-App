@@ -29,22 +29,27 @@ for anything new.
 ### 1. Get the latest code
 
 1. Open **Terminal** (press ⌘ Space, type `Terminal`, press Return).
-2. Find the checkout. `~/Thro Darts App` holds the ThroProbe Xcode project and is **not** the git
-   clone — `git status` there says *not a git repository*. Look for the clone:
+2. The clone is **`~/Thro-Darts-App`** (hyphens). `~/Thro Darts App` (spaces) holds the ThroProbe
+   Xcode project and is not a git clone; `~/Documents/Thro-Darts-App` is an older second clone — leave
+   it alone. Paste these lines one at a time, without anything after them on the line:
    ```bash
-   ls -d ~/Thro-Darts-App ~/Documents/Thro-Darts-App 2>/dev/null
+   cd ~/Thro-Darts-App
+   git status --short
    ```
-3. If a path printed, use it and bring it up to date, then **check you have the newest commit**:
+3. If `git status --short` printed `M apps/ios/ThroDarts.xcodeproj/project.pbxproj`, that is the
+   change Xcode made when you chose your signing team, and **it is what stops `git pull`** ("Your
+   local changes to the following files would be overwritten by merge"). Set it aside, then pull:
    ```bash
-   cd ~/Documents/Thro-Darts-App        # or whichever path printed
+   git checkout -- apps/ios/ThroDarts.xcodeproj/project.pbxproj
    git checkout claude/thro-production-build-je2mkf
    git pull origin claude/thro-production-build-je2mkf
    git log -1 --oneline
    ```
-   The last line prints the commit you are about to build. Compare it with the newest commit at the
+   The last command prints the commit you are about to build. Compare it with the newest commit at the
    top of the PR's *Commits* tab (https://github.com/JensonLR/Thro-Darts-App/pull/1/commits). If they
-   differ, the pull did not happen — you are in a different folder from the one the pull went to, or
-   `git pull` printed an error above. Paste the whole output back rather than building.
+   differ, paste the whole Terminal output back rather than building. (Once your Team ID is committed
+   to the project — see step 2 of the signing section — Xcode has nothing to change and this step
+   becomes a plain pull.)
    If nothing printed, clone afresh — the repository is public, so no login is needed:
    ```bash
    cd ~
@@ -63,7 +68,17 @@ for anything new.
    Xcode opens. The window title reads **ThroDarts**. If it reads ThroProbe, close that window and
    run the command again.
 
-### 2. Tell Xcode who signs it (first time only)
+### 2. Tell Xcode who signs it (until the Team ID is in the project)
+
+Choosing a team makes Xcode write `DEVELOPMENT_TEAM = <your Team ID>;` into
+`apps/ios/ThroDarts.xcodeproj/project.pbxproj`. That is a local change to a tracked file, and every
+later `git pull` refuses to run over it — which is how the phone stayed on the 5 September build for a
+day. The lasting fix is to commit that line, so Xcode finds the team already set and changes nothing.
+A Team ID is a public identifier (it is in every provisioning profile), not a secret. To supply it,
+run this before step 1's `git checkout --` and paste the line it prints:
+```bash
+git diff apps/ios/ThroDarts.xcodeproj/project.pbxproj | grep DEVELOPMENT_TEAM
+```
 
 6. Wait for the small status area at the top of the window to finish *Resolving Package Graph*; a
    few seconds. Xcode is reading the four local packages.
@@ -227,9 +242,13 @@ System / Light / Dark; setup and scoring stay dark as drawn.
 *Fonts not embedded* notice and the 1–1 match from the night before, Settings without the Scoring
 group, the result of the first match — show the phone running the build from the night before: none
 of the four pushes since (the non-scrolling scoring screen, the announcement cards, the fonts, the icon
-and launch screen) had reached it. Nothing from those pushes is verified on a device yet. Step 1 now
-ends with `git log -1 --oneline` so a stale checkout is caught before Xcode opens, and Settings shows
-the build's commit so a screenshot can say what it is of.
+and launch screen) had reached it. The founder's Terminal showed why: every `git pull` since had
+aborted on Xcode's signing change to `project.pbxproj` ("Your local changes … would be overwritten by
+merge"), and the pasted step-1 lines carried their trailing comments, which zsh read as arguments
+(`cd: too many arguments`). Nothing from those pushes is verified on a device yet. Step 1 now checks
+`git status` first, sets the signing change aside, carries no inline comments, and ends with
+`git log -1 --oneline`; the signing section says how to commit the Team ID so the pull stays clean; and
+Settings shows the build's commit so a screenshot can say what it is of.
 
 **Third run, 2026-09-06, on commit `e9382ad`.** The founder confirmed the retraction, the appearance
 choice on every screen and the Settings screen, and found one thing wrong: with the thrower on a
