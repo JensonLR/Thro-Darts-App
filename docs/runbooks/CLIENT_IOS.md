@@ -1,7 +1,7 @@
 # Running the iOS client
 
-> **Verification status, 2026-09-05.** Every package compiles and every test passes on macOS CI — 40
-> tests: 13 design, 11 journal, 16 scoring session — and the Xcode app builds for the iOS simulator on
+> **Verification status, 2026-09-06.** Every package compiles and every test passes on macOS CI — 55
+> tests: 16 design, 15 journal, 24 scoring session — and the Xcode app builds for the iOS simulator on
 > CI with Xcode 26.6, on every push that touches them. **The app has run on a phone**: the founder's,
 > the evening of 2026-09-05, a full best-of-3 from setup to result, in dark mode, on an iPhone 14 Pro Max
 > (MQ9P3ZD/A) running iOS 26.6.1. Nine screenshots came back; what they showed is under "First run on
@@ -15,9 +15,9 @@
 | `packages/engine-swift` | the scoring engine | conformance corpus on Linux, every push |
 | `packages/statistics-swift` | the statistics layer, honest about its basis | twenty tests on Linux, every push |
 | `packages/client-ios` → `ThroDesign` | the approved components as SwiftUI | tests on macOS, every push |
-| `packages/client-ios` → `ThroJournal` | the on-device journal (ADR-006) | eleven tests on macOS, every push |
-| `packages/client-ios` → `ThroPlay` | setup, ready, scoring, result | sixteen session tests on macOS, every push |
-| `packages/client-ios` → `ThroApp` | Home, tabs, the root view | compiles for macOS and the iOS simulator on every push; drawn, not tested |
+| `packages/client-ios` → `ThroJournal` | the on-device journal (ADR-006), with retractions (PD-004) | fifteen tests on macOS, every push |
+| `packages/client-ios` → `ThroPlay` | setup, ready, scoring, result, undo | twenty-four session tests on macOS, every push |
+| `packages/client-ios` → `ThroApp` | Home, tabs, You, Settings, the root view | compiles for macOS and the iOS simulator on every push; drawn, not tested |
 | `apps/ios/ThroDarts.xcodeproj` | the app target: thirteen lines that mount `ThroApp` | `xcodebuild` for the iOS simulator, every push |
 
 ## Running it on the phone, step by step

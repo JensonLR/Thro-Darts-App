@@ -56,8 +56,8 @@ database.
 | Design tokens | 50 contrast pairs, absolute thresholds, 0 unrecorded breaches |
 | Design components | 61 components audited mechanically against a baseline ratchet |
 | Statistics honesty, Swift | The same 20 tests, ported case for case, on Linux |
-| On-device journal | 11 tests — configuration read back on open, append-only by trigger, replay throws on a corrupt row |
-| Scoring session | 16 tests — every PD-001 branch; engine → journal commit → screen, never another order |
+| On-device journal | 15 tests — configuration read back on open, append-only by trigger, replay throws on a corrupt row, a retraction supersedes and never deletes, an old journal upgrades on open |
+| Scoring session | 24 tests — every PD-001 branch; engine → journal commit → screen, never another order; undo as a retraction, including of the visit that ended a match |
 | iOS app | Builds for the iOS simulator on every push that touches it. Run on the founder's phone on 2026-09-05 — a full match, setup to result; two layout defects found and fixed the same evening (see the runbook) |
 
 **Nothing here is production ready**, and no claim of security, offline reliability or rating
