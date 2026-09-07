@@ -210,9 +210,14 @@ final class ExportTests: XCTestCase {
                        "the URL remembers being excluded; the file system does not")
 
         // And the same through the policy's own writer, which is where it actually went wrong.
+        // **Both halves carry the paths.** These two lines disagreed on CI about the same directory,
+        // and there is no Swift on the machine this was written on, so the assertion has to be the
+        // thing that says why: a mismatch here is either the write not landing or the two URLs not
+        // naming the same file, and the message tells them apart without another round.
         try url.setResourceValues(exclude)
-        XCTAssertEqual(BackupPolicy.include(url), .included)
-        XCTAssertEqual(BackupPolicy.read(dir), .included, "and a different URL agrees")
+        let paths = "wrote through \(url.path); reading \(dir.path)"
+        XCTAssertEqual(BackupPolicy.include(url), .included, "include did not clear it — \(paths)")
+        XCTAssertEqual(BackupPolicy.read(dir), .included, "a different URL disagrees — \(paths)")
     }
 
     // MARK: reading one back

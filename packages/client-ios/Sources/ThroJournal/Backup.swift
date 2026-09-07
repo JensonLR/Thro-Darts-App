@@ -49,12 +49,12 @@ public enum BackupPolicy {
             // worth telling a player about.
             return read(url)
         }
-        // **`target`, not `url`.** `setResourceValues` writes through the copy it was called on and
-        // caches the new value there; the caller's `url` is a different value with its own cache,
-        // which may still hold what the flag was before. Reading that one gave the previous answer
-        // to a question that had just been changed — and `read` clears its cache anyway, so this is
-        // belt as well as braces.
-        return read(target)
+        // **`url`, not `target`.** What this returns has to be the same answer a caller gets from
+        // `read(url)` a moment later — Settings does exactly that, through a URL it built itself.
+        // Reading through `target` was one operation and the caller's read was another, on values
+        // that had been mutated a different number of times; CI found them disagreeing about the
+        // same directory. `read` builds its own URL from the path, so this is one operation now.
+        return read(url)
     }
 
     /// What the file system says right now.
