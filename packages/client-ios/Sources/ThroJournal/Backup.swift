@@ -49,13 +49,32 @@ public enum BackupPolicy {
             // worth telling a player about.
             return read(url)
         }
-        return read(url)
+        // **`target`, not `url`.** `setResourceValues` writes through the copy it was called on and
+        // caches the new value there; the caller's `url` is a different value with its own cache,
+        // which may still hold what the flag was before. Reading that one gave the previous answer
+        // to a question that had just been changed — and `read` clears its cache anyway, so this is
+        // belt as well as braces.
+        return read(target)
     }
 
     /// What the file system says right now.
+    ///
+    /// **The cache is dropped first, and that is the whole correctness of this function.** `URL`
+    /// memoises resource values on the value itself: once `isExcludedFromBackup` has been read or
+    /// written through a particular `URL`, asking again returns what it remembers rather than what
+    /// the file system now says. So a URL that was excluded a moment ago goes on reporting itself
+    /// excluded after being included — which reached Settings as *"your matches are NOT included in
+    /// this phone's backup"* about a folder that was.
+    ///
+    /// That is the exact shape of failure this whole type exists to prevent: the flag is read rather
+    /// than assumed **because** a wrong answer here is invisible until somebody sets up a new phone.
+    /// Reading a stale cache is assuming with extra steps. CI found it, intermittently, which is
+    /// what a memoised value looks like from outside.
     public static func read(_ url: URL) -> State {
+        var target = url
+        target.removeAllCachedResourceValues()
         do {
-            let values = try url.resourceValues(forKeys: [.isExcludedFromBackupKey])
+            let values = try target.resourceValues(forKeys: [.isExcludedFromBackupKey])
             guard let excluded = values.isExcludedFromBackup else {
                 // Absent means the flag was never set, which on iOS means *not excluded*. Said as a
                 // fact rather than guessed: the absence of an exclusion is an inclusion.

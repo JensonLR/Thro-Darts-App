@@ -179,6 +179,42 @@ final class ExportTests: XCTestCase {
         XCTAssertEqual(BackupPolicy.include(excluded), .included)
     }
 
+    /// **A `URL` remembers what it last read, and this must not.**
+    ///
+    /// `URL` memoises resource values on the value itself: once `isExcludedFromBackup` has been read
+    /// or written through a particular `URL`, asking that same `URL` again returns what it
+    /// remembers. `BackupPolicy.include` used to set the flag through one copy and read it back
+    /// through another, so a folder that had just been included went on reporting itself excluded —
+    /// and Settings told the player their matches were **not** in this phone's backup about a folder
+    /// that was.
+    ///
+    /// That is precisely what this type exists to prevent. The flag is read rather than assumed
+    /// because a wrong answer is invisible until somebody sets up a new phone; reading a stale cache
+    /// is assuming with extra steps.
+    ///
+    /// The `url` here is deliberately the one that has already been written through twice, because a
+    /// fresh `URL` has nothing cached and would pass either way — which is why CI found this only
+    /// intermittently.
+    func testTheAnswerComesFromTheFileSystemAndNotFromWhatTheURLRemembers() throws {
+        var url = dir!
+
+        var exclude = URLResourceValues()
+        exclude.isExcludedFromBackup = true
+        try url.setResourceValues(exclude)
+        XCTAssertEqual(BackupPolicy.read(url), .excluded)
+
+        var include = URLResourceValues()
+        include.isExcludedFromBackup = false
+        try url.setResourceValues(include)
+        XCTAssertEqual(BackupPolicy.read(url), .included,
+                       "the URL remembers being excluded; the file system does not")
+
+        // And the same through the policy's own writer, which is where it actually went wrong.
+        try url.setResourceValues(exclude)
+        XCTAssertEqual(BackupPolicy.include(url), .included)
+        XCTAssertEqual(BackupPolicy.read(dir), .included, "and a different URL agrees")
+    }
+
     // MARK: reading one back
 
     /// The reason this exists. `Export.read` and `Export.summary` had ten tests and no caller, and
