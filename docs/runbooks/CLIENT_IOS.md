@@ -289,7 +289,11 @@ scoring dark with the back chevron in the header and the remaining, turn indicat
 screen at once; Match ready light with both players, the three format tags and *Start scoring*. All
 three fixes above are confirmed on the device. The status bar text follows each screen's scheme.
 
-Still to add: the screenshots themselves into `docs/runbooks/screenshots/`.
+**The screenshot files themselves are not in this repository, and cannot be added from here.** They
+arrive in conversation from the founder's phone; nothing in this environment can write them into
+`docs/runbooks/screenshots/`. What each one showed is written out above instead — including, for the
+sixth, the exact defect it found and the commit that fixed it. Adding the images is the founder's to
+do if they want them under version control; the record does not depend on it.
 
 **Sixth look, 2026-09-07 at 13:54, on a build transferred from a Mac.** One screenshot, of a club
 called *The Lockdown Inn*, and it found a defect two rounds of tests, a design review and a canvas had
