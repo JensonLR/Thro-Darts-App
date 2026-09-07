@@ -161,12 +161,32 @@ final class ShareCardTests: XCTestCase {
         XCTAssertEqual(figures.first?.away, "54.1")
     }
 
+    /// **Rule 3, on a real leg rather than a hand-made figure.** Ann checked out; Bea never threw
+    /// from a finish at all, so a checkout percentage of hers is a figure with no sample — and the
+    /// row is dropped for *both*, because a card reading "Ann 100% · Bea —" invites a reader who
+    /// cannot tap it for the reason to fill in a zero.
+    ///
+    /// This test asserted all three labels when it was written. CI was right and the expectation was
+    /// wrong, which is the rule firing on the first real match it saw.
+    func testTheCardDropsAFigureOnlyOnePlayerCouldHave() throws {
+        let session = try annWon()
+        XCTAssertEqual(session.statistics(for: .home).first { $0.label == "Checkout %" }?.confidence,
+                       .exact, "Ann checked out, so hers is a real figure")
+        XCTAssertEqual(session.statistics(for: .away).first { $0.label == "Checkout %" }?.confidence,
+                       .unavailable, "Bea never threw from a finish")
+        XCTAssertEqual(ThroShareCard.copy(for: session).figures.map(\.label),
+                       ["3-dart average", "180s"],
+                       "the checkout row is on the card for neither, not for one")
+    }
+
     /// No figure reaches the card that this build would not show inside the app, and none of them is
     /// the form figure — which is not a rating (PD-018, OD-001) and must not become one by being
     /// shared with people who cannot see the label that says so.
     func testTheCardCarriesNoFigureTheAppWouldNotShow() throws {
         let copy = ThroShareCard.copy(for: try annWon())
-        XCTAssertEqual(copy.figures.map(\.label), ["3-dart average", "Checkout %", "180s"])
+        XCTAssertTrue(copy.figures.map(\.label)
+                        .allSatisfy(["3-dart average", "Checkout %", "180s"].contains),
+                      "\(copy.figures.map(\.label))")
         let text = (copy.figures.map(\.label) + [copy.headline, copy.provenance, copy.sample, copy.format])
             .joined(separator: " ").lowercased()
         for banned in ["rating", "rank", "form", "elo"] {
