@@ -119,3 +119,12 @@ no packaging obstacle for iOS, Android or web.
 - **33** participant screens
 - **9** organiser screens
 - **70** icons
+
+### Ending a match short (PD-016), engineering-drawn
+
+| Thing | Why it is not exported | What it is made of |
+|---|---|---|
+| `MatchHeader.onEnd` | The export's scoring screen has no way out at all, and the same header already carries an engineering-drawn `onBack` for that reason. A match that will not be played out has to be endable from the screen the players are looking at when it happens. | A trailing 44-point target on the header row that already exists, Lucide `x` from the approved set, `colorTextSecondary`. Costs nothing vertically, which is the constraint that decides this header's shape. |
+| `EndMatchCard` | Nothing in the export offers a way to stop. | The `Eyebrow` / `heading2` / `metadata` / `ThroButton` stack `RetractionCard` already uses, because it is the same kind of moment: a serious recorded thing offered with its consequence stated first. |
+| `EndMatchConfirmCard` | As above. | The same stack, plus one `colorStatusError` line saying it cannot be undone — the part that would otherwise be a surprise, since PD-004 makes a mis-keyed visit undoable and a player will reasonably expect the same here. |
+| The "No result" row state | The export draws finished and in-progress. It does not draw *finished with no result*, because nothing in the design ends a match early. | `Tag` in `neutral`. Deliberately **not** a `VerificationState`: there is no result, and a self-reported badge would attest to a claim nobody made. |

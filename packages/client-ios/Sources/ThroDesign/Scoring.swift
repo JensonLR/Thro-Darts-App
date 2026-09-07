@@ -133,20 +133,28 @@ public struct LegState: View {
 /// this header was tried first and cost 64 points the screen does not have on a 430×932 phone — the
 /// checkout card clipped and the turn indicator fell below the keypad. A 44-point chevron at the
 /// header's leading edge costs nothing vertically.
+///
+/// `onEnd` is the same extension made a second time, for PD-016: a match that will not be played out
+/// has to be endable from the screen the players are looking at when it happens. It is a trailing
+/// 44-point target on the row that already exists, so it too costs nothing vertically — which is the
+/// constraint that decides this header's shape. Both are recorded in `DESIGN_INVENTORY.md` as
+/// engineering-drawn rather than exported.
 public struct MatchHeader: View {
     private let competition: String
     private let round: String?
     private let board: String?
     private let format: String?
     private let onBack: (() -> Void)?
+    private let onEnd: (() -> Void)?
 
     public init(competition: String, round: String? = nil, board: String? = nil, format: String? = nil,
-                onBack: (() -> Void)? = nil) {
+                onBack: (() -> Void)? = nil, onEnd: (() -> Void)? = nil) {
         self.competition = competition
         self.round = round
         self.board = board
         self.format = format
         self.onBack = onBack
+        self.onEnd = onEnd
     }
 
     public var body: some View {
@@ -168,6 +176,20 @@ public struct MatchHeader: View {
                 if let round { cell("Round", round, sport: false) }
                 if let board { cell("Board", board, sport: true) }
                 if let format { cell("Format", format, sport: true) }
+            }
+            if let onEnd {
+                Button(action: onEnd) {
+                    Icon(.x, size: 20)
+                        .foregroundStyle(ThroColor.colorTextSecondary)
+                        .frame(width: ThroSpacing.touchTargetMinimum, height: ThroSpacing.touchTargetMinimum)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                // Named for what it does, not for the glyph. "Close" would read as dismissing the
+                // screen; this ends the match, and a player who taps it by accident deserves to have
+                // been told which of those it was before the confirm card appears.
+                .accessibilityLabel("End this match")
+                .padding(.trailing, -ThroSpacing.spacing3)
             }
         }
         .padding(.vertical, ThroSpacing.spacing3)

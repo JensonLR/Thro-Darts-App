@@ -1047,3 +1047,70 @@ everybody a club has not recorded an age for. That is the rule working, not a ga
 ### How to reverse
 
 Stop offering the picker. Every badge falls back to initials, and the images folder can be deleted.
+
+## PD-015 — Four design commissions come off the B3 list
+
+**Asked** 2026-09-07. **Answered** 2026-09-07: all four.
+
+`docs/design/DESIGN_UNSPECIFIED.md` forbids engineering from inventing what the export does not
+draw, and B3 lists what a designer still owes. Four of those items are things engineering can draw
+under PD-010's terms; two — the master vector files and recorded foley — need a person and stay on
+the list.
+
+The four commissioned: **the `Stat` variant** for bounded and unavailable values (the honesty
+layer's visual form, and the most-used unspecified thing in the app); **pressed, focus and keypad
+haptics** (the control touched sixty times a leg); **the Dynamic Type contract** (what the scoring
+screen does at the largest accessibility sizes); and **the state for a match ended short**, which
+PD-016 creates.
+
+PD-010's four conditions carry over unchanged: tokens only, approved components first, anything
+genuinely missing drawn in the system's own idiom and recorded in `DESIGN_INVENTORY.md` as
+engineering-drawn, and the canvas as the review surface.
+
+### How to reverse
+
+Each is a component or a modifier; removing one returns that surface to what SwiftUI does by
+default. The `Stat` variant is the one with a cost: without it, an unavailable figure has no drawn
+form and every screen invents its own.
+
+## PD-016 — A match may be retired or abandoned, and the player picks which
+
+**Asked** 2026-09-07. **Answered** 2026-09-07: both, and the player picks.
+
+Somebody leaves, the pub shuts, a player is injured. The app had no answer at all: a half-played
+match sat on Home for ever.
+
+**They are two different things and the app does not choose between them.**
+
+- **A retirement is a concession.** Somebody stops; the other player wins. That is how darts has
+  always handled a walk-off, and it is a result that should count. The legs stand as they were.
+- **An abandonment has no winner**, and none is invented. The match counts for nobody.
+
+Collapsing them into one word would force exactly one of two errors — inventing a winner where
+there was none, or throwing away a real one — which is why there are two.
+
+**The darts are real either way.** Every visit thrown is kept and counts towards both players'
+figures, in an abandoned match as much as any other. Only the *result* differs. A person's history
+counts abandoned and retired matches apart from matches played out, because "played 12" meaning
+"nine played out and three walked away from" is a different claim to the one it looks like.
+
+**An ending is final.** Nothing undoes it: no more visits, no retractions, no second ending. That is
+a deliberate departure from PD-004, which makes a mis-keyed *visit* undoable — a visit is a
+transcription, and an ending is a declaration taken behind a confirmation that states its
+consequence and says outright that it cannot be undone. If an ending could be undone, the match
+could un-end and "the result" would be a claim that moves, which is precisely what PD-011's
+attestation exists to pin down.
+
+**An ending makes an earlier agreement stale.** Retiring after both players confirmed a scoreline
+would hand the match to somebody neither of them agreed had won it, so the label drops back and both
+are asked again — the same rule a visit or a retraction already triggers.
+
+**An abandoned match is never labelled.** There is no result, so there is nothing to confirm and
+nothing to dispute: no verification badge, no attestation flow. "Self-reported" on a match nobody
+claimed to have won would be attesting to a claim that was never made.
+
+### How to reverse
+
+Stop offering the two buttons. Rows already written stay readable, because the journal reads a kind
+it does not know as `unknown` and refuses to replay rather than guessing — which is also what an
+older build does with these rows today.

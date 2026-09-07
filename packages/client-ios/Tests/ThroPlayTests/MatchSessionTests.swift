@@ -574,4 +574,109 @@ final class MatchSessionTests: XCTestCase {
         XCTAssertEqual(figures.first { $0.label == "3-dart average" }?.value, "—")
         XCTAssertNotNil(figures.first { $0.label == "3-dart average" }?.note)
     }
+
+    // MARK: - ending a match short (PD-016)
+
+    /// Not one tap. An ending is final, so the offer and the confirmation are separate steps and
+    /// `Back` from the confirmation returns to the choice rather than out of the flow — otherwise
+    /// the destructive button is the only way forward from there.
+    func testEndingIsTwoStepsAndBackReturnsToTheChoice() throws {
+        let s = try session()
+        s.quick(60)
+        XCTAssertNil(s.endFlow)
+
+        s.offerToEnd()
+        XCTAssertEqual(s.endFlow, .choosing)
+        s.proposeEnding(.retired(by: .home))
+        XCTAssertEqual(s.endFlow, .confirming(.retired(by: .home)))
+        XCTAssertNil(s.ending, "proposing writes nothing")
+
+        s.cancelEnding()
+        XCTAssertEqual(s.endFlow, .choosing, "back goes to the choice, not out")
+        s.cancelEnding()
+        XCTAssertNil(s.endFlow)
+        XCTAssertNil(s.ending, "and still nothing was written")
+    }
+
+    /// Offered only while there is something to end. A match nobody has thrown a dart in is left,
+    /// not retired: there is no result to protect and no darts to keep.
+    func testEndingShortIsNotOfferedBeforeADartOrAfterTheMatchIsOver() throws {
+        let s = try session(legs: 1)
+        XCTAssertFalse(s.mayEndShort, "no darts thrown yet")
+        s.offerToEnd()
+        XCTAssertNil(s.endFlow, "and the offer does not open")
+
+        s.quick(60)
+        XCTAssertTrue(s.mayEndShort)
+
+        s.offerToEnd()
+        s.proposeEnding(.abandoned)
+        s.confirmEnding()
+        XCTAssertEqual(s.ending, .abandoned)
+        XCTAssertFalse(s.mayEndShort, "an ended match is not ended again")
+    }
+
+    /// A retirement produces a winner and so has a result to stand behind; an abandonment produces
+    /// none, so there is nothing to confirm and nothing to dispute.
+    func testARetirementHasAResultToConfirmAndAnAbandonmentDoesNot() throws {
+        let retire = try session()
+        retire.quick(60)
+        retire.offerToEnd(); retire.proposeEnding(.retired(by: .away)); retire.confirmEnding()
+        XCTAssertTrue(retire.isComplete)
+        XCTAssertFalse(retire.wasPlayedOut, "it was ended, not played out")
+        XCTAssertEqual(retire.winner, .home, "the seat that did not stop")
+        XCTAssertTrue(retire.hasResult)
+        XCTAssertEqual(retire.awaitingAttestation, Seat.allCases, "both are still asked")
+
+        let abandon = try session()
+        abandon.quick(60)
+        abandon.offerToEnd(); abandon.proposeEnding(.abandoned); abandon.confirmEnding()
+        XCTAssertTrue(abandon.isComplete)
+        XCTAssertNil(abandon.winner)
+        XCTAssertFalse(abandon.hasResult)
+        XCTAssertEqual(abandon.awaitingAttestation, [], "there is no result to attest to")
+    }
+
+    /// The headline an abandoned match must NOT show. `winner ?? "In progress"` collapses "nobody
+    /// won" into "still playing", and a match that is over reading as live is the wrong answer in
+    /// the one place a player looks for the answer.
+    func testAnAbandonedMatchReadsAsNoResultRatherThanInProgress() throws {
+        let s = try session()
+        s.quick(60)
+        XCTAssertEqual(s.resultHeadline, "In progress")
+        XCTAssertNil(s.resultDetail)
+
+        s.offerToEnd(); s.proposeEnding(.abandoned); s.confirmEnding()
+        XCTAssertEqual(s.resultHeadline, "No result")
+        XCTAssertEqual(s.resultDetail?.isEmpty, false, "and it says what happened")
+    }
+
+    /// The two sentences that are the whole difference between the endings. A screen that showed
+    /// them the wrong way round would record the opposite of what the players said happened.
+    func testTheConsequenceSaysWhoWinsAndWhoDoesNot() throws {
+        let s = try session()
+        let retiring = s.endingConsequence(.retired(by: .home))
+        XCTAssertTrue(retiring.contains("Jenson stops"), retiring)
+        XCTAssertTrue(retiring.contains("Alex wins"), retiring)
+
+        let abandoning = s.endingConsequence(.abandoned)
+        XCTAssertTrue(abandoning.contains("Nobody wins"), abandoning)
+        // The property, not the wording: an abandonment names nobody, because naming somebody in
+        // the sentence that ends a match with no winner is how a win gets handed out by accident.
+        XCTAssertFalse(abandoning.contains("Jenson"), abandoning)
+        XCTAssertFalse(abandoning.contains("Alex"), abandoning)
+    }
+
+    /// The darts are real either way, so a person's figures include them. Only the result differs.
+    func testAnEndedMatchKeepsTheDartsThrownInIt() throws {
+        let s = try session()
+        s.quick(180); s.quick(60)
+        let before = s.visits.count
+        s.offerToEnd(); s.proposeEnding(.abandoned); s.confirmEnding()
+
+        let reopened = try MatchSession.open(s.record.id, in: journal)
+        XCTAssertEqual(reopened.visits.count, before, "an ending strikes nothing")
+        XCTAssertEqual(reopened.ending, .abandoned, "and is read back from the journal, not assumed")
+        XCTAssertEqual(reopened.remaining(.home), 321)
+    }
 }

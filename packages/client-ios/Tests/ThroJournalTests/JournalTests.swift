@@ -531,4 +531,135 @@ final class JournalTests: XCTestCase {
         XCTAssertEqual(history.unreadable, 1, "and one of them says so")
         XCTAssertEqual(history.visits.count, 1)
     }
+
+    // MARK: - ending a match short (PD-016)
+
+    /// The whole reason there are two endings rather than one. Retiring hands the win to the other
+    /// player; abandoning hands it to nobody, and `winner` being optional is what stops anything
+    /// downstream inventing one.
+    func testRetiringHasAWinnerAndAbandoningHasNone() throws {
+        let j = try open()
+        let retired = try j.createMatch(NewMatch(homeName: "A", awayName: "B"))
+        try j.append(.visit(Seat.home.playerId, 60), to: retired.id)
+        try j.end(retired.id, as: .retired(by: .home))
+        XCTAssertEqual(try j.ending(for: retired.id), .retired(by: .home))
+        XCTAssertEqual(try j.ending(for: retired.id)?.winner, .away, "the player who did not stop")
+        XCTAssertEqual(try j.ending(for: retired.id)?.isResult, true)
+
+        let abandoned = try j.createMatch(NewMatch(homeName: "C", awayName: "D"))
+        try j.append(.visit(Seat.home.playerId, 60), to: abandoned.id)
+        try j.end(abandoned.id, as: .abandoned)
+        XCTAssertEqual(try j.ending(for: abandoned.id), .abandoned)
+        XCTAssertNil(try j.ending(for: abandoned.id)?.winner, "nobody won, and nobody is given the win")
+        XCTAssertEqual(try j.ending(for: abandoned.id)?.isResult, false)
+    }
+
+    /// An abandonment has no seat, and the column will not take a null, so `home` goes in as a
+    /// placeholder. This proves the placeholder is inert: the row is rewritten with the OTHER seat
+    /// and reads back as the same ending. A comment saying "never read" is not a guarantee; this is.
+    func testAbandonmentIgnoresTheSeatItStores() throws {
+        let j = try open()
+        let m = try j.createMatch(NewMatch(homeName: "A", awayName: "B"))
+        try j.append(.visit(Seat.home.playerId, 60), to: m.id)
+        try j.end(m.id, as: .abandoned)
+
+        let asWritten = try j.entries(for: m.id).first { $0.kind == .abandonment }
+        XCTAssertEqual(asWritten?.seat, .home, "the placeholder this test is about")
+
+        // Read the same rows back with the seat flipped. Nothing goes through the journal's writer,
+        // because the journal is append-only and this is a test of the READER.
+        let flipped = try j.entries(for: m.id).map { e -> JournalEntry in
+            guard e.kind == .abandonment else { return e }
+            return JournalEntry(matchId: e.matchId, deviceId: e.deviceId, deviceSeq: e.deviceSeq,
+                                commandId: e.commandId, kind: e.kind, seat: .away, visitTotal: e.visitTotal,
+                                dartsUsed: e.dartsUsed, dartsAtDouble: e.dartsAtDouble,
+                                correctsSeq: e.correctsSeq, occurredAt: e.occurredAt)
+        }
+        XCTAssertEqual(Journal.ending(flipped), .abandoned, "the stored seat changes nothing")
+        XCTAssertNil(Journal.ending(flipped)?.winner)
+    }
+
+    /// An ending is final. Not a preference — the alternative is a result that moves after somebody
+    /// has agreed to it, which is exactly what PD-011's attestation exists to pin down.
+    func testAnEndingIsFinalAndASecondOneIsRefused() throws {
+        let j = try open()
+        let m = try j.createMatch(NewMatch(homeName: "A", awayName: "B"))
+        try j.append(.visit(Seat.home.playerId, 60), to: m.id)
+        try j.end(m.id, as: .retired(by: .away))
+
+        XCTAssertThrowsError(try j.end(m.id, as: .abandoned)) { error in
+            XCTAssertEqual(error as? JournalError, .alreadyEnded(.retired(by: .away)))
+        }
+        XCTAssertEqual(try j.ending(for: m.id), .retired(by: .away), "and the first one still stands")
+    }
+
+    /// No more darts, and no corrections either. Undoing the last visit of a retired match would
+    /// change the scoreline behind a result somebody has already been given.
+    func testAnEndedMatchTakesNoVisitAndNoRetraction() throws {
+        let j = try open()
+        let m = try j.createMatch(NewMatch(homeName: "A", awayName: "B"))
+        try j.append(.visit(Seat.home.playerId, 60), to: m.id)
+        try j.end(m.id, as: .abandoned)
+
+        XCTAssertThrowsError(try j.append(.visit(Seat.away.playerId, 60), to: m.id)) { error in
+            XCTAssertEqual(error as? JournalError, .alreadyEnded(.abandoned))
+        }
+        XCTAssertThrowsError(try j.retractLastVisit(in: m.id)) { error in
+            XCTAssertEqual(error as? JournalError, .alreadyEnded(.abandoned))
+        }
+        XCTAssertEqual(Journal.standingVisits(try j.entries(for: m.id)).count, 1, "nothing was added or struck")
+    }
+
+    /// Ending short changes what the result IS, so an agreement given before it no longer applies.
+    /// Retiring after both players confirmed a scoreline hands the match to somebody neither of them
+    /// agreed had won it.
+    func testAnEndingMakesAnEarlierAgreementStale() throws {
+        let j = try open()
+        let m = try j.createMatch(NewMatch(homeName: "A", awayName: "B", startingScore: 501, legsTarget: 1))
+        try j.append(.visit(Seat.home.playerId, 60), to: m.id)
+        try j.attest(m.id, seat: .home, agrees: true)
+        try j.attest(m.id, seat: .away, agrees: true)
+        XCTAssertTrue(try j.standing(for: m.id).bothConfirmed)
+
+        try j.end(m.id, as: .retired(by: .away))
+        let standing = try j.standing(for: m.id)
+        XCTAssertTrue(standing.stale, "a retirement came after the agreement")
+        XCTAssertFalse(standing.bothConfirmed)
+        XCTAssertEqual(standing.confirmed, [.home, .away], "the answers are still there; they no longer apply")
+    }
+
+    /// The darts are real either way. Only the RESULT differs, so an ended match still replays every
+    /// visit that was thrown in it — an ending is a fact about the record, not a throw.
+    func testAnEndedMatchStillReplaysEveryVisitThrownInIt() throws {
+        let j = try open()
+        let m = try j.createMatch(NewMatch(homeName: "A", awayName: "B", startingScore: 501, legsTarget: 1))
+        try j.append(.visit(Seat.home.playerId, 100), to: m.id)
+        try j.append(.visit(Seat.away.playerId, 60), to: m.id)
+        let before = try j.replayVisits(m.id)
+
+        try j.end(m.id, as: .abandoned)
+        let after = try j.replayVisits(m.id)
+        XCTAssertEqual(after.visits, before.visits, "an ending adds no visit and removes none")
+        XCTAssertEqual(after.state.remaining, before.state.remaining)
+        XCTAssertFalse(after.state.isComplete, "the ENGINE never said this was complete; the journal did")
+    }
+
+    /// A person's darts count from an abandoned match; the match does not. Counted apart rather than
+    /// folded in, because "played 12" meaning "9 played out and 3 walked away from" is a different
+    /// claim to the one it looks like.
+    func testAPersonsHistoryCountsRetiredAndAbandonedApart() throws {
+        let j = try open()
+        let me = "person-1"
+        let cases: [(String, Ending?)] = [("one", nil), ("two", .retired(by: .away)), ("three", .abandoned)]
+        for (name, ending) in cases {
+            let m = try j.createMatch(NewMatch(homeName: name, awayName: "B", homePlayerId: me))
+            try j.append(.visit(Seat.home.playerId, 60), to: m.id)
+            if let ending { try j.end(m.id, as: ending) }
+        }
+        let history = try j.history(of: me)
+        XCTAssertEqual(history.matches, 3)
+        XCTAssertEqual(history.retired, 1)
+        XCTAssertEqual(history.abandoned, 1)
+        XCTAssertEqual(history.visits.count, 3, "every dart thrown counts, including in the abandoned one")
+    }
 }

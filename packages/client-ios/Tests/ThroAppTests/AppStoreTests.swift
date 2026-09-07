@@ -1,5 +1,6 @@
 import Foundation
 import XCTest
+import ThroEngine
 @testable import ThroApp
 @testable import ThroJournal
 
@@ -108,5 +109,37 @@ final class AppStoreTests: XCTestCase {
         XCTAssertEqual(defaults.string(forKey: AppStore.deviceIdKey), "the-original",
                        "and asking again now gives the journal's identity, not a third one")
         XCTAssertEqual(AppStore.deviceId(in: defaults), "the-original")
+    }
+
+    // MARK: - ending a match short (PD-016)
+
+    /// Home has three states, not two. An abandoned match is finished AND is not a result, so a row
+    /// that showed it as "In progress" would offer to resume a match nothing can be added to, and a
+    /// row that showed a verification badge would attest to a result nobody claimed.
+    func testHomeTellsTheThreeEndingsApart() throws {
+        let j = try Journal(path: path, deviceId: DeviceId("home-tests"))
+        let live = try j.createMatch(NewMatch(homeName: "A", awayName: "B"))
+        try j.append(.visit(Seat.home.playerId, 60), to: live.id)
+
+        let retired = try j.createMatch(NewMatch(homeName: "C", awayName: "D"))
+        try j.append(.visit(Seat.home.playerId, 60), to: retired.id)
+        try j.end(retired.id, as: .retired(by: .home))
+
+        let abandoned = try j.createMatch(NewMatch(homeName: "E", awayName: "F"))
+        try j.append(.visit(Seat.home.playerId, 60), to: abandoned.id)
+        try j.end(abandoned.id, as: .abandoned)
+
+        let store = AppStore(journal: j)
+        func row(_ id: MatchId) -> AppStore.HomeMatch { store.matches.first { $0.id == id }! }
+
+        XCTAssertEqual(row(live.id).status, "In progress")
+        XCTAssertFalse(row(live.id).complete)
+
+        XCTAssertEqual(row(retired.id).status, "Retired")
+        XCTAssertTrue(row(retired.id).complete, "the keypad is closed, so the row must not offer to resume")
+
+        XCTAssertEqual(row(abandoned.id).status, "No result")
+        XCTAssertTrue(row(abandoned.id).complete)
+        XCTAssertEqual(row(abandoned.id).ending, .abandoned)
     }
 }

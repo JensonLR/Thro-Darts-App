@@ -26,6 +26,9 @@ public enum JournalError: Error, Equatable, CustomStringConvertible {
     /// The journal holds a command the engine rejects on replay. That is corruption, and a replay
     /// that shrugged past it would rebuild a match that never happened.
     case replayRejected(seq: Int64, reason: String)
+    /// Something was written to a match that has already been retired or abandoned (PD-016). An
+    /// ending is final, so this refuses rather than appending after it.
+    case alreadyEnded(Ending)
 
     public var description: String {
         switch self {
@@ -35,6 +38,11 @@ public enum JournalError: Error, Equatable, CustomStringConvertible {
         case .matchNotFound(let id): return "no match \(id) in this journal"
         case .nothingToRetract: return "there is no visit to undo"
         case let .replayRejected(seq, reason): return "journal entry \(seq) rejected on replay: \(reason)"
+        case let .alreadyEnded(e):
+            switch e {
+            case .retired: return "this match was already retired, and an ending is final"
+            case .abandoned: return "this match was already abandoned, and an ending is final"
+            }
         }
     }
 }
@@ -174,10 +182,17 @@ public struct JournalEntry: Equatable, Sendable {
     /// to `visit`, which would have replayed somebody else's confirmation as a nil-scoring visit and
     /// quietly changed the score and every statistic derived from it. Replay throws on it instead.
     public enum Kind: String, Sendable {
-        case visit, retraction, confirmation, contest, unknown
+        case visit, retraction, confirmation, contest, retirement, abandonment, unknown
 
         /// The kinds that carry a score. Everything else is a fact about the record, not a throw.
         var isScoring: Bool { self == .visit }
+
+        /// The kinds that close a match short of its format (PD-016). Both are final.
+        var endsTheMatch: Bool { self == .retirement || self == .abandonment }
+
+        /// The kinds that change what the result IS, and so make an earlier agreement stale.
+        /// A confirmation or a contest is somebody's opinion of the result and changes nothing.
+        var changesTheResult: Bool { isScoring || self == .retraction || endsTheMatch }
     }
 
     public let matchId: MatchId
@@ -197,6 +212,41 @@ public struct JournalEntry: Equatable, Sendable {
     public var command: Command? {
         guard kind.isScoring else { return nil }
         return .recordVisit(player: seat.playerId, visitTotal: visitTotal, dartsUsed: dartsUsed, dartsAtDouble: dartsAtDouble)
+    }
+}
+
+/// How a match ended short of its format (PD-016).
+///
+/// The founder chose to have both, and they are genuinely different things rather than two words
+/// for one. A **retirement** is a concession: somebody stops and the other player wins, which is
+/// how darts has always handled an injury or a walk-off, and it is a result that should count. An
+/// **abandonment** has no winner — the pub shut, the lights went out — and inventing one would put a
+/// win on somebody's record that nobody threw for.
+///
+/// Collapsing them would force exactly one of those two errors, which is why there are two.
+public enum Ending: Equatable, Sendable {
+    /// `seat` is the player who **retired**. The other seat won.
+    case retired(by: Seat)
+    /// Nobody won, and nobody is going to be given the win.
+    case abandoned
+
+    /// Who won, when anybody did. `nil` for an abandonment is the whole point of the type.
+    public var winner: Seat? {
+        switch self {
+        case let .retired(by): return by == .home ? .away : .home
+        case .abandoned: return nil
+        }
+    }
+
+    /// Whether this ending produces a result at all. An abandoned match is a thing that happened,
+    /// not a match somebody won, so nothing downstream may treat it as one.
+    public var isResult: Bool { winner != nil }
+
+    var kind: JournalEntry.Kind {
+        switch self {
+        case .retired: return .retirement
+        case .abandoned: return .abandonment
+        }
     }
 }
 
@@ -525,6 +575,11 @@ public final class Journal {
 
         try Journal.exec(handle, "BEGIN IMMEDIATE;")
         do {
+            // A retired or abandoned match takes no more darts (PD-016). Inside the transaction, so
+            // the check and the insert cannot be separated by another writer.
+            if let already = Journal.ending(try entries(for: matchId)) {
+                throw JournalError.alreadyEnded(already)
+            }
             var next: Int64 = 1
             try run("SELECT COALESCE(MAX(device_seq), 0) + 1 FROM journal WHERE match_id = ? AND device_id = ?;",
                     [.text(matchId.value), .text(deviceId.value)]) { s in
@@ -563,6 +618,12 @@ public final class Journal {
         try Journal.exec(handle, "BEGIN IMMEDIATE;")
         do {
             let all = try entries(for: matchId)
+            // An ended match is closed to corrections too (PD-016). Undoing the last visit of a
+            // retired match would change the scoreline behind a result that has already been given
+            // to somebody, which is the moving claim an ending exists to stop.
+            if let already = Journal.ending(all) {
+                throw JournalError.alreadyEnded(already)
+            }
             guard let target = Journal.standingVisits(all).last else {
                 throw JournalError.nothingToRetract
             }
@@ -629,6 +690,69 @@ public final class Journal {
         }
     }
 
+    // MARK: - ending a match short (PD-016)
+
+    /// Closes a match that will not be played out: a retirement, which has a winner, or an
+    /// abandonment, which does not.
+    ///
+    /// **An ending is final.** Nothing here retracts it, and `append` refuses a visit afterwards.
+    /// That is a deliberate departure from PD-004, which makes a mis-keyed *visit* undoable: a visit
+    /// is a transcription and endings are declarations, taken behind a confirmation on the screen.
+    /// If an ending could be undone the match could un-end, and "the result" would be a claim that
+    /// moves — precisely what the attestation in PD-011 exists to pin down. A match ended in error
+    /// stays ended and says what happened, which is what an evidence journal is for.
+    @discardableResult
+    public func end(_ matchId: MatchId, as ending: Ending,
+                    occurredAt: Date = Date(), commandId: String = UUID().uuidString) throws -> JournalEntry {
+        try Journal.exec(handle, "BEGIN IMMEDIATE;")
+        do {
+            let all = try entries(for: matchId)
+            if let already = Journal.ending(all) {
+                throw JournalError.alreadyEnded(already)
+            }
+            var next: Int64 = 1
+            try run("SELECT COALESCE(MAX(device_seq), 0) + 1 FROM journal WHERE match_id = ? AND device_id = ?;",
+                    [.text(matchId.value), .text(deviceId.value)]) { s in
+                next = sqlite3_column_int64(s, 0)
+            }
+            // An abandonment has no seat, and the column will not take a null. `home` is written as
+            // a placeholder and is NEVER read back for an abandonment — `Journal.ending` branches on
+            // the kind before it looks at the seat. `abandonmentIgnoresTheSeatItStores` proves the
+            // placeholder is inert by storing the other one and reading the same answer, which is a
+            // stronger guarantee than this comment.
+            let seat: Seat = { if case let .retired(by) = ending { return by } else { return .home } }()
+            try run("""
+                INSERT INTO journal (match_id, device_id, device_seq, command_id, kind, seat, visit_total,
+                                     darts_used, darts_at_double, corrects_seq, occurred_at)
+                VALUES (?, ?, ?, ?, ?, ?, 0, NULL, NULL, NULL, ?);
+                """, [
+                    .text(matchId.value), .text(deviceId.value), .int(next), .text(commandId),
+                    .text(ending.kind.rawValue), .text(seat.rawValue), .text(Journal.iso.string(from: occurredAt)),
+                ])
+            try Journal.exec(handle, "COMMIT;")
+            return JournalEntry(matchId: matchId, deviceId: deviceId, deviceSeq: next, commandId: commandId,
+                                kind: ending.kind, seat: seat, visitTotal: 0, dartsUsed: nil,
+                                dartsAtDouble: nil, correctsSeq: nil, occurredAt: occurredAt)
+        } catch {
+            try? Journal.exec(handle, "ROLLBACK;")
+            throw error
+        }
+    }
+
+    /// How this match ended short, if it did. `nil` means it is still open or was played out.
+    public func ending(for matchId: MatchId) throws -> Ending? {
+        Journal.ending(try entries(for: matchId))
+    }
+
+    public static func ending(_ entries: [JournalEntry]) -> Ending? {
+        // The earliest ending wins. `end` refuses a second one, so there is normally only ever one;
+        // reading the earliest rather than the latest means a file that somehow carries two still
+        // answers with the ending that actually stopped play.
+        guard let row = entries.filter({ $0.kind.endsTheMatch }).min(by: { $0.deviceSeq < $1.deviceSeq })
+        else { return nil }
+        return row.kind == .retirement ? .retired(by: row.seat) : .abandoned
+    }
+
     /// Who stands behind the result as it is recorded right now.
     public struct Standing: Equatable, Sendable {
         public let confirmed: Set<Seat>
@@ -662,8 +786,11 @@ public final class Journal {
         guard let lastAttestation = attestations.map(\.deviceSeq).max() else {
             return Standing(confirmed: [], contested: [], stale: false)
         }
+        // Anything that changes what the result IS — a visit, a retraction, or an ending (PD-016) —
+        // overtakes an agreement. Retiring after both players confirmed a scoreline hands the match
+        // to somebody neither of them agreed had won it.
         let changedAfter = entries.contains {
-            ($0.kind == .visit || $0.kind == .retraction) && $0.deviceSeq > lastAttestation
+            $0.kind.changesTheResult && $0.deviceSeq > lastAttestation
         }
         // The last word each player said. Somebody who contests and then agrees has agreed.
         var latest: [Seat: JournalEntry] = [:]
@@ -765,6 +892,13 @@ public final class Journal {
         /// The out-rules across their matches. More than one means the checkout figures cannot be
         /// pooled, because "was this visit thrown from a finishable position" depends on the rule.
         public let outRules: Set<String>
+        /// Matches of theirs that were abandoned (PD-016). Their darts are in `visits` — those were
+        /// thrown and are as real as any other — but the match produced no result, so it is counted
+        /// separately rather than folded into a record of matches played out.
+        public let abandoned: Int
+        /// Matches of theirs that ended in a retirement, by either player. A result, and counted as
+        /// one; named separately because a season with six of them is worth being able to see.
+        public let retired: Int
     }
 
     /// Replays every match a person is named in and returns their visits, with legs renumbered.
@@ -776,7 +910,7 @@ public final class Journal {
     public func history(of personId: String) throws -> PersonHistory {
         var pooled: [ReplayedVisit] = []
         var legOffset = 0
-        var matches = 0, legsWon = 0, unreadable = 0
+        var matches = 0, legsWon = 0, unreadable = 0, abandoned = 0, retired = 0
         var outRules: Set<String> = []
 
         for record in try self.matches() {
@@ -785,6 +919,11 @@ public final class Journal {
             matches += 1
             outRules.insert(record.outRule.rawValue)
             do {
+                switch try ending(for: record.id) {
+                case .abandoned: abandoned += 1
+                case .retired: retired += 1
+                case nil: break
+                }
                 let replayed = try replayVisits(record.id)
                 let legsHere = replayed.visits.map(\.legOrdinal).max() ?? 0
                 for seat in seats {
@@ -803,7 +942,8 @@ public final class Journal {
             }
         }
         return PersonHistory(visits: pooled, matches: matches, legsWon: legsWon,
-                             unreadable: unreadable, outRules: outRules)
+                             unreadable: unreadable, outRules: outRules,
+                             abandoned: abandoned, retired: retired)
     }
 
     // MARK: - plumbing

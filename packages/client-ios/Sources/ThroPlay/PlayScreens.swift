@@ -315,12 +315,24 @@ public struct ScoringScreen: View {
         ZStack {
             VStack(spacing: 0) {
                 MatchHeader(competition: "\(session.name(.home)) v \(session.name(.away))", format: session.formatLabel,
-                            onBack: onLeave)
+                            onBack: onLeave,
+                            onEnd: session.mayEndShort ? session.offerToEnd : nil)
                 // Everything above the keypad shares the height the keypad leaves. Nothing scrolls
                 // and nothing is cut off: when a phone is short, the hero numeral yields first.
                 upper
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-                if let prompt = session.prompt {
+                // One place at a time, in the keypad's own space — the precedent PromptCard and
+                // RetractionCard already set. Ending outranks a retraction proposal: a player who
+                // reaches for the way out while an undo is offered means the way out.
+                if let flow = session.endFlow {
+                    switch flow {
+                    case .choosing:
+                        EndMatchCard(session: session, onChoose: session.proposeEnding, onCancel: session.cancelEnding)
+                    case let .confirming(ending):
+                        EndMatchConfirmCard(session: session, ending: ending,
+                                            onConfirm: session.confirmEnding, onCancel: session.cancelEnding)
+                    }
+                } else if let prompt = session.prompt {
                     PromptCard(prompt: prompt, onAnswer: session.answer, onCancel: session.cancelPrompt)
                 } else if let proposal = session.retraction {
                     RetractionCard(proposal: proposal, playerName: session.name(proposal.seat),
@@ -340,6 +352,8 @@ public struct ScoringScreen: View {
         .onReceive(session.$state) { state in
             if state.isComplete { onComplete() }
         }
+        // A match ended short is over too, and leaves for the same screen (PD-016).
+        .onReceive(session.$ending) { if $0 != nil { onComplete() } }
         .onAppear { setIdleTimer(disabled: keepScreenAwake) }
         .onDisappear { setIdleTimer(disabled: false) }
     }
@@ -590,6 +604,98 @@ public struct RetractionCard: View {
     }
 }
 
+// MARK: - Ending a match short (PD-016)
+
+/// The offer. Two buttons, because a retirement and an abandonment are different things and the app
+/// must not pick for the player: one hands somebody the win, the other hands it to nobody.
+///
+/// Drawn in the system's idiom rather than invented — the same `Eyebrow` / heading / metadata /
+/// button stack `RetractionCard` uses, because this is the same kind of moment: a serious, recorded
+/// thing being offered with its consequence stated before it is taken.
+public struct EndMatchCard: View {
+    private let session: MatchSession
+    private let onChoose: (Ending) -> Void
+    private let onCancel: () -> Void
+
+    public init(session: MatchSession, onChoose: @escaping (Ending) -> Void, onCancel: @escaping () -> Void) {
+        self.session = session
+        self.onChoose = onChoose
+        self.onCancel = onCancel
+    }
+
+    public var body: some View {
+        VStack(alignment: .leading, spacing: ThroSpacing.spacing3) {
+            Eyebrow("End this match")
+            Text("How did it end?")
+                .thro(ThroTypography.heading2)
+                .foregroundStyle(ThroColor.colorTextPrimary)
+            Text("The darts already thrown are kept either way. What differs is whether anybody won.")
+                .thro(ThroTypography.metadata)
+                .foregroundStyle(ThroColor.colorTextSecondary)
+                .fixedSize(horizontal: false, vertical: true)
+            ForEach(Seat.allCases, id: \.self) { seat in
+                ThroButton("\(session.name(seat)) retires", variant: .secondary, size: .large,
+                           fullWidth: true, action: { onChoose(.retired(by: seat)) })
+            }
+            ThroButton("Abandon — nobody wins", variant: .secondary, size: .large,
+                       fullWidth: true, action: { onChoose(.abandoned) })
+            ThroButton("Keep playing", variant: .ghost, size: .medium, action: onCancel)
+        }
+        .padding(.vertical, ThroSpacing.spacing4)
+        .padding(.horizontal, ThroSpacing.spaceScreenGutter)
+        .background(ThroColor.colorBackgroundPrimary)
+    }
+}
+
+/// The confirmation. An ending is final and nothing undoes it, so it is never one tap away and the
+/// consequence is spelt out in the same sentence as the button that causes it.
+public struct EndMatchConfirmCard: View {
+    private let session: MatchSession
+    private let ending: Ending
+    private let onConfirm: () -> Void
+    private let onCancel: () -> Void
+
+    public init(session: MatchSession, ending: Ending,
+                onConfirm: @escaping () -> Void, onCancel: @escaping () -> Void) {
+        self.session = session
+        self.ending = ending
+        self.onConfirm = onConfirm
+        self.onCancel = onCancel
+    }
+
+    private var headline: String {
+        switch ending {
+        case let .retired(by): return "\(session.name(by)) retires?"
+        case .abandoned: return "Abandon this match?"
+        }
+    }
+
+    public var body: some View {
+        VStack(alignment: .leading, spacing: ThroSpacing.spacing3) {
+            Eyebrow("End this match")
+            Text(headline)
+                .thro(ThroTypography.heading2)
+                .foregroundStyle(ThroColor.colorTextPrimary)
+            Text(session.endingConsequence(ending))
+                .thro(ThroTypography.metadata)
+                .foregroundStyle(ThroColor.colorTextSecondary)
+                .fixedSize(horizontal: false, vertical: true)
+            // Said outright, because it is the part that would be a surprise. PD-004 makes a
+            // mis-keyed visit undoable and a player will reasonably expect the same here.
+            Text("This cannot be undone.")
+                .thro(ThroTypography.metadata)
+                .foregroundStyle(ThroColor.colorStatusError)
+            HStack(spacing: ThroSpacing.spacing2) {
+                ThroButton("End the match", variant: .destructive, size: .large, fullWidth: true, action: onConfirm)
+                ThroButton("Back", variant: .secondary, size: .large, fullWidth: true, action: onCancel)
+            }
+        }
+        .padding(.vertical, ThroSpacing.spacing4)
+        .padding(.horizontal, ThroSpacing.spaceScreenGutter)
+        .background(ThroColor.colorBackgroundPrimary)
+    }
+}
+
 // MARK: - Result
 
 /// After `result` and `shadow-result`. No RatingMovement (OD-001: no rating model is validated) and
@@ -619,11 +725,17 @@ public struct MatchResultScreen: View {
                 VStack(alignment: .leading, spacing: 0) {
                     section {
                         MatchSummary(
-                            headline: session.winner.map { "\(session.name($0)) wins" } ?? "In progress",
+                            headline: session.resultHeadline,
                             won: session.winner != nil,
                             score: "\(session.legsWon(.home))–\(session.legsWon(.away))",
                             opponent: "\(session.name(.home)) v \(session.name(.away)) · \(session.formatLabel)"
                         )
+                        if let detail = session.resultDetail {
+                            Text(detail)
+                                .thro(ThroTypography.metadata)
+                                .foregroundStyle(ThroColor.colorTextSecondary)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
                         Tag("Not rated", tone: .neutral, icon: .info).padding(.top, ThroSpacing.spacing4)
                     }
                     ThroDivider(inset: ThroSpacing.spaceScreenGutter)
@@ -636,6 +748,15 @@ public struct MatchResultScreen: View {
                     }
                     section {
                         SectionHeader("Evidence")
+                        if session.ending == .abandoned {
+                            // No result, so no label. A verification badge here would be attesting
+                            // to nothing, and "self-reported" on an abandoned match reads as a
+                            // claim somebody made rather than as the absence of one.
+                            Text("There is no result to verify. The visits are recorded as thrown; nothing is claimed about who won, because nobody did.")
+                                .thro(ThroTypography.metadata)
+                                .foregroundStyle(ThroColor.colorTextSecondary)
+                                .fixedSize(horizontal: false, vertical: true)
+                        } else {
                         VerificationState(session.verification, explain: true)
                         if session.verification == .participantConfirmed {
                             // Said plainly, because the label alone would flatter it. Two people at
@@ -657,6 +778,7 @@ public struct MatchResultScreen: View {
                                 .foregroundStyle(ThroColor.colorTextSecondary)
                                 .fixedSize(horizontal: false, vertical: true)
                         }
+                        }
                         Text("Saved on this device. Sending results to THRØ is not built yet, so this one has not left the phone.")
                             .thro(ThroTypography.metadata)
                             .foregroundStyle(ThroColor.colorTextSecondary)
@@ -674,7 +796,11 @@ public struct MatchResultScreen: View {
                             ThroButton("Done", variant: .primary, size: .large, fullWidth: true, action: onDone)
                             ThroButton("Play again", variant: .secondary, size: .large, fullWidth: true, action: onPlayAgain)
                             // The mis-key that ends a match is the one that most needs undoing (PD-004).
-                            ThroButton("Undo last visit", variant: .ghost, size: .medium, action: session.proposeRetraction)
+                            // Not on an ended match: the journal refuses it there (PD-016), and a
+                            // button whose only outcome is a refusal is worse than no button.
+                            if session.ending == nil {
+                                ThroButton("Undo last visit", variant: .ghost, size: .medium, action: session.proposeRetraction)
+                            }
                         }
                     }
                 }
@@ -682,8 +808,11 @@ public struct MatchResultScreen: View {
         }
         .background(ThroColor.colorBackgroundPrimary.ignoresSafeArea())
         .throAppearance(Appearance(stored: appearanceRaw))
+        // Undoing the visit that won a match reopens it. An ended match must NOT reopen: the engine
+        // never said it was complete, so `state.isComplete` is false for a perfectly ended match and
+        // this would have bounced straight back to the keypad on a retirement.
         .onReceive(session.$state) { state in
-            if !state.isComplete { onReopen() }
+            if !state.isComplete && session.ending == nil { onReopen() }
         }
     }
 
@@ -731,11 +860,19 @@ public struct ConfirmResultScreen: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: ThroSpacing.spacing5) {
                     MatchSummary(
-                        headline: session.winner.map { "\(session.name($0)) wins" } ?? "In progress",
+                        headline: session.resultHeadline,
                         won: session.winner != nil,
                         score: "\(session.legsWon(.home))–\(session.legsWon(.away))",
                         opponent: "\(session.name(.home)) v \(session.name(.away)) · \(session.formatLabel)"
                     )
+                    // A retirement is exactly the kind of result people later disagree about, so
+                    // what is being confirmed is said before the question is asked.
+                    if let detail = session.resultDetail {
+                        Text(detail)
+                            .thro(ThroTypography.metadata)
+                            .foregroundStyle(ThroColor.colorTextSecondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
                     if let seat = asking {
                         asking(seat)
                     } else {

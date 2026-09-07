@@ -17,7 +17,31 @@ public final class AppStore: ObservableObject {
         /// journal is unreadable is still a match that happened: it stays on the list and says so,
         /// rather than disappearing and leaving the player to wonder whether they imagined it.
         public let unreadable: String?
+        /// How it ended short, if it did (PD-016). `complete` is true for both kinds, because the
+        /// keypad is closed either way; this is what says which of the three it was.
+        public let ending: Ending?
         public var id: MatchId { record.id }
+
+        /// The status word on the row. Three states, not two: an abandoned match is finished and is
+        /// not a result, and a row that showed it as either "In progress" or a win would be wrong.
+        public var status: String {
+            if unreadable != nil { return "Unreadable" }
+            switch ending {
+            case .retired: return "Retired"
+            case .abandoned: return "No result"
+            case nil: return complete ? "Finished" : "In progress"
+            }
+        }
+
+        public init(record: MatchRecord, legsHome: Int, legsAway: Int, complete: Bool,
+                    unreadable: String?, ending: Ending? = nil) {
+            self.record = record
+            self.legsHome = legsHome
+            self.legsAway = legsAway
+            self.complete = complete
+            self.unreadable = unreadable
+            self.ending = ending
+        }
     }
 
     public let journal: Journal?
@@ -108,10 +132,14 @@ public final class AppStore: ObservableObject {
         matches = records.map { record in
             do {
                 let state = try journal.replay(record.id)
+                let ending = try journal.ending(for: record.id)
                 return HomeMatch(record: record,
                                  legsHome: state.legsWonTotal[Seat.home.playerId] ?? 0,
                                  legsAway: state.legsWonTotal[Seat.away.playerId] ?? 0,
-                                 complete: state.isComplete, unreadable: nil)
+                                 // Ended short counts as complete here: the keypad is closed and the
+                                 // row must not offer to resume a match nothing more can be added to.
+                                 complete: state.isComplete || ending != nil, unreadable: nil,
+                                 ending: ending)
             } catch {
                 return HomeMatch(record: record, legsHome: 0, legsAway: 0,
                                  complete: false, unreadable: "\(error)")
@@ -290,12 +318,22 @@ public struct MatchRow: View {
                     Text("\(match.record.startingScore) · Bo\(match.record.legsTarget) · \(match.record.startedAt.formatted(date: .abbreviated, time: .shortened))")
                         .thro(ThroTypography.metadata)
                         .foregroundStyle(ThroColor.colorTextSecondary)
-                    Spacer()
+                        .lineLimit(1)
+                    Spacer(minLength: ThroSpacing.spacing2)
                     if match.unreadable != nil {
                         // The score is not shown because it is not known. A match whose rows will not
                         // replay must not be opened into a scoring screen built on a state that could
                         // not be rebuilt, and must not be quietly dropped from the list either.
                         Tag("Cannot be read", tone: .error)
+                    } else if match.ending == .abandoned {
+                        // NOT a verification state. There is no result here, and a "self-reported"
+                        // badge would be attesting to a claim nobody made (PD-016).
+                        Tag("No result", tone: .neutral)
+                    } else if match.ending != nil {
+                        // A retirement IS a result, and it is the kind people later disagree about,
+                        // so the row carries both what it was and who stands behind it.
+                        Tag("Retired", tone: .warning)
+                        VerificationState(.selfReported, compact: true)
                     } else if match.complete {
                         VerificationState(.selfReported, compact: true)
                     } else {

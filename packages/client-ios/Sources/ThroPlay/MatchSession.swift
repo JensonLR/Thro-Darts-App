@@ -101,6 +101,7 @@ public final class MatchSession: ObservableObject {
         // Read on open, so reopening a finished match shows what was actually agreed (PD-011)
         // rather than starting again from nothing.
         self.standing = try journal.standing(for: record.id)
+        self.ending = try journal.ending(for: record.id)
     }
 
     public static func start(_ new: NewMatch, in journal: Journal) throws -> MatchSession {
@@ -114,13 +115,97 @@ public final class MatchSession: ObservableObject {
     // MARK: - derived
 
     public var thrower: Seat? { state.thrower.flatMap(Seat.init(playerId:)) }
-    public var winner: Seat? { state.winner.flatMap(Seat.init(playerId:)) }
-    public var isComplete: Bool { state.isComplete }
+
+    /// Who won. The engine's answer when the match was played out; the **other** seat when somebody
+    /// retired; and **nobody** when it was abandoned, which is why this is optional and why nothing
+    /// downstream may fill it in (PD-016).
+    public var winner: Seat? {
+        if let ending { return ending.winner }
+        return state.winner.flatMap(Seat.init(playerId:))
+    }
+
+    /// Whether the match is over — played out, or ended short (PD-016). Both close the keypad.
+    public var isComplete: Bool { state.isComplete || ending != nil }
+
+    /// Whether it was played to its format. A retired match has a winner and is still not this.
+    public var wasPlayedOut: Bool { state.isComplete && ending == nil }
     public func name(_ seat: Seat) -> String { record.name(seat) }
     public func remaining(_ seat: Seat) -> Int { state.remaining[seat.playerId] ?? record.startingScore }
     public func legsWon(_ seat: Seat) -> Int { state.legsWonTotal[seat.playerId] ?? 0 }
     public var checkable: Set<Int> { RuleTables.checkouts(record.outRule) }
     public var throwerOnAFinish: Bool { thrower.map { checkable.contains(remaining($0)) } ?? false }
+
+    // MARK: - ending a match short (PD-016)
+
+    /// How this match ended short, if it did. Read from the journal, never assumed.
+    @Published public private(set) var ending: Ending?
+
+    /// Two steps, because an ending is final and so is never one tap away: choose which kind, then
+    /// confirm that one with its consequence spelt out.
+    public enum EndFlow: Equatable, Sendable {
+        case choosing
+        case confirming(Ending)
+    }
+
+    /// Where the player is in that flow, or nil when they are not in it.
+    @Published public private(set) var endFlow: EndFlow?
+
+    /// Whether ending short is offered at all. A match already over — played out or ended — is not
+    /// ended again, and a match nobody has thrown a dart in is closed by leaving it, not by
+    /// retiring: there is no result to protect and no darts to keep.
+    public var mayEndShort: Bool { !isComplete && !visits.isEmpty }
+
+    public func offerToEnd() {
+        guard mayEndShort else { return }
+        endFlow = .choosing
+    }
+
+    public func proposeEnding(_ ending: Ending) {
+        guard mayEndShort else { return }
+        endFlow = .confirming(ending)
+    }
+
+    /// Steps back one: from the confirmation to the choice, and from the choice out of the flow.
+    /// One `Back` that means "out" would make the destructive button the only way forward.
+    public func cancelEnding() {
+        switch endFlow {
+        case .confirming: endFlow = .choosing
+        case .choosing, nil: endFlow = nil
+        }
+    }
+
+    /// What the confirm sheet says, in the words the screen shows. Written here rather than in the
+    /// view because these two sentences are the whole difference between the two endings, and a
+    /// screen that got them the wrong way round would record the opposite of what happened.
+    public func endingConsequence(_ ending: Ending) -> String {
+        switch ending {
+        case let .retired(by):
+            return "\(name(by)) stops, so \(name(by == .home ? .away : .home)) wins. "
+                 + "It is recorded as a retirement, not as a match played out."
+        case .abandoned:
+            return "Nobody wins, and nobody is given the win. "
+                 + "The darts already thrown are kept; the match counts as no result."
+        }
+    }
+
+    /// Writes the ending. Journal first, screen second, like every other change here — so a match
+    /// never shows as ended until the row that ends it has committed.
+    public func confirmEnding() {
+        guard case let .confirming(proposed) = endFlow else { return }
+        do {
+            try journal.end(record.id, as: proposed)
+            ending = try journal.ending(for: record.id)
+            standing = try journal.standing(for: record.id)
+            endFlow = nil
+            notice = Notice(text: proposed.isResult ? "Recorded as a retirement." : "Recorded as abandoned — no result.",
+                            tone: .neutral)
+        } catch {
+            // The confirmation stays up: nothing was written, so the offer is still live and the
+            // player can try again rather than being returned to a match that looks unchanged
+            // because it *is* unchanged.
+            notice = Notice(text: "Not saved, so not recorded. \(error)", tone: .error)
+        }
+    }
 
     // MARK: - attestation (PD-011)
 
@@ -141,9 +226,35 @@ public final class MatchSession: ObservableObject {
         return .selfReported
     }
 
+    /// Whether there is a result here for anybody to stand behind. An abandoned match has none, so
+    /// there is nothing to confirm and nothing to dispute (PD-016).
+    public var hasResult: Bool { isComplete && winner != nil }
+
+    /// What the Result screen leads with. Here rather than in the view because "no result" and
+    /// "in progress" are different states that a `winner ?? "In progress"` would collapse into one,
+    /// and an abandoned match reading as still in progress is exactly the wrong answer.
+    public var resultHeadline: String {
+        if ending == .abandoned { return "No result" }
+        if let winner { return "\(name(winner)) wins" }
+        return "In progress"
+    }
+
+    /// The line under it, when the match did not simply get played out. Nil when it did — a normal
+    /// win needs no explanation.
+    public var resultDetail: String? {
+        switch ending {
+        case let .retired(by):
+            return "\(name(by)) retired. The legs stand as they were; this is recorded as a retirement, not as a match played out."
+        case .abandoned:
+            return "This match was abandoned. The darts thrown are kept and count towards both players' figures; the match itself counts for nobody."
+        case nil:
+            return nil
+        }
+    }
+
     /// Seats still to answer. Empty when both have, which is what ends the confirm flow.
     public var awaitingAttestation: [Seat] {
-        guard isComplete else { return [] }
+        guard hasResult else { return [] }
         if standing.stale { return Seat.allCases }
         return Seat.allCases.filter { !standing.confirmed.contains($0) && !standing.contested.contains($0) }
     }
