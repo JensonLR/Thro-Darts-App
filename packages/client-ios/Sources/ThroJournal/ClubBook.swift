@@ -130,6 +130,9 @@ public struct StoredFixture: Equatable, Sendable {
     /// 1-based, because that is how a draw sheet is read.
     public let round: Int?
     public let slot: Int?
+    /// Which bracket, in a shape that has more than one: `winners`, `losers` or `final` under double
+    /// elimination (PD-021). Nil in a knockout, which has only one, and everywhere else.
+    public let bracket: String?
 
     public var isBetweenTeams: Bool { homeTeamId != nil && awayTeamId != nil }
     public var isDrawn: Bool { round != nil && slot != nil }
@@ -179,6 +182,9 @@ public final class ClubBook {
     /// The four shapes a tournament may be (PD-021). All four were chosen at once deliberately: a
     /// shape added later is not a feature bolted on, it is a second design of the same screens.
     public static let tournamentShapes: Set<String> = ["knockout", "groups", "roundRobin", "doubleElimination"]
+    /// The brackets a drawn match can belong to. A knockout uses none of them: it has one bracket, so
+    /// naming it would be naming the only thing there is.
+    public static let brackets: Set<String> = ["winners", "losers", "final"]
     /// What a league's results are counted in (PD-022). The three ways darts leagues actually run.
     public static let resultUnits: Set<String> = ["legs", "matches", "points"]
     /// What a win and a draw are worth when a league does not say. The common answer in pub and
@@ -273,7 +279,8 @@ public final class ClubBook {
             try Journal.exec(h, "ALTER TABLE club ADD COLUMN \(column);")
         }
         let fixtureColumns = try Journal.columnNames(h, table: "club_fixture")
-        for column in ["home_team_id TEXT", "away_team_id TEXT", "round INTEGER", "slot INTEGER"]
+        for column in ["home_team_id TEXT", "away_team_id TEXT", "round INTEGER", "slot INTEGER",
+                       "bracket TEXT"]
         where !fixtureColumns.contains(String(column.split(separator: " ")[0])) {
             try Journal.exec(h, "ALTER TABLE club_fixture ADD COLUMN \(column);")
         }
@@ -492,7 +499,7 @@ public final class ClubBook {
     @discardableResult
     public func addFixture(to clubId: String, title: String, when: Date, venue: String,
                            homeTeam: String? = nil, awayTeam: String? = nil,
-                           round: Int? = nil, slot: Int? = nil,
+                           round: Int? = nil, slot: Int? = nil, bracket: String? = nil,
                            id: String = UUID().uuidString) throws -> StoredFixture {
         let clean = try ClubBook.checkedName(title)
         try requireClub(clubId)
@@ -514,33 +521,49 @@ public final class ClubBook {
             throw ClubBookError.unknownValue(field: "draw position",
                                              value: "a round and a slot are given together or not at all")
         }
+        if let bracket {
+            try ClubBook.check(bracket, in: ClubBook.brackets, field: "bracket")
+            guard round != nil else {
+                throw ClubBookError.unknownValue(field: "bracket",
+                                                 value: "a bracket without a round is not a position")
+            }
+        }
         if let round, let slot {
             guard round >= 1, slot >= 1 else {
                 throw ClubBookError.unknownValue(field: "draw position", value: "rounds and slots start at 1")
             }
+            // A position is (bracket, round, slot). Under double elimination the winners' and the
+            // losers' side both have a round 2 slot 1, and they are different matches — so the
+            // bracket is part of the key rather than something a later read has to disambiguate.
             var taken = false
             try run("""
-                SELECT 1 FROM club_fixture WHERE club_id = ? AND round = ? AND slot = ?;
-                """, [.text(clubId), .int(Int64(round)), .int(Int64(slot))]) { _ in taken = true }
+                SELECT 1 FROM club_fixture
+                WHERE club_id = ? AND round = ? AND slot = ?
+                  AND (bracket IS ? OR (bracket IS NULL AND ? IS NULL));
+                """, [.text(clubId), .int(Int64(round)), .int(Int64(slot)),
+                      bracket.map { Journal.Param.text($0) } ?? .null,
+                      bracket.map { Journal.Param.text($0) } ?? .null]) { _ in taken = true }
             guard !taken else {
-                throw ClubBookError.unknownValue(field: "draw position",
-                                                 value: "round \(round) slot \(slot) is already drawn")
+                throw ClubBookError.unknownValue(
+                    field: "draw position",
+                    value: "\(bracket.map { "\($0) " } ?? "")round \(round) slot \(slot) is already drawn")
             }
         }
         try run("""
             INSERT INTO club_fixture (club_id, fixture_id, title, when_at, venue, state,
-                                      home_team_id, away_team_id, round, slot)
-            VALUES (?, ?, ?, ?, ?, 'scheduled', ?, ?, ?, ?);
+                                      home_team_id, away_team_id, round, slot, bracket)
+            VALUES (?, ?, ?, ?, ?, 'scheduled', ?, ?, ?, ?, ?);
             """, [.text(clubId), .text(id), .text(clean), .text(Journal.iso.string(from: when)),
                   .text(venue.trimmingCharacters(in: .whitespacesAndNewlines)),
                   homeTeam.map { Journal.Param.text($0) } ?? .null,
                   awayTeam.map { Journal.Param.text($0) } ?? .null,
                   round.map { Journal.Param.int(Int64($0)) } ?? .null,
-                  slot.map { Journal.Param.int(Int64($0)) } ?? .null])
+                  slot.map { Journal.Param.int(Int64($0)) } ?? .null,
+                  bracket.map { Journal.Param.text($0) } ?? .null])
         return StoredFixture(clubId: clubId, id: id, title: clean, when: when,
                              venue: venue.trimmingCharacters(in: .whitespacesAndNewlines),
                              state: "scheduled", homeTeamId: homeTeam, awayTeamId: awayTeam,
-                             round: round, slot: slot)
+                             round: round, slot: slot, bracket: bracket)
     }
 
     /// Moves a fixture. Cancelled and played are terminal — the same rule the Kotlin domain states,
@@ -560,7 +583,7 @@ public final class ClubBook {
         var out: [StoredFixture] = []
         try run("""
             SELECT club_id, fixture_id, title, when_at, venue, state, home_team_id, away_team_id,
-                   round, slot
+                   round, slot, bracket
             FROM club_fixture WHERE club_id = ? ORDER BY round, slot, when_at;
             """, [.text(clubId)]) { s in
             let state = Journal.text(s, 5)
@@ -583,7 +606,12 @@ public final class ClubBook {
                 homeTeamId: both ? home : nil, awayTeamId: both ? away : nil,
                 // Half a draw position is not one, for the same reason half a team fixture is not:
                 // everything that reads it needs both to know where the winner goes.
-                round: drawn ? round : nil, slot: drawn ? slot : nil))
+                round: drawn ? round : nil, slot: drawn ? slot : nil,
+                bracket: {
+                    guard drawn, sqlite3_column_type(s, 10) != SQLITE_NULL else { return nil }
+                    let value = Journal.text(s, 10)
+                    return ClubBook.brackets.contains(value) ? value : nil
+                }()))
         }
         return out
     }

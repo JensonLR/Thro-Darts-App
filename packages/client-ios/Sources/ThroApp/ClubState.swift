@@ -94,10 +94,12 @@ public struct Fixture: Identifiable, Equatable, Sendable {
     /// fixtures are a list rather than a bracket.
     public let round: Int?
     public let slot: Int?
+    /// Which bracket, under double elimination (PD-021). Nil in a knockout, which has one.
+    public let bracket: String?
 
     public init(id: String, title: String, when: String, venue: String, state: FixtureState = .scheduled,
                 homeTeamId: String? = nil, awayTeamId: String? = nil, result: MatchResult? = nil,
-                round: Int? = nil, slot: Int? = nil) {
+                round: Int? = nil, slot: Int? = nil, bracket: String? = nil) {
         self.id = id
         self.title = title
         self.when = when
@@ -108,6 +110,7 @@ public struct Fixture: Identifiable, Equatable, Sendable {
         self.result = result
         self.round = round
         self.slot = slot
+        self.bracket = bracket
     }
 
     public var isBetweenTeams: Bool { homeTeamId != nil && awayTeamId != nil }
@@ -487,6 +490,15 @@ public struct Club: Identifiable, Equatable, Sendable {
     public var draw: Draw? {
         guard kind == .tournament, shape == .knockout, teams.count >= 2 else { return nil }
         return Draw.of(entrants: teams, fixtures: fixtures)
+    }
+
+    /// The double-elimination draw, for a tournament that is one (PD-021).
+    ///
+    /// Derived on every read, like the knockout and the table, so it cannot come to disagree with
+    /// the results under it.
+    public var doubleElimination: DoubleElimination? {
+        guard kind == .tournament, shape == .doubleElimination, teams.count >= 2 else { return nil }
+        return DoubleElimination.of(entrants: teams, fixtures: fixtures)
     }
 
     /// Whether the unit may still be changed (PD-022): only while there is nothing to reinterpret.

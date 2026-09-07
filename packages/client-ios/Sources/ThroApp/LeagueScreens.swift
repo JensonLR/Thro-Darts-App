@@ -458,14 +458,18 @@ public struct TournamentScreen: View {
     private let onAnnounce: () -> Void
     private let onEdit: (() -> Void)?
     private let onRecord: ((Fixture) -> Void)?
-    /// Nil unless this viewer may make the draw. An admin's: it creates fixtures.
+    /// Nil unless this viewer may make the draw. An official's: it creates fixtures.
     private let onDraw: ((Int) -> Void)?
+    /// The same, for a shape with more than one bracket.
+    private let onDraw2: ((Bracket, Int) -> Void)?
 
     public init(tournament: Club, badge: Image? = nil, onBack: @escaping () -> Void = {},
                 onEntrants: @escaping () -> Void = {}, onFixtures: @escaping () -> Void = {},
                 onAnnounce: @escaping () -> Void = {}, onEdit: (() -> Void)? = nil,
-                onRecord: ((Fixture) -> Void)? = nil, onDraw: ((Int) -> Void)? = nil) {
+                onRecord: ((Fixture) -> Void)? = nil, onDraw: ((Int) -> Void)? = nil,
+                onDraw2: ((Bracket, Int) -> Void)? = nil) {
         self.onDraw = onDraw
+        self.onDraw2 = onDraw2
         self.tournament = tournament
         self.badge = badge
         self.onBack = onBack
@@ -501,6 +505,7 @@ public struct TournamentScreen: View {
                                        verified: tournament.verified, image: badge)
                     shape
                     draw
+                    doubleDraw
                     entrants
                     fixtures
                     if tournament.shape == .roundRobin { table }
@@ -700,13 +705,24 @@ public struct TournamentScreen: View {
     }
 
     @ViewBuilder private func round(_ number: Int, _ matches: [DrawMatch], of draw: Draw) -> some View {
+        roundHeader(TournamentScreen.roundName(number, of: draw.rounds.count),
+                    ready: draw.readyToDraw(round: number).count) { onDraw?(number) }
+        ForEach(matches) { match in
+            drawRow(match)
+            ThroDivider()
+        }
+    }
+
+    /// One round's heading, with the control that turns it into fixtures when it is ready.
+    @ViewBuilder private func roundHeader(_ title: String, ready: Int,
+                                          draw: @escaping () -> Void) -> some View {
         HStack(alignment: .firstTextBaseline) {
-            Text(TournamentScreen.roundName(number, of: draw.rounds.count))
+            Text(title)
                 .thro(ThroTypography.labelStrong.weight(.semibold))
                 .foregroundStyle(ThroColor.colorTextSecondary)
             Spacer()
-            if let onDraw, !draw.readyToDraw(round: number).isEmpty {
-                Button("Draw \(draw.readyToDraw(round: number).count)") { onDraw(number) }
+            if onDraw != nil, ready > 0 {
+                Button("Draw \(ready)", action: draw)
                     .thro(ThroTypography.label.weight(.semibold))
                     .foregroundStyle(ThroColor.colorTextBrand)
                     .buttonStyle(.plain)
@@ -714,8 +730,78 @@ public struct TournamentScreen: View {
         }
         .padding(.top, ThroSpacing.spacing4)
         ThroDivider().padding(.top, ThroSpacing.spacing1)
-        ForEach(matches) { match in
-            drawRow(match)
+    }
+
+    /// The double-elimination draw: two sides and a final that may be played twice (PD-021).
+    @ViewBuilder private var doubleDraw: some View {
+        if let double = tournament.doubleElimination {
+            Eyebrow("The draw").padding(.top, ThroSpacing.spaceSectionGap)
+            ForEach(double.problems, id: \.self) { problem in
+                Note(problem, icon: .triangleAlert, tone: ThroColor.colorStatusError)
+                    .padding(.top, ThroSpacing.spacing3)
+            }
+            if let champion = double.champion {
+                Text("\(champion.name) wins it.")
+                    .thro(ThroTypography.heading3.weight(.bold))
+                    .foregroundStyle(ThroColor.colorTextPrimary)
+                    .padding(.top, ThroSpacing.spacing3)
+            }
+            side("Winners", double.winners, bracket: .winners, of: double)
+            if !double.losers.isEmpty {
+                side("Losers", double.losers, bracket: .losers, of: double)
+            }
+            finals(double)
+            Note("Lose once and you drop to the losers' side; lose twice and you are out. The "
+                 + "losers' side arrives at the final with a loss already, so **they have to win it "
+                 + "twice** — which is what the second final is for. Seeded in the order they were "
+                 + "entered (OD-001), and **a bye is not a win**: it drops nobody.")
+                .padding(.top, ThroSpacing.spacing4)
+        } else if tournament.shape == .doubleElimination {
+            Eyebrow("The draw").padding(.top, ThroSpacing.spaceSectionGap)
+            Text("A draw needs at least two entrants.")
+                .thro(ThroTypography.body)
+                .foregroundStyle(ThroColor.colorTextSecondary)
+                .padding(.vertical, ThroSpacing.spacing3)
+        }
+    }
+
+    @ViewBuilder private func side(_ name: String, _ rounds: [[DrawMatch]], bracket: Bracket,
+                                   of double: DoubleElimination) -> some View {
+        Text(name)
+            .thro(ThroTypography.heading3.weight(.bold))
+            .foregroundStyle(ThroColor.colorTextPrimary)
+            .padding(.top, ThroSpacing.spacing5)
+        ForEach(Array(rounds.enumerated()), id: \.offset) { index, matches in
+            roundHeader(bracket == .winners
+                        ? TournamentScreen.roundName(index + 1, of: rounds.count + 1)
+                        : "Losers' round \(index + 1)",
+                        ready: double.readyToDraw(bracket: bracket, round: index + 1).count) {
+                onDraw2?(bracket, index + 1)
+            }
+            ForEach(matches) { match in
+                drawRow(match)
+                ThroDivider()
+            }
+        }
+    }
+
+    @ViewBuilder private func finals(_ double: DoubleElimination) -> some View {
+        Text("The final")
+            .thro(ThroTypography.heading3.weight(.bold))
+            .foregroundStyle(ThroColor.colorTextPrimary)
+            .padding(.top, ThroSpacing.spacing5)
+        roundHeader("Grand final", ready: double.readyToDraw(bracket: .final, round: 1).count) {
+            onDraw2?(.final, 1)
+        }
+        if let grandFinal = double.grandFinal {
+            drawRow(grandFinal)
+            ThroDivider()
+        }
+        if let reset = double.reset {
+            roundHeader("Second final", ready: double.readyToDraw(bracket: .final, round: 2).count) {
+                onDraw2?(.final, 2)
+            }
+            drawRow(reset)
             ThroDivider()
         }
     }
@@ -759,6 +845,7 @@ public struct TournamentScreen: View {
         case let .entrant(team): return team.name
         case .bye: return "bye"
         case let .winnerOf(round, slot): return "winner of round \(round) match \(slot)"
+        case let .loserOf(round, slot): return "loser of round \(round) match \(slot)"
         }
     }
 

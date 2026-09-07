@@ -21,6 +21,11 @@ public enum Side: Equatable, Sendable {
     /// Whoever wins an earlier match. Held rather than resolved, so a page can say *winner of match
     /// 3* instead of a blank where a name will be.
     case winnerOf(round: Int, slot: Int)
+    /// Whoever **loses** an earlier match — the losers' bracket under double elimination is built
+    /// out of these. Distinct from `.bye` on purpose: a match nobody has played yet has a loser
+    /// coming, and a walkover never will. Reading the first as the second would draw a losers' round
+    /// as a set of walkovers and advance the wrong people through it.
+    case loserOf(round: Int, slot: Int)
 
     public var team: Team? { if case let .entrant(t) = self { return t }; return nil }
     public var isBye: Bool { self == .bye }
@@ -34,8 +39,13 @@ public struct DrawMatch: Identifiable, Equatable, Sendable {
     public let away: Side
     /// The fixture this match has become, once somebody has drawn it. Nil until then.
     public let fixture: Fixture?
+    /// Which side of a double-elimination draw this sits on. Nil in a knockout, which has one
+    /// bracket — naming it would be naming the only thing there is.
+    public var bracket: Bracket?
 
-    public var id: String { "\(round)-\(slot)" }
+    /// The bracket is part of the identity, because the winners' and the losers' sides both have a
+    /// round 2 match 1 and they are different matches.
+    public var id: String { "\(bracket?.rawValue ?? "k")-\(round)-\(slot)" }
 
     /// A match with a bye on one side is not played: the other side goes through, and **it is not a
     /// win**. Nothing about it reaches a record of results.

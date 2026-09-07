@@ -222,14 +222,23 @@ public final class ClubStore: ObservableObject {
     /// happened. The store re-derives the draw from what it has just written, so the count it
     /// returns is what actually exists rather than what was intended.
     @discardableResult
-    public func drawRound(_ round: Int, in clubId: String, when: Date, venue: String) -> Bool {
-        guard let club = club(clubId), let draw = club.draw else {
+    public func drawRound(_ round: Int, in clubId: String, when: Date, venue: String,
+                          bracket: Bracket? = nil) -> Bool {
+        guard let club = club(clubId) else {
+            writeProblem = "that tournament is not on this device"
+            return false
+        }
+        let ready: [DrawMatch]
+        if let bracket, let double = club.doubleElimination {
+            ready = double.readyToDraw(bracket: bracket, round: round)
+        } else if bracket == nil, let draw = club.draw {
+            ready = draw.readyToDraw(round: round)
+        } else {
             writeProblem = "this tournament has no draw to make"
             return false
         }
-        let ready = draw.readyToDraw(round: round)
         guard !ready.isEmpty else {
-            writeProblem = "there is nothing to draw in round \(round) yet"
+            writeProblem = "there is nothing to draw there yet"
             return false
         }
         return write { book in
@@ -238,7 +247,8 @@ public final class ClubStore: ObservableObject {
                 try book.addFixture(to: clubId, title: "\(sides.home.name) v \(sides.away.name)",
                                     when: when, venue: venue,
                                     homeTeam: sides.home.id, awayTeam: sides.away.id,
-                                    round: match.round, slot: match.slot)
+                                    round: match.round, slot: match.slot,
+                                    bracket: match.bracket?.rawValue)
             }
         }
     }
@@ -345,7 +355,7 @@ public final class ClubStore: ObservableObject {
                     venue: f.venue, state: FixtureState(rawValue: f.state) ?? .scheduled,
                     homeTeamId: f.homeTeamId, awayTeamId: f.awayTeamId,
                     result: ClubStore.result(results[f.id]),
-                    round: f.round, slot: f.slot)
+                    round: f.round, slot: f.slot, bracket: f.bracket)
         }
         let kind = OrgKind(rawValue: stored.kind) ?? .club
         return Club(id: stored.id, name: stored.name,
@@ -528,7 +538,8 @@ public struct ClubsFlow: View {
                                      onAnnounce: { route = .announce(id) },
                                      onEdit: editAction(id, if: c.mayEditIdentity),
                                      onRecord: resultAction(id, if: c.mayRecordResults),
-                                     onDraw: drawAction(id, if: c.mayManageFixtures))
+                                     onDraw: drawAction(id, if: c.mayManageFixtures),
+                                     onDraw2: bracketDrawAction(id, if: c.mayManageFixtures))
                 }
             } else { gone }
 
@@ -722,10 +733,25 @@ public struct ClubsFlow: View {
     private func drawAction(_ id: String, if allowed: Bool) -> ((Int) -> Void)? {
         guard allowed else { return nil }
         return { round in
-            var when = Calendar.current.date(byAdding: .day, value: 7, to: Date()) ?? Date()
-            when = Calendar.current.date(bySettingHour: 20, minute: 0, second: 0, of: when) ?? when
-            store.drawRound(round, in: id, when: when, venue: "")
+            store.drawRound(round, in: id, when: ClubsFlow.nextWeek(), venue: "")
         }
+    }
+
+    /// The same, for a shape with more than one bracket.
+    private func bracketDrawAction(_ id: String, if allowed: Bool) -> ((Bracket, Int) -> Void)? {
+        guard allowed else { return nil }
+        return { bracket, round in
+            store.drawRound(round, in: id, when: ClubsFlow.nextWeek(), venue: "", bracket: bracket)
+        }
+    }
+
+    /// A week out at eight in the evening — the same default the fixture screens use. The venue is
+    /// left blank rather than guessed: a drawn round is a set of matches somebody then arranges, and
+    /// inventing a venue would be putting words in their mouth on every row.
+    static func nextWeek(from now: Date = Date()) -> Date {
+        var when = Calendar.current.date(byAdding: .day, value: 7, to: now) ?? now
+        when = Calendar.current.date(bySettingHour: 20, minute: 0, second: 0, of: when) ?? when
+        return when
     }
 
     /// A team's name inside its own league. Static, because the record-result screen needs it while
