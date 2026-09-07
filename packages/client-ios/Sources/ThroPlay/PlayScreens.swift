@@ -375,6 +375,23 @@ public struct ScoringScreen: View {
             case nil: break
             }
         }
+        // Coming down onto a finish. The one moment in a leg a player wants to know about *before*
+        // they look up — and, as far as the market research could establish, a moment no darts app
+        // marks. Lighter than a commit on purpose: it is news, not a change to the record, and the
+        // visit that produced it has already had its own.
+        .onChange(of: session.throwerOnAFinish) { was, now in
+            if now && !was { ThroHaptics.play(.checkout, enabled: haptics) }
+        }
+        // The match decided. Heavier than a leg, and felt once.
+        .onChange(of: session.winner) { was, now in
+            if was == nil, now != nil { ThroHaptics.play(.matchWon, enabled: haptics) }
+        }
+        // A visit struck from the record. Deliberately unlike a commit: an undo is a correction,
+        // and a correction that felt like an entry would be the wrong feedback for the one action
+        // in the app that takes something back.
+        .onChange(of: session.visits.count) { was, now in
+            if now < was { ThroHaptics.play(.retracted, enabled: haptics) }
+        }
         .onAppear { setIdleTimer(disabled: keepScreenAwake) }
         .onDisappear { setIdleTimer(disabled: false) }
     }
@@ -928,6 +945,7 @@ public struct MatchResultScreen: View {
 public struct ConfirmResultScreen: View {
     @ObservedObject private var session: MatchSession
     @AppStorage(Appearance.storageKey) private var appearanceRaw: String = Appearance.system.rawValue
+    @AppStorage(ThroHaptics.enabledKey) private var haptics: Bool = true
     private let onDone: () -> Void
 
     public init(session: MatchSession, onDone: @escaping () -> Void) {
@@ -991,6 +1009,11 @@ public struct ConfirmResultScreen: View {
                 .fixedSize(horizontal: false, vertical: true)
             ThroButton("Yes, that is the result", variant: .primary, size: .large, fullWidth: true) {
                 session.attest(seat, agrees: true)
+                // The only haptic in the app that is about the record rather than the game: a claim
+                // becoming attested evidence (PD-011). A refusal deliberately gets none — the
+                // screen says what happened, and a buzz on "no, something is wrong" would read as
+                // congratulation.
+                ThroHaptics.play(.attested, enabled: haptics)
             }
             ThroButton("No, something is wrong", variant: .secondary, size: .large, fullWidth: true) {
                 session.attest(seat, agrees: false)

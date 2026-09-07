@@ -184,16 +184,59 @@ final class DesignTests: XCTestCase {
         XCTAssertGreaterThan(ThroMotion.motionScaleImpact, 1, "and an impact comes out")
     }
 
-    /// Four events, four sensations. A keypad that buzzed identically for a digit and for a bust
-    /// would be telling the player nothing they could use without looking at the screen — which is
-    /// the entire reason a haptic is worth having at a dartboard.
-    func testTheFourHapticsAreFourDifferentThings() {
-        let all: [ThroHaptics.Event] = [.key, .commit, .refused, .legWon]
-        XCTAssertEqual(Set(all.map(ThroHaptics.weight)).count, 4)
+    /// A keypad that buzzed identically for a digit and for a bust would be telling the player
+    /// nothing they could use without looking at the screen — which is the entire reason a haptic is
+    /// worth having at a dartboard.
+    func testTheThingsThatWentWrongAndRightAreNeverTheSameSensation() {
         XCTAssertNotEqual(ThroHaptics.weight(.refused), ThroHaptics.weight(.legWon),
                           "something went wrong and something went right are not the same sensation")
         XCTAssertNotEqual(ThroHaptics.weight(.key), ThroHaptics.weight(.commit),
                           "a digit and a saved visit are not the same event")
+        XCTAssertNotEqual(ThroHaptics.weight(.commit), ThroHaptics.weight(.retracted),
+                          "an entry and a correction are not the same event")
+    }
+
+    /// **Every event in the vocabulary is mapped.** `CaseIterable` plus this is what stops a case
+    /// being added and silently falling through to somebody else's sensation — the compiler catches
+    /// a missing `switch` arm, and this catches a lazy one that reuses an existing answer where a
+    /// new one was meant.
+    func testEveryHapticEventIsMappedAndNothingIsUnfelt() {
+        for event in ThroHaptics.Event.allCases {
+            XCTAssertFalse(ThroHaptics.weight(event).isEmpty, "\(event) has no weight")
+            XCTAssertGreaterThan(ThroHaptics.intensity(event), 0, "\(event) would be unfelt")
+            XCTAssertLessThanOrEqual(ThroHaptics.intensity(event), 1, "\(event) is over full")
+            XCTAssertGreaterThan(ThroHaptics.magnitude(event), 0, "\(event) has no magnitude")
+        }
+        XCTAssertEqual(ThroHaptics.Event.allCases.count, 10,
+                       "a case was added or removed without the vocabulary being reviewed")
+    }
+
+    /// The ordering is the design: what happens many times a leg is lighter than what happens once
+    /// a match. A vocabulary where the keypad hit as hard as the win would be no vocabulary at all.
+    func testTheVocabularyIsOrderedByHowOftenAMomentHappens() {
+        let key = ThroHaptics.magnitude(.key)
+        let checkout = ThroHaptics.magnitude(.checkout)
+        let commit = ThroHaptics.magnitude(.commit)
+        let leg = ThroHaptics.magnitude(.legWon)
+        let match = ThroHaptics.magnitude(.matchWon)
+        XCTAssertLessThan(key, commit, "a digit is lighter than a committed visit")
+        XCTAssertLessThan(checkout, commit, "news is lighter than a change to the record")
+        XCTAssertLessThan(commit, leg, "a visit is lighter than a leg")
+        XCTAssertLessThan(leg, match, "a leg is lighter than the match")
+        XCTAssertEqual(match, ThroHaptics.magnitude(.strike), "the two heaviest are the two heaviest")
+    }
+
+    /// The opening's two touches are the vocabulary's, not its own literals.
+    ///
+    /// There were **two haptic systems** in this app: four named events on one preference, and two
+    /// unnamed intensities living as `1.0` and `0.55` inside the opening's scheduler. They are one
+    /// vocabulary now, and these are the numbers PD-007 chose — held here so the opening cannot
+    /// drift from the design on its own.
+    func testTheOpeningsTouchesAreTheVocabularys() {
+        XCTAssertEqual(ThroHaptics.intensity(.strike), 1.0, accuracy: 0.001)
+        XCTAssertEqual(ThroHaptics.intensity(.stamp), 0.55, accuracy: 0.001)
+        XCTAssertGreaterThan(ThroHaptics.intensity(.strike), ThroHaptics.intensity(.stamp),
+                             "the dart hits harder than a letter does")
     }
 
     /// The player's answer is stored under a key that is a contract with every install that has

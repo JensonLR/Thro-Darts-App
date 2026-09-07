@@ -200,7 +200,14 @@ public enum ThroHaptics {
     /// The string is a contract with every install that has saved one.
     public static let enabledKey = "thro.haptics"
 
-    public enum Event: Sendable, Equatable {
+    /// The vocabulary.
+    ///
+    /// **These are moments in a game of darts, not places a finger landed.** That is the whole
+    /// distinction between a haptic language and haptics on buttons: a phone that taps for every
+    /// control teaches a player to ignore it, and then the one tap that mattered — *that did not go
+    /// on the board* — is lost in the noise. Every case below is a thing that happened to the
+    /// record, and nothing else in the app produces a haptic at all.
+    public enum Event: Sendable, Equatable, CaseIterable {
         /// A digit, a quick score, a choice. The lightest thing the phone can do.
         case key
         /// A visit accepted and committed. Slightly firmer: this one changed the record.
@@ -208,9 +215,29 @@ public enum ThroHaptics {
         /// A bust, or a refused entry. Sharp, and distinct from a commit, because the player needs
         /// to know something did NOT go on the board without reading the screen.
         case refused
-        /// A leg won. The heaviest, and the only one a player should feel more than a few times a
-        /// match — which is what makes it recognisable.
+        /// The thrower has come down onto a finish.
+        ///
+        /// The one moment in a leg that a player wants to know about **before** they look up, and
+        /// the reason this vocabulary is worth having: no darts app marks it. Lighter than a commit
+        /// on purpose — it is news, not a change to the record, and the visit that produced it has
+        /// already had its own.
+        case checkout
+        /// A visit struck from the record (PD-004). Deliberately unlike a commit: an undo is a
+        /// correction, and a correction that felt like an entry would be the wrong feedback for the
+        /// one action in the app that takes something back.
+        case retracted
+        /// A leg won.
         case legWon
+        /// The match decided. The heaviest thing here, and the rarest — a player should feel this
+        /// once, which is what makes it unmistakable.
+        case matchWon
+        /// Both players have agreed the result (PD-011). The moment a claim becomes attested
+        /// evidence, and the only haptic in the app that is about the record rather than the game.
+        case attested
+        /// The dart striking the board in the opening (PD-007).
+        case strike
+        /// A letter of the wordmark being struck in behind it.
+        case stamp
     }
 
     /// Whether a haptic is played at all. False on a Mac, in a test, and whenever the player has
@@ -221,25 +248,125 @@ public enum ThroHaptics {
         switch event {
         case .key:
             UIImpactFeedbackGenerator(style: .light).impactOccurred()
+        case .checkout:
+            UIImpactFeedbackGenerator(style: .soft).impactOccurred()
         case .commit:
             UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+        case .retracted:
+            UIImpactFeedbackGenerator(style: .rigid).impactOccurred()
         case .refused:
             UINotificationFeedbackGenerator().notificationOccurred(.warning)
-        case .legWon:
+        case .legWon, .attested:
             UINotificationFeedbackGenerator().notificationOccurred(.success)
+        case .matchWon:
+            UIImpactFeedbackGenerator(style: .heavy).impactOccurred()
+        case .strike:
+            UIImpactFeedbackGenerator(style: .heavy).impactOccurred(intensity: 1.0)
+        case .stamp:
+            UIImpactFeedbackGenerator(style: .rigid).impactOccurred(intensity: 0.55)
         }
         #endif
     }
 
     /// The mapping, exposed so a test can hold it. A description of the design rather than of UIKit:
-    /// what matters is that the four events are four distinct sensations and that the two which
-    /// mean *something went wrong* and *something went right* are not the same one.
+    /// what matters is that *something went wrong* and *something went right* are never the same
+    /// sensation, and that the events which happen many times a leg are lighter than the ones that
+    /// happen once a match.
     public static func weight(_ event: Event) -> String {
         switch event {
         case .key: return "light"
+        case .checkout: return "soft"
         case .commit: return "medium"
+        case .retracted: return "rigid"
         case .refused: return "warning"
         case .legWon: return "success"
+        case .matchWon: return "heavy"
+        case .attested: return "success"
+        case .strike: return "heavy"
+        case .stamp: return "rigid-soft"
+        }
+    }
+
+    /// One event's generator, held ready.
+    ///
+    /// `play(_:)` builds a generator and fires it in the same breath, which is right for a keypad —
+    /// the finger is already down and a millisecond does not matter. It is wrong for the opening,
+    /// where the strike has to land on the frame of the thud: the Taptic Engine needs readying
+    /// roughly half a second ahead, and that is as long as it stays ready.
+    ///
+    /// So the opening keeps its prepared generators and gives up its own vocabulary instead. Before
+    /// this there were two haptic systems in the app — four named events on one preference, and two
+    /// unnamed intensities on another — and the intensities lived as literals in a scheduler.
+    public final class Player {
+        private let event: Event
+        #if canImport(UIKit) && !os(watchOS)
+        private let generator: UIImpactFeedbackGenerator?
+        #endif
+
+        public init(_ event: Event) {
+            self.event = event
+            #if canImport(UIKit) && !os(watchOS)
+            switch event {
+            case .strike, .matchWon: generator = UIImpactFeedbackGenerator(style: .heavy)
+            case .stamp, .retracted: generator = UIImpactFeedbackGenerator(style: .rigid)
+            case .key: generator = UIImpactFeedbackGenerator(style: .light)
+            case .checkout: generator = UIImpactFeedbackGenerator(style: .soft)
+            case .commit: generator = UIImpactFeedbackGenerator(style: .medium)
+            // The notification generator is a different class and does not take an intensity;
+            // these events are not ones anything schedules to a frame, so they go the short way.
+            case .refused, .legWon, .attested: generator = nil
+            }
+            #endif
+        }
+
+        /// Readies the engine. Costs nothing if it is already ready.
+        public func prepare() {
+            #if canImport(UIKit) && !os(watchOS)
+            generator?.prepare()
+            #endif
+        }
+
+        public func play(enabled: Bool = true) {
+            guard enabled else { return }
+            #if canImport(UIKit) && !os(watchOS)
+            if let generator {
+                generator.impactOccurred(intensity: CGFloat(ThroHaptics.intensity(event)))
+            } else {
+                ThroHaptics.play(event)
+            }
+            #endif
+        }
+    }
+
+    /// How hard an impact event strikes, 0...1. The opening's two were literals in its scheduler;
+    /// they are part of the vocabulary now, so a test can hold them and the opening cannot drift
+    /// from the design on its own.
+    public static func intensity(_ event: Event) -> Double {
+        switch event {
+        case .strike, .matchWon: return 1.0
+        case .stamp: return 0.55
+        case .retracted: return 0.7
+        case .commit: return 0.8
+        case .checkout: return 0.6
+        case .key: return 1.0
+        case .refused, .legWon, .attested: return 1.0
+        }
+    }
+
+    /// Roughly how hard each event feels, on one scale, so the ordering can be asserted rather than
+    /// argued about. Not a UIKit value: a description of the design's own intent.
+    public static func magnitude(_ event: Event) -> Double {
+        switch event {
+        case .key: return 0.2
+        case .checkout: return 0.3
+        case .stamp: return 0.4
+        case .commit: return 0.5
+        case .retracted: return 0.6
+        case .refused: return 0.7
+        case .legWon: return 0.8
+        case .attested: return 0.8
+        case .matchWon: return 1.0
+        case .strike: return 1.0
         }
     }
 }

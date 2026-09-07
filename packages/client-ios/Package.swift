@@ -28,7 +28,13 @@ import PackageDescription
 // compatibility code to unpick.
 let package = Package(
     name: "ThroClient",
-    platforms: [.iOS(.v18), .macOS(.v15)],
+    // Written as version strings rather than `.iOS(.v18)`: the `.v18` and `.v15` enum cases were
+    // introduced in PackageDescription 6.0, and adopting `swift-tools-version:6.0` to reach them
+    // would switch every target to the Swift 6 language mode and its strict concurrency checking —
+    // a migration of its own, unplanned, and nothing to do with raising a deployment floor. The
+    // string form has meant exactly the same thing since tools 5.0. CI found this in thirteen
+    // seconds, which is the argument for pushing a floor change on its own.
+    platforms: [.iOS("18.0"), .macOS("15.0")],
     products: [
         .library(name: "ThroDesign", targets: ["ThroDesign"]),
         .library(name: "ThroJournal", targets: ["ThroJournal"]),

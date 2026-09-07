@@ -1,8 +1,6 @@
 import Foundation
 import AVFoundation
-#if canImport(UIKit)
-import UIKit
-#endif
+import ThroDesign
 
 /// The opening's two switches, in Settings under Opening (PD-007 v2).
 public enum OpeningPreferences {
@@ -21,10 +19,11 @@ final class LaunchSoundtrack {
     private let sound: Bool
     private let haptics: Bool
     private var pending: [DispatchWorkItem] = []
-    #if canImport(UIKit)
-    private let impact = UIImpactFeedbackGenerator(style: .heavy)
-    private let stamp = UIImpactFeedbackGenerator(style: .rigid)
-    #endif
+    /// The opening's two touches, named by the app's one haptic vocabulary rather than by this
+    /// file. Held rather than made on the spot because a strike has to land on the frame of the
+    /// thud, and the Taptic Engine needs readying ahead of that.
+    private let strike = ThroHaptics.Player(.strike)
+    private let stampTouch = ThroHaptics.Player(.stamp)
 
     init(sound: Bool, haptics: Bool) {
         self.sound = sound
@@ -48,18 +47,10 @@ final class LaunchSoundtrack {
             let delay = max(0, cue.at - Date().timeIntervalSince(start))
             if cue.name == "haptic" || cue.name == "stamp" {
                 guard haptics else { continue }
-                let intensity: CGFloat = cue.name == "haptic" ? 1.0 : 0.55
+                let touch = self.touch(for: cue.name)
                 // The Taptic Engine is readied half a second ahead, which is as long as it stays ready.
-                later(max(0, delay - 0.5)) { [weak self] in
-                    #if canImport(UIKit)
-                    self?.generator(for: cue.name).prepare()
-                    #endif
-                }
-                later(delay) { [weak self] in
-                    #if canImport(UIKit)
-                    self?.generator(for: cue.name).impactOccurred(intensity: intensity)
-                    #endif
-                }
+                later(max(0, delay - 0.5)) { touch.prepare() }
+                later(delay) { touch.play() }
             } else if let player = players["thro-" + cue.name] {
                 // Scheduled on the audio device's own clock, which is exact; if the device has no clock
                 // yet, on the main queue, which is close enough for a cue.
@@ -73,11 +64,10 @@ final class LaunchSoundtrack {
         }
     }
 
-    #if canImport(UIKit)
-    private func generator(for cue: String) -> UIImpactFeedbackGenerator {
-        cue == "haptic" ? impact : stamp
+    /// The cue names are PD-007's and predate the vocabulary; this is the one place they meet it.
+    private func touch(for cue: String) -> ThroHaptics.Player {
+        cue == "haptic" ? strike : stampTouch
     }
-    #endif
 
     private func later(_ delay: TimeInterval, _ work: @escaping () -> Void) {
         let item = DispatchWorkItem(block: work)
