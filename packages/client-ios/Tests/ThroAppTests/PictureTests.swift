@@ -66,6 +66,18 @@ final class PictureTests: XCTestCase {
                        "PersonScreen shows this too, and a person on this phone is not a member")
     }
 
+    /// PD-023: the refusal for an unrecorded age says **where a picture does come from**, rather
+    /// than leaving it open. The person in the photograph answers for their own age, which arrives
+    /// with an account — and until then the page says which rule and why, not just "no".
+    func testTheUnrecordedAgeRefusalSaysWhereAPictureComesFrom() {
+        let unknown = PicturePolicy.refusal(for: .unknown) ?? ""
+        XCTAssertTrue(unknown.contains("arrives with an account"))
+        XCTAssertTrue(unknown.contains("answers for their own age"),
+                      "which is the whole of the decision: not whoever is holding the phone")
+        // A minor's refusal must NOT say that, because for them nothing changes with an account.
+        XCTAssertFalse((PicturePolicy.refusal(for: .minor) ?? "").contains("account"))
+    }
+
     /// Renaming, recolouring, badging and deleting a club are an admin's. An official runs fixtures
     /// and announcements; what the club is *called* is not theirs to change.
     func testOnlyAnAdminMayEditAClubsIdentity() {

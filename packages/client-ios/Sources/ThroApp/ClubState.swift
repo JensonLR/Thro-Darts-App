@@ -174,6 +174,46 @@ public struct MatchResult: Equatable, Sendable {
     public var homeWon: Bool? { home == away ? nil : home > away }
 }
 
+/// What a league's results are counted in (PD-022).
+///
+/// **`3–1` on its own does not mean anything.** Three legs, three matches and three points are three
+/// different claims, and one league's table cannot be compared with another's unless both say which.
+/// It is asked when a league is made because it is the one thing here that **cannot be answered
+/// afterwards**: a stored number with no unit on it cannot be reinterpreted, and by the time anybody
+/// asks, nobody remembers what they meant.
+public enum ResultUnit: String, CaseIterable, Equatable, Sendable {
+    case legs, matches, points
+
+    public var label: String { rawValue.capitalized }
+
+    /// The word beside a single number — "7 legs", "1 point".
+    public func counted(_ n: Int) -> String {
+        switch self {
+        case .legs: return n == 1 ? "1 leg" : "\(n) legs"
+        case .matches: return n == 1 ? "1 match" : "\(n) matches"
+        case .points: return n == 1 ? "1 point" : "\(n) points"
+        }
+    }
+
+    /// What it means, in the words somebody running a pub league would use.
+    public var summary: String {
+        switch self {
+        case .legs: return "Legs won across the night. A 7–2 is nine legs played."
+        case .matches: return "Individual matches won within the fixture. A 5–4 is a nine-match card."
+        case .points: return "Whatever your own points system awards for the fixture."
+        }
+    }
+
+    /// The column headings a table uses for what a team scored and conceded.
+    public var forAgainst: (String, String) {
+        switch self {
+        case .legs: return ("LF", "LA")
+        case .matches: return ("MF", "MA")
+        case .points: return ("PF", "PA")
+        }
+    }
+}
+
 /// The four shapes a tournament may be (PD-021).
 public enum TournamentShape: String, CaseIterable, Equatable, Sendable {
     case knockout, groups, roundRobin, doubleElimination
@@ -290,6 +330,9 @@ public struct Club: Identifiable, Equatable, Sendable {
     public let teams: [Team]
     /// A tournament's shape (PD-021). Nil for anything else.
     public let shape: TournamentShape?
+    /// What this league's results are counted in (PD-022). **Nil is a real answer** — a league made
+    /// before this was asked has none, and nothing guesses one for it.
+    public let unit: ResultUnit?
     /// What a win and a draw are worth here. Stored on the league rather than assumed, and said on
     /// the table rather than left to be inferred from the arithmetic.
     public let pointsForWin: Int
@@ -299,9 +342,10 @@ public struct Club: Identifiable, Equatable, Sendable {
                 verified: Bool = false, yourRole: OrgRole? = nil, members: [ClubMember] = [],
                 fixtures: [Fixture] = [], announcements: [Announcement] = [],
                 badgeAssetId: String? = nil, teams: [Team] = [], shape: TournamentShape? = nil,
-                pointsForWin: Int = 2, pointsForDraw: Int = 1) {
+                pointsForWin: Int = 2, pointsForDraw: Int = 1, unit: ResultUnit? = nil) {
         self.teams = teams
         self.shape = shape
+        self.unit = unit
         self.pointsForWin = pointsForWin
         self.pointsForDraw = pointsForDraw
         self.badgeAssetId = badgeAssetId
@@ -424,6 +468,9 @@ public struct Club: Identifiable, Equatable, Sendable {
     /// leads with these, because a table with results missing is a table that is quietly wrong and
     /// the only person who can fix it is looking at it.
     public var fixturesAwaitingResults: [Fixture] { fixtures.filter(\.awaitsResult) }
+
+    /// Whether the unit may still be changed (PD-022): only while there is nothing to reinterpret.
+    public var unitIsStillOpen: Bool { !fixtures.contains { $0.result != nil } }
 
     /// Whether this league has enough to show a table at all. Two teams and one result: below that
     /// a table is a list of zeroes, which looks like a season nobody has won a game in.

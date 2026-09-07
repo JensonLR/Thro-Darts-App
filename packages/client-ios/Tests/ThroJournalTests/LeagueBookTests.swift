@@ -207,6 +207,50 @@ final class LeagueBookTests: XCTestCase {
         XCTAssertEqual(old?.pointsForDraw, 1)
     }
 
+    /// What a league's results are counted in (PD-022), and the one moment it can be changed.
+    ///
+    /// **This is the decision that could not be made retroactively**, which is why it was asked
+    /// before any league data existed: a stored `3–1` with no unit on it cannot be reinterpreted.
+    func testAUnitIsChosenOnceAndSettlesTheMomentThereIsAResult() throws {
+        let book = try ClubBook(path: path)
+        let id = try book.createClub(name: "Crediton & District", kind: "league", unit: "legs").id
+        XCTAssertEqual(try ClubBook(path: path).clubs().first(where: { $0.id == id })?.unit, "legs")
+
+        // Changeable while nothing depends on it: an admin who picked wrong on day one can fix it.
+        try book.setUnit("matches", on: id)
+        XCTAssertEqual(try book.clubs().first(where: { $0.id == id })?.unit, "matches")
+
+        let a = try book.addTeam(to: id, name: "A").id
+        let b = try book.addTeam(to: id, name: "B").id
+        let f = try book.addFixture(to: id, title: "A v B", when: Date(), venue: "",
+                                    homeTeam: a, awayTeam: b).id
+        try book.recordResult(fixture: f, in: id, home: 5, away: 4,
+                              source: "recorded", recordedBy: "Pat")
+
+        // And settled the moment there is a number it would reinterpret.
+        XCTAssertThrowsError(try book.setUnit("points", on: id)) { error in
+            XCTAssertEqual(error as? ClubBookError, .unitIsSettled(1),
+                           "and the refusal says how many results are in the way")
+        }
+        XCTAssertEqual(try book.clubs().first(where: { $0.id == id })?.unit, "matches")
+    }
+
+    /// A unit belongs to something that has a table. A club has no results to count, and a unit this
+    /// build does not know is refused rather than stored — and one that reaches a row is not shown.
+    func testAUnitBelongsToACompetitionAndIsNeverGuessedAt() throws {
+        let book = try ClubBook(path: path)
+        XCTAssertThrowsError(try book.createClub(name: "The Feathers", kind: "club", unit: "legs"))
+        XCTAssertThrowsError(try book.createClub(name: "A league", kind: "league", unit: "frames"))
+
+        // A league from before this was asked has no unit, and nothing invents one for it.
+        let old = try book.createClub(name: "Old league", kind: "league").id
+        XCTAssertNil(try book.clubs().first(where: { $0.id == old })?.unit,
+                     "nil is a real answer — the screens say so rather than labelling numbers")
+        try book.forTests("UPDATE club SET result_unit = 'frames' WHERE club_id = '\(old)';")
+        XCTAssertNil(try book.clubs().first(where: { $0.id == old })?.unit,
+                     "and a unit this build cannot read is not shown either")
+    }
+
     /// A result row that lost its provenance — from an edited file, or a build that should not have
     /// written it — is **dropped on read**, not handed over with the source missing.
     func testAResultRowWithNoProvenanceIsDroppedOnRead() throws {

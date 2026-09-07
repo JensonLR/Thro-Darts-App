@@ -173,9 +173,16 @@ public final class ClubStore: ObservableObject {
 
     @discardableResult
     public func createClub(name: String, kind: OrgKind, accentHex: String?,
-                           shape: TournamentShape? = nil) -> Bool {
+                           shape: TournamentShape? = nil, unit: ResultUnit? = nil) -> Bool {
         write { try $0.createClub(name: name, kind: kind.rawValue, accentHex: accentHex,
-                                  shape: shape?.rawValue) }
+                                  shape: shape?.rawValue, unit: unit?.rawValue) }
+    }
+
+    /// What a league's results are counted in (PD-022). Refused by the book once there is a result
+    /// to reinterpret, and the refusal is kept and shown rather than dropped.
+    @discardableResult
+    public func setUnit(_ unit: ResultUnit, on clubId: String) -> Bool {
+        write { try $0.setUnit(unit.rawValue, on: clubId) }
     }
 
     @discardableResult
@@ -326,7 +333,8 @@ public final class ClubStore: ObservableObject {
                     teams: teams,
                     shape: stored.shape.flatMap(TournamentShape.init(rawValue:)),
                     pointsForWin: stored.pointsForWin,
-                    pointsForDraw: stored.pointsForDraw)
+                    pointsForDraw: stored.pointsForDraw,
+                    unit: stored.unit.flatMap(ResultUnit.init(rawValue:)))
     }
 
     /// A stored result as the screens want it, or nil.
@@ -448,8 +456,9 @@ public struct ClubsFlow: View {
             }
 
         case .newClub:
-            NewClubScreen(onBack: { route = .list }) { name, kind, accent, shape in
-                if store.createClub(name: name, kind: kind, accentHex: accent, shape: shape) {
+            NewClubScreen(onBack: { route = .list }) { name, kind, accent, shape, unit in
+                if store.createClub(name: name, kind: kind, accentHex: accent, shape: shape,
+                                    unit: unit) {
                     route = .list
                 }
             }
@@ -546,6 +555,9 @@ public struct ClubsFlow: View {
                                        guard store.setPoints(win: edits.pointsForWin,
                                                              draw: edits.pointsForDraw, on: id)
                                        else { return }
+                                   }
+                                   if let unit = edits.unit, unit != c.unit {
+                                       guard store.setUnit(unit, on: id) else { return }
                                    }
                                    route = .club(id)
                                },
@@ -723,11 +735,16 @@ public struct NewClubScreen: View {
     /// every round means, so there is no write that changes it afterwards, and a screen that let one
     /// be picked later would be offering something the store refuses.
     @State private var shape: TournamentShape = .knockout
+    /// What a league counts its results in (PD-022). Asked here because it is the one thing about a
+    /// league that **cannot be answered afterwards** — a stored `3–1` with no unit on it cannot be
+    /// reinterpreted, and by then nobody remembers what they meant.
+    @State private var unit: ResultUnit = .legs
     private let onBack: () -> Void
-    private let onCreate: (String, OrgKind, String?, TournamentShape?) -> Void
+    private let onCreate: (String, OrgKind, String?, TournamentShape?, ResultUnit?) -> Void
 
     public init(onBack: @escaping () -> Void = {},
-                onCreate: @escaping (String, OrgKind, String?, TournamentShape?) -> Void = { _, _, _, _ in }) {
+                onCreate: @escaping (String, OrgKind, String?, TournamentShape?, ResultUnit?) -> Void
+                    = { _, _, _, _, _ in }) {
         self.onBack = onBack
         self.onCreate = onCreate
     }
@@ -779,6 +796,7 @@ public struct NewClubScreen: View {
                             .padding(.top, 2)
                     }
                     if kind == .tournament { shapes }
+                    if kind == .league { units }
                     // Swatches drawn AS the badge will be drawn, rather than six hex digits typed
                     // blind. The initials on each are in whichever neutral THRØ chooses for that
                     // colour, so the choice is made by looking at the result.
@@ -797,7 +815,8 @@ public struct NewClubScreen: View {
             }
             ThroButton("Start \(kind.label.lowercased())", variant: .primary, size: .large, fullWidth: true,
                        disabled: trimmedName.isEmpty || accentError != nil) {
-                onCreate(trimmedName, kind, typedAccent, kind == .tournament ? shape : nil)
+                onCreate(trimmedName, kind, typedAccent, kind == .tournament ? shape : nil,
+                         kind == .league ? unit : nil)
             }
             .padding(.horizontal, ThroSpacing.spaceScreenGutter)
             .padding(.bottom, ThroSpacing.spacing6)
@@ -837,6 +856,26 @@ public struct NewClubScreen: View {
             }
             Note("**Chosen once.** A tournament keeps its shape, because changing it would change "
                  + "what the matches already played were for.")
+        }
+    }
+
+    /// What a league's results are counted in (PD-022), asked once and fixed as soon as there is a
+    /// result to reinterpret.
+    @ViewBuilder private var units: some View {
+        VStack(alignment: .leading, spacing: ThroSpacing.spacing2) {
+            Text("Results counted in")
+                .thro(ThroTypography.label.weight(.semibold))
+                .foregroundStyle(ThroColor.colorTextPrimary)
+            SegmentedControl(ResultUnit.allCases.map { (unit: ResultUnit) in (unit, unit.label) },
+                             selection: $unit)
+            Text(unit.summary)
+                .thro(ThroTypography.metadata)
+                .foregroundStyle(ThroColor.colorTextSecondary)
+                .fixedSize(horizontal: false, vertical: true)
+                .padding(.top, 2)
+            Note("**Asked now because it cannot be asked later.** A result of 3–1 means nothing "
+                 + "without it, and a number already entered cannot be reinterpreted. You can "
+                 + "change this until the first result goes in, and not after.")
         }
     }
 
@@ -1025,8 +1064,9 @@ public struct PersonScreen: View {
                       // A person on this phone has no recorded age — the person table holds a name
                       // and nothing else — so by the app's own rule they may not have a picture, and
                       // the page says which rule rather than simply having no picture on it.
-                      // Recording an age for somebody whose name was typed at an oche is a product
-                      // decision, not an engineering one, and it is OD-021.
+                      // **PD-023 settled where one does come from**: an account, where the person in
+                      // the photograph answers for their own age rather than whoever is holding the
+                      // phone answering for them. That is B4, and nothing here changes until it lands.
                       pictureNote: PicturePolicy.refusal(for: .unknown),
                       onBack: onBack)
             .task { load() }
@@ -1072,6 +1112,9 @@ public struct EditClubScreen: View {
         /// A league's points (PD-019). Unchanged for a club and a tournament, which have no table.
         public let pointsForWin: Int
         public let pointsForDraw: Int
+        /// A league's unit (PD-022), when it may still be set. Nil means leave it as it is — which
+        /// is what it always means once a result exists, because the store refuses it then anyway.
+        public let unit: ResultUnit?
     }
 
     private let club: Club
@@ -1082,6 +1125,7 @@ public struct EditClubScreen: View {
     @State private var removeBadge = false
     @State private var win: String
     @State private var draw: String
+    @State private var unit: ResultUnit
     private let onBack: () -> Void
     private let onSave: (Edits) -> Void
     private let onDelete: () -> Void
@@ -1095,6 +1139,7 @@ public struct EditClubScreen: View {
         _accent = State(initialValue: club.accentHex ?? "")
         _win = State(initialValue: "\(club.pointsForWin)")
         _draw = State(initialValue: "\(club.pointsForDraw)")
+        _unit = State(initialValue: club.unit ?? .legs)
         self.onBack = onBack
         self.onSave = onSave
         self.onDelete = onDelete
@@ -1151,7 +1196,8 @@ public struct EditClubScreen: View {
                 onSave(Edits(name: trimmedName, accentHex: typedAccent, picked: pickedData,
                              removeBadge: removeBadge,
                              pointsForWin: points?.win ?? club.pointsForWin,
-                             pointsForDraw: points?.draw ?? club.pointsForDraw))
+                             pointsForDraw: points?.draw ?? club.pointsForDraw,
+                             unit: (club.kind == .league && club.unitIsStillOpen) ? unit : nil))
             }
             .padding(.horizontal, ThroSpacing.spaceScreenGutter)
             .padding(.bottom, ThroSpacing.spacing6)
@@ -1181,6 +1227,42 @@ public struct EditClubScreen: View {
             }
             Note("The table is worked out from these every time it is drawn — nothing is stored, so "
                  + "changing them changes the table rather than leaving it disagreeing with itself.")
+            counting
+        }
+    }
+
+    /// What this league's results are counted in (PD-022).
+    ///
+    /// **Offered only while there is nothing to reinterpret.** Once a result is in, changing the unit
+    /// would turn every number already entered into a claim about something else — so the control is
+    /// gone and the screen says what it settled on and why, rather than a disabled picker that would
+    /// refuse. `ClubBook.setUnit` refuses it too, so this is a screen agreeing with a store rather
+    /// than a screen being trusted.
+    @ViewBuilder private var counting: some View {
+        VStack(alignment: .leading, spacing: ThroSpacing.spacing2) {
+            Text("Results counted in")
+                .thro(ThroTypography.labelStrong.weight(.semibold))
+                .foregroundStyle(ThroColor.colorTextSecondary)
+            if club.unitIsStillOpen {
+                SegmentedControl(ResultUnit.allCases.map { (u: ResultUnit) in (u, u.label) },
+                                 selection: $unit)
+                Text(unit.summary)
+                    .thro(ThroTypography.metadata)
+                    .foregroundStyle(ThroColor.colorTextSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                Note(club.unit == nil
+                     ? "**This league has never said.** It was made before THRØ asked, so its "
+                       + "figures have no unit on them. Set one now — after the first result goes "
+                       + "in it cannot be changed."
+                     : "You can change this until the first result goes in, and not after.")
+            } else {
+                Text(club.unit?.label ?? "Not set")
+                    .thro(ThroTypography.body)
+                    .foregroundStyle(ThroColor.colorTextPrimary)
+                Note("**Settled.** This league has results in it, and changing what they are "
+                     + "counted in would quietly turn every number already entered into a claim "
+                     + "about something else.")
+            }
         }
     }
 }

@@ -1115,6 +1115,75 @@ Stop offering the two buttons. Rows already written stay readable, because the j
 it does not know as `unknown` and refuses to replay rather than guessing — which is also what an
 older build does with these rows today.
 
+## PD-023 — A player's picture arrives with their account, and not before (closing OD-021)
+
+**Asked** 2026-09-07. **Answered** 2026-09-07: a picture arrives with an account.
+
+PD-014 settled that nobody under 18, and nobody of unestablished age, has a picture. A club member
+has an age band because an admin was asked for one. A **person on this phone** — one of the two names
+typed at an oche before a match — has none, and there is nowhere in the app that asks. So by PD-014
+applied honestly they have no picture, which is what the app does and what their page says.
+
+The founder chose the third of the three ways out, and it is the one that widens nothing:
+
+> **The person in the photograph is the one who answers for their own age.**
+
+A club admin answering for a member is a compromise PD-014 already accepted, because a roster has to
+work before anybody has an account. Extending it to *whoever is holding the phone answers for whoever
+is playing* would widen that on the surface where THRØ has the least idea who anybody is — and it
+would put a safeguarding question in the middle of setting up a game of darts, asked about somebody
+standing next to them.
+
+So nothing changes on this phone until **B4** (accounts and identity). What changes today is the
+sentence: the person's page says the picture arrives with an account rather than leaving it open.
+
+### How to reverse
+
+Nothing to reverse — this is a decision not to build something. If it is ever revisited, the thing to
+revisit is *who is asked*, not whether the rule applies.
+
+## PD-022 — A league declares what its results are counted in
+
+**Asked** 2026-09-07. **Answered** 2026-09-07: the league declares its unit.
+
+A league result is stored as two numbers. **`3–1` on its own does not mean anything**: three legs,
+three matches and three points are three different claims, and one league's table cannot be compared
+with another's — or joined to it, or ranked against it — unless both say which.
+
+This was asked now rather than later for one reason: **it cannot be answered retroactively.** A
+stored `3–1` with no unit on it cannot be reinterpreted afterwards; somebody has to be asked what they
+meant, and by then they will not remember. There is currently no league data anywhere, which makes
+today the only cheap moment this decision will ever have.
+
+Three units, because these are the three ways darts leagues actually run:
+
+| Unit | What a result counts |
+|---|---|
+| **Legs** | Legs won across the night. A 7–2 is nine legs played |
+| **Matches** | Individual matches won within the fixture. A 5–4 is a nine-match card |
+| **Points** | Whatever the league's own points system awards for the fixture |
+
+**Chosen once, and then fixed.** The unit may be changed only while the league has **no results at
+all** — an admin who picked wrong on day one can fix it before anything depends on it, and after the
+first result is in, changing it would silently reinterpret every number already entered. The store
+refuses it rather than the screen remembering to.
+
+A league created before this decision has **no unit**. It is not guessed at: the league says so, and
+an admin may set one, and the same refusal applies once results exist.
+
+The unit travels with the number everywhere it is shown — the table's columns, the result screen's
+boxes, the sentence under the table. A figure without its unit is the same failure as a figure
+without its provenance (PD-020), and this repository already has a name for that.
+
+**What is still not decided (OD-022 remains open on its other halves):** whether THRØ has a *standard*
+a league may override, and whether the tie-break — points, then difference, then scored — is the
+league's to change. Neither becomes unanswerable later, which is why they waited and this did not.
+
+### How to reverse
+
+Stop asking, and treat every league as unitless. Every league that declared one keeps it, because a
+record of what somebody meant is not made false by a later change of policy.
+
 ## PD-021 — A tournament is one of four shapes, chosen when it is made
 
 **Asked** 2026-09-07. **Answered** 2026-09-07: all four — knockout with byes, group then knockout,

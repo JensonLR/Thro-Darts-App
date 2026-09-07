@@ -393,7 +393,9 @@ is the whole question, and it is measurable rather than arguable.
 
 
 ## OD-021 — Whether a person on this phone may have a picture, and how their age would be known
-**Status:** OPEN · **Impact:** one screen, and the rule PD-014 already set
+**Status: CLOSED, 2026-09-07 — decided by the founder as PD-023.** A picture arrives with an account.
+The person in the photograph is the one who answers for their own age; nothing on this phone asks,
+and nothing about it changes until B4. Engineering's reading was the same, for the reason below.
 
 PD-014 settled who may have a picture: **nobody under 18, and nobody of unestablished age.** A club
 member has an age band because the club's admin is asked for one when they add them, so the rule can
@@ -423,7 +425,14 @@ the surface where THRØ has the least idea who anybody is.
 **Must not be decided by:** the fact that it would be easy to add a column. It would.
 
 ## OD-022 — Whether THRØ has a league scoring standard, or every league sets its own
-**Status:** OPEN · **Impact:** every league table THRØ ever draws
+**Status: PARTLY CLOSED, 2026-09-07.** The third question below — the **unit** — came back as
+**PD-022**: the league declares whether its results are counted in legs, matches or points, chosen
+once and fixed as soon as a result exists. That was the half that could not be answered
+retroactively. The other two are still open and can wait, because neither becomes unanswerable:
+whether THRØ has a *standard* a league may override, and whether the tie-break is the league's to
+change.
+
+**Impact:** every league table THRØ ever draws
 
 A table needs to know what a win is worth. Real leagues disagree: two points a win is the common
 answer in pub and county darts, one is not rare, and some run on legs or on match points rather than

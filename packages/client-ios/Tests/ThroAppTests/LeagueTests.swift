@@ -183,6 +183,36 @@ final class LeagueTests: XCTestCase {
         XCTAssertTrue(tournament(.roundRobin).table.isEmpty)
     }
 
+    // MARK: - what the numbers are (PD-022)
+
+    /// A result of `3–1` means nothing without a unit, so the unit is a value rather than a label
+    /// somebody types — and it says itself correctly for one as well as for many.
+    func testTheUnitSaysItselfForOneAndForMany() {
+        XCTAssertEqual(ResultUnit.legs.counted(7), "7 legs")
+        XCTAssertEqual(ResultUnit.legs.counted(1), "1 leg")
+        XCTAssertEqual(ResultUnit.matches.counted(1), "1 match")
+        XCTAssertEqual(ResultUnit.matches.counted(5), "5 matches", "not '5 matchs'")
+        XCTAssertEqual(ResultUnit.points.counted(1), "1 point")
+        XCTAssertEqual(ResultUnit.points.counted(0), "0 points")
+        XCTAssertEqual(Set(ResultUnit.allCases.map(\.label)).count, 3)
+    }
+
+    /// **The moment the unit settles.** While a league has no results, changing it costs nothing;
+    /// after the first one, changing it would turn every number already entered into a claim about
+    /// something else — so the screen stops offering it and the store refuses it.
+    func testTheUnitIsOpenUntilThereIsAResultToReinterpret() {
+        let empty = league(teams: ["a", "b"], fixtures: [fixture("1", "a", "b")])
+        XCTAssertTrue(empty.unitIsStillOpen)
+
+        let played = league(teams: ["a", "b"], fixtures: [fixture("1", "a", "b", word(3, 1))])
+        XCTAssertFalse(played.unitIsStillOpen)
+
+        // A cancelled or postponed fixture is not a result, so it settles nothing.
+        let scheduled = league(teams: ["a", "b"],
+                               fixtures: [fixture("1", "a", "b"), fixture("2", "b", "a")])
+        XCTAssertTrue(scheduled.unitIsStillOpen)
+    }
+
     // MARK: - the three kinds are three things
 
     /// The founder's complaint, as an assertion: the three do not describe themselves the same way.

@@ -172,7 +172,9 @@ enum PicturePolicy {
             // person on this phone, for whom there is nowhere to give one at all.
             return "No picture. THRØ shows one only for somebody it knows to be an adult, and no "
                  + "age has been recorded here. What is not known is whether this is a child, so "
-                 + "the careful answer is the one taken."
+                 + "the careful answer is the one taken. **A picture arrives with an account** "
+                 + "(PD-023), where the person in the photograph answers for their own age — which "
+                 + "is the one person who should."
         }
     }
 }

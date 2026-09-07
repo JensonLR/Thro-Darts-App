@@ -27,6 +27,7 @@ public enum ClubBookError: Error, Equatable, CustomStringConvertible {
     case pictureRefused(String)
     case notATeamFixture(String)
     case negativeScore
+    case unitIsSettled(Int)
     case sqlite(String)
 
     public var description: String {
@@ -51,6 +52,9 @@ public enum ClubBookError: Error, Equatable, CustomStringConvertible {
             return "fixture \(id) is not between two teams, so it has no team result"
         case .negativeScore:
             return "a score is never negative"
+        case .unitIsSettled(let results):
+            return "this league already has \(results) result\(results == 1 ? "" : "s") in it, and "
+                 + "changing what they are counted in would reinterpret every one of them"
         case .pictureRefused(let band):
             return band == "minor"
                 ? "a member recorded as under 18 has no picture"
@@ -85,6 +89,12 @@ public struct StoredClub: Equatable, Sendable {
     /// whether THRØ should have a standard at all.
     public let pointsForWin: Int
     public let pointsForDraw: Int
+    /// What this league's results are counted in (PD-022): `legs`, `matches` or `points`.
+    ///
+    /// **Nil is a real answer**, not a default: a league made before this was asked has none, and it
+    /// is not guessed at. `3–1` on its own does not mean anything, and a unit cannot be worked out
+    /// afterwards — somebody would have to be asked what they meant.
+    public let unit: String?
 }
 
 public struct StoredMember: Equatable, Sendable {
@@ -163,6 +173,8 @@ public final class ClubBook {
     /// The four shapes a tournament may be (PD-021). All four were chosen at once deliberately: a
     /// shape added later is not a feature bolted on, it is a second design of the same screens.
     public static let tournamentShapes: Set<String> = ["knockout", "groups", "roundRobin", "doubleElimination"]
+    /// What a league's results are counted in (PD-022). The three ways darts leagues actually run.
+    public static let resultUnits: Set<String> = ["legs", "matches", "points"]
     /// What a win and a draw are worth when a league does not say. The common answer in pub and
     /// county darts, stated here once rather than spread through a table calculation.
     public static let defaultPointsForWin = 2
@@ -250,7 +262,7 @@ public final class ClubBook {
         // Leagues and tournaments arrived after the word for them did (PD-019, PD-020, PD-021).
         // Everything below is additive, so a club written before today reads back exactly as it was:
         // no shape, no teams, no results, and its fixtures still a title somebody typed.
-        for column in ["shape TEXT", "points_win INTEGER", "points_draw INTEGER"]
+        for column in ["shape TEXT", "points_win INTEGER", "points_draw INTEGER", "result_unit TEXT"]
         where !clubColumns.contains(String(column.split(separator: " ")[0])) {
             try Journal.exec(h, "ALTER TABLE club ADD COLUMN \(column);")
         }
@@ -305,7 +317,8 @@ public final class ClubBook {
     /// caller asked for is how a screen and a store come to disagree.
     @discardableResult
     public func createClub(name: String, kind: String, accentHex: String? = nil, shape: String? = nil,
-                           id: String = UUID().uuidString, createdAt: Date = Date()) throws -> StoredClub {
+                           unit: String? = nil, id: String = UUID().uuidString,
+                           createdAt: Date = Date()) throws -> StoredClub {
         let clean = try ClubBook.checkedName(name)
         let accent = try ClubBook.checkedAccent(accentHex)
         try ClubBook.check(kind, in: ClubBook.kinds, field: "kind")
@@ -315,19 +328,45 @@ public final class ClubBook {
             }
             try ClubBook.check(shape, in: ClubBook.tournamentShapes, field: "tournament shape")
         }
+        if let unit {
+            guard kind != "club" else {
+                throw ClubBookError.unknownValue(field: "result unit for a club", value: unit)
+            }
+            try ClubBook.check(unit, in: ClubBook.resultUnits, field: "result unit")
+        }
         try run("""
-            INSERT INTO club (club_id, name, kind, accent_hex, created_at, shape, points_win, points_draw)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?);
+            INSERT INTO club (club_id, name, kind, accent_hex, created_at, shape, points_win,
+                              points_draw, result_unit)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?);
             """,
                 [.text(id), .text(clean), .text(kind),
                  accent.map { Journal.Param.text($0) } ?? .null,
                  .text(Journal.iso.string(from: createdAt)),
                  shape.map { Journal.Param.text($0) } ?? .null,
-                 .int(Int64(ClubBook.defaultPointsForWin)), .int(Int64(ClubBook.defaultPointsForDraw))])
+                 .int(Int64(ClubBook.defaultPointsForWin)), .int(Int64(ClubBook.defaultPointsForDraw)),
+                 unit.map { Journal.Param.text($0) } ?? .null])
         return StoredClub(id: id, name: clean, kind: kind, accentHex: accent, createdAt: createdAt,
                           badgeAssetId: nil, shape: shape,
                           pointsForWin: ClubBook.defaultPointsForWin,
-                          pointsForDraw: ClubBook.defaultPointsForDraw)
+                          pointsForDraw: ClubBook.defaultPointsForDraw,
+                          unit: unit)
+    }
+
+    /// Sets what this league's results are counted in (PD-022).
+    ///
+    /// **Refused once there is a result to reinterpret.** An admin who picked wrong on the first day
+    /// can fix it; after the first result is in, changing the unit would silently turn every number
+    /// already entered into a claim about something else. The store refuses it rather than the screen
+    /// remembering to, and the refusal says how many results are in the way.
+    public func setUnit(_ unit: String, on clubId: String) throws {
+        try ClubBook.check(unit, in: ClubBook.resultUnits, field: "result unit")
+        try requireClub(clubId)
+        var results = 0
+        try run("SELECT COUNT(*) FROM fixture_result WHERE club_id = ?;", [.text(clubId)]) { s in
+            results = Int(sqlite3_column_int64(s, 0))
+        }
+        guard results == 0 else { throw ClubBookError.unitIsSettled(results) }
+        try run("UPDATE club SET result_unit = ? WHERE club_id = ?;", [.text(unit), .text(clubId)])
     }
 
     /// What a win and a draw are worth in this league. Refused if either is negative — a league that
@@ -356,7 +395,7 @@ public final class ClubBook {
         var out: [StoredClub] = []
         try run("""
             SELECT club_id, name, kind, accent_hex, created_at, badge_asset_id, shape,
-                   points_win, points_draw
+                   points_win, points_draw, result_unit
             FROM club ORDER BY name COLLATE NOCASE;
             """, []) { s in
             let kind = Journal.text(s, 2)
@@ -374,7 +413,14 @@ public final class ClubBook {
                 shape: (kind == "tournament"
                         && shape.map { ClubBook.tournamentShapes.contains($0) } == true) ? shape : nil,
                 pointsForWin: ClubBook.points(s, 7, or: ClubBook.defaultPointsForWin),
-                pointsForDraw: ClubBook.points(s, 8, or: ClubBook.defaultPointsForDraw)))
+                pointsForDraw: ClubBook.points(s, 8, or: ClubBook.defaultPointsForDraw),
+                // A unit this build does not know reads back as none, and a league says so rather
+                // than the screens labelling every number with a word nobody chose.
+                unit: {
+                    guard sqlite3_column_type(s, 9) != SQLITE_NULL else { return nil }
+                    let value = Journal.text(s, 9)
+                    return ClubBook.resultUnits.contains(value) ? value : nil
+                }()))
         }
         return out
     }

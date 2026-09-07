@@ -112,6 +112,9 @@ struct LeagueTableView: View {
     let rows: [TableRow]
     let pointsForWin: Int
     let pointsForDraw: Int
+    /// What the numbers in this table are counted in (PD-022). Nil for a league made before it was
+    /// asked — and the table says so rather than labelling every figure with a word nobody chose.
+    var unit: ResultUnit?
 
     /// `static`, so it is not a stored property: a private stored property would drag the
     /// synthesised memberwise initialiser private with it, and this view is built by two others.
@@ -127,13 +130,30 @@ struct LeagueTableView: View {
                 line(index + 1, row)
                 ThroDivider()
             }
-            Note("**\(pointsForWin) point\(pointsForWin == 1 ? "" : "s") for a win, "
+            Note(counted + "**\(pointsForWin) point\(pointsForWin == 1 ? "" : "s") for a win, "
                  + "\(pointsForDraw) for a draw.** Sorted on points, then difference, then what a "
                  + "team scored. **E** counts the results in that row that came from a match scored "
                  + "in THRØ — the rest are an official's word, which counts here and can never move "
                  + "a rating.")
                 .padding(.top, ThroSpacing.spacing3)
         }
+    }
+
+    /// The unit, said once above the arithmetic rather than repeated in every cell — a phone-width
+    /// table has no room for the word beside seven numbers, and saying it once is still saying it.
+    private var counted: String {
+        guard let unit else {
+            return "**This league has not said what its results are counted in**, so the figures "
+                 + "below are numbers without a unit. An admin can set one until the first result "
+                 + "goes in. "
+        }
+        return "Counted in **\(unit.rawValue)**. "
+    }
+
+    /// What a row scored and conceded, with the unit on it. Empty when the league has not said.
+    private func spoken(_ row: TableRow) -> String {
+        guard let unit else { return "" }
+        return "\(unit.counted(row.scoreFor)) for and \(unit.counted(row.scoreAgainst)) against, "
     }
 
     private var header: some View {
@@ -145,7 +165,7 @@ struct LeagueTableView: View {
                 Text(column.0)
                     .thro(ThroTypography.metadata)
                     .frame(width: column.0 == "+/−" ? 34 : 26, alignment: .trailing)
-                    .accessibilityLabel(column.1)
+                    .accessibilityLabel(unitised(column.1))
             }
         }
         .foregroundStyle(ThroColor.colorTextSecondary)
@@ -182,7 +202,14 @@ struct LeagueTableView: View {
         .padding(.vertical, ThroSpacing.spacing3)
         .accessibilityElement(children: .combine)
         .accessibilityLabel("\(position). \(row.team.name), played \(row.played), \(row.points) points, "
-                            + "\(row.evidenced) of \(row.played) scored in THRØ")
+                            + spoken(row) + "\(row.evidenced) of \(row.played) scored in THRØ")
+    }
+
+    /// A column's spoken name with the unit in it, so a screen reader says "leg difference" rather
+    /// than "difference" — which is where the unit has room to travel with the number.
+    private func unitised(_ name: String) -> String {
+        guard let unit, name == "difference" else { return name }
+        return "\(unit.rawValue.dropLast()) difference"
     }
 
     private func figure(_ text: String, width: CGFloat = 26) -> some View {
@@ -324,7 +351,7 @@ public struct LeagueScreen: View {
         Eyebrow("Table").padding(.top, ThroSpacing.spaceSectionGap)
         if league.tableIsWorthShowing {
             LeagueTableView(rows: league.table, pointsForWin: league.pointsForWin,
-                            pointsForDraw: league.pointsForDraw)
+                            pointsForDraw: league.pointsForDraw, unit: league.unit)
                 .padding(.top, ThroSpacing.spacing2)
         } else {
             // Not an empty table. A grid of zeroes reads as a season nobody has won a game in.
@@ -662,7 +689,7 @@ public struct TournamentScreen: View {
         Eyebrow("Standings").padding(.top, ThroSpacing.spaceSectionGap)
         if tournament.teams.count >= 2, tournament.fixtures.contains(where: { $0.result != nil }) {
             LeagueTableView(rows: tournament.standings, pointsForWin: tournament.pointsForWin,
-                            pointsForDraw: tournament.pointsForDraw)
+                            pointsForDraw: tournament.pointsForDraw, unit: tournament.unit)
                 .padding(.top, ThroSpacing.spacing2)
         } else {
             Text("Standings appear when the first match has a result.")
@@ -934,9 +961,16 @@ public struct RecordResultScreen: View {
             Text("Already recorded")
                 .thro(ThroTypography.labelStrong.weight(.semibold))
                 .foregroundStyle(ThroColor.colorTextSecondary)
-            Text("\(result.home)–\(result.away)")
-                .thro(ThroTypography.heading1.family(.sport).weight(.bold))
-                .foregroundStyle(ThroColor.colorTextPrimary)
+            HStack(alignment: .firstTextBaseline, spacing: ThroSpacing.spacing2) {
+                Text("\(result.home)–\(result.away)")
+                    .thro(ThroTypography.heading1.family(.sport).weight(.bold))
+                    .foregroundStyle(ThroColor.colorTextPrimary)
+                if let unit = club.unit {
+                    Text(unit.rawValue)
+                        .thro(ThroTypography.body)
+                        .foregroundStyle(ThroColor.colorTextSecondary)
+                }
+            }
             SourceTag(source: result.source)
             Text(result.source.explanation)
                 .thro(ThroTypography.metadata)
@@ -951,7 +985,7 @@ public struct RecordResultScreen: View {
             .strokeBorder(ThroColor.colorBorderDefault, lineWidth: 1))
     }
 
-    private var boxes: some View {
+    @ViewBuilder private var boxes: some View {
         HStack(alignment: .top, spacing: ThroSpacing.spacing4) {
             score(home, $homeScore)
             Text("v")
@@ -959,6 +993,19 @@ public struct RecordResultScreen: View {
                 .foregroundStyle(ThroColor.colorTextSecondary)
                 .padding(.top, 34)
             score(away, $awayScore)
+        }
+        // What the two numbers ARE (PD-022). A result of 3–1 means nothing without it, and this is
+        // the screen where somebody is typing the 3.
+        if let unit = club.unit {
+            Text("\(unit.label) won by each side.")
+                .thro(ThroTypography.metadata)
+                .foregroundStyle(ThroColor.colorTextSecondary)
+        } else {
+            Text("This league has not said what its results are counted in, so these are numbers "
+                 + "without a unit. An admin can set one until the first result goes in.")
+                .thro(ThroTypography.metadata)
+                .foregroundStyle(ThroColor.colorStatusError)
+                .fixedSize(horizontal: false, vertical: true)
         }
     }
 
