@@ -19,6 +19,25 @@ component mapping (Claude Design → iOS → Android → web) once platforms are
 | `scoring` | 9 | Checkout, LegState, MatchHeader, MatchSummary, RemainingScore, ScoreHero, ScoreKeypad, SetState, TurnIndicator |
 | `state` | 12 | Dialog, EmptyState, ErrorState, LiveIndicator, LoadingState, Notification, OfflineState, Progress, Sheet, Snackbar, SyncState, VerificationState |
 
+## Drawn by engineering, not exported — 1
+
+PD-010 commissioned the club, league, tournament and profile screens from engineering, to be built
+**from** the approved system rather than from scratch. Where the system genuinely lacked something,
+the rule was to draw it in the system's own idiom and record it here rather than slip it in. Exactly
+one element needed that.
+
+| Component | Where | Why it is not exported, and what it borrows |
+|---|---|---|
+| `Badge` | `ThroDesign/Club.swift` | A club, league or tournament's mark. The export draws a mark for a **person** — `PlayerIdentity`'s grey circle with the initials in the condensed face — and that is untouched and still used for people. A club needed one too, and it is a **rounded square in the club's own colour**, so that a club and a person never read as the same kind of thing in a list. Same face, same proportion (0.38 of the mark), same border weight as the exported mark; only the shape and the fill differ, and both differences carry meaning. The initials on a club's colour are chalk or ink — whichever reads better against it, chosen rather than configured, which is the same guarantee `packages/organisation` makes for the accent. |
+
+Two further composites in the same file — `OrganisationRow` and `OrganisationHeader` — are assembly
+rather than invention: a row is `Badge` plus two type roles, and a header is a band of the club's
+accent with `Badge`, `Tag` and `Icon.circleCheck` on it. Nothing in either introduces a value.
+
+**Four glyphs were ported, not invented.** `lock`, `shield`, `calendar` and `search` were already in
+the export's own icon set (`extracted/components/core/icons.js`) and had simply not been carried into
+`ThroDesign` yet. Their path data is verbatim, as every other glyph's is.
+
 ## Participant app — screens
 
 | Group | Screens |

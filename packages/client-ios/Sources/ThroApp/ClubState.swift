@@ -165,9 +165,16 @@ public struct Club: Identifiable, Equatable, Sendable {
         self.announcements = announcements
     }
 
+    /// A badge carries at most three letters, and "The Feathers A" is FA rather than TFA: the words
+    /// a club's name shares with every other club's carry no information at that size.
+    /// "A" is NOT here, and that is the point: Feathers A and Feathers B are different clubs, and a
+    /// badge that dropped the letter would give them the same one.
+    private static let skipped: Set<String> = ["the", "of", "and", "&"]
     public var initials: String {
-        let words = name.split(separator: " ").filter { $0.first?.isUppercase == true }
-        return String(words.prefix(3).compactMap { $0.first }.map(String.init).joined().uppercased().prefix(3))
+        let words = name.split(whereSeparator: { $0 == " " || $0 == "-" })
+            .filter { !Club.skipped.contains($0.lowercased()) }
+        let letters = words.compactMap { $0.first }.map { String($0).uppercased() }.joined()
+        return String(letters.prefix(3))
     }
 
     // MARK: - PD-009
