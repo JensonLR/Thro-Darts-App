@@ -15,8 +15,8 @@
 | `packages/engine-swift` | the scoring engine | conformance corpus on Linux, every push |
 | `packages/statistics-swift` | the statistics layer, honest about its basis | twenty tests on Linux, every push |
 | `packages/client-ios` → `ThroDesign` | the approved components as SwiftUI | tests on macOS, every push |
-| `packages/client-ios` → `ThroJournal` | the on-device journal (ADR-006), with retractions (PD-004), and its own device identity; and the **club book**, the separate database a captain's roster and fixture list live in | twenty-eight tests on macOS, every push — seventeen on the journal, eleven on the club book |
-| `packages/client-ios` → `ThroPlay` | setup, ready, scoring, result, undo, the bust and leg announcements, double-in (PD-008) | twenty-eight session tests on macOS, every push |
+| `packages/client-ios` → `ThroJournal` | the on-device journal (ADR-006), with retractions (PD-004), and its own device identity; and the **club book**, the separate database a captain's roster and fixture list live in | thirty-two tests on macOS, every push — twenty-one on the journal (four of them on attestation, PD-011) and eleven on the club book |
+| `packages/client-ios` → `ThroPlay` | setup, ready, scoring, result, undo, the bust and leg announcements, double-in (PD-008), the checkout route (PD-013) and confirming the result (PD-011) | thirty-three session tests on macOS, every push |
 | `packages/client-ios` → `ThroApp` | Home, tabs, Settings, the root view, the opening (PD-007), and the club, league, tournament and profile screens under Discover (PD-009, PD-010) | thirty-one tests on macOS, every push: thirteen on the opening (timeline, the tagline's read time, cues, easings, geometry, the throw, the chalk stroke, the wall's dust, the dart), four on Home's reading of the journal and the device identity, five on the club rules the screens obey, and nine on the mapping between the club book and those screens. The layouts themselves are drawn, not tested |
 | `apps/ios/ThroDarts.xcodeproj` | the app target: thirteen lines that mount `ThroApp`, the ten embedded faces with their licences, the icon and the launch screen (PD-006) | `xcodebuild` for the iOS simulator, every push; `check_fonts.py` on Linux, every push |
 
@@ -167,6 +167,17 @@ exactly what CI does (`xcodebuild -scheme ThroDarts -destination 'generic/platfo
   the format, when they started, and *Self-reported* or *In progress*. Tapping one resumes it or
   opens its result. The tab bar's *Live* says plainly that it is not in this build; *You* says the
   profile is not built and carries the export's settings action in its header.
+- **Scoring.** When the thrower is on a finish, the route appears under the remaining score —
+  *T20 T20 D20* for 160 (PD-013). It is **one** route: most finishes have several and players
+  disagree, so THRØ takes a position and `docs/product/DECISIONS.md` states the rule it takes it by.
+  What is not a preference is that the route is a legal finish of exactly that number under this
+  match's own out-rule, and that is checked for every route in every rule, in three places.
+- **The end of a match.** The result screen offers **Confirm the result** (PD-011). Each player is
+  asked in turn, by name, so the phone gets handed over. Both agreeing makes it
+  *participant-confirmed*; either refusing makes it *disputed* and deletes nothing; and if a visit is
+  added or undone afterwards the agreement stops applying and the screen says so. The screen also
+  says in words what the label would flatter: two people at one phone is two people agreeing, not
+  two devices, under the names typed at the start.
 - **Discover — clubs, leagues and tournaments.** *No clubs yet* with one action: **Start a club**.
   What you start is kept on this phone and nowhere else. A club has a name, a kind (club, league or
   tournament) and — if you want one — its own accent colour, typed as six hex digits, with the badge

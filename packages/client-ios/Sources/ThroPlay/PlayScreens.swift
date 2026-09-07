@@ -28,6 +28,7 @@ public struct PlayFlow: View {
         case ready(MatchSession)
         case scoring(MatchSession)
         case result(MatchSession)
+        case confirming(MatchSession)
     }
 
     private let journal: Journal
@@ -71,7 +72,10 @@ public struct PlayFlow: View {
         case .result(let session):
             MatchResultScreen(session: session, onDone: onExit,
                               onPlayAgain: { step = .setup(home: session.name(.home), away: session.name(.away)) },
-                              onReopen: { step = .scoring(session) })
+                              onReopen: { step = .scoring(session) },
+                              onConfirmResult: { step = .confirming(session) })
+        case .confirming(let session):
+            ConfirmResultScreen(session: session) { step = .result(session) }
         }
     }
 }
@@ -534,13 +538,15 @@ public struct MatchResultScreen: View {
     private let onDone: () -> Void
     private let onPlayAgain: () -> Void
     private let onReopen: () -> Void
+    private let onConfirmResult: () -> Void
 
     public init(session: MatchSession, onDone: @escaping () -> Void, onPlayAgain: @escaping () -> Void,
-                onReopen: @escaping () -> Void) {
+                onReopen: @escaping () -> Void, onConfirmResult: @escaping () -> Void = {}) {
         self.session = session
         self.onDone = onDone
         self.onPlayAgain = onPlayAgain
         self.onReopen = onReopen
+        self.onConfirmResult = onConfirmResult
     }
 
     public var body: some View {
@@ -567,10 +573,34 @@ public struct MatchResultScreen: View {
                     }
                     section {
                         SectionHeader("Evidence")
-                        VerificationState(.selfReported, explain: true)
+                        VerificationState(session.verification, explain: true)
+                        if session.verification == .participantConfirmed {
+                            // Said plainly, because the label alone would flatter it. Two people at
+                            // one phone is the weakest form of participant-confirmed: it is an
+                            // assertion by somebody standing there, not corroboration by a second
+                            // device, and the names are the ones typed at setup.
+                            Text("\(session.name(.home)) and \(session.name(.away)) both confirmed this on this phone. That is two people agreeing, not two devices — and the names are the ones typed at the start.")
+                                .thro(ThroTypography.metadata)
+                                .foregroundStyle(ThroColor.colorTextSecondary)
+                                .fixedSize(horizontal: false, vertical: true)
+                        } else if session.verification == .disputed {
+                            Text("Somebody said this is not right. Nothing has been deleted: the result stands as recorded and is marked. Undo the visit that is wrong and confirm again.")
+                                .thro(ThroTypography.metadata)
+                                .foregroundStyle(ThroColor.colorTextSecondary)
+                                .fixedSize(horizontal: false, vertical: true)
+                        } else if session.standing.stale {
+                            Text("The result changed after it was agreed, so the agreement no longer applies to it. Confirm it again.")
+                                .thro(ThroTypography.metadata)
+                                .foregroundStyle(ThroColor.colorTextSecondary)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
                         Text("Saved on this device. Sending results to THRØ is not built yet, so this one has not left the phone.")
                             .thro(ThroTypography.metadata)
                             .foregroundStyle(ThroColor.colorTextSecondary)
+                        if !session.awaitingAttestation.isEmpty {
+                            ThroButton("Confirm the result", variant: .secondary, size: .large,
+                                       fullWidth: true, action: onConfirmResult)
+                        }
                     }
                     ThroDivider(inset: ThroSpacing.spaceScreenGutter)
                     if let proposal = session.retraction {
@@ -599,5 +629,118 @@ public struct MatchResultScreen: View {
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.vertical, ThroSpacing.spacing6)
             .padding(.horizontal, ThroSpacing.spaceScreenGutter)
+    }
+}
+
+// MARK: - Confirming the result (PD-011)
+
+/// One player at a time, on the one phone, saying whether the result is right.
+///
+/// **Why this exists.** `docs/design/DESIGN_UNSPECIFIED.md` called participant attestation the single
+/// highest-value missing item, because PD-002 says one player's word never moves a rating and the
+/// participant app had no way for the second player to say anything at all. The founder commissioned
+/// this screen (PD-011) on PD-010's terms: tokens only, approved components, on the record.
+///
+/// **What it is honest about.** Two people at one phone is the weakest form of the trust model's
+/// `participant-confirmed`: an assertion by somebody standing there, not corroboration by a second
+/// independent device, under names typed at setup rather than accounts. It is still the difference
+/// between one person's word and two, which is what PD-002 asks for — and every screen that shows
+/// the label says which it is.
+///
+/// **What a refusal does.** Nothing is deleted. The result stands exactly as recorded and is marked
+/// contested; the way to change it is the retraction PD-004 already defines. An app that let a
+/// disagreement erase evidence would be worse than one that recorded no disagreement at all.
+public struct ConfirmResultScreen: View {
+    @ObservedObject private var session: MatchSession
+    @AppStorage(Appearance.storageKey) private var appearanceRaw: String = Appearance.system.rawValue
+    private let onDone: () -> Void
+
+    public init(session: MatchSession, onDone: @escaping () -> Void) {
+        self.session = session
+        self.onDone = onDone
+    }
+
+    private var asking: Seat? { session.awaitingAttestation.first }
+
+    public var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            TopBar("Confirm the result", eyebrow: "Local match", onBack: onDone)
+            ScrollView {
+                VStack(alignment: .leading, spacing: ThroSpacing.spacing5) {
+                    MatchSummary(
+                        headline: session.winner.map { "\(session.name($0)) wins" } ?? "In progress",
+                        won: session.winner != nil,
+                        score: "\(session.legsWon(.home))–\(session.legsWon(.away))",
+                        opponent: "\(session.name(.home)) v \(session.name(.away)) · \(session.formatLabel)"
+                    )
+                    if let seat = asking {
+                        asking(seat)
+                    } else {
+                        done
+                    }
+                    Note("Nothing is deleted either way. A result somebody does not accept is marked, not removed — and the way to change it is to undo the visit that is wrong.")
+                }
+                .padding(.horizontal, ThroSpacing.spaceScreenGutter)
+                .padding(.vertical, ThroSpacing.spacing5)
+            }
+        }
+        .background(ThroColor.colorBackgroundPrimary.ignoresSafeArea())
+        .throAppearance(Appearance(stored: appearanceRaw))
+    }
+
+    /// The ask, addressed to one person by name, so the phone gets handed to the right hand.
+    @ViewBuilder private func asking(_ seat: Seat) -> some View {
+        VStack(alignment: .leading, spacing: ThroSpacing.spacing4) {
+            HStack(spacing: ThroSpacing.spacing3) {
+                PlayerIdentity(PlayerRef(name: session.name(seat)), size: .medium)
+                Spacer(minLength: 0)
+            }
+            Text("\(session.name(seat)) — is this right?")
+                .thro(ThroTypography.heading3)
+                .foregroundStyle(ThroColor.colorTextPrimary)
+                .fixedSize(horizontal: false, vertical: true)
+            Text("Hand the phone over. Each player says for themselves, and their answer is on the record with the match.")
+                .thro(ThroTypography.body)
+                .foregroundStyle(ThroColor.colorTextSecondary)
+                .fixedSize(horizontal: false, vertical: true)
+            ThroButton("Yes, that is the result", variant: .primary, size: .large, fullWidth: true) {
+                session.attest(seat, agrees: true)
+            }
+            ThroButton("No, something is wrong", variant: .secondary, size: .large, fullWidth: true) {
+                session.attest(seat, agrees: false)
+            }
+            if let notice = session.notice, notice.tone == .error {
+                Snackbar(notice.text, tone: .error)
+            }
+        }
+    }
+
+    /// Both have answered. What the answers add up to, in words rather than a label alone.
+    @ViewBuilder private var done: some View {
+        VStack(alignment: .leading, spacing: ThroSpacing.spacing4) {
+            VerificationState(session.verification, explain: true)
+            Text(session.verification == .participantConfirmed
+                 ? "Both players agreed. On this phone that means two people standing behind it, under the names typed at the start — not two devices, and not accounts."
+                 : "Recorded as contested. The result stands exactly as it was; undo the visit that is wrong and ask again.")
+                .thro(ThroTypography.body)
+                .foregroundStyle(ThroColor.colorTextSecondary)
+                .fixedSize(horizontal: false, vertical: true)
+            ThroButton("Done", variant: .primary, size: .large, fullWidth: true, action: onDone)
+        }
+    }
+}
+
+/// The same quiet line the club screens use. Declared here because `ThroPlay` does not import them.
+private struct Note: View {
+    private let text: String
+    init(_ text: String) { self.text = text }
+    var body: some View {
+        HStack(alignment: .top, spacing: 10) {
+            Icon(.info, size: 16).foregroundStyle(ThroColor.colorTextSecondary).padding(.top, 2)
+            Text(text)
+                .thro(ThroTypography.metadata)
+                .foregroundStyle(ThroColor.colorTextSecondary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
     }
 }

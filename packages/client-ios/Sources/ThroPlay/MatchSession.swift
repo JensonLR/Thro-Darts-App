@@ -1,4 +1,5 @@
 import Foundation
+import ThroDesign
 import ThroEngine
 import ThroJournal
 import ThroStatistics
@@ -43,7 +44,7 @@ public final class MatchSession: ObservableObject {
     }
 
     public struct Notice: Equatable, Sendable {
-        public enum Tone: Sendable { case neutral, success, error }
+        public enum Tone: Sendable, Equatable { case neutral, success, error }
         public let text: String
         public let tone: Tone
     }
@@ -97,6 +98,9 @@ public final class MatchSession: ObservableObject {
         let replayed = try journal.replayVisits(record.id)
         self.state = replayed.state
         self.visits = replayed.visits
+        // Read on open, so reopening a finished match shows what was actually agreed (PD-011)
+        // rather than starting again from nothing.
+        self.standing = try journal.standing(for: record.id)
     }
 
     public static func start(_ new: NewMatch, in journal: Journal) throws -> MatchSession {
@@ -117,6 +121,43 @@ public final class MatchSession: ObservableObject {
     public func legsWon(_ seat: Seat) -> Int { state.legsWonTotal[seat.playerId] ?? 0 }
     public var checkable: Set<Int> { RuleTables.checkouts(record.outRule) }
     public var throwerOnAFinish: Bool { thrower.map { checkable.contains(remaining($0)) } ?? false }
+
+    // MARK: - attestation (PD-011)
+
+    /// Who stands behind this result, read from the journal on every change.
+    @Published public private(set) var standing: Journal.Standing =
+        Journal.Standing(confirmed: [], contested: [], stale: false)
+
+    /// The label the Result screen shows, derived rather than stored.
+    ///
+    /// The derivation is deliberately conservative in both directions. A contest outranks a
+    /// confirmation, because a result one competitor does not accept is disputed whatever the other
+    /// said. And a confirmation that a later visit or retraction has overtaken counts for nothing:
+    /// what was agreed is no longer what is recorded, so the label falls back to self-reported
+    /// rather than claiming an agreement nobody gave to this version of the result.
+    public var verification: VerificationLabel {
+        if standing.anyContest { return .disputed }
+        if standing.bothConfirmed { return .participantConfirmed }
+        return .selfReported
+    }
+
+    /// Seats still to answer. Empty when both have, which is what ends the confirm flow.
+    public var awaitingAttestation: [Seat] {
+        guard isComplete else { return [] }
+        if standing.stale { return Seat.allCases }
+        return Seat.allCases.filter { !standing.confirmed.contains($0) && !standing.contested.contains($0) }
+    }
+
+    /// Records one player's answer. Appends; nothing is replaced and nothing is removed.
+    public func attest(_ seat: Seat, agrees: Bool) {
+        do {
+            try journal.attest(record.id, seat: seat, agrees: agrees)
+            standing = try journal.standing(for: record.id)
+            notice = nil
+        } catch {
+            notice = Notice(text: "Not saved, so not recorded. \(error)", tone: .error)
+        }
+    }
 
     /// The route THRØ shows for the thrower's remaining (PD-013), or empty when there is no finish.
     ///
@@ -249,6 +290,9 @@ public final class MatchSession: ObservableObject {
             let replayed = try journal.replayVisits(record.id)
             state = replayed.state
             visits = replayed.visits
+            // Undoing a visit is exactly the case that makes an agreement stale: what somebody
+            // confirmed is no longer what is recorded (PD-011).
+            standing = (try? journal.standing(for: record.id)) ?? standing
             entry = ""
             bust = nil
             notice = Notice(text: Copy.undone(name(proposal.seat), proposal.visitTotal, next: thrower.map(name) ?? ""),
@@ -301,6 +345,9 @@ public final class MatchSession: ObservableObject {
                 remainingAfter: won ? 0 : (next.remaining[seat.playerId] ?? before),
                 bust: effect == .bust, wonLeg: won
             ))
+            // A visit written after an agreement makes that agreement stale (PD-011). It is read
+            // back rather than reasoned about, so the screen and the journal cannot disagree.
+            standing = (try? journal.standing(for: record.id)) ?? standing
             state = next                                      // … then apply
             entry = ""
 

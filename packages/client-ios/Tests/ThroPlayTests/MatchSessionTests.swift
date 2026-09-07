@@ -459,4 +459,64 @@ final class MatchSessionTests: XCTestCase {
         XCTAssertEqual(RuleTables.route(20, .double), ["D10"], "double-out must finish on a double")
         XCTAssertEqual(RuleTables.route(20, .straight), ["20"], "straight-out is thrown at twenty")
     }
+
+
+    // MARK: - attestation (PD-011)
+
+    /// Brings a best-of-one to a finished state: home takes 141 out and the match is over.
+    private func finished() throws -> MatchSession {
+        let s = try session(legs: 1)
+        bringHomeToAFinish(s)
+        s.digit("1"); s.digit("4"); s.digit("1"); s.enter(); s.answer(3); s.answer(1)
+        XCTAssertTrue(s.isComplete)
+        return s
+    }
+
+    /// A finished match is self-reported until both players say otherwise, on the phone, by name.
+    ///
+    /// Both are asked rather than one, because on a single phone nothing records who was keeping
+    /// score — and a confirmation from whoever happened to be holding it is one person's word twice.
+    func testAResultIsSelfReportedUntilBothPlayersHaveSaidSo() throws {
+        let s = try finished()
+        XCTAssertEqual(s.verification, .selfReported)
+        XCTAssertEqual(s.awaitingAttestation, [.home, .away])
+
+        s.attest(.home, agrees: true)
+        XCTAssertEqual(s.verification, .selfReported, "one player agreeing is not two")
+        XCTAssertEqual(s.awaitingAttestation, [.away])
+
+        s.attest(.away, agrees: true)
+        XCTAssertEqual(s.verification, .participantConfirmed)
+        XCTAssertTrue(s.awaitingAttestation.isEmpty)
+    }
+
+    /// A refusal marks; it never removes. And it outranks the other player's agreement, because a
+    /// result one competitor does not accept is disputed whatever the other said.
+    func testARefusalMarksTheResultAndDeletesNothing() throws {
+        let s = try finished()
+        let visitsBefore = try journal.entries(for: s.record.id).filter { $0.kind == .visit }.count
+
+        s.attest(.home, agrees: true)
+        s.attest(.away, agrees: false)
+        XCTAssertEqual(s.verification, .disputed)
+        XCTAssertEqual(try journal.entries(for: s.record.id).filter { $0.kind == .visit }.count, visitsBefore,
+                       "a disagreement removes no evidence")
+        XCTAssertEqual(s.legsWon(.home), 1, "and the result still stands as recorded")
+    }
+
+    /// Undoing a visit after the result was agreed is the case this exists for: what was confirmed
+    /// is no longer what is recorded, so the label falls back rather than claiming an agreement
+    /// nobody gave to this version of it.
+    func testAnUndoAfterAnAgreementDropsTheLabelBackRatherThanKeepingIt() throws {
+        let s = try finished()
+        s.attest(.home, agrees: true)
+        s.attest(.away, agrees: true)
+        XCTAssertEqual(s.verification, .participantConfirmed)
+
+        s.proposeRetraction()
+        s.confirmRetraction()
+        XCTAssertEqual(s.verification, .selfReported, "the agreement no longer describes this result")
+        XCTAssertTrue(s.standing.stale)
+        XCTAssertEqual(s.standing.confirmed, [.home, .away], "and it is still on the record, not deleted")
+    }
 }

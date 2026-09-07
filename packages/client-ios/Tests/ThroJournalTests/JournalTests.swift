@@ -361,4 +361,95 @@ final class JournalTests: XCTestCase {
         XCTAssertEqual(Set(entries.map(\.deviceId)), [DeviceId("the-original")],
                        "one device, one stream")
     }
+
+    // MARK: - attestation (PD-011)
+
+    /// An attestation is an append like any other: durable, unremovable, and invisible to replay.
+    /// The last property is the one that matters — a confirmation must not change the score.
+    func testAnAttestationIsAppendedAndChangesNothingAboutTheScore() throws {
+        let j = try open()
+        let m = try j.createMatch(NewMatch(homeName: "A", awayName: "B", startingScore: 101, legsTarget: 1))
+        try j.append(.visit(Seat.home.playerId, 61), to: m.id)
+        let before = try j.replay(m.id)
+
+        try j.attest(m.id, seat: .away, agrees: true)
+        let after = try j.replay(m.id)
+        XCTAssertEqual(before.remaining, after.remaining, "an attestation is not a throw")
+        XCTAssertEqual(try j.entries(for: m.id).count, 2, "and it is on the record")
+        XCTAssertEqual(Journal.standingVisits(try j.entries(for: m.id)).count, 1)
+    }
+
+    func testBothConfirmingIsBothConfirmingAndOneContestOutranksIt() throws {
+        let j = try open()
+        let m = try j.createMatch(NewMatch(homeName: "A", awayName: "B", startingScore: 101, legsTarget: 1))
+        try j.append(.visit(Seat.home.playerId, 61), to: m.id)
+
+        XCTAssertEqual(try j.standing(for: m.id), Journal.Standing(confirmed: [], contested: [], stale: false))
+        try j.attest(m.id, seat: .home, agrees: true)
+        XCTAssertFalse(try j.standing(for: m.id).bothConfirmed, "one is not both")
+        try j.attest(m.id, seat: .away, agrees: true)
+        XCTAssertTrue(try j.standing(for: m.id).bothConfirmed)
+        XCTAssertFalse(try j.standing(for: m.id).anyContest)
+
+        // A player may change their mind, and the last word is the one that counts.
+        try j.attest(m.id, seat: .away, agrees: false)
+        let standing = try j.standing(for: m.id)
+        XCTAssertTrue(standing.anyContest)
+        XCTAssertFalse(standing.bothConfirmed)
+        XCTAssertEqual(standing.confirmed, [.home])
+        XCTAssertEqual(standing.contested, [.away])
+        XCTAssertEqual(try j.entries(for: m.id).count, 4, "and all three answers are still on the record")
+    }
+
+    /// The property that stops an agreement being borrowed. What was confirmed has to be what is
+    /// recorded, so a visit or a retraction written afterwards makes the agreement stale — without
+    /// deleting it, because nothing here is ever deleted.
+    func testAnAgreementDoesNotSurviveTheResultChangingUnderIt() throws {
+        let j = try open()
+        let m = try j.createMatch(NewMatch(homeName: "A", awayName: "B", startingScore: 501, legsTarget: 1))
+        try j.append(.visit(Seat.home.playerId, 60), to: m.id)
+        try j.attest(m.id, seat: .home, agrees: true)
+        try j.attest(m.id, seat: .away, agrees: true)
+        XCTAssertTrue(try j.standing(for: m.id).bothConfirmed)
+
+        try j.append(.visit(Seat.away.playerId, 60), to: m.id)
+        var standing = try j.standing(for: m.id)
+        XCTAssertTrue(standing.stale, "a visit came after the agreement")
+        XCTAssertFalse(standing.bothConfirmed)
+        XCTAssertEqual(standing.confirmed, [.home, .away], "the answers are still there; they just no longer apply")
+
+        // The same for a retraction, which is the case that actually happens: somebody undoes a
+        // mis-key after the other player has already said yes.
+        try j.attest(m.id, seat: .home, agrees: true)
+        try j.attest(m.id, seat: .away, agrees: true)
+        XCTAssertTrue(try j.standing(for: m.id).bothConfirmed)
+        try j.retractLastVisit(in: m.id)
+        standing = try j.standing(for: m.id)
+        XCTAssertTrue(standing.stale)
+        XCTAssertFalse(standing.bothConfirmed)
+    }
+
+    /// A row written by a LATER build must not be replayed as a visit.
+    ///
+    /// It used to be: `Kind(rawValue:) ?? .visit`, so an unrecognised kind became a nil-scoring
+    /// visit and quietly entered the match — changing the score and every statistic derived from it,
+    /// with nothing anywhere saying so. A journal containing rows this build cannot interpret cannot
+    /// be replayed faithfully, so it says that instead.
+    func testARowThisBuildCannotReadIsRefusedRatherThanScoredAsAVisit() throws {
+        let j = try open()
+        let m = try j.createMatch(NewMatch(homeName: "A", awayName: "B", startingScore: 501, legsTarget: 1))
+        try j.append(.visit(Seat.home.playerId, 60), to: m.id)
+        try j.exec("""
+            INSERT INTO journal (match_id, device_id, device_seq, command_id, kind, seat, visit_total, occurred_at)
+            VALUES ('\(m.id.value)', 'test-device', 99, 'from-the-future', 'wager', 'home', 0, '2030-01-01T00:00:00.000Z');
+            """)
+
+        XCTAssertEqual(try j.entries(for: m.id).last?.kind, .unknown, "not silently a visit")
+        XCTAssertThrowsError(try j.replay(m.id)) { error in
+            guard case JournalError.replayRejected(_, let reason) = error else {
+                return XCTFail("wrong error: \(error)")
+            }
+            XCTAssertEqual(reason, "UNKNOWN_ROW_KIND")
+        }
+    }
 }

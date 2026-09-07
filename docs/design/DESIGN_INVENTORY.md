@@ -38,6 +38,12 @@ accent with `Badge`, `Tag` and `Icon.circleCheck` on it. Nothing in either intro
 the export's own icon set (`extracted/components/core/icons.js`) and had simply not been carried into
 `ThroDesign` yet. Their path data is verbatim, as every other glyph's is.
 
+**The confirm-result screen is composition too (PD-011).** `ConfirmResultScreen` is `TopBar`,
+`MatchSummary`, `PlayerIdentity`, `ThroButton` and `VerificationState` as they already exist. The one
+thing it adds is words: the label alone would flatter what happened, so the screen says in plain text
+that two people at one phone is two people agreeing rather than two devices, and that the names are
+the ones typed at the start.
+
 **Three entry screens are composition, not new components.** Starting a club, adding a member and
 adding a fixture (`ThroApp/ClubFlow.swift`) are built from `ThroTextField`, `SegmentedControl`,
 `ThroButton`, `Badge` and `TopBar` as they already exist. Two things in them are worth stating

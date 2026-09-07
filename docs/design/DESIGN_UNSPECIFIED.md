@@ -38,13 +38,21 @@ Sourced by reading the whole export: 61 components, 33 participant screens, 9 or
    "Sign-in method · Passkey". Passkey *recovery* and the organiser-verified **identity-claim** flow
    are the two highest-risk flows in the product and neither is drawn.
 
-7. **Participant result attestation.** There is no way for a player to confirm, or contest, a
-   result. The match result screen's only action is "Back to tournament". The organiser's per-leg
-   `Confirmed` column reads from an event no participant client can author, so the trust model's
-   `participant-confirmed` state is currently unreachable from the participant app.
+7. **Participant result attestation.** ~~There is no way for a player to confirm, or contest, a
+   result.~~ **Commissioned and built, 2026-09-07 — PD-011.** The export still draws no such screen;
+   the founder extended PD-010's authority to cover this one, and `ConfirmResultScreen` is composed
+   from approved components on those terms.
+
+   What is built is the local case: both players at one phone, each asked in turn by name, their
+   answers appended to the journal. That reaches `participant-confirmed` — the state that was
+   unreachable — while saying plainly that two people at one phone is the weakest form of it, not
+   the two-device corroboration the trust model prefers.
+
+   **What is still missing** is the export's own drawing of it, and the online case: an opponent on
+   their own device confirming a result they did not enter, which needs identity (B4) and sync.
 
    **This gates rating eligibility** (decision PD-002): without it, only organiser-confirmed results
-   can rate, so anything outside an organised competition does not count. It is the single highest-
+   can rate, so anything outside an organised competition does not count. It was the single highest-
    value item on this list.
 
 ## State and component gaps

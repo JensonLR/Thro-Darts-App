@@ -135,7 +135,18 @@ public struct MatchRecord: Equatable, Sendable {
 /// record. The shape is the server's (`AccountedVisit.correctsSeq`): a correction supersedes, it never
 /// deletes, and the struck row stays for an investigator to read. PD-004.
 public struct JournalEntry: Equatable, Sendable {
-    public enum Kind: String, Sendable { case visit, retraction }
+    /// What a row is.
+    ///
+    /// `unknown` is not written by anything; it is what a row written by a LATER build reads back
+    /// as. It exists because the alternative — the one this journal shipped with — was to fall back
+    /// to `visit`, which would have replayed somebody else's confirmation as a nil-scoring visit and
+    /// quietly changed the score and every statistic derived from it. Replay throws on it instead.
+    public enum Kind: String, Sendable {
+        case visit, retraction, confirmation, contest, unknown
+
+        /// The kinds that carry a score. Everything else is a fact about the record, not a throw.
+        var isScoring: Bool { self == .visit }
+    }
 
     public let matchId: MatchId
     public let deviceId: DeviceId
@@ -150,9 +161,9 @@ public struct JournalEntry: Equatable, Sendable {
     public let correctsSeq: Int64?
     public let occurredAt: Date
 
-    /// The engine command a visit carries. A retraction carries none; replay skips it and what it struck.
+    /// The engine command a visit carries. Nothing else carries one; replay skips them.
     public var command: Command? {
-        guard kind == .visit else { return nil }
+        guard kind.isScoring else { return nil }
         return .recordVisit(player: seat.playerId, visitTotal: visitTotal, dartsUsed: dartsUsed, dartsAtDouble: dartsAtDouble)
     }
 }
@@ -532,10 +543,97 @@ public final class Journal {
         }
     }
 
+    // MARK: - attestation (PD-011)
+
+    /// Records that a player agrees, or does not agree, with the result as it currently stands.
+    ///
+    /// **This is an assertion by a person, not corroboration by a second device.** Two people at one
+    /// phone is the weakest form of the trust model's `participant-confirmed`, and the client says
+    /// so where it shows it. What it does give is the thing PD-002 requires before any result can
+    /// ever rate: two competitors on the record, rather than one person's word.
+    ///
+    /// Written as an ordinary append, so it is durable on the same terms as a visit and cannot be
+    /// edited afterwards. Nothing is ever removed by it.
+    @discardableResult
+    public func attest(_ matchId: MatchId, seat: Seat, agrees: Bool,
+                       occurredAt: Date = Date(), commandId: String = UUID().uuidString) throws -> JournalEntry {
+        let kind: JournalEntry.Kind = agrees ? .confirmation : .contest
+        try Journal.exec(handle, "BEGIN IMMEDIATE;")
+        do {
+            var next: Int64 = 1
+            try run("SELECT COALESCE(MAX(device_seq), 0) + 1 FROM journal WHERE match_id = ? AND device_id = ?;",
+                    [.text(matchId.value), .text(deviceId.value)]) { s in
+                next = sqlite3_column_int64(s, 0)
+            }
+            try run("""
+                INSERT INTO journal (match_id, device_id, device_seq, command_id, kind, seat, visit_total,
+                                     darts_used, darts_at_double, corrects_seq, occurred_at)
+                VALUES (?, ?, ?, ?, ?, ?, 0, NULL, NULL, NULL, ?);
+                """, [
+                    .text(matchId.value), .text(deviceId.value), .int(next), .text(commandId),
+                    .text(kind.rawValue), .text(seat.rawValue), .text(Journal.iso.string(from: occurredAt)),
+                ])
+            try Journal.exec(handle, "COMMIT;")
+            return JournalEntry(matchId: matchId, deviceId: deviceId, deviceSeq: next, commandId: commandId,
+                                kind: kind, seat: seat, visitTotal: 0, dartsUsed: nil,
+                                dartsAtDouble: nil, correctsSeq: nil, occurredAt: occurredAt)
+        } catch {
+            try? Journal.exec(handle, "ROLLBACK;")
+            throw error
+        }
+    }
+
+    /// Who stands behind the result as it is recorded right now.
+    public struct Standing: Equatable, Sendable {
+        public let confirmed: Set<Seat>
+        public let contested: Set<Seat>
+        /// A visit or a retraction was written **after** the last attestation, so what somebody
+        /// agreed to is no longer what is recorded. The attestation is not deleted — nothing here
+        /// ever is — it simply no longer describes this result, and the label says so.
+        public let stale: Bool
+
+        public init(confirmed: Set<Seat>, contested: Set<Seat>, stale: Bool) {
+            self.confirmed = confirmed
+            self.contested = contested
+            self.stale = stale
+        }
+
+        public var bothConfirmed: Bool { confirmed == Set(Seat.allCases) && !stale }
+        public var anyContest: Bool { !contested.isEmpty && !stale }
+    }
+
+    /// Reads the attestations for a match and works out whether they still apply.
+    ///
+    /// Staleness is decided by `device_seq` alone: it is monotonic per device, so on the one phone
+    /// that scored this match it is a total order, and "a scoring row came after the last
+    /// attestation" is exactly "somebody changed the result after agreeing it".
+    public func standing(for matchId: MatchId) throws -> Standing {
+        Journal.standing(try entries(for: matchId))
+    }
+
+    public static func standing(_ entries: [JournalEntry]) -> Standing {
+        let attestations = entries.filter { $0.kind == .confirmation || $0.kind == .contest }
+        guard let lastAttestation = attestations.map(\.deviceSeq).max() else {
+            return Standing(confirmed: [], contested: [], stale: false)
+        }
+        let changedAfter = entries.contains {
+            ($0.kind == .visit || $0.kind == .retraction) && $0.deviceSeq > lastAttestation
+        }
+        // The last word each player said. Somebody who contests and then agrees has agreed.
+        var latest: [Seat: JournalEntry] = [:]
+        for a in attestations.sorted(by: { $0.deviceSeq < $1.deviceSeq }) { latest[a.seat] = a }
+        return Standing(
+            confirmed: Set(latest.filter { $0.value.kind == .confirmation }.keys),
+            contested: Set(latest.filter { $0.value.kind == .contest }.keys),
+            stale: changedAfter)
+    }
+
     /// The visits that stand: rows of kind `visit` that no retraction supersedes, in order.
     public static func standingVisits(_ entries: [JournalEntry]) -> [JournalEntry] {
-        let superseded = Set(entries.compactMap { $0.correctsSeq })
-        return entries.filter { $0.kind == .visit && !superseded.contains($0.deviceSeq) }
+        // Only a retraction supersedes; an attestation's corrects_seq is null, and a row of a kind
+        // this build cannot read is not allowed to strike a visit it cannot be shown to refer to.
+        let superseded = Set(entries.filter { $0.kind == .retraction }.compactMap { $0.correctsSeq })
+        return entries.filter { $0.kind.isScoring && !superseded.contains($0.deviceSeq) }
     }
 
     /// Every committed row for a match — visits and retractions — in the order committed on this device.
@@ -551,7 +649,9 @@ public final class Journal {
                 deviceId: DeviceId(Journal.text(s, 1)),
                 deviceSeq: sqlite3_column_int64(s, 2),
                 commandId: Journal.text(s, 3),
-                kind: JournalEntry.Kind(rawValue: Journal.text(s, 9)) ?? .visit,
+                // NOT `?? .visit`. A kind this build does not know is a row it cannot interpret,
+                // and interpreting it as a visit would put a score in the match that nobody threw.
+                kind: JournalEntry.Kind(rawValue: Journal.text(s, 9)) ?? .unknown,
                 seat: Seat(rawValue: Journal.text(s, 4)) ?? .home,
                 visitTotal: Int(sqlite3_column_int64(s, 5)),
                 dartsUsed: Journal.optionalInt(s, 6),
@@ -577,6 +677,11 @@ public final class Journal {
         var ordinal: [Seat: [Int: Int]] = [.home: [:], .away: [:]]   // seat -> leg -> visits so far
 
         let all = try entries(for: id)
+        // A row this build cannot interpret might have been a visit. Replaying around it would
+        // produce a state that looks right and is not, so the journal says so instead.
+        if let alien = all.first(where: { $0.kind == .unknown }) {
+            throw JournalError.replayRejected(seq: alien.deviceSeq, reason: "UNKNOWN_ROW_KIND")
+        }
         for e in Journal.standingVisits(all) {
             guard let command = e.command else { continue }
             let leg = state.currentLeg

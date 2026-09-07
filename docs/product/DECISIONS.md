@@ -885,3 +885,63 @@ anywhere depends on it.
 
 Stop passing `session.throwerRoute` to `CheckoutCard` and the card is exactly what it was. The table
 stays generated and costs nothing.
+
+---
+
+## PD-011 — Both players confirm the result, on the one phone
+
+**Status: decided by the founder, 2026-09-07.** Extends PD-010's design authority to this one screen.
+
+`docs/design/DESIGN_UNSPECIFIED.md` item 7 called participant attestation **the single highest-value
+item** on the missing list: PD-002 says one player's word never moves a rating, and the participant
+app had no way for the second player to say anything at all. Both players stand at the same phone,
+so it is buildable today. The founder chose to build it.
+
+### Decided
+
+When a match finishes, each player is asked in turn — by name, so the phone gets handed to the right
+hand — whether the result is right. Their answer is appended to the journal with the match.
+
+- **Both agree** → the result is `participant-confirmed`.
+- **Either refuses** → the result is `disputed`, and a refusal outranks the other player's agreement,
+  because a result one competitor does not accept is disputed whatever the other said.
+- **Neither has answered** → `self-reported`, as before.
+
+### What it is honest about, which is the point of it
+
+**Two people at one phone is not two devices.** It is the weakest form of `participant-confirmed`:
+an assertion by somebody standing there, under names typed at setup rather than accounts, with no
+independent second record. The trust model's strongest corroboration — two devices with their own
+streams — is a different and better thing, and this is not it. Every screen that shows the label
+says so in words rather than leaving the label to imply more than it means.
+
+It is still the difference between one person's word and two, which is exactly what PD-002 asks for
+before a result can ever count.
+
+**Both are asked, not one.** The trust model lets the player who *entered* a result count as one of
+its backers, so ordinarily only the opponent need confirm. On a single phone nothing records who was
+keeping score, so a confirmation from whoever happened to be holding it would be one person's word
+twice. Asking both costs one extra tap and removes the ambiguity entirely.
+
+**A refusal deletes nothing.** The result stands exactly as recorded and is marked. The way to change
+it is the retraction PD-004 already defines. An app where a disagreement erased evidence would be
+worse than one that recorded no disagreement at all.
+
+**An agreement does not survive the result changing under it.** If a visit is added or undone after
+somebody agreed, what they agreed to is no longer what is recorded, so the label drops back to
+self-reported. The answers are not deleted — nothing here ever is — they simply stop applying, and
+the screen says why. Decided by `device_seq` alone, which is monotonic per device and therefore a
+total order on the one phone that scored the match.
+
+### A defect this found
+
+The journal read an unrecognised row kind as `?? .visit`. Adding two new kinds is exactly the change
+that makes that fire: a row written by a later build would have been replayed as a nil-scoring visit
+and quietly entered the match, changing the score and every statistic derived from it, with nothing
+anywhere saying so. An unreadable kind is now `unknown`, replay throws on it, and a test holds the
+direction — the same shape as the age band that must never default to *adult*.
+
+### How to reverse
+
+Stop offering the confirm action; the label falls back to `self-reported` and every row already
+written stays where it is.
