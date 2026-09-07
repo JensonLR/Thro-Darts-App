@@ -261,6 +261,10 @@ public struct VerificationState: View {
             }
         }
         .accessibilityElement(children: .combine)
+        // The explanation, on demand. Compact draws the label alone, so a listener got
+        // "Self-reported" and nothing about what that means — and even where the explanation is
+        // drawn, a hint is where it belongs: after the label, and skippable.
+        .accessibilityHint(state.help)
     }
 }
 

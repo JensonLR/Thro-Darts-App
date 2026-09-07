@@ -7,7 +7,11 @@ import ThroTokens
 
 /// components/scoring/RemainingScore.jsx. `aria-live="polite"` becomes the updates-frequently trait.
 public struct RemainingScore: View {
-    public enum State: Sendable { case normal, checkout, bust }
+    /// `CaseIterable` so a test can walk every state and hold that no two of them sound the
+    /// same. The compiler already makes sure each is *handled*; what it cannot see is a new
+    /// state that is handled by speaking what another one speaks, which is a state a
+    /// listener cannot tell from its neighbour.
+    public enum State: CaseIterable, Sendable { case normal, checkout, bust }
 
     private let value: Int
     private let label: String
@@ -47,8 +51,32 @@ public struct RemainingScore: View {
             }
         }
         .frame(maxWidth: .infinity)
-        .accessibilityElement(children: .combine)
+        // Label and value are separate, not combined into one string. VoiceOver re-announces a
+        // changed *value* without re-reading the name, which is what a number that moves every
+        // visit needs, and a Braille display puts it in its own cell.
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(RemainingScore.spokenLabel(label: label, state: state))
+        .accessibilityValue(RemainingScore.spokenValue(value: value, darts: darts))
         .accessibilityAddTraits(.updatesFrequently)
+    }
+
+    /// What a screen reader is told this number *is*.
+    ///
+    /// **The checkout state was carried by colour and nothing else.** A sighted player sees the
+    /// hero turn brand green and knows they are on a finish; a VoiceOver player was told the number
+    /// and left to work it out. On this screen a `CheckoutCard` happens to name the fact as well,
+    /// but this is a design-system component that any screen may use, and a component that relies
+    /// on a sibling to say the important half is one that will eventually be used without it.
+    static func spokenLabel(label: String, state: State) -> String {
+        switch state {
+        case .bust: return "\(label). Bust — score restored"
+        case .checkout: return "\(label), on a finish"
+        case .normal: return label
+        }
+    }
+
+    static func spokenValue(value: Int, darts: String?) -> String {
+        [String(value), darts].compactMap { $0 }.joined(separator: ", ")
     }
 }
 
@@ -126,7 +154,18 @@ public struct LegState: View {
                     .foregroundStyle(ThroColor.colorTextSecondary)
             }
         }
-        .accessibilityElement(children: .combine)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(unit)
+        .accessibilityValue(LegState.spoken(home: home, away: away, bestOf: bestOf))
+    }
+
+    /// `2–1` drawn is `2 to 1` spoken. An en dash between two numerals is not a word: read out it
+    /// becomes "2 1", which is the same sound as twenty-one and tells a player nothing about who is
+    /// ahead — on the one figure that decides whether the match is nearly over.
+    static func spoken(home: Int, away: Int, bestOf: Int?) -> String {
+        let score = "\(home) to \(away)"
+        guard let bestOf else { return score }
+        return "\(score), best of \(bestOf)"
     }
 }
 
@@ -261,6 +300,18 @@ public struct TurnIndicator: View {
 public struct ScoreKeypad: View {
     public static let quick: [Int] = [180, 140, 100, 60, 45, 26]
 
+    /// What to say when the entry changes, or nil when there is nothing worth saying.
+    ///
+    /// Nil for no change and nil when the keypad arrives empty, so a screen appearing does not
+    /// announce anything. Emptying a typed entry says so: silence there would be indistinguishable
+    /// from the tap not registering, which is the same complaint about controls that do not react —
+    /// heard rather than felt.
+    static func spokenEntry(from was: String, to now: String) -> String? {
+        guard was != now else { return nil }
+        if now.isEmpty { return was.isEmpty ? nil : "Cleared" }
+        return now
+    }
+
     /// Whether the phone answers in the hand (PD-015). Read here rather than passed in, because a
     /// player's answer to "should this buzz" belongs to the player and not to every caller.
     @AppStorage(ThroHaptics.enabledKey) private var haptics: Bool = true
@@ -328,6 +379,16 @@ public struct ScoreKeypad: View {
         .background(ThroColor.colorBackgroundPrimary)
         .opacity(disabled ? 0.4 : 1)
         .disabled(disabled)
+        // **What has been typed, said out loud.** The Enter key is the readout — it reads
+        // "Enter 141" — and a sighted player sees it change under their thumb. A VoiceOver player's
+        // focus stays on the digit they just tapped, and nothing announced anything at all: three
+        // taps and no confirmation of what is about to be committed, on the one screen in this app
+        // where a mis-key becomes evidence. The announcement is the entry and nothing else, so it
+        // is over before the next dart.
+        .onChange(of: value) { was, now in
+            guard let spoken = ScoreKeypad.spokenEntry(from: was, to: now) else { return }
+            AccessibilityNotification.Announcement(spoken).post()
+        }
     }
 
     private func digit(_ text: String) -> some View {
@@ -368,7 +429,7 @@ public struct ScoreKeypad: View {
 public struct StatItem: Identifiable, Equatable, Sendable {
     /// How far the figure can be trusted. Mirrors `ThroStatistics.Basis`, restated here because the
     /// design package must not depend on the statistics package to know how to draw a number.
-    public enum Confidence: Sendable, Equatable { case exact, range, unavailable }
+    public enum Confidence: CaseIterable, Sendable, Equatable { case exact, range, unavailable }
 
     public let label: String
     public let value: String
@@ -436,7 +497,13 @@ public struct StatGrid: View {
                     }
                 }
                 .accessibilityElement(children: .ignore)
-                .accessibilityLabel(StatGrid.spoken(s))
+                .accessibilityLabel(s.label)
+                .accessibilityValue(StatGrid.spokenValue(s))
+                // The reason is a hint, not part of the value. VoiceOver reads a label and value in
+                // one uninterruptible run: six figures whose reasons are two sentences each made a
+                // paragraph a player had to sit through to reach the next figure. As a hint it is
+                // still spoken, still after the figure, and can be skipped past.
+                .accessibilityHint(s.note ?? "")
             }
         }
     }
@@ -447,16 +514,24 @@ public struct StatGrid: View {
         c == .unavailable ? ThroColor.colorTextSecondary : ThroColor.colorTextPrimary
     }
 
-    /// What a screen reader says. The basis is spoken because it is the part a sighted reader gets
-    /// from weight and colour, and "dash" would tell somebody nothing at all.
-    static func spoken(_ s: StatItem) -> String {
-        let head: String
+    /// What a screen reader says the figure **is**. The basis is spoken because it is the part a
+    /// sighted reader gets from weight and colour, and "dash" would tell somebody nothing at all.
+    ///
+    /// A range is spoken as *"between 58.2 and 61.0"* rather than read off the string: an en dash
+    /// between two numerals is not a word, and "58.2 61.0" is a pair of figures with no relation
+    /// stated — which is exactly the collapse of a range into something else that the statistics
+    /// layer exists to prevent.
+    static func spokenValue(_ s: StatItem) -> String {
         switch s.confidence {
-        case .exact: head = "\(s.label), \(s.value)"
-        case .range: head = "\(s.label), between \(s.value.replacingOccurrences(of: "–", with: " and "))"
-        case .unavailable: head = "\(s.label), not available"
+        case .exact: return s.value
+        case .range: return "between \(s.value.replacingOccurrences(of: "–", with: " and "))"
+        case .unavailable: return "not available"
         }
-        return [head, s.note].compactMap { $0 }.joined(separator: ". ")
+    }
+
+    /// The whole thing in one string, for a caller that has only a label to put it in.
+    static func spoken(_ s: StatItem) -> String {
+        [ "\(s.label), \(spokenValue(s))", s.note ].compactMap { $0 }.joined(separator: ". ")
     }
 }
 
