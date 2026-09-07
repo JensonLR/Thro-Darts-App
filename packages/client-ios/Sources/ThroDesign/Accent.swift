@@ -36,12 +36,23 @@ public enum AccentBranding {
         return (max(la, lb) + 0.05) / (min(la, lb) + 0.05)
     }
 
+    /// The brand's two neutrals as **fixed** sRGB, which is what they have to be here.
+    ///
+    /// Not `ThroColor.colorTextPrimary` and `colorTextInverse`, for two reasons and CI found the
+    /// second one. They are *semantic pairs that swap*: primary is ink in light and chalk in dark.
+    /// A club's badge is a fixed-colour surface, so the text on it must be fixed too — reading a
+    /// semantic token would flip a badge's initials from ink to chalk when the phone got dark.
+    /// And they are asset-catalogue colours: `NSColor.usingColorSpace` returns nil for a dynamic
+    /// one, so resolving them for arithmetic gave black on macOS and every answer was wrong.
+    ///
+    /// These are the same two values `Branding.kt`'s `Palette` states, for the same reason.
+    public static let ink = Color(.sRGB, red: 0x10 / 255, green: 0x12 / 255, blue: 0x11 / 255)
+    public static let chalk = Color(.sRGB, red: 0xF7 / 255, green: 0xF6 / 255, blue: 0xF2 / 255)
+
     /// Whichever neutral reads better **on** `accent`. Chosen, never configured — a club picks its
     /// colour and THRØ picks what is legible on it.
     public static func textOn(_ accent: Color) -> Color {
-        contrast(ThroColor.colorTextInverse, accent) >= contrast(ThroColor.colorTextPrimary, accent)
-            ? ThroColor.colorTextInverse
-            : ThroColor.colorTextPrimary
+        contrast(chalk, accent) >= contrast(ink, accent) ? chalk : ink
     }
 
     /// What `textOn` achieves. Shown to a club choosing a colour, because "this reads at 2.9:1 and
@@ -56,8 +67,9 @@ public enum AccentBranding {
     /// Whether the accent may also be used **as** text on the app's own surfaces. Most cannot: a
     /// mid-tone that carries chalk beautifully is unreadable *as* text on chalk.
     public static func usableAsText(_ accent: Color) -> Bool {
-        min(contrast(accent, ThroColor.colorBackgroundPrimary),
-            contrast(accent, ThroColor.colorBackgroundInverse)) >= floor
+        // The app's two surfaces are the same two values as the neutrals, swapped — light paints
+        // chalk and dark paints ink — so checking against both is checking both appearances.
+        min(contrast(accent, chalk), contrast(accent, ink)) >= floor
     }
 
     /// The sRGB components of a colour, resolved on whichever platform this is.
@@ -73,7 +85,14 @@ public enum AccentBranding {
         native.getRed(&r, green: &g, blue: &b, alpha: &a)
         return (Double(r), Double(g), Double(b))
         #elseif canImport(AppKit)
-        let native = NSColor(color).usingColorSpace(.sRGB) ?? .black
+        // A dynamic (asset-catalogue) colour has no single sRGB representation and returns nil here.
+        // The old fallback was `?? .black`, which is a plausible colour — so a failed resolution
+        // produced plausible-looking wrong answers instead of an obvious break. Every colour this
+        // function is now asked about is a fixed sRGB value, so nil means a real defect and says so.
+        guard let native = NSColor(color).usingColorSpace(.sRGB) else {
+            assertionFailure("a colour reached AccentBranding that has no fixed sRGB value")
+            return (0, 0, 0)
+        }
         return (Double(native.redComponent), Double(native.greenComponent), Double(native.blueComponent))
         #else
         return (0, 0, 0)

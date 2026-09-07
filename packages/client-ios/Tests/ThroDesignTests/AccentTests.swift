@@ -32,8 +32,8 @@ final class AccentTests: XCTestCase {
     /// **The defect this file exists for.** On a dark accent the answer is chalk; on a light one it
     /// is ink. The old code always said chalk, so this test fails against it on every light colour.
     func testTheTextOnAnAccentIsChosenPerColourAndNotAlwaysChalk() {
-        let chalk = ThroColor.colorTextInverse
-        let ink = ThroColor.colorTextPrimary
+        let chalk = AccentBranding.chalk
+        let ink = AccentBranding.ink
 
         for dark in ["0F3D2E", "1F3A5F", "6E1F35", "101211", "4A2A5A"] {
             XCTAssertEqual(AccentBranding.textOn(hex(dark)), chalk, "chalk belongs on \(dark)")
@@ -68,7 +68,7 @@ final class AccentTests: XCTestCase {
         // The headroom that MAKES it true: the two neutrals sit near the ends of the luminance
         // range. The day they drift towards each other this fails, rather than a club finding out.
         XCTAssertGreaterThan(worst, 4.0, "the worst case should still be comfortable, not marginal")
-        XCTAssertGreaterThan(AccentBranding.contrast(ThroColor.colorTextPrimary, ThroColor.colorTextInverse), 17.0,
+        XCTAssertGreaterThan(AccentBranding.contrast(AccentBranding.ink, AccentBranding.chalk), 17.0,
                              "the neutrals' separation is what the sweep above depends on")
     }
 
@@ -83,8 +83,9 @@ final class AccentTests: XCTestCase {
                        "but it cannot BE text: it has to read on both of the app's surfaces")
 
         // The brand's own green fails the second too, on the dark surface — which is why the app
-        // does not set body text in it.
-        XCTAssertFalse(AccentBranding.usableAsText(ThroColor.throGreen))
+        // does not set body text in it. Named by hex rather than by token, because a token is a
+        // semantic pair and this question is about one fixed colour.
+        XCTAssertFalse(AccentBranding.usableAsText(hex("0F3D2E")))
     }
 
     /// Every offered swatch is a colour the store will actually accept, and every one is legible.
@@ -102,6 +103,24 @@ final class AccentTests: XCTestCase {
                        "no colour is offered twice")
         XCTAssertEqual(AccentSwatch.palette.first?.hex, "0F3D2E",
                        "the brand's own is first, because it is what a club wears until it chooses")
+    }
+
+    /// The two neutrals are the brand's own, stated as fixed sRGB.
+    ///
+    /// They cannot be `colorTextPrimary` and `colorTextInverse`: those are semantic pairs that swap
+    /// with the appearance, so a badge's initials would flip from ink to chalk when the phone got
+    /// dark — and being asset-catalogue colours they have no fixed sRGB value to do arithmetic on,
+    /// which is what CI caught. These are the same two `Branding.kt`'s `Palette` states.
+    func testTheNeutralsAreTheBrandsOwnAndAreFixed() {
+        XCTAssertEqual(AccentBranding.contrast(AccentBranding.ink, hex("101211")), 1.0, accuracy: 0.001)
+        XCTAssertEqual(AccentBranding.contrast(AccentBranding.chalk, hex("F7F6F2")), 1.0, accuracy: 0.001)
+        XCTAssertEqual(AccentBranding.contrast(AccentBranding.ink, AccentBranding.chalk), 17.4, accuracy: 0.2,
+                       "the separation the cube sweep depends on")
+        // Resolvable to components, which the asset-catalogue tokens are not.
+        let (r, g, b) = AccentBranding.components(AccentBranding.chalk)
+        XCTAssertEqual(r, 0xF7 / 255.0, accuracy: 0.005)
+        XCTAssertEqual(g, 0xF6 / 255.0, accuracy: 0.005)
+        XCTAssertEqual(b, 0xF2 / 255.0, accuracy: 0.005)
     }
 
     /// The chosen colour must not depend on the phone's dark-mode setting. Resolving an accent in
