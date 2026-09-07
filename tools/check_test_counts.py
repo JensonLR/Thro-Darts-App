@@ -31,7 +31,7 @@ ROWS = {
     "| Statistics honesty |": ["packages/statistics/src/test"],
     "| Statistics honesty, Swift |": ["packages/statistics-swift/Tests"],
     "| On-device journal, Android |": ["packages/journal/src/test"],
-    "| The Lock Screen scoreboard |": ["packages/client-ios/Tests/ThroLiveKitTests"],
+    "| The Lock Screen and the wall |": ["packages/client-ios/Tests/ThroLiveKitTests"],
 }
 
 IOS = "packages/client-ios/Tests"

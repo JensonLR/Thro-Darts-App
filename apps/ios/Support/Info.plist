@@ -18,6 +18,35 @@
 	<!-- The Lock Screen and Dynamic Island scoreboard. Nothing else is needed for it: a Live
 	     Activity is started and updated from the app itself, so there is no entitlement, no push
 	     certificate and no server behind this key. -->
+	<!-- Club TV mode. The system creates this scene when a display is attached or when the
+	     player turns on AirPlay screen mirroring; `UIScreen.screens` and the older
+	     `windowExternalDisplay` role were both deprecated in iOS 16.0.
+	     `UIApplicationSupportsMultipleScenes` stays NO: the phone still has one window, and only
+	     the external role is added. -->
+	<key>UIApplicationSceneManifest</key>
+	<dict>
+		<key>UIApplicationSupportsMultipleScenes</key>
+		<false/>
+		<key>UISceneConfigurations</key>
+		<dict>
+			<key>UIWindowSceneSessionRoleApplication</key>
+			<array>
+				<dict>
+					<key>UISceneConfigurationName</key>
+					<string>Default Configuration</string>
+				</dict>
+			</array>
+			<key>UIWindowSceneSessionRoleExternalDisplayNonInteractive</key>
+			<array>
+				<dict>
+					<key>UISceneConfigurationName</key>
+					<string>Venue</string>
+					<key>UISceneDelegateClassName</key>
+					<string>$(PRODUCT_MODULE_NAME).ThroVenueSceneDelegate</string>
+				</dict>
+			</array>
+		</dict>
+	</dict>
 	<key>NSSupportsLiveActivities</key>
 	<true/>
 	<key>ITSAppUsesNonExemptEncryption</key>
