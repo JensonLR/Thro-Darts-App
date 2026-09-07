@@ -42,15 +42,42 @@ final class ClubStoreTests: XCTestCase {
         XCTAssertEqual(club.initials, "F", "\"The\" carries no information at badge size")
     }
 
+    /// A club is counted in people, and a league is counted in **teams** (PD-019).
+    ///
+    /// This test used to make a league and assert it said "2 members", which was the whole defect
+    /// the founder called out in one line: the three kinds were one screen with three labels, so
+    /// nobody noticed a league describing itself by the size of the wrong list. A league of eight
+    /// teams run by two officials is not "2 members".
     func testTheMetaLineCountsWhatIsActuallyThere() throws {
         let s = try store()
-        _ = s.createClub(name: "Feathers A", kind: .league, accentHex: nil)
-        let id = s.clubs[0].id
+        _ = s.createClub(name: "The Feathers", kind: .club, accentHex: nil)
+        let club = s.clubs[0].id
         XCTAssertEqual(s.clubs[0].meta, "No members yet")
-        _ = s.addMember(to: id, name: "Alex", role: .member, ageBand: .adult)
+        _ = s.addMember(to: club, name: "Alex", role: .member, ageBand: .adult)
         XCTAssertEqual(s.clubs[0].meta, "1 member")
-        _ = s.addMember(to: id, name: "Sam", role: .official, ageBand: .adult)
+        _ = s.addMember(to: club, name: "Sam", role: .official, ageBand: .adult)
         XCTAssertEqual(s.clubs[0].meta, "2 members", "and it is plural when it should be")
+    }
+
+    /// The same line for a league, which counts something else entirely.
+    func testALeagueIsCountedInTeamsAndNotInItsOfficials() throws {
+        let s = try store()
+        _ = s.createClub(name: "Crediton & District", kind: .league, accentHex: nil)
+        let league = s.clubs[0].id
+        XCTAssertEqual(s.clubs[0].meta, "No teams yet")
+
+        // Two people who run it. They are members, and they are not what a league is measured in.
+        _ = s.addMember(to: league, name: "Alex", role: .admin, ageBand: .adult)
+        _ = s.addMember(to: league, name: "Sam", role: .official, ageBand: .adult)
+        XCTAssertEqual(s.clubs[0].meta, "No teams yet", "two officials are not two teams")
+
+        XCTAssertTrue(s.addTeam(to: league, name: "The Feathers A"))
+        XCTAssertEqual(s.clubs[0].meta, "1 team")
+        XCTAssertTrue(s.addTeam(to: league, name: "The Feathers B"))
+        XCTAssertEqual(s.clubs[0].meta, "2 teams")
+        XCTAssertEqual(s.clubs[0].teams.map(\.name), ["The Feathers A", "The Feathers B"],
+                       "and the letter that tells them apart survives")
+        XCTAssertEqual(s.clubs[0].members.count, 2, "the people are still there, under their own name")
     }
 
     /// The direction that matters. A band the mapping cannot read has to become `unknown`, which is

@@ -220,10 +220,31 @@ final class LeagueBookTests: XCTestCase {
                               source: "recorded", recordedBy: "Pat")
         XCTAssertEqual(try book.results(of: id).count, 1)
 
-        // The CHECK stops this being written through the API, so the row is planted directly — which
-        // is the only way to prove what a read does with one it cannot attribute.
-        try book.forTests("UPDATE fixture_result SET source = 'guessed' WHERE fixture_id = '\(f)';")
+        // **The CHECK will not even let it be broken**, which is the stronger of the two guarantees
+        // and is asserted first. This started as a test that planted the row directly and failed on
+        // CI, because the constraint is tighter than I had assumed when I wrote the test.
+        XCTAssertThrowsError(try book.forTests(
+            "UPDATE fixture_result SET source = 'guessed' WHERE fixture_id = '\(f)';"))
+        XCTAssertEqual(try book.results(of: id).count, 1, "and the row it protected is untouched")
+
+        // A file some other build wrote — an older schema, a newer one, or an edited copy — carries
+        // no such promise. Rebuilt without the CHECK, which is the only honest way to reach the read
+        // and prove it drops what this build's write could never have made.
+        try book.forTests("""
+            DROP TABLE fixture_result;
+            CREATE TABLE fixture_result (
+              club_id TEXT NOT NULL, fixture_id TEXT NOT NULL,
+              home_score INTEGER NOT NULL, away_score INTEGER NOT NULL,
+              source TEXT NOT NULL, match_id TEXT, recorded_by TEXT, recorded_at TEXT NOT NULL,
+              PRIMARY KEY (club_id, fixture_id));
+            INSERT INTO fixture_result VALUES
+              ('\(id)', '\(f)', 6, 1, 'guessed', NULL, NULL, '2026-01-01T00:00:00Z'),
+              ('\(id)', 'other', 3, 0, 'scored', NULL, NULL, '2026-01-01T00:00:00Z'),
+              ('\(id)', 'third', 2, 2, 'recorded', NULL, NULL, '2026-01-01T00:00:00Z');
+            """)
         XCTAssertEqual(try book.results(of: id).count, 0,
-                       "a result nobody can attribute is the one thing a table must not contain")
+                       "a source nobody knows, a scored result with no match, and somebody's word "
+                       + "with nobody's name — a result nobody can attribute is the one thing a "
+                       + "table must not contain")
     }
 }
