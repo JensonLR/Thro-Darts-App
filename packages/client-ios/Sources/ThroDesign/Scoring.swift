@@ -52,8 +52,11 @@ public struct RemainingScore: View {
     }
 }
 
-/// components/scoring/Checkout.jsx. Route chips are shown only when a route is supplied — the
-/// repository holds no checkout-route table, and one will not be invented here.
+/// components/scoring/Checkout.jsx. Route chips are shown only when a route is supplied, and the
+/// component never derives one: the table is the engine's (`RuleTables.route`, PD-013), held by the
+/// conformance corpus to be a legal finish of exactly that number under exactly that out-rule. A
+/// component that guessed a route would be inventing dart-level evidence on the one screen a player
+/// reads mid-visit.
 public struct CheckoutCard: View {
     private let required: Int
     private let route: [String]

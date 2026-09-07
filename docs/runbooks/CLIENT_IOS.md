@@ -529,7 +529,7 @@ platform's own behaviour or renders the honest minimum, and says so.
 | 1 Dynamic Type | Type roles scale through `relativeTo`; spacing and radius do not (ADR-010). **No clamps.** The score numeral alone may shrink (to half) when the screen is too short for it, so it never clips or scrolls; that is a floor, not a design. |
 | 2 Pressed / focus | The platform's own. Nothing removed (the export removed the text field's focus ring; SwiftUI's stays). |
 | 5 Safe areas | The platform's: content respects them, only backgrounds paint under them. The scoring screen is laid out to the height the keypad leaves, so nothing scrolls. |
-| 7 Attestation | Not in the app. The harness asks the non-throwing player to confirm each leg on the same device; the app does not, because a confirmation with no identity behind it is not the participant-confirmed state PD-002 describes. **Every result is self-reported.** |
+| 7 Attestation | **Built (PD-011), and this row said the opposite for three weeks.** Both players are asked by name on the result screen; both agreeing gives *participant-confirmed*, either refusing gives *disputed*, neither answering leaves *self-reported*, and an agreement does not survive a visit or an undo written after it. The screen says in words that two people at one phone is not two devices, and that the names are the ones typed at the start — which is the weakest form of the state PD-002 describes, not the strong one. An abandoned match is never labelled at all. |
 | 9 Stat basis | Bounded is a range, unavailable is a dash; the reason is shown in the metadata role beneath. |
 | 11 Offline-completed result | *Self-reported*; and because no sync exists, the screen says the result has not left the phone rather than showing a *Queued* that promises one. |
 | 15 Disabled | The export's opacity multiplier. |
@@ -538,7 +538,7 @@ platform's own behaviour or renders the honest minimum, and says so.
 | 20 Dark mode | **Decided by the founder (PD-003, amended):** System / Light / Dark in Settings, governing every screen, scoring included. Each screen's undrawn rendering — dark Home, light scoring — is the token layer's, unreviewed by design. |
 | 23 Landscape | **Portrait only**, as every screen in the export is drawn. A landscape scoring screen would need a design. |
 | 24 Truncation | Names truncate with an ellipsis in the header, the identity, and the Home rows. |
-| 25 Haptics | None. |
+| 25 Haptics | **Built (PD-015), and this row said *None* after they shipped.** Four sensations, one for each event the design names: a key, a committed visit, a refusal, a won leg. Settings → Scoring → Haptics turns them off. The opening's strike has its own, on its own switch. Nothing outside the scoring screen and the opening produces one. |
 
 Composed from the export's components because the export does not draw them:
 
@@ -558,8 +558,9 @@ Composed from the export's components because the export does not draw them:
 Read differently from the JSX, on purpose: Enter disabled on an empty entry (the export scores 0);
 the undo key clears the entry (the export labels it *Undo last score* and every screen uses it to
 clear; the journal is append-only and corrections are not built); the segmented control's segment
-is 44 points, not the export's 40; the checkout card shows the number and no route, because no
-route table exists in this repository.
+is 44 points, not the export's 40. The checkout card's route slot — drawn by the export and empty
+until PD-013 — now carries the route from the engine's own table, per out-rule, held by the
+conformance corpus to be a legal finish of exactly that number under exactly that rule.
 
 ## What is not built
 

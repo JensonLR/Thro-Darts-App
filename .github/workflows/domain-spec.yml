@@ -61,6 +61,14 @@ jobs:
       - name: Tokens exist
         run: python3 tools/check_tokens_exist.py
 
+      # And a document that describes the build has to still be true of it. The runbook said
+      # "Attestation | Not in the app" three weeks after PD-011 shipped, "Haptics | None" after
+      # PD-015 shipped four, and that the checkout card carried no route because no route table
+      # existed — after PD-013 built one per out-rule. A claim of absence decays in the direction
+      # of a lie: the code gains something and the sentence does not notice.
+      - name: Claims of absence are still true
+        run: python3 tools/check_absence_claims.py
+
   journal:
     name: The on-device journal, on Android's half
     runs-on: ubuntu-latest
