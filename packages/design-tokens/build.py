@@ -300,36 +300,40 @@ def emit_css(doc):
 # ---------------------------------------------------------------- contrast gate
 # Absolute thresholds with a dated, itemised exception list. A regression gate against the current
 # baseline would FREEZE the known failures rather than catch them.
+# Each entry is (the ratio it is at, why). The gate fails if the real ratio drops below that floor: an
+# exception records a known failure, it does not licence a worse one. Every floor here is measured, not
+# transcribed — the entries that said "as above" had been copied from a sibling pair and three of them
+# were wrong by up to 0.18, which is exactly the kind of drift a floor is for.
 EXCEPTIONS = {
     ("--color-status-live", "--color-status-live-surface", "light"):
-        "4.38:1 — design commission: live status pairing (raised 2026-09-03)",
+        (4.38, "design commission: live status pairing (raised 2026-09-03)"),
     ("--color-text-achievement", "--color-background-primary", "light"):
-        "3.68:1 — bronze is large-text only by design (raised 2026-09-03)",
+        (3.68, "bronze is large-text only by design (raised 2026-09-03)"),
     ("--color-text-tertiary", "--color-background-secondary", "light"):
-        "4.21:1 — non-critical support text on sunken surfaces (raised 2026-09-03)",
+        (4.21, "non-critical support text on sunken surfaces (raised 2026-09-03)"),
     ("--color-text-tertiary", "--color-background-secondary", "dark"):
-        "4.30:1 — as above (raised 2026-09-03)",
+        (4.30, "as above (raised 2026-09-03)"),
     ("--color-text-tertiary", "--color-background-raised", "dark"):
-        "4.30:1 — as above (raised 2026-09-03)",
+        (4.30, "as above (raised 2026-09-03)"),
     ("--color-text-inverse", "--color-background-brand", "dark"):
-        "1.99:1 — ink on deep green; design commission (raised 2026-09-03)",
-    ("--color-border-default", "--color-background-primary", "light"): "decorative rule, not a control boundary",
-    ("--color-border-default", "--color-background-raised", "light"): "decorative rule",
-    ("--color-border-default", "--color-background-primary", "dark"): "decorative rule",
-    ("--color-border-default", "--color-background-raised", "dark"): "decorative rule",
+        (1.99, "ink on deep green; design commission (raised 2026-09-03)"),
+    ("--color-border-default", "--color-background-primary", "light"): (1.27, "decorative rule, not a control boundary"),
+    ("--color-border-default", "--color-background-raised", "light"): (1.37, "decorative rule"),
+    ("--color-border-default", "--color-background-primary", "dark"): (1.42, "decorative rule"),
+    ("--color-border-default", "--color-background-raised", "dark"): (1.26, "decorative rule"),
     ("--color-border-strong", "--color-background-primary", "light"):
-        "1.70:1 — load-bearing control boundary; design commission (raised 2026-09-03)",
-    ("--color-border-strong", "--color-surface-primary", "light"): "as above",
-    ("--color-border-strong", "--color-background-primary", "dark"): "as above",
-    ("--color-border-strong", "--color-surface-primary", "dark"): "as above",
+        (1.70, "load-bearing control boundary; design commission (raised 2026-09-03)"),
+    ("--color-border-strong", "--color-surface-primary", "light"): (1.84, "as above"),
+    ("--color-border-strong", "--color-background-primary", "dark"): (1.88, "as above"),
+    ("--color-border-strong", "--color-surface-primary", "dark"): (1.67, "as above"),
     ("--color-focus-ring", "--color-background-brand", "light"):
-        "1.29:1 — focus invisible on primary buttons; design commission (raised 2026-09-03)",
-    ("--color-focus-ring", "--color-background-inverse", "light"): "1.99:1 — as above",
-    ("--color-focus-ring", "--color-background-inverse", "dark"): "2.78:1 — as above",
-    ("--color-chart-reference", "--color-background-primary", "light"): "benchmark line; chart commission",
-    ("--color-chart-reference", "--color-background-primary", "dark"): "benchmark line; chart commission",
-    ("--color-chart-primary", "--color-chart-secondary", "light"): "single-series today; chart commission",
-    ("--color-chart-primary", "--color-chart-secondary", "dark"): "single-series today; chart commission",
+        (1.29, "focus invisible on primary buttons; design commission (raised 2026-09-03)"),
+    ("--color-focus-ring", "--color-background-inverse", "light"): (1.99, "as above"),
+    ("--color-focus-ring", "--color-background-inverse", "dark"): (2.78, "as above"),
+    ("--color-chart-reference", "--color-background-primary", "light"): (1.27, "benchmark line; chart commission"),
+    ("--color-chart-reference", "--color-background-primary", "dark"): (1.42, "benchmark line; chart commission"),
+    ("--color-chart-primary", "--color-chart-secondary", "light"): (2.69, "single-series today; chart commission"),
+    ("--color-chart-primary", "--color-chart-secondary", "dark"): (1.29, "single-series today; chart commission"),
 }
 
 PAIRS_TEXT = [("--color-text-primary", "--color-background-primary"),
@@ -343,7 +347,23 @@ PAIRS_TEXT = [("--color-text-primary", "--color-background-primary"),
               ("--color-text-inverse", "--color-background-brand"),
               ("--color-text-brand", "--color-background-primary"),
               ("--color-text-achievement", "--color-background-primary")]
-STATUSES = ["success", "warning", "error", "info", "live", "pending", "offline", "verified", "disputed"]
+# Which surface each status colour is actually shown on, read off the export rather than assumed from
+# the token's name. Only five of the nine statuses have a surface of their own; the gate used to look for
+# `--color-status-<name>-surface` for all nine, so four of them silently resolved to nothing and were
+# dropped from the check. These pairings come from the components that use them:
+#   pending  → warning-surface   (organiser/BoardStatus, "Awaiting result")
+#   disputed → error-surface     (organiser/BoardStatus, "Disputed")
+#   offline  → neutral-surface   (state/OfflineState)
+#   verified → surface-secondary (identity/PlayerIdentity, on the identity card)
+PAIRS_STATUS = [("--color-status-success", "--color-status-success-surface"),
+                ("--color-status-warning", "--color-status-warning-surface"),
+                ("--color-status-error", "--color-status-error-surface"),
+                ("--color-status-info", "--color-status-info-surface"),
+                ("--color-status-live", "--color-status-live-surface"),
+                ("--color-status-pending", "--color-status-warning-surface"),
+                ("--color-status-disputed", "--color-status-error-surface"),
+                ("--color-status-offline", "--color-status-neutral-surface"),
+                ("--color-status-verified", "--color-surface-secondary")]
 PAIRS_UI = [("--color-border-default", "--color-background-primary"),
             ("--color-border-default", "--color-background-raised"),
             ("--color-border-strong", "--color-background-primary"),
@@ -355,24 +375,46 @@ PAIRS_UI = [("--color-border-default", "--color-background-primary"),
             ("--color-chart-primary", "--color-chart-secondary")]
 
 def contrast_report(doc):
+    """Every pair, checked. A pair whose tokens cannot be resolved is a breach, not a silent skip:
+    the gate used to `continue` past those, so renaming a token would have quietly removed its pair
+    from the check and left the printed count as the only evidence anything had changed.
+
+    An exception records a known failure and the ratio it was at when it was raised. If the real ratio
+    falls below that floor the exception no longer covers it — an exception is a note of a known state,
+    not a licence for it to get worse."""
     rows, breaches = [], []
     for mode in ("light", "dark"):
         t = flat(doc, mode)
         checks = [(f, b, 4.5) for f, b in PAIRS_TEXT]
-        checks += [(f"--color-status-{s}", f"--color-status-{s}-surface", 4.5) for s in STATUSES]
+        checks += [(f, b, 4.5) for f, b in PAIRS_STATUS]
         checks += [(f, b, 3.0) for f, b in PAIRS_UI]
         for fg, bg, need in checks:
             a, b = t.get(fg), t.get(bg)
             if not a or not b:
+                missing = " and ".join(n for n, v in ((fg, a), (bg, b)) if not v)
+                breaches.append(f"{mode}: {fg} on {bg} cannot be checked — {missing} does not resolve to a colour")
                 continue
             r = contrast(a, b)
             if r is None:
+                breaches.append(f"{mode}: {fg} on {bg} cannot be checked — {a} or {b} is not a parseable colour")
                 continue
             ok = r >= need
             rows.append((mode, fg, bg, r, need, ok))
-            if not ok and (fg, bg, mode) not in EXCEPTIONS:
+            if ok:
+                continue
+            floor = EXCEPTIONS.get((fg, bg, mode))
+            if floor is None:
                 breaches.append(f"{mode}: {fg} on {bg} = {r:.2f}:1 (needs {need}:1) — no exception recorded")
+            elif r < floor[0] - 0.005:
+                breaches.append(f"{mode}: {fg} on {bg} = {r:.2f}:1 has fallen below the {floor[0]:.2f}:1 "
+                                f"its exception was raised at — {floor[1]}")
     return rows, breaches
+
+
+def expected_pair_count():
+    """How many pairs the gate must check. Held here so that a pair silently disappearing from the
+    lists shows up as a failure and not merely as a smaller number in the printed line."""
+    return 2 * (len(PAIRS_TEXT) + len(PAIRS_STATUS) + len(PAIRS_UI))
 
 # ---------------------------------------------------------------- main
 def main():
@@ -397,6 +439,10 @@ def main():
 
     rows, breaches = contrast_report(doc)
     n_fail = sum(1 for r in rows if not r[5])
+    expected = expected_pair_count()
+    if len(rows) + sum(1 for b in breaches if "cannot be checked" in b) != expected:
+        breaches.append(f"the gate checked {len(rows)} pairs, not the {expected} its lists name — "
+                        "a pair has gone missing")
     n_sets = sum(1 for k in artefacts if k.endswith(".colorset/Contents.json"))
     print(f"tokens: {len(doc['tokens'])}  platforms: swift ({n_sets} colour sets), kotlin, css")
     print(f"contrast: {len(rows)} pairs checked, {n_fail} below threshold, "

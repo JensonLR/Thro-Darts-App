@@ -45,7 +45,7 @@ database.
 | | |
 |---|---|
 | Scoring rules | 436 property checks against independent darts facts |
-| Scoring engine | 86,000 exhaustive transitions + 64 corpus cases, **on two independent implementations** |
+| Scoring engine | 86,000 exhaustive transitions + 64 corpus cases, **on two independent implementations** — both of them in CI on every push, and a runner that cannot find the table now fails instead of skipping itself |
 | Statistics honesty | 20 tests — an uncomputable figure says so; an approximate one is never a point value |
 | Trust and eligibility | 30 tests — a label can never disagree with the provenance under it |
 | Authorization | 21 tests — the conflict-of-interest rule, and age as a dimension |
@@ -53,7 +53,7 @@ database.
 | Competition structure | 13 tests — bracket identities exhaustive for every field size to 1024 |
 | Schema and privileges | 71 property assertions against a real PostgreSQL |
 | Command path | 9 integration suites, 132 properties end to end against a real PostgreSQL |
-| Design tokens | 50 contrast pairs, absolute thresholds, 0 unrecorded breaches |
+| Design tokens | 58 contrast pairs, absolute thresholds, 0 unrecorded breaches; every recorded exception carries the measured ratio it was raised at and fails if it worsens |
 | Design components | 61 components audited mechanically against a baseline ratchet |
 | Statistics honesty, Swift | The same 20 tests, ported case for case, on Linux |
 | On-device journal | 15 tests — configuration read back on open, append-only by trigger, replay throws on a corrupt row, a retraction supersedes and never deletes, an old journal upgrades on open |

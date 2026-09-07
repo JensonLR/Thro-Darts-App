@@ -22,6 +22,12 @@ final class ConformanceTests: XCTestCase {
             }
             dir = dir.deletingLastPathComponent()
         }
+        // CI runs this from the repository and sets THRO_REQUIRE_CORPUS=1, so a run that cannot find the
+        // corpus fails rather than reporting a green suite that checked nothing. Locally, from somewhere
+        // else on disk, it still skips.
+        if let required = ProcessInfo.processInfo.environment["THRO_REQUIRE_CORPUS"], !required.isEmpty {
+            XCTFail("THRO_REQUIRE_CORPUS is set but the conformance corpus was not found from \(FileManager.default.currentDirectoryPath)")
+        }
         throw XCTSkip("conformance corpus not found — run from the repository")
     }
 
@@ -68,6 +74,9 @@ final class ConformanceTests: XCTestCase {
         let vectors = try vectorsDirectory()
         let file = vectors.appendingPathComponent("core-transitions.jsonl")
         guard FileManager.default.fileExists(atPath: file.path) else {
+            if let required = ProcessInfo.processInfo.environment["THRO_REQUIRE_CORPUS"], !required.isEmpty {
+                XCTFail("THRO_REQUIRE_CORPUS is set but core-transitions.jsonl is missing: run generate.py --full")
+            }
             throw XCTSkip("core-transitions.jsonl not generated (run generate.py --full)")
         }
         let text = try String(contentsOf: file, encoding: .utf8)

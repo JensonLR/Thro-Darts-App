@@ -5,6 +5,13 @@ on:
     branches: ["**"]
   pull_request:
 
+
+# These jobs read the repository and write nothing back. Stating that here rather than
+# inheriting whatever the repository's default happens to be means a token that leaks out of a
+# build step cannot push, comment, or publish.
+permissions:
+  contents: read
+
 jobs:
   conformance:
     name: Scoring rules and conformance corpus
@@ -45,10 +52,21 @@ jobs:
           python3 packages/domain-spec/generate.py
           git diff --exit-code -- packages/engine/src/main/kotlin/thro/engine/RuleTables.kt
 
-      # Runs the conformance corpus against the engine, the exhaustive property tests, and the
-      # determinism guard that forbids a clock, randomness, floating point or I/O in the engine.
+      # The exhaustive transition table is generated, never committed (it is 9 MB), so this job has to
+      # make it before the engine can be held to it. Without this step the Kotlin runner skipped that
+      # family silently while the Swift runner ran it — so "86,000 exhaustive transitions on two
+      # independent implementations" was true of one of them. THRO_REQUIRE_CORPUS makes a missing table
+      # a failure rather than a skip, so it cannot quietly stop running again.
+      - name: The exhaustive transition table
+        run: python3 packages/domain-spec/generate.py --full
+
+      # Runs the conformance corpus against the engine, the exhaustive transition table, the exhaustive
+      # property tests, and the determinism guard that forbids a clock, randomness, floating point or
+      # I/O in the engine.
       - name: Conformance, properties and determinism
         working-directory: packages/engine
+        env:
+          THRO_REQUIRE_CORPUS: "1"
         run: gradle check --no-daemon
 
   statistics:

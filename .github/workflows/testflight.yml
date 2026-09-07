@@ -60,13 +60,24 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: gh api -X POST "repos/${{ github.repository }}/issues/comments/${{ github.event.comment.id }}/reactions" -f content=rocket >/dev/null
 
-      - name: Find the pull request's head
+      # This job builds a checkout with the App Store Connect key on disk and in its environment, so the
+      # code it builds has to be code this repository owns. An Xcode run-script phase or a package plugin
+      # in a fork's branch would run with that key. The owner gate above stops a stranger from asking for
+      # a build; this stops the owner from accidentally granting one to a fork's code by commenting on
+      # somebody else's pull request.
+      - name: Find the pull request's head, and refuse a fork
         id: head
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           if [ "${{ github.event_name }}" = "issue_comment" ]; then
-            sha=$(gh api "repos/${{ github.repository }}/pulls/${{ github.event.issue.number }}" --jq .head.sha)
+            pr=$(gh api "repos/${{ github.repository }}/pulls/${{ github.event.issue.number }}")
+            repo=$(printf '%s' "$pr" | jq -r .head.repo.full_name)
+            if [ "$repo" != "${{ github.repository }}" ]; then
+              echo "::error::/testflight builds only branches of ${{ github.repository }}; this pull request's head is on $repo. Signing secrets are not handed to a fork's build scripts."
+              exit 1
+            fi
+            sha=$(printf '%s' "$pr" | jq -r .head.sha)
           else
             sha="${{ github.sha }}"
           fi

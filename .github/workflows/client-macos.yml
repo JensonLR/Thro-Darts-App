@@ -24,6 +24,13 @@ on:
       - "apps/**"
       - ".github/workflows/client-macos.yml"
 
+
+# These jobs read the repository and write nothing back. Stating that here rather than
+# inheriting whatever the repository's default happens to be means a token that leaks out of a
+# build step cannot push, comment, or publish.
+permissions:
+  contents: read
+
 jobs:
   durability-probe:
     name: Durability probe compiles and runs

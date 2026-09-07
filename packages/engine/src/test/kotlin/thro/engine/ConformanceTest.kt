@@ -169,6 +169,12 @@ class ConformanceTest {
     fun `engine reproduces the exhaustive transition table when present`() {
         val file = File(vectors, "core-transitions.jsonl")
         if (!file.exists()) {
+            // CI generates the table (generate.py --full) and sets THRO_REQUIRE_CORPUS=1, so a run that
+            // has lost the table fails here rather than passing this test having checked nothing.
+            check(System.getenv("THRO_REQUIRE_CORPUS").isNullOrBlank()) {
+                "THRO_REQUIRE_CORPUS is set but ${'$'}{file.path} is missing: this run must check the exhaustive " +
+                    "transition table and cannot. Run packages/domain-spec/generate.py --full."
+            }
             println("exhaustive table absent (run generate.py --full) — skipped")
             return
         }

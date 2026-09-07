@@ -5,6 +5,13 @@ on:
     branches: ["**"]
   pull_request:
 
+
+# These jobs read the repository and write nothing back. Stating that here rather than
+# inheriting whatever the repository's default happens to be means a token that leaks out of a
+# build step cannot push, comment, or publish.
+permissions:
+  contents: read
+
 jobs:
   conformance:
     name: Swift engine conformance (ADR-002 spike)
@@ -29,8 +36,12 @@ jobs:
           git config --global --add safe.directory "$GITHUB_WORKSPACE"
           git diff --exit-code -- packages/engine-swift/Sources/ThroEngine/RuleTables.swift
 
-      # ADR-002's exit condition: the corpus passes identically on both platforms.
+      # ADR-002's exit condition: the corpus passes identically on both platforms. THRO_REQUIRE_CORPUS
+      # turns the runner's "corpus missing, skipped" into a failure, so this step cannot report a pass
+      # over a suite that checked nothing.
       - name: Conformance corpus, including the exhaustive family
+        env:
+          THRO_REQUIRE_CORPUS: "1"
         run: |
           python3 packages/domain-spec/generate.py --full
           swift test --package-path packages/engine-swift
