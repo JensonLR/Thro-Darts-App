@@ -297,3 +297,68 @@ whatever colour a club picks, the app stays readable — the text on an accent i
 configured, and a sweep of the colour cube proves no choice falls below the contrast floor. The same
 discipline has no equivalent for an image; a photograph cannot be made safe by arithmetic.
 
+## OD-020 — Apple Watch: what it is for, and which of the three shapes THRØ can honestly build
+**Status:** OPEN · **Impact:** product surface, durability, and one measurement that has not been taken
+
+The founder asked to see the options. There are three, and **which of them is buildable is decided by
+a rule this repository already keeps** rather than by taste:
+
+> Every visit is committed to the journal **before** the screen updates (`MatchSession.submit`). If
+> the commit fails, the screen says *Not saved, so not scored* and the state does not change.
+
+That is ADR-006's rule, it is measured (P95 1.6 ms against a 20 ms budget on an iPhone 14 Pro Max),
+and it is why the app can be trusted with a match. A watch either keeps it or breaks it, and the
+three options are exactly the three ways that goes.
+
+### A — A glance, and nothing more
+
+The watch shows the match the phone is scoring: remaining, whose throw, legs, and the bust or won-leg
+announcement PD-005 already defines. No input. A complication, and a view.
+
+- **Keeps the rule trivially**, because nothing is recorded on the wrist.
+- **Costs**: a watchOS target, a build in CI, and a `WatchConnectivity` session that is *allowed* to
+  be late or lossy because nothing depends on it arriving.
+- **Worth**: modest and real. The phone is usually on the shelf and the player is at the oche; a
+  glance at the remaining without walking over is worth something. It is not what most people mean
+  when they ask for a watch app.
+
+### B — Scoring from the wrist, with the watch's own journal
+
+The watch records visits. To keep the rule it needs **its own durable journal**, not a message to the
+phone: `WatchConnectivity` is best-effort by design, so "the watch takes the entry and the phone
+stores it" would show a score that is not yet saved — precisely what the rule exists to prevent.
+
+- **The architecture is already most of the way there.** The engine is Swift and dependency-free; the
+  journal is SQLite and so is watchOS; and the two-device reconciliation this needs is *already built
+  and tested* (`packages/trust`), because a watch and a phone are two devices with their own streams
+  — the same problem the offline model already solves.
+- **The one thing missing is a measurement.** ADR-006's durability numbers were taken on a phone. A
+  watch has a different chip, a different flash controller and a much tighter power budget, and
+  `synchronous=FULL` with `fullfsync` may well cost more than 20 ms there. `packages/durability-probe`
+  would have to be **run on a watch** before a line of the scoring UI is written, and the answer might
+  be no — in which case the honest outcome is A, and knowing that is worth the probe.
+- **The interface is the other risk.** A 45 mm screen cannot hold the export's keypad. The plausible
+  shape is the Digital Crown for the total plus one large confirm, with the common totals as quick
+  keys — and that is a **design commission** (B3), not an engineering choice.
+
+### C — The watch as the second, corroborating device
+
+The trust model's centre is that one player's word never moves a rating (PD-002), and that
+corroboration comes from two independent devices. A watch on the opponent's wrist is a natural second
+device: they confirm what they saw, from where they are standing, without holding a phone.
+
+- **This is the option that is uniquely THRØ's** rather than a scoring app's. It is also the one that
+  makes a rated match possible in a pub without two phones on the oche.
+- **Blocked twice over**: it needs identity (**B4**) so the watch's confirmation is *someone's*, and
+  it needs the sync path, which does not exist. Neither is close.
+
+### Engineering's reading
+
+**Run the probe first, then decide between A and B.** The measurement is a day, it is the only fact
+that separates the two, and taking it before designing anything means the design is not thrown away.
+**C waits on B4** and should be recorded as the destination rather than attempted early — the
+reconciliation it needs is built, so nothing is lost by waiting.
+
+**Must not be decided by:** an assumption that a watch behaves like a phone under `fullfsync`. That
+is the whole question, and it is measurable rather than arguable.
+
