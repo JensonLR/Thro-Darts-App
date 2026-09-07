@@ -181,7 +181,9 @@ public struct ThroRootView: View {
         case .play: PlayLandingScreen(store: store)
         case .live: NotBuiltScreen(title: "Live")
         case .discover: ClubsFlow(store: clubs)
-        case .you: YouScreen(onSettings: { showingSettings = true })
+        case .you: YouScreen(clubs: clubs.clubs,
+                             onSettings: { showingSettings = true },
+                             onClubs: { store.tab = .discover })
         }
     }
 }
@@ -330,19 +332,56 @@ public struct PlayLandingScreen: View {
 
 /// The You tab. The export's You is a profile with a settings action in its TopBar; this build has
 /// no profile to show and says so, and keeps the action.
+///
+/// It does have one true thing to put there: **the clubs kept on this phone**. Somebody who starts a
+/// club under Discover and then looks for it under You has not made a mistake — that is where a
+/// person expects their own things to be — so it is listed here and one tap goes to it. The tab
+/// itself is not renamed: the tab set is the export's.
 public struct YouScreen: View {
+    private let clubs: [Club]
     private let onSettings: () -> Void
+    private let onClubs: () -> Void
 
-    public init(onSettings: @escaping () -> Void) { self.onSettings = onSettings }
+    public init(clubs: [Club] = [], onSettings: @escaping () -> Void, onClubs: @escaping () -> Void = {}) {
+        self.clubs = clubs
+        self.onSettings = onSettings
+        self.onClubs = onClubs
+    }
 
     public var body: some View {
         VStack(spacing: 0) {
             TopBar("You", actions: [TopBar.Action(icon: .settings, label: "Settings", action: onSettings)], large: true)
             ScrollView {
-                EmptyState(title: "Profile not in this build",
-                           message: "Your profile, rating and passport need THRØ's servers. This build scores matches and keeps them on the device; nothing else is connected yet. Settings are behind the gear above.")
-                    .padding(.vertical, ThroSpacing.spacing6)
-                    .padding(.horizontal, ThroSpacing.spaceScreenGutter)
+                VStack(alignment: .leading, spacing: 0) {
+                    EmptyState(title: "Profile not in this build",
+                               message: "Your profile, rating and passport need THRØ's servers. This build scores matches and keeps them on the device; nothing else is connected yet. Settings are behind the gear above.")
+                        .padding(.top, ThroSpacing.spacing6)
+                    Eyebrow("Clubs you keep").padding(.top, ThroSpacing.spaceSectionGap)
+                    if clubs.isEmpty {
+                        Text("None on this phone. Start one under Discover and its roster and fixtures are kept here.")
+                            .thro(ThroTypography.body)
+                            .foregroundStyle(ThroColor.colorTextSecondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                            .padding(.top, ThroSpacing.spacing2)
+                        ThroButton("Start a club", variant: .secondary, size: .large,
+                                   fullWidth: true, action: onClubs)
+                            .padding(.top, ThroSpacing.spacing4)
+                    } else {
+                        ThroDivider().padding(.top, ThroSpacing.spacing2)
+                        ForEach(clubs) { club in
+                            Button(action: onClubs) {
+                                OrganisationRow(initials: club.initials, name: club.name,
+                                                meta: "\(club.kind.label) · \(club.meta)",
+                                                accent: club.accentHex.flatMap { Color.thro(hex: $0) },
+                                                trailing: club.yourRole?.label)
+                            }
+                            .buttonStyle(.plain)
+                            ThroDivider()
+                        }
+                    }
+                }
+                .padding(.horizontal, ThroSpacing.spaceScreenGutter)
+                .padding(.bottom, ThroSpacing.spacing6)
             }
         }
         .background(ThroColor.colorBackgroundPrimary.ignoresSafeArea())
