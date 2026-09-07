@@ -52,14 +52,15 @@ database.
 | Rating projection | 14 tests — reproducible from a watermark pair; OD-001 stays open |
 | Competition structure | 13 tests — bracket identities exhaustive for every field size to 1024 |
 | Schema and privileges | 71 property assertions against a real PostgreSQL |
-| Command path | 9 integration suites, 132 properties end to end against a real PostgreSQL |
+| Command path | 9 integration suites, 169 assertions end to end against a real PostgreSQL |
 | Design tokens | 58 contrast pairs, absolute thresholds, 0 unrecorded breaches; every recorded exception carries the measured ratio it was raised at and fails if it worsens |
 | Design components | 61 components audited mechanically against a baseline ratchet |
 | Statistics honesty, Swift | The same 20 tests, ported case for case, on Linux |
-| On-device journal | 15 tests — configuration read back on open, append-only by trigger, replay throws on a corrupt row, a retraction supersedes and never deletes, an old journal upgrades on open |
+| On-device journal | 16 tests — configuration read back on open, append-only by trigger, replay throws on a corrupt row, a retraction supersedes and never deletes, an old journal upgrades on open, and the device identity a journal was created with survives a caller that has forgotten it |
 | Scoring session | 27 tests — every PD-001 branch; engine → journal commit → screen, never another order; undo as a retraction, including of the visit that ended a match; a bust or a won leg holds the keypad until both players have seen it (PD-005) |
-| Type faces | 4 tests — every type role resolves to one of the ten embedded faces; weights the families lack land on their nearest face |
-| iOS app | Builds for the iOS simulator on every push that touches it. Run on the founder's phone three times (2026-09-05 / 06), setup to result, each run's findings fixed and confirmed on the next (see the runbook). Carries the founder's mark as icon and launch screen and embeds the two type families under the SIL Open Font License (PD-006); `apps/ios/check_fonts.py` holds the fonts, licences and assets to the code on every push |
+| Design layer | 22 tests — every icon parses inside its own grid, every type role sits on the approved scale, an error state says what happened, what is safe and what to do, and an unknown stored appearance falls back to *System* rather than guessing. Four of them hold the type faces: every role resolves to one of the ten embedded faces, and weights the families lack land on their nearest face |
+| The opening and the app shell | 16 tests — the opening's cuts are contiguous and it is no longer than its own reasons, its cues land on their beats, the tagline is left still long enough to read, Reduce Motion has no motion and no cues, and the mark keeps its measured proportions as it becomes the wordmark's Ø; and a match whose rows will not replay stays on the list saying so, rather than vanishing from it |
+| iOS app | Builds for the iOS simulator on every push that touches it. Run on the founder's phone three times (2026-09-05 / 06), setup to result, each run's findings fixed and confirmed on the next; the opening was watched there on five further occasions, once for each of its first five versions (see the runbook, and PD-007's amendments). The sixth opening has not yet been on a phone. Carries the founder's mark as icon and launch screen and embeds the two type families under the SIL Open Font License (PD-006); `apps/ios/check_fonts.py` holds the fonts, licences and assets to the code on every push |
 
 **Nothing here is production ready**, and no claim of security, offline reliability or rating
 validity is made anywhere in this repository. There is an iOS client that scores a match between two people on
