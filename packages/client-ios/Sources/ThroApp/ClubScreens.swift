@@ -98,12 +98,15 @@ struct MemberRow: View {
 /// sentence instead.
 public struct ClubsScreen: View {
     private let clubs: [Club]
+    private let badge: (Club) -> Image?
     private let onOpen: (Club) -> Void
     private let onCreate: () -> Void
 
-    public init(clubs: [Club], onOpen: @escaping (Club) -> Void = { _ in },
+    public init(clubs: [Club], badge: @escaping (Club) -> Image? = { _ in nil },
+                onOpen: @escaping (Club) -> Void = { _ in },
                 onCreate: @escaping () -> Void = {}) {
         self.clubs = clubs
+        self.badge = badge
         self.onOpen = onOpen
         self.onCreate = onCreate
     }
@@ -127,7 +130,8 @@ public struct ClubsScreen: View {
                                 OrganisationRow(initials: club.initials, name: club.name,
                                                 meta: "\(club.kind.label) · \(club.meta)",
                                                 accent: club.accentHex.flatMap { Color.thro(hex: $0) },
-                                                trailing: club.yourRole?.label)
+                                                trailing: club.yourRole?.label,
+                                                image: badge(club))
                             }
                             .buttonStyle(.plain)
                             ThroDivider()
@@ -159,14 +163,21 @@ public struct ClubScreen: View {
     private let onAnnounce: () -> Void
     private let onSeeMembers: () -> Void
     private let onFixtures: () -> Void
+    private let badge: Image?
+    /// Nil when the viewer may not change the club. Absent rather than disabled, for the reason the
+    /// members list gives: an admin-only action shown greyed out tells a member what they are missing.
+    private let onEdit: (() -> Void)?
 
-    public init(club: Club, onBack: @escaping () -> Void = {}, onAnnounce: @escaping () -> Void = {},
-                onSeeMembers: @escaping () -> Void = {}, onFixtures: @escaping () -> Void = {}) {
+    public init(club: Club, badge: Image? = nil, onBack: @escaping () -> Void = {},
+                onAnnounce: @escaping () -> Void = {}, onSeeMembers: @escaping () -> Void = {},
+                onFixtures: @escaping () -> Void = {}, onEdit: (() -> Void)? = nil) {
         self.club = club
+        self.badge = badge
         self.onBack = onBack
         self.onAnnounce = onAnnounce
         self.onSeeMembers = onSeeMembers
         self.onFixtures = onFixtures
+        self.onEdit = onEdit
     }
 
     private var accent: Color { club.accentHex.flatMap { Color.thro(hex: $0) } ?? ThroColor.throGreen }
@@ -180,6 +191,14 @@ public struct ClubScreen: View {
             HStack(spacing: 0) {
                 BackChevron(action: onBack)
                 Spacer()
+                if let onEdit {
+                    Button(action: onEdit) {
+                        Text("Edit")
+                            .thro(ThroTypography.label.weight(.semibold))
+                            .foregroundStyle(ThroColor.colorTextBrand)
+                    }
+                    .padding(.trailing, ThroSpacing.spacing4)
+                }
                 if club.mayAnnounce {
                     Button(action: onAnnounce) {
                         Text("Announce")
@@ -194,7 +213,7 @@ public struct ClubScreen: View {
                 VStack(alignment: .leading, spacing: 0) {
                     OrganisationHeader(initials: club.initials, name: club.name, kind: club.kind.label,
                                        meta: club.meta, accent: accent, verified: club.verified,
-                                       role: roleLine)
+                                       role: roleLine, image: badge)
                     if club.isMember { inside } else { front }
                 }
                 .padding(.horizontal, ThroSpacing.spaceScreenGutter)

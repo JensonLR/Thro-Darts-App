@@ -992,3 +992,58 @@ refuses.
 
 Stop writing the player ids. Matches keep their names, the book is ignorable, and every figure on a
 profile falls back to a dash with a reason.
+
+---
+
+## PD-014 — What happens to an image somebody supplies (OD-019 closed)
+
+**Status: decided by the founder, 2026-09-07.** Closes **OD-019**.
+
+The founder chose to decide the moderation questions now rather than defer images or ship them
+undecided. Four answers, recorded here and enforced as code in `packages/organisation`
+(`ImagePolicy`) and in the client (`ThroJournal/Images.swift`).
+
+**Which of these shapes is legally available to THRØ is not a question this repository answers.**
+What follows is product intent expressed as behaviour, and it needs a solicitor's eye before it
+reaches anyone but its owner.
+
+### Decided
+
+1. **Screening: automated on the way in, plus report-and-remove.** Every image goes through a
+   classifier; anything flagged waits for a person; every image carries a report route and a
+   takedown path. This happens **where an image is published**, and there is nowhere to publish to
+   yet — so the part that exists today is the takedown mechanism's shape and the refusal that
+   nothing unscreened may be published.
+2. **A member recorded as under 18 has no picture at all** — and neither does one whose age has not
+   been established, treated the same way for the same reason the announcements are: what is not
+   known is whether this is a child. The control is not shown rather than shown and refused, and the
+   refusal is **at the write, not at the render**, so there is no image of a child in the file to
+   leak whatever any screen later decides to draw.
+3. **Deleting stops it being served immediately; the bytes go within 30 days.** The gap covers
+   backups and an accidental-deletion window. It is a promise that has to be stated in a privacy
+   notice rather than discovered, and the number is written down so it can be.
+4. **The uploader warrants the right; THRØ removes on notice.** This one needs terms of service that
+   actually say it, which do not exist and are not engineering's to write. The takedown mechanism is
+   built regardless, because every answer to that question needs one.
+
+### The fifth thing, which was engineering's and not asked
+
+**Every image is decoded and written out again, and carries nothing it came with.** A phone
+photograph carries the place it was taken; a club badge picked by a fifteen-year-old carries their
+house. It is done with ImageIO and an explicitly empty property dictionary, so metadata is dropped
+*by construction* rather than by remembering to remove each kind — and a test builds a real JPEG
+with GPS and EXIF in it, puts it through the intake, and reads the bytes back to prove it is gone.
+
+### What exists today
+
+A club can have a badge, picked from the photo library, resized to badge size, stripped, and stored
+on the device. It is drawn wherever the initials would be. Removing it removes the file. **Nothing
+has left the phone**, and the screen says so rather than implying an image has been checked when
+nothing has checked it.
+
+Member pictures are refused for everybody the app does not know to be an adult, which today is
+everybody a club has not recorded an age for. That is the rule working, not a gap.
+
+### How to reverse
+
+Stop offering the picker. Every badge falls back to initials, and the images folder can be deleted.

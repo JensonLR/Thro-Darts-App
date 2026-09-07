@@ -279,7 +279,12 @@ Engineering's reading: **A first**, because it is what the model already support
 reversible; **B** the moment a league asks for it.
 
 ## OD-019 — Logos, avatars, and what happens to an image somebody uploads
-**Status:** OPEN · **Impact:** safeguarding, moderation, storage cost, legal
+**Status: CLOSED, 2026-09-07 — decided by the founder as PD-014.** Automated screening plus
+report-and-remove; **nobody under 18, or of unestablished age, has a picture at all**; deletion stops
+it being served at once and purges the bytes within 30 days; the uploader warrants the right and THRØ
+removes on notice. Re-encoding and metadata stripping were engineering's to decide and are done
+always. Which of those shapes is legally available is still a question for a solicitor, and this
+repository records the answers as product intent rather than as legal conclusions.
 
 `AssetRef` is an opaque handle and this repository stores nothing and fetches nothing. That is
 deliberate: the moment an image is accepted, questions follow that are not engineering's.

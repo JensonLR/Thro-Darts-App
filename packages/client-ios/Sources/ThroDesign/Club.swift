@@ -1,5 +1,10 @@
 import SwiftUI
 import ThroTokens
+#if canImport(UIKit)
+import UIKit
+#elseif canImport(AppKit)
+import AppKit
+#endif
 
 // Clubs, leagues and tournaments in the design system (PD-010).
 //
@@ -26,11 +31,15 @@ public struct Badge: View {
     private let initials: String
     private let accent: Color?
     private let size: CGFloat
+    /// The club's own badge, when it has one (PD-014). It fills the same rounded square the initials
+    /// would, so a list of clubs stays a list of one shape whether or not anybody uploaded anything.
+    private let image: Image?
 
-    public init(_ initials: String, size: CGFloat = 48, accent: Color? = nil) {
+    public init(_ initials: String, size: CGFloat = 48, accent: Color? = nil, image: Image? = nil) {
         self.initials = String(initials.prefix(3)).uppercased()
         self.size = size
         self.accent = accent
+        self.image = image
     }
 
     /// The initials, in the same face and at the same proportion as `PlayerIdentity`'s mark uses —
@@ -47,13 +56,41 @@ public struct Badge: View {
     }
 
     public var body: some View {
-        Text(initials)
-            .thro(role)
-            .foregroundStyle(ink)
-            .frame(width: size, height: size)
-            .background(fill, in: shape)
-            .overlay(shape.strokeBorder(ThroColor.colorTextPrimary.opacity(0.06), lineWidth: 1))
-            .accessibilityHidden(true)
+        Group {
+            if let image {
+                image
+                    .resizable()
+                    .aspectRatio(contentMode: .fill)
+                    .frame(width: size, height: size)
+                    .clipShape(shape)
+            } else {
+                Text(initials)
+                    .thro(role)
+                    .foregroundStyle(ink)
+                    .frame(width: size, height: size)
+                    .background(fill, in: shape)
+            }
+        }
+        .overlay(shape.strokeBorder(ThroColor.colorTextPrimary.opacity(0.06), lineWidth: 1))
+        .accessibilityHidden(true)
+    }
+}
+
+public extension Image {
+    /// A picture from bytes this device holds, or nil when the bytes are not one.
+    ///
+    /// `Image(data:)` does not exist, and the platform's decoders live in different frameworks, so
+    /// this is the one place that knows which. Returning nil rather than a placeholder is deliberate:
+    /// a badge that cannot be read falls back to the initials, which is a mark, rather than to a
+    /// broken-image glyph, which is a complaint.
+    static func thro(data: Data) -> Image? {
+        #if canImport(UIKit)
+        return UIImage(data: data).map(Image.init(uiImage:))
+        #elseif canImport(AppKit)
+        return NSImage(data: data).map(Image.init(nsImage:))
+        #else
+        return nil
+        #endif
     }
 }
 
@@ -64,18 +101,21 @@ public struct OrganisationRow: View {
     private let meta: String
     private let accent: Color?
     private let trailing: String?
+    private let image: Image?
 
-    public init(initials: String, name: String, meta: String, accent: Color? = nil, trailing: String? = nil) {
+    public init(initials: String, name: String, meta: String, accent: Color? = nil,
+                trailing: String? = nil, image: Image? = nil) {
         self.initials = initials
         self.name = name
         self.meta = meta
         self.accent = accent
         self.trailing = trailing
+        self.image = image
     }
 
     public var body: some View {
         HStack(spacing: ThroSpacing.spacing3) {
-            Badge(initials, size: 48, accent: accent)
+            Badge(initials, size: 48, accent: accent, image: image)
             VStack(alignment: .leading, spacing: 2) {
                 Text(name)
                     .thro(ThroTypography.label.weight(.bold))
@@ -104,12 +144,15 @@ public struct OrganisationHeader: View {
     private let name: String
     private let kind: String
     private let meta: String
+    private let image: Image?
     private let accent: Color
     private let verified: Bool
     private let role: String?
 
     public init(initials: String, name: String, kind: String, meta: String,
-                accent: Color = ThroColor.throGreen, verified: Bool = false, role: String? = nil) {
+                accent: Color = ThroColor.throGreen, verified: Bool = false, role: String? = nil,
+                image: Image? = nil) {
+        self.image = image
         self.initials = initials
         self.name = name
         self.kind = kind
@@ -124,7 +167,7 @@ public struct OrganisationHeader: View {
             accent
                 .frame(height: 64)
                 .padding(.horizontal, -ThroSpacing.spaceScreenGutter)
-            Badge(initials, size: 62, accent: accent)
+            Badge(initials, size: 62, accent: accent, image: image)
                 .padding(5)
                 .background(
                     ThroColor.colorBackgroundPrimary,

@@ -52,9 +52,13 @@ public struct ClubMember: Identifiable, Equatable, Sendable {
     public let joined: String
     /// Nil when the figure cannot be computed honestly, which is a fact and not an absence.
     public let threeDartAverage: Double?
+    /// Their picture, when they have one. **Only ever an adult** (PD-014): the store refuses to
+    /// write one for anybody else and refuses to hand one back if the age stops saying adult.
+    public let avatarAssetId: String?
 
     public init(id: String, name: String, role: OrgRole, ageBand: AgeBand = .adult,
-                joined: String, threeDartAverage: Double? = nil) {
+                joined: String, threeDartAverage: Double? = nil, avatarAssetId: String? = nil) {
+        self.avatarAssetId = avatarAssetId
         self.id = id
         self.name = name
         self.role = role
@@ -144,6 +148,8 @@ public struct Club: Identifiable, Equatable, Sendable {
     /// The club's accent as six hex digits. Nil means it has chosen none and wears the brand's.
     public let accentHex: String?
     public let verified: Bool
+    /// The club's badge, when it has one (PD-014). Nil is ordinary: a club may prefer its initials.
+    public let badgeAssetId: String?
     /// The viewer's own role here, or nil if they are not a member. PD-009: a stranger sees the front.
     public let yourRole: OrgRole?
     public let members: [ClubMember]
@@ -152,7 +158,9 @@ public struct Club: Identifiable, Equatable, Sendable {
 
     public init(id: String, name: String, kind: OrgKind, meta: String, accentHex: String? = nil,
                 verified: Bool = false, yourRole: OrgRole? = nil, members: [ClubMember] = [],
-                fixtures: [Fixture] = [], announcements: [Announcement] = []) {
+                fixtures: [Fixture] = [], announcements: [Announcement] = [],
+                badgeAssetId: String? = nil) {
+        self.badgeAssetId = badgeAssetId
         self.id = id
         self.name = name
         self.kind = kind

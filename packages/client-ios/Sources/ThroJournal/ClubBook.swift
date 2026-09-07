@@ -22,6 +22,8 @@ public enum ClubBookError: Error, Equatable, CustomStringConvertible {
     case fixtureIsFinished(String)
     case noSuchClub(String)
     case noSuchFixture(String)
+    case noSuchMember(String)
+    case pictureRefused(String)
     case sqlite(String)
 
     public var description: String {
@@ -38,6 +40,12 @@ public enum ClubBookError: Error, Equatable, CustomStringConvertible {
             return "no club \(id) on this device"
         case .noSuchFixture(let id):
             return "no fixture \(id) in that club"
+        case .noSuchMember(let id):
+            return "no member \(id) in that club"
+        case .pictureRefused(let band):
+            return band == "minor"
+                ? "a member recorded as under 18 has no picture"
+                : "a member whose age is not established has no picture, for the same reason a minor does not"
         case .sqlite(let m):
             return "club book: \(m)"
         }
@@ -53,6 +61,9 @@ public struct StoredClub: Equatable, Sendable {
     /// Six hex digits, or nil when the club wears the brand's own accent.
     public let accentHex: String?
     public let createdAt: Date
+    /// The club's badge, when it has one. Nil is the ordinary case and always will be for a club
+    /// that would rather wear its initials.
+    public let badgeAssetId: String?
 }
 
 public struct StoredMember: Equatable, Sendable {
@@ -66,6 +77,8 @@ public struct StoredMember: Equatable, Sendable {
     /// would list a child.
     public let ageBand: String
     public let joinedAt: Date
+    /// Their picture, when they have one. **Only an adult ever does** — see `ImagePolicy`.
+    public let avatarAssetId: String?
 }
 
 public struct StoredFixture: Equatable, Sendable {
@@ -119,6 +132,13 @@ public final class ClubBook {
               created_at TEXT NOT NULL
             );
             """)
+        // Images arrived after clubs did (PD-014). ADD COLUMN is the one schema change SQLite makes
+        // without rewriting a row, so a club written before this reads back with no badge — which is
+        // what it has.
+        let clubColumns = try Journal.columnNames(h, table: "club")
+        if !clubColumns.contains("badge_asset_id") {
+            try Journal.exec(h, "ALTER TABLE club ADD COLUMN badge_asset_id TEXT;")
+        }
         // ON DELETE CASCADE, with foreign keys switched on in `configure`: removing a club must not
         // leave a roster behind with nothing to belong to.
         try Journal.exec(h, """
@@ -132,6 +152,10 @@ public final class ClubBook {
               PRIMARY KEY (club_id, member_id)
             );
             """)
+        let memberColumns = try Journal.columnNames(h, table: "club_member")
+        if !memberColumns.contains("avatar_asset_id") {
+            try Journal.exec(h, "ALTER TABLE club_member ADD COLUMN avatar_asset_id TEXT;")
+        }
         // The people who play on this device (ADR-016). Not a club's roster — those are members of
         // a club — but the device's own book: who has played here, so a match can say who its two
         // names referred to, and so a claim can later attach all of one person's matches at once.
@@ -167,7 +191,8 @@ public final class ClubBook {
                 [.text(id), .text(clean), .text(kind),
                  accent.map { Journal.Param.text($0) } ?? .null,
                  .text(Journal.iso.string(from: createdAt))])
-        return StoredClub(id: id, name: clean, kind: kind, accentHex: accent, createdAt: createdAt)
+        return StoredClub(id: id, name: clean, kind: kind, accentHex: accent, createdAt: createdAt,
+                          badgeAssetId: nil)
     }
 
     /// Renames a club and/or changes its accent. A club is a thing people get wrong when they type it.
@@ -185,13 +210,17 @@ public final class ClubBook {
 
     public func clubs() throws -> [StoredClub] {
         var out: [StoredClub] = []
-        try run("SELECT club_id, name, kind, accent_hex, created_at FROM club ORDER BY name COLLATE NOCASE;", []) { s in
+        try run("""
+            SELECT club_id, name, kind, accent_hex, created_at, badge_asset_id FROM club
+            ORDER BY name COLLATE NOCASE;
+            """, []) { s in
             out.append(StoredClub(
                 id: Journal.text(s, 0),
                 name: Journal.text(s, 1),
                 kind: Journal.text(s, 2),
                 accentHex: sqlite3_column_type(s, 3) == SQLITE_NULL ? nil : Journal.text(s, 3),
-                createdAt: Journal.iso.date(from: Journal.text(s, 4)) ?? Date(timeIntervalSince1970: 0)))
+                createdAt: Journal.iso.date(from: Journal.text(s, 4)) ?? Date(timeIntervalSince1970: 0),
+                badgeAssetId: sqlite3_column_type(s, 5) == SQLITE_NULL ? nil : Journal.text(s, 5)))
         }
         return out
     }
@@ -210,7 +239,8 @@ public final class ClubBook {
             VALUES (?, ?, ?, ?, ?, ?);
             """, [.text(clubId), .text(id), .text(clean), .text(role), .text(ageBand),
                   .text(Journal.iso.string(from: joinedAt))])
-        return StoredMember(clubId: clubId, id: id, name: clean, role: role, ageBand: ageBand, joinedAt: joinedAt)
+        return StoredMember(clubId: clubId, id: id, name: clean, role: role, ageBand: ageBand,
+                            joinedAt: joinedAt, avatarAssetId: nil)
     }
 
     public func removeMember(_ memberId: String, from clubId: String) throws {
@@ -222,18 +252,24 @@ public final class ClubBook {
     public func members(of clubId: String) throws -> [StoredMember] {
         var out: [StoredMember] = []
         try run("""
-            SELECT club_id, member_id, name, role, age_band, joined_at FROM club_member
+            SELECT club_id, member_id, name, role, age_band, joined_at, avatar_asset_id FROM club_member
             WHERE club_id = ? ORDER BY joined_at, name COLLATE NOCASE;
             """, [.text(clubId)]) { s in
             let band = Journal.text(s, 4)
             let role = Journal.text(s, 3)
+            let safeBand = ClubBook.ageBands.contains(band) ? band : "unknown"
             out.append(StoredMember(
                 clubId: Journal.text(s, 0),
                 id: Journal.text(s, 1),
                 name: Journal.text(s, 2),
                 role: ClubBook.roles.contains(role) ? role : "member",
-                ageBand: ClubBook.ageBands.contains(band) ? band : "unknown",
-                joinedAt: Journal.iso.date(from: Journal.text(s, 5)) ?? Date(timeIntervalSince1970: 0)))
+                ageBand: safeBand,
+                joinedAt: Journal.iso.date(from: Journal.text(s, 5)) ?? Date(timeIntervalSince1970: 0),
+                // Read through the policy, not around it. A row that has a picture and an age this
+                // build reads as anything but adult does not get to show it — whether that came from
+                // a later build, an edited file, or a bug of ours.
+                avatarAssetId: (ImagePolicy.mayHavePicture(ageBand: safeBand)
+                                && sqlite3_column_type(s, 6) != SQLITE_NULL) ? Journal.text(s, 6) : nil))
         }
         return out
     }
@@ -281,6 +317,44 @@ public final class ClubBook {
                 when: Journal.iso.date(from: Journal.text(s, 3)) ?? Date(timeIntervalSince1970: 0),
                 venue: Journal.text(s, 4),
                 state: ClubBook.fixtureStates.contains(state) ? state : "scheduled"))
+        }
+        return out
+    }
+
+    // MARK: - images (PD-014)
+
+    /// Sets or clears a club's badge. A club is not a person, so no age question arises.
+    public func setBadge(_ assetId: String?, on clubId: String) throws {
+        try requireClub(clubId)
+        try run("UPDATE club SET badge_asset_id = ? WHERE club_id = ?;",
+                [assetId.map { Journal.Param.text($0) } ?? .null, .text(clubId)])
+    }
+
+    /// Sets or clears a member's picture.
+    ///
+    /// **Refused for anybody not recorded as an adult**, including one whose age is not established,
+    /// and refused at the point of writing rather than at the point of drawing — so there is no image
+    /// of a child in the file to leak, whatever any screen later decides to render.
+    public func setAvatar(_ assetId: String?, forMember memberId: String, in clubId: String) throws {
+        guard let member = try members(of: clubId).first(where: { $0.id == memberId }) else {
+            throw ClubBookError.noSuchMember(memberId)
+        }
+        if assetId != nil, !ImagePolicy.mayHavePicture(ageBand: member.ageBand) {
+            throw ClubBookError.pictureRefused(member.ageBand)
+        }
+        try run("UPDATE club_member SET avatar_asset_id = ? WHERE club_id = ? AND member_id = ?;",
+                [assetId.map { Journal.Param.text($0) } ?? .null, .text(clubId), .text(memberId)])
+    }
+
+    /// Every asset id anything currently points at. What is not in here is not referenced, which is
+    /// how a deleted club's badge stops taking up space.
+    public func referencedAssetIds() throws -> Set<String> {
+        var out: Set<String> = []
+        try run("SELECT badge_asset_id FROM club WHERE badge_asset_id IS NOT NULL;", []) { s in
+            out.insert(Journal.text(s, 0))
+        }
+        try run("SELECT avatar_asset_id FROM club_member WHERE avatar_asset_id IS NOT NULL;", []) { s in
+            out.insert(Journal.text(s, 0))
         }
         return out
     }

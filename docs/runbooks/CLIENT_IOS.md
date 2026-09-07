@@ -15,7 +15,7 @@
 | `packages/engine-swift` | the scoring engine | conformance corpus on Linux, every push |
 | `packages/statistics-swift` | the statistics layer, honest about its basis | twenty tests on Linux, every push |
 | `packages/client-ios` → `ThroDesign` | the approved components as SwiftUI | tests on macOS, every push |
-| `packages/client-ios` → `ThroJournal` | the on-device journal (ADR-006), with retractions (PD-004), and its own device identity; and the **club book**, the separate database a captain's roster and fixture list live in | thirty-eight tests on macOS, every push — twenty-four on the journal (four on attestation, three on who played) and fourteen on the device's book of clubs and people |
+| `packages/client-ios` → `ThroJournal` | the on-device journal (ADR-006), with retractions (PD-004), and its own device identity; and the **club book**, the separate database a captain's roster and fixture list live in | forty-six tests on macOS, every push — twenty-four on the journal, fourteen on the device's book of clubs and people, and eight on images |
 | `packages/client-ios` → `ThroPlay` | setup, ready, scoring, result, undo, the bust and leg announcements, double-in (PD-008), the checkout route (PD-013) and confirming the result (PD-011) | thirty-six session tests on macOS, every push |
 | `packages/client-ios` → `ThroApp` | Home, tabs, Settings, the root view, the opening (PD-007), and the club, league, tournament and profile screens under Discover (PD-009, PD-010) | thirty-one tests on macOS, every push: thirteen on the opening (timeline, the tagline's read time, cues, easings, geometry, the throw, the chalk stroke, the wall's dust, the dart), four on Home's reading of the journal and the device identity, five on the club rules the screens obey, and nine on the mapping between the club book and those screens. The layouts themselves are drawn, not tested |
 | `apps/ios/ThroDarts.xcodeproj` | the app target: thirteen lines that mount `ThroApp`, the ten embedded faces with their licences, the icon and the launch screen (PD-006) | `xcodebuild` for the iOS simulator, every push; `check_fonts.py` on Linux, every push |
@@ -185,6 +185,13 @@ exactly what CI does (`xcodebuild -scheme ThroDarts -destination 'generic/platfo
   figure it cannot support is a dash with the reason — a checkout percentage is refused outright for
   somebody who has played under more than one out-rule, because whether a visit began on a finish
   depends on the rule.
+- **A club's badge.** An admin taps **Edit** on their club to change its name, its accent, or to
+  pick a badge from the photo library (PD-014). The image is resized to badge size on the phone and
+  written out again carrying nothing it came with — including where a photograph was taken. Removing
+  it removes the file. Nothing has left the phone: an image is screened when it is published, and
+  there is nowhere to publish to yet, which the screen says rather than implying otherwise. Member
+  pictures are refused for anybody the app does not know to be an adult, which today is everybody a
+  club has not recorded an age for — that is the rule working, not a gap.
 - **Discover — clubs, leagues and tournaments.** *No clubs yet* with one action: **Start a club**.
   What you start is kept on this phone and nowhere else. A club has a name, a kind (club, league or
   tournament) and — if you want one — its own accent colour, typed as six hex digits, with the badge

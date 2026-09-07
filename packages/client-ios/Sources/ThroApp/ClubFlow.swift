@@ -4,6 +4,7 @@ import ThroTokens
 import ThroDesign
 import ThroJournal
 import ThroPlay
+import PhotosUI
 
 // Clubs on the phone, wired to the book that holds them (PD-009, PD-010).
 //
@@ -20,6 +21,11 @@ import ThroPlay
 public final class ClubStore: ObservableObject {
     /// The book, or nil when it could not be opened.
     public let book: ClubBook?
+    /// The pictures this device holds (PD-014). Nil when the folder could not be made, which leaves
+    /// every badge as initials — a smaller loss than failing to open the app.
+    public let images: ImageStore?
+    /// Decoded pictures, kept so a list of clubs does not read the same file off disk on every frame.
+    private var decoded: [String: Image] = [:]
     /// Why it could not be opened, when it could not. Shown, never swallowed.
     public let openProblem: String?
 
@@ -35,12 +41,14 @@ public final class ClubStore: ObservableObject {
             book = nil
             openProblem = "\(error)"
         }
+        images = try? ClubStore.openImages()
         refresh()
     }
 
     /// For previews and tests: a store over a book the caller made.
-    public init(book: ClubBook) {
+    public init(book: ClubBook, images: ImageStore? = nil) {
         self.book = book
+        self.images = images
         self.openProblem = nil
         refresh()
     }
@@ -52,6 +60,84 @@ public final class ClubStore: ObservableObject {
         try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
         // Its own file, beside the journal and not inside it: see the note at the top of ClubBook.
         return try ClubBook(path: dir.appendingPathComponent("clubs.sqlite").path)
+    }
+
+    static func openImages() throws -> ImageStore {
+        let support = try FileManager.default.url(for: .applicationSupportDirectory, in: .userDomainMask,
+                                                  appropriateFor: nil, create: true)
+        let dir = support.appendingPathComponent("THRO", isDirectory: true)
+            .appendingPathComponent("images", isDirectory: true)
+        return try ImageStore(directory: dir)
+    }
+
+    // MARK: - pictures (PD-014)
+
+    /// The picture behind an asset id, or nil — which is not a failure. A badge that cannot be read
+    /// falls back to the club's initials, which is a mark rather than a complaint.
+    public func image(_ assetId: String?) -> Image? {
+        guard let assetId else { return nil }
+        if let cached = decoded[assetId] { return cached }
+        guard let data = images?.data(assetId), let image = Image.thro(data: data) else { return nil }
+        decoded[assetId] = image
+        return image
+    }
+
+    /// Stores a picked image and puts it on a club. Passing nil takes the badge off.
+    ///
+    /// The bytes are re-encoded and stripped of metadata on the way in, always — a phone photograph
+    /// carries the place it was taken, and a club badge picked by a fifteen-year-old carries their
+    /// house. That is engineering's rule, not a setting.
+    @discardableResult
+    public func setBadge(_ picked: Data?, on clubId: String) -> Bool {
+        guard let book else { writeProblem = openProblem ?? "no club book on this device"; return false }
+        do {
+            let previous = try book.clubs().first { $0.id == clubId }?.badgeAssetId
+            var assetId: String?
+            if let picked {
+                guard let images else { throw ImageStore.Failure.notStored("no image folder on this device") }
+                assetId = try images.put(picked)
+            }
+            try book.setBadge(assetId, on: clubId)
+            sweep(previous)
+            writeProblem = nil
+            refresh()
+            return true
+        } catch {
+            writeProblem = "\(error)"
+            return false
+        }
+    }
+
+    /// Stores a picked image against a member. Refused for anybody not recorded as an adult, by the
+    /// book rather than by this screen — see `ImagePolicy`.
+    @discardableResult
+    public func setAvatar(_ picked: Data?, forMember memberId: String, in clubId: String) -> Bool {
+        guard let book else { writeProblem = openProblem ?? "no club book on this device"; return false }
+        do {
+            let previous = try book.members(of: clubId).first { $0.id == memberId }?.avatarAssetId
+            var assetId: String?
+            if let picked {
+                guard let images else { throw ImageStore.Failure.notStored("no image folder on this device") }
+                assetId = try images.put(picked)
+            }
+            try book.setAvatar(assetId, forMember: memberId, in: clubId)
+            sweep(previous)
+            writeProblem = nil
+            refresh()
+            return true
+        } catch {
+            writeProblem = "\(error)"
+            return false
+        }
+    }
+
+    /// Removes a file nothing points at any more. Deleting an image means deleting it, and a folder
+    /// that only ever grows is how a phone fills up with faces nobody asked to keep.
+    private func sweep(_ assetId: String?) {
+        guard let assetId, let book, let images else { return }
+        decoded[assetId] = nil
+        guard let referenced = try? book.referencedAssetIds(), !referenced.contains(assetId) else { return }
+        try? images.delete(assetId)
     }
 
     public func refresh() {
@@ -162,7 +248,8 @@ public final class ClubStore: ObservableObject {
                        // The permissive default would list a child. `ClubBook` already collapses an
                        // unreadable band to `unknown`; this is the same direction, kept twice on purpose.
                        ageBand: AgeBand(rawValue: m.ageBand) ?? .unknown,
-                       joined: ClubStore.joined.string(from: m.joinedAt))
+                       joined: ClubStore.joined.string(from: m.joinedAt),
+                       avatarAssetId: m.avatarAssetId)
         }
         let fixtures = try book.fixtures(of: stored.id).map { f in
             Fixture(id: f.id, title: f.title, when: ClubStore.when.string(from: f.when),
@@ -178,7 +265,8 @@ public final class ClubStore: ObservableObject {
                     members: members,
                     fixtures: fixtures,
                     // Nothing has been sent, because there is nowhere to send it.
-                    announcements: [])
+                    announcements: [],
+                    badgeAssetId: stored.badgeAssetId)
     }
 
     static func meta(_ members: Int) -> String {
@@ -252,6 +340,7 @@ public struct ClubsFlow: View {
                     .background(ThroColor.colorBackgroundPrimary.ignoresSafeArea())
             } else {
                 ClubsScreen(clubs: store.clubs,
+                            badge: { store.image($0.badgeAssetId) },
                             onOpen: { route = .club($0.id) },
                             onCreate: { route = .newClub })
             }
@@ -625,6 +714,123 @@ public struct PersonScreen: View {
         } catch {
             figures = []
             problem = "Their matches could not be read: \(error)"
+        }
+    }
+}
+
+// MARK: - editing a club (PD-014)
+
+/// A club's name, its colour and its badge.
+///
+/// The badge is the first place an image enters THRØ at all, and three things about it are rules
+/// rather than choices:
+///
+///  - **Every image is decoded and written out again**, at badge size, carrying nothing it came
+///    with. A phone photograph carries the place it was taken.
+///  - **Nothing has left this phone.** There is no server to publish to, so the screening the
+///    founder chose (PD-014) happens at a publish that does not exist yet — and the screen says so
+///    rather than implying an image has been checked when nothing has checked it.
+///  - **Removing it removes it.** The file goes when nothing points at it any more, rather than
+///    lingering in a folder that only ever grows.
+public struct EditClubScreen: View {
+    private let club: Club
+    private let currentBadge: Image?
+    @State private var name: String
+    @State private var accent: String
+    @State private var picked: PhotosPickerItem?
+    @State private var pickedData: Data?
+    @State private var removeBadge = false
+    private let onBack: () -> Void
+    private let onSave: (String, String?, Data?, Bool) -> Void
+    private let onDelete: () -> Void
+
+    public init(club: Club, currentBadge: Image? = nil, onBack: @escaping () -> Void = {},
+                onSave: @escaping (String, String?, Data?, Bool) -> Void = { _, _, _, _ in },
+                onDelete: @escaping () -> Void = {}) {
+        self.club = club
+        self.currentBadge = currentBadge
+        _name = State(initialValue: club.name)
+        _accent = State(initialValue: club.accentHex ?? "")
+        self.onBack = onBack
+        self.onSave = onSave
+        self.onDelete = onDelete
+    }
+
+    private var trimmedName: String { name.trimmingCharacters(in: .whitespacesAndNewlines) }
+    private var typedAccent: String? {
+        let t = accent.trimmingCharacters(in: .whitespacesAndNewlines)
+        return t.isEmpty ? nil : t
+    }
+    private var accentColour: Color? { typedAccent.flatMap { Color.thro(hex: $0) } }
+    private var accentError: String? {
+        guard let typed = typedAccent, accentColour == nil else { return nil }
+        return "Six hex digits, like 0F3D2E. \"\(typed)\" is not a colour."
+    }
+    /// What the badge will look like once this is saved.
+    private var preview: Image? {
+        if removeBadge { return nil }
+        if let pickedData { return Image.thro(data: pickedData) }
+        return currentBadge
+    }
+
+    public var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            TopBar("Edit", eyebrow: club.name, onBack: onBack)
+            ScrollView {
+                VStack(alignment: .leading, spacing: ThroSpacing.spacing5) {
+                    HStack(spacing: ThroSpacing.spacing4) {
+                        Badge(club.initials, size: 72, accent: accentColour, image: preview)
+                        VStack(alignment: .leading, spacing: ThroSpacing.spacing2) {
+                            PhotosPicker(selection: $picked, matching: .images) {
+                                Text(preview == nil ? "Choose a badge" : "Change badge")
+                                    .thro(ThroTypography.label.weight(.semibold))
+                                    .foregroundStyle(ThroColor.colorTextBrand)
+                            }
+                            if preview != nil {
+                                Button {
+                                    removeBadge = true
+                                    pickedData = nil
+                                    picked = nil
+                                } label: {
+                                    Text("Remove badge")
+                                        .thro(ThroTypography.label.weight(.semibold))
+                                        .foregroundStyle(ThroColor.colorStatusError)
+                                }
+                                .buttonStyle(.plain)
+                            }
+                        }
+                        Spacer(minLength: 0)
+                    }
+                    ThroTextField("Name", text: $name)
+                    ThroTextField("Accent colour", text: $accent, placeholder: "0F3D2E",
+                                  helper: "Six hex digits, or blank for THRØ's own.",
+                                  error: accentError)
+                    Note("The badge is resized and written out again on this phone, and everything the "
+                         + "original carried — including where a photograph was taken — is dropped. Nothing "
+                         + "has left the phone: an image is checked when it is published, and there is "
+                         + "nowhere to publish to yet.")
+                    ThroDivider()
+                    ThroButton("Delete this \(club.kind.label.lowercased())", variant: .destructive,
+                               size: .medium, action: onDelete)
+                }
+                .padding(.horizontal, ThroSpacing.spaceScreenGutter)
+                .padding(.vertical, ThroSpacing.spacing5)
+            }
+            ThroButton("Save", variant: .primary, size: .large, fullWidth: true,
+                       disabled: trimmedName.isEmpty || accentError != nil) {
+                onSave(trimmedName, typedAccent, pickedData, removeBadge)
+            }
+            .padding(.horizontal, ThroSpacing.spaceScreenGutter)
+            .padding(.bottom, ThroSpacing.spacing6)
+        }
+        .background(ThroColor.colorBackgroundPrimary.ignoresSafeArea())
+        // `.task(id:)` rather than `.onChange`: it is one spelling on every version this app
+        // supports, it is already async, and it cancels itself if the picker changes again while a
+        // large photograph is still loading.
+        .task(id: picked) {
+            guard let picked else { return }
+            pickedData = try? await picked.loadTransferable(type: Data.self)
+            removeBadge = false
         }
     }
 }

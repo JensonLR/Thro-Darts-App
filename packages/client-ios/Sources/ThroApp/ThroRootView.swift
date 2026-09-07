@@ -190,6 +190,7 @@ public struct ThroRootView: View {
         case .live: NotBuiltScreen(title: "Live")
         case .discover: ClubsFlow(store: clubs)
         case .you: YouScreen(clubs: clubs.clubs, people: clubs.people,
+                             badge: { clubs.image($0.badgeAssetId) },
                              onSettings: { showingSettings = true },
                              onClubs: { store.tab = .discover },
                              onPerson: { viewing = $0 })
@@ -352,9 +353,13 @@ public struct YouScreen: View {
     private let onSettings: () -> Void
     private let onClubs: () -> Void
     private let onPerson: (LocalPerson) -> Void
+    private let badge: (Club) -> Image?
 
-    public init(clubs: [Club] = [], people: [LocalPerson] = [], onSettings: @escaping () -> Void,
+    public init(clubs: [Club] = [], people: [LocalPerson] = [],
+                badge: @escaping (Club) -> Image? = { _ in nil },
+                onSettings: @escaping () -> Void,
                 onClubs: @escaping () -> Void = {}, onPerson: @escaping (LocalPerson) -> Void = { _ in }) {
+        self.badge = badge
         self.clubs = clubs
         self.people = people
         self.onSettings = onSettings
@@ -403,7 +408,8 @@ public struct YouScreen: View {
                                 OrganisationRow(initials: club.initials, name: club.name,
                                                 meta: "\(club.kind.label) · \(club.meta)",
                                                 accent: club.accentHex.flatMap { Color.thro(hex: $0) },
-                                                trailing: club.yourRole?.label)
+                                                trailing: club.yourRole?.label,
+                                                image: badge(club))
                             }
                             .buttonStyle(.plain)
                             ThroDivider()

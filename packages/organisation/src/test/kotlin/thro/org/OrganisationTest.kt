@@ -268,4 +268,67 @@ class OrganisationTest {
         assertFalse(Fixtures.mayManage(member(OrgRole.MEMBER)))
         assertTrue(Fixtures.mayManage(member(OrgRole.OFFICIAL)))
     }
+
+    // ---------------------------------------------------------------- images (PD-014, OD-019)
+
+    /**
+     * The safeguarding rule in its second place. The first is the announcement that is never sent;
+     * this is the picture that never exists. Unknown is treated exactly as minor, for the reason it
+     * always is: what is not known is whether this is a child.
+     */
+    @Test
+    fun `a member under 18, or of unknown age, has no picture at all`() {
+        assertTrue(ImagePolicy.mayHavePicture(AgeBand.ADULT))
+        assertFalse(ImagePolicy.mayHavePicture(AgeBand.MINOR))
+        assertFalse(ImagePolicy.mayHavePicture(AgeBand.UNKNOWN), "unknown is treated as under 18")
+
+        val clean = ImagePolicy.Intake(reEncoded = true, metadataStripped = true,
+                                       screened = true, uploaderWarrantedTheRight = true)
+        assertTrue(ImagePolicy.mayPublish(clean, AgeBand.ADULT))
+        for (band in listOf(AgeBand.MINOR, AgeBand.UNKNOWN)) {
+            assertFalse(ImagePolicy.mayPublish(clean, band),
+                        "a perfectly clean image is still refused for $band")
+            assertEquals(1, ImagePolicy.refusals(clean, band).size)
+        }
+    }
+
+    /**
+     * Every gate is load-bearing, and the refusals name which one failed rather than saying no.
+     * Re-encoding and stripping metadata are engineering's, not the founder's: a phone photograph
+     * carries the place it was taken.
+     */
+    @Test
+    fun `an image is refused for each thing it has not passed, by name`() {
+        val nothing = ImagePolicy.Intake(reEncoded = false, metadataStripped = false,
+                                         screened = false, uploaderWarrantedTheRight = false)
+        val refusals = ImagePolicy.refusals(nothing, AgeBand.ADULT)
+        assertEquals(4, refusals.size, refusals.toString())
+        assertTrue(refusals.any { it.contains("re-encoded") })
+        assertTrue(refusals.any { it.contains("metadata") })
+        assertTrue(refusals.any { it.contains("screened") })
+        assertTrue(refusals.any { it.contains("warranted") })
+
+        // And each one alone is enough.
+        val clean = ImagePolicy.Intake(true, true, true, true)
+        assertFalse(ImagePolicy.mayPublish(clean.copy(screened = false), AgeBand.ADULT))
+        assertFalse(ImagePolicy.mayPublish(clean.copy(reEncoded = false), AgeBand.ADULT))
+        assertFalse(ImagePolicy.mayPublish(clean.copy(metadataStripped = false), AgeBand.ADULT))
+        assertFalse(ImagePolicy.mayPublish(clean.copy(uploaderWarrantedTheRight = false), AgeBand.ADULT))
+    }
+
+    /**
+     * Deletion and takedown both stop the image being served at once. The thirty days are the bytes,
+     * not the serving, and the difference is the whole reason the number is written down.
+     */
+    @Test
+    fun `deleting stops it being served now, and the bytes go within thirty days`() {
+        assertFalse(ImagePolicy.servedAfterDeletion())
+        assertFalse(ImagePolicy.servedAfterTakedown())
+        assertEquals(30, ImagePolicy.PURGE_WITHIN_DAYS)
+
+        val takedown = ImagePolicy.Takedown("asset-1", "not their badge", "the other club")
+        assertEquals("asset-1", takedown.assetId)
+        assertFailsWith<IllegalArgumentException> { ImagePolicy.Takedown(" ", "why", "who") }
+        assertFailsWith<IllegalArgumentException> { ImagePolicy.Takedown("asset-1", " ", "who") }
+    }
 }

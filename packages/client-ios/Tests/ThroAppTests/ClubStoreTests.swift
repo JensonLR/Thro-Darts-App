@@ -1,4 +1,6 @@
 import XCTest
+import CoreGraphics
+import ImageIO
 @testable import ThroJournal
 @testable import ThroApp
 
@@ -152,5 +154,78 @@ final class ClubStoreTests: XCTestCase {
         XCTAssertTrue(s.delete(id))
         XCTAssertEqual(s.clubs.count, 0)
         XCTAssertNil(s.club(id), "and the flow can tell a club has gone rather than drawing an empty one")
+    }
+
+
+    // MARK: - pictures (PD-014)
+
+    /// A badge round-trips: picked bytes are re-encoded, stored, and come back as the club's image.
+    /// And removing it removes the file, rather than leaving a folder that only ever grows.
+    func testABadgeIsStoredReEncodedAndSweptUpWhenItIsRemoved() throws {
+        let dir = URL(fileURLWithPath: NSTemporaryDirectory())
+            .appendingPathComponent("thro-store-images-\(UUID().uuidString)")
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let images = try ImageStore(directory: dir)
+        let s = ClubStore(book: try ClubBook(path: path), images: images)
+        XCTAssertTrue(s.createClub(name: "The Feathers", kind: .club, accentHex: nil))
+        let id = s.clubs[0].id
+        XCTAssertNil(s.clubs[0].badgeAssetId)
+
+        XCTAssertTrue(s.setBadge(try ClubStoreTests.picture(), on: id))
+        let asset = s.clubs[0].badgeAssetId
+        XCTAssertNotNil(asset)
+        XCTAssertEqual(try images.assetIds().count, 1)
+        XCTAssertNotNil(s.image(asset), "and it decodes")
+
+        XCTAssertTrue(s.setBadge(nil, on: id))
+        XCTAssertNil(s.clubs[0].badgeAssetId)
+        XCTAssertEqual(try images.assetIds().count, 0, "nothing points at it, so the file is gone")
+    }
+
+    /// The safeguarding rule reaches the store, not just the book: a picture for a member who is not
+    /// recorded as an adult is refused, and the refusal is kept rather than dropped.
+    func testAPictureForAMinorIsRefusedThroughTheStoreToo() throws {
+        let dir = URL(fileURLWithPath: NSTemporaryDirectory())
+            .appendingPathComponent("thro-store-images-\(UUID().uuidString)")
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let s = ClubStore(book: try ClubBook(path: path), images: try ImageStore(directory: dir))
+        XCTAssertTrue(s.createClub(name: "The Feathers", kind: .club, accentHex: nil))
+        let club = s.clubs[0].id
+        XCTAssertTrue(s.addMember(to: club, name: "Jamie", role: .member, ageBand: .minor))
+        XCTAssertTrue(s.addMember(to: club, name: "Alex", role: .member, ageBand: .adult))
+
+        let jamie = s.clubs[0].members.first { $0.name == "Jamie" }!
+        let alex = s.clubs[0].members.first { $0.name == "Alex" }!
+        let picture = try ClubStoreTests.picture()
+
+        XCTAssertFalse(s.setAvatar(picture, forMember: jamie.id, in: club))
+        XCTAssertNotNil(s.writeProblem)
+        XCTAssertNil(s.clubs[0].members.first { $0.id == jamie.id }?.avatarAssetId)
+
+        XCTAssertTrue(s.setAvatar(picture, forMember: alex.id, in: club))
+        XCTAssertNotNil(s.clubs[0].members.first { $0.id == alex.id }?.avatarAssetId)
+    }
+
+    /// A tiny real JPEG, so the intake is exercised rather than described.
+    static func picture(size: Int = 64) throws -> Data {
+        let space = CGColorSpaceCreateDeviceRGB()
+        guard let context = CGContext(data: nil, width: size, height: size, bitsPerComponent: 8,
+                                      bytesPerRow: 0, space: space,
+                                      bitmapInfo: CGImageAlphaInfo.noneSkipLast.rawValue),
+              let image = { () -> CGImage? in
+                  context.setFillColor(CGColor(red: 0.06, green: 0.24, blue: 0.18, alpha: 1))
+                  context.fill(CGRect(x: 0, y: 0, width: size, height: size))
+                  return context.makeImage()
+              }() else {
+            throw XCTSkip("this machine cannot make a bitmap")
+        }
+        let out = NSMutableData()
+        guard let destination = CGImageDestinationCreateWithData(out as CFMutableData,
+                                                                "public.jpeg" as CFString, 1, nil) else {
+            throw XCTSkip("no JPEG encoder here")
+        }
+        CGImageDestinationAddImage(destination, image, nil)
+        guard CGImageDestinationFinalize(destination) else { throw XCTSkip("could not finalise") }
+        return out as Data
     }
 }
