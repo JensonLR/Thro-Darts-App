@@ -490,11 +490,26 @@ public enum ClubRoute: Equatable {
 public struct ClubsFlow: View {
     @ObservedObject private var store: ClubStore
     @State private var route: ClubRoute = .list
+    /// A club a link asked for. Written by the root view, cleared here the moment it lands, so a
+    /// player who then taps Back is not sent to the same club again by the next re-evaluation.
+    @Binding private var open: String?
 
-    public init(store: ClubStore) { self.store = store }
+    public init(store: ClubStore, open: Binding<String?> = .constant(nil)) {
+        self.store = store
+        self._open = open
+    }
+
+    /// Opens the club a link named, and forgets the request.
+    private func land(_ id: String?) {
+        guard let id, store.clubs.contains(where: { $0.id == id }) else { return }
+        route = .club(id)
+        open = nil
+    }
 
     public var body: some View {
         content
+            .onChange(of: open) { _, id in land(id) }
+            .task { land(open) }
             // A refusal is shown where it happened, over the screen that caused it.
             .overlay(alignment: .bottom) {
                 if let problem = store.writeProblem {

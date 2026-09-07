@@ -270,6 +270,10 @@ public struct ThroRootView: View {
     /// The person whose page is open, if any. Their figures come from the journal, so this is the
     /// one screen in the app where a statistic is about a person rather than about a match.
     @State private var viewing: LocalPerson?
+    /// Where an incoming link asked to go, until a screen can take it there.
+    @StateObject private var router = ThroRouter()
+    /// The club a link named, handed to the Discover tab and cleared as it lands.
+    @State private var openClub: String?
     /// PD-007: the opening plays once, at cold launch, over whatever the app shows first.
     @State private var opening = true
     /// The opening withdraws its own motion under this setting; the handover has to withdraw too,
@@ -297,6 +301,45 @@ public struct ThroRootView: View {
                 .transition(.opacity)
                 .zIndex(1)
             }
+        }
+        // A link may arrive at any moment — during the opening, mid-match, on a cold launch before
+        // the journal has opened. None of those is a moment to move the screen, so the router holds
+        // it and this takes it when SwiftUI is next evaluating.
+        .onOpenURL { router.open($0) }
+        .onChange(of: router.pending) { _, _ in follow() }
+        .task { follow() }
+    }
+
+    /// Goes where a link asked, once, if the place still exists.
+    ///
+    /// **A route names a place; it does not assert that the place is there.** A match id in a
+    /// widget tapped a week after the match was deleted, a person removed from this phone, a club
+    /// that was on another device — all of them arrive here looking exactly like a good link. Each
+    /// is checked against what this device actually holds, and an address that resolves to nothing
+    /// leaves the screen alone rather than opening an empty one.
+    private func follow() {
+        guard let route = router.take() else { return }
+        switch route {
+        case let .tab(tab):
+            viewing = nil; showingSettings = false; store.flow = nil
+            store.tab = tab
+        case .settings:
+            viewing = nil; store.flow = nil
+            showingSettings = true
+        case let .match(id):
+            guard store.matches.contains(where: { $0.record.id == id })
+                    || store.archived.contains(where: { $0.record.id == id }) else { return }
+            viewing = nil; showingSettings = false
+            store.flow = .resume(id)
+        case let .person(id):
+            guard let person = clubs.people.first(where: { $0.id == id }) else { return }
+            showingSettings = false; store.flow = nil
+            viewing = person
+        case let .club(id):
+            guard clubs.clubs.contains(where: { $0.id == id }) else { return }
+            viewing = nil; showingSettings = false; store.flow = nil
+            store.tab = .discover
+            openClub = id
         }
     }
 
@@ -338,7 +381,7 @@ public struct ThroRootView: View {
         case .home: HomeScreen(store: store)
         case .play: PlayLandingScreen(store: store)
         case .live: LiveScreen(store: store, clubs: clubs.clubs, onClubs: { store.tab = .discover })
-        case .discover: ClubsFlow(store: clubs)
+        case .discover: ClubsFlow(store: clubs, open: $openClub)
         case .you: YouScreen(clubs: clubs.clubs, people: clubs.people,
                              badge: { clubs.image($0.badgeAssetId) },
                              onSettings: { showingSettings = true },

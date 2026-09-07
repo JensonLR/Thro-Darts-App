@@ -15,7 +15,7 @@ import PackageDescription
 // not by the call site. That is what lets a scoring screen force ink while Home stays chalk.
 let package = Package(
     name: "ThroTokens",
-    platforms: [.iOS(.v16), .macOS(.v13)],
+    platforms: [.iOS(.v18), .macOS(.v15)],
     products: [
         .library(name: "ThroTokens", targets: ["ThroTokens"]),
     ],

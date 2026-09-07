@@ -17,6 +17,23 @@
 	</array>
 	<key>ITSAppUsesNonExemptEncryption</key>
 	<false/>
+	<!-- ADR-011 fixes the public URL shapes as /e/{eventId}, /m/{matchId}, /p/{playerHandle} and
+	     requires every identifier to be ASCII, so the scheme is `thro` and not the product name.
+	     ThroRoute reads these paths and the same paths under https://, so adopting universal links
+	     later is a hosting decision rather than a code change. -->
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleTypeRole</key>
+			<string>Editor</string>
+			<key>CFBundleURLName</key>
+			<string>app.thro.darts</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>thro</string>
+			</array>
+		</dict>
+	</array>
 	<key>UILaunchScreen</key>
 	<dict>
 		<key>UIColorName</key>

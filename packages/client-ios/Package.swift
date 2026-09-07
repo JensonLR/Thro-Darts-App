@@ -13,9 +13,22 @@ import PackageDescription
 // Apple platforms only, because SwiftUI and the asset catalogue are. The engine and the statistics
 // are separate packages precisely so that the parts which CAN build on Linux are verified there on
 // every push, rather than only when someone has a Mac.
+//
+// **The floor is iOS 18, raised from 16 on 2026-09-07.** Apple's own June 2026 figures put 79% of
+// devices on iOS 26 and 14% on 18, with everything older — iOS 16 included — sharing 7%. What 16
+// cost was not a rounding error: symbol effects, scroll transitions, `visualEffect`, mesh
+// gradients, zoom navigation transitions, the SwiftUI Map API, EventKit's write-only access,
+// interactive widgets, Control Center controls, and the Live Activity surfaces that make a Live
+// Activity worth building — the Apple Watch Smart Stack among them.
+//
+// It cost this app less than it would cost most, because the design system already answers much of
+// what the new APIs offer: `ContentUnavailableView` would be a *regression* beside the approved
+// `EmptyState`, and `.sensoryFeedback` would lose `ThroHaptics`' four named events. Those stay.
+// And there was not one `#available` in this client, so the raise is a pure unlock with no
+// compatibility code to unpick.
 let package = Package(
     name: "ThroClient",
-    platforms: [.iOS(.v16), .macOS(.v13)],
+    platforms: [.iOS(.v18), .macOS(.v15)],
     products: [
         .library(name: "ThroDesign", targets: ["ThroDesign"]),
         .library(name: "ThroJournal", targets: ["ThroJournal"]),
