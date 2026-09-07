@@ -90,9 +90,14 @@ public struct Fixture: Identifiable, Equatable, Sendable {
     public let awayTeamId: String?
     /// What happened, with where that came from (PD-020). Nil until somebody says.
     public let result: MatchResult?
+    /// Where this sits in a tournament draw (PD-021). Both nil for a league and a club, whose
+    /// fixtures are a list rather than a bracket.
+    public let round: Int?
+    public let slot: Int?
 
     public init(id: String, title: String, when: String, venue: String, state: FixtureState = .scheduled,
-                homeTeamId: String? = nil, awayTeamId: String? = nil, result: MatchResult? = nil) {
+                homeTeamId: String? = nil, awayTeamId: String? = nil, result: MatchResult? = nil,
+                round: Int? = nil, slot: Int? = nil) {
         self.id = id
         self.title = title
         self.when = when
@@ -101,6 +106,8 @@ public struct Fixture: Identifiable, Equatable, Sendable {
         self.homeTeamId = homeTeamId
         self.awayTeamId = awayTeamId
         self.result = result
+        self.round = round
+        self.slot = slot
     }
 
     public var isBetweenTeams: Bool { homeTeamId != nil && awayTeamId != nil }
@@ -468,6 +475,19 @@ public struct Club: Identifiable, Equatable, Sendable {
     /// leads with these, because a table with results missing is a table that is quietly wrong and
     /// the only person who can fix it is looking at it.
     public var fixturesAwaitingResults: [Fixture] { fixtures.filter(\.awaitsResult) }
+
+    /// The knockout draw, for a tournament that has one (PD-021).
+    ///
+    /// Derived on every read from the entry order and the fixtures that exist — like the table, and
+    /// for the same reason: a stored bracket could come to disagree with the results under it.
+    ///
+    /// Only for the two shapes that **are** a bracket. A round robin is a table, and groups need
+    /// their group sizes and qualifying places set first, which is not asked yet — so it says so on
+    /// the page rather than being handed a knockout it did not ask for.
+    public var draw: Draw? {
+        guard kind == .tournament, shape == .knockout, teams.count >= 2 else { return nil }
+        return Draw.of(entrants: teams, fixtures: fixtures)
+    }
 
     /// Whether the unit may still be changed (PD-022): only while there is nothing to reinterpret.
     public var unitIsStillOpen: Bool { !fixtures.contains { $0.result != nil } }

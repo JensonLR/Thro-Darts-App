@@ -122,10 +122,34 @@ the founder the question underneath it, which is whether a result's *unit* needs
 leagues ever sit next to each other, because a stored `3–1` with no unit on it cannot be
 reinterpreted later.
 
-**What is not built, said rather than implied:** the tournament draw. Rounds and slots against
-fixtures is the next thing. The page holds the shape, the entrants, and the arithmetic — matches to
-play, byes to give, who gets them and why — and says on the screen where it stops, because half a
-bracket looks broken and reads as a bug.
+**The knockout draws itself** (PD-021). Rounds and slots sit on a fixture; the bracket is derived
+from the entry order and whatever has been played, never stored, so it cannot come to disagree with
+the results under it. Byes go to the entrants who went in first, because THRØ has no rating to seed
+on (OD-001) and the page says so rather than implying a ranking put anybody anywhere — **and a bye is
+not a win**: it has no fixture, and appears in no record of results. Each round is created as
+fixtures once both its sides are known, so a round nobody can play yet is not conjured into one.
+
+Ten tests hold it, and they assert identities rather than one worked example, because a plausible
+bracket is the worst kind of wrong: the seed order is a permutation of the bracket whose round-one
+pairs all sum to *size + 1* — which is what makes the top seed meet the bottom one — and the top two
+seeds are never in the same half, for every bracket size to 256. Then a whole eight-entrant
+tournament is played through and the bottom seed comes out of it.
+
+One thing the draw has to catch that the result screen cannot: **a knockout match cannot end level.**
+The result screen accepts a draw because a league fixture may legitimately be one, so the tournament
+names it as a problem and advances nobody, rather than quietly producing a round with no winner.
+
+**Still not drawn: groups.** How many groups, how big, and how many go through are set before a
+tournament starts, and nothing asks — so THRØ will not guess and hand somebody a bracket they did not
+choose. The page says which of the four shapes draws itself today and which does not.
+
+**What a result is counted in** was the other half of this (PD-022). `3–1` on its own does not mean
+anything, so a league declares legs, matches or points when it is made, and the unit travels with the
+numbers — the table's note, the screen reader's "leg difference", the boxes on the result screen. It
+can be changed while the league has no results and **not after**, because changing it later would
+turn every number already entered into a claim about something else; the store refuses it and the
+refusal says how many results are in the way. A league made before the question was asked has no
+unit, nil is a real answer, and nothing invents one for it.
 
 ### The screens (PD-010)
 

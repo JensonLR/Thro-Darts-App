@@ -1,7 +1,7 @@
 # Running the iOS client
 
 > **Verification status, 2026-09-07.** Every package compiles and every test passes on macOS CI —
-> 217 tests in all: 36 design, 78 journal, 45 scoring session, 58 opening, app and clubs — and the
+> 227 tests in all: 36 design, 78 journal, 45 scoring session, 68 opening, app and clubs — and the
 > Xcode app builds for the iOS simulator on
 > CI with Xcode 26.6, on every push that touches them. **The app has run on a phone**: the founder's,
 > the evening of 2026-09-05, a full best-of-3 from setup to result, in dark mode, on an iPhone 14 Pro Max
@@ -18,7 +18,7 @@
 | `packages/client-ios` → `ThroDesign` | the approved components as SwiftUI | 36 design tests on macOS, every push |
 | `packages/client-ios` → `ThroJournal` | the on-device journal (ADR-006), with retractions (PD-004), and its own device identity; and the **club book**, the separate database a captain's roster and fixture list live in | 78 journal tests on macOS, every push — 32 on the journal itself, 14 on the device's book of clubs and people, 13 on the export and what it refuses to read back, 8 on images, and 11 on the league book — teams, results, units and what the database refuses to write |
 | `packages/client-ios` → `ThroPlay` | setup, ready, scoring, result, undo, the bust and leg announcements, double-in (PD-008), the checkout route (PD-013) and confirming the result (PD-011) | 45 session tests on macOS, every push |
-| `packages/client-ios` → `ThroApp` | Home, tabs, Settings, the root view, the opening (PD-007), and the club, league, tournament and profile screens under Discover (PD-009, PD-010) | 58 app tests on macOS, every push: 13 on the opening (timeline, the tagline's read time, cues, easings, geometry, the throw, the chalk stroke, the wall's dust, the dart), 7 on Home's reading of the journal and the device identity, 5 on the club rules the screens obey, 12 on the mapping between the club book and those screens, 6 on who may have a picture and who is told why not, and 15 on a club, a league and a tournament being three different things — the table's arithmetic and its total ordering, where each result came from, and what each tournament shape counts. The layouts themselves are drawn, not tested — and until 2026-09-07 nothing checked that a screen could be reached at all, which is how the club editor sat unroutable |
+| `packages/client-ios` → `ThroApp` | Home, tabs, Settings, the root view, the opening (PD-007), and the club, league, tournament and profile screens under Discover (PD-009, PD-010) | 68 app tests on macOS, every push: 13 on the opening (timeline, the tagline's read time, cues, easings, geometry, the throw, the chalk stroke, the wall's dust, the dart), 7 on Home's reading of the journal and the device identity, 5 on the club rules the screens obey, 12 on the mapping between the club book and those screens, 6 on who may have a picture and who is told why not, 15 on a club, a league and a tournament being three different things, and 10 on the knockout draw — the seeding identities for every bracket to 256, the byes, a whole tournament played through, and a knockout match that cannot end level — the table's arithmetic and its total ordering, where each result came from, and what each tournament shape counts. The layouts themselves are drawn, not tested — and until 2026-09-07 nothing checked that a screen could be reached at all, which is how the club editor sat unroutable |
 | `apps/ios/ThroDarts.xcodeproj` | the app target: thirteen lines that mount `ThroApp`, the ten embedded faces with their licences, the icon and the launch screen (PD-006) | `xcodebuild` for the iOS simulator, every push; `check_fonts.py` on Linux, every push |
 
 ## Running it on the phone, step by step
@@ -208,7 +208,10 @@ exactly what CI does (`xcodebuild -scheme ThroDarts -destination 'generic/platfo
   build on a screen nothing constructs or a route case nothing assigns.
 - **Discover — clubs, leagues and tournaments.** *No clubs yet* with one action: **Start a club**.
   What you start is kept on this phone and nowhere else. A club has a name, a kind (club, league or
-  tournament) and — if you want one — its own colour, picked from thirteen swatches or from the
+  tournament) and — for a **league**, what its results are counted in (legs, matches or points),
+  which is asked once because a stored 3–1 with no unit on it cannot be reinterpreted later; for a
+  **tournament**, its shape, chosen once from four. And — if you want one — its own colour, picked
+  from thirteen swatches or from the
   phone's own colour well. **Each swatch is drawn as the badge will be**, with the club's real
   initials on it, and underneath it the screen says what the initials read at — 12.4:1, say. You
   never choose the colour they are set in: THRØ picks whichever of its two colours reads better on

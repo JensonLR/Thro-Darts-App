@@ -459,10 +459,11 @@ public struct LeagueScreen: View {
 /// competitions, and the thing a tournament admin needs to see is what their shape means for the
 /// field they actually have — how many matches that is, and how many byes, and who gets them.
 ///
-/// What this page does **not** do yet is draw the bracket. That needs rounds and slots stored
-/// against fixtures, and it is the next thing rather than something half-drawn here: half a bracket
-/// looks broken and reads as a bug. What is here is real and arrives at a number the admin can act
-/// on, and the page says plainly where it stops.
+/// A **knockout** draws itself here (PD-021): the seeded bracket, the byes at the top of the entry
+/// order, and each round created as fixtures once its two sides are known. The other three shapes do
+/// not, and the page says which and why rather than handing them a bracket they did not ask for — a
+/// round robin is a table, and a groups tournament needs its group sizes and qualifying places set
+/// before anything can be drawn at all.
 public struct TournamentScreen: View {
     private let tournament: Club
     private let badge: Image?
@@ -472,11 +473,14 @@ public struct TournamentScreen: View {
     private let onAnnounce: () -> Void
     private let onEdit: (() -> Void)?
     private let onRecord: ((Fixture) -> Void)?
+    /// Nil unless this viewer may make the draw. An admin's: it creates fixtures.
+    private let onDraw: ((Int) -> Void)?
 
     public init(tournament: Club, badge: Image? = nil, onBack: @escaping () -> Void = {},
                 onEntrants: @escaping () -> Void = {}, onFixtures: @escaping () -> Void = {},
                 onAnnounce: @escaping () -> Void = {}, onEdit: (() -> Void)? = nil,
-                onRecord: ((Fixture) -> Void)? = nil) {
+                onRecord: ((Fixture) -> Void)? = nil, onDraw: ((Int) -> Void)? = nil) {
+        self.onDraw = onDraw
         self.tournament = tournament
         self.badge = badge
         self.onBack = onBack
@@ -526,14 +530,10 @@ public struct TournamentScreen: View {
                                        meta: tournament.meta, accent: accent,
                                        verified: tournament.verified, image: badge)
                     shape
+                    draw
                     entrants
                     fixtures
                     if tournament.shape == .roundRobin { table }
-                    Note("The draw is not built yet. A tournament here holds its shape, its entrants "
-                         + "and its fixtures, and the rounds are the next thing — drawn properly, "
-                         + "with the byes where this page says they go, rather than half a bracket "
-                         + "that looks broken.", icon: .triangleAlert)
-                        .padding(.top, ThroSpacing.spaceSectionGap)
                 }
                 .padding(.horizontal, ThroSpacing.spaceScreenGutter)
                 .padding(.bottom, ThroSpacing.spacing6)
@@ -680,6 +680,127 @@ public struct TournamentScreen: View {
                 .thro(ThroTypography.body)
                 .foregroundStyle(ThroColor.colorTextSecondary)
                 .padding(.vertical, ThroSpacing.spacing3)
+        }
+    }
+
+    // MARK: - the draw (PD-021)
+
+    /// The bracket, round by round.
+    ///
+    /// **A list per round, not a tree.** A bracket drawn as a tree on a phone is either unreadable or
+    /// scrolls in two directions, and what somebody running a tournament needs is *which matches am
+    /// I playing next* — which is a list.
+    @ViewBuilder private var draw: some View {
+        if let draw = tournament.draw {
+            Eyebrow("The draw").padding(.top, ThroSpacing.spaceSectionGap)
+            // A knockout match cannot end level, and the result screen will take a draw because a
+            // league fixture may legitimately be one. So the tournament says so rather than
+            // producing a round nobody advances from.
+            ForEach(draw.problems, id: \.self) { problem in
+                Note(problem, icon: .triangleAlert, tone: ThroColor.colorStatusError)
+                    .padding(.top, ThroSpacing.spacing3)
+            }
+            if let champion = draw.champion {
+                Text("\(champion.name) wins it.")
+                    .thro(ThroTypography.heading3.weight(.bold))
+                    .foregroundStyle(ThroColor.colorTextPrimary)
+                    .padding(.top, ThroSpacing.spacing3)
+            }
+            ForEach(Array(draw.rounds.enumerated()), id: \.offset) { index, matches in
+                round(index + 1, matches, of: draw)
+            }
+            Note("Seeded in the order they were entered, because THRØ has no rating (OD-001) and "
+                 + "will not pretend a ranking put anybody anywhere. **A bye is not a win** — it "
+                 + "advances an entrant and appears in no record of results.")
+                .padding(.top, ThroSpacing.spacing4)
+        } else if tournament.shape == .knockout {
+            Eyebrow("The draw").padding(.top, ThroSpacing.spaceSectionGap)
+            Text("A draw needs at least two entrants.")
+                .thro(ThroTypography.body)
+                .foregroundStyle(ThroColor.colorTextSecondary)
+                .padding(.vertical, ThroSpacing.spacing3)
+        } else if tournament.shape == .groups {
+            Eyebrow("The draw").padding(.top, ThroSpacing.spaceSectionGap)
+            Note("**A groups tournament is not drawn yet.** How many groups, how big, and how many "
+                 + "go through are set before it starts and nothing here asks — so THRØ will not "
+                 + "guess at them and hand you a bracket you did not choose. A knockout draws itself "
+                 + "today.", icon: .triangleAlert)
+                .padding(.top, ThroSpacing.spacing3)
+        }
+    }
+
+    @ViewBuilder private func round(_ number: Int, _ matches: [DrawMatch], of draw: Draw) -> some View {
+        HStack(alignment: .firstTextBaseline) {
+            Text(TournamentScreen.roundName(number, of: draw.rounds.count))
+                .thro(ThroTypography.labelStrong.weight(.semibold))
+                .foregroundStyle(ThroColor.colorTextSecondary)
+            Spacer()
+            if let onDraw, !draw.readyToDraw(round: number).isEmpty {
+                Button("Draw \(draw.readyToDraw(round: number).count)") { onDraw(number) }
+                    .thro(ThroTypography.label.weight(.semibold))
+                    .foregroundStyle(ThroColor.colorTextBrand)
+                    .buttonStyle(.plain)
+            }
+        }
+        .padding(.top, ThroSpacing.spacing4)
+        ThroDivider().padding(.top, ThroSpacing.spacing1)
+        ForEach(matches) { match in
+            drawRow(match)
+            ThroDivider()
+        }
+    }
+
+    private func drawRow(_ match: DrawMatch) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            HStack(alignment: .firstTextBaseline, spacing: ThroSpacing.spacing2) {
+                Text("\(name(match.home)) v \(name(match.away))")
+                    .thro(ThroTypography.label.weight(match.isWalkover ? .medium : .semibold))
+                    .foregroundStyle(match.isWalkover ? ThroColor.colorTextSecondary
+                                     : ThroColor.colorTextPrimary)
+                    .fixedSize(horizontal: false, vertical: true)
+                Spacer(minLength: ThroSpacing.spacing2)
+                if let result = match.fixture?.result {
+                    Text("\(result.home)–\(result.away)")
+                        .thro(ThroTypography.label.family(.sport).weight(.bold))
+                        .foregroundStyle(ThroColor.colorTextPrimary)
+                } else if match.isWalkover {
+                    Tag("Bye", tone: .neutral)
+                } else if match.fixture != nil {
+                    Tag("To play", tone: .neutral)
+                }
+            }
+            if let winner = match.winner {
+                Text(match.isWalkover ? "\(winner.name) goes through without playing"
+                                      : "\(winner.name) goes through")
+                    .thro(ThroTypography.metadata)
+                    .foregroundStyle(ThroColor.colorTextSecondary)
+            } else if match.fixture == nil, match.playable != nil {
+                Text("Not drawn yet")
+                    .thro(ThroTypography.metadata)
+                    .foregroundStyle(ThroColor.colorTextTertiary)
+            }
+        }
+        .padding(.vertical, ThroSpacing.spacing2)
+        .accessibilityElement(children: .combine)
+    }
+
+    private func name(_ side: Side) -> String {
+        switch side {
+        case let .entrant(team): return team.name
+        case .bye: return "bye"
+        case let .winnerOf(round, slot): return "winner of round \(round) match \(slot)"
+        }
+    }
+
+    /// What a round is called. The last one is the final, and the two before it have names people
+    /// actually use — a page that said "round 3 of 3" to somebody watching a final would be right
+    /// and useless.
+    static func roundName(_ number: Int, of total: Int) -> String {
+        switch total - number {
+        case 0: return "Final"
+        case 1: return "Semi-finals"
+        case 2: return "Quarter-finals"
+        default: return "Round \(number)"
         }
     }
 

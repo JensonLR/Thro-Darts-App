@@ -125,8 +125,14 @@ public struct StoredFixture: Equatable, Sendable {
     /// entities this device knows about. Either both or neither; one alone is refused on write.
     public let homeTeamId: String?
     public let awayTeamId: String?
+    /// Which round of a tournament draw this is, and which match within it (PD-021). Both nil for a
+    /// league and a club, whose fixtures are a list rather than a bracket. Rounds and slots are
+    /// 1-based, because that is how a draw sheet is read.
+    public let round: Int?
+    public let slot: Int?
 
     public var isBetweenTeams: Bool { homeTeamId != nil && awayTeamId != nil }
+    public var isDrawn: Bool { round != nil && slot != nil }
 }
 
 /// A team in a league (PD-019). A league's unit of competition is a team, not a person.
@@ -267,7 +273,7 @@ public final class ClubBook {
             try Journal.exec(h, "ALTER TABLE club ADD COLUMN \(column);")
         }
         let fixtureColumns = try Journal.columnNames(h, table: "club_fixture")
-        for column in ["home_team_id TEXT", "away_team_id TEXT"]
+        for column in ["home_team_id TEXT", "away_team_id TEXT", "round INTEGER", "slot INTEGER"]
         where !fixtureColumns.contains(String(column.split(separator: " ")[0])) {
             try Journal.exec(h, "ALTER TABLE club_fixture ADD COLUMN \(column);")
         }
@@ -486,6 +492,7 @@ public final class ClubBook {
     @discardableResult
     public func addFixture(to clubId: String, title: String, when: Date, venue: String,
                            homeTeam: String? = nil, awayTeam: String? = nil,
+                           round: Int? = nil, slot: Int? = nil,
                            id: String = UUID().uuidString) throws -> StoredFixture {
         let clean = try ClubBook.checkedName(title)
         try requireClub(clubId)
@@ -501,17 +508,39 @@ public final class ClubBook {
         case let (one, other):
             throw ClubBookError.notATeamFixture(one ?? other ?? id)
         }
+        // A round without a slot, or a slot without a round, is half a draw position — and every
+        // reader of one needs both to know where its winner goes. Refused together, like the teams.
+        guard (round == nil) == (slot == nil) else {
+            throw ClubBookError.unknownValue(field: "draw position",
+                                             value: "a round and a slot are given together or not at all")
+        }
+        if let round, let slot {
+            guard round >= 1, slot >= 1 else {
+                throw ClubBookError.unknownValue(field: "draw position", value: "rounds and slots start at 1")
+            }
+            var taken = false
+            try run("""
+                SELECT 1 FROM club_fixture WHERE club_id = ? AND round = ? AND slot = ?;
+                """, [.text(clubId), .int(Int64(round)), .int(Int64(slot))]) { _ in taken = true }
+            guard !taken else {
+                throw ClubBookError.unknownValue(field: "draw position",
+                                                 value: "round \(round) slot \(slot) is already drawn")
+            }
+        }
         try run("""
             INSERT INTO club_fixture (club_id, fixture_id, title, when_at, venue, state,
-                                      home_team_id, away_team_id)
-            VALUES (?, ?, ?, ?, ?, 'scheduled', ?, ?);
+                                      home_team_id, away_team_id, round, slot)
+            VALUES (?, ?, ?, ?, ?, 'scheduled', ?, ?, ?, ?);
             """, [.text(clubId), .text(id), .text(clean), .text(Journal.iso.string(from: when)),
                   .text(venue.trimmingCharacters(in: .whitespacesAndNewlines)),
                   homeTeam.map { Journal.Param.text($0) } ?? .null,
-                  awayTeam.map { Journal.Param.text($0) } ?? .null])
+                  awayTeam.map { Journal.Param.text($0) } ?? .null,
+                  round.map { Journal.Param.int(Int64($0)) } ?? .null,
+                  slot.map { Journal.Param.int(Int64($0)) } ?? .null])
         return StoredFixture(clubId: clubId, id: id, title: clean, when: when,
                              venue: venue.trimmingCharacters(in: .whitespacesAndNewlines),
-                             state: "scheduled", homeTeamId: homeTeam, awayTeamId: awayTeam)
+                             state: "scheduled", homeTeamId: homeTeam, awayTeamId: awayTeam,
+                             round: round, slot: slot)
     }
 
     /// Moves a fixture. Cancelled and played are terminal — the same rule the Kotlin domain states,
@@ -530,8 +559,9 @@ public final class ClubBook {
     public func fixtures(of clubId: String) throws -> [StoredFixture] {
         var out: [StoredFixture] = []
         try run("""
-            SELECT club_id, fixture_id, title, when_at, venue, state, home_team_id, away_team_id
-            FROM club_fixture WHERE club_id = ? ORDER BY when_at;
+            SELECT club_id, fixture_id, title, when_at, venue, state, home_team_id, away_team_id,
+                   round, slot
+            FROM club_fixture WHERE club_id = ? ORDER BY round, slot, when_at;
             """, [.text(clubId)]) { s in
             let state = Journal.text(s, 5)
             let home = sqlite3_column_type(s, 6) == SQLITE_NULL ? nil : Journal.text(s, 6)
@@ -540,6 +570,9 @@ public final class ClubBook {
             // anyway came from somewhere else, and reads back as the ordinary kind rather than as a
             // fixture whose missing side something downstream would have to invent.
             let both = home != nil && away != nil
+            let round = sqlite3_column_type(s, 8) == SQLITE_NULL ? nil : Int(sqlite3_column_int64(s, 8))
+            let slot = sqlite3_column_type(s, 9) == SQLITE_NULL ? nil : Int(sqlite3_column_int64(s, 9))
+            let drawn = round != nil && slot != nil && (round ?? 0) >= 1 && (slot ?? 0) >= 1
             out.append(StoredFixture(
                 clubId: Journal.text(s, 0),
                 id: Journal.text(s, 1),
@@ -547,7 +580,10 @@ public final class ClubBook {
                 when: Journal.iso.date(from: Journal.text(s, 3)) ?? Date(timeIntervalSince1970: 0),
                 venue: Journal.text(s, 4),
                 state: ClubBook.fixtureStates.contains(state) ? state : "scheduled",
-                homeTeamId: both ? home : nil, awayTeamId: both ? away : nil))
+                homeTeamId: both ? home : nil, awayTeamId: both ? away : nil,
+                // Half a draw position is not one, for the same reason half a team fixture is not:
+                // everything that reads it needs both to know where the winner goes.
+                round: drawn ? round : nil, slot: drawn ? slot : nil))
         }
         return out
     }

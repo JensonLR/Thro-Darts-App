@@ -214,6 +214,35 @@ public final class ClubStore: ObservableObject {
 
     // MARK: - teams and results (PD-019, PD-020)
 
+    /// Creates the fixtures for one round of a knockout draw (PD-021).
+    ///
+    /// **It draws what is ready and nothing else.** A match whose two sides are not both known yet
+    /// is not created — there is nobody to put in it — and a walkover is never created at all,
+    /// because nobody plays it and a fixture for it would be a match in the record that never
+    /// happened. The store re-derives the draw from what it has just written, so the count it
+    /// returns is what actually exists rather than what was intended.
+    @discardableResult
+    public func drawRound(_ round: Int, in clubId: String, when: Date, venue: String) -> Bool {
+        guard let club = club(clubId), let draw = club.draw else {
+            writeProblem = "this tournament has no draw to make"
+            return false
+        }
+        let ready = draw.readyToDraw(round: round)
+        guard !ready.isEmpty else {
+            writeProblem = "there is nothing to draw in round \(round) yet"
+            return false
+        }
+        return write { book in
+            for match in ready {
+                guard let sides = match.playable else { continue }
+                try book.addFixture(to: clubId, title: "\(sides.home.name) v \(sides.away.name)",
+                                    when: when, venue: venue,
+                                    homeTeam: sides.home.id, awayTeam: sides.away.id,
+                                    round: match.round, slot: match.slot)
+            }
+        }
+    }
+
     @discardableResult
     public func addTeam(to clubId: String, name: String) -> Bool {
         write { try $0.addTeam(to: clubId, name: name) }
@@ -315,7 +344,8 @@ public final class ClubStore: ObservableObject {
             Fixture(id: f.id, title: f.title, when: ClubStore.when.string(from: f.when),
                     venue: f.venue, state: FixtureState(rawValue: f.state) ?? .scheduled,
                     homeTeamId: f.homeTeamId, awayTeamId: f.awayTeamId,
-                    result: ClubStore.result(results[f.id]))
+                    result: ClubStore.result(results[f.id]),
+                    round: f.round, slot: f.slot)
         }
         let kind = OrgKind(rawValue: stored.kind) ?? .club
         return Club(id: stored.id, name: stored.name,
@@ -497,7 +527,8 @@ public struct ClubsFlow: View {
                                      onFixtures: { route = .fixtures(id) },
                                      onAnnounce: { route = .announce(id) },
                                      onEdit: editAction(id, if: c.mayEditIdentity),
-                                     onRecord: resultAction(id, if: c.mayRecordResults))
+                                     onRecord: resultAction(id, if: c.mayRecordResults),
+                                     onDraw: drawAction(id, if: c.mayManageFixtures))
                 }
             } else { gone }
 
@@ -681,6 +712,20 @@ public struct ClubsFlow: View {
 
     private func removeTeamAction(_ id: String, if allowed: Bool) -> ((Team) -> Void)? {
         allowed ? { store.removeTeam($0.id, from: id) } : nil
+    }
+
+    /// Making the draw creates fixtures, so it is an official's, like every other fixture write.
+    ///
+    /// The date is a week out at eight in the evening — the same default the fixture screens use —
+    /// and the venue is left blank rather than guessed: a drawn round is a set of matches somebody
+    /// then arranges, and inventing a venue would be putting words in their mouth on every row.
+    private func drawAction(_ id: String, if allowed: Bool) -> ((Int) -> Void)? {
+        guard allowed else { return nil }
+        return { round in
+            var when = Calendar.current.date(byAdding: .day, value: 7, to: Date()) ?? Date()
+            when = Calendar.current.date(bySettingHour: 20, minute: 0, second: 0, of: when) ?? when
+            store.drawRound(round, in: id, when: when, venue: "")
+        }
     }
 
     /// A team's name inside its own league. Static, because the record-result screen needs it while
