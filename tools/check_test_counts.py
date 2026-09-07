@@ -68,6 +68,10 @@ ANCHORED = [
      [f"{IOS}/ThroAppTests/ClubStoreTests.swift"]),
     ("docs/runbooks/CLIENT_IOS.md", r"(\d+) on who may have a picture",
      [f"{IOS}/ThroAppTests/PictureTests.swift"]),
+    ("docs/runbooks/CLIENT_IOS.md", r"(\d+) on a club, a league and a tournament being three",
+     [f"{IOS}/ThroAppTests/LeagueTests.swift"]),
+    ("docs/runbooks/CLIENT_IOS.md", r"(\d+) on the league book",
+     [f"{IOS}/ThroJournalTests/LeagueBookTests.swift"]),
 ]
 
 # Kotlin declares a test with an annotation on the line before the function, so both are counted the

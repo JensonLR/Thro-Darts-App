@@ -172,8 +172,10 @@ public final class ClubStore: ObservableObject {
     }
 
     @discardableResult
-    public func createClub(name: String, kind: OrgKind, accentHex: String?) -> Bool {
-        write { try $0.createClub(name: name, kind: kind.rawValue, accentHex: accentHex) }
+    public func createClub(name: String, kind: OrgKind, accentHex: String?,
+                           shape: TournamentShape? = nil) -> Bool {
+        write { try $0.createClub(name: name, kind: kind.rawValue, accentHex: accentHex,
+                                  shape: shape?.rawValue) }
     }
 
     @discardableResult
@@ -197,8 +199,56 @@ public final class ClubStore: ObservableObject {
     }
 
     @discardableResult
-    public func addFixture(to clubId: String, title: String, when: Date, venue: String) -> Bool {
-        write { try $0.addFixture(to: clubId, title: title, when: when, venue: venue) }
+    public func addFixture(to clubId: String, title: String, when: Date, venue: String,
+                           homeTeam: String? = nil, awayTeam: String? = nil) -> Bool {
+        write { try $0.addFixture(to: clubId, title: title, when: when, venue: venue,
+                                  homeTeam: homeTeam, awayTeam: awayTeam) }
+    }
+
+    // MARK: - teams and results (PD-019, PD-020)
+
+    @discardableResult
+    public func addTeam(to clubId: String, name: String) -> Bool {
+        write { try $0.addTeam(to: clubId, name: name) }
+    }
+
+    /// Removes a team **and the fixtures it was in**. `fixturesLost` says how many that is, so the
+    /// screen can say the number before it happens rather than the admin finding out after.
+    @discardableResult
+    public func removeTeam(_ teamId: String, from clubId: String) -> Bool {
+        write { try $0.removeTeam(teamId, from: clubId) }
+    }
+
+    public func fixturesLost(removing teamId: String, from clubId: String) -> Int {
+        guard let book else { return 0 }
+        return (try? book.fixtureCount(forTeam: teamId, in: clubId)) ?? 0
+    }
+
+    /// Records an official's word about a fixture (PD-020). Marked as theirs everywhere it is shown.
+    @discardableResult
+    public func recordResult(fixture: String, in clubId: String, home: Int, away: Int,
+                             by official: String) -> Bool {
+        write { try $0.recordResult(fixture: fixture, in: clubId, home: home, away: away,
+                                    source: "recorded", recordedBy: official) }
+    }
+
+    /// Attaches a match scored in THRØ to a fixture. **This is the strong source**, and the client
+    /// cannot fabricate one: it takes the id of a match that is in this device's journal.
+    @discardableResult
+    public func linkResult(fixture: String, in clubId: String, home: Int, away: Int,
+                           matchId: String) -> Bool {
+        write { try $0.recordResult(fixture: fixture, in: clubId, home: home, away: away,
+                                    source: "scored", matchId: matchId) }
+    }
+
+    @discardableResult
+    public func clearResult(fixture: String, in clubId: String) -> Bool {
+        write { try $0.clearResult(fixture: fixture, in: clubId) }
+    }
+
+    @discardableResult
+    public func setPoints(win: Int, draw: Int, on clubId: String) -> Bool {
+        write { try $0.setPoints(win: win, draw: draw, on: clubId) }
     }
 
     @discardableResult
@@ -250,13 +300,20 @@ public final class ClubStore: ObservableObject {
                        joined: ClubStore.joined.string(from: m.joinedAt),
                        avatarAssetId: m.avatarAssetId)
         }
+        let teams = try book.teams(of: stored.id).map { Team(id: $0.id, name: $0.name) }
+        // Keyed by fixture, because a fixture has at most one result and a screen asks per row.
+        let results = try Dictionary(book.results(of: stored.id).map { ($0.fixtureId, $0) },
+                                     uniquingKeysWith: { first, _ in first })
         let fixtures = try book.fixtures(of: stored.id).map { f in
             Fixture(id: f.id, title: f.title, when: ClubStore.when.string(from: f.when),
-                    venue: f.venue, state: FixtureState(rawValue: f.state) ?? .scheduled)
+                    venue: f.venue, state: FixtureState(rawValue: f.state) ?? .scheduled,
+                    homeTeamId: f.homeTeamId, awayTeamId: f.awayTeamId,
+                    result: ClubStore.result(results[f.id]))
         }
+        let kind = OrgKind(rawValue: stored.kind) ?? .club
         return Club(id: stored.id, name: stored.name,
-                    kind: OrgKind(rawValue: stored.kind) ?? .club,
-                    meta: ClubStore.meta(members.count),
+                    kind: kind,
+                    meta: ClubStore.meta(kind, members: members.count, teams: teams.count),
                     accentHex: stored.accentHex,
                     // Nothing on this device has been verified by anybody, so nothing wears the mark.
                     verified: false,
@@ -265,11 +322,46 @@ public final class ClubStore: ObservableObject {
                     fixtures: fixtures,
                     // Nothing has been sent, because there is nowhere to send it.
                     announcements: [],
-                    badgeAssetId: stored.badgeAssetId)
+                    badgeAssetId: stored.badgeAssetId,
+                    teams: teams,
+                    shape: stored.shape.flatMap(TournamentShape.init(rawValue:)),
+                    pointsForWin: stored.pointsForWin,
+                    pointsForDraw: stored.pointsForDraw)
     }
 
-    static func meta(_ members: Int) -> String {
-        members == 0 ? "No members yet" : "\(members) member\(members == 1 ? "" : "s")"
+    /// A stored result as the screens want it, or nil.
+    ///
+    /// A row that says `scored` with no match, or `recorded` with nobody's name, becomes **nil**
+    /// rather than a result with its provenance missing. `ClubBook` already refuses to write one and
+    /// already drops one on read; this is the same answer a third time, because a result whose
+    /// source cannot be shown is the one thing PD-020 says must never reach a table.
+    static func result(_ stored: StoredResult?) -> MatchResult? {
+        guard let stored else { return nil }
+        let source: ResultSource
+        switch stored.source {
+        case "scored":
+            guard let matchId = stored.matchId else { return nil }
+            source = .scored(matchId: matchId)
+        case "recorded":
+            guard let by = stored.recordedBy, !by.isEmpty else { return nil }
+            source = .recorded(by: by)
+        default:
+            return nil
+        }
+        return MatchResult(home: stored.home, away: stored.away, source: source)
+    }
+
+    /// The line under a name. A league is counted in teams, because a league's roster is its teams
+    /// (PD-019) and "24 members" on a league of eight teams tells nobody anything they wanted.
+    static func meta(_ kind: OrgKind, members: Int, teams: Int) -> String {
+        switch kind {
+        case .league:
+            return teams == 0 ? "No teams yet" : "\(teams) team\(teams == 1 ? "" : "s")"
+        case .tournament:
+            return teams == 0 ? "No entrants yet" : "\(teams) entrant\(teams == 1 ? "" : "s")"
+        case .club:
+            return members == 0 ? "No members yet" : "\(members) member\(members == 1 ? "" : "s")"
+        }
     }
 
     static let when: DateFormatter = {
@@ -305,6 +397,12 @@ public enum ClubRoute: Equatable {
     /// renamed, recoloured or given a badge. Nothing was broken — it simply could not be reached.
     case edit(String)
     case memberPicture(club: String, member: String)
+    /// A league's teams, or a tournament's entrants (PD-019, PD-021). One route, because they are
+    /// one stored thing; the screen uses the word the organisation actually calls them.
+    case teams(String)
+    case newTeam(String)
+    /// Saying what happened in a fixture, and where that came from (PD-020).
+    case result(club: String, fixture: String)
 }
 
 /// The Clubs tab.
@@ -350,33 +448,104 @@ public struct ClubsFlow: View {
             }
 
         case .newClub:
-            NewClubScreen(onBack: { route = .list }) { name, kind, accent in
-                if store.createClub(name: name, kind: kind, accentHex: accent) { route = .list }
+            NewClubScreen(onBack: { route = .list }) { name, kind, accent, shape in
+                if store.createClub(name: name, kind: kind, accentHex: accent, shape: shape) {
+                    route = .list
+                }
             }
 
+        // **Three kinds, three screens.** They were one screen with the word at the top changed,
+        // which is what the founder called wrong, lazy and ugly. What each one shows now follows
+        // from what each one *is* — PD-019, PD-020 and PD-021 decided that before any of this was
+        // drawn.
         case .club(let id):
             if let c = club(id) {
-                ClubScreen(club: c,
-                           badge: store.image(c.badgeAssetId),
-                           picture: { store.image($0.avatarAssetId) },
-                           onBack: { route = .list },
-                           onAnnounce: { route = .announce(id) },
-                           onSeeMembers: { route = .members(id) },
-                           onFixtures: { route = .fixtures(id) },
-                           onEdit: editAction(id, if: c.mayEditIdentity))
+                switch c.kind {
+                case .club:
+                    ClubScreen(club: c,
+                               badge: store.image(c.badgeAssetId),
+                               picture: { store.image($0.avatarAssetId) },
+                               onBack: { route = .list },
+                               onAnnounce: { route = .announce(id) },
+                               onSeeMembers: { route = .members(id) },
+                               onFixtures: { route = .fixtures(id) },
+                               onEdit: editAction(id, if: c.mayEditIdentity))
+                case .league:
+                    LeagueScreen(league: c,
+                                 badge: store.image(c.badgeAssetId),
+                                 onBack: { route = .list },
+                                 onTeams: { route = .teams(id) },
+                                 onFixtures: { route = .fixtures(id) },
+                                 onOfficials: { route = .members(id) },
+                                 onAnnounce: { route = .announce(id) },
+                                 onEdit: editAction(id, if: c.mayEditIdentity),
+                                 onRecord: resultAction(id, if: c.mayRecordResults))
+                case .tournament:
+                    TournamentScreen(tournament: c,
+                                     badge: store.image(c.badgeAssetId),
+                                     onBack: { route = .list },
+                                     onEntrants: { route = .teams(id) },
+                                     onFixtures: { route = .fixtures(id) },
+                                     onAnnounce: { route = .announce(id) },
+                                     onEdit: editAction(id, if: c.mayEditIdentity),
+                                     onRecord: resultAction(id, if: c.mayRecordResults))
+                }
+            } else { gone }
+
+        case .teams(let id):
+            if let c = club(id) {
+                TeamsScreen(club: c,
+                            onBack: { route = .club(id) },
+                            onAdd: c.mayManageTeams ? { route = .newTeam(id) } : nil,
+                            onRemove: removeTeamAction(id, if: c.mayManageTeams),
+                            fixturesLost: { store.fixturesLost(removing: $0.id, from: id) })
+            } else { gone }
+
+        case .newTeam(let id):
+            if let c = club(id), c.mayManageTeams {
+                NewTeamScreen(club: c, onBack: { route = .teams(id) }) { name in
+                    if store.addTeam(to: id, name: name) { route = .teams(id) }
+                }
+            } else { gone }
+
+        case .result(let clubId, let fixtureId):
+            if let c = club(clubId), c.mayRecordResults,
+               let f = c.fixtures.first(where: { $0.id == fixtureId }), f.isBetweenTeams {
+                RecordResultScreen(club: c, fixture: f,
+                                   home: ClubsFlow.team(f.homeTeamId, in: c),
+                                   away: ClubsFlow.team(f.awayTeamId, in: c),
+                                   onBack: { route = .club(clubId) },
+                                   onRecord: { home, away, official in
+                                       if store.recordResult(fixture: fixtureId, in: clubId,
+                                                             home: home, away: away, by: official) {
+                                           route = .club(clubId)
+                                       }
+                                   },
+                                   onClear: f.result == nil ? nil : {
+                                       if store.clearResult(fixture: fixtureId, in: clubId) {
+                                           route = .club(clubId)
+                                       }
+                                   })
             } else { gone }
 
         case .edit(let id):
             if let c = club(id) {
                 EditClubScreen(club: c, currentBadge: store.image(c.badgeAssetId),
                                onBack: { route = .club(id) },
-                               onSave: { name, accent, picked, removeBadge in
-                                   guard store.rename(id, to: name, accentHex: accent) else { return }
-                                   // Two writes, and the second only if the picture actually changed.
-                                   // A save that touched nothing must not rewrite the file and drop
-                                   // the badge on the way past.
-                                   if picked != nil || removeBadge {
-                                       guard store.setBadge(picked, on: id) else { return }
+                               onSave: { edits in
+                                   guard store.rename(id, to: edits.name, accentHex: edits.accentHex)
+                                   else { return }
+                                   // Each write only if that thing actually changed. A save that
+                                   // touched nothing must not rewrite the file and drop the badge on
+                                   // the way past.
+                                   if edits.picked != nil || edits.removeBadge {
+                                       guard store.setBadge(edits.picked, on: id) else { return }
+                                   }
+                                   if edits.pointsForWin != c.pointsForWin
+                                       || edits.pointsForDraw != c.pointsForDraw {
+                                       guard store.setPoints(win: edits.pointsForWin,
+                                                             draw: edits.pointsForDraw, on: id)
+                                       else { return }
                                    }
                                    route = .club(id)
                                },
@@ -405,13 +574,27 @@ public struct ClubsFlow: View {
             if let c = club(id) {
                 FixturesScreen(club: c, onBack: { route = .club(id) },
                                onAdd: { route = .newFixture(id) },
-                               onMove: moveFixtureAction(id, if: c.mayManageFixtures))
+                               onMove: moveFixtureAction(id, if: c.mayManageFixtures),
+                               onRecord: resultAction(id, if: c.mayRecordResults))
             } else { gone }
 
         case .newFixture(let id):
             if let c = club(id) {
-                NewFixtureScreen(club: c, onBack: { route = .fixtures(id) }) { title, when, venue in
-                    if store.addFixture(to: id, title: title, when: when, venue: venue) { route = .fixtures(id) }
+                // A club's fixture is a title somebody typed; a league's or a tournament's is
+                // between two of its own teams, so it is chosen and the title follows.
+                if c.kind == .club {
+                    NewFixtureScreen(club: c, onBack: { route = .fixtures(id) }) { title, when, venue in
+                        if store.addFixture(to: id, title: title, when: when, venue: venue) {
+                            route = .fixtures(id)
+                        }
+                    }
+                } else {
+                    NewTeamFixtureScreen(club: c, onBack: { route = .fixtures(id) }) { home, away, title, when, venue in
+                        if store.addFixture(to: id, title: title, when: when, venue: venue,
+                                            homeTeam: home, awayTeam: away) {
+                            route = .fixtures(id)
+                        }
+                    }
                 }
             } else { gone }
 
@@ -480,6 +663,20 @@ public struct ClubsFlow: View {
         allowed ? { route = .memberPicture(club: clubId, member: memberId) } : nil
     }
 
+    private func resultAction(_ id: String, if allowed: Bool) -> ((Fixture) -> Void)? {
+        allowed ? { route = .result(club: id, fixture: $0.id) } : nil
+    }
+
+    private func removeTeamAction(_ id: String, if allowed: Bool) -> ((Team) -> Void)? {
+        allowed ? { store.removeTeam($0.id, from: id) } : nil
+    }
+
+    /// A team's name inside its own league. Static, because the record-result screen needs it while
+    /// the flow is building it rather than after.
+    static func team(_ id: String?, in club: Club) -> String {
+        club.teams.first { $0.id == id }?.name ?? "—"
+    }
+
     /// What this device can honestly say about a member's darts, which is nothing.
     ///
     /// A figure here would have to come from matches attributed to this person, and nothing on this
@@ -522,11 +719,15 @@ public struct NewClubScreen: View {
     @State private var name: String = ""
     @State private var kind: OrgKind = .club
     @State private var accent: String = ""
+    /// A tournament's shape (PD-021). Asked here because it is asked **once**: a shape decides what
+    /// every round means, so there is no write that changes it afterwards, and a screen that let one
+    /// be picked later would be offering something the store refuses.
+    @State private var shape: TournamentShape = .knockout
     private let onBack: () -> Void
-    private let onCreate: (String, OrgKind, String?) -> Void
+    private let onCreate: (String, OrgKind, String?, TournamentShape?) -> Void
 
     public init(onBack: @escaping () -> Void = {},
-                onCreate: @escaping (String, OrgKind, String?) -> Void = { _, _, _ in }) {
+                onCreate: @escaping (String, OrgKind, String?, TournamentShape?) -> Void = { _, _, _, _ in }) {
         self.onBack = onBack
         self.onCreate = onCreate
     }
@@ -571,7 +772,13 @@ public struct NewClubScreen: View {
                             .foregroundStyle(ThroColor.colorTextPrimary)
                         SegmentedControl(OrgKind.allCases.map { (kind: OrgKind) in (kind, kind.label) },
                                          selection: $kind)
+                        Text(NewClubScreen.whatItIs(kind))
+                            .thro(ThroTypography.metadata)
+                            .foregroundStyle(ThroColor.colorTextSecondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                            .padding(.top, 2)
                     }
+                    if kind == .tournament { shapes }
                     // Swatches drawn AS the badge will be drawn, rather than six hex digits typed
                     // blind. The initials on each are in whichever neutral THRØ chooses for that
                     // colour, so the choice is made by looking at the result.
@@ -582,7 +789,7 @@ public struct NewClubScreen: View {
                             .thro(ThroTypography.metadata)
                             .foregroundStyle(ThroColor.colorStatusError)
                     }
-                    Note("A club you start is kept on this phone. Nobody else can see it, and nothing about it is sent anywhere.")
+                    Note("A \(kind.label.lowercased()) you start is kept on this phone. Nobody else can see it, and nothing about it is sent anywhere.")
                 }
                 .padding(.horizontal, ThroSpacing.spaceScreenGutter)
                 .padding(.top, ThroSpacing.spacing5)
@@ -590,12 +797,62 @@ public struct NewClubScreen: View {
             }
             ThroButton("Start \(kind.label.lowercased())", variant: .primary, size: .large, fullWidth: true,
                        disabled: trimmedName.isEmpty || accentError != nil) {
-                onCreate(trimmedName, kind, typedAccent)
+                onCreate(trimmedName, kind, typedAccent, kind == .tournament ? shape : nil)
             }
             .padding(.horizontal, ThroSpacing.spaceScreenGutter)
             .padding(.bottom, ThroSpacing.spacing6)
         }
         .background(ThroColor.colorBackgroundPrimary.ignoresSafeArea())
+    }
+
+    /// The shape, chosen once (PD-021), with what each one means beside it rather than four words
+    /// somebody has to already know.
+    @ViewBuilder private var shapes: some View {
+        VStack(alignment: .leading, spacing: ThroSpacing.spacing2) {
+            Text("Shape")
+                .thro(ThroTypography.label.weight(.semibold))
+                .foregroundStyle(ThroColor.colorTextPrimary)
+            ForEach(TournamentShape.allCases, id: \.rawValue) { option in
+                Button { shape = option } label: {
+                    HStack(alignment: .top, spacing: ThroSpacing.spacing3) {
+                        Icon(shape == option ? .circleCheck : .circle, size: 20)
+                            .foregroundStyle(shape == option ? ThroColor.colorTextBrand
+                                             : ThroColor.colorBorderStrong)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(option.label)
+                                .thro(ThroTypography.label.weight(.semibold))
+                                .foregroundStyle(ThroColor.colorTextPrimary)
+                            Text(option.summary)
+                                .thro(ThroTypography.metadata)
+                                .foregroundStyle(ThroColor.colorTextSecondary)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                        Spacer(minLength: 0)
+                    }
+                    .padding(.vertical, ThroSpacing.spacing2)
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityAddTraits(shape == option ? [.isSelected] : [])
+            }
+            Note("**Chosen once.** A tournament keeps its shape, because changing it would change "
+                 + "what the matches already played were for.")
+        }
+    }
+
+    /// One line on what each kind actually is, because the difference between them is the thing this
+    /// app got wrong: they were three words for one screen.
+    static func whatItIs(_ kind: OrgKind) -> String {
+        switch kind {
+        case .club:
+            return "People who play together, with a roster and a fixture list."
+        case .league:
+            return "Teams that play each other over a season, with a table. Its members are the "
+                 + "people who run it; the people who play are in the teams (PD-019)."
+        case .tournament:
+            return "One competition with a shape — knockout, groups, round robin or double "
+                 + "elimination — chosen now and kept."
+        }
     }
 }
 
@@ -805,26 +1062,48 @@ public struct PersonScreen: View {
 ///  - **Removing it removes it.** The file goes when nothing points at it any more, rather than
 ///    lingering in a folder that only ever grows.
 public struct EditClubScreen: View {
+    /// Everything one save changes. A struct rather than six positional arguments, because a
+    /// six-parameter closure is a call site where two `Int`s can be swapped and nothing notices.
+    public struct Edits {
+        public let name: String
+        public let accentHex: String?
+        public let picked: Data?
+        public let removeBadge: Bool
+        /// A league's points (PD-019). Unchanged for a club and a tournament, which have no table.
+        public let pointsForWin: Int
+        public let pointsForDraw: Int
+    }
+
     private let club: Club
     private let currentBadge: Image?
     @State private var name: String
     @State private var accent: String
     @State private var pickedData: Data?
     @State private var removeBadge = false
+    @State private var win: String
+    @State private var draw: String
     private let onBack: () -> Void
-    private let onSave: (String, String?, Data?, Bool) -> Void
+    private let onSave: (Edits) -> Void
     private let onDelete: () -> Void
 
     public init(club: Club, currentBadge: Image? = nil, onBack: @escaping () -> Void = {},
-                onSave: @escaping (String, String?, Data?, Bool) -> Void = { _, _, _, _ in },
+                onSave: @escaping (Edits) -> Void = { _ in },
                 onDelete: @escaping () -> Void = {}) {
         self.club = club
         self.currentBadge = currentBadge
         _name = State(initialValue: club.name)
         _accent = State(initialValue: club.accentHex ?? "")
+        _win = State(initialValue: "\(club.pointsForWin)")
+        _draw = State(initialValue: "\(club.pointsForDraw)")
         self.onBack = onBack
         self.onSave = onSave
         self.onDelete = onDelete
+    }
+
+    private var points: (win: Int, draw: Int)? {
+        guard let w = Int(win.trimmingCharacters(in: .whitespaces)),
+              let d = Int(draw.trimmingCharacters(in: .whitespaces)), w >= 0, d >= 0 else { return nil }
+        return (w, d)
     }
 
     private var trimmedName: String { name.trimmingCharacters(in: .whitespacesAndNewlines) }
@@ -850,6 +1129,7 @@ public struct EditClubScreen: View {
                                   picked: $pickedData, removed: $removeBadge)
                     ThroTextField("Name", text: $name)
                     AccentPicker(hex: $accent, initials: club.initials)
+                    if club.kind == .league { scoring }
                     if let accentError {
                         Text(accentError)
                             .thro(ThroTypography.metadata)
@@ -868,12 +1148,40 @@ public struct EditClubScreen: View {
             }
             ThroButton("Save", variant: .primary, size: .large, fullWidth: true,
                        disabled: trimmedName.isEmpty || accentError != nil) {
-                onSave(trimmedName, typedAccent, pickedData, removeBadge)
+                onSave(Edits(name: trimmedName, accentHex: typedAccent, picked: pickedData,
+                             removeBadge: removeBadge,
+                             pointsForWin: points?.win ?? club.pointsForWin,
+                             pointsForDraw: points?.draw ?? club.pointsForDraw))
             }
             .padding(.horizontal, ThroSpacing.spaceScreenGutter)
             .padding(.bottom, ThroSpacing.spacing6)
         }
         .background(ThroColor.colorBackgroundPrimary.ignoresSafeArea())
+    }
+
+    /// What a win and a draw are worth in this league.
+    ///
+    /// **Asked rather than assumed.** Points per win differ between real leagues, and a constant
+    /// buried in a table calculation would be THRØ quietly deciding a league's rules for it. The
+    /// default is the common one and it is on the screen where it can be argued with — which is also
+    /// why OD-022 exists rather than this being treated as settled.
+    @ViewBuilder private var scoring: some View {
+        VStack(alignment: .leading, spacing: ThroSpacing.spacing3) {
+            Text("Points")
+                .thro(ThroTypography.labelStrong.weight(.semibold))
+                .foregroundStyle(ThroColor.colorTextSecondary)
+            HStack(spacing: ThroSpacing.spacing4) {
+                ThroTextField("For a win", text: $win)
+                ThroTextField("For a draw", text: $draw)
+            }
+            if points == nil {
+                Text("Both are whole numbers, and neither is negative.")
+                    .thro(ThroTypography.metadata)
+                    .foregroundStyle(ThroColor.colorStatusError)
+            }
+            Note("The table is worked out from these every time it is drawn — nothing is stored, so "
+                 + "changing them changes the table rather than leaving it disagreeing with itself.")
+        }
     }
 }
 

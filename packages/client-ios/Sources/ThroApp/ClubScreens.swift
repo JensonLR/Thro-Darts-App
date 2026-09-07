@@ -131,7 +131,10 @@ public struct ClubsScreen: View {
                         ForEach(clubs) { club in
                             Button { onOpen(club) } label: {
                                 OrganisationRow(initials: club.initials, name: club.name,
-                                                meta: "\(club.kind.label) · \(club.meta)",
+                                                // A tournament's shape says more than the word
+                                                // "tournament" does, and it is the thing that
+                                                // decides what its page looks like.
+                                                meta: "\(club.shape?.label ?? club.kind.label) · \(club.meta)",
                                                 accent: club.accentHex.flatMap { Color.thro(hex: $0) },
                                                 trailing: club.yourRole?.label,
                                                 image: badge(club))
@@ -452,13 +455,36 @@ public struct FixturesScreen: View {
     /// Nil when the viewer may not keep the list. Cancelled and played are terminal, which is why
     /// the controls disappear once a fixture is in one of them rather than failing when tapped.
     private let onMove: ((String, FixtureState) -> Void)?
+    /// Nil unless this viewer may say what happened (PD-020). A club never has one: a club's fixture
+    /// is a title somebody typed, so there are no two sides for a score to belong to.
+    private let onRecord: ((Fixture) -> Void)?
 
     public init(club: Club, onBack: @escaping () -> Void = {}, onAdd: @escaping () -> Void = {},
-                onMove: ((String, FixtureState) -> Void)? = nil) {
+                onMove: ((String, FixtureState) -> Void)? = nil,
+                onRecord: ((Fixture) -> Void)? = nil) {
         self.club = club
         self.onBack = onBack
         self.onAdd = onAdd
         self.onMove = onMove
+        self.onRecord = onRecord
+    }
+
+    private func team(_ id: String?) -> String { club.teams.first { $0.id == id }?.name ?? "—" }
+
+    private func recordAction(_ f: Fixture) -> (() -> Void)? {
+        guard let onRecord, f.awaitsResult else { return nil }
+        return { onRecord(f) }
+    }
+
+    /// One row, drawn as what it is: a team fixture carries a score and where it came from; a club's
+    /// carries a typed title and a state.
+    @ViewBuilder private func row(_ f: Fixture) -> some View {
+        if f.isBetweenTeams {
+            TeamFixtureRow(fixture: f, home: team(f.homeTeamId), away: team(f.awayTeamId),
+                           onRecord: recordAction(f))
+        } else {
+            FixtureRow(fixture: f)
+        }
     }
 
     private var upcoming: [Fixture] { club.fixtures.filter { !$0.state.isTerminal } }
@@ -474,7 +500,7 @@ public struct FixturesScreen: View {
                         Eyebrow("To come").padding(.top, ThroSpacing.spacing4)
                         ThroDivider().padding(.top, ThroSpacing.spacing1)
                         ForEach(upcoming) { f in
-                            FixtureRow(fixture: f)
+                            row(f)
                             if let onMove { moves(f, onMove) }
                             ThroDivider()
                         }
@@ -482,7 +508,7 @@ public struct FixturesScreen: View {
                     if !done.isEmpty {
                         Eyebrow("Played").padding(.top, ThroSpacing.spaceSectionGap)
                         ThroDivider().padding(.top, ThroSpacing.spacing1)
-                        ForEach(done) { f in FixtureRow(fixture: f); ThroDivider() }
+                        ForEach(done) { f in row(f); ThroDivider() }
                     }
                     if club.fixtures.isEmpty {
                         EmptyState(title: "No fixtures yet",
@@ -491,7 +517,16 @@ public struct FixturesScreen: View {
                                         : "An official adds them.")
                             .padding(.top, ThroSpacing.spacing6)
                     }
-                    Note("A fixture carries no result. A result comes from a scored match and the evidence behind it, so a fixture that could assert one would be a second place a score came from.")
+                    // Two different true sentences, because PD-020 changed one of them for leagues
+                    // and tournaments and not for clubs. Shipping the old one on a league page would
+                    // be a screen contradicting the build.
+                    Note(club.kind == .club
+                         ? "A fixture carries no result. A result comes from a scored match and the "
+                           + "evidence behind it, so a fixture that could assert one would be a "
+                           + "second place a score came from."
+                         : "A result here is **evidence with a source on it** (PD-020): a match "
+                           + "scored in THRØ, or an official's word marked as theirs. Never a bare "
+                           + "number, and the two are never drawn the same way.")
                         .padding(.top, ThroSpacing.spaceSectionGap)
                 }
                 .padding(.horizontal, ThroSpacing.spaceScreenGutter)

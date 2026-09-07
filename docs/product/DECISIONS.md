@@ -1115,6 +1115,92 @@ Stop offering the two buttons. Rows already written stay readable, because the j
 it does not know as `unknown` and refuses to replay rather than guessing — which is also what an
 older build does with these rows today.
 
+## PD-021 — A tournament is one of four shapes, chosen when it is made
+
+**Asked** 2026-09-07. **Answered** 2026-09-07: all four — knockout with byes, group then knockout,
+round robin, and double elimination.
+
+The founder took the whole set rather than a starting subset, which is the harder answer and the
+right one: a tournament's shape decides what every screen shows, so a shape added later is not a
+feature bolted on, it is a second design of the same screens. Building all four at once means the
+tournament screen is written against *shape* from the first line instead of against knockout with
+the others imagined.
+
+What each shape actually changes on the screen:
+
+| Shape | What it draws | The thing it must not get wrong |
+|---|---|---|
+| Knockout | Rounds, halving. A field that is not a power of two gets **byes in the first round**, distributed so the strongest seeds get them | A bye is not a win. It advances a player and appears in no record of results |
+| Group then knockout | Groups with their own tables, then a bracket seeded from them | Which group positions qualify is stated *before* the groups are played, never decided by who came through |
+| Round robin | One table; everybody plays everybody | The number of rounds and the fixture count are arithmetic, not a guess: n(n−1)/2 |
+| Double elimination | A winners' side and a losers' side, and a final that may need playing twice | Where a player *drops to* is a rule, not a placement — and losing twice is out |
+
+`packages/competition` already holds bracket identities proved exhaustively for every field size to
+1024, so the shapes are not being invented here; the client renders what that model defines.
+
+**Nothing about a shape implies a result.** PD-009 stands: a fixture, a bracket slot and a group row
+are all schedule, and none of them may assert who won. What fills them is PD-020.
+
+### How to reverse
+
+A shape is stored on the tournament. Removing one means refusing to create new tournaments of that
+shape; existing ones keep rendering, because the record of what was played must not change when the
+product's mind does.
+
+## PD-020 — A league table's results come from two places, and it always says which
+
+**Asked** 2026-09-07. **Answered** 2026-09-07: both a scored match and an official's record, clearly
+told apart.
+
+A league table needs results. PD-009 forbids a fixture from asserting one. Both are right, and the
+resolution is that a result is **evidence with a source attached**, never a bare number:
+
+1. **A linked match.** A fixture is linked to a match scored in THRØ. The result comes from the
+   journal — every visit, every dart, whatever confirmation the players gave it (PD-011). This is
+   the strong case and the one the product is for.
+2. **An official's record.** An official types what happened. That is their word, it is **marked as
+   their word on every screen it reaches**, and it can never move a rating (OD-001), because a
+   rating built on typed numbers is a rating built on nothing.
+
+The two are never averaged, never merged, and never drawn the same way. A table where the reader
+cannot tell which rows are evidenced is a table that launders the weaker source through the stronger,
+and it would be worse than having no table.
+
+**Both count for the table.** A league has to produce standings — an official's record that did not
+count would mean a league that cannot run without every player using THRØ, which is not a product,
+it is a demand. So it counts for points and position, and it is labelled everywhere.
+
+### How to reverse
+
+Stop offering the second source. Every row that used it keeps its label and its provenance; nothing
+is rewritten, because a record of what was claimed is not made false by a later change of policy.
+
+## PD-019 — A league is made of teams, and a team is made of players
+
+**Asked** 2026-09-07. **Answered** 2026-09-07: teams, made of players.
+
+The screens had treated a league as a club with a different word on it — the same roster of people,
+the same fixture list — which is what the founder called *"wrong, lazy & ugly"*, and they were right
+about the cause: nobody had decided what a league **is**.
+
+A league's unit of competition is a **team**. Teams play fixtures; players play for teams. That is
+how pub and county darts actually works, and it changes what every league screen shows:
+
+- The roster of a league is a list of **teams**, not of people. A person appears inside a team.
+- A fixture is **team v team**, and its result is a team result.
+- The table's rows are teams.
+- A player's page, seen from a league, says which team they play for — a fact a club's page has no
+  equivalent of.
+
+**A team is not a club**, though it usually belongs to one. "The Feathers A" and "The Feathers B" are
+two teams from one club, and a league that could not tell them apart would be a league that cannot
+run a fixture list. This is why `Club.initials` already keeps the trailing letter.
+
+### How to reverse
+
+A league with one team per player is a league of individuals, so nothing needs removing to support
+individual leagues later — the shape already covers it.
+
 ## PD-018 — A descriptive form figure, never called a rating
 
 **Asked** 2026-09-07. **Answered** 2026-09-07: a descriptive form figure, never called a rating.

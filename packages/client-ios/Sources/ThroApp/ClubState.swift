@@ -85,13 +85,144 @@ public struct Fixture: Identifiable, Equatable, Sendable {
     public let when: String
     public let venue: String
     public let state: FixtureState
+    /// The two teams, in a league (PD-019). Nil in a club, whose fixtures are a typed title.
+    public let homeTeamId: String?
+    public let awayTeamId: String?
+    /// What happened, with where that came from (PD-020). Nil until somebody says.
+    public let result: MatchResult?
 
-    public init(id: String, title: String, when: String, venue: String, state: FixtureState = .scheduled) {
+    public init(id: String, title: String, when: String, venue: String, state: FixtureState = .scheduled,
+                homeTeamId: String? = nil, awayTeamId: String? = nil, result: MatchResult? = nil) {
         self.id = id
         self.title = title
         self.when = when
         self.venue = venue
         self.state = state
+        self.homeTeamId = homeTeamId
+        self.awayTeamId = awayTeamId
+        self.result = result
+    }
+
+    public var isBetweenTeams: Bool { homeTeamId != nil && awayTeamId != nil }
+    /// Played, and nobody has said what happened. The one row a league admin has to act on, and the
+    /// reason the league screen leads with it rather than with the table.
+    public var awaitsResult: Bool { state == .played && result == nil }
+}
+
+/// A team in a league (PD-019). A league's unit of competition is a team, not a person.
+public struct Team: Identifiable, Equatable, Sendable {
+    public let id: String
+    public let name: String
+
+    public init(id: String, name: String) {
+        self.id = id
+        self.name = name
+    }
+
+    /// The same rule a club's badge uses, so *The Feathers A* and *The Feathers B* keep the letter
+    /// that tells them apart.
+    public var initials: String {
+        let words = name.split(whereSeparator: { $0 == " " || $0 == "-" })
+            .filter { !["the", "of", "and", "&"].contains($0.lowercased()) }
+        return String(words.compactMap { $0.first }.map { String($0).uppercased() }.joined().prefix(3))
+    }
+}
+
+/// Where a result came from, and it is never not said (PD-020).
+public enum ResultSource: Equatable, Sendable {
+    /// A match scored in THRØ. Every visit and every dart is behind it.
+    case scored(matchId: String)
+    /// An official's word. It counts for the table and it can never move a rating (OD-001).
+    case recorded(by: String)
+
+    /// The word on the screen. Short, because it sits on a row.
+    public var label: String {
+        switch self {
+        case .scored: return "Scored in THRØ"
+        case let .recorded(by): return "Recorded by \(by)"
+        }
+    }
+
+    /// The sentence under a table, said once rather than on every row.
+    public var explanation: String {
+        switch self {
+        case .scored:
+            return "Every dart of this is in the journal on the phone that scored it."
+        case .recorded:
+            return "Somebody typed what happened. That is their word — nothing checked it, and it "
+                 + "cannot move a rating."
+        }
+    }
+
+    public var isEvidenced: Bool { if case .scored = self { return true }; return false }
+}
+
+/// What happened in a fixture, and where that came from. Never one without the other.
+public struct MatchResult: Equatable, Sendable {
+    public let home: Int
+    public let away: Int
+    public let source: ResultSource
+
+    public init(home: Int, away: Int, source: ResultSource) {
+        self.home = home
+        self.away = away
+        self.source = source
+    }
+
+    public var isDraw: Bool { home == away }
+    /// True when the home team won. Nil on a draw, because "not a home win" is two different things.
+    public var homeWon: Bool? { home == away ? nil : home > away }
+}
+
+/// The four shapes a tournament may be (PD-021).
+public enum TournamentShape: String, CaseIterable, Equatable, Sendable {
+    case knockout, groups, roundRobin, doubleElimination
+
+    public var label: String {
+        switch self {
+        case .knockout: return "Knockout"
+        case .groups: return "Groups, then knockout"
+        case .roundRobin: return "Round robin"
+        case .doubleElimination: return "Double elimination"
+        }
+    }
+
+    /// What it means, in the words somebody running a pub tournament would use.
+    public var summary: String {
+        switch self {
+        case .knockout:
+            return "Lose once and you are out. A field that is not 4, 8, 16 or 32 gets byes in the "
+                 + "first round, given to the top seeds."
+        case .groups:
+            return "Groups first, everybody in a group plays everybody, then the top of each group "
+                 + "goes into a knockout."
+        case .roundRobin:
+            return "Everybody plays everybody. One table, and the top of it wins."
+        case .doubleElimination:
+            return "Lose once and you drop to the losers' side. Lose twice and you are out."
+        }
+    }
+
+    /// How many matches a field of this size plays, or nil where the shape needs more than a number
+    /// to say — groups, whose size and qualifying places are set before it starts.
+    public func matches(forEntrants n: Int) -> Int? {
+        guard n >= 2 else { return 0 }
+        switch self {
+        case .knockout: return n - 1
+        case .roundRobin: return n * (n - 1) / 2
+        // Every entrant but the winner loses twice, and the winner may lose once — so it is either
+        // 2n−2 or 2n−1, and which one is not known until the final is played.
+        case .doubleElimination: return 2 * n - 2
+        case .groups: return nil
+        }
+    }
+
+    /// A knockout of `n` needs a bracket of the next power of two, and the difference is byes.
+    public static func byes(forEntrants n: Int) -> Int {
+        guard n >= 2 else { return 0 }
+        var bracket = 1
+        while bracket < n { bracket *= 2 }
+        return bracket - n
     }
 }
 
@@ -155,11 +286,24 @@ public struct Club: Identifiable, Equatable, Sendable {
     public let members: [ClubMember]
     public let fixtures: [Fixture]
     public let announcements: [Announcement]
+    /// A league's teams (PD-019). Empty for a club and a tournament.
+    public let teams: [Team]
+    /// A tournament's shape (PD-021). Nil for anything else.
+    public let shape: TournamentShape?
+    /// What a win and a draw are worth here. Stored on the league rather than assumed, and said on
+    /// the table rather than left to be inferred from the arithmetic.
+    public let pointsForWin: Int
+    public let pointsForDraw: Int
 
     public init(id: String, name: String, kind: OrgKind, meta: String, accentHex: String? = nil,
                 verified: Bool = false, yourRole: OrgRole? = nil, members: [ClubMember] = [],
                 fixtures: [Fixture] = [], announcements: [Announcement] = [],
-                badgeAssetId: String? = nil) {
+                badgeAssetId: String? = nil, teams: [Team] = [], shape: TournamentShape? = nil,
+                pointsForWin: Int = 2, pointsForDraw: Int = 1) {
+        self.teams = teams
+        self.shape = shape
+        self.pointsForWin = pointsForWin
+        self.pointsForDraw = pointsForDraw
         self.badgeAssetId = badgeAssetId
         self.id = id
         self.name = name
@@ -219,9 +363,73 @@ public struct Club: Identifiable, Equatable, Sendable {
     public var mayAnnounce: Bool { (yourRole ?? .member) >= .official && isMember }
     public var mayManageFixtures: Bool { (yourRole ?? .member) >= .official && isMember }
     public var mayManageMembers: Bool { yourRole == .admin }
+    /// Adding and removing teams (PD-019), and a tournament's entrants, which are the same stored
+    /// thing under a different word — an entrant of one player is a team of one. An admin's, the
+    /// same standing as a club's roster.
+    public var mayManageTeams: Bool { yourRole == .admin && kind != .club }
+
+    /// What this organisation calls the things that compete in it. A league has teams; a tournament
+    /// has entrants; a club has neither, because a club is not a competition.
+    public var competitorNoun: (one: String, many: String) {
+        kind == .tournament ? ("entrant", "Entrants") : ("team", "Teams")
+    }
+    /// Saying what happened in a fixture (PD-020). An **official's**, not only an admin's — the
+    /// person at the venue on the night is usually not the person who set the league up, and a
+    /// league where only one person can enter results is a league that stops when they are away.
+    public var mayRecordResults: Bool { (yourRole ?? .member) >= .official && isMember }
     /// Changing the club's own name, colour and badge, and deleting it. An admin's, like the roster:
     /// what a club is *called* is not an official's to change.
     public var mayEditIdentity: Bool { yourRole == .admin }
+
+    // MARK: - the table (PD-019, PD-020)
+
+    /// The league table, computed from results rather than stored.
+    ///
+    /// **Nothing here is remembered.** A table that were stored could drift from the results under
+    /// it — the classic way a league's standings come to disagree with its own fixture list — so it
+    /// is derived on every read from the fixtures this device holds, and there is no write that can
+    /// set a row.
+    ///
+    /// Both sources count (PD-020) and every row carries how many of its results were **evidenced**,
+    /// so the screen can say which parts of a standing are backed by darts and which are somebody's
+    /// word. They are never averaged and never merged.
+    public var table: [TableRow] { kind == .league ? computedTable : [] }
+
+    /// A round robin's standings. **The one tournament shape that has a table**, because it is the
+    /// one where everybody plays everybody — a knockout's standing is the round somebody went out
+    /// in, and drawing it a table would be drawing it a league.
+    public var standings: [TableRow] {
+        (kind == .tournament && shape == .roundRobin) ? computedTable : []
+    }
+
+    private var computedTable: [TableRow] {
+        var rows: [String: TableRow.Tally] = [:]
+        for team in teams { rows[team.id] = TableRow.Tally() }
+        for fixture in fixtures {
+            guard let home = fixture.homeTeamId, let away = fixture.awayTeamId,
+                  let result = fixture.result,
+                  rows[home] != nil, rows[away] != nil else { continue }
+            rows[home]?.add(scored: result.home, conceded: result.away, source: result.source)
+            rows[away]?.add(scored: result.away, conceded: result.home, source: result.source)
+        }
+        return teams.compactMap { team -> TableRow? in
+            guard let tally = rows[team.id] else { return nil }
+            return TableRow(team: team, tally: tally,
+                            pointsForWin: pointsForWin, pointsForDraw: pointsForDraw)
+        }
+        .sorted(by: TableRow.before)
+    }
+
+    /// Fixtures somebody has to act on: played, and nobody has said what happened. The league screen
+    /// leads with these, because a table with results missing is a table that is quietly wrong and
+    /// the only person who can fix it is looking at it.
+    public var fixturesAwaitingResults: [Fixture] { fixtures.filter(\.awaitsResult) }
+
+    /// Whether this league has enough to show a table at all. Two teams and one result: below that
+    /// a table is a list of zeroes, which looks like a season nobody has won a game in.
+    public var tableIsWorthShowing: Bool {
+        kind == .league && teams.count >= 2 && fixtures.contains { $0.result != nil }
+    }
 
     /// Who an announcement would reach, and who it would not.
     public var delivery: (reaches: Int, of: Int, withheld: Withheld) {
@@ -229,5 +437,67 @@ public struct Club: Identifiable, Equatable, Sendable {
         let unknown = members.filter { $0.ageBand == .unknown }.count
         let withheld = Withheld(minors: minors, ageNotGiven: unknown)
         return (members.count - withheld.total, members.count, withheld)
+    }
+}
+
+
+/// One team's line in a league table (PD-019, PD-020).
+public struct TableRow: Identifiable, Equatable, Sendable {
+    /// The running counts, before they are turned into a row. Separate from `TableRow` so that the
+    /// arithmetic happens in one place and a row cannot be constructed with figures that disagree.
+    struct Tally: Equatable {
+        var won = 0, drawn = 0, lost = 0
+        var scoreFor = 0, scoreAgainst = 0
+        var evidenced = 0
+
+        mutating func add(scored: Int, conceded: Int, source: ResultSource) {
+            scoreFor += scored
+            scoreAgainst += conceded
+            if scored > conceded { won += 1 } else if scored == conceded { drawn += 1 } else { lost += 1 }
+            if source.isEvidenced { evidenced += 1 }
+        }
+    }
+
+    public let team: Team
+    public let won: Int
+    public let drawn: Int
+    public let lost: Int
+    public let scoreFor: Int
+    public let scoreAgainst: Int
+    public let points: Int
+    /// How many of this row's results came from a match scored in THRØ. The rest are somebody's
+    /// word, and the screen says so rather than presenting one number as if it were all the same.
+    public let evidenced: Int
+
+    public var id: String { team.id }
+    public var played: Int { won + drawn + lost }
+    public var difference: Int { scoreFor - scoreAgainst }
+    /// Results in this row that nothing checked. Named rather than computed at the call site,
+    /// because "played minus evidenced" is the kind of arithmetic a screen gets subtly wrong.
+    public var unevidenced: Int { played - evidenced }
+
+    init(team: Team, tally: Tally, pointsForWin: Int, pointsForDraw: Int) {
+        self.team = team
+        self.won = tally.won
+        self.drawn = tally.drawn
+        self.lost = tally.lost
+        self.scoreFor = tally.scoreFor
+        self.scoreAgainst = tally.scoreAgainst
+        self.evidenced = tally.evidenced
+        self.points = tally.won * pointsForWin + tally.drawn * pointsForDraw
+    }
+
+    /// Points, then difference, then what they scored, then the name.
+    ///
+    /// **This ordering is a convention, not a law**, and it is the one league sport uses almost
+    /// everywhere. A league that separates its teams differently — head-to-head first is the common
+    /// alternative — cannot say so yet, and that is part of OD-022 rather than something engineering
+    /// decided was universal. The name is last so the order is total: two teams level on everything
+    /// come out in a stable order rather than in whatever order the dictionary happened to hold.
+    static func before(_ a: TableRow, _ b: TableRow) -> Bool {
+        if a.points != b.points { return a.points > b.points }
+        if a.difference != b.difference { return a.difference > b.difference }
+        if a.scoreFor != b.scoreFor { return a.scoreFor > b.scoreFor }
+        return a.team.name.localizedCaseInsensitiveCompare(b.team.name) == .orderedAscending
     }
 }

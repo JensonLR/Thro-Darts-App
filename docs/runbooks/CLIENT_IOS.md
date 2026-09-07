@@ -1,7 +1,7 @@
 # Running the iOS client
 
 > **Verification status, 2026-09-07.** Every package compiles and every test passes on macOS CI —
-> 189 tests in all: 36 design, 67 journal, 45 scoring session, 41 opening, app and clubs — and the
+> 211 tests in all: 36 design, 76 journal, 45 scoring session, 54 opening, app and clubs — and the
 > Xcode app builds for the iOS simulator on
 > CI with Xcode 26.6, on every push that touches them. **The app has run on a phone**: the founder's,
 > the evening of 2026-09-05, a full best-of-3 from setup to result, in dark mode, on an iPhone 14 Pro Max
@@ -16,9 +16,9 @@
 | `packages/engine-swift` | the scoring engine | conformance corpus on Linux, every push |
 | `packages/statistics-swift` | the statistics layer, honest about its basis | 25 statistics tests on Linux, every push |
 | `packages/client-ios` → `ThroDesign` | the approved components as SwiftUI | 36 design tests on macOS, every push |
-| `packages/client-ios` → `ThroJournal` | the on-device journal (ADR-006), with retractions (PD-004), and its own device identity; and the **club book**, the separate database a captain's roster and fixture list live in | 67 journal tests on macOS, every push — 32 on the journal itself, 14 on the device's book of clubs and people, 13 on the export and what it refuses to read back, and 8 on images |
+| `packages/client-ios` → `ThroJournal` | the on-device journal (ADR-006), with retractions (PD-004), and its own device identity; and the **club book**, the separate database a captain's roster and fixture list live in | 76 journal tests on macOS, every push — 32 on the journal itself, 14 on the device's book of clubs and people, 13 on the export and what it refuses to read back, 8 on images, and 9 on the league book — teams, results and what the database refuses to write |
 | `packages/client-ios` → `ThroPlay` | setup, ready, scoring, result, undo, the bust and leg announcements, double-in (PD-008), the checkout route (PD-013) and confirming the result (PD-011) | 45 session tests on macOS, every push |
-| `packages/client-ios` → `ThroApp` | Home, tabs, Settings, the root view, the opening (PD-007), and the club, league, tournament and profile screens under Discover (PD-009, PD-010) | 41 app tests on macOS, every push: 13 on the opening (timeline, the tagline's read time, cues, easings, geometry, the throw, the chalk stroke, the wall's dust, the dart), 7 on Home's reading of the journal and the device identity, 5 on the club rules the screens obey, 11 on the mapping between the club book and those screens, and 5 on who may have a picture and who is told why not. The layouts themselves are drawn, not tested — and until 2026-09-07 nothing checked that a screen could be reached at all, which is how the club editor sat unroutable |
+| `packages/client-ios` → `ThroApp` | Home, tabs, Settings, the root view, the opening (PD-007), and the club, league, tournament and profile screens under Discover (PD-009, PD-010) | 54 app tests on macOS, every push: 13 on the opening (timeline, the tagline's read time, cues, easings, geometry, the throw, the chalk stroke, the wall's dust, the dart), 7 on Home's reading of the journal and the device identity, 5 on the club rules the screens obey, 11 on the mapping between the club book and those screens, 5 on who may have a picture and who is told why not, and 13 on a club, a league and a tournament being three different things — the table's arithmetic and its total ordering, where each result came from, and what each tournament shape counts. The layouts themselves are drawn, not tested — and until 2026-09-07 nothing checked that a screen could be reached at all, which is how the club editor sat unroutable |
 | `apps/ios/ThroDarts.xcodeproj` | the app target: thirteen lines that mount `ThroApp`, the ten embedded faces with their licences, the icon and the launch screen (PD-006) | `xcodebuild` for the iOS simulator, every push; `check_fonts.py` on Linux, every push |
 
 ## Running it on the phone, step by step

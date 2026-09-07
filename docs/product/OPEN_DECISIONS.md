@@ -421,3 +421,44 @@ to "whoever is holding the phone answers for whoever is playing" widens it in th
 the surface where THRØ has the least idea who anybody is.
 
 **Must not be decided by:** the fact that it would be easy to add a column. It would.
+
+## OD-022 — Whether THRØ has a league scoring standard, or every league sets its own
+**Status:** OPEN · **Impact:** every league table THRØ ever draws
+
+A table needs to know what a win is worth. Real leagues disagree: two points a win is the common
+answer in pub and county darts, one is not rare, and some run on legs or on match points rather than
+on fixtures won at all.
+
+**What engineering did, and why it is not the decision:** the app asks. A league stores its own
+points for a win and for a draw, defaulting to 2 and 1, the numbers are on the league's edit screen,
+and the table says which it used. That is the smallest honest thing: a constant buried in a table
+calculation would be THRØ deciding a league's rules for it without saying so, which is exactly the
+kind of silent invention this repository refuses.
+
+It is still only half an answer, because two related things are **not** asked and are currently
+fixed:
+
+- **What separates two teams on the same points.** The table sorts on points, then difference, then
+  what a team scored, then the name. That is the near-universal convention and it is not universal:
+  head-to-head first is the common alternative, and some leagues use legs won.
+- **What the numbers in a result mean.** Today they are whatever the person entering them says —
+  legs, matches, points. The table adds them up either way, so a league that enters legs and a
+  league that enters match points both get a coherent table, and neither can be compared with the
+  other. That is fine while a league lives on one phone and is **not** fine the moment two leagues
+  are in the same product.
+
+The questions for the founder:
+
+1. Does THRØ have a **standard** league scoring, with a league free to override it — or is scoring
+   always the league's, with THRØ only ever storing what it is told?
+2. Should the tie-break be configurable, or is one convention imposed?
+3. Does a result's **unit** need to be declared by the league (legs / matches / points), so that two
+   leagues' tables mean the same thing when they eventually sit next to each other?
+
+**Engineering's reading:** answer 3 first, and answer it before any league data exists that would
+have to be migrated. The unit is the one that becomes expensive later, because a stored `3–1` with
+no unit on it cannot be reinterpreted afterwards — somebody has to be asked what they meant, and by
+then they will not remember.
+
+**Must not be decided by:** whichever numbers happen to be the defaults today. They are defaults
+because a screen needed one, not because they were chosen.
