@@ -945,3 +945,50 @@ direction — the same shape as the age band that must never default to *adult*.
 
 Stop offering the confirm action; the label falls back to `self-reported` and every row already
 written stays where it is.
+
+---
+
+## PD-012 — Local first, with the path to accounts designed now
+
+**Status: decided by the founder, 2026-09-07.** Architecture recorded as **ADR-016**.
+
+Asked what the first release is, the founder chose **local first, with the migration path designed
+now**: ship the phone app with no accounts and no server, but build the identity-claim path so a
+person's local history can be attached to an account later without losing a leg.
+
+### What was built for it
+
+The device keeps a **book of the people who play on it**, and a match records who each of its two
+names referred to. That is the whole mechanism, and it is worth having for its own sake: nobody wants
+to retype their opponent's name every Tuesday, and a name typed the same way every time is what makes
+a person's matches theirs rather than three strangers'.
+
+It also makes the profile screen real. A person's visits can be pooled across every match they played
+here — through the same audited honesty layer a single match's figures go through, not a second
+arithmetic written for profiles — so *matches, legs won, 3-dart average, checkout %, 180s, highest
+checkout* are computed rather than dashed out.
+
+### Three things it refuses to do
+
+- **It does not pool a checkout percentage across out-rules.** Whether a visit began on a finish
+  depends on the rule, so a person who has played double-out and straight-out gets a dash and the
+  reason, not a number that is a checkout percentage of nothing.
+- **It does not merge legs across matches.** Leg 1 of one match and leg 1 of another are different
+  legs; they are renumbered when pooled. Skipping that would put six visits in a first-nine average,
+  which is the same class of defect as sharing visit ordinals between competitors — already made once
+  in this repository, and not again.
+- **It does not guess who an old match belonged to.** Matches written before this carry nulls, read
+  perfectly, and can be named later. Guessing is how one person's history becomes another's.
+
+### What claiming will and will not buy
+
+ADR-016 states it: a claim attaches a history, it does not corroborate one. A local journal lives in
+a file its owner can edit, so its rows are **attributable, never verified**. Claiming gives a player
+their history, their figures and their clubs — not a rated record they did not earn. Anything that
+presented a claimed local history as verified would be exactly the fake completion this repository
+refuses.
+
+### How to reverse
+
+Stop writing the player ids. Matches keep their names, the book is ignorable, and every figure on a
+profile falls back to a dash with a reason.

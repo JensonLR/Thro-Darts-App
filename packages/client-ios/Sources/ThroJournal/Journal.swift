@@ -83,6 +83,27 @@ public enum Seat: String, CaseIterable, Sendable {
 
 /// What is needed to start a local match. Straight in; the out-rule and structure are the
 /// player's choice at match-ready.
+/// Somebody who plays on this device (ADR-016, PD-012).
+///
+/// The name on a match row is what was typed and what is displayed; this is who it was. The
+/// difference matters exactly once, and it matters a great deal then: when accounts arrive, a claim
+/// is a mapping from one of these to an account, and every match that person appears in comes with
+/// it. Free text cannot be claimed — "Jenson", "jenson" and "Jenson L" are three strings and one
+/// player, and a claim that had to guess would either lose matches or steal them.
+public struct LocalPerson: Identifiable, Equatable, Sendable {
+    public let id: String
+    public let name: String
+
+    public init(id: String, name: String) {
+        self.id = id
+        self.name = name
+    }
+
+    public var initials: String {
+        name.split(separator: " ").prefix(2).compactMap { $0.first }.map(String.init).joined().uppercased()
+    }
+}
+
 public struct NewMatch: Sendable {
     public let homeName: String
     public let awayName: String
@@ -92,10 +113,16 @@ public struct NewMatch: Sendable {
     public let legsMode: StructureMode
     public let legsTarget: Int
     public let throwFirst: Seat
+    /// Who each name refers to, when the device knows (ADR-016). Nil is normal and always readable:
+    /// a match without them is a match that cannot be claimed until its players are named.
+    public let homePlayerId: String?
+    public let awayPlayerId: String?
 
     public init(homeName: String, awayName: String, startingScore: Int = 501, inRule: InRule = .straight,
                 outRule: OutRule = .double, legsMode: StructureMode = .bestOf, legsTarget: Int = 5,
-                throwFirst: Seat = .home) {
+                throwFirst: Seat = .home, homePlayerId: String? = nil, awayPlayerId: String? = nil) {
+        self.homePlayerId = homePlayerId
+        self.awayPlayerId = awayPlayerId
         self.homeName = homeName
         self.awayName = awayName
         self.startingScore = startingScore
@@ -118,6 +145,11 @@ public struct MatchRecord: Equatable, Sendable {
     public let legsTarget: Int
     public let throwFirst: Seat
     public let startedAt: Date
+    /// Who each name refers to, when the device knows (ADR-016).
+    public let homePlayerId: String?
+    public let awayPlayerId: String?
+
+    public func playerId(_ seat: Seat) -> String? { seat == .home ? homePlayerId : awayPlayerId }
 
     public var format: MatchFormat {
         MatchFormat(startingScore: startingScore, inRule: inRule, outRule: outRule,
@@ -393,6 +425,16 @@ public final class Journal {
         if try !columnNames(h, table: "local_match").contains("in_rule") {
             try exec(h, "ALTER TABLE local_match ADD COLUMN in_rule TEXT NOT NULL DEFAULT 'straight';")
         }
+        // Matches written before the device kept a book of who plays on it (ADR-016). Null is the
+        // honest value: nobody knows who those two names were, and a prompt can ask later. It is
+        // never guessed at, because guessing is how one person's history becomes another's.
+        let matchColumnNames = try columnNames(h, table: "local_match")
+        if !matchColumnNames.contains("home_player_id") {
+            try exec(h, "ALTER TABLE local_match ADD COLUMN home_player_id TEXT;")
+        }
+        if !matchColumnNames.contains("away_player_id") {
+            try exec(h, "ALTER TABLE local_match ADD COLUMN away_player_id TEXT;")
+        }
         // Append-only, enforced by the database rather than by discipline — the same property the
         // server's grants give evidence.event. Corrections, when they come, are new events.
         try exec(h, """
@@ -411,13 +453,15 @@ public final class Journal {
     public func createMatch(_ m: NewMatch, id: MatchId = MatchId(UUID().uuidString), startedAt: Date = Date()) throws -> MatchRecord {
         try run("""
             INSERT INTO local_match (match_id, home_name, away_name, starting_score, out_rule, legs_mode, legs_target,
-                               throw_first, started_at, device_id, in_rule)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+                               throw_first, started_at, device_id, in_rule, home_player_id, away_player_id)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
             """, [
                 .text(id.value), .text(m.homeName), .text(m.awayName), .int(Int64(m.startingScore)),
                 .text(m.outRule.rawValue), .text(m.legsMode == .bestOf ? "bestOf" : "firstTo"),
                 .int(Int64(m.legsTarget)), .text(m.throwFirst.rawValue),
                 .text(Journal.iso.string(from: startedAt)), .text(deviceId.value), .text(m.inRule.rawValue),
+                m.homePlayerId.map { Param.text($0) } ?? .null,
+                m.awayPlayerId.map { Param.text($0) } ?? .null,
             ])
         return try match(id)
     }
@@ -444,7 +488,7 @@ public final class Journal {
     /// `SELECT *` was doing exactly that, and adding in_rule was the change that would have found it.
     static let matchColumns = """
         match_id, home_name, away_name, starting_score, out_rule, legs_mode, legs_target, \
-        throw_first, started_at, in_rule
+        throw_first, started_at, in_rule, home_player_id, away_player_id
         """
 
     private static func record(from s: OpaquePointer) -> MatchRecord {
@@ -458,7 +502,9 @@ public final class Journal {
             legsMode: text(s, 5) == "firstTo" ? .firstTo : .bestOf,
             legsTarget: Int(sqlite3_column_int64(s, 6)),
             throwFirst: Seat(rawValue: text(s, 7)) ?? .home,
-            startedAt: iso.date(from: text(s, 8)) ?? Date(timeIntervalSince1970: 0)
+            startedAt: iso.date(from: text(s, 8)) ?? Date(timeIntervalSince1970: 0),
+            homePlayerId: sqlite3_column_type(s, 10) == SQLITE_NULL ? nil : text(s, 10),
+            awayPlayerId: sqlite3_column_type(s, 11) == SQLITE_NULL ? nil : text(s, 11)
         )
     }
 
@@ -704,6 +750,60 @@ public final class Journal {
             }
         }
         return (state, visits)
+    }
+
+    // MARK: - a person's history (ADR-016)
+
+    /// Everything this device can honestly say about one person's darts.
+    public struct PersonHistory: Sendable {
+        public let visits: [ReplayedVisit]
+        public let matches: Int
+        public let legsWon: Int
+        /// Matches of theirs whose rows would not replay. Counted and reported, never dropped —
+        /// an average computed over the readable half is a different number, not a smaller sample.
+        public let unreadable: Int
+        /// The out-rules across their matches. More than one means the checkout figures cannot be
+        /// pooled, because "was this visit thrown from a finishable position" depends on the rule.
+        public let outRules: Set<String>
+    }
+
+    /// Replays every match a person is named in and returns their visits, with legs renumbered.
+    ///
+    /// The renumbering is the part that would be a defect to skip: leg 1 of one match and leg 1 of
+    /// another are different legs, and pooling them would merge two players' best legs into one and
+    /// put six visits into a first-nine average. This repository has made that exact mistake once
+    /// already, by sharing visit ordinals between the two competitors.
+    public func history(of personId: String) throws -> PersonHistory {
+        var pooled: [ReplayedVisit] = []
+        var legOffset = 0
+        var matches = 0, legsWon = 0, unreadable = 0
+        var outRules: Set<String> = []
+
+        for record in try self.matches() {
+            let seats = Seat.allCases.filter { record.playerId($0) == personId }
+            guard !seats.isEmpty else { continue }
+            matches += 1
+            outRules.insert(record.outRule.rawValue)
+            do {
+                let replayed = try replayVisits(record.id)
+                let legsHere = replayed.visits.map(\.legOrdinal).max() ?? 0
+                for seat in seats {
+                    legsWon += replayed.state.legsWonTotal[seat.playerId] ?? 0
+                    for v in replayed.visits where v.seat == seat {
+                        pooled.append(ReplayedVisit(
+                            seat: v.seat, legOrdinal: legOffset + v.legOrdinal, visitOrdinal: v.visitOrdinal,
+                            visitTotal: v.visitTotal, dartsUsed: v.dartsUsed, dartsAtDouble: v.dartsAtDouble,
+                            remainingBefore: v.remainingBefore, remainingAfter: v.remainingAfter,
+                            bust: v.bust, wonLeg: v.wonLeg))
+                    }
+                }
+                legOffset += legsHere
+            } catch {
+                unreadable += 1
+            }
+        }
+        return PersonHistory(visits: pooled, matches: matches, legsWon: legsWon,
+                             unreadable: unreadable, outRules: outRules)
     }
 
     // MARK: - plumbing

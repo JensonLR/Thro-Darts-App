@@ -130,6 +130,9 @@ public struct ThroRootView: View {
     @StateObject private var clubs = ClubStore()
     @AppStorage(Appearance.storageKey) private var appearanceRaw: String = Appearance.system.rawValue
     @State private var showingSettings = false
+    /// The person whose page is open, if any. Their figures come from the journal, so this is the
+    /// one screen in the app where a statistic is about a person rather than about a match.
+    @State private var viewing: LocalPerson?
     /// PD-007: the opening plays once, at cold launch, over whatever the app shows first.
     @State private var opening = true
 
@@ -151,10 +154,15 @@ public struct ThroRootView: View {
 
     @ViewBuilder private var content: some View {
         if let flow = store.flow, let journal = store.journal {
-            PlayFlow(journal: journal, resume: resumeId(flow)) {
+            PlayFlow(journal: journal, resume: resumeId(flow),
+                     people: clubs.people,
+                     resolvePerson: { clubs.person(named: $0)?.id }) {
                 store.flow = nil
                 store.refresh()
             }
+        } else if let person = viewing {
+            PersonScreen(person: person, journal: store.journal, clubs: clubs.clubs) { viewing = nil }
+                .throAppearance(Appearance(stored: appearanceRaw))
         } else if showingSettings {
             SettingsScreen(onBack: { showingSettings = false },
                            onReplayOpening: { showingSettings = false; opening = true })
@@ -181,9 +189,10 @@ public struct ThroRootView: View {
         case .play: PlayLandingScreen(store: store)
         case .live: NotBuiltScreen(title: "Live")
         case .discover: ClubsFlow(store: clubs)
-        case .you: YouScreen(clubs: clubs.clubs,
+        case .you: YouScreen(clubs: clubs.clubs, people: clubs.people,
                              onSettings: { showingSettings = true },
-                             onClubs: { store.tab = .discover })
+                             onClubs: { store.tab = .discover },
+                             onPerson: { viewing = $0 })
         }
     }
 }
@@ -339,13 +348,18 @@ public struct PlayLandingScreen: View {
 /// itself is not renamed: the tab set is the export's.
 public struct YouScreen: View {
     private let clubs: [Club]
+    private let people: [LocalPerson]
     private let onSettings: () -> Void
     private let onClubs: () -> Void
+    private let onPerson: (LocalPerson) -> Void
 
-    public init(clubs: [Club] = [], onSettings: @escaping () -> Void, onClubs: @escaping () -> Void = {}) {
+    public init(clubs: [Club] = [], people: [LocalPerson] = [], onSettings: @escaping () -> Void,
+                onClubs: @escaping () -> Void = {}, onPerson: @escaping (LocalPerson) -> Void = { _ in }) {
         self.clubs = clubs
+        self.people = people
         self.onSettings = onSettings
         self.onClubs = onClubs
+        self.onPerson = onPerson
     }
 
     public var body: some View {
@@ -356,6 +370,22 @@ public struct YouScreen: View {
                     EmptyState(title: "Profile not in this build",
                                message: "Your profile, rating and passport need THRØ's servers. This build scores matches and keeps them on the device; nothing else is connected yet. Settings are behind the gear above.")
                         .padding(.top, ThroSpacing.spacing6)
+                    if !people.isEmpty {
+                        Eyebrow("Who plays on this phone").padding(.top, ThroSpacing.spaceSectionGap)
+                        ThroDivider().padding(.top, ThroSpacing.spacing2)
+                        ForEach(people) { person in
+                            Button { onPerson(person) } label: {
+                                HStack(spacing: ThroSpacing.spacing3) {
+                                    PlayerIdentity(PlayerRef(name: person.name), size: .small)
+                                    Spacer(minLength: 0)
+                                    Icon(.chevronRight, size: 16).foregroundStyle(ThroColor.colorTextSecondary)
+                                }
+                                .padding(.vertical, ThroSpacing.spacing2)
+                            }
+                            .buttonStyle(.plain)
+                            ThroDivider()
+                        }
+                    }
                     Eyebrow("Clubs you keep").padding(.top, ThroSpacing.spaceSectionGap)
                     if clubs.isEmpty {
                         Text("None on this phone. Start one under Discover and its roster and fixtures are kept here.")

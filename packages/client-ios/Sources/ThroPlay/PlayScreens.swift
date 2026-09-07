@@ -33,12 +33,23 @@ public struct PlayFlow: View {
 
     private let journal: Journal
     private let onExit: () -> Void
+    /// Who plays on this phone, and how a typed name becomes one of them (ADR-016).
+    ///
+    /// A closure rather than a store, because `ThroPlay` has no business knowing where the device's
+    /// book of people lives — it knows about matches. The default keeps every match unattributed,
+    /// which is exactly what every match written before ADR-016 is, and is readable for ever.
+    private let people: [LocalPerson]
+    private let resolvePerson: (String) -> String?
     @State private var step: Step
     @State private var problem: String?
 
     /// Starts a new match, or resumes `resume` where it left off.
-    public init(journal: Journal, resume: MatchId? = nil, onExit: @escaping () -> Void) {
+    public init(journal: Journal, resume: MatchId? = nil, people: [LocalPerson] = [],
+                resolvePerson: @escaping (String) -> String? = { _ in nil },
+                onExit: @escaping () -> Void) {
         self.journal = journal
+        self.people = people
+        self.resolvePerson = resolvePerson
         self.onExit = onExit
         var initial = Step.setup(home: "", away: "")
         var problem: String?
@@ -54,12 +65,23 @@ public struct PlayFlow: View {
         _problem = State(initialValue: problem)
     }
 
+    /// The same match, with each name resolved to the person it refers to. If the book cannot be
+    /// written the match is played and saved anyway, unattributed — losing a match to bookkeeping
+    /// would be a far worse failure than not knowing whose it was.
+    private func attributed(_ new: NewMatch) -> NewMatch {
+        NewMatch(homeName: new.homeName, awayName: new.awayName, startingScore: new.startingScore,
+                 inRule: new.inRule, outRule: new.outRule, legsMode: new.legsMode,
+                 legsTarget: new.legsTarget, throwFirst: new.throwFirst,
+                 homePlayerId: resolvePerson(new.homeName), awayPlayerId: resolvePerson(new.awayName))
+    }
+
     public var body: some View {
         switch step {
         case let .setup(home, away):
-            MatchSetupScreen(initialHome: home, initialAway: away, problem: problem, onBack: onExit) { new in
+            MatchSetupScreen(initialHome: home, initialAway: away, problem: problem, people: people,
+                             onBack: onExit) { new in
                 do {
-                    step = .ready(try MatchSession.start(new, in: journal))
+                    step = .ready(try MatchSession.start(attributed(new), in: journal))
                     problem = nil
                 } catch {
                     problem = "\(error)"
@@ -102,12 +124,25 @@ public struct MatchSetupScreen: View {
     private enum NameField: Hashable { case home, away }
 
     public init(initialHome: String = "", initialAway: String = "", problem: String? = nil,
+                people: [LocalPerson] = [],
                 onBack: @escaping () -> Void, onStart: @escaping (NewMatch) -> Void) {
         _home = State(initialValue: initialHome)
         _away = State(initialValue: initialAway)
+        self.people = people
         self.problem = problem
         self.onBack = onBack
         self.onStart = onStart
+    }
+
+    /// Who plays on this phone (ADR-016). Tapping one fills the field, which is the whole feature:
+    /// nobody wants to retype their opponent's name every Tuesday, and a name typed the same way
+    /// every time is what makes a person's matches theirs rather than three strangers'.
+    private let people: [LocalPerson]
+
+    /// The people not already chosen for the other seat, so the same person cannot be both players.
+    private func suggestions(excluding taken: String) -> [LocalPerson] {
+        let takenKey = taken.trimmingCharacters(in: .whitespaces).lowercased()
+        return people.filter { $0.name.lowercased() != takenKey }
     }
 
     private var homeName: String { home.trimmingCharacters(in: .whitespaces).isEmpty ? "Home" : home.trimmingCharacters(in: .whitespaces) }
@@ -128,11 +163,13 @@ public struct MatchSetupScreen: View {
                         .focused($focused, equals: .home)
                         .submitLabel(.next)
                         .onSubmit { focused = .away }
+                    known(suggestions(excluding: away)) { home = $0.name }
                     ThroTextField("Away player", text: $away, placeholder: "Name")
                         .modifier(NameEntry())
                         .focused($focused, equals: .away)
                         .submitLabel(.done)
                         .onSubmit { focused = nil }
+                    known(suggestions(excluding: home)) { away = $0.name }
                     ThroDivider()
                     choice("Game", SegmentedControl([(301, "301"), (501, "501"), (701, "701")], selection: $game))
                     choice("Length", SegmentedControl([(3, "Bo3"), (5, "Bo5"), (7, "Bo7"), (9, "Bo9")], selection: $length))
@@ -159,6 +196,32 @@ public struct MatchSetupScreen: View {
         }
         .background(ThroColor.colorBackgroundPrimary.ignoresSafeArea())
         .throAppearance(Appearance(stored: appearanceRaw))
+    }
+
+    /// The people this phone already knows, as a row of taps. Absent entirely when it knows nobody,
+    /// so a first match looks exactly as it did before any of this existed.
+    @ViewBuilder private func known(_ list: [LocalPerson], pick: @escaping (LocalPerson) -> Void) -> some View {
+        if !list.isEmpty {
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: ThroSpacing.spacing2) {
+                    ForEach(list) { person in
+                        Button { pick(person) } label: {
+                            Text(person.name)
+                                .thro(ThroTypography.metadata.weight(.semibold))
+                                .foregroundStyle(ThroColor.colorTextPrimary)
+                                .lineLimit(1)
+                                .padding(.vertical, 7)
+                                .padding(.horizontal, 12)
+                                .background(ThroColor.colorBackgroundSecondary,
+                                            in: Capsule())
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+                .padding(.vertical, 1)
+            }
+            .padding(.top, -ThroSpacing.spacing3)
+        }
     }
 
     private func choice<Control: View>(_ label: String, _ control: Control) -> some View {

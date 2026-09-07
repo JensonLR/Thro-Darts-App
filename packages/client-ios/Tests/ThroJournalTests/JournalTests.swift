@@ -452,4 +452,83 @@ final class JournalTests: XCTestCase {
             XCTAssertEqual(reason, "UNKNOWN_ROW_KIND")
         }
     }
+
+    // MARK: - who played (ADR-016)
+
+    /// A match remembers who its two names referred to, and a match written before the device kept
+    /// a book of people still reads — with nulls, which is the honest answer rather than a guess.
+    func testAMatchCarriesItsPlayersAndAnOlderOneReadsBackWithout() throws {
+        let j = try open()
+        let attributed = try j.createMatch(NewMatch(homeName: "Jenson", awayName: "Alex",
+                                                    homePlayerId: "p-jenson", awayPlayerId: "p-alex"))
+        let anonymous = try j.createMatch(NewMatch(homeName: "A", awayName: "B"))
+
+        let reopened = try Journal(path: path, deviceId: device)
+        let read = try reopened.match(attributed.id)
+        XCTAssertEqual(read.homePlayerId, "p-jenson")
+        XCTAssertEqual(read.awayPlayerId, "p-alex")
+        XCTAssertEqual(read.playerId(.home), "p-jenson")
+        XCTAssertEqual(read.playerId(.away), "p-alex")
+
+        let old = try reopened.match(anonymous.id)
+        XCTAssertNil(old.homePlayerId, "not knowing is a value, and it is not a guess")
+        XCTAssertNil(old.awayPlayerId)
+        XCTAssertEqual(old.homeName, "A", "and everything else about it is unchanged")
+    }
+
+    /// One person's visits pooled across their matches, with legs renumbered.
+    ///
+    /// The renumbering is the point. Leg 1 of one match and leg 1 of another are different legs, and
+    /// pooling them under the same ordinal would merge two best legs into one and put six visits in a
+    /// first-nine average — the same class of defect as sharing visit ordinals between competitors,
+    /// which this repository has already made once.
+    func testAPersonsVisitsArePooledAcrossMatchesWithLegsKeptApart() throws {
+        let j = try open()
+        for _ in 0..<2 {
+            let m = try j.createMatch(NewMatch(homeName: "Jenson", awayName: "Alex", startingScore: 101,
+                                               legsTarget: 1, homePlayerId: "p-jenson", awayPlayerId: "p-alex"))
+            try j.append(.visit(Seat.home.playerId, 60), to: m.id)
+            try j.append(.visit(Seat.away.playerId, 20), to: m.id)
+            try j.append(.visit(Seat.home.playerId, 41, dartsUsed: 2, dartsAtDouble: 1), to: m.id)
+        }
+        // A match the person is not in, so it must not be counted.
+        let other = try j.createMatch(NewMatch(homeName: "Sam", awayName: "Chris", startingScore: 101,
+                                               legsTarget: 1, homePlayerId: "p-sam", awayPlayerId: "p-chris"))
+        try j.append(.visit(Seat.home.playerId, 60), to: other.id)
+
+        let history = try j.history(of: "p-jenson")
+        XCTAssertEqual(history.matches, 2)
+        XCTAssertEqual(history.legsWon, 2, "they won both")
+        XCTAssertEqual(history.unreadable, 0)
+        XCTAssertEqual(history.outRules, ["double"])
+        XCTAssertEqual(history.visits.count, 4, "two visits each, and none of Sam's")
+        XCTAssertEqual(Set(history.visits.map(\.legOrdinal)).count, 2,
+                       "the two matches' legs stay apart rather than both being leg 1")
+        XCTAssertEqual(history.visits.map(\.visitTotal), [60, 41, 60, 41])
+
+        let alex = try j.history(of: "p-alex")
+        XCTAssertEqual(alex.matches, 2)
+        XCTAssertEqual(alex.legsWon, 0)
+        XCTAssertEqual(alex.visits.map(\.visitTotal), [20, 20])
+    }
+
+    /// A match of theirs that will not replay is counted and reported, never quietly dropped: an
+    /// average computed over the readable half is a different number, not a smaller sample.
+    func testAnUnreadableMatchOfTheirsIsCountedRatherThanSkipped() throws {
+        let j = try open()
+        let good = try j.createMatch(NewMatch(homeName: "Jenson", awayName: "Alex", startingScore: 101,
+                                              legsTarget: 1, homePlayerId: "p-jenson", awayPlayerId: "p-alex"))
+        try j.append(.visit(Seat.home.playerId, 60), to: good.id)
+        let bad = try j.createMatch(NewMatch(homeName: "Jenson", awayName: "Alex", startingScore: 101,
+                                             legsTarget: 1, homePlayerId: "p-jenson", awayPlayerId: "p-alex"))
+        try j.exec("""
+            INSERT INTO journal (match_id, device_id, device_seq, command_id, kind, seat, visit_total, occurred_at)
+            VALUES ('\(bad.id.value)', 'test-device', 1, 'not-a-kind', 'wager', 'home', 0, '2030-01-01T00:00:00.000Z');
+            """)
+
+        let history = try j.history(of: "p-jenson")
+        XCTAssertEqual(history.matches, 2, "both are theirs")
+        XCTAssertEqual(history.unreadable, 1, "and one of them says so")
+        XCTAssertEqual(history.visits.count, 1)
+    }
 }

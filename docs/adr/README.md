@@ -21,6 +21,7 @@ a guess wearing a suit.
 | [013](ADR-013-migrations.md) | Migrations and schema evolution | Accepted |
 | [014](ADR-014-configuration-and-policy.md) | Configuration and policy versioning | Accepted |
 | [015](ADR-015-notifications.md) | Notifications | Accepted |
+| [016](ADR-016-local-history-and-the-claim.md) | A local history, and how it is claimed by an account later | Accepted |
 
 ## Standing constraint on all of them
 

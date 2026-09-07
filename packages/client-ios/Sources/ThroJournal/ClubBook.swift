@@ -132,6 +132,16 @@ public final class ClubBook {
               PRIMARY KEY (club_id, member_id)
             );
             """)
+        // The people who play on this device (ADR-016). Not a club's roster — those are members of
+        // a club — but the device's own book: who has played here, so a match can say who its two
+        // names referred to, and so a claim can later attach all of one person's matches at once.
+        try Journal.exec(h, """
+            CREATE TABLE IF NOT EXISTS person (
+              person_id  TEXT PRIMARY KEY,
+              name       TEXT NOT NULL,
+              created_at TEXT NOT NULL
+            );
+            """)
         try Journal.exec(h, """
             CREATE TABLE IF NOT EXISTS club_fixture (
               club_id    TEXT NOT NULL REFERENCES club(club_id) ON DELETE CASCADE,
@@ -273,6 +283,50 @@ public final class ClubBook {
                 state: ClubBook.fixtureStates.contains(state) ? state : "scheduled"))
         }
         return out
+    }
+
+    // MARK: - people (ADR-016)
+
+    /// Everybody the device knows, by name.
+    public func people() throws -> [LocalPerson] {
+        var out: [LocalPerson] = []
+        try run("SELECT person_id, name FROM person ORDER BY name COLLATE NOCASE;", []) { s in
+            out.append(LocalPerson(id: Journal.text(s, 0), name: Journal.text(s, 1)))
+        }
+        return out
+    }
+
+    /// The person this name refers to, adding them if the device has not seen them before.
+    ///
+    /// Matching is case- and space-insensitive on purpose: "jenson" typed at the oche on a Tuesday
+    /// is the same player as "Jenson" typed on the Thursday, and a book that treated them as two
+    /// people would split one person's history in half with nothing to say it had.
+    ///
+    /// It matches on the name alone, which is the honest limit of what a phone can know: two
+    /// different people called Alex who both play here will share a row until somebody says
+    /// otherwise. Nothing is lost by that today — the alternative is asking every stranger to
+    /// disambiguate themselves, which nobody would do — and the day it matters is the day accounts
+    /// exist, when a claim is a person saying which one is theirs.
+    @discardableResult
+    public func person(named name: String, id: String = UUID().uuidString,
+                       createdAt: Date = Date()) throws -> LocalPerson {
+        let clean = try ClubBook.checkedName(name)
+        let key = ClubBook.fold(clean)
+        for existing in try people() where ClubBook.fold(existing.name) == key { return existing }
+        try run("INSERT INTO person (person_id, name, created_at) VALUES (?, ?, ?);",
+                [.text(id), .text(clean), .text(Journal.iso.string(from: createdAt))])
+        return LocalPerson(id: id, name: clean)
+    }
+
+    /// Corrects a person's name. Their matches follow, because the matches hold the id.
+    public func renamePerson(_ personId: String, to name: String) throws {
+        let clean = try ClubBook.checkedName(name)
+        try run("UPDATE person SET name = ? WHERE person_id = ?;", [.text(clean), .text(personId)])
+    }
+
+    /// How two names are compared when deciding whether they are the same person.
+    static func fold(_ name: String) -> String {
+        name.lowercased().split(whereSeparator: { $0 == " " || $0 == "\t" }).joined(separator: " ")
     }
 
     // MARK: - guards

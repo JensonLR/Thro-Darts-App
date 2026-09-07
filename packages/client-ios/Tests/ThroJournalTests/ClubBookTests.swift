@@ -176,6 +176,47 @@ final class ClubBookTests: XCTestCase {
     }
 }
 
+extension ClubBookTests {
+
+    // MARK: - the book of people (ADR-016)
+
+    /// A name typed differently is the same player. A book that treated "jenson" and "Jenson" as two
+    /// people would split one person's history in half with nothing anywhere saying it had.
+    func testTheSamePersonTypedDifferentlyIsTheSamePerson() throws {
+        let book = try open()
+        let first = try book.person(named: "Jenson")
+        let again = try book.person(named: "  jenson  ")
+        let spaced = try book.person(named: "jenson")
+        XCTAssertEqual(first.id, again.id)
+        XCTAssertEqual(first.id, spaced.id)
+        XCTAssertEqual(first.name, "Jenson", "and the first spelling is the one kept")
+        XCTAssertEqual(try book.people().count, 1)
+
+        let other = try book.person(named: "Alex")
+        XCTAssertNotEqual(first.id, other.id)
+        XCTAssertEqual(try book.people().map(\.name), ["Alex", "Jenson"], "listed by name")
+    }
+
+    func testARenameKeepsTheSamePersonSoTheirMatchesFollow() throws {
+        let book = try open()
+        let person = try book.person(named: "Jensn")
+        try book.renamePerson(person.id, to: "Jenson")
+        XCTAssertEqual(try book.people().map(\.name), ["Jenson"])
+        XCTAssertEqual(try book.people().map(\.id), [person.id], "the same person, corrected")
+
+        // And the corrected spelling is now what matches to.
+        XCTAssertEqual(try book.person(named: "jenson").id, person.id)
+    }
+
+    func testAPersonNeedsAName() throws {
+        let book = try open()
+        XCTAssertThrowsError(try book.person(named: " ")) { error in
+            XCTAssertEqual(error as? ClubBookError, .blankName)
+        }
+        XCTAssertEqual(try book.people().count, 0)
+    }
+}
+
 private extension ClubBook {
     /// A club whose only interesting property is its accent, for the accent refusals.
     func createThrowaway(_ accent: String) throws {

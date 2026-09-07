@@ -386,6 +386,57 @@ public final class MatchSession: ObservableObject {
     }
 }
 
+/// What this device can honestly say about one person's darts, across every match they played on it.
+///
+/// The same honesty layer as a single match's figures — the audited `Statistics` functions, not a
+/// second arithmetic written for profiles — over the person's pooled visits, with legs renumbered by
+/// the journal so per-leg figures do not merge one match's leg 1 with another's.
+///
+/// **Checkout percentage is refused when the person has played under more than one out-rule.**
+/// Whether a visit was thrown from a finishable position depends on the rule, so pooling visits from
+/// a double-out match and a straight-out one gives a number that is not a checkout percentage of
+/// anything. Refusing it is a fact about the sample, and it says so rather than showing a figure.
+public enum PersonSummary {
+    public static func figures(for personId: String, in journal: Journal) throws -> [StatLine] {
+        let history = try journal.history(of: personId)
+        let records = history.visits.map {
+            VisitRecord(legOrdinal: $0.legOrdinal, visitOrdinal: $0.visitOrdinal, visitTotal: $0.visitTotal,
+                        dartsUsed: $0.dartsUsed, bust: $0.bust, remainingBefore: $0.remainingBefore,
+                        remainingAfter: $0.remainingAfter, wonLeg: $0.wonLeg, dartsAtDouble: $0.dartsAtDouble)
+        }
+        let checkout: Stat
+        if let only = history.outRules.first, history.outRules.count == 1,
+           let rule = OutRule(rawValue: only) {
+            checkout = Statistics.checkoutPercentage(records, checkable: RuleTables.checkouts(rule))
+        } else if history.outRules.isEmpty {
+            checkout = Stat.unavailable("No matches on this device yet.")
+        } else {
+            checkout = Stat.unavailable(
+                "These matches were played under \(history.outRules.count) different out-rules, and "
+                + "whether a visit began on a finish depends on the rule. Pooling them would not be a "
+                + "checkout percentage of anything.")
+        }
+        var lines: [StatLine] = [
+            StatLine(label: "Matches", value: "\(history.matches)",
+                     note: history.unreadable > 0
+                         ? "\(history.unreadable) more could not be replayed and are not counted here."
+                         : nil),
+            StatLine(label: "Legs won", value: "\(history.legsWon)", note: nil),
+            StatPresentation.line("3-dart average", Statistics.threeDartAverage(records), kind: .average),
+            StatPresentation.line("Checkout %", checkout, kind: .percent),
+            StatPresentation.line("180s", Statistics.maximums(records), kind: .count),
+            StatPresentation.line("Highest checkout", Statistics.highestCheckout(records), kind: .count),
+        ]
+        if history.matches == 0 {
+            lines = lines.map {
+                StatLine(label: $0.label, value: $0.label == "Matches" || $0.label == "Legs won" ? "0" : "—",
+                         note: $0.note ?? "No matches on this device yet.")
+            }
+        }
+        return lines
+    }
+}
+
 /// A statistic as text. EXACT is a number; BOUNDED is a range and says so; UNAVAILABLE is a dash
 /// and says why. A bounded figure is never collapsed to a point value.
 public struct StatLine: Identifiable, Equatable, Sendable {

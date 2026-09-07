@@ -3,6 +3,7 @@ import SwiftUI
 import ThroTokens
 import ThroDesign
 import ThroJournal
+import ThroPlay
 
 // Clubs on the phone, wired to the book that holds them (PD-009, PD-010).
 //
@@ -54,11 +55,13 @@ public final class ClubStore: ObservableObject {
     }
 
     public func refresh() {
-        guard let book else { clubs = []; return }
+        guard let book else { clubs = []; people = []; return }
         do {
             clubs = try book.clubs().map { try ClubStore.assemble($0, from: book) }
+            people = try book.people()
         } catch {
             clubs = []
+            people = []
             writeProblem = "\(error)"
         }
     }
@@ -116,6 +119,32 @@ public final class ClubStore: ObservableObject {
     @discardableResult
     public func move(_ fixtureId: String, in clubId: String, to state: FixtureState) -> Bool {
         write { try $0.moveFixture(fixtureId, in: clubId, to: state.rawValue) }
+    }
+
+    // MARK: - people (ADR-016)
+
+    /// Everybody who has played on this device.
+    @Published public private(set) var people: [LocalPerson] = []
+
+    /// The person a typed name refers to, adding them to the book if they are new.
+    ///
+    /// Returns nil only when the book could not be written, in which case the match is still played
+    /// and still saved — it simply carries no player id, which is the same state every match written
+    /// before ADR-016 is in, and is recoverable later.
+    public func person(named name: String) -> LocalPerson? {
+        guard let book else { return nil }
+        do {
+            let found = try book.person(named: name)
+            people = try book.people()
+            return found
+        } catch {
+            writeProblem = "\(error)"
+            return nil
+        }
+    }
+
+    public func rename(person id: String, to name: String) -> Bool {
+        write { try $0.renamePerson(id, to: name) }
     }
 
     // MARK: - the mapping
@@ -545,3 +574,58 @@ public struct NewFixtureScreen: View {
         .background(ThroColor.colorBackgroundPrimary.ignoresSafeArea())
     }
 }
+
+// MARK: - one person's page (ADR-016)
+
+/// A person who plays on this phone, and what this phone can honestly say about their darts.
+///
+/// This is the profile screen with real numbers in it. They are real because the matches on this
+/// device now say **who** each name referred to (ADR-016), so a person's visits can be pooled across
+/// every match they played here — through the same audited honesty layer a single match's figures
+/// go through, not a second arithmetic written for profiles.
+///
+/// What it does not claim: these are self-reported matches on one phone. They are attributable, not
+/// verified, and the screen says so where the export puts the verification line.
+public struct PersonScreen: View {
+    private let person: LocalPerson
+    private let journal: Journal?
+    private let clubs: [Club]
+    private let onBack: () -> Void
+    @State private var figures: [StatLine] = []
+    @State private var problem: String?
+
+    public init(person: LocalPerson, journal: Journal?, clubs: [Club] = [],
+                onBack: @escaping () -> Void = {}) {
+        self.person = person
+        self.journal = journal
+        self.clubs = clubs
+        self.onBack = onBack
+    }
+
+    public var body: some View {
+        ProfileScreen(name: person.name,
+                      meta: problem ?? "Matches played on this phone",
+                      heading: "On this phone",
+                      figures: figures.map {
+                          ProfileScreen.Figure(value: $0.value, label: $0.label, unavailable: $0.note)
+                      },
+                      clubs: clubs,
+                      onBack: onBack)
+            .task { load() }
+    }
+
+    private func load() {
+        guard let journal else {
+            problem = "The journal could not be opened, so there are no figures to show."
+            return
+        }
+        do {
+            figures = try PersonSummary.figures(for: person.id, in: journal)
+            problem = nil
+        } catch {
+            figures = []
+            problem = "Their matches could not be read: \(error)"
+        }
+    }
+}
+

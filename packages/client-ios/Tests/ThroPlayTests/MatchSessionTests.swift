@@ -519,4 +519,59 @@ final class MatchSessionTests: XCTestCase {
         XCTAssertTrue(s.standing.stale)
         XCTAssertEqual(s.standing.confirmed, [.home, .away], "and it is still on the record, not deleted")
     }
+
+    // MARK: - a person's figures across matches (ADR-016)
+
+    /// The profile's numbers come from the same audited honesty layer a match's do, over the
+    /// person's pooled visits — not a second arithmetic written for profiles.
+    func testAPersonsFiguresAreComputedFromTheirOwnMatches() throws {
+        for _ in 0..<2 {
+            let m = try journal.createMatch(NewMatch(homeName: "Jenson", awayName: "Alex", startingScore: 101,
+                                                     legsTarget: 1, homePlayerId: "p-jenson", awayPlayerId: "p-alex"))
+            try journal.append(.visit(Seat.home.playerId, 60), to: m.id)
+            try journal.append(.visit(Seat.away.playerId, 20), to: m.id)
+            try journal.append(.visit(Seat.home.playerId, 41, dartsUsed: 2, dartsAtDouble: 1), to: m.id)
+        }
+
+        let figures = try PersonSummary.figures(for: "p-jenson", in: journal)
+        let by = Dictionary(uniqueKeysWithValues: figures.map { ($0.label, $0) })
+        XCTAssertEqual(by["Matches"]?.value, "2")
+        XCTAssertEqual(by["Legs won"]?.value, "2")
+        // 101 in five darts, twice: 202 scored off 10 darts = 60.6 per three.
+        XCTAssertEqual(by["3-dart average"]?.value, "60.6")
+        XCTAssertEqual(by["Highest checkout"]?.value, "41")
+        // 101 is itself a finish (T17 Bull), so the opening visit of each match began on one without
+        // recording its darts at a double — the honesty layer answers with a range and says why,
+        // rather than a point value it cannot support. Pooling does not change that.
+        XCTAssertTrue(by["Checkout %"]?.value.contains("–") == true,
+                      "expected a range, got \(by["Checkout %"]?.value ?? "")")
+        XCTAssertNotNil(by["Checkout %"]?.note)
+        XCTAssertNil(by["Matches"]?.note, "nothing unreadable, so nothing to say about it")
+    }
+
+    /// Checkout percentage is refused across mixed out-rules rather than pooled into a number that
+    /// is not a checkout percentage of anything: whether a visit began on a finish depends on the
+    /// rule, and this person played under two.
+    func testCheckoutPercentageIsRefusedAcrossMixedOutRules() throws {
+        let a = try journal.createMatch(NewMatch(homeName: "Jenson", awayName: "Alex", startingScore: 101,
+                                                 outRule: .double, legsTarget: 1, homePlayerId: "p-jenson"))
+        try journal.append(.visit(Seat.home.playerId, 60), to: a.id)
+        let b = try journal.createMatch(NewMatch(homeName: "Jenson", awayName: "Alex", startingScore: 101,
+                                                 outRule: .straight, legsTarget: 1, homePlayerId: "p-jenson"))
+        try journal.append(.visit(Seat.home.playerId, 60), to: b.id)
+
+        let figures = try PersonSummary.figures(for: "p-jenson", in: journal)
+        let checkout = figures.first { $0.label == "Checkout %" }
+        XCTAssertEqual(checkout?.value, "—")
+        XCTAssertTrue(checkout?.note?.contains("out-rules") == true, "and it says why: \(checkout?.note ?? "")")
+        // The rule-independent figure is still given, because it is still true.
+        XCTAssertEqual(figures.first { $0.label == "3-dart average" }?.value, "60.0")
+    }
+
+    func testSomebodyWithNoMatchesGetsDashesAndAReasonRatherThanZeroes() throws {
+        let figures = try PersonSummary.figures(for: "p-nobody", in: journal)
+        XCTAssertEqual(figures.first { $0.label == "Matches" }?.value, "0")
+        XCTAssertEqual(figures.first { $0.label == "3-dart average" }?.value, "—")
+        XCTAssertNotNil(figures.first { $0.label == "3-dart average" }?.note)
+    }
 }
