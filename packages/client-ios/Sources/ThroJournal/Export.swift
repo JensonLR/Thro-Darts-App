@@ -267,3 +267,59 @@ public extension ClubBook {
         }
     }
 }
+
+/// What a player is told when they open an export file to check it (PD-017).
+///
+/// **Why this exists at all.** `Export.read` and `Export.summary` were written, tested ten ways, and
+/// wired to nothing — `summary`'s own doc comment described "the screen that shows what was found",
+/// and there was no such screen. An export nobody can read back is a file a player has to *trust*
+/// worked, which is exactly the posture this repository is built to avoid. So the file can be opened
+/// and inspected.
+///
+/// **It writes nothing**, and there is no path from here that does. That is PD-017's decision, not a
+/// limitation of this type: merging an exported journal into a live one is the reconciliation ADR-006
+/// specifies for sync, and sync is not built.
+public enum ExportInspection: Equatable, Sendable {
+    /// The file is a THRØ export and its digest matches its content.
+    case readable(Readable)
+    /// It is not, or it has changed since it was written. The reason is the player's to read.
+    case refused(String)
+
+    public struct Readable: Equatable, Sendable {
+        public let summary: String
+        public let matches: Int
+        public let visits: Int
+        public let people: Int
+        public let clubs: Int
+        public let exportedAt: String
+        /// The device that wrote it. **Not** necessarily this one — a file can come from a phone
+        /// somebody no longer has, which is most of the point of having it.
+        public let deviceId: String
+        /// Whether it came from this device. Said rather than assumed either way.
+        public let fromThisDevice: Bool
+        /// Assets the file names but does not carry.
+        public let assetsNotIncluded: Int
+    }
+
+    /// Reads and describes a file. Never throws: a refusal is an answer, and one that reaches the
+    /// screen as a sentence rather than as an error the view has to interpret.
+    public static func of(_ data: Data, thisDevice: DeviceId? = nil) -> ExportInspection {
+        do {
+            let d = try Export.read(data)
+            return .readable(Readable(
+                summary: Export.summary(d),
+                matches: d.matches.count,
+                visits: d.journal.filter { $0.kind == "visit" }.count,
+                people: d.people.count,
+                clubs: d.clubs.count,
+                exportedAt: d.exportedAt,
+                deviceId: d.deviceId,
+                fromThisDevice: thisDevice.map { $0.value == d.deviceId } ?? false,
+                assetsNotIncluded: d.assetsNotIncluded.count))
+        } catch let error as ExportError {
+            return .refused(error.description)
+        } catch {
+            return .refused("This file could not be read: \(error)")
+        }
+    }
+}

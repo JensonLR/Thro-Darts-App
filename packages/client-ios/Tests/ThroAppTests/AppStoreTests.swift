@@ -142,4 +142,43 @@ final class AppStoreTests: XCTestCase {
         XCTAssertTrue(row(abandoned.id).complete)
         XCTAssertEqual(row(abandoned.id).ending, .abandoned)
     }
+
+    // MARK: - checking an export file (PD-017)
+
+    /// The picker's own two failures are not the file's fault and must not be reported as if they
+    /// were. Driven through the importer's `Result` rather than a file picker, so both are testable.
+    func testAFileThatCannotBeOpenedIsNotReportedAsABadExport() throws {
+        struct Denied: LocalizedError { var errorDescription: String? { "permission denied" } }
+
+        guard case let .refused(why) = SettingsScreen.inspect(.failure(Denied())) else {
+            return XCTFail("a picker failure is still an answer")
+        }
+        XCTAssertTrue(why.contains("could not be opened"), why)
+        XCTAssertTrue(why.contains("permission denied"), "and it carries the reason: \(why)")
+        XCTAssertFalse(why.contains("changed since"), "which is NOT the same as a forged file")
+
+        // A path that is not there is the same class of problem, and reads the same way.
+        let missing = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent("no-such-\(UUID()).json")
+        guard case let .refused(gone) = SettingsScreen.inspect(.success(missing)) else {
+            return XCTFail("a missing file is refused")
+        }
+        XCTAssertTrue(gone.contains("could not be opened"), gone)
+    }
+
+    /// And a real file on disk, chosen and read, describes itself.
+    func testAFileOnDiskIsReadAndDescribed() throws {
+        let j = try Journal(path: path, deviceId: DeviceId("home-tests"))
+        let m = try j.createMatch(NewMatch(homeName: "A", awayName: "B"))
+        try j.append(.visit(Seat.home.playerId, 60), to: m.id)
+
+        let url = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent("thro-\(UUID()).json")
+        try Export.data(try Export.make(j)).write(to: url)
+        defer { try? FileManager.default.removeItem(at: url) }
+
+        guard case let .readable(file) = SettingsScreen.inspect(.success(url), thisDevice: DeviceId("home-tests"))
+        else { return XCTFail("a file this device wrote must read back") }
+        XCTAssertEqual(file.matches, 1)
+        XCTAssertEqual(file.visits, 1)
+        XCTAssertTrue(file.fromThisDevice)
+    }
 }

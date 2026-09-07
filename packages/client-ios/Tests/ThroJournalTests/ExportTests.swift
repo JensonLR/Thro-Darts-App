@@ -178,4 +178,68 @@ final class ExportTests: XCTestCase {
         // And including it again puts it back, so the app can repair what it finds.
         XCTAssertEqual(BackupPolicy.include(excluded), .included)
     }
+
+    // MARK: reading one back
+
+    /// The reason this exists. `Export.read` and `Export.summary` had ten tests and no caller, and
+    /// `summary`'s own doc comment described a screen that did not exist — so a player had to
+    /// *trust* their export worked. These hold what the screen is told.
+    func testAGoodFileDescribesItselfInWordsAPlayerCanCheck() throws {
+        try aMatch(person: "person-1")
+        try aMatch()
+        let data = try Export.data(try Export.make(
+            journal, people: [LocalPerson(id: "person-1", name: "Jenson")],
+            assetsNotIncluded: ["badge-a"]))
+
+        guard case let .readable(file) = ExportInspection.of(data, thisDevice: DeviceId("export-tests")) else {
+            return XCTFail("a file this device just wrote must read back")
+        }
+        XCTAssertEqual(file.matches, 2)
+        XCTAssertEqual(file.visits, 4, "two visits in each")
+        XCTAssertEqual(file.people, 1)
+        XCTAssertEqual(file.assetsNotIncluded, 1)
+        XCTAssertTrue(file.fromThisDevice)
+        XCTAssertTrue(file.summary.contains("2 matches"), file.summary)
+        XCTAssertTrue(file.summary.contains("4 visits"), file.summary)
+    }
+
+    /// A file from a phone somebody no longer has is the ordinary case, not an error — it is most of
+    /// the point of keeping one. Said either way rather than assumed, and never claimed when there
+    /// is no device to compare against.
+    func testAFileFromAnotherPhoneIsReadableAndSaysSo() throws {
+        try aMatch()
+        let data = try Export.data(try Export.make(journal))
+
+        guard case let .readable(mine) = ExportInspection.of(data, thisDevice: DeviceId("export-tests")),
+              case let .readable(theirs) = ExportInspection.of(data, thisDevice: DeviceId("some-other-phone")),
+              case let .readable(unknown) = ExportInspection.of(data)
+        else { return XCTFail("all three readings must succeed") }
+        XCTAssertTrue(mine.fromThisDevice)
+        XCTAssertFalse(theirs.fromThisDevice, "a different device is not this one")
+        XCTAssertFalse(unknown.fromThisDevice, "and with nothing to compare against, no claim is made")
+        XCTAssertEqual(mine.matches, theirs.matches, "the file says the same thing either way")
+        XCTAssertEqual(mine.deviceId, "export-tests", "and it names who wrote it")
+    }
+
+    /// A refusal is an answer, and it reaches the screen as a sentence rather than an error the view
+    /// has to interpret. `of` never throws, so there is no path where a bad file shows nothing.
+    func testABadFileIsRefusedInWordsRatherThanThrowing() throws {
+        try aMatch()
+        let good = String(decoding: try Export.data(try Export.make(journal)), as: UTF8.self)
+
+        let forged = good.replacingOccurrences(of: "\"visitTotal\" : 180", with: "\"visitTotal\" : 140")
+        guard case let .refused(why) = ExportInspection.of(Data(forged.utf8)) else {
+            return XCTFail("a forged file must be refused")
+        }
+        XCTAssertTrue(why.contains("changed since it was exported"), why)
+
+        guard case let .refused(notOurs) = ExportInspection.of(Data("{}".utf8)) else {
+            return XCTFail("a json file that is not an export must be refused")
+        }
+        XCTAssertFalse(notOurs.isEmpty, "and it says why, in a sentence")
+
+        guard case .refused = ExportInspection.of(Data("not json at all".utf8)) else {
+            return XCTFail("and so must something that is not json")
+        }
+    }
 }

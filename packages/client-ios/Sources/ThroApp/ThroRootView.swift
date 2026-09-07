@@ -1,4 +1,5 @@
 import SwiftUI
+import UniformTypeIdentifiers
 import ThroTokens
 import ThroDesign
 import ThroJournal
@@ -514,6 +515,8 @@ public struct SettingsScreen: View {
     private let makeExport: (() throws -> URL)?
     @State private var exported: URL?
     @State private var exportProblem: String?
+    @State private var picking = false
+    @State private var inspection: ExportInspection?
 
     public init(onBack: @escaping () -> Void, onReplayOpening: (() -> Void)? = nil,
                 backupState: @escaping () -> BackupPolicy.State = { .unknown("no data folder in this build") },
@@ -621,6 +624,19 @@ public struct SettingsScreen: View {
                                 .thro(ThroTypography.metadata)
                                 .foregroundStyle(ThroColor.colorTextSecondary)
                                 .fixedSize(horizontal: false, vertical: true)
+
+                            // PD-017. An export nobody can read back is a file a player has to
+                            // *trust* worked. This opens one and says what is in it — and writes
+                            // nothing, which is the decision rather than a limitation.
+                            ThroButton("Check a file", variant: .ghost, size: .medium) { picking = true }
+                                .padding(.top, ThroSpacing.spacing2)
+                            if let inspection {
+                                inspected(inspection)
+                            }
+                            Text("Checking a file reads it and nothing else. Bringing one back into the app is not built: merging two journals is the same problem as syncing two phones, and doing it badly would leave a record that lies about what this phone wrote.")
+                                .thro(ThroTypography.metadata)
+                                .foregroundStyle(ThroColor.colorTextSecondary)
+                                .fixedSize(horizontal: false, vertical: true)
                         }
                     }
                     group("This build") {
@@ -634,6 +650,59 @@ public struct SettingsScreen: View {
             }
         }
         .background(ThroColor.colorBackgroundPrimary.ignoresSafeArea())
+        .fileImporter(isPresented: $picking, allowedContentTypes: [.json]) { result in
+            inspection = SettingsScreen.inspect(result)
+        }
+    }
+
+    /// Reads the picked file and describes it. Static and taking the importer's own result so the
+    /// whole path — including the two failures that are not the file's fault — is testable without
+    /// a file picker.
+    static func inspect(_ result: Result<URL, Error>, thisDevice: DeviceId? = nil) -> ExportInspection {
+        switch result {
+        case let .failure(error):
+            return .refused("That file could not be opened: \(error.localizedDescription)")
+        case let .success(url):
+            // A file chosen outside the app's own container needs its scope claimed for the read
+            // and released after it, whether or not the read succeeds.
+            let scoped = url.startAccessingSecurityScopedResource()
+            defer { if scoped { url.stopAccessingSecurityScopedResource() } }
+            guard let data = try? Data(contentsOf: url) else {
+                return .refused("That file could not be opened.")
+            }
+            return ExportInspection.of(data, thisDevice: thisDevice)
+        }
+    }
+
+    @ViewBuilder
+    private func inspected(_ inspection: ExportInspection) -> some View {
+        switch inspection {
+        case let .readable(file):
+            VStack(alignment: .leading, spacing: ThroSpacing.spacing2) {
+                Tag("Readable", tone: .success)
+                Text(file.summary)
+                    .thro(ThroTypography.body)
+                    .foregroundStyle(ThroColor.colorTextPrimary)
+                    .fixedSize(horizontal: false, vertical: true)
+                Text(file.fromThisDevice
+                     ? "Written by this phone."
+                     : "Written by a different phone. That is normal for a file you have kept or been sent.")
+                    .thro(ThroTypography.metadata)
+                    .foregroundStyle(ThroColor.colorTextSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                if file.assetsNotIncluded > 0 {
+                    Text("It names \(file.assetsNotIncluded) picture\(file.assetsNotIncluded == 1 ? "" : "s") it does not carry.")
+                        .thro(ThroTypography.metadata)
+                        .foregroundStyle(ThroColor.colorTextSecondary)
+                }
+            }
+            .padding(ThroSpacing.spacing4)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(RoundedRectangle(cornerRadius: ThroSpacing.radiusCard).fill(ThroColor.colorBackgroundRaised))
+            .overlay(RoundedRectangle(cornerRadius: ThroSpacing.radiusCard).strokeBorder(ThroColor.colorBorderDefault, lineWidth: 1))
+        case let .refused(why):
+            Snackbar(why, tone: .error)
+        }
     }
 
     private func toggleRow(icon: ThroIcon, label: String, isOn: Binding<Bool>) -> some View {
