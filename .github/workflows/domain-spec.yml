@@ -89,6 +89,13 @@ jobs:
       - name: The App Group holds together
         run: python3 tools/check_app_group.py
 
+      # And the association file, against the parser it has to agree with. A universal link iOS
+      # accepts and the app cannot read opens THRØ and does nothing — which looks exactly like the
+      # app being broken, on a link somebody shared. `ThroRoute` refuses an unknown path rather than
+      # guessing, deliberately, so the refusal is silent and the mismatch has to be caught here.
+      - name: The link file matches the parser
+        run: python3 tools/check_aasa.py
+
   journal:
     name: The on-device journal, on Android's half
     runs-on: ubuntu-latest

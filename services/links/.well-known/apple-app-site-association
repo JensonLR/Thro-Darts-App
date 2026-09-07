@@ -1,0 +1,21 @@
+{
+  "applinks": {
+    "details": [
+      {
+        "appIDs": ["2XM324WPD5.app.thro.darts"],
+        "components": [
+          { "/": "/m/*", "comment": "A match" },
+          { "/": "/match/*", "comment": "A match, spelled out" },
+          { "/": "/p/*", "comment": "A person" },
+          { "/": "/person/*", "comment": "A person, spelled out" },
+          { "/": "/e/*", "comment": "A club, league or tournament" },
+          { "/": "/club/*", "comment": "A club, spelled out" },
+          { "/": "/tab/*", "comment": "One of the five tabs" },
+          { "/": "/settings", "comment": "Settings" },
+          { "/": "/new", "comment": "Start a match" },
+          { "/": "/continue", "comment": "The match this phone walked away from" }
+        ]
+      }
+    ]
+  }
+}

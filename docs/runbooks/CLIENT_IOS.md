@@ -581,6 +581,16 @@ conformance corpus to be a legal finish of exactly that number under exactly tha
 
 ## What is not built
 
+**Universal links are ready and not turned on.** ADR-011's path grammar is fixed, the app's parser
+has always read `https://` paths as well as `thro://`, and the association file that a domain would
+serve is committed at `services/links/.well-known/apple-app-site-association` —
+`tools/check_aasa.py` holds it against the parser on every push. What is deliberately **not** there
+is the `associated-domains` entitlement: adding `applinks:thro.app` for a domain nobody owns makes
+iOS ask Apple's CDN for a file that is not there, and the app then silently never handles a link.
+`services/links/README.md` says the three steps once there is a domain. Note also that a link into a
+phone's own data opens nothing on anybody else's until there is a server, which is why the share
+card carries no link at all.
+
 **Two approved components describe a server THRØ does not have, and no screen constructs either.**
 `SyncState` — *"Synced · This match is saved to THRØ"* — and `OfflineState` — *"Changes will sync
 when connection returns"* — are in the design system and are drawn nowhere in this build, because
