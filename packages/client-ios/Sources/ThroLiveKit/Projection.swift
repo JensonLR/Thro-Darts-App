@@ -31,9 +31,14 @@ public struct ThroProjectedFixture: Codable, Equatable, Sendable {
     public let at: Date
     public let venue: String
 
+    /// **Stamped, like the projection's own timestamp.** This one was missed the first time, and the
+    /// failure was invisible in the test's output: `Date`'s description prints to whole seconds, so
+    /// the two sides of the equality assertion were byte-identical on screen and unequal in fact.
+    /// A file that does not read back as itself is a file that will one day disagree with the app
+    /// that wrote it.
     public init(title: String, at: Date, venue: String) {
         self.title = title
-        self.at = at
+        self.at = ThroProjection.stamped(at)
         self.venue = venue
     }
 }

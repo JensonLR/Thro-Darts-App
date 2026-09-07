@@ -71,7 +71,12 @@ public enum BackupPolicy {
     /// Reading a stale cache is assuming with extra steps. CI found it, intermittently, which is
     /// what a memoised value looks like from outside.
     public static func read(_ url: URL) -> State {
-        var target = url
+        // **A URL built from the path, not the one handed in.** Clearing the cache on a *copy* was
+        // not enough: a copied `URL` shares the backing the values were memoised on, so the copy
+        // answered with what the original had been told rather than with what is on disk. A value
+        // constructed from the path has no cache to answer from at all, which is the only version of
+        // this that does not depend on how copy-on-write happens to behave.
+        var target = URL(fileURLWithPath: url.path)
         target.removeAllCachedResourceValues()
         do {
             let values = try target.resourceValues(forKeys: [.isExcludedFromBackupKey])

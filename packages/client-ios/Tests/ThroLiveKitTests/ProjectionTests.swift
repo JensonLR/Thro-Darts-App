@@ -37,10 +37,24 @@ final class ProjectionTests: XCTestCase {
                        matches: 12, legsThisWeek: 9)
     }
 
-    func testWhatIsWrittenIsWhatIsRead() {
+    /// **The dates are asserted one at a time, before the whole thing.**
+    ///
+    /// `Date`'s description prints to whole seconds, so a sub-second difference makes
+    /// `XCTAssertEqual` print two byte-identical strings and say they are not equal — which is a
+    /// failure with no information in it, and cost a CI round to diagnose. Naming each date means
+    /// the next such failure says which one.
+    func testWhatIsWrittenIsWhatIsRead() throws {
         let written = projection()
         XCTAssertTrue(ThroProjectionStore.write(written, to: url))
-        XCTAssertEqual(ThroProjectionStore.read(from: url), written)
+        let read = try XCTUnwrap(ThroProjectionStore.read(from: url))
+
+        XCTAssertEqual(read.writtenAt.timeIntervalSince1970,
+                       written.writtenAt.timeIntervalSince1970, accuracy: 0,
+                       "writtenAt did not survive the file")
+        XCTAssertEqual(read.nextFixture?.at.timeIntervalSince1970,
+                       written.nextFixture?.at.timeIntervalSince1970,
+                       "the fixture's instant did not survive the file")
+        XCTAssertEqual(read, written)
     }
 
     /// A widget on a phone with no App Group entitlement — a package test, a build without the
@@ -146,6 +160,16 @@ final class ProjectionTests: XCTestCase {
         XCTAssertEqual(projection.writtenAt, ThroProjection.stamped(awkward))
         XCTAssertTrue(ThroProjectionStore.write(projection, to: url))
         XCTAssertEqual(ThroProjectionStore.read(from: url)?.writtenAt, projection.writtenAt)
+    }
+
+    /// The fixture's instant is stamped too, and it was not the first time. Every `Date` that goes
+    /// into this file has to survive it, not only the one at the top.
+    func testEveryInstantInTheFileIsOneTheFileCanHold() {
+        let awkward = Date(timeIntervalSince1970: 1_800_000_000.987_654)
+        let fixture = ThroProjectedFixture(title: "Home to The Bell", at: awkward, venue: "The Bell")
+        XCTAssertEqual(fixture.at, ThroProjection.stamped(awkward))
+        XCTAssertEqual(fixture.at.timeIntervalSince1970.truncatingRemainder(dividingBy: 1), 0,
+                       accuracy: 0.0005, "the format holds whole seconds")
     }
 
     /// The group id is written down in three places — here, and the two entitlements files — and a
