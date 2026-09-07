@@ -576,6 +576,20 @@ app can do reaches those.* Not "this cannot be undone", which every app says and
 
 ### Bare and basic (PD-027)
 
+**The Live tab said "not built", and that was nearly true and not true enough.** You cannot watch
+somebody else's match on a phone with no network, and this build still says so. But *nothing live*
+was never right: a match in progress on this device is the most live thing THRØ has, and a fixture
+somebody played that nobody has entered a result for is the one row an official actually has to act
+on. Live now shows both, across every club on the phone, from the journal and the club book, with
+the honest sentence at the bottom where an absence belongs. Nothing is scheduled, predicted or
+invented — including the ordering, which is the order an official typed the fixtures in, because
+`Fixture.when` is a line of text somebody wrote and not a date this app can sort by. Saying that is
+better than sorting text and calling it a diary.
+
+`NotBuiltScreen` was then reachable from nothing, and `tools/check_screens_reachable.py` said so on
+the next run. It is deleted rather than kept for later — which is the rule that checker exists for.
+
+
 Home was a system title bar, a list of rows and a button: everything on it was reachable from it and
 nothing on it was known by it. It now answers three questions before a finger moves, in the order
 they matter — *is there a match I walked away from*, *what have I been throwing*, *what happened

@@ -337,7 +337,7 @@ public struct ThroRootView: View {
         switch store.tab {
         case .home: HomeScreen(store: store)
         case .play: PlayLandingScreen(store: store)
-        case .live: NotBuiltScreen(title: "Live")
+        case .live: LiveScreen(store: store, clubs: clubs.clubs, onClubs: { store.tab = .discover })
         case .discover: ClubsFlow(store: clubs)
         case .you: YouScreen(clubs: clubs.clubs, people: clubs.people,
                              badge: { clubs.image($0.badgeAssetId) },
@@ -1356,25 +1356,144 @@ public struct SettingsRow: View {
     }
 }
 
-/// The tabs the export draws and this build cannot honestly fill. They say so.
-public struct NotBuiltScreen: View {
-    let title: String
+/// The Live tab: what is happening now, on this phone.
+///
+/// **It was a screen that said "not built".** In an app with no network that is nearly true — you
+/// cannot watch somebody else's match, and this build says so, at the bottom, where an absence
+/// belongs. But *nothing live* was never true: a match in progress on this device is the most live
+/// thing THRØ has, and a fixture somebody played and nobody has entered a result for is the one row
+/// an official actually has to act on.
+///
+/// Everything here is read from the journal and the club book. **Nothing is scheduled, predicted or
+/// invented** — including the ordering, which is the order an official typed the fixtures in,
+/// because `Fixture.when` is a line of text an official wrote and not a date this app can sort by.
+/// Saying that is better than sorting text and calling it a diary.
+public struct LiveScreen: View {
+    @ObservedObject var store: AppStore
+    private let clubs: [Club]
+    private let onClubs: () -> Void
 
-    public init(title: String) { self.title = title }
+    public init(store: AppStore, clubs: [Club] = [], onClubs: @escaping () -> Void = {}) {
+        self.store = store
+        self.clubs = clubs
+        self.onClubs = onClubs
+    }
+
+    private var inProgress: [AppStore.HomeMatch] {
+        store.matches.filter { !$0.complete && $0.unreadable == nil }
+    }
+
+    /// Played, and nobody has said what happened — across every club on this phone. A league's own
+    /// screen leads with these for one league; this is all of them at once, which is the only place
+    /// somebody keeping three clubs can see the whole of what they owe.
+    private var awaiting: [(club: Club, fixture: Fixture)] {
+        clubs.flatMap { club in club.fixturesAwaitingResults.map { (club, $0) } }
+    }
+
+    private var upcoming: [(club: Club, fixture: Fixture)] {
+        clubs.flatMap { club in club.upcomingFixtures.map { (club, $0) } }
+    }
 
     public var body: some View {
         VStack(spacing: 0) {
-            TopBar(title, large: true)
+            TopBar("Live", large: true)
             ScrollView {
-                EmptyState(title: "Not in this build",
-                           message: "\(title) needs THRØ's servers. This build scores matches and keeps them on the device; nothing else is connected yet.")
-                    .padding(.vertical, ThroSpacing.spacing6)
-                    .padding(.horizontal, ThroSpacing.spaceScreenGutter)
+                VStack(alignment: .leading, spacing: 0) {
+                    if inProgress.isEmpty && awaiting.isEmpty && upcoming.isEmpty {
+                        block {
+                            EmptyState(title: "Nothing on right now",
+                                       message: "A match you are scoring shows here while it is going, and so do fixtures your clubs have not finished with.",
+                                       actionLabel: "Start match") { store.flow = .new }
+                        }
+                        .throEntrance(0)
+                    }
+                    if !inProgress.isEmpty {
+                        block {
+                            SectionHeader("On this phone", meta: inProgress.count == 1 ? "1 match" : "\(inProgress.count) matches")
+                            ForEach(inProgress) { match in
+                                ContinueCard(match: match) { store.flow = .resume(match.id) }
+                            }
+                        }
+                        .throEntrance(0)
+                    }
+                    if !awaiting.isEmpty {
+                        block {
+                            SectionHeader("Waiting on a result", meta: "\(awaiting.count)")
+                            Note("**Played, and nobody has said what happened.** Until somebody "
+                                 + "does, these count for nothing in a table — not as a nil-nil, "
+                                 + "and not as a win for anybody.")
+                            ForEach(awaiting, id: \.fixture.id) { row in
+                                LiveFixtureRow(club: row.club, fixture: row.fixture, action: onClubs)
+                                ThroDivider()
+                            }
+                        }
+                        .throEntrance(1)
+                    }
+                    if !upcoming.isEmpty {
+                        block {
+                            SectionHeader("Still to play", meta: "\(upcoming.count)")
+                            ForEach(upcoming, id: \.fixture.id) { row in
+                                LiveFixtureRow(club: row.club, fixture: row.fixture, action: onClubs)
+                                ThroDivider()
+                            }
+                            Note("**In the order they were entered.** A fixture's date is a line an "
+                                 + "official typed, not something this app reads, so it is not "
+                                 + "sorted into a diary it cannot honestly build.")
+                        }
+                        .throEntrance(2)
+                    }
+                    block {
+                        Eyebrow("Not in this build")
+                        Note("**Watching somebody else's match needs THRØ's servers.** There is no "
+                             + "network code in this app at all, so nothing here has come from "
+                             + "anywhere but this phone.")
+                    }
+                    .throEntrance(3)
+                }
+                .padding(.bottom, ThroSpacing.spacing6)
             }
         }
-        // The screen arrives (PD-027): one beat, on the design's own curve,
-        // withdrawn entirely under Reduce Motion.
-        .throEntrance(0)
         .background(ThroColor.colorBackgroundPrimary.ignoresSafeArea())
     }
+
+    private func block<Content: View>(@ViewBuilder _ content: () -> Content) -> some View {
+        VStack(alignment: .leading, spacing: ThroSpacing.spacing3) { content() }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.vertical, ThroSpacing.spacing6)
+            .padding(.horizontal, ThroSpacing.spaceScreenGutter)
+    }
 }
+
+/// One fixture on the Live tab, said with the club it belongs to — which the club's own fixture list
+/// does not need to say and this one does, because here they are mixed together.
+struct LiveFixtureRow: View {
+    let club: Club
+    let fixture: Fixture
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: ThroSpacing.spacing3) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(fixture.title)
+                        .thro(ThroTypography.label.weight(.semibold))
+                        .foregroundStyle(ThroColor.colorTextPrimary)
+                        .lineLimit(1)
+                    Text([club.name, fixture.when, fixture.venue].filter { !$0.isEmpty }.joined(separator: " · "))
+                        .thro(ThroTypography.metadata)
+                        .foregroundStyle(ThroColor.colorTextSecondary)
+                        .lineLimit(1)
+                }
+                Spacer(minLength: ThroSpacing.spacing2)
+                Tag(fixture.state.label, tone: fixture.awaitsResult ? .warning : .info)
+                Icon(.chevronRight, size: 16).foregroundStyle(ThroColor.colorTextTertiary)
+            }
+            .padding(.vertical, ThroSpacing.spacing3)
+            .frame(minHeight: ThroSpacing.touchTargetMinimum)
+            .throRowTapTarget()
+        }
+        .buttonStyle(ThroPressStyle(radius: ThroSpacing.radiusCard,
+                                    pressedFill: ThroColor.colorSurfaceSecondary, scales: false))
+    }
+}
+

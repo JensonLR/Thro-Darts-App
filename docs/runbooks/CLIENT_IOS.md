@@ -164,10 +164,20 @@ exactly what CI does (`xcodebuild -scheme ThroDarts -destination 'generic/platfo
 
 ## What you will see
 
-- **Home.** *No matches yet* with one action: **Start match**. Once matches exist, they are listed under *On this device* with the legs,
-  the format, when they started, and *Self-reported* or *In progress*. Tapping one resumes it or
-  opens its result. The tab bar's *Live* says plainly that it is not in this build; *You* says the
-  profile is not built and carries the export's settings action in its header.
+- **Home.** The mark on the board's own dark surface, and under it a fact — how many matches this
+  phone has watched this week. Then the match you walked away from, if there is one, as the largest
+  thing on the screen; then **Last 7 days**, three figures from the audited honesty layer (a new
+  phone shows three dashes and says why, because a number without its sample is a claim); then the
+  record under *On this device*, with **Edit** revealing an archive and a delete on every row; then
+  the shelf, if anything is on it. Tapping a match resumes it or opens its result.
+- **Live.** What is actually happening: matches in progress on this phone, fixtures your clubs have
+  played and nobody has entered a result for, and fixtures still to play. It says at the bottom that
+  watching somebody else's match needs THRØ's servers, which are not in this build.
+- **Play.** The match still going, **Start match**, what was played last time — read back from the
+  journal rather than remembered separately — and the last three matches.
+- **You.** Who plays on this phone and the clubs you keep, with the note that a profile, a passport
+  and a rating need THRØ's servers **at the bottom**, where an absence belongs. The export's
+  settings action is in the header.
 - **Scoring.** When the thrower is on a finish, the route appears under the remaining score —
   *T20 T20 D20* for 160 (PD-013). It is **one** route: most finishes have several and players
   disagree, so THRØ takes a position and `docs/product/DECISIONS.md` states the rule it takes it by.
@@ -561,7 +571,7 @@ rather than guessing.
 
 No network, sync or server calls of any kind — the module graph has no network target, which is how
 LATENCY_BUDGETS.md's structural requirement is enforced. No attestation, no rating (OD-001), no
-identity or sign-in (item 6), no organiser surface, no Live tab. Clubs exist on the device only:
+identity or sign-in (item 6), no organiser surface, and nothing live from anybody else — the Live tab shows this phone's own matches and its own clubs' unfinished fixtures, and says so. Clubs exist on the device only:
 nothing is published, no club can be joined or searched for, and no announcement can be sent — the
 composer exists and refuses, with the reason. A player profile is reachable from a club's roster and
 shows dashes with reasons where a figure would be, because nothing on this device is attributed to
