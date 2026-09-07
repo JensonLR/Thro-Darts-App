@@ -551,7 +551,7 @@ struct Masthead: View {
                 .accessibilityAddTraits(.isHeader)
             Text(line)
                 .thro(ThroTypography.label)
-                .foregroundStyle(ThroColor.throChalk.opacity(0.72))
+                .foregroundStyle(ThroColor.throChalk.opacity(0.78))
                 .lineLimit(2)
                 .fixedSize(horizontal: false, vertical: true)
         }
@@ -559,15 +559,19 @@ struct Masthead: View {
         .padding(.horizontal, ThroSpacing.spaceScreenGutter)
         .padding(.top, ThroSpacing.spacing6)
         .padding(.bottom, ThroSpacing.spacing6)
-        .background(alignment: .bottom) {
-            ZStack(alignment: .bottom) {
-                ThroColor.throChalkSunken
-                // A single hairline where the board meets the page, the same one the scoring screen
-                // uses between the board and the keypad. It is what stops a dark block from reading
-                // as a coloured rectangle somebody dropped on the screen.
-                Rectangle().fill(ThroColor.throChalkHairline).frame(height: 1)
-            }
-            .ignoresSafeArea(edges: .top)
+        // **The brand field, and chalk on it.** The first draft of this used `throChalkSunken` for
+        // the band — a *light* neutral — under `throChalk` text: 1.08:1, which is invisible. The
+        // `thro*` primitives are the raw palette and are not appearance-aware; `chalk` is the
+        // near-white and `ink` is the dark, and I had them the wrong way round.
+        //
+        // What it is now is the field the app launches on, so Home opens on the same green the
+        // opening's first frame is: `colorBackgroundBrand` — throGreen in light, throGreenDeep in
+        // dark — with **`throChalk` rather than `colorTextInverse`**, because `colorTextInverse` is
+        // *ink* in dark mode and lands at 1.99:1 on the brand surface, which is one of the design's
+        // 21 recorded exceptions. Chalk measures 11.24:1 light and 8.75:1 dark at full strength,
+        // and 6.61 / 5.39 for the line beneath it. `build.py` now checks that pair on every push.
+        .background {
+            ThroColor.colorBackgroundBrand.ignoresSafeArea(edges: .top)
         }
     }
 }
@@ -588,7 +592,7 @@ struct ContinueCard: View {
                 Spacer(minLength: ThroSpacing.spacing2)
                 Text(match.record.startedAt.formatted(date: .abbreviated, time: .shortened))
                     .thro(ThroTypography.metadata)
-                    .foregroundStyle(ThroColor.colorTextTertiary)
+                    .foregroundStyle(ThroColor.colorTextSecondary)
                     .lineLimit(1)
             }
             HStack(alignment: .firstTextBaseline, spacing: ThroSpacing.spacing3) {

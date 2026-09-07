@@ -608,6 +608,20 @@ ordinal per match would have handed `bestLegInVisits` a leg containing *both* pl
 first screen of the app would have reported every 15-visit leg as a 30-visit one. Each seat of each
 match gets its own block of ordinals; a test plays a five-visit leg and asserts the answer is three.
 
+**And the first version of that masthead was invisible.** I reached for `throChalkSunken` as "the
+board's own dark surface" and put `throChalk` text on it: **1.08:1**. The `thro*` tokens are the raw
+brand palette and are not appearance-aware — `chalk` is the near-white and `ink` is the dark — and I
+had them the wrong way round. Nothing would have caught it: the design system's contrast gate checks
+token *pairs* it has been told about, and this was a pairing no pair covered.
+
+The masthead is the **brand field** now, so Home opens on the same green the opening's first frame
+is: `colorBackgroundBrand` with **`throChalk` rather than `colorTextInverse`**, because
+`colorTextInverse` is *ink* in dark mode and lands at 1.99:1 on the brand surface — one of the
+design's 21 recorded exceptions, and the trap the appearance-aware name walks you into. Chalk
+measures 11.24:1 light and 8.75:1 dark. **The pair is now in `PAIRS_TEXT`**, so the gate covers it
+on every push and the next person reaching for the token that reads like the right one is stopped by
+a check rather than by a screenshot.
+
 **Inside a match, the two reveals were cuts.** A bust and a won leg — the two things PD-005 exists
 to announce — put a card on the screen on one frame and took it off on the next. The scrim fades
 now and the card lands on `motionEasingImpact`, which is the same physics as the strike that caused

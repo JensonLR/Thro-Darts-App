@@ -345,6 +345,12 @@ PAIRS_TEXT = [("--color-text-primary", "--color-background-primary"),
               ("--color-text-tertiary", "--color-background-raised"),
               ("--color-text-inverse", "--color-background-inverse"),
               ("--color-text-inverse", "--color-background-brand"),
+              # Home's masthead (PD-027) and every primary button put chalk on the brand field.
+              # `--color-text-inverse` is INK in dark and is a recorded exception there at 1.99:1, so
+              # what is actually drawn is `--thro-chalk`, which is chalk in both appearances. Adding
+              # the pair here is what stops the next person from reaching for the appearance-aware
+              # token because it reads like the right one.
+              ("--thro-chalk", "--color-background-brand"),
               ("--color-text-brand", "--color-background-primary"),
               ("--color-text-achievement", "--color-background-primary")]
 # Which surface each status colour is actually shown on, read off the export rather than assumed from
