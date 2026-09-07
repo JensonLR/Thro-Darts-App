@@ -608,6 +608,17 @@ ordinal per match would have handed `bestLegInVisits` a leg containing *both* pl
 first screen of the app would have reported every 15-visit leg as a 30-visit one. Each seat of each
 match gets its own block of ordinals; a test plays a five-visit leg and asserts the answer is three.
 
+**Inside a match, the two reveals were cuts.** A bust and a won leg — the two things PD-005 exists
+to announce — put a card on the screen on one frame and took it off on the next. The scrim fades
+now and the card lands on `motionEasingImpact`, which is the same physics as the strike that caused
+it. So do the cards that take the keypad's place: the PD-001 question, a retraction proposal, the
+end-a-match choice. **The keypad coming back does not land**, because a player waiting to throw
+wants their keys, not a flourish.
+
+Before this round the whole application contained no `withAnimation` and no `.animation` outside the
+opening sequence's own timeline. That is worth writing down plainly: it was not that the motion was
+wrong, it was that there was none.
+
 And nothing arrived. `throEntrance` gives each block of a screen a 12-point rise a beat after the one
 above it, from the design's own `motionTravelMedium` and `motionEasingSet` — tokens that were in the
 system all along and that nothing but the opening sequence could reach as an `Animation`. That is

@@ -347,8 +347,14 @@ public struct ScoringScreen: View {
             }
             if let announcement = session.announcement {
                 AnnouncementOverlay(announcement: announcement, session: session, onContinue: session.acknowledge)
+                    .transition(.opacity)
             }
         }
+        // PD-027. A bust and a won leg are the two reveals inside a match, and both used to be a
+        // cut: the card was simply there on one frame and gone on the next. The scrim fades and the
+        // card lands on the design's impact curve (`throLanding`, inside the overlay), which is the
+        // same physics as the strike that caused it.
+        .animation(.throEnter(), value: session.announcement != nil)
         .background(ThroColor.colorBackgroundPrimary.ignoresSafeArea())
         .throAppearance(Appearance(stored: appearanceRaw))
         // PD-015, amended by PD-024. Below the reflow threshold this is the one screen that must fit
@@ -387,19 +393,25 @@ public struct ScoringScreen: View {
     /// cards do not — they carry the PD-001 question and a retraction's explanation, which are things
     /// to be read, so they grow with everything else above them.
     @ViewBuilder private var lower: some View {
+        // PD-027. A card taking the keypad's place lands in it; **the keypad coming back does not**,
+        // because a player waiting to throw wants their keys, not a flourish.
         if let flow = session.endFlow {
             switch flow {
             case .choosing:
                 EndMatchCard(session: session, onChoose: session.proposeEnding, onCancel: session.cancelEnding)
+                    .throLanding()
             case let .confirming(ending):
                 EndMatchConfirmCard(session: session, ending: ending,
                                     onConfirm: session.confirmEnding, onCancel: session.cancelEnding)
+                    .throLanding()
             }
         } else if let prompt = session.prompt {
             PromptCard(prompt: prompt, onAnswer: session.answer, onCancel: session.cancelPrompt)
+                .throLanding()
         } else if let proposal = session.retraction {
             RetractionCard(proposal: proposal, playerName: session.name(proposal.seat),
                            onConfirm: session.confirmRetraction, onCancel: session.cancelRetraction)
+                .throLanding()
         } else {
             ScoreKeypad(value: session.entry, disabled: session.isComplete || session.announcement != nil,
                         onDigit: session.digit, onQuick: session.quick,
@@ -447,8 +459,10 @@ public struct ScoringScreen: View {
                 Snackbar(notice.text, tone: tone(notice.tone))
                     .padding(.horizontal, ThroSpacing.spaceScreenGutter)
                     .padding(.top, ThroSpacing.spacing2)
+                    .transition(.opacity)
             }
         }
+        .animation(.throEnter(), value: session.notice != nil)
     }
 
     private var legRow: some View {
@@ -508,7 +522,7 @@ struct AnnouncementOverlay: View {
                 .contentShape(Rectangle())
                 .onTapGesture(perform: onContinue)
                 .accessibilityHidden(true)
-            card
+            card.throLanding()
         }
         .accessibilityAddTraits(.isModal)
         .onAppear {
