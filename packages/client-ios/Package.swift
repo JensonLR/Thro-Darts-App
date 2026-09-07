@@ -37,6 +37,7 @@ let package = Package(
     platforms: [.iOS("18.0"), .macOS("15.0")],
     products: [
         .library(name: "ThroDesign", targets: ["ThroDesign"]),
+        .library(name: "ThroLiveKit", targets: ["ThroLiveKit"]),
         .library(name: "ThroJournal", targets: ["ThroJournal"]),
         .library(name: "ThroPlay", targets: ["ThroPlay"]),
         .library(name: "ThroApp", targets: ["ThroApp"]),
@@ -58,6 +59,20 @@ let package = Package(
                     dependencies: ["ThroDesign", .product(name: "ThroTokens", package: "design-tokens")],
                     path: "Tests/ThroDesignTests"),
 
+        // What a leg looks like from outside the app: the Live Activity's state, its copy, and the
+        // views the Lock Screen and the Dynamic Island draw.
+        //
+        // Deliberately the lightest target here — tokens and nothing else. A widget extension links
+        // this, and an extension that reached the journal would be linking SQLite and a scoring
+        // engine into a process whose whole job is to draw two numbers. The state it carries is
+        // handed to it by the app, which is also what keeps it inside ActivityKit's 4 KB budget.
+        .target(
+            name: "ThroLiveKit",
+            dependencies: [.product(name: "ThroTokens", package: "design-tokens")],
+            path: "Sources/ThroLiveKit"
+        ),
+        .testTarget(name: "ThroLiveKitTests", dependencies: ["ThroLiveKit"], path: "Tests/ThroLiveKitTests"),
+
         // ADR-006's on-device journal: SQLite under the measured durability configuration, verified
         // in force on every open, append-only by trigger, replayed through the engine. Reaches the
         // engine and the system SQLite and nothing else — no design, no network.
@@ -74,7 +89,7 @@ let package = Package(
         .target(
             name: "ThroPlay",
             dependencies: [
-                "ThroDesign", "ThroJournal",
+                "ThroDesign", "ThroJournal", "ThroLiveKit",
                 .product(name: "ThroTokens", package: "design-tokens"),
                 .product(name: "ThroEngine", package: "engine-swift"),
                 .product(name: "ThroStatistics", package: "statistics-swift"),
@@ -95,7 +110,7 @@ let package = Package(
         .target(
             name: "ThroApp",
             dependencies: [
-                "ThroDesign", "ThroJournal", "ThroPlay",
+                "ThroDesign", "ThroJournal", "ThroPlay", "ThroLiveKit",
                 .product(name: "ThroTokens", package: "design-tokens"),
             ],
             path: "Sources/ThroApp"

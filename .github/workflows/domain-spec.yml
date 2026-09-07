@@ -69,6 +69,12 @@ jobs:
       - name: Claims of absence are still true
         run: python3 tools/check_absence_claims.py
 
+      # And the one file nothing checked. The Xcode project is written by hand here — there is no
+      # generator — and a mistyped 24-character object id costs a macOS runner several minutes to
+      # discover, on a runner that bills ten times what this one does.
+      - name: The Xcode project holds together
+        run: python3 tools/check_xcode_project.py
+
   journal:
     name: The on-device journal, on Android's half
     runs-on: ubuntu-latest

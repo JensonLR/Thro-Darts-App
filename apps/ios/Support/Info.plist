@@ -15,6 +15,11 @@
 		<string>IBMPlexSansCondensed-SemiBold.ttf</string>
 		<string>IBMPlexSansCondensed-Bold.ttf</string>
 	</array>
+	<!-- The Lock Screen and Dynamic Island scoreboard. Nothing else is needed for it: a Live
+	     Activity is started and updated from the app itself, so there is no entitlement, no push
+	     certificate and no server behind this key. -->
+	<key>NSSupportsLiveActivities</key>
+	<true/>
 	<key>ITSAppUsesNonExemptEncryption</key>
 	<false/>
 	<!-- ADR-011 fixes the public URL shapes as /e/{eventId}, /m/{matchId}, /p/{playerHandle} and

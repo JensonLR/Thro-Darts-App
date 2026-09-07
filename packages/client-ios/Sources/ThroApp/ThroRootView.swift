@@ -317,7 +317,13 @@ public struct ThroRootView: View {
             if let route = ThroSpotlight.route(for: activity) { router.go(route) }
         }
         .onChange(of: router.pending) { _, _ in follow() }
-        .task { follow(); reindex() }
+        .task {
+            follow()
+            reindex()
+            // A scoreboard that outlived the app that started it is a score nobody is keeping. On a
+            // cold launch the in-memory handle is gone, so anything still running is orphaned.
+            LiveBoard.clearStale()
+        }
         // Keyed on what is actually indexable rather than on a count: a club being renamed changes
         // no count, and an index that only noticed additions would keep showing the old name.
         .onChange(of: searchable) { _, _ in reindex() }

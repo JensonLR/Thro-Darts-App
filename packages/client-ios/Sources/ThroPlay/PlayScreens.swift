@@ -3,6 +3,7 @@ import ThroTokens
 import ThroDesign
 import ThroEngine
 import ThroJournal
+import ThroLiveKit
 #if canImport(UIKit)
 import UIKit
 #endif
@@ -311,6 +312,7 @@ public struct ScoringScreen: View {
     @AppStorage(Appearance.storageKey) private var appearanceRaw: String = Appearance.system.rawValue
     @AppStorage(ScoringPreferences.keepScreenAwakeKey) private var keepScreenAwake: Bool = true
     @AppStorage(ThroHaptics.enabledKey) private var haptics: Bool = true
+    private let board = LiveBoard()
     /// The player's own text size, read **before** this screen caps it — the cap is applied to the
     /// body below, so what arrives here is what they actually asked for.
     @Environment(\.dynamicTypeSize) private var typeSize
@@ -392,8 +394,18 @@ public struct ScoringScreen: View {
         .onChange(of: session.visits.count) { was, now in
             if now < was { ThroHaptics.play(.retracted, enabled: haptics) }
         }
-        .onAppear { setIdleTimer(disabled: keepScreenAwake) }
-        .onDisappear { setIdleTimer(disabled: false) }
+        .onAppear {
+            setIdleTimer(disabled: keepScreenAwake)
+            board.start(session)
+        }
+        // Every change to the board renews its freshness. When the app stops running the renewals
+        // stop with it, the staleDate passes, and the Lock Screen says the score may be out of date
+        // rather than going on asserting it.
+        .onChange(of: session.liveState) { _, state in board.update(state) }
+        .onDisappear {
+            setIdleTimer(disabled: false)
+            board.finish(session)
+        }
     }
 
     /// Whether the screen has changed shape for a player who needs large text (PD-024).

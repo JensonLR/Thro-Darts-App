@@ -2,6 +2,7 @@ import Foundation
 import SwiftUI
 import ThroDesign
 import ThroJournal
+import ThroLiveKit
 
 // One address for every place in THRØ that something outside the app can name.
 //
@@ -52,14 +53,10 @@ public enum ThroRoute: Equatable, Hashable, Sendable {
 }
 
 extension ThroRoute {
-    /// The scheme this build registers. ASCII, and not the product name, for ADR-011's reasons.
-    public static let scheme = "thro"
-
-    /// What a segment may contain unescaped. Deliberately narrower than `.urlPathAllowed`, which
-    /// permits `/`: an identifier carrying a slash would otherwise forge a second path segment and
-    /// name a different place than the one being written down.
-    private static let idAllowed = CharacterSet(charactersIn:
-        "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-._~")
+    /// The scheme this build registers, and the escaping every link uses. Both live in
+    /// `ThroLiveKit`, at the bottom of the graph, because a Live Activity and a widget build links
+    /// too and neither can see this file — see `ThroLink`. One implementation, whoever is asking.
+    public static var scheme: String { ThroLink.scheme }
 
     /// The link that names this place. The inverse of `init(url:)`, and tested as one.
     ///
@@ -68,9 +65,7 @@ extension ThroRoute {
     /// Interpolating one raw and letting `URL(string:)` refuse it would turn an awkward id into a
     /// link to Home — a wrong address that looks like a working one.
     public var url: URL {
-        func escape(_ raw: String) -> String {
-            raw.addingPercentEncoding(withAllowedCharacters: Self.idAllowed) ?? ""
-        }
+        let escape = ThroLink.escape
         let path: String
         switch self {
         case let .tab(tab): path = "tab/\(tab.rawValue)"
@@ -81,9 +76,7 @@ extension ThroRoute {
         case .newMatch: path = "new"
         case .continueLatest: path = "continue"
         }
-        // Every path above is now percent-encoded, so this cannot fail. The fallback exists because
-        // a force-unwrap in a URL builder is how a crash reaches a player through a shared link.
-        return URL(string: "\(Self.scheme)://\(path)") ?? URL(fileURLWithPath: "/")
+        return ThroLink.url(path: path)
     }
 
     /// The place a URL names, or nil when it names nothing this app has.

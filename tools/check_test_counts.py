@@ -31,6 +31,7 @@ ROWS = {
     "| Statistics honesty |": ["packages/statistics/src/test"],
     "| Statistics honesty, Swift |": ["packages/statistics-swift/Tests"],
     "| On-device journal, Android |": ["packages/journal/src/test"],
+    "| The Lock Screen scoreboard |": ["packages/client-ios/Tests/ThroLiveKitTests"],
 }
 
 IOS = "packages/client-ios/Tests"
@@ -40,7 +41,9 @@ IOS = "packages/client-ios/Tests"
 # silently stopped checking, which is worse than a wrong number because it looks like a pass.
 ANCHORED = [
     ("docs/runbooks/CLIENT_IOS.md", r"(\d+) tests in all",
-     [f"{IOS}/ThroDesignTests", f"{IOS}/ThroJournalTests", f"{IOS}/ThroPlayTests", f"{IOS}/ThroAppTests"]),
+     [f"{IOS}/ThroDesignTests", f"{IOS}/ThroJournalTests", f"{IOS}/ThroPlayTests", f"{IOS}/ThroAppTests",
+      f"{IOS}/ThroLiveKitTests"]),
+    ("docs/runbooks/CLIENT_IOS.md", r"(\d+) Lock Screen", [f"{IOS}/ThroLiveKitTests"]),
     ("docs/runbooks/CLIENT_IOS.md", r"(\d+) design,", [f"{IOS}/ThroDesignTests"]),
     ("docs/runbooks/CLIENT_IOS.md", r"(\d+) journal,", [f"{IOS}/ThroJournalTests"]),
     ("docs/runbooks/CLIENT_IOS.md", r"(\d+) scoring session,", [f"{IOS}/ThroPlayTests"]),
