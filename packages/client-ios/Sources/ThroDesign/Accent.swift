@@ -186,6 +186,7 @@ public struct AccentPicker: View {
                                         .padding(-3)
                                         .opacity(hex.uppercased() == swatch.hex ? 1 : 0)
                                 }
+                                .throRowTapTarget()
                         }
                         .buttonStyle(ThroPressStyle(radius: ThroSpacing.radiusCard))
                         .accessibilityLabel(swatch.name)
@@ -204,10 +205,7 @@ public struct AccentPicker: View {
                         .foregroundStyle(ThroColor.colorTextPrimary)
                 }
                 if chosen != nil {
-                    Button("Use THRØ's") { hex = "" }
-                        .thro(ThroTypography.label.weight(.semibold))
-                        .foregroundStyle(ThroColor.colorTextBrand)
-                        .buttonStyle(.plain)
+                    ThroTextButton("Use THRØ's") { hex = "" }
                 }
             }
 

@@ -47,7 +47,11 @@ struct BackChevron: View {
             Icon(.chevronLeft, size: 20)
                 .foregroundStyle(ThroColor.colorTextPrimary)
                 .frame(width: 44, height: 44, alignment: .leading)
+                // Without this the 44 points are decoration: SwiftUI hit-tests the chevron's ink,
+                // so three quarters of the target did nothing.
+                .contentShape(Rectangle())
         }
+        .buttonStyle(ThroPressStyle(radius: ThroSpacing.radiusStatus))
         .accessibilityLabel("Back")
     }
 }
@@ -89,13 +93,7 @@ struct PageBar: View {
             BackChevron(action: onBack)
             Spacer(minLength: ThroSpacing.spacing2)
             ForEach(actions) { action in
-                Button(action.label, action: action.action)
-                    .thro(ThroTypography.label.weight(.semibold))
-                    .foregroundStyle(ThroColor.colorTextBrand)
-                    .buttonStyle(.plain)
-                    .lineLimit(1)
-                    .fixedSize(horizontal: true, vertical: false)
-                    .frame(minHeight: ThroSpacing.touchTargetMinimum)
+                ThroTextButton(action.label, alignment: .trailing, action: action.action)
             }
         }
         .padding(.horizontal, ThroSpacing.spaceScreenGutter)
@@ -189,8 +187,11 @@ public struct ClubsScreen: View {
                                                 accent: club.accentHex.flatMap { Color.thro(hex: $0) },
                                                 trailing: club.yourRole?.label,
                                                 image: badge(club))
+                                    .throRowTapTarget()
                             }
-                            .buttonStyle(.plain)
+                            .buttonStyle(ThroPressStyle(radius: ThroSpacing.radiusCard,
+                                                        pressedFill: ThroColor.colorSurfaceSecondary,
+                                                        scales: false))
                             ThroDivider()
                         }
                         Text("A club or league's front page is public. What is inside it — members, results, announcements — is not.")
@@ -393,11 +394,7 @@ public struct ClubScreen: View {
         HStack(alignment: .firstTextBaseline) {
             Eyebrow(title)
             Spacer()
-            Button(action: onAction) {
-                Text(action)
-                    .thro(ThroTypography.metadata.weight(.semibold))
-                    .foregroundStyle(ThroColor.colorTextBrand)
-            }
+            ThroTextButton(action, alignment: .trailing, action: onAction)
         }
     }
 }
@@ -435,8 +432,12 @@ public struct ClubMembersScreen: View {
                     ForEach(club.visibleMembers) { m in
                         HStack(spacing: 0) {
                             if let onOpen {
-                                Button { onOpen(m) } label: { MemberRow(member: m, picture: picture(m)) }
-                                    .buttonStyle(.plain)
+                                Button { onOpen(m) } label: {
+                                    MemberRow(member: m, picture: picture(m)).throRowTapTarget()
+                                }
+                                .buttonStyle(ThroPressStyle(radius: ThroSpacing.radiusCard,
+                                                            pressedFill: ThroColor.colorSurfaceSecondary,
+                                                            scales: false))
                             } else {
                                 MemberRow(member: m, picture: picture(m))
                             }
@@ -444,9 +445,9 @@ public struct ClubMembersScreen: View {
                                 Button { onRemove(m.id) } label: {
                                     Icon(.x, size: 18)
                                         .foregroundStyle(ThroColor.colorTextSecondary)
-                                        .frame(width: 44, height: 44)
+                                        .throTapTarget()
                                 }
-                                .buttonStyle(.plain)
+                                .buttonStyle(ThroPressStyle(radius: ThroSpacing.radiusStatus))
                                 .accessibilityLabel("Remove \(m.name)")
                             }
                         }
@@ -750,13 +751,8 @@ public struct ProfileScreen: View {
                     HStack(spacing: 6) { Tag("Not rated"); Tag("Self-reported") }
                         .padding(.top, ThroSpacing.spacing2)
                     if let onEditPicture {
-                        Button(action: onEditPicture) {
-                            Text(picture == nil ? "Add a picture" : "Change picture")
-                                .thro(ThroTypography.label.weight(.semibold))
-                                .foregroundStyle(ThroColor.colorTextBrand)
-                        }
-                        .buttonStyle(.plain)
-                        .frame(minHeight: ThroSpacing.touchTargetMinimum, alignment: .leading)
+                        ThroTextButton(picture == nil ? "Add a picture" : "Change picture",
+                                       action: onEditPicture)
                     } else if let pictureNote {
                         Text(pictureNote)
                             .thro(ThroTypography.metadata)

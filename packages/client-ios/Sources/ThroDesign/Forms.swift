@@ -95,7 +95,9 @@ public struct SegmentedControl<ID: Hashable>: View {
                             .fill(on ? ThroColor.colorBackgroundRaised : Color.clear))
                         .contentShape(Rectangle())
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(ThroPressStyle(radius: ThroSpacing.radiusStatus,
+                                            pressedFill: ThroColor.colorBackgroundRaised,
+                                            scales: false))
                 .accessibilityAddTraits(on ? [.isSelected] : [])
             }
         }

@@ -33,10 +33,19 @@ public struct ThroPressStyle: ButtonStyle {
     /// The fill a press moves to. Nil keeps the label's own background and dims instead, which is
     /// what a ghost button — a control with no surface of its own — needs.
     private let pressedFill: Color?
+    /// Whether the press moves the control as well as changing it.
+    ///
+    /// A key and a chip want the travel: it is the whole sensation of pressing something. **A
+    /// full-width row does not** — scaling a list row shrinks it away from the finger that is
+    /// touching it, which reads as the row flinching rather than as a press landing. Those get the
+    /// fill and stay still.
+    private let scales: Bool
 
-    public init(radius: CGFloat = ThroSpacing.radiusKeypad, pressedFill: Color? = nil) {
+    public init(radius: CGFloat = ThroSpacing.radiusKeypad, pressedFill: Color? = nil,
+                scales: Bool = true) {
         self.radius = radius
         self.pressedFill = pressedFill
+        self.scales = scales
     }
 
     /// A press goes in by as much as an impact comes out. 1.02 out, 0.98 in.
@@ -52,8 +61,92 @@ public struct ThroPressStyle: ButtonStyle {
                 }
             }
             .opacity(pressedFill == nil && configuration.isPressed ? 0.6 : 1)
-            .scaleEffect(configuration.isPressed && !reduceMotion ? ThroPressStyle.pressedScale : 1)
+            .scaleEffect(scales && configuration.isPressed && !reduceMotion ? ThroPressStyle.pressedScale : 1)
             .animation(.easeOut(duration: ThroMotion.motionDurationInstant), value: configuration.isPressed)
+    }
+}
+
+/// A worded action — *See all*, *Edit*, *Announce*, *Draw 4*, *Enter the result*.
+///
+/// **This exists because those were not buttons in any way a finger could tell.** The founder, on a
+/// build from their phone: *"buttons need to be more reactive, sometimes when I press close to them
+/// they don't react and have to be exactly direct on them."* Every one of them was a `Text` in a
+/// `Button` with `.buttonStyle(.plain)`, which is SwiftUI for **do nothing at all**: no pressed
+/// state, and a hit area exactly the size of the glyphs. *See all* was a target about 50 by 17
+/// points, in an app whose own design system defines a 44-point minimum and uses it for icons.
+///
+/// Two failures in one control, and both are fixed here rather than at seventeen call sites:
+///
+///  - **The target is at least 44 by 44**, and `contentShape` makes the whole of it tappable rather
+///    than only where ink happens to fall. The frame's alignment keeps the *text* where it was, so a
+///    trailing action still sits on the screen gutter and the target grows inward — the same trick
+///    `BackChevron` uses, and the reason it needs no negative inset.
+///  - **It reacts.** `ThroPressStyle` was built for PD-015 and was on three controls in the whole
+///    app: the keypad, its enter key, and the accent swatches. Everything else was `.plain`.
+public struct ThroTextButton: View {
+    public enum Tone: Sendable { case brand, destructive, quiet }
+
+    private let label: String
+    private let tone: Tone
+    private let alignment: Alignment
+    private let action: () -> Void
+
+    /// - Parameter alignment: where the words sit inside the 44-point target. `.trailing` for an
+    ///   action at the end of a row, `.leading` for one that starts a line — so the glyphs stay put
+    ///   and only the target grows.
+    public init(_ label: String, tone: Tone = .brand, alignment: Alignment = .leading,
+                action: @escaping () -> Void) {
+        self.label = label
+        self.tone = tone
+        self.alignment = alignment
+        self.action = action
+    }
+
+    private var colour: Color {
+        switch tone {
+        case .brand: return ThroColor.colorTextBrand
+        case .destructive: return ThroColor.colorStatusError
+        case .quiet: return ThroColor.colorTextSecondary
+        }
+    }
+
+    public var body: some View {
+        Button(action: action) {
+            Text(label)
+                .thro(ThroTypography.label.weight(.semibold))
+                .foregroundStyle(colour)
+                .lineLimit(1)
+                // So a neighbour can never squeeze the words into an ellipsis — the defect that put
+                // "Announce" half off the edge of a phone.
+                .fixedSize(horizontal: true, vertical: false)
+                .frame(minWidth: ThroSpacing.touchTargetMinimum,
+                       minHeight: ThroSpacing.touchTargetMinimum,
+                       alignment: alignment)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(ThroPressStyle(radius: ThroSpacing.radiusStatus))
+    }
+}
+
+public extension View {
+    /// A whole row that is a button.
+    ///
+    /// Without this the gaps between a row's pieces are not tappable at all: SwiftUI hit-tests the
+    /// label's ink, so a finger landing between a badge and a name lands on nothing. The row is also
+    /// given the press fill rather than the travel — see `ThroPressStyle.scales`.
+    func throRowTapTarget() -> some View {
+        contentShape(Rectangle())
+    }
+
+    /// The 44-point minimum, for a control whose own content is smaller than a fingertip.
+    ///
+    /// The alignment keeps the visible thing where the design put it and grows the target around it,
+    /// which is why this never moves a layout: the same reason `BackChevron` needs no inset.
+    func throTapTarget(_ alignment: Alignment = .center) -> some View {
+        frame(minWidth: ThroSpacing.touchTargetMinimum,
+              minHeight: ThroSpacing.touchTargetMinimum,
+              alignment: alignment)
+            .contentShape(Rectangle())
     }
 }
 
@@ -216,4 +309,78 @@ public extension View {
     func throPinnedKeypadTypeCeiling() -> some View {
         dynamicTypeSize(...ThroDynamicType.scoringCeiling)
     }
+}
+
+// MARK: - entrances (PD-027)
+
+/// The design's own easing curves as SwiftUI animations.
+///
+/// They were already in the tokens and already used — by the opening sequence, which evaluates them
+/// as maths on a per-frame basis. Nothing could reach them as an `Animation`, so every transition
+/// in the app that was not the opening used SwiftUI's defaults. That is what "generic" looks like
+/// from the outside: an app whose motion is Apple's rather than its own.
+public extension Animation {
+    /// Something arriving. `motionEasingSet` decelerates hard at the end — a thing that lands.
+    static func throEnter(_ duration: Double = ThroMotion.motionDurationStandard) -> Animation {
+        let c = ThroMotion.motionEasingSet
+        return .timingCurve(Double(c.0), Double(c.1), Double(c.2), Double(c.3), duration: duration)
+    }
+
+    /// Something settling into a new value in place — a score changing, a row re-sorting.
+    static func throResolve(_ duration: Double = ThroMotion.motionDurationResolve) -> Animation {
+        let c = ThroMotion.motionEasingResolve
+        return .timingCurve(Double(c.0), Double(c.1), Double(c.2), Double(c.3), duration: duration)
+    }
+
+    /// Something leaving. Faster than it arrived, because waiting for an exit is the one kind of
+    /// motion that always reads as slowness.
+    static func throExit(_ duration: Double = ThroMotion.motionDurationFast) -> Animation {
+        let c = ThroMotion.motionEasingExit
+        return .timingCurve(Double(c.0), Double(c.1), Double(c.2), Double(c.3), duration: duration)
+    }
+}
+
+/// A block of a screen arriving, a beat after the one above it.
+///
+/// **Why a screen needs this at all.** The founder: *"all screens feel bare & basic ... must be
+/// incredibly beautiful, clean, dynamic & fluid, no clunkyness or generic slop anywhere."* A screen
+/// that is simply *there* the instant it is pushed has no craft in it, however good its typography
+/// is; a screen whose parts land in the order you read them has depth without a single extra pixel
+/// of decoration. This is that, and it is deliberately small: 12 points of travel — the design's own
+/// `motionTravelMedium` — and 45 milliseconds between blocks.
+///
+/// **It withdraws completely under Reduce Motion**, and withdrawing means the content is simply
+/// present at full opacity from the first frame, never a faded-in version of itself. A person who
+/// has asked for no motion gets no motion, not gentler motion.
+///
+/// **The stagger is capped.** Past about six blocks the delay stops growing, because the eighth
+/// section of a long screen arriving a third of a second late is not choreography, it is a wait.
+public struct ThroEntrance: ViewModifier {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    private let index: Int
+    @State private var arrived = false
+
+    public init(index: Int) { self.index = index }
+
+    /// The most blocks that are still worth staggering.
+    public static let stagger = 6
+    public static let step = 0.045
+
+    public func body(content: Content) -> some View {
+        let shown = arrived || reduceMotion
+        return content
+            .opacity(shown ? 1 : 0)
+            .offset(y: shown ? 0 : ThroMotion.motionTravelMedium)
+            .onAppear {
+                guard !reduceMotion else { return }
+                withAnimation(.throEnter().delay(Double(min(index, ThroEntrance.stagger)) * ThroEntrance.step)) {
+                    arrived = true
+                }
+            }
+    }
+}
+
+public extension View {
+    /// Marks this as the `index`-th block of a screen, counting from the top.
+    func throEntrance(_ index: Int) -> some View { modifier(ThroEntrance(index: index)) }
 }

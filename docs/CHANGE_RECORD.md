@@ -480,6 +480,127 @@ averages, first nine, best leg — is order-independent. The form figure takes t
 the recent ones, so under that numbering it would have described a player's oldest darts as their
 current form. Reversed, documented, and held by a test, since nothing else would ever have caught it.
 
+## The controls did not react, and the screens had nothing to say
+
+The founder, from a build on their phone:
+
+> *"Buttons need to be more reactive sometimes when i press close to them they dont react and have to
+> be exactly direct on them. undo last visit shouldn't be on results page as thats when its all done.
+> option to delete or achive games. home page feels very bare & basic, all screens feel bare & basic
+> ... all screens & features & unveilings or reveals including intro must be incredibly beautiful,
+> clean, dynamic & fluid, no clunkyness or generic slop anywhere"*
+
+### Two defects in one sentence
+
+*Press close to them and they don't react* and *have to be exactly direct on them* are not one
+complaint, they are two, and they had the same cause. **`.buttonStyle(.plain)` was on 32 controls.**
+It is SwiftUI's way of saying *do nothing at all*: no pressed appearance, and a hit area exactly the
+size of the ink the label happens to draw. `ThroPressStyle`, built for PD-015 precisely so that a
+control would acknowledge a touch, was on **three** — the keypad, its enter key, and the accent
+swatches.
+
+So *See all* was a target about 50 by 17 points, in an app whose own design system defines 44 as the
+minimum and uses it for icons; and none of the 32 moved, dimmed or changed under a finger.
+
+Every one of them is now a `ThroPressStyle` with a real target. Three general fixes rather than 32
+local ones:
+
+- **`ThroTextButton`** — a worded action (*See all*, *Edit*, *Announce*, *Use THRØ's*), at least 44
+  by 44 with `contentShape`, and aligned so the *words* stay where they were and the target grows
+  inward. That is why it needs no negative inset, which is what broke the club page's top bar twice.
+- **`throRowTapTarget()`** — a whole row is the button, gaps included. Without it a finger landing
+  between a badge and a name lands on nothing.
+- **`ThroPressStyle(scales:)`** — a key or a chip travels under the finger, because that is the
+  sensation of pressing something; **a full-width row does not**, because scaling a row shrinks it
+  away from the finger touching it, which reads as flinching rather than as a press landing.
+
+`ThroButton` itself — the primary button of the whole application, on every screen — was one of the
+32.
+
+**Nothing in the repository was going to catch this.** No test here constructs a screen, and a hit
+area is not something a unit test can see. `tools/check_controls_react.py` checks the source on every
+push: no `.buttonStyle(.plain)` anywhere; every `Button` carries a style; every `Button`'s label
+reaches a tap target. It reads a `Button`'s full modifier chain by indentation rather than by a fixed
+window of lines, because a row's label is thirty lines and a chevron's is three, and a guessed number
+either misses a real defect or invents one. The system's own dialog buttons are exempt by a rule that
+is itself checked: `Button("Title") { … }` — the title-and-action form — is reserved for
+`.confirmationDialog` and `.alert`, and a file using it while presenting no dialog fails.
+
+It found two live defects the moment it ran that were not in the founder's list: the back chevron on
+**every** club, league, tournament and profile page had a 44-point frame with no `contentShape`, so
+three quarters of it did nothing — on the very control the founder had complained about the round
+before — and it had no pressed state either.
+
+### Undo, and where it belongs (PD-025)
+
+The result screen now has two actions and both of them finish. The founder is right that the moment a
+match becomes a record is the wrong moment to offer to unpick it — and PD-004's argument for undo,
+*the mis-key that ends a match is the one that most needs undoing*, is answered by the confirm step
+**before** that screen, not by a third button on it.
+
+One case keeps it and moves it. Where a result is disputed the screen already says *"Undo the visit
+that is wrong and confirm again."* A screen that gives an instruction and no way to follow it is
+worse than either, so the control now sits directly under that sentence.
+
+### The shelf, and the one delete (PD-026)
+
+*Delete or archive* is two asks and only one of them was difficult.
+
+**Archiving** takes a match off Home and out of nothing else — journal, export, history and every
+figure still have it, because it happened. It is a column, it is reversible, and it is the right
+answer for almost everybody who wants a match off their screen.
+
+**Deleting** collided with `journal_append_only_delete`, which aborted every delete unconditionally.
+The temptation was to weaken it quietly. What settles it is a distinction the trigger was not making:
+append-only exists so that **what a visit says cannot be changed**; it does not exist to make a person
+keep a match they never wanted recorded. A journal that will not let you edit a visit is honest. A
+journal that will not let you throw away a match you started by mistake is stubborn — and in the
+United Kingdom it is also a person being refused erasure of their own record.
+
+So the rule is narrowed and the narrowing is held by tests. The **update** trigger is untouched and
+unconditional. The **delete** trigger now aborts unless the row belongs to the match a purge is
+currently naming, a key only `deleteMatch` sets, inside its own transaction, cleared in the same
+transaction — so a crash mid-purge rolls the key back with the rows. A bare `DELETE FROM journal`
+still aborts. A delete of another match's rows *during* a purge still aborts. Both are asserted, as is
+that a journal written before any of this has the old trigger **replaced** rather than left beside the
+new one.
+
+One delete is refused outright, and it is not about tidiness: **a league result scored in THRØ cites
+its match by id**, and that citation is the whole of its provenance. Deleting the match would leave a
+table resting on evidence nobody could produce. The refusal says so, counts the fixtures, and offers
+the shelf.
+
+The warning before a delete names the two players, the date, the visits, and the thing the person
+cannot know from the row — *an export or a backup written before now still has it, and nothing this
+app can do reaches those.* Not "this cannot be undone", which every app says and nobody reads.
+
+### Bare and basic (PD-027)
+
+Home was a system title bar, a list of rows and a button: everything on it was reachable from it and
+nothing on it was known by it. It now answers three questions before a finger moves, in the order
+they matter — *is there a match I walked away from*, *what have I been throwing*, *what happened
+lately*.
+
+The masthead is the mark on the board's own dark surface rather than a large title in a system bar,
+because a large title bar is what every app on the phone opens with. The match still going is the
+largest object on the screen when there is one; it used to be a row among thirty finished ones,
+marked by a small blue tag. The last seven days are figures from the **audited** honesty layer — the
+same `Statistics` functions the result screen uses — so a new phone shows three dashes and says why.
+Filling that strip with zeroes was the one thing that could not be done: a number without its sample
+is a claim rather than a description.
+
+**A defect written and caught before it shipped.** Pooling a whole device's visits under one leg
+ordinal per match would have handed `bestLegInVisits` a leg containing *both* players' darts, and the
+first screen of the app would have reported every 15-visit leg as a 30-visit one. Each seat of each
+match gets its own block of ordinals; a test plays a five-visit leg and asserts the answer is three.
+
+And nothing arrived. `throEntrance` gives each block of a screen a 12-point rise a beat after the one
+above it, from the design's own `motionTravelMedium` and `motionEasingSet` — tokens that were in the
+system all along and that nothing but the opening sequence could reach as an `Animation`. That is
+what *generic* looked like from the inside: an app whose motion was Apple's rather than its own. It
+withdraws completely under Reduce Motion, and the stagger caps at six blocks, because the eighth
+section of a long screen arriving a third of a second late is a wait rather than choreography.
+
 ## Nothing here is a convention
 
 Each competitive property is asserted by something that fails when it is removed.

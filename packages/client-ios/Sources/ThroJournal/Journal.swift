@@ -156,6 +156,11 @@ public struct MatchRecord: Equatable, Sendable {
     /// Who each name refers to, when the device knows (ADR-016).
     public let homePlayerId: String?
     public let awayPlayerId: String?
+    /// When this match was put away (PD-026), or nil while it is on Home. Archiving takes nothing
+    /// out of the journal and nothing out of the export: it is a shelf, not a bin.
+    public let archivedAt: Date?
+
+    public var isArchived: Bool { archivedAt != nil }
 
     public func playerId(_ seat: Seat) -> String? { seat == .home ? homePlayerId : awayPlayerId }
 
@@ -485,14 +490,41 @@ public final class Journal {
         if !matchColumnNames.contains("away_player_id") {
             try exec(h, "ALTER TABLE local_match ADD COLUMN away_player_id TEXT;")
         }
+        // A match that has been put away (PD-026). Null for every match written before it existed,
+        // which is what they were: on Home.
+        if !matchColumnNames.contains("archived_at") {
+            try exec(h, "ALTER TABLE local_match ADD COLUMN archived_at TEXT;")
+        }
         // Append-only, enforced by the database rather than by discipline — the same property the
         // server's grants give evidence.event. Corrections, when they come, are new events.
+        //
+        // **Nothing may ever edit a row.** That is the whole of the journal's trustworthiness and it
+        // is unconditional: a visit that was recorded stays exactly as it was recorded, and a
+        // correction is a new row that supersedes it (PD-004).
         try exec(h, """
             CREATE TRIGGER IF NOT EXISTS journal_append_only_update BEFORE UPDATE ON journal
             BEGIN SELECT RAISE(ABORT, 'journal is append-only'); END;
             """)
+        // **Deleting is narrower than it was, and narrower than it looks.** It was unconditional
+        // too, and the founder asked for something it forbade: *"option to delete or achive
+        // games."*
+        //
+        // Those are two different asks and only one of them touches this. Archiving is a column;
+        // nothing is lost. Deleting is a person withdrawing a whole match from their own phone —
+        // not editing what it says, which is what append-only exists to prevent. A journal that
+        // will not let you edit a visit is honest. A journal that will not let you throw away a
+        // match you started by mistake is not principled, it is stubborn — and on a phone in the
+        // United Kingdom it is also a person being refused erasure of their own record.
+        //
+        // So the trigger still refuses every DELETE except the rows of the one match a purge is
+        // currently naming, which only `deleteMatch` sets and only inside its own transaction. A
+        // delete of any other match's rows during that purge still aborts, and so does every delete
+        // when no purge is running: with no `purging` row the subquery is NULL, and `IS NOT NULL`
+        // is true, so it raises. `JournalTests` proves both.
+        try exec(h, "DROP TRIGGER IF EXISTS journal_append_only_delete;")
         try exec(h, """
-            CREATE TRIGGER IF NOT EXISTS journal_append_only_delete BEFORE DELETE ON journal
+            CREATE TRIGGER journal_append_only_delete BEFORE DELETE ON journal
+            WHEN OLD.match_id IS NOT (SELECT value FROM meta WHERE key = 'purging')
             BEGIN SELECT RAISE(ABORT, 'journal is append-only'); END;
             """)
     }
@@ -526,19 +558,77 @@ public final class Journal {
     }
 
     /// Every match on this device, newest first.
-    public func matches() throws -> [MatchRecord] {
+    ///
+    /// - Parameter archived: nil for all of them — which is what a history and an export want, and
+    ///   why archiving is safe: putting a match away never changes a figure. `false` is Home's
+    ///   list, `true` is the shelf.
+    public func matches(archived: Bool? = nil) throws -> [MatchRecord] {
+        let filter: String
+        switch archived {
+        case nil: filter = ""
+        case .some(true): filter = "WHERE archived_at IS NOT NULL "
+        case .some(false): filter = "WHERE archived_at IS NULL "
+        }
         var out: [MatchRecord] = []
-        try run("SELECT \(Journal.matchColumns) FROM local_match ORDER BY started_at DESC, rowid DESC;", []) { s in
+        try run("SELECT \(Journal.matchColumns) FROM local_match \(filter)ORDER BY started_at DESC, rowid DESC;", []) { s in
             out.append(Journal.record(from: s))
         }
         return out
+    }
+
+    /// Puts a match away, or brings it back (PD-026).
+    ///
+    /// Reversible on purpose, and reversible is the point: this is the answer for almost everybody
+    /// who wants a match gone from Home. Nothing leaves the journal, the export still carries it,
+    /// and every figure a person's history shows still counts it — because it happened.
+    public func setArchived(_ id: MatchId, _ archived: Bool, at when: Date = Date()) throws {
+        try run("UPDATE local_match SET archived_at = ? WHERE match_id = ?;",
+                [archived ? .text(Journal.iso.string(from: when)) : .null, .text(id.value)])
+        guard sqlite3_changes(handle) > 0 else { throw JournalError.matchNotFound(id.value) }
+    }
+
+    /// Removes a match and every visit in it, permanently (PD-026).
+    ///
+    /// **This is the only delete in the system and it is not a correction.** A correction is a new
+    /// row that supersedes an old one, and the journal will still never let anything edit a visit.
+    /// This is a person taking a whole match off their own phone — a mis-started game, a practice
+    /// session they do not want in their figures, a match that was never theirs.
+    ///
+    /// What it cannot undo is what has already left: an export written before it, a backup, or a
+    /// result a league has recorded from it. `AppStore` refuses the delete outright while a fixture
+    /// cites the match, because that result would then rest on evidence nobody could produce.
+    ///
+    /// - Returns: how many journal rows went with it, so a caller can say what was actually lost.
+    @discardableResult
+    public func deleteMatch(_ id: MatchId) throws -> Int {
+        try Journal.exec(handle, "BEGIN IMMEDIATE;")
+        do {
+            var rows = 0
+            try run("SELECT COUNT(*) FROM journal WHERE match_id = ?;", [.text(id.value)]) { s in
+                rows = Int(sqlite3_column_int64(s, 0))
+            }
+            // The one key that opens the delete trigger, set and cleared inside this transaction —
+            // so a crash mid-purge rolls the key back with the rows, and nothing can find the
+            // journal unlocked afterwards.
+            try run("INSERT OR REPLACE INTO meta (key, value) VALUES ('purging', ?);", [.text(id.value)])
+            try run("DELETE FROM journal WHERE match_id = ?;", [.text(id.value)])
+            try run("DELETE FROM meta WHERE key = 'purging';", [])
+            try run("DELETE FROM local_match WHERE match_id = ?;", [.text(id.value)])
+            let removed = sqlite3_changes(handle)
+            try Journal.exec(handle, "COMMIT;")
+            guard removed > 0 else { throw JournalError.matchNotFound(id.value) }
+            return rows
+        } catch {
+            try? Journal.exec(handle, "ROLLBACK;")
+            throw error
+        }
     }
 
     /// Named, in this order, so a column added by ALTER cannot silently shift the ones below it.
     /// `SELECT *` was doing exactly that, and adding in_rule was the change that would have found it.
     static let matchColumns = """
         match_id, home_name, away_name, starting_score, out_rule, legs_mode, legs_target, \
-        throw_first, started_at, in_rule, home_player_id, away_player_id
+        throw_first, started_at, in_rule, home_player_id, away_player_id, archived_at
         """
 
     private static func record(from s: OpaquePointer) -> MatchRecord {
@@ -554,7 +644,8 @@ public final class Journal {
             throwFirst: Seat(rawValue: text(s, 7)) ?? .home,
             startedAt: iso.date(from: text(s, 8)) ?? Date(timeIntervalSince1970: 0),
             homePlayerId: sqlite3_column_type(s, 10) == SQLITE_NULL ? nil : text(s, 10),
-            awayPlayerId: sqlite3_column_type(s, 11) == SQLITE_NULL ? nil : text(s, 11)
+            awayPlayerId: sqlite3_column_type(s, 11) == SQLITE_NULL ? nil : text(s, 11),
+            archivedAt: sqlite3_column_type(s, 12) == SQLITE_NULL ? nil : iso.date(from: text(s, 12))
         )
     }
 

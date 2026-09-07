@@ -581,6 +581,96 @@ public enum PersonSummary {
     }
 }
 
+/// What this phone has done lately: the figures Home opens on.
+///
+/// **Why Home has figures at all.** The founder, on a build: *"home page feels very bare & basic."*
+/// It was — a title, a list of rows, and a button. A darts app's first screen should tell a player
+/// something they want to know before they have tapped anything, and the only thing this device can
+/// honestly tell them is what it has actually watched them throw.
+///
+/// **Every figure here comes from the audited `Statistics` layer**, over the same `VisitRecord`
+/// shape a match's result screen uses. Nothing is computed twice and nothing is computed loosely:
+/// an average with too small a sample comes back `unavailable` and the strip draws a dash, which is
+/// the whole point of that layer and the reason a "bare" screen was never going to be fixed by
+/// inventing numbers to fill it.
+///
+/// **The window is seven days and it is in the label.** A figure without its sample is a claim
+/// rather than a description (PD-018), so the strip says *Last 7 days* on the screen, not only in
+/// this comment.
+public enum DeviceSummary {
+    public struct Week: Equatable, Sendable {
+        /// Matches started in the window, readable or not.
+        public let matches: Int
+        /// Legs completed in them.
+        public let legs: Int
+        /// Matches in the window whose rows would not replay. Their darts are in no figure here,
+        /// and saying so is the difference between a small sample and a wrong one.
+        public let unreadable: Int
+        /// The figures themselves, already worded by `StatPresentation`.
+        public let figures: [StatLine]
+        /// True when the device has matches but none of them fall in the window — a different fact
+        /// from an empty phone, and Home says a different thing for each.
+        public let quietWeek: Bool
+
+        public init(matches: Int, legs: Int, unreadable: Int, figures: [StatLine], quietWeek: Bool) {
+            self.matches = matches
+            self.legs = legs
+            self.unreadable = unreadable
+            self.figures = figures
+            self.quietWeek = quietWeek
+        }
+    }
+
+    /// - Parameter days: the window, in days back from `now`. Seven unless a test says otherwise.
+    public static func week(in journal: Journal, now: Date = Date(), days: Int = 7) throws -> Week {
+        let cutoff = now.addingTimeInterval(-Double(days) * 86_400)
+        // Archived matches count. Putting a match on a shelf is a decision about a list, not a
+        // claim that the darts were not thrown (PD-026).
+        let all = try journal.matches()
+        let recent = all.filter { $0.startedAt >= cutoff }
+        var records: [VisitRecord] = []
+        var legs = 0, unreadable = 0, legOffset = 0
+        for record in recent.reversed() {
+            do {
+                let replayed = try journal.replayVisits(record.id)
+                // The renumbering `Journal.history` does, and one more separation on top of it.
+                //
+                // `history` pools one person, so renumbering per match is enough there. This pools
+                // a whole device, and a leg holds **two** players' visits. Numbering per match would
+                // have put both of them under one ordinal, and `bestLegInVisits` counts the visits
+                // sharing an ordinal — so a 15-visit leg would have been reported as a 30-visit one,
+                // for every player, on the first screen of the app. Each seat of each match gets its
+                // own block instead, so no ordinal ever holds two people's darts.
+                for seat in Seat.allCases {
+                    let mine = replayed.visits.filter { $0.seat == seat }
+                    guard !mine.isEmpty else { continue }
+                    records.append(contentsOf: mine.map {
+                        VisitRecord(legOrdinal: $0.legOrdinal + legOffset, visitOrdinal: $0.visitOrdinal,
+                                    visitTotal: $0.visitTotal, dartsUsed: $0.dartsUsed, bust: $0.bust,
+                                    remainingBefore: $0.remainingBefore, remainingAfter: $0.remainingAfter,
+                                    wonLeg: $0.wonLeg, dartsAtDouble: $0.dartsAtDouble)
+                    })
+                    legOffset += mine.map(\.legOrdinal).max() ?? 0
+                }
+                legs += replayed.state.legsWonTotal.values.reduce(0, +)
+            } catch {
+                unreadable += 1
+            }
+        }
+        // Both players' darts are in here, because this is what the *phone* has seen — two people at
+        // one device are both throwing on it. It is labelled "on this phone" for exactly that
+        // reason and is never presented as one person's average; a person's own figures live on
+        // their page, where `PersonSummary` pools only the visits they threw.
+        let figures = [
+            StatPresentation.line("3-dart average", Statistics.threeDartAverage(records), kind: .average),
+            StatPresentation.line("Best leg", Statistics.bestLegInVisits(records), kind: .count),
+            StatPresentation.line("180s", Statistics.maximums(records), kind: .count),
+        ]
+        return Week(matches: recent.count, legs: legs, unreadable: unreadable,
+                    figures: figures, quietWeek: recent.isEmpty && !all.isEmpty)
+    }
+}
+
 /// A statistic as text. EXACT is a number; BOUNDED is a range and says so; UNAVAILABLE is a dash
 /// and says why. A bounded figure is never collapsed to a point value.
 ///

@@ -69,10 +69,7 @@ struct TeamFixtureRow: View {
                 HStack(spacing: ThroSpacing.spacing2) {
                     Tag("No result yet", tone: .warning)
                     if let onRecord {
-                        Button("Enter the result", action: onRecord)
-                            .thro(ThroTypography.label.weight(.semibold))
-                            .foregroundStyle(ThroColor.colorTextBrand)
-                            .buttonStyle(.plain)
+                        ThroTextButton("Enter the result", action: onRecord)
                     }
                 }
             }
@@ -318,8 +315,11 @@ public struct LeagueScreen: View {
                             Icon(.chevronRight, size: 16).foregroundStyle(ThroColor.colorTextBrand)
                         }
                         .frame(minHeight: ThroSpacing.touchTargetMinimum)
+                        .throRowTapTarget()
                     }
-                    .buttonStyle(.plain)
+                    .buttonStyle(ThroPressStyle(radius: ThroSpacing.radiusCard,
+                                                pressedFill: ThroColor.colorSurfaceSecondary,
+                                                scales: false))
                 }
             }
             .padding(ThroSpacing.spacing4)
@@ -354,10 +354,7 @@ public struct LeagueScreen: View {
         HStack(alignment: .firstTextBaseline) {
             Eyebrow("Fixtures")
             Spacer()
-            Button("See all", action: onFixtures)
-                .thro(ThroTypography.label.weight(.semibold))
-                .foregroundStyle(ThroColor.colorTextBrand)
-                .buttonStyle(.plain)
+            ThroTextButton("See all", alignment: .trailing, action: onFixtures)
         }
         .padding(.top, ThroSpacing.spaceSectionGap)
         ThroDivider().padding(.top, ThroSpacing.spacing2)
@@ -381,10 +378,8 @@ public struct LeagueScreen: View {
         HStack(alignment: .firstTextBaseline) {
             Eyebrow("Teams")
             Spacer()
-            Button(league.mayManageTeams ? "Manage" : "See all", action: onTeams)
-                .thro(ThroTypography.label.weight(.semibold))
-                .foregroundStyle(ThroColor.colorTextBrand)
-                .buttonStyle(.plain)
+            ThroTextButton(league.mayManageTeams ? "Manage" : "See all",
+                           alignment: .trailing, action: onTeams)
         }
         .padding(.top, ThroSpacing.spaceSectionGap)
         ThroDivider().padding(.top, ThroSpacing.spacing2)
@@ -415,10 +410,7 @@ public struct LeagueScreen: View {
         HStack(alignment: .firstTextBaseline) {
             Eyebrow("Who runs it")
             Spacer()
-            Button("See all", action: onOfficials)
-                .thro(ThroTypography.label.weight(.semibold))
-                .foregroundStyle(ThroColor.colorTextBrand)
-                .buttonStyle(.plain)
+            ThroTextButton("See all", alignment: .trailing, action: onOfficials)
         }
         .padding(.top, ThroSpacing.spaceSectionGap)
         ThroDivider().padding(.top, ThroSpacing.spacing2)
@@ -694,10 +686,8 @@ public struct TournamentScreen: View {
         HStack(alignment: .firstTextBaseline) {
             Eyebrow("Entrants")
             Spacer()
-            Button(tournament.mayManageTeams ? "Manage" : "See all", action: onEntrants)
-                .thro(ThroTypography.label.weight(.semibold))
-                .foregroundStyle(ThroColor.colorTextBrand)
-                .buttonStyle(.plain)
+            ThroTextButton(tournament.mayManageTeams ? "Manage" : "See all",
+                           alignment: .trailing, action: onEntrants)
         }
         .padding(.top, ThroSpacing.spaceSectionGap)
         ThroDivider().padding(.top, ThroSpacing.spacing2)
@@ -733,10 +723,7 @@ public struct TournamentScreen: View {
         HStack(alignment: .firstTextBaseline) {
             Eyebrow("Matches")
             Spacer()
-            Button("See all", action: onFixtures)
-                .thro(ThroTypography.label.weight(.semibold))
-                .foregroundStyle(ThroColor.colorTextBrand)
-                .buttonStyle(.plain)
+            ThroTextButton("See all", alignment: .trailing, action: onFixtures)
         }
         .padding(.top, ThroSpacing.spaceSectionGap)
         ThroDivider().padding(.top, ThroSpacing.spacing2)
@@ -810,10 +797,7 @@ public struct TournamentScreen: View {
                 .foregroundStyle(ThroColor.colorTextSecondary)
             Spacer()
             if onDraw != nil, ready > 0 {
-                Button("Draw \(ready)", action: draw)
-                    .thro(ThroTypography.label.weight(.semibold))
-                    .foregroundStyle(ThroColor.colorTextBrand)
-                    .buttonStyle(.plain)
+                ThroTextButton("Draw \(ready)", alignment: .trailing, action: draw)
             }
         }
         .padding(.top, ThroSpacing.spacing4)
@@ -1064,9 +1048,9 @@ public struct TeamsScreen: View {
                 Button { removing = team } label: {
                     Icon(.x, size: 18)
                         .foregroundStyle(ThroColor.colorTextSecondary)
-                        .frame(width: 44, height: 44)
+                        .throTapTarget()
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(ThroPressStyle(radius: ThroSpacing.radiusStatus))
                 .accessibilityLabel("Remove \(team.name)")
             }
         }

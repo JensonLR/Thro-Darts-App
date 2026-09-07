@@ -44,9 +44,11 @@ public struct Snackbar: View {
                 Button(action: onAction) {
                     Text(actionLabel)
                         .thro(ThroTypography.labelStrong.weight(.bold).tracking(em: 0.04).uppercase(true))
-                        .frame(minHeight: ThroSpacing.touchTargetMinimum)
+                        .frame(minWidth: ThroSpacing.touchTargetMinimum,
+                               minHeight: ThroSpacing.touchTargetMinimum)
+                        .contentShape(Rectangle())
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(ThroPressStyle(radius: ThroSpacing.radiusStatus))
             }
         }
         .padding(.vertical, ThroSpacing.spacing3)
@@ -149,9 +151,11 @@ public struct SyncState: View {
                     Text("Retry")
                         .thro(ThroTypography.labelStrong.weight(.bold))
                         .foregroundStyle(ThroColor.colorTextBrand)
-                        .frame(minHeight: ThroSpacing.touchTargetMinimum)
+                        .frame(minWidth: ThroSpacing.touchTargetMinimum,
+                               minHeight: ThroSpacing.touchTargetMinimum)
+                        .contentShape(Rectangle())
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(ThroPressStyle(radius: ThroSpacing.radiusStatus))
             }
         }
         .padding(.vertical, ThroSpacing.spacing3)

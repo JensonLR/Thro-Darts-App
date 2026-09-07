@@ -166,7 +166,7 @@ public struct MatchHeader: View {
                         .frame(width: ThroSpacing.touchTargetMinimum, height: ThroSpacing.touchTargetMinimum)
                         .contentShape(Rectangle())
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(ThroPressStyle(radius: ThroSpacing.radiusStatus))
                 .accessibilityLabel("Back")
                 .padding(.leading, -ThroSpacing.spacing3)
             }
@@ -184,7 +184,7 @@ public struct MatchHeader: View {
                         .frame(width: ThroSpacing.touchTargetMinimum, height: ThroSpacing.touchTargetMinimum)
                         .contentShape(Rectangle())
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(ThroPressStyle(radius: ThroSpacing.radiusStatus))
                 // Named for what it does, not for the glyph. "Close" would read as dismissing the
                 // screen; this ends the match, and a player who taps it by accident deserves to have
                 // been told which of those it was before the confirm card appears.

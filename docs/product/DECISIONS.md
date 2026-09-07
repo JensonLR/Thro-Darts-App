@@ -1115,6 +1115,137 @@ Stop offering the two buttons. Rows already written stay readable, because the j
 it does not know as `unknown` and refuses to replay rather than guessing — which is also what an
 older build does with these rows today.
 
+## PD-027 — Every screen has an entrance, and Home has something to say
+
+**Asked** 2026-09-07 by the founder. **Answered** 2026-09-07.
+
+> *"home page feels very bare & basic, all screens feel bare & basic ... all screens & features &
+> unveilings or reveals including intro must be incredibly beautiful, clean, dynamic & fluid, no
+> clunkyness or generic slop anywhere"*
+
+Two different faults, and neither is fixed by decoration.
+
+**Home had nothing to say.** It was a system title bar, a list of rows, and a button. Everything on
+it was reachable from it and nothing on it was *known* by it. A darts app's first screen should
+answer three questions before a finger moves — *is there a match I walked away from*, *what have I
+been throwing*, *what happened lately* — and it now answers them in that order, because that is the
+order they matter in.
+
+- **The masthead** is the mark on the board's own dark surface, not a large title in a system bar.
+  A large title bar is what every app on the phone opens with, and *generic* was the founder's word.
+  The line under it is a fact, never a greeting: how many matches this phone has watched this week.
+- **The match still going** is the largest object on the screen when there is one. It was a row in a
+  list, distinguished from thirty finished matches by a small blue tag.
+- **The last seven days** are figures from the audited honesty layer — the same `Statistics`
+  functions the result screen uses, over the same `VisitRecord` shape. **A figure it cannot support
+  comes back as a dash and a reason**, so a new phone shows three dashes and says why. Filling that
+  strip with zeroes to make the screen look fuller was the one thing that could not be done, and the
+  reason is PD-018's: a number without its sample is a claim rather than a description.
+- **The window is in the label.** *Last 7 days*, on the screen, not only in a comment.
+- **Both players' darts are in it**, because that is what the phone has seen, and the strip says so.
+  A person's own figures are on their own page, where `PersonSummary` pools only the visits they
+  threw.
+
+**Nothing arrived.** A screen that is simply *there* the instant it is pushed has no craft in it
+however good its typography is. `throEntrance` gives each block of a screen a 12-point rise and a
+45-millisecond beat after the one above it — the design's own `motionTravelMedium` and its own
+`motionEasingSet`, which were in the tokens all along and which nothing but the opening sequence
+could reach as an `Animation`. That is what "generic" looked like from the inside: an app whose
+motion was Apple's rather than its own. `Animation.throEnter/throResolve/throExit` fix that for
+every transition, not only for entrances.
+
+**It withdraws completely under Reduce Motion**, and withdrawing means the content is present at
+full opacity on the first frame — never a gentler version of the same animation. **The stagger is
+capped at six blocks**, because the eighth section of a long screen arriving a third of a second
+late is a wait rather than choreography.
+
+### How to reverse
+
+`throEntrance` becoming the identity modifier removes every entrance in the app at once. Home's
+strip and card are `WeekStrip` and `ContinueCard`; deleting the two calls in `HomeScreen.sections`
+returns Home to the list it was.
+
+## PD-026 — A match can be put on a shelf, and a match can be taken off the phone
+
+**Asked** 2026-09-07 by the founder. **Answered** 2026-09-07.
+
+> *"option to delete or achive games."*
+
+Two asks, and only one of them touched anything difficult.
+
+**Archiving is a shelf.** A match is taken off Home and out of nothing else: it is in the journal, in
+the export, on the person's page and in every figure derived from it, because it happened.
+Reversible, and reversible is the point — this is the right answer for almost everybody who wants a
+match gone from their screen. It is a column on `local_match`, which is a mutable table and always
+was.
+
+**Deleting collided with the append-only trigger**, which aborted every `DELETE` on `journal`
+unconditionally. That trigger is the whole of the journal's trustworthiness and the temptation was
+to weaken it quietly. What settles it is a distinction the trigger was not making:
+
+> Append-only exists so that **what a visit says cannot be changed**. It does not exist to make a
+> person keep a match they never wanted recorded.
+
+A journal that will not let you edit a visit is honest. A journal that will not let you throw away a
+match you started by mistake is not principled, it is stubborn — and on a phone in the United
+Kingdom it is also a person being refused erasure of their own record.
+
+So the rule is **narrowed, not removed**, and narrowed in a way a test can hold:
+
+- `journal_append_only_update` is **unchanged and unconditional**. Nothing may ever edit a row.
+- `journal_append_only_delete` now aborts unless the row's match is the one a purge is currently
+  naming in `meta`. Only `deleteMatch` sets that key, only inside its own transaction, and it clears
+  it in the same transaction — so a crash mid-purge rolls the key back with the rows.
+- With no purge running the subquery is NULL, `OLD.match_id IS NOT NULL` is true, and every delete
+  raises exactly as before. **A bare `DELETE FROM journal` still aborts**, and so does a delete of
+  another match's rows *while a purge is running*. Both are asserted.
+
+**One delete is refused outright, and it is not about tidiness.** A league result scored in THRØ
+cites its match by id, and that citation is the whole of its provenance — it is what makes the
+result *scored* rather than *somebody typed it in*. Deleting the match would leave a table resting
+on evidence nobody could produce. `AppStore.deletionRefusal` says so, names how many fixtures, and
+offers the shelf, which does everything the person wanted and keeps all of it.
+
+**The warning before a delete names what is lost**, not "this cannot be undone" — which every app
+says and nobody reads. The two names, the date, the visits, and the one thing the person cannot know
+from the row: *an export or a backup written before now still has it, and nothing this app can do
+reaches those.*
+
+**The controls are in an edit mode**, not on every row. A delete button permanently under the thumb
+of somebody reaching to open a match is a trap; a delete hidden behind a long press is hidden from
+everybody who has never discovered a long press.
+
+### How to reverse
+
+Dropping `archived_at` and restoring the unconditional delete trigger returns the journal exactly to
+what it was; `deleteMatch` then fails, loudly, which is the correct failure. There is no state to
+migrate back — an archived match is a match with a date in one column.
+
+## PD-025 — Undo belongs to the match, not to the result
+
+**Asked** 2026-09-07 by the founder. **Answered** 2026-09-07.
+
+> *"undo last visit shouldn't be on results page as thats when its all done."*
+
+Right, and the reason is sharper than clutter. The result screen is the moment a match becomes a
+record. Offering to unpick the last visit there invites a player to reopen something they have just
+watched close — and PD-004's argument for undo, *the mis-key that ends a match is the one that most
+needs undoing*, is already answered by the confirm step that comes **before** this screen, not by a
+third button on it.
+
+So the finished result screen has two actions and both of them finish: **Done** and **Play again**.
+
+**One case keeps it, and keeps it somewhere else.** Where a result is disputed the screen already
+says, in its own words, *"Undo the visit that is wrong and confirm again."* A screen that gives an
+instruction and no way to follow it is worse than either. The undo now sits directly under that
+sentence, in Evidence, worded as what that sentence asked for — and it is not there on an ended
+match, where the journal refuses a retraction (PD-016) and the sentence is still true of the record.
+
+### How to reverse
+
+Moving the button back into the action block restores the old screen exactly; nothing about the
+retraction itself changed.
+
 ## PD-024 — The scoring screen reflows instead of capping a player's text
 
 **Asked** 2026-09-07. **Answered** 2026-09-07: the upper region scrolls above a pinned keypad.

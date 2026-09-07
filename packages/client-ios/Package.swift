@@ -82,7 +82,7 @@ let package = Package(
             path: "Sources/ThroApp"
         ),
         .testTarget(name: "ThroAppTests",
-                    dependencies: ["ThroApp", "ThroJournal",
+                    dependencies: ["ThroApp", "ThroJournal", "ThroPlay",
                                    .product(name: "ThroEngine", package: "engine-swift"),
                                    .product(name: "ThroTokens", package: "design-tokens")],
                     path: "Tests/ThroAppTests"),

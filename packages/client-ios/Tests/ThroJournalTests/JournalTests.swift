@@ -97,6 +97,145 @@ final class JournalTests: XCTestCase {
         XCTAssertEqual(try j.entries(for: m.id).map(\.visitTotal), [60])
     }
 
+    // MARK: the shelf, and taking a match off the phone (PD-026)
+
+    /// Archiving is a fact about a list, not about the darts. Every reader that is not Home still
+    /// sees the match, which is the whole reason it is offered as the answer to "get this off my
+    /// screen".
+    func testArchivingTakesAMatchOffHomeAndNowhereElse() throws {
+        let j = try open()
+        let kept = try j.createMatch(NewMatch(homeName: "A", awayName: "B"),
+                                     startedAt: Date(timeIntervalSince1970: 2_000))
+        let shelved = try j.createMatch(NewMatch(homeName: "C", awayName: "D"),
+                                        startedAt: Date(timeIntervalSince1970: 1_000))
+        try j.append(.visit(Seat.home.playerId, 60), to: shelved.id)
+
+        try j.setArchived(shelved.id, true)
+        XCTAssertEqual(try j.matches(archived: false).map(\.id), [kept.id])
+        XCTAssertEqual(try j.matches(archived: true).map(\.id), [shelved.id])
+        XCTAssertEqual(try j.matches().map(\.id), [kept.id, shelved.id], "everything, for the export")
+        XCTAssertNotNil(try j.match(shelved.id).archivedAt)
+        XCTAssertTrue(try j.match(shelved.id).isArchived)
+        XCTAssertEqual(try j.entries(for: shelved.id).map(\.visitTotal), [60], "the visit is untouched")
+
+        try j.setArchived(shelved.id, false)
+        XCTAssertNil(try j.match(shelved.id).archivedAt)
+        XCTAssertEqual(try j.matches(archived: false).map(\.id), [kept.id, shelved.id])
+        XCTAssertThrowsError(try j.setArchived(MatchId("nope"), true))
+    }
+
+    /// The archive stamp survives a close and reopen, like every other column. It is stored, not a
+    /// flag some view model is holding.
+    func testTheShelfSurvivesReopening() throws {
+        let m: MatchRecord
+        do {
+            let j = try open()
+            m = try j.createMatch(NewMatch(homeName: "A", awayName: "B"))
+            try j.setArchived(m.id, true)
+        }
+        let reopened = try open()
+        XCTAssertTrue(try reopened.match(m.id).isArchived)
+        XCTAssertTrue(try reopened.matches(archived: false).isEmpty)
+    }
+
+    /// A delete takes the match and every visit in it, and leaves everything else exactly as it was.
+    func testDeletingAMatchTakesItsVisitsAndNothingElse() throws {
+        let j = try open()
+        let doomed = try j.createMatch(NewMatch(homeName: "A", awayName: "B"))
+        let kept = try j.createMatch(NewMatch(homeName: "C", awayName: "D"))
+        try j.append(.visit(Seat.home.playerId, 180), to: doomed.id)
+        try j.append(.visit(Seat.away.playerId, 60), to: doomed.id)
+        try j.append(.visit(Seat.home.playerId, 100), to: kept.id)
+
+        XCTAssertEqual(try j.deleteMatch(doomed.id), 2, "it says how many darts went with it")
+        XCTAssertEqual(try j.matches().map(\.id), [kept.id])
+        XCTAssertThrowsError(try j.match(doomed.id))
+        XCTAssertTrue(try j.entries(for: doomed.id).isEmpty)
+        XCTAssertEqual(try j.entries(for: kept.id).map(\.visitTotal), [100])
+        XCTAssertThrowsError(try j.deleteMatch(doomed.id), "and it is gone, so a second one fails")
+    }
+
+    /// The delete a person asks for is the ONLY delete. Everything else still aborts — including a
+    /// bare `DELETE FROM journal`, which is what the trigger was written to stop and what a
+    /// carelessly relaxed trigger would have let through.
+    func testEveryDeleteThatIsNotAPurgeIsStillRefused() throws {
+        let j = try open()
+        let m = try j.createMatch(NewMatch(homeName: "A", awayName: "B"))
+        try j.append(.visit(Seat.home.playerId, 60), to: m.id)
+
+        XCTAssertThrowsError(try j.exec("DELETE FROM journal;")) { error in
+            XCTAssertTrue("\(error)".contains("append-only"), "got: \(error)")
+        }
+        XCTAssertThrowsError(try j.exec("DELETE FROM journal WHERE match_id = '\(m.id.value)';")) { error in
+            XCTAssertTrue("\(error)".contains("append-only"), "got: \(error)")
+        }
+        XCTAssertThrowsError(try j.exec("UPDATE journal SET visit_total = 180;")) { error in
+            XCTAssertTrue("\(error)".contains("append-only"), "got: \(error)")
+        }
+        XCTAssertEqual(try j.entries(for: m.id).map(\.visitTotal), [60])
+    }
+
+    /// A purge opens the door for exactly one match. While one is named, another match's rows are
+    /// as protected as they were before — which is the difference between narrowing the rule and
+    /// removing it.
+    func testAPurgeUnlocksOnlyTheMatchItNames() throws {
+        let j = try open()
+        let named = try j.createMatch(NewMatch(homeName: "A", awayName: "B"))
+        let other = try j.createMatch(NewMatch(homeName: "C", awayName: "D"))
+        try j.append(.visit(Seat.home.playerId, 60), to: named.id)
+        try j.append(.visit(Seat.home.playerId, 41), to: other.id)
+
+        try j.exec("INSERT OR REPLACE INTO meta (key, value) VALUES ('purging', '\(named.id.value)');")
+        XCTAssertThrowsError(try j.exec("DELETE FROM journal WHERE match_id = '\(other.id.value)';")) { error in
+            XCTAssertTrue("\(error)".contains("append-only"), "got: \(error)")
+        }
+        XCTAssertEqual(try j.entries(for: other.id).map(\.visitTotal), [41])
+        try j.exec("DELETE FROM meta WHERE key = 'purging';")
+        XCTAssertThrowsError(try j.exec("DELETE FROM journal WHERE match_id = '\(named.id.value)';"),
+                             "and with no purge running, not even that one")
+    }
+
+    /// A journal written before the shelf existed opens with the column and the narrowed trigger,
+    /// and every match in it reads back as what it was: on Home.
+    func testAJournalFromBeforeTheShelfIsUpgradedOnOpen() throws {
+        var handle: OpaquePointer?
+        XCTAssertEqual(sqlite3_open(path, &handle), SQLITE_OK)
+        let h = handle!
+        // The schema as it stood, including the unconditional delete trigger.
+        try Journal.exec(h, """
+            CREATE TABLE local_match (
+              match_id TEXT PRIMARY KEY, home_name TEXT NOT NULL, away_name TEXT NOT NULL,
+              starting_score INTEGER NOT NULL, out_rule TEXT NOT NULL, legs_mode TEXT NOT NULL,
+              legs_target INTEGER NOT NULL, throw_first TEXT NOT NULL, started_at TEXT NOT NULL,
+              device_id TEXT NOT NULL);
+            """)
+        try Journal.exec(h, """
+            CREATE TABLE journal (
+              match_id TEXT NOT NULL REFERENCES local_match(match_id), device_id TEXT NOT NULL,
+              device_seq INTEGER NOT NULL, command_id TEXT NOT NULL UNIQUE,
+              kind TEXT NOT NULL DEFAULT 'visit', seat TEXT NOT NULL, visit_total INTEGER NOT NULL,
+              darts_used INTEGER, darts_at_double INTEGER, occurred_at TEXT NOT NULL,
+              PRIMARY KEY (match_id, device_id, device_seq));
+            """)
+        try Journal.exec(h, """
+            CREATE TRIGGER journal_append_only_delete BEFORE DELETE ON journal
+            BEGIN SELECT RAISE(ABORT, 'journal is append-only'); END;
+            """)
+        try Journal.exec(h, """
+            INSERT INTO local_match (match_id, home_name, away_name, starting_score, out_rule,
+                                     legs_mode, legs_target, throw_first, started_at, device_id)
+            VALUES ('old', 'A', 'B', 501, 'double', 'bestOf', 3, 'home', '2024-01-01T00:00:00Z', 'd');
+            """)
+        sqlite3_close(h)
+
+        let j = try open()
+        XCTAssertFalse(try j.match(MatchId("old")).isArchived, "a match nobody archived is on Home")
+        XCTAssertEqual(try j.matches(archived: false).count, 1)
+        // The old trigger was replaced rather than left beside the new one, so a purge works.
+        try j.append(.visit(Seat.home.playerId, 60), to: MatchId("old"))
+        XCTAssertEqual(try j.deleteMatch(MatchId("old")), 1)
+    }
+
     // MARK: replay
 
     /// A whole leg, played through the engine and journaled, is rebuilt exactly by replay — including

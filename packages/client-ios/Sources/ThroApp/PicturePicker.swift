@@ -93,18 +93,14 @@ struct PicturePicker: View {
                             Text(preview == nil ? "Choose a \(noun)" : "Change \(noun)")
                                 .thro(ThroTypography.label.weight(.semibold))
                                 .foregroundStyle(ThroColor.colorTextBrand)
+                                .throTapTarget(.leading)
                         }
                         if preview != nil {
-                            Button {
+                            ThroTextButton("Remove \(noun)", tone: .destructive) {
                                 removed = true
                                 picked = nil
                                 item = nil
-                            } label: {
-                                Text("Remove \(noun)")
-                                    .thro(ThroTypography.label.weight(.semibold))
-                                    .foregroundStyle(ThroColor.colorStatusError)
                             }
-                            .buttonStyle(.plain)
                         }
                     }
                 }

@@ -214,8 +214,10 @@ public struct MatchSetupScreen: View {
                                 .padding(.horizontal, 12)
                                 .background(ThroColor.colorBackgroundSecondary,
                                             in: Capsule())
+                                .frame(minHeight: ThroSpacing.touchTargetMinimum)
+                                .throRowTapTarget()
                         }
-                        .buttonStyle(.plain)
+                        .buttonStyle(ThroPressStyle(radius: 22))
                     }
                 }
                 .padding(.vertical, 1)
@@ -814,6 +816,14 @@ public struct MatchResultScreen: View {
                                 .thro(ThroTypography.metadata)
                                 .foregroundStyle(ThroColor.colorTextSecondary)
                                 .fixedSize(horizontal: false, vertical: true)
+                            // PD-025. The sentence above tells a player to undo a visit, so the
+                            // control to do it belongs under that sentence and nowhere else. On an
+                            // ended match the journal refuses a retraction (PD-016), so there is no
+                            // button there — only the sentence, which is still true of the record.
+                            if session.ending == nil && session.retraction == nil {
+                                ThroButton("Undo the visit that is wrong", variant: .secondary,
+                                           size: .medium, action: session.proposeRetraction)
+                            }
                         } else if session.standing.stale {
                             Text("The result changed after it was agreed, so the agreement no longer applies to it. Confirm it again.")
                                 .thro(ThroTypography.metadata)
@@ -834,15 +844,18 @@ public struct MatchResultScreen: View {
                         RetractionCard(proposal: proposal, playerName: session.name(proposal.seat),
                                        onConfirm: session.confirmRetraction, onCancel: session.cancelRetraction)
                     } else {
+                        // PD-025. Two actions, and both of them finish. The founder: *"undo last
+                        // visit shouldn't be on results page as thats when its all done."* Right —
+                        // and the reason is sharper than clutter. This screen is the moment a match
+                        // becomes a record; offering to unpick the last visit here invites a player
+                        // to reopen something they have just watched close, and PD-004's argument
+                        // for undo — *the mis-key that ends a match is the one that most needs
+                        // undoing* — is answered by the confirm step that comes **before** this
+                        // screen, not by a third button on it. Where a result is disputed the undo
+                        // is still reachable, under the sentence in Evidence that asks for it.
                         section {
                             ThroButton("Done", variant: .primary, size: .large, fullWidth: true, action: onDone)
                             ThroButton("Play again", variant: .secondary, size: .large, fullWidth: true, action: onPlayAgain)
-                            // The mis-key that ends a match is the one that most needs undoing (PD-004).
-                            // Not on an ended match: the journal refuses it there (PD-016), and a
-                            // button whose only outcome is a refusal is worse than no button.
-                            if session.ending == nil {
-                                ThroButton("Undo last visit", variant: .ghost, size: .medium, action: session.proposeRetraction)
-                            }
                         }
                     }
                 }

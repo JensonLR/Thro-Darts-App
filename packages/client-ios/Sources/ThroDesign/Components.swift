@@ -142,7 +142,7 @@ public struct ThroButton: View {
             .clipShape(RoundedRectangle(cornerRadius: ThroSpacing.radiusControl))
             .contentShape(RoundedRectangle(cornerRadius: ThroSpacing.radiusControl))
         }
-        .buttonStyle(.plain)
+        .buttonStyle(ThroPressStyle(radius: ThroSpacing.radiusControl))
         .disabled(disabled || loading)
         .opacity(disabled ? 0.38 : 1)
         .accessibilityAddTraits(loading ? .updatesFrequently : [])
@@ -236,8 +236,9 @@ public struct SectionHeader: View {
                     }
                     .foregroundStyle(ThroColor.colorTextBrand)
                     .frame(minHeight: ThroSpacing.touchTargetMinimum)
+                    .contentShape(Rectangle())
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(ThroPressStyle(radius: ThroSpacing.radiusStatus))
             }
         }
         .padding(.bottom, ThroSpacing.spacing3)

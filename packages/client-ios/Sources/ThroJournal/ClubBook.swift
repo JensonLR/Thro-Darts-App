@@ -797,6 +797,20 @@ public final class ClubBook {
         return out
     }
 
+    /// Which fixtures, if any, rest on this match (PD-026).
+    ///
+    /// A result scored on this phone cites the match it came from, and that citation is the whole
+    /// of its provenance: it is what separates *scored here* from *somebody typed it in*. Deleting
+    /// the match would leave a table standing on evidence nobody could produce, so `AppStore`
+    /// refuses the delete while this returns anything and offers archiving instead.
+    public func fixturesCiting(match matchId: String) throws -> [String] {
+        var out: [String] = []
+        try run("SELECT fixture_id FROM fixture_result WHERE match_id = ?;", [.text(matchId)]) { s in
+            out.append(Journal.text(s, 0))
+        }
+        return out
+    }
+
     /// Takes a result off a fixture. The fixture stays played — it was — and the table simply has
     /// one fewer result in it.
     public func clearResult(fixture fixtureId: String, in clubId: String) throws {

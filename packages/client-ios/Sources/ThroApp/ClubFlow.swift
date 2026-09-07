@@ -966,9 +966,12 @@ public struct NewClubScreen: View {
                         Spacer(minLength: 0)
                     }
                     .padding(.vertical, ThroSpacing.spacing2)
-                    .contentShape(Rectangle())
+                    .frame(minHeight: ThroSpacing.touchTargetMinimum)
+                    .throRowTapTarget()
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(ThroPressStyle(radius: ThroSpacing.radiusCard,
+                                            pressedFill: ThroColor.colorSurfaceSecondary,
+                                            scales: false))
                 .accessibilityAddTraits(shape == option ? [.isSelected] : [])
             }
             Note("**Chosen once.** A tournament keeps its shape, because changing it would change "

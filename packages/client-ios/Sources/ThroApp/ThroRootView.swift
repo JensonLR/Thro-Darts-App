@@ -55,6 +55,21 @@ public final class AppStore: ObservableObject {
     /// Why the list of matches could not be read, when it could not. An empty list and an unreadable
     /// one are different facts and the screen must not show the second as the first.
     @Published public private(set) var listProblem: String?
+    /// The matches that have been put away (PD-026). Their own list, read at the same time as
+    /// Home's, so opening the shelf is not a second trip to the database.
+    @Published public private(set) var archived: [HomeMatch] = []
+    /// What went wrong the last time somebody tried to archive or delete something, if anything.
+    /// Shown on the screen that asked, then cleared — a failure that only appears in a log is a
+    /// failure the person is left to guess at.
+    @Published public var actionProblem: String?
+
+    /// Which fixtures cite a match, so a delete that would strip a league table of its evidence can
+    /// be refused (PD-026). A closure because the fixtures live in `ClubBook` — a different
+    /// database, deliberately — and this store must not learn to open it.
+    public var fixturesCiting: (MatchId) -> [String] = { _ in [] }
+    /// What this phone has done in the last seven days (PD-027). Nil while the journal cannot be
+    /// read; the screen shows the reason it already has rather than an empty strip.
+    @Published public private(set) var week: DeviceSummary.Week?
 
     public init() {
         do {
@@ -152,31 +167,92 @@ public final class AppStore: ObservableObject {
     /// purpose**, and the app answered by hiding the match. Evidence that exists must never be
     /// shown as evidence that does not.
     public func refresh() {
-        guard let journal else { matches = []; listProblem = nil; return }
+        guard let journal else { matches = []; archived = []; listProblem = nil; return }
         let records: [MatchRecord]
         do {
             records = try journal.matches()
             listProblem = nil
         } catch {
             matches = []
+            archived = []
             listProblem = "\(error)"
             return
         }
-        matches = records.map { record in
-            do {
-                let state = try journal.replay(record.id)
-                let ending = try journal.ending(for: record.id)
-                return HomeMatch(record: record,
-                                 legsHome: state.legsWonTotal[Seat.home.playerId] ?? 0,
-                                 legsAway: state.legsWonTotal[Seat.away.playerId] ?? 0,
-                                 // Ended short counts as complete here: the keypad is closed and the
-                                 // row must not offer to resume a match nothing more can be added to.
-                                 complete: state.isComplete || ending != nil, unreadable: nil,
-                                 ending: ending)
-            } catch {
-                return HomeMatch(record: record, legsHome: 0, legsAway: 0,
-                                 complete: false, unreadable: "\(error)")
-            }
+        let all = records.map { home($0, in: journal) }
+        matches = all.filter { !$0.record.isArchived }
+        archived = all.filter { $0.record.isArchived }
+        // Only the last seven days are replayed for this, so the cost is bounded by how much darts
+        // somebody has thrown this week rather than by how long they have had the app.
+        week = try? DeviceSummary.week(in: journal)
+    }
+
+    /// One row, replayed. Split out of `refresh` when the shelf arrived (PD-026) so that Home and
+    /// the shelf are built by the same code rather than by two that must be kept alike.
+    private func home(_ record: MatchRecord, in journal: Journal) -> HomeMatch {
+        do {
+            let state = try journal.replay(record.id)
+            let ending = try journal.ending(for: record.id)
+            return HomeMatch(record: record,
+                             legsHome: state.legsWonTotal[Seat.home.playerId] ?? 0,
+                             legsAway: state.legsWonTotal[Seat.away.playerId] ?? 0,
+                             // Ended short counts as complete here: the keypad is closed and the
+                             // row must not offer to resume a match nothing more can be added to.
+                             complete: state.isComplete || ending != nil, unreadable: nil,
+                             ending: ending)
+        } catch {
+            return HomeMatch(record: record, legsHome: 0, legsAway: 0,
+                             complete: false, unreadable: "\(error)")
+        }
+    }
+
+    // MARK: - putting a match away, and taking it off the phone (PD-026)
+
+    /// Moves a match to the shelf, or brings it back. Nothing is lost either way.
+    public func setArchived(_ id: MatchId, _ archived: Bool) {
+        guard let journal else { return }
+        do {
+            try journal.setArchived(id, archived)
+            actionProblem = nil
+            refresh()
+        } catch {
+            actionProblem = "\(error)"
+        }
+    }
+
+    /// Why this match may not be deleted, or nil when it may.
+    ///
+    /// **The refusal is about somebody else's record, not about this phone's tidiness.** A result a
+    /// league has taken from this match cites it by id; that citation is what makes the result
+    /// *scored* rather than *typed in*, and deleting the match would leave a table resting on
+    /// evidence nobody could produce. Archiving does everything the person wanted and keeps it.
+    public func deletionRefusal(_ id: MatchId) -> String? {
+        let citing = fixturesCiting(id)
+        guard !citing.isEmpty else { return nil }
+        let fixtures = citing.count == 1 ? "a fixture" : "\(citing.count) fixtures"
+        return "This match cannot be deleted: \(fixtures) took a result from it, and that result "
+             + "would be left claiming evidence that no longer exists. Archive it instead — it "
+             + "leaves Home and everything it proves stays."
+    }
+
+    /// Takes a match off this phone for good.
+    ///
+    /// Returns how many visits went with it, so the screen can say what was actually lost rather
+    /// than "deleted". Refuses when `deletionRefusal` has something to say.
+    @discardableResult
+    public func delete(_ id: MatchId) -> Int? {
+        guard let journal else { return nil }
+        if let refusal = deletionRefusal(id) {
+            actionProblem = refusal
+            return nil
+        }
+        do {
+            let rows = try journal.deleteMatch(id)
+            actionProblem = nil
+            refresh()
+            return rows
+        } catch {
+            actionProblem = "\(error)"
+            return nil
         }
     }
 }
@@ -264,56 +340,421 @@ public struct ThroRootView: View {
 /// Home, honestly. The export's `home-new` shows a rating hero, a confidence meter and events near
 /// you; none of those exist for this build (OD-001, no servers), so Home shows what is true: the
 /// matches on this device, or an empty state with the one action that is real.
+/// The first screen of the app.
+///
+/// **It was a title, a list and a button.** The founder: *"home page feels very bare & basic, all
+/// screens feel bare & basic."* Correct, and the fix is not decoration. A darts app's first screen
+/// should answer three things before a finger moves: *is there a match I walked away from*, *what
+/// have I been throwing*, and *what happened lately* — in that order, because that is the order
+/// they matter in.
+///
+/// So, top to bottom: the masthead, on the board's own dark surface rather than a system title bar;
+/// the match in progress, if there is one, as the largest object on the screen; the last seven days
+/// as figures from the audited honesty layer; then the record, then the shelf. Each block lands a
+/// beat after the one above it (`throEntrance`).
+///
+/// **Nothing here is filler.** Every number comes from `DeviceSummary`, which comes from
+/// `Statistics`, which returns *unavailable* rather than a flattering zero — so a new phone shows
+/// dashes and says why, and a screen that is honestly empty stays honestly empty.
 public struct HomeScreen: View {
     @ObservedObject var store: AppStore
+    /// Whether the rows are showing their archive and delete controls (PD-026). Off by default:
+    /// the common thing a person does with a match is open it.
+    @State private var editing = false
+    /// The match a delete has been asked for and not yet confirmed.
+    @State private var confirmingDelete: AppStore.HomeMatch?
+    @State private var showingArchive = false
 
     public init(store: AppStore) { self.store = store }
 
+    /// The match to offer to continue: the newest one still open. A match that ended short is not
+    /// one of these — `complete` is true for it — so the card never offers to resume something the
+    /// journal would refuse to take another dart for (PD-016).
+    private var inProgress: AppStore.HomeMatch? {
+        store.matches.first { !$0.complete && $0.unreadable == nil }
+    }
+
     public var body: some View {
-        VStack(spacing: 0) {
-            TopBar("Home", large: true)
-            ScrollView {
-                VStack(alignment: .leading, spacing: 0) {
-                    FontSubstitutionNotice()
-                        .padding(.horizontal, ThroSpacing.spaceScreenGutter)
-                        .padding(.top, ThroSpacing.spacing4)
-                    if let problem = store.openProblem {
-                        block {
-                            ErrorState(title: "The journal could not be opened",
-                                       what: problem,
-                                       safe: "Nothing has been lost. The journal is a file on this device and it has not been written to.",
-                                       todo: "Close the app and open it again. If it keeps happening, say so — this is the file every match on this phone lives in.")
-                        }
-                    } else if let problem = store.listProblem {
-                        block {
-                            ErrorState(title: "Your matches could not be read",
-                                       what: problem,
-                                       safe: "Every match is still on this device. This screen could not read the list; it did not delete anything.",
-                                       todo: "Close the app and open it again.",
-                                       actionLabel: "Try again") { store.refresh() }
-                        }
-                    } else if store.matches.isEmpty {
-                        block {
-                            EmptyState(title: "No matches yet",
-                                       message: "Score a match on this device and it will appear here.",
-                                       actionLabel: "Start match") { store.flow = .new }
-                        }
-                    } else {
-                        block {
-                            SectionHeader("On this device", meta: "\(store.matches.count) \(store.matches.count == 1 ? "match" : "matches")")
-                            ForEach(store.matches) { match in
-                                MatchRow(match: match) { store.flow = .resume(match.id) }
-                                ThroDivider()
-                            }
-                        }
-                        block {
-                            ThroButton("Start match", variant: .primary, size: .large, fullWidth: true) { store.flow = .new }
-                        }
-                    }
-                }
+        Group {
+            if showingArchive {
+                ArchiveScreen(store: store, onBack: { showingArchive = false })
+            } else {
+                home
             }
         }
         .background(ThroColor.colorBackgroundPrimary.ignoresSafeArea())
+    }
+
+    private var home: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 0) {
+                Masthead(line: mastheadLine).throEntrance(0)
+                FontSubstitutionNotice()
+                    .padding(.horizontal, ThroSpacing.spaceScreenGutter)
+                    .padding(.top, ThroSpacing.spacing4)
+                if let problem = store.actionProblem {
+                    block {
+                        Snackbar(problem, tone: .error, actionLabel: "OK") { store.actionProblem = nil }
+                    }
+                }
+                if let problem = store.openProblem {
+                    block {
+                        ErrorState(title: "The journal could not be opened",
+                                   what: problem,
+                                   safe: "Nothing has been lost. The journal is a file on this device and it has not been written to.",
+                                   todo: "Close the app and open it again. If it keeps happening, say so — this is the file every match on this phone lives in.")
+                    }
+                } else if let problem = store.listProblem {
+                    block {
+                        ErrorState(title: "Your matches could not be read",
+                                   what: problem,
+                                   safe: "Every match is still on this device. This screen could not read the list; it did not delete anything.",
+                                   todo: "Close the app and open it again.",
+                                   actionLabel: "Try again") { store.refresh() }
+                    }
+                } else if store.matches.isEmpty && store.archived.isEmpty {
+                    block {
+                        EmptyState(title: "No matches yet",
+                                   message: "Score a match on this device and it will appear here.",
+                                   actionLabel: "Start match") { store.flow = .new }
+                    }
+                    .throEntrance(1)
+                } else {
+                    sections(after: store.openProblem == nil ? 1 : 2)
+                }
+            }
+            .padding(.bottom, ThroSpacing.spacing6)
+        }
+        .confirmationDialog("Delete this match?",
+                            isPresented: Binding(get: { confirmingDelete != nil },
+                                                 set: { if !$0 { confirmingDelete = nil } }),
+                            titleVisibility: .visible) {
+            Button("Delete for good", role: .destructive) {
+                if let match = confirmingDelete { store.delete(match.id) }
+                confirmingDelete = nil
+            }
+            Button("Archive instead") {
+                if let match = confirmingDelete { store.setArchived(match.id, true) }
+                confirmingDelete = nil
+            }
+            Button("Cancel", role: .cancel) { confirmingDelete = nil }
+        } message: {
+            if let match = confirmingDelete { Text(HomeScreen.deleteWarning(match)) }
+        }
+    }
+
+    /// What a delete actually costs, said in full before it happens.
+    ///
+    /// Not "this cannot be undone", which every app says and nobody reads. The names, the darts and
+    /// where the record will and will not survive — because the one thing a person cannot know from
+    /// the row is whether they already sent this match somewhere.
+    static func deleteWarning(_ match: AppStore.HomeMatch) -> String {
+        let who = "\(match.record.homeName) v \(match.record.awayName)"
+        let when = match.record.startedAt.formatted(date: .abbreviated, time: .shortened)
+        return "\(who), \(when). Every visit in it leaves this phone and its figures leave your "
+             + "history. An export or a backup written before now still has it; nothing this app "
+             + "can do reaches those. Archiving takes it off Home and keeps all of it."
+    }
+
+    @ViewBuilder private func sections(after first: Int) -> some View {
+        if let match = inProgress {
+            block {
+                ContinueCard(match: match) { store.flow = .resume(match.id) }
+            }
+            .throEntrance(first)
+        }
+        if let week = store.week, !store.matches.isEmpty || !store.archived.isEmpty {
+            block {
+                WeekStrip(week: week)
+            }
+            .throEntrance(first + 1)
+        }
+        if !store.matches.isEmpty {
+            block {
+                SectionHeader("On this device",
+                              meta: "\(store.matches.count) \(store.matches.count == 1 ? "match" : "matches")",
+                              action: editing ? "Done" : "Edit") {
+                    withAnimation(.throEnter()) { editing.toggle() }
+                }
+                ForEach(store.matches) { match in
+                    MatchRow(match: match,
+                             editing: editing,
+                             onOpen: { store.flow = .resume(match.id) },
+                             onArchive: { withAnimation(.throEnter()) { store.setArchived(match.id, true) } },
+                             onDelete: { confirmingDelete = match })
+                    ThroDivider()
+                }
+            }
+            .throEntrance(first + 2)
+        }
+        if !store.archived.isEmpty {
+            block {
+                ShelfRow(count: store.archived.count) { showingArchive = true }
+            }
+            .throEntrance(first + 3)
+        }
+        block {
+            ThroButton("Start match", variant: .primary, size: .large, fullWidth: true) { store.flow = .new }
+        }
+        .throEntrance(first + 4)
+    }
+
+    /// One line under the wordmark, and it is a fact rather than a greeting. "Good evening" tells a
+    /// player nothing; the number of matches this phone has watched this week tells them where they
+    /// are.
+    private var mastheadLine: String {
+        if store.openProblem != nil { return "The journal could not be opened" }
+        guard let week = store.week else { return "Nothing has left this phone" }
+        if week.matches == 0 {
+            return store.matches.isEmpty && store.archived.isEmpty
+                ? "Nothing on this phone yet"
+                : "Nothing in the last seven days"
+        }
+        let matches = "\(week.matches) match\(week.matches == 1 ? "" : "es")"
+        let legs = week.legs == 0 ? "" : " · \(week.legs) leg\(week.legs == 1 ? "" : "s")"
+        return "\(matches)\(legs) this week"
+    }
+
+    private func block<Content: View>(@ViewBuilder _ content: () -> Content) -> some View {
+        VStack(alignment: .leading, spacing: ThroSpacing.spacing3) { content() }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.vertical, ThroSpacing.spacing6)
+            .padding(.horizontal, ThroSpacing.spaceScreenGutter)
+    }
+}
+
+/// The top of Home: the mark, on the board's own surface.
+///
+/// **Not a `TopBar`.** A large title in a system bar is what every app on the phone opens with, and
+/// the founder's word for that was *generic*. THRØ has a dark board surface of its own and a mark
+/// that was drawn for it; this is the one place on Home where the app says its own name, so it says
+/// it in its own colours and lets the rest of the screen be plain.
+struct Masthead: View {
+    let line: String
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: ThroSpacing.spacing2) {
+            Text("THRØ")
+                .thro(ThroTypography.display.tracking(em: 0.02))
+                .foregroundStyle(ThroColor.throChalk)
+                .accessibilityAddTraits(.isHeader)
+            Text(line)
+                .thro(ThroTypography.label)
+                .foregroundStyle(ThroColor.throChalk.opacity(0.72))
+                .lineLimit(2)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, ThroSpacing.spaceScreenGutter)
+        .padding(.top, ThroSpacing.spacing6)
+        .padding(.bottom, ThroSpacing.spacing6)
+        .background(alignment: .bottom) {
+            ZStack(alignment: .bottom) {
+                ThroColor.throChalkSunken
+                // A single hairline where the board meets the page, the same one the scoring screen
+                // uses between the board and the keypad. It is what stops a dark block from reading
+                // as a coloured rectangle somebody dropped on the screen.
+                Rectangle().fill(ThroColor.throChalkHairline).frame(height: 1)
+            }
+            .ignoresSafeArea(edges: .top)
+        }
+    }
+}
+
+/// The match you walked away from, offered back.
+///
+/// **The largest object on Home when it exists**, because it is the only thing on the screen that
+/// is unfinished. It was a row in a list, indistinguishable from thirty finished matches, marked
+/// only by a small blue tag.
+struct ContinueCard: View {
+    let match: AppStore.HomeMatch
+    let onContinue: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: ThroSpacing.spacing4) {
+            HStack(alignment: .firstTextBaseline) {
+                Eyebrow("Still going", color: ThroColor.colorTextBrand)
+                Spacer(minLength: ThroSpacing.spacing2)
+                Text(match.record.startedAt.formatted(date: .abbreviated, time: .shortened))
+                    .thro(ThroTypography.metadata)
+                    .foregroundStyle(ThroColor.colorTextTertiary)
+                    .lineLimit(1)
+            }
+            HStack(alignment: .firstTextBaseline, spacing: ThroSpacing.spacing3) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(match.record.homeName)
+                        .thro(ThroTypography.heading2.weight(.bold))
+                        .foregroundStyle(ThroColor.colorTextPrimary)
+                        .lineLimit(1)
+                    Text(match.record.awayName)
+                        .thro(ThroTypography.heading2.weight(.bold))
+                        .foregroundStyle(ThroColor.colorTextPrimary)
+                        .lineLimit(1)
+                }
+                Spacer(minLength: ThroSpacing.spacing2)
+                VStack(alignment: .trailing, spacing: 2) {
+                    Text("\(match.legsHome)")
+                        .thro(ThroTypography.heading2.family(.sport).weight(.bold))
+                    Text("\(match.legsAway)")
+                        .thro(ThroTypography.heading2.family(.sport).weight(.bold))
+                }
+                .foregroundStyle(ThroColor.colorTextPrimary)
+            }
+            Text("\(match.record.startingScore) · \(match.record.legsMode == .bestOf ? "Best of" : "First to") \(match.record.legsTarget)")
+                .thro(ThroTypography.metadata)
+                .foregroundStyle(ThroColor.colorTextSecondary)
+                .lineLimit(1)
+            ThroButton("Continue", variant: .primary, size: .large, fullWidth: true, action: onContinue)
+        }
+        .padding(ThroSpacing.spacing5)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(RoundedRectangle(cornerRadius: ThroSpacing.radiusCard, style: .continuous)
+            .fill(ThroColor.colorBackgroundRaised))
+        .overlay(RoundedRectangle(cornerRadius: ThroSpacing.radiusCard, style: .continuous)
+            .strokeBorder(ThroColor.colorBorderDefault, lineWidth: 1))
+    }
+}
+
+/// What this phone has seen in a week.
+///
+/// **The figures are the audited ones**, drawn by `StatGrid` in the three forms PD-015 defines: a
+/// number, a range, or a dash that says why. A new phone shows three dashes and a sentence, which
+/// is the correct thing for it to show and is why filling this strip with zeroes was never an
+/// option.
+struct WeekStrip: View {
+    let week: DeviceSummary.Week
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: ThroSpacing.spacing4) {
+            SectionHeader("Last 7 days", meta: meta)
+            StatGrid(week.figures.map(WeekStrip.item))
+            if week.unreadable > 0 {
+                Text("\(week.unreadable) match\(week.unreadable == 1 ? "" : "es") this week could not be replayed, so no dart in \(week.unreadable == 1 ? "it is" : "them is") counted above.")
+                    .thro(ThroTypography.metadata)
+                    .foregroundStyle(ThroColor.colorStatusError)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            // Both players' darts are on this phone and both are in these figures. Saying so is the
+            // difference between a description and a claim about one person.
+            Text("Every dart thrown on this phone, both players. Your own figures are on your page.")
+                .thro(ThroTypography.metadata)
+                .foregroundStyle(ThroColor.colorTextTertiary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+    }
+
+    private var meta: String {
+        week.matches == 0
+            ? "nothing yet"
+            : "\(week.matches) match\(week.matches == 1 ? "" : "es") · \(week.legs) leg\(week.legs == 1 ? "" : "s")"
+    }
+
+    /// `StatLine` carries the basis; `StatItem` draws it. The mapping is total on purpose — a new
+    /// confidence would fail to compile here rather than silently drawing as a confident number.
+    static func item(_ line: StatLine) -> StatItem {
+        switch line.confidence {
+        case .exact: return .exact(line.label, line.value, note: line.note)
+        case .range: return .range(line.label, line.value, why: line.note ?? "")
+        case .unavailable: return .unavailable(line.label, why: line.note ?? "")
+        }
+    }
+}
+
+/// The way to the shelf (PD-026).
+struct ShelfRow: View {
+    let count: Int
+    let onOpen: () -> Void
+
+    var body: some View {
+        Button(action: onOpen) {
+            HStack(spacing: ThroSpacing.spacing3) {
+                Icon(.eyeOff, size: 20).foregroundStyle(ThroColor.colorTextSecondary)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Archived")
+                        .thro(ThroTypography.label.weight(.semibold))
+                        .foregroundStyle(ThroColor.colorTextPrimary)
+                    Text("\(count) match\(count == 1 ? "" : "es") off Home. Still in your history and your export.")
+                        .thro(ThroTypography.metadata)
+                        .foregroundStyle(ThroColor.colorTextSecondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                Spacer(minLength: ThroSpacing.spacing2)
+                Icon(.chevronRight, size: 16).foregroundStyle(ThroColor.colorTextTertiary)
+            }
+            .padding(.vertical, ThroSpacing.spacing3)
+            .frame(minHeight: ThroSpacing.touchTargetMinimum)
+            .throRowTapTarget()
+        }
+        .buttonStyle(ThroPressStyle(radius: ThroSpacing.radiusCard,
+                                    pressedFill: ThroColor.colorSurfaceSecondary, scales: false))
+    }
+}
+
+/// The shelf: matches put away, and the way to bring one back (PD-026).
+///
+/// **A separate screen rather than a collapsed section**, because a shelf that lives inside Home is
+/// still on Home. The point of archiving is that the match is somewhere else.
+public struct ArchiveScreen: View {
+    @ObservedObject var store: AppStore
+    let onBack: () -> Void
+    @State private var confirmingDelete: AppStore.HomeMatch?
+
+    public init(store: AppStore, onBack: @escaping () -> Void) {
+        self.store = store
+        self.onBack = onBack
+    }
+
+    public var body: some View {
+        VStack(spacing: 0) {
+            TopBar("Archived", eyebrow: "Off Home, still yours", onBack: onBack)
+            ScrollView {
+                VStack(alignment: .leading, spacing: 0) {
+                    if let problem = store.actionProblem {
+                        block {
+                            Snackbar(problem, tone: .error, actionLabel: "OK") { store.actionProblem = nil }
+                        }
+                    }
+                    if store.archived.isEmpty {
+                        block {
+                            EmptyState(title: "Nothing archived",
+                                       message: "Matches you put away from Home appear here. They stay in your history and in every export.")
+                        }
+                        .throEntrance(0)
+                    } else {
+                        block {
+                            Text("These are off Home and nowhere else. Every figure on your page still counts them, and every export still carries them.")
+                                .thro(ThroTypography.metadata)
+                                .foregroundStyle(ThroColor.colorTextSecondary)
+                                .fixedSize(horizontal: false, vertical: true)
+                            ForEach(store.archived) { match in
+                                MatchRow(match: match,
+                                         editing: true,
+                                         archived: true,
+                                         onOpen: { store.flow = .resume(match.id) },
+                                         onArchive: { withAnimation(.throEnter()) { store.setArchived(match.id, false) } },
+                                         onDelete: { confirmingDelete = match })
+                                ThroDivider()
+                            }
+                        }
+                        .throEntrance(0)
+                    }
+                }
+                .padding(.bottom, ThroSpacing.spacing6)
+            }
+        }
+        .background(ThroColor.colorBackgroundPrimary.ignoresSafeArea())
+        .confirmationDialog("Delete this match?",
+                            isPresented: Binding(get: { confirmingDelete != nil },
+                                                 set: { if !$0 { confirmingDelete = nil } }),
+                            titleVisibility: .visible) {
+            Button("Delete for good", role: .destructive) {
+                if let match = confirmingDelete { store.delete(match.id) }
+                confirmingDelete = nil
+            }
+            Button("Cancel", role: .cancel) { confirmingDelete = nil }
+        } message: {
+            if let match = confirmingDelete { Text(HomeScreen.deleteWarning(match)) }
+        }
     }
 
     private func block<Content: View>(@ViewBuilder _ content: () -> Content) -> some View {
@@ -325,68 +766,116 @@ public struct HomeScreen: View {
 }
 
 /// One match on this device: the players, the legs, when, and what it is worth as evidence.
+///
+/// In edit mode (PD-026) it also carries the two things a person can do with a match they no longer
+/// want on Home. **Only in edit mode**: a row that always showed a delete button would put a
+/// destructive control under the thumb of somebody reaching to open a match, and a row that hid
+/// both behind a long press would hide them from everybody who has never discovered a long press.
 public struct MatchRow: View {
     let match: AppStore.HomeMatch
+    /// Whether the archive and delete controls are showing.
+    var editing: Bool = false
+    /// True on the shelf, where the archive control means *bring it back* rather than *put it away*.
+    var archived: Bool = false
     let onOpen: () -> Void
+    var onArchive: (() -> Void)?
+    var onDelete: (() -> Void)?
 
-    public init(match: AppStore.HomeMatch, onOpen: @escaping () -> Void) {
+    public init(match: AppStore.HomeMatch, editing: Bool = false, archived: Bool = false,
+                onOpen: @escaping () -> Void, onArchive: (() -> Void)? = nil,
+                onDelete: (() -> Void)? = nil) {
         self.match = match
+        self.editing = editing
+        self.archived = archived
         self.onOpen = onOpen
+        self.onArchive = onArchive
+        self.onDelete = onDelete
     }
 
     public var body: some View {
-        Button(action: { if match.unreadable == nil { onOpen() } }) {
-            VStack(alignment: .leading, spacing: ThroSpacing.spacing1) {
-                HStack(alignment: .firstTextBaseline) {
-                    Text("\(match.record.homeName) v \(match.record.awayName)")
-                        .thro(ThroTypography.heading3.weight(.bold))
-                        .foregroundStyle(ThroColor.colorTextPrimary)
-                        .lineLimit(1)
-                    Spacer()
-                    if match.unreadable == nil {
-                        Text("\(match.legsHome)–\(match.legsAway)")
-                            .thro(ThroTypography.heading3.family(.sport).weight(.bold))
-                            .foregroundStyle(ThroColor.colorTextPrimary)
+        HStack(spacing: 0) {
+            Button(action: { if match.unreadable == nil { onOpen() } }) {
+                details.throRowTapTarget()
+            }
+            .buttonStyle(ThroPressStyle(radius: ThroSpacing.radiusCard,
+                                        pressedFill: ThroColor.colorSurfaceSecondary, scales: false))
+            .disabled(match.unreadable != nil)
+            if editing {
+                if let onArchive {
+                    Button(action: onArchive) {
+                        Icon(archived ? .eye : .eyeOff, size: 20)
+                            .foregroundStyle(ThroColor.colorTextSecondary)
+                            .throTapTarget()
                     }
+                    .buttonStyle(ThroPressStyle(radius: ThroSpacing.radiusStatus))
+                    .accessibilityLabel(archived ? "Put \(match.record.homeName) v \(match.record.awayName) back on Home"
+                                                 : "Archive \(match.record.homeName) v \(match.record.awayName)")
                 }
-                HStack(spacing: ThroSpacing.spacing2) {
-                    Text("\(match.record.startingScore) · Bo\(match.record.legsTarget) · \(match.record.startedAt.formatted(date: .abbreviated, time: .shortened))")
-                        .thro(ThroTypography.metadata)
-                        .foregroundStyle(ThroColor.colorTextSecondary)
-                        .lineLimit(1)
-                    Spacer(minLength: ThroSpacing.spacing2)
-                    if match.unreadable != nil {
-                        // The score is not shown because it is not known. A match whose rows will not
-                        // replay must not be opened into a scoring screen built on a state that could
-                        // not be rebuilt, and must not be quietly dropped from the list either.
-                        Tag("Cannot be read", tone: .error)
-                    } else if match.ending == .abandoned {
-                        // NOT a verification state. There is no result here, and a "self-reported"
-                        // badge would be attesting to a claim nobody made (PD-016).
-                        Tag("No result", tone: .neutral)
-                    } else if match.ending != nil {
-                        // A retirement IS a result, and it is the kind people later disagree about,
-                        // so the row carries both what it was and who stands behind it.
-                        Tag("Retired", tone: .warning)
-                        VerificationState(.selfReported, compact: true)
-                    } else if match.complete {
-                        VerificationState(.selfReported, compact: true)
-                    } else {
-                        Tag("In progress", tone: .info)
+                if let onDelete {
+                    Button(action: onDelete) {
+                        Icon(.circleX, size: 20)
+                            .foregroundStyle(ThroColor.colorStatusError)
+                            .throTapTarget()
                     }
-                }
-                if let problem = match.unreadable {
-                    Text(problem)
-                        .thro(ThroTypography.metadata)
-                        .foregroundStyle(ThroColor.colorStatusError)
-                        .fixedSize(horizontal: false, vertical: true)
+                    .buttonStyle(ThroPressStyle(radius: ThroSpacing.radiusStatus))
+                    .accessibilityLabel("Delete \(match.record.homeName) v \(match.record.awayName)")
                 }
             }
-            .padding(.vertical, ThroSpacing.spacing3)
-            .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
-        .disabled(match.unreadable != nil)
+        // The controls slide in from the trailing edge rather than appearing, so a row that grows a
+        // delete button under a finger is something the eye can follow.
+        .animation(.throEnter(), value: editing)
+    }
+
+    private var details: some View {
+        VStack(alignment: .leading, spacing: ThroSpacing.spacing1) {
+            HStack(alignment: .firstTextBaseline) {
+                Text("\(match.record.homeName) v \(match.record.awayName)")
+                    .thro(ThroTypography.heading3.weight(.bold))
+                    .foregroundStyle(ThroColor.colorTextPrimary)
+                    .lineLimit(1)
+                Spacer()
+                if match.unreadable == nil {
+                    Text("\(match.legsHome)–\(match.legsAway)")
+                        .thro(ThroTypography.heading3.family(.sport).weight(.bold))
+                        .foregroundStyle(ThroColor.colorTextPrimary)
+                }
+            }
+            HStack(spacing: ThroSpacing.spacing2) {
+                Text("\(match.record.startingScore) · Bo\(match.record.legsTarget) · \(match.record.startedAt.formatted(date: .abbreviated, time: .shortened))")
+                    .thro(ThroTypography.metadata)
+                    .foregroundStyle(ThroColor.colorTextSecondary)
+                    .lineLimit(1)
+                Spacer(minLength: ThroSpacing.spacing2)
+                if match.unreadable != nil {
+                    // The score is not shown because it is not known. A match whose rows will not
+                    // replay must not be opened into a scoring screen built on a state that could
+                    // not be rebuilt, and must not be quietly dropped from the list either.
+                    Tag("Cannot be read", tone: .error)
+                } else if match.ending == .abandoned {
+                    // NOT a verification state. There is no result here, and a "self-reported"
+                    // badge would be attesting to a claim nobody made (PD-016).
+                    Tag("No result", tone: .neutral)
+                } else if match.ending != nil {
+                    // A retirement IS a result, and it is the kind people later disagree about,
+                    // so the row carries both what it was and who stands behind it.
+                    Tag("Retired", tone: .warning)
+                    VerificationState(.selfReported, compact: true)
+                } else if match.complete {
+                    VerificationState(.selfReported, compact: true)
+                } else {
+                    Tag("In progress", tone: .info)
+                }
+            }
+            if let problem = match.unreadable {
+                Text(problem)
+                    .thro(ThroTypography.metadata)
+                    .foregroundStyle(ThroColor.colorStatusError)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+        .padding(.vertical, ThroSpacing.spacing3)
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 }
 
@@ -459,8 +948,12 @@ public struct YouScreen: View {
                                     Icon(.chevronRight, size: 16).foregroundStyle(ThroColor.colorTextSecondary)
                                 }
                                 .padding(.vertical, ThroSpacing.spacing2)
+                                .frame(minHeight: ThroSpacing.touchTargetMinimum)
+                                .throRowTapTarget()
                             }
-                            .buttonStyle(.plain)
+                            .buttonStyle(ThroPressStyle(radius: ThroSpacing.radiusCard,
+                                                        pressedFill: ThroColor.colorSurfaceSecondary,
+                                                        scales: false))
                             ThroDivider()
                         }
                     }
@@ -483,8 +976,11 @@ public struct YouScreen: View {
                                                 accent: club.accentHex.flatMap { Color.thro(hex: $0) },
                                                 trailing: club.yourRole?.label,
                                                 image: badge(club))
+                                    .throRowTapTarget()
                             }
-                            .buttonStyle(.plain)
+                            .buttonStyle(ThroPressStyle(radius: ThroSpacing.radiusCard,
+                                                        pressedFill: ThroColor.colorSurfaceSecondary,
+                                                        scales: false))
                             ThroDivider()
                         }
                     }

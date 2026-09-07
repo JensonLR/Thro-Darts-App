@@ -48,6 +48,13 @@ jobs:
       - name: Top bars
         run: python3 tools/check_screen_bars.py
 
+      # And a bar you can see still has to react to a finger. `.buttonStyle(.plain)` is SwiftUI for
+      # "do nothing": no pressed state, and a hit area the size of the ink. It was on 32 controls,
+      # including the app's primary button. No test in this repository constructs a screen, and a
+      # hit area is not a thing a unit test can see, so it is checked on the source.
+      - name: Controls react
+        run: python3 tools/check_controls_react.py
+
   conformance:
     name: Scoring rules and conformance corpus
     runs-on: ubuntu-latest

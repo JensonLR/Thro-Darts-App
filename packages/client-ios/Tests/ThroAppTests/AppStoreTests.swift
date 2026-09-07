@@ -1,6 +1,7 @@
 import Foundation
 import XCTest
 import ThroEngine
+import ThroPlay
 @testable import ThroApp
 @testable import ThroJournal
 
@@ -147,6 +148,143 @@ final class AppStoreTests: XCTestCase {
 
     /// The picker's own two failures are not the file's fault and must not be reported as if they
     /// were. Driven through the importer's `Result` rather than a file picker, so both are testable.
+    // MARK: the shelf and the delete (PD-026)
+
+    /// Archiving moves a match between two lists Home already holds, and takes it out of neither
+    /// the journal nor anybody's figures.
+    func testAnArchivedMatchIsOffHomeAndOnTheShelf() throws {
+        let j = try journal()
+        let kept = try j.createMatch(NewMatch(homeName: "Ann", awayName: "Ben"))
+        let shelved = try j.createMatch(NewMatch(homeName: "Cara", awayName: "Dai"))
+        let store = AppStore(journal: j)
+        XCTAssertEqual(store.matches.count, 2)
+        XCTAssertTrue(store.archived.isEmpty)
+
+        store.setArchived(shelved.id, true)
+        XCTAssertEqual(store.matches.map(\.id), [kept.id])
+        XCTAssertEqual(store.archived.map(\.id), [shelved.id])
+        XCTAssertNil(store.actionProblem)
+
+        store.setArchived(shelved.id, false)
+        XCTAssertEqual(store.matches.count, 2)
+        XCTAssertTrue(store.archived.isEmpty)
+    }
+
+    /// A match a league has taken a result from may not be deleted, and the refusal says why and
+    /// names the thing that can be done instead.
+    ///
+    /// This is the one rule in PD-026 that is about somebody other than the person holding the
+    /// phone: a `scored` result cites the match by id, and that citation is the whole of its
+    /// provenance. Deleting the match would leave a table resting on evidence nobody can produce.
+    func testDeleteIsRefusedWhileAFixtureRestsOnTheMatch() throws {
+        let j = try journal()
+        let m = try j.createMatch(NewMatch(homeName: "Ann", awayName: "Ben"))
+        try j.append(.visit(Seat.home.playerId, 60), to: m.id)
+        let store = AppStore(journal: j)
+        store.fixturesCiting = { $0 == m.id ? ["fixture-1"] : [] }
+
+        XCTAssertNotNil(store.deletionRefusal(m.id))
+        XCTAssertNil(store.delete(m.id), "it did not happen")
+        XCTAssertEqual(store.actionProblem, store.deletionRefusal(m.id))
+        XCTAssertEqual(store.matches.count, 1, "and the match is still there")
+        XCTAssertEqual(try j.entries(for: m.id).count, 1)
+
+        // Archiving is what the refusal offers, and it works.
+        store.setArchived(m.id, true)
+        XCTAssertEqual(store.archived.map(\.id), [m.id])
+    }
+
+    /// A delete nobody is relying on goes through, takes its visits, and says how many.
+    func testDeleteTakesTheMatchAndSaysWhatWentWithIt() throws {
+        let j = try journal()
+        let doomed = try j.createMatch(NewMatch(homeName: "Ann", awayName: "Ben"))
+        let kept = try j.createMatch(NewMatch(homeName: "Cara", awayName: "Dai"))
+        try j.append(.visit(Seat.home.playerId, 180), to: doomed.id)
+        try j.append(.visit(Seat.away.playerId, 60), to: doomed.id)
+        let store = AppStore(journal: j)
+
+        XCTAssertEqual(store.delete(doomed.id), 2)
+        XCTAssertNil(store.actionProblem)
+        XCTAssertEqual(store.matches.map(\.id), [kept.id])
+        XCTAssertThrowsError(try j.match(doomed.id))
+    }
+
+    /// The warning names the match, the date and what a delete cannot reach. Not "this cannot be
+    /// undone", which every app says and nobody reads.
+    func testTheDeleteWarningSaysWhatIsActuallyLost() throws {
+        let j = try journal()
+        let m = try j.createMatch(NewMatch(homeName: "Ann", awayName: "Ben"))
+        let store = AppStore(journal: j)
+        let match = try XCTUnwrap(store.matches.first)
+        let warning = HomeScreen.deleteWarning(match)
+        XCTAssertTrue(warning.contains("Ann v Ben"), warning)
+        XCTAssertTrue(warning.contains("export"), "it must say an export already written still has it")
+        XCTAssertTrue(warning.contains("Archiving"), "and offer the thing that keeps it")
+        _ = m
+    }
+
+    /// Home offers to continue the newest match that is still open, and offers nothing when every
+    /// match is done. A match that ended short is done (PD-016), so the card must not offer it.
+    func testHomeOffersTheMatchThatIsStillGoing() throws {
+        let j = try journal()
+        let finished = try j.createMatch(NewMatch(homeName: "Ann", awayName: "Ben", legsTarget: 1),
+                                         startedAt: Date(timeIntervalSince1970: 1_000))
+        try j.append(.visit(Seat.home.playerId, 441), to: finished.id)
+        try j.append(.visit(Seat.home.playerId, 60, dartsUsed: 3, dartsAtDouble: 1), to: finished.id)
+        let open = try j.createMatch(NewMatch(homeName: "Cara", awayName: "Dai"),
+                                     startedAt: Date(timeIntervalSince1970: 2_000))
+        try j.append(.visit(Seat.home.playerId, 60), to: open.id)
+
+        let store = AppStore(journal: j)
+        XCTAssertEqual(store.matches.filter { !$0.complete && $0.unreadable == nil }.map(\.id), [open.id])
+    }
+
+    /// The last seven days, and only those. A match older than the window is in the record and out
+    /// of the strip, and the strip says which of "nothing yet" and "nothing lately" it is.
+    func testTheWeekCountsTheLastSevenDaysAndSaysWhenItIsQuiet() throws {
+        let j = try journal()
+        let now = Date(timeIntervalSince1970: 1_000_000)
+        let old = try j.createMatch(NewMatch(homeName: "Ann", awayName: "Ben"),
+                                    startedAt: now.addingTimeInterval(-30 * 86_400))
+        try j.append(.visit(Seat.home.playerId, 180), to: old.id)
+
+        var week = try DeviceSummary.week(in: j, now: now)
+        XCTAssertEqual(week.matches, 0)
+        XCTAssertTrue(week.quietWeek, "a phone with history and a quiet week is not an empty phone")
+
+        let recent = try j.createMatch(NewMatch(homeName: "Cara", awayName: "Dai"),
+                                       startedAt: now.addingTimeInterval(-2 * 86_400))
+        try j.append(.visit(Seat.home.playerId, 140), to: recent.id)
+        week = try DeviceSummary.week(in: j, now: now)
+        XCTAssertEqual(week.matches, 1)
+        XCTAssertFalse(week.quietWeek)
+        XCTAssertEqual(week.figures.count, 3)
+        XCTAssertEqual(week.unreadable, 0)
+    }
+
+    /// The best leg on Home counts one player's visits, not both of theirs added together.
+    ///
+    /// **This is a defect that was written and caught before it shipped.** Pooling a whole device's
+    /// visits under one leg ordinal per match would have handed `bestLegInVisits` a leg containing
+    /// both players' darts, and the first screen of the app would have reported every 15-visit leg
+    /// as a 30-visit one. Each seat of each match gets its own block of ordinals instead.
+    func testTheWeeksBestLegIsOnePlayersLegNotTwo() throws {
+        let j = try journal()
+        let now = Date(timeIntervalSince1970: 1_000_000)
+        let m = try j.createMatch(NewMatch(homeName: "Ann", awayName: "Ben", legsTarget: 1),
+                                  startedAt: now.addingTimeInterval(-86_400))
+        // Ann takes the leg in three visits; Ben throws two in the same leg.
+        try j.append(.visit(Seat.home.playerId, 180), to: m.id)
+        try j.append(.visit(Seat.away.playerId, 100), to: m.id)
+        try j.append(.visit(Seat.home.playerId, 180), to: m.id)
+        try j.append(.visit(Seat.away.playerId, 100), to: m.id)
+        try j.append(.visit(Seat.home.playerId, 141, dartsUsed: 3, dartsAtDouble: 1), to: m.id)
+
+        let week = try DeviceSummary.week(in: j, now: now)
+        let best = try XCTUnwrap(week.figures.first { $0.label == "Best leg" })
+        XCTAssertEqual(best.value, "3", "Ann's three visits, not Ann's three plus Ben's two")
+    }
+
     func testAFileThatCannotBeOpenedIsNotReportedAsABadExport() throws {
         struct Denied: LocalizedError { var errorDescription: String? { "permission denied" } }
 

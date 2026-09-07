@@ -40,8 +40,9 @@ public struct TopBar: View {
                     Button(action: onBack) {
                         Icon(.chevronLeft, size: 26)
                             .frame(width: ThroSpacing.touchTargetMinimum, height: ThroSpacing.touchTargetMinimum)
+                            .contentShape(Rectangle())
                     }
-                    .buttonStyle(.plain)
+                    .buttonStyle(ThroPressStyle(radius: ThroSpacing.radiusStatus))
                     .foregroundStyle(ThroColor.colorTextPrimary)
                     .padding(.leading, -ThroSpacing.spacing3)
                     .accessibilityLabel("Back")
@@ -63,8 +64,9 @@ public struct TopBar: View {
                         Button(action: a.action) {
                             Icon(a.icon, size: 22)
                                 .frame(width: ThroSpacing.touchTargetMinimum, height: ThroSpacing.touchTargetMinimum)
+                                .contentShape(Rectangle())
                         }
-                        .buttonStyle(.plain)
+                        .buttonStyle(ThroPressStyle(radius: ThroSpacing.radiusStatus))
                         .foregroundStyle(ThroColor.colorTextPrimary)
                         .accessibilityLabel(a.label)
                     }
@@ -160,7 +162,7 @@ public struct BottomBar: View {
                     }
                     .contentShape(Rectangle())
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(ThroPressStyle(radius: ThroSpacing.radiusStatus, scales: false))
                 .accessibilityLabel(tab.label)
                 .accessibilityAddTraits(on ? [.isSelected] : [])
             }
