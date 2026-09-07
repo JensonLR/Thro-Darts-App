@@ -2,10 +2,18 @@ import SwiftUI
 import ThroTokens
 import ThroDesign
 
-// PD-007, sixth version, after the founder's fifth look: "Feels like the end screen with the bottom text
-// should be visible just a little bit longer so people can read it properly. Also any further visual
-// upgrades to the intro." The tagline is now still and fully legible for 1.37 seconds before the
-// cross-fade — two and a half times what it had — and the rest is the upgrade.
+// PD-007, seventh version. The sixth answered the founder's fifth look — "Feels like the end screen
+// with the bottom text should be visible just a little bit longer so people can read it properly.
+// Also any further visual upgrades to the intro" — by holding the tagline still and fully legible
+// for 1.37 seconds, two and a half times what it had. The seventh answers the sixth look: the Ø is
+// struck into being by the shock rather than drawn on, and half a second comes out of the end. The
+// tagline still has 0.87 s of stillness, two thirds again what the fifth version gave it.
+//
+// The **handover** is the eighth change and the only one in this file's neighbourhood rather than
+// in it: the cross-fade to the app used `.easeInOut`, Apple's curve, on the single most important
+// transition THRØ has. It is `Animation.throExit` now — the design's own — and the app comes
+// towards the viewer by `motionScaleImpact` as the opening leaves, so the handover is one movement
+// in one direction rather than a cut. Both withdraw under Reduce Motion. See `ThroRootView`.
 //
 // The opening is one shot. It opens on a place: a lit spot far off in a dark hall under a beam from
 // above, with chalk dust on it. The dart comes in from the lower left at the mark's 45° and never

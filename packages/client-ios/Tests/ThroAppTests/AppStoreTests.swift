@@ -285,6 +285,30 @@ final class AppStoreTests: XCTestCase {
         XCTAssertEqual(best.value, "3", "Ann's three visits, not Ann's three plus Ben's two")
     }
 
+    /// A match this week whose rows will not replay is **counted and named**, not skipped.
+    ///
+    /// Home's strip would otherwise show an average over the readable half of the week and call it
+    /// the week — which is a different number, not a smaller sample. This is the same rule
+    /// `PersonHistory.unreadable` holds for a person, applied to the first screen of the app.
+    func testTheWeekCountsAMatchItCouldNotReadRatherThanSkippingIt() throws {
+        let j = try journal()
+        let now = Date(timeIntervalSince1970: 1_000_000)
+        let good = try j.createMatch(NewMatch(homeName: "Ann", awayName: "Ben"),
+                                     startedAt: now.addingTimeInterval(-86_400))
+        try j.append(.visit(Seat.home.playerId, 180), to: good.id)
+        let bad = try j.createMatch(NewMatch(homeName: "Cara", awayName: "Dai"),
+                                    startedAt: now.addingTimeInterval(-86_400))
+        // 179 is not a total three darts can make: the engine refuses it, so replay throws.
+        try j.exec("""
+            INSERT INTO journal (match_id, device_id, device_seq, command_id, seat, visit_total, occurred_at)
+            VALUES ('\(bad.id.value)', 'test-device', 1, 'corrupt-week', 'home', 179, '2026-09-05T00:00:00.000Z');
+            """)
+
+        let week = try DeviceSummary.week(in: j, now: now)
+        XCTAssertEqual(week.matches, 2, "both were started this week")
+        XCTAssertEqual(week.unreadable, 1, "and one of them is not in any figure above")
+    }
+
     func testAFileThatCannotBeOpenedIsNotReportedAsABadExport() throws {
         struct Denied: LocalizedError { var errorDescription: String? { "permission denied" } }
 
