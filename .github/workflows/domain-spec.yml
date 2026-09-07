@@ -13,6 +13,20 @@ permissions:
   contents: read
 
 jobs:
+  # The README states how many tests hold each part of this repository. Those counts have drifted
+  # three times, and each time it was a person who noticed afterwards. A count in prose is a claim
+  # like any other, and a claim nobody checks is a claim that stops being true.
+  counts:
+    name: The README's test counts are the tests that exist
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Counts
+        run: python3 tools/check_test_counts.py
+
   conformance:
     name: Scoring rules and conformance corpus
     runs-on: ubuntu-latest

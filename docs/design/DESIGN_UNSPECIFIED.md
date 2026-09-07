@@ -8,15 +8,25 @@ Sourced by reading the whole export: 61 components, 33 participant screens, 9 or
 
 ## Blocking — implementation cannot proceed correctly without these
 
-1. **Dynamic Type / font-scaling contract.** The entire type scale is fixed pixels; there is no
-   `rem`, `em` or scaling ramp anywhere. Needed per type role: does it scale, what are the min/max
-   clamps, and what do the hero numerals do at accessibility sizes. Several heroes already have
-   tight or negative leading (96/88), so naive scaling clips them. This changes every layout, not
-   every colour — it is the most expensive item here to retrofit.
-2. **Focus, hover and pressed appearance.** Zero of 61 components implement any of them. For a
-   keypad used one-handed at speed, the absence of a pressed state is a functional defect: the
-   player gets no confirmation a score registered. Note the focus ring currently fails contrast on
-   brand and ink surfaces (see `CONTRAST_MATRIX.md`), so this needs a solution, not just a colour.
+1. ~~**Dynamic Type / font-scaling contract.**~~ **COMMISSIONED (PD-015) AND BUILT, 2026-09-07.**
+   The scaling ramp came first: every type role carries a `relativeTo:` text style, so the embedded
+   faces grow with the player's setting. What was missing was the *contract* at the top of the
+   range, and it is now written down in `docs/design/DYNAMIC_TYPE.md`: reading screens scale to
+   `.accessibility5` and scroll; the scoring screen stops at `.accessibility1`, because it must fit
+   without scrolling and holds a keypad already at the minimum touch target. **That is a real limit
+   for a player who needs the largest text and it is stated rather than discovered.** The thing that
+   would serve them properly is a scoring screen that reflows at accessibility sizes — the upper
+   region scrolling above a pinned keypad — and that remains a design commission, listed there.
+2. ~~**Focus, hover and pressed appearance.**~~ **COMMISSIONED (PD-015) AND BUILT ON THE CLIENT,
+   2026-09-07.** `ThroPressStyle` replaces `.buttonStyle(.plain)` — which was SwiftUI for *do
+   nothing at all* — on the keypad and its Enter key. A press goes in by the inverse of the design's
+   own `motionScaleImpact`, so a key travels exactly as far in as the design says an impact travels
+   out; the scale is withdrawn under Reduce Motion and the surface change is kept, because that
+   setting means what it says. `ThroFocusRing` draws the focus ring *outside* the control's own
+   border, so it never overlaps an error border and the contrast problem below does not arise.
+   **The export's own components are unchanged and this item stands for them** — the React
+   components still implement none of this, and `audit_components.py` still fails CI on any new
+   instance of the `outline: 'none'` defect below.
 
    **Worse than absent in two places.** `TextField` and `SearchField` set `outline: 'none'` on the
    input itself and supply no replacement — no focus box-shadow, no focus border, no handler. They
@@ -59,9 +69,14 @@ Sourced by reading the whole export: 61 components, 33 participant screens, 9 or
 
 8. **The `quarantined` verification state.** The trust model needs it; `VerificationState`
    implements eight states and does not include it.
-9. **A `Stat` variant for unavailable or bounded values.** `Stat` accepts only label/value/delta/unit.
-   Without an "unavailable" and an "approximate" rendering, statistics that cannot be honestly
-   computed have nowhere truthful to go.
+9. ~~**A `Stat` variant for unavailable or bounded values.**~~ **COMMISSIONED (PD-015) AND BUILT ON
+   THE CLIENT, 2026-09-07.** `StatItem` now carries a confidence — exact, range or unavailable —
+   and `StatGrid` draws the three differently and speaks the basis to a screen reader, since colour
+   is not available to one. The guarantee is in the type rather than in the drawing: `range` and
+   `unavailable` take the reason as a **non-optional** argument, so it is not possible to put a dash
+   or an interval on a screen without saying why it is one. Until this, all three were drawn
+   identically — same weight, same colour, same size — so the one thing the honesty layer exists to
+   communicate was the one thing the screen did not show. The export's `Stat` is unchanged.
 10. **A pending / not-yet-eligible rating state.** The result screen shows rating movement beside a
    verified badge only. There is no way to say *"your rating has not moved yet, because this result
    is not yet eligible"* — which will be the majority case at launch.
@@ -96,7 +111,12 @@ Sourced by reading the whole export: 61 components, 33 participant screens, 9 or
 23. **Landscape orientation for scoring.** The app is portrait-only, as every screen in the export is drawn;
     a landscape scoring screen would need a design.
 24. **Truncation policy for long player, venue and team names.** Only 8 of 61 components handle overflow.
-25. **Haptics** — nothing is specified for the scoring keypad, where it matters most.
+25. ~~**Haptics**~~ **COMMISSIONED (PD-015) AND BUILT, 2026-09-07.** Four events, four sensations:
+   a light tap on a key, a firmer one when a visit commits, and two deliberately distinct ones for a
+   bust and for a leg won — the two things a player needs to know while looking at the board rather
+   than at the phone. Off is offered in Settings under a key that is a contract with every install;
+   default on. The mapping is asserted by a test rather than left as a comment, because "four
+   different sensations" is the whole claim and three of them being the same would be silent.
 
 Also outstanding, and smaller: **the brand assets** (`logo-chalk.svg` and `mark-chalk.svg` are both
 referenced throughout and neither was exported); the **icon legibility floor** (a 2px stroke on a 24

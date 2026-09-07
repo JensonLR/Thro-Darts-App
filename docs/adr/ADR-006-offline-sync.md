@@ -388,3 +388,35 @@ that a claim is **rule-consistent**, never that it is what happened.
 
 Any evidence loss observed in the field; or divergence alerts firing more than negligibly, which
 would trigger ADR-002's kill criteria.
+
+## Amendment, 2026-09-07 — the journal belongs in the device backup (PD-017)
+
+PD-012 chose local-first, which made the on-device journal the **only** copy of what was thrown.
+That is a durability decision this ADR had not taken: everything above concerns surviving a crash
+or a power cut on one device, and none of it survives the device itself.
+
+Two things follow, both built.
+
+**The container is marked as included in the backup, and the flag is read back.** Application
+Support is backed up by iOS unless something excludes it, so on paper there was nothing to do —
+which is exactly the situation the durability probe was caught by, measuring a configuration SQLite
+had refused because nobody read the pragmas back. Apple's guidance is to exclude *regenerable* data;
+a journal is the only record of what was thrown and regenerates from nothing, so including it is the
+decision rather than the absence of one. `BackupPolicy` sets it, reads it back, and Settings reports
+what was found. A future change that excluded the container — for a cache, for a temporary file, for
+a reason that seemed local at the time — is noticed here instead of on somebody's new phone.
+
+**An export carries the same rows out of the app.** One JSON file: every match, every journal row as
+written including the struck ones, every person, every club. It carries a digest over its content,
+which detects a file that changed between the phone and wherever it ended up and proves nothing
+about who wrote the rows — the same claim, and no larger, than ADR-016 makes about a claimed local
+history.
+
+**There is deliberately no importer.** Merging an exported journal into a live one is the
+reconciliation this ADR specifies for sync: two append-only streams, each with its own gapless
+per-device sequence, whose ordering has to be re-established without either device's `device_seq`
+lying afterwards. That is built and tested for the *server* case and is not wired to anything on the
+client. An import that pretended to do it would produce a journal whose sequence claims this device
+wrote rows it did not. Reading an export is therefore read-only until sync exists, and a test asserts
+that reading one writes nothing.
+

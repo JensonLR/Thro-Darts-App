@@ -342,6 +342,52 @@ What to check on the next run, in this order:
 9. The faces: numerals on the scoring screen in IBM Plex Sans Condensed, everything else in Archivo,
    and no *Fonts not embedded* notice on Home.
 
+## Ending a match that will not finish (PD-016)
+
+Somebody leaves, the pub shuts, a player is injured. Tap the **×** at the top right of the scoring
+screen and the keypad is replaced by the choice: *Jenson retires*, *Alex retires*, or *Abandon —
+nobody wins*. Choosing one shows what it will do in words, and says outright that it cannot be
+undone; **Back** goes to the choice rather than out, so the destructive button is never the only way
+forward.
+
+- **A retirement is a result.** The other player wins, the legs stand as they were, and both players
+  are still asked to confirm it — a retirement is exactly the kind of result people later disagree
+  about.
+- **An abandonment is not.** Nobody wins, nobody is given the win, and there is no verification badge
+  because there is nothing to attest to.
+
+The darts already thrown are kept either way and count towards both players' figures. On Home the
+match reads **Retired** or **No result** rather than "In progress", and it will not offer to resume.
+
+**An ending is final.** No more visits, no undo, no second ending — the journal refuses all three.
+That is on purpose and it is different from PD-004, which makes a mis-keyed *visit* undoable: a visit
+is a transcription, and an ending is a declaration taken behind a confirmation. If it could be undone
+the match could un-end, and the result would be a claim that moves.
+
+## Keeping a copy (PD-017)
+
+Everything is on this phone. **Settings → Your darts** says whether it is in the phone's backup —
+read from the file system rather than assumed — and offers **Export everything**: one file with every
+match, every visit as written (corrections included), and every club. Nothing is sent anywhere; the
+share sheet lets you decide where it goes.
+
+Pictures are not in the file. It names the ones this phone holds instead, so a reader knows what is
+missing rather than being quietly given less than they think.
+
+There is no import. Merging an exported journal into a live one is the two-device reconciliation
+ADR-006 specifies for sync, and sync is not built; an import that pretended to do it would produce a
+journal whose sequence lies about what this device wrote.
+
+## What a profile says now (PD-018)
+
+A person's page shows **Recent form** — their three-dart average over their last ten completed legs,
+with the window written beside it and the words *Not a rating*. Below three completed legs it is a
+dash and says how many more are needed, because one leg is a performance and not form.
+
+It is **not** a rating and is never called one. OD-001 leaves the rating model open because no model
+here has been validated against real matches, and this is a description of what somebody has
+actually scored rather than a claim about how good they are. Nothing seeds a rating from it.
+
 ## Where the data is
 
 `Application Support/THRO/journal.sqlite` inside the app's container, in WAL mode with
@@ -400,6 +446,24 @@ wordmark's letters are Archivo ExtraBold, drawn live, on the reading that the su
 that face, which the founder confirms or corrects on the phone. Storyboard and spec: the design
 canvas "THRØ Launch Sequence"; `docs/design/brand/README.md` says how to replace the mark with the
 master file, and the synthesised sounds with recorded ones.
+
+## What is new since the last run on a phone
+
+None of these have been on a phone at all. In the order you are most likely to meet them:
+
+1. **The seventh opening.** Watch it once and skip it once.
+2. **Setup** offers the people this phone knows as a row of taps.
+3. **The keypad answers.** Every key has a pressed state and a light tap; Enter is firmer; a bust and
+   a won leg each get their own distinct one. Settings → Scoring → Haptics turns them off.
+4. **A checkout shows its route** — one route, the conventional one, under the match's own out-rule.
+5. **Under double-in** the screen says who is not in.
+6. **The × at the top right** ends a match that will not finish.
+7. **The result** asks both players to confirm it, by name, in turn.
+8. **A figure that is not a fact looks different.** A range carries a "Range" tag; an unavailable
+   figure is a dash in the quieter neutral with its reason under it. Turn VoiceOver on for one screen
+   and check it says "not available" rather than reading out a dash.
+9. **Settings → Your darts** says whether your matches are in the phone's backup, and exports them.
+10. **Clubs.** Start one, add a member, add a fixture, give it a badge from your photo library.
 
 ## What the design does not specify, and what this build does about it
 

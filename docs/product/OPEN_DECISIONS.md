@@ -38,14 +38,26 @@ naming bands. Do not introduce a band enum into the domain model until the taxon
 approved.
 
 ## OD-003 — Final Form representation
-**Status:** OPEN · **Impact:** product, domain
+**Status: HALF CLOSED, 2026-09-07 — the scalar decided by the founder as PD-018; the sequence still open.**
+· **Impact:** product, domain
 
 The design shows Form as a separate number alongside Rating (`form` prop on `RatingHero`)
 and as a recent results sequence (`FormIndicator` with W/L results). Whether Form is
-ultimately a rating-like scalar, a windowed performance measure, or both, is undecided.
+ultimately a rating-like scalar, a windowed performance measure, or both, was undecided.
 
-**Must not be decided by:** hardwiring a formula into a core aggregate. Keep Form computed
-in a dedicated module with its own contract.
+**PD-018 decided the number: a windowed performance measure, and never a rating-like scalar.**
+Recent form is a three-dart average over the last ten *completed legs*, computed by the same audited
+`Statistics.threeDartAverage` a single match uses, labelled with its window and with the words "Not
+a rating" beside it. Nothing seeds a rating from it, and OD-001 is untouched.
+
+**Still open: the W/L sequence.** `FormIndicator` draws a run of recent results, and whether THRØ
+shows one — and what a retirement or an abandonment looks like in it now that PD-016 makes both real
+— is not decided. That is a design and product question, not an engineering one, and nothing has
+been built for it.
+
+**Must not be decided by:** hardwiring a formula into a core aggregate. That constraint was kept:
+Form lives in `Statistics` with its own `Form` type carrying the sample beside the figure, in both
+the Kotlin and the Swift, and no aggregate knows about it.
 
 ## OD-004 — Rating establishment threshold
 **Status:** OPEN · **Impact:** product, rating credibility
@@ -157,6 +169,18 @@ the same event as one retiring while winning.
 **Resolved for now by:** excluding it. `EligibilityPolicy.informing` defaults to `played` alone, so
 the conservative reading is what ships. Admitting retirements is a policy value plus a rating
 recomputation, which the architecture supports because rating is a replayable projection.
+
+**Sharpened, not closed, by PD-016 (2026-09-07).** A retirement is now a real thing a player can
+record on the phone, so there are retired matches for this policy to exclude rather than a
+hypothetical. Two things follow that a future answer will want:
+
+- **The data exists to decide it.** A person's history counts retirements apart from matches played
+  out, and the journal records **which seat retired** — so "retiring while losing" and "retiring
+  while winning" are distinguishable, which is the asymmetry this entry says makes the question
+  arguable at all.
+- **Abandonment does not extend this question.** PD-016's other ending has no winner at all, so
+  there is no result for a rating to be informed by. It is excluded because there is nothing to
+  include, not as a policy choice, and it must never acquire one.
 
 **Must not be decided by:** an implementation quietly adding `RETIRED` to the default policy because
 it felt reasonable. That is how this register gets bypassed.

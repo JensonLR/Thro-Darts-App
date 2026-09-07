@@ -128,3 +128,14 @@ no packaging obstacle for iOS, Android or web.
 | `EndMatchCard` | Nothing in the export offers a way to stop. | The `Eyebrow` / `heading2` / `metadata` / `ThroButton` stack `RetractionCard` already uses, because it is the same kind of moment: a serious recorded thing offered with its consequence stated first. |
 | `EndMatchConfirmCard` | As above. | The same stack, plus one `colorStatusError` line saying it cannot be undone — the part that would otherwise be a surprise, since PD-004 makes a mis-keyed visit undoable and a player will reasonably expect the same here. |
 | The "No result" row state | The export draws finished and in-progress. It does not draw *finished with no result*, because nothing in the design ends a match early. | `Tag` in `neutral`. Deliberately **not** a `VerificationState`: there is no result, and a self-reported badge would attest to a claim nobody made. |
+
+### The four design commissions (PD-015), engineering-drawn
+
+| Thing | Why it is not exported | What it is made of |
+|---|---|---|
+| `StatItem.Confidence` and `StatGrid`'s three forms | `DESIGN_UNSPECIFIED` #9: the export's `Stat` takes label/value/delta/unit and has nowhere for a figure that cannot be honestly computed. | The same `Eyebrow` / sport-face value / metadata note the export draws, plus `colorTextSecondary` for a figure that is not a fact and an approved `Tag` reading "Range". No new colour, no new type role. |
+| `ThroPressStyle` | `DESIGN_UNSPECIFIED` #2: zero of 61 components implement a pressed state. | `motionScaleImpact` inverted, `motionDurationInstant`, and a fill one step along. Every value is a token; nothing is a number typed here. |
+| `ThroFocusRing` | Same item. The export's own focus ring fails contrast on brand and ink surfaces, so a colour alone would not have been an answer. | A 2-point `colorSurfaceBrand` stroke drawn *outside* the control's border, so it never overlaps an error border and the contrast problem does not arise. |
+| `ThroHaptics` | `DESIGN_UNSPECIFIED` #25: nothing specified for the keypad, where it matters most. | Not drawn at all — four named events mapped to the platform's own feedback generators, with the mapping asserted by a test because "four different sensations" is the whole claim. |
+| The Dynamic Type ceiling | `DESIGN_UNSPECIFIED` #1: the export's type scale is fixed pixels with no clamps. | `dynamicTypeSize(...)` on one screen. The contract, including the limit it accepts and why, is `docs/design/DYNAMIC_TYPE.md`. |
+
