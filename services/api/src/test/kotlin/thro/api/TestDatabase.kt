@@ -38,10 +38,15 @@ public object TestDatabase {
 
     private val roles = listOf("thro_owner", "app_match", "app_trust", "app_rating", "app_read", "app_competition")
 
+    /** An environment variable's value, treating blank as absent — because a build that forwards
+     *  every name unconditionally supplies "" for the ones nobody set, and "" is not a port. */
+    private fun env(name: String, fallback: String): String =
+        System.getenv(name)?.takeIf { it.isNotBlank() } ?: fallback
+
     public fun migrated(): Connection {
-        val port = System.getenv("PGPORT") ?: "5432"
-        val db = System.getenv("PGDATABASE") ?: "postgres"
-        val user = System.getenv("PGUSER") ?: "postgres"
+        val port = env("PGPORT", "5432")
+        val db = env("PGDATABASE", "postgres")
+        val user = env("PGUSER", "postgres")
         val c = DriverManager.getConnection("jdbc:postgresql://$host:$port/$db", user, "")
         c.createStatement().use { st ->
             for (s in schemas) st.execute("DROP SCHEMA IF EXISTS $s CASCADE")

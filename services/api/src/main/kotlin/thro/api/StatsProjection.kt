@@ -5,8 +5,8 @@ import java.util.UUID
 import thro.engine.Command
 import thro.engine.Effect
 import thro.engine.Engine
+import thro.engine.MatchFormat
 import thro.engine.MatchState
-import thro.engine.OutRule
 import thro.engine.Outcome
 import thro.engine.PlayerId
 import thro.engine.RuleTables
@@ -31,10 +31,21 @@ public class StatsProjection(private val connection: Connection) {
     /** A record with the competitor it belongs to, since every figure is a property of one player. */
     public data class Attributed(val player: String, val record: VisitRecord)
 
-    public fun visitsFor(matchId: UUID, deviceId: UUID, home: String, away: String): List<Attributed> {
+    /**
+     * @param format the match's own format, from the aggregate. It is **not** optional and it is not
+     *   defaulted, because that is exactly how this went wrong: the projection replayed every match
+     *   under a fixed 501 / double-out / first-to-five while the command path rehydrated from the
+     *   match's stored format. A match stored as 301 was replayed as 501, so every remaining was
+     *   wrong; a match stored as straight-out had busts fabricated at a remainder of one. The
+     *   figures then disagreed with the scoreboard that produced them — the precise failure the
+     *   shared-format comment was written to prevent.
+     */
+    public fun visitsFor(
+        matchId: UUID, deviceId: UUID, home: String, away: String, format: MatchFormat,
+    ): List<Attributed> {
         val h = PlayerId(home)
         val a = PlayerId(away)
-        var state = MatchState.start(playtestFormat(h), h, a)
+        var state = MatchState.start(format, h, a)
         val out = mutableListOf<Attributed>()
         // Ordinals are per competitor per leg: firstNineAverage takes a player's first three
         // visits of a leg, so a counter shared across both players would take the wrong three.
@@ -96,11 +107,15 @@ public class StatsProjection(private val connection: Connection) {
         home: String,
         away: String,
         player: String,
+        format: MatchFormat,
     ): String {
-        val mine = visitsFor(matchId, deviceId, home, away)
+        val mine = visitsFor(matchId, deviceId, home, away, format)
             .filter { it.player == player }
             .map { it.record }
-        val checkable = RuleTables.checkouts(OutRule.DOUBLE)
+        // The checkable set is a property of the match's out-rule, not a constant. Under straight-out
+        // more remainings are finishable than under double-out, so a checkout percentage taken
+        // against the double-out set would be measured against positions the player was never in.
+        val checkable = RuleTables.checkouts(format.outRule)
         val figures = linkedMapOf(
             "threeDartAverage" to Statistics.threeDartAverage(mine),
             "firstNineAverage" to Statistics.firstNineAverage(mine),

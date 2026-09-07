@@ -65,7 +65,7 @@ class StatsProjectionTest {
         visit("Home", 20, 1, 1)
 
         val proj = StatsProjection(c)
-        val all = proj.visitsFor(match, device, "Home", "Away")
+        val all = proj.visitsFor(match, device, "Home", "Away", playtestFormat(thro.engine.PlayerId("Home")))
         val home = all.filter { it.player == "Home" }.map { it.record }
 
         assertEquals(9, all.size, "every accepted visit should project a record")
@@ -108,5 +108,62 @@ class StatsProjectionTest {
         assertTrue(awayCheckout.note!!.isNotBlank(), "an unavailable figure must explain itself")
 
         println("  projection verified against a hand-computed leg")
+    }
+
+    /**
+     * The projection must replay under the match's own format, not a fixed one.
+     *
+     * It used to replay every match under a hardcoded 501 / double-out / first-to-five while the
+     * command path rehydrated from the stored format — so a 301 match had every remaining derived
+     * two hundred too high, and the figures disagreed with the scoreboard that produced them. That
+     * is the precise failure the "shared format" comment was written to prevent, and it was the one
+     * happening.
+     */
+    @Test
+    fun `the projection replays under the match's own format, not a fixed one`() {
+        if (!configured) {
+            println("no database configured (set PGHOST) — projection format test skipped")
+            return
+        }
+        val c = migrated()
+        val h = CommandHandler(c)
+        val match = UUID.randomUUID()
+        val device = UUID.randomUUID()
+        val format = thro.engine.MatchFormat(
+            startingScore = 301,
+            inRule = thro.engine.InRule.STRAIGHT,
+            outRule = thro.engine.OutRule.DOUBLE,
+            legs = thro.engine.Structure(thro.engine.StructureMode.FIRST_TO, 3),
+            throwFirst = thro.engine.PlayerId("Home"),
+        )
+        Matches(c).open(match, UUID.randomUUID(), UUID.randomUUID(), "Home", "Away", format)
+
+        var seq = 0L
+        fun visit(player: String, total: Int) {
+            seq += 1
+            val r = h.handle(
+                VisitCommand(
+                    commandId = UUID.randomUUID(), matchId = match, deviceId = device,
+                    deviceSeq = seq, actorId = UUID.randomUUID(), actorRole = "participant",
+                    correlationId = UUID.randomUUID(), player = player, visitTotal = total,
+                    dartsUsed = null, dartsAtDouble = null,
+                    occurredAt = "2026-09-07T19:00:00+01:00", occurredTz = "Europe/London",
+                ),
+                "Home", "Away",
+            )
+            assertTrue(r is CommandResult.Applied, "visit $seq ($player $total) was not applied: $r")
+        }
+        visit("Home", 100); visit("Away", 60); visit("Home", 100)
+
+        val proj = StatsProjection(c)
+        val home = proj.visitsFor(match, device, "Home", "Away", format)
+            .filter { it.player == "Home" }.map { it.record }
+        assertEquals(listOf(301, 201), home.map { it.remainingBefore },
+                     "a 301 match starts at 301 — under the old fixed format this read 501 and 401")
+        assertEquals(listOf(201, 101), home.map { it.remainingAfter })
+
+        // And the summary's checkable set comes from the match's out-rule for the same reason.
+        val summary = proj.summaryFor(match, device, "Home", "Away", "Home", format)
+        assertTrue(summary.contains("threeDartAverage"), "summary: $summary")
     }
 }

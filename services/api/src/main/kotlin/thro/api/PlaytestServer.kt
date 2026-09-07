@@ -191,9 +191,12 @@ public object PlaytestServer {
 
     private fun matchStats(conn: Connection, matchId: UUID): String {
         val reg = matches[matchId] ?: throw IllegalArgumentException("unknown match")
+        // The match's own format, from the store — not a fixed one. Statistics replayed under a
+        // different format than the scoreboard used would disagree with the scoreboard.
+        val format = requireNotNull(Matches(conn).load(matchId)) { "no such match" }.format
         val proj = StatsProjection(conn)
-        return """{"home":${proj.summaryFor(matchId, reg.device, reg.home, reg.away, reg.home)},""" +
-            """"away":${proj.summaryFor(matchId, reg.device, reg.home, reg.away, reg.away)}}"""
+        return """{"home":${proj.summaryFor(matchId, reg.device, reg.home, reg.away, reg.home, format)},""" +
+            """"away":${proj.summaryFor(matchId, reg.device, reg.home, reg.away, reg.away, format)}}"""
     }
 
     private fun matchState(conn: Connection, matchId: UUID): String {

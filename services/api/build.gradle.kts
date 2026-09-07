@@ -16,11 +16,17 @@ kotlin { explicitApi() }
 tasks.test {
     useJUnitPlatform()
     testLogging { showStandardStreams = true }
-    // integration tests need a database; skipped cleanly when none is configured
-    environment("PGHOST", System.getenv("PGHOST") ?: "")
-    environment("PGPORT", System.getenv("PGPORT") ?: "")
-    environment("PGUSER", System.getenv("PGUSER") ?: "")
-    environment("PGDATABASE", System.getenv("PGDATABASE") ?: "")
+    // Integration tests need a database; they skip cleanly when none is configured, and fail rather
+    // than skip when THRO_REQUIRE_DB says the run must have one — which is why that variable has to
+    // be forwarded too. A Gradle test task does not inherit the environment, so anything the tests
+    // read has to be named here; THRO_REQUIRE_DB was set by CI and never arrived until it was.
+    //
+    // Each is forwarded only when it has a value. Passing an empty string is not the same as passing
+    // nothing: it defeats the `?: "5432"` fallbacks on the other side, and produced the unparseable
+    // `jdbc:postgresql://host:/` for anyone who set PGHOST alone.
+    for (name in listOf("PGHOST", "PGPORT", "PGUSER", "PGDATABASE", "THRO_REQUIRE_DB")) {
+        System.getenv(name)?.takeIf { it.isNotBlank() }?.let { environment(name, it) }
+    }
 }
 
 // `gradle -p services/api run` starts the playtest harness. The database settings come from the
