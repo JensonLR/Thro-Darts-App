@@ -232,19 +232,29 @@ final class MatchSessionTests: XCTestCase {
 
     // MARK: statistics presentation
 
+    /// The confidence is named on every expectation here, not left to the default. It was the
+    /// default that made this test weaker than it looked: `StatLine` gained the field for PD-015 and
+    /// every literal below silently claimed `.exact`, including the one whose value is a range.
     func testStatisticsAreHonestAboutTheirBasis() {
         XCTAssertEqual(StatPresentation.line("3-dart average", .exact(89.44, n: 12), kind: .average),
-                       StatLine(label: "3-dart average", value: "89.4", note: nil))
+                       StatLine(label: "3-dart average", value: "89.4", note: nil, confidence: .exact))
         XCTAssertEqual(StatPresentation.line("Checkout %", .bounded(lower: 30, upper: 50, n: 4, note: "Two attempts were not recorded."), kind: .percent),
-                       StatLine(label: "Checkout %", value: "30%–50%", note: "Two attempts were not recorded."))
+                       StatLine(label: "Checkout %", value: "30%–50%", note: "Two attempts were not recorded.",
+                                confidence: .range),
+                       "a range is drawn as a range, not as a fact that happens to have a dash in it")
         XCTAssertEqual(StatPresentation.line("180s", .exact(3, n: 20), kind: .count),
-                       StatLine(label: "180s", value: "3", note: nil))
+                       StatLine(label: "180s", value: "3", note: nil, confidence: .exact))
         let disclosed = Stat(basis: .exact, value: 95.0, sampleSize: 2, note: "1 leg(s) ended before nine darts and are excluded.")
         XCTAssertEqual(StatPresentation.line("First 9", disclosed, kind: .average).note,
                        "1 leg(s) ended before nine darts and are excluded.", "an exact figure keeps its disclosure")
         let unavailable = StatPresentation.line("Checkout %", .unavailable("No darts at a double were recorded for this player."), kind: .percent)
         XCTAssertEqual(unavailable.value, "—")
         XCTAssertEqual(unavailable.note, "No darts at a double were recorded for this player.")
+        XCTAssertEqual(unavailable.confidence, .unavailable, "and it reaches the view saying so")
+        // The drawn form the view actually receives. The basis used to stop at StatLine, which is
+        // why all three were drawn identically until PD-015.
+        XCTAssertEqual(unavailable.item.confidence, .unavailable)
+        XCTAssertNotNil(unavailable.item.note, "a dash always arrives with its reason")
     }
 
     func testTheResultFiguresComeFromTheReplayedVisits() throws {

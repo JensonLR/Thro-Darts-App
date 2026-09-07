@@ -73,15 +73,47 @@ public final class AppStore: ObservableObject {
         refresh()
     }
 
-    static func openJournal() throws -> Journal {
+    /// Where the journal and the club book live. One directory, so one backup decision covers both.
+    static func container() throws -> URL {
         let support = try FileManager.default.url(for: .applicationSupportDirectory, in: .userDomainMask,
                                                   appropriateFor: nil, create: true)
         let dir = support.appendingPathComponent("THRO", isDirectory: true)
         try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        return dir
+    }
+
+    static func openJournal() throws -> Journal {
+        let dir = try container()
+        // PD-017. A journal is the only copy of what was thrown, so it belongs in the device backup.
+        // Stated and read back rather than left to a default, for the same reason the durability
+        // pragmas are: a default that nothing checks is a default that changes.
+        BackupPolicy.include(dir)
         let opened = try Journal(path: dir.appendingPathComponent("journal.sqlite").path,
                                  deviceId: DeviceId(deviceId()))
         reconcileDeviceId(opened)
         return opened
+    }
+
+    /// Whether this device's darts would survive a new phone (PD-017). Read on demand rather than
+    /// cached, because the answer is a fact about the file system now and not when the app started.
+    public var backupState: BackupPolicy.State {
+        (try? AppStore.container()).map(BackupPolicy.read) ?? .unknown("the data folder could not be found")
+    }
+
+    /// Everything this device holds, as one file the player can keep (PD-017).
+    ///
+    /// Written to a temporary file so it can be shared. Nothing is sent anywhere by this: the
+    /// player chooses where it goes, which is the whole point of it existing alongside the backup.
+    public func exportEverything(clubs book: ClubBook?, at now: Date = Date()) throws -> URL {
+        guard let journal else { throw ExportError.notAnExport("this device has no journal open") }
+        let document = try Export.make(journal,
+                                       clubs: (try? book?.exportRows()) ?? [],
+                                       people: (try? book?.people()) ?? [],
+                                       assetsNotIncluded: Array((try? book?.referencedAssetIds()) ?? []).sorted(),
+                                       at: now)
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent(Export.filename(at: now))
+        try Export.data(document).write(to: url, options: .atomic)
+        return url
     }
 
     static let deviceIdKey = "thro.journal.deviceId"
@@ -193,7 +225,9 @@ public struct ThroRootView: View {
                 .throAppearance(Appearance(stored: appearanceRaw))
         } else if showingSettings {
             SettingsScreen(onBack: { showingSettings = false },
-                           onReplayOpening: { showingSettings = false; opening = true })
+                           onReplayOpening: { showingSettings = false; opening = true },
+                           backupState: { store.backupState },
+                           makeExport: { try store.exportEverything(clubs: clubs.book) })
                 .throAppearance(Appearance(stored: appearanceRaw))
         } else {
             VStack(spacing: 0) {
@@ -473,10 +507,21 @@ public struct SettingsScreen: View {
     @AppStorage(OpeningPreferences.hapticsKey) private var openingHaptics: Bool = true
     private let onBack: () -> Void
     private let onReplayOpening: (() -> Void)?
+    /// PD-017. Where the file comes from and what the file system says about backups. Closures
+    /// rather than the stores themselves, so Settings stays a screen and not a second owner of the
+    /// device's data — and so a test can drive both without a journal on disk.
+    private let backupState: () -> BackupPolicy.State
+    private let makeExport: (() throws -> URL)?
+    @State private var exported: URL?
+    @State private var exportProblem: String?
 
-    public init(onBack: @escaping () -> Void, onReplayOpening: (() -> Void)? = nil) {
+    public init(onBack: @escaping () -> Void, onReplayOpening: (() -> Void)? = nil,
+                backupState: @escaping () -> BackupPolicy.State = { .unknown("no data folder in this build") },
+                makeExport: (() throws -> URL)? = nil) {
         self.onBack = onBack
         self.onReplayOpening = onReplayOpening
+        self.backupState = backupState
+        self.makeExport = makeExport
     }
 
     private var appearance: Binding<Appearance> {
@@ -538,6 +583,45 @@ public struct SettingsScreen: View {
                         Text("The silent switch silences the sound whatever this says. Reduce Motion shows the finished mark instead of the throw.")
                             .thro(ThroTypography.metadata)
                             .foregroundStyle(ThroColor.colorTextSecondary)
+                    }
+                    group("Your darts") {
+                        // PD-017. Both halves are told. A player who learns their darts are in
+                        // iCloud from a support article rather than from the app has been failed
+                        // twice — and one who assumes they are, and is wrong, has been failed worse.
+                        let state = backupState()
+                        SettingsRow(icon: state.isIncluded ? .cloudCheck : .cloudOff,
+                                    label: "In the phone's backup",
+                                    value: state.isIncluded ? "Yes" : "No")
+                        Text(BackupPolicy.sentence(state))
+                            .thro(ThroTypography.metadata)
+                            .foregroundStyle(state.isIncluded ? ThroColor.colorTextSecondary : ThroColor.colorStatusError)
+                            .fixedSize(horizontal: false, vertical: true)
+                        if let makeExport {
+                            ThroButton("Export everything", variant: .secondary, size: .medium) {
+                                do {
+                                    exported = try makeExport()
+                                    exportProblem = nil
+                                } catch {
+                                    exported = nil
+                                    exportProblem = "\(error)"
+                                }
+                            }
+                            .padding(.top, ThroSpacing.spacing2)
+                            if let exported {
+                                ShareLink(item: exported) {
+                                    Text("Save or send \(exported.lastPathComponent)")
+                                        .thro(ThroTypography.body.weight(.semibold))
+                                        .foregroundStyle(ThroColor.colorTextBrand)
+                                }
+                            }
+                            if let exportProblem {
+                                Snackbar(exportProblem, tone: .error)
+                            }
+                            Text("One file with every match, every visit as written — corrections and all — and every club this phone keeps. Nothing is sent anywhere: you choose where it goes. Pictures are not in it; the file names the ones this phone holds.")
+                                .thro(ThroTypography.metadata)
+                                .foregroundStyle(ThroColor.colorTextSecondary)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
                     }
                     group("This build") {
                         SettingsRow(icon: .info, label: "Build", value: BuildInfo.label)
