@@ -1,3 +1,4 @@
+import CoreSpotlight
 import SwiftUI
 import UniformTypeIdentifiers
 import ThroTokens
@@ -270,10 +271,13 @@ public struct ThroRootView: View {
     /// The person whose page is open, if any. Their figures come from the journal, so this is the
     /// one screen in the app where a statistic is about a person rather than about a match.
     @State private var viewing: LocalPerson?
-    /// Where an incoming link asked to go, until a screen can take it there.
-    @StateObject private var router = ThroRouter()
+    /// Where an incoming link asked to go, until a screen can take it there. The shared one, because
+    /// an App Intent and a Spotlight result both arrive from outside any view.
+    @ObservedObject private var router = ThroRouter.shared
     /// The club a link named, handed to the Discover tab and cleared as it lands.
     @State private var openClub: String?
+    /// Whether this phone's own search field finds matches, people and clubs (on by default).
+    @AppStorage(ThroSpotlight.enabledKey) private var spotlight: Bool = true
     /// PD-007: the opening plays once, at cold launch, over whatever the app shows first.
     @State private var opening = true
     /// The opening withdraws its own motion under this setting; the handover has to withdraw too,
@@ -306,8 +310,31 @@ public struct ThroRootView: View {
         // the journal has opened. None of those is a moment to move the screen, so the router holds
         // it and this takes it when SwiftUI is next evaluating.
         .onOpenURL { router.open($0) }
+        // A tapped Spotlight result arrives as a user activity rather than a URL, and is the one
+        // place `onContinueUserActivity` is right — a universal link would arrive at `onOpenURL`,
+        // which is the mistake a 2024-era mental model makes in SwiftUI.
+        .onContinueUserActivity(CSSearchableItemActionType) { activity in
+            if let route = ThroSpotlight.route(for: activity) { router.go(route) }
+        }
         .onChange(of: router.pending) { _, _ in follow() }
-        .task { follow() }
+        .task { follow(); reindex() }
+        // Keyed on what is actually indexable rather than on a count: a club being renamed changes
+        // no count, and an index that only noticed additions would keep showing the old name.
+        .onChange(of: searchable) { _, _ in reindex() }
+    }
+
+    /// A fingerprint of everything Spotlight would hold, so a rename reindexes as surely as an add.
+    private var searchable: String {
+        let matches = (store.matches + store.archived)
+            .map { "\($0.record.id.value)|\($0.record.homeName)|\($0.record.awayName)|\($0.complete)" }
+        let people = clubs.people.map { "\($0.id)|\($0.name)" }
+        let orgs = clubs.clubs.map { "\($0.id)|\($0.name)|\($0.kind.rawValue)" }
+        return (matches + people + orgs).joined(separator: "\n") + "|\(spotlight)"
+    }
+
+    private func reindex() {
+        ThroSpotlight.index(matches: store.matches + store.archived,
+                            people: clubs.people, clubs: clubs.clubs, enabled: spotlight)
     }
 
     /// Goes where a link asked, once, if the place still exists.
@@ -340,6 +367,20 @@ public struct ThroRootView: View {
             viewing = nil; showingSettings = false; store.flow = nil
             store.tab = .discover
             openClub = id
+        case .newMatch:
+            viewing = nil; showingSettings = false
+            store.flow = .new
+        case .continueLatest:
+            viewing = nil; showingSettings = false
+            // `matches` is newest first, so the first unfinished one is the one they walked away
+            // from. With none, Play — not a guess about which match, but the right place when there
+            // is no match to continue, and the screen there says so rather than opening an empty one.
+            if let open = store.matches.first(where: { !$0.complete }) {
+                store.flow = .resume(open.record.id)
+            } else {
+                store.flow = nil
+                store.tab = .play
+            }
         }
     }
 
@@ -1134,6 +1175,7 @@ public struct SettingsScreen: View {
     @AppStorage(ThroHaptics.enabledKey) private var haptics: Bool = true
     @AppStorage(OpeningPreferences.soundKey) private var openingSound: Bool = true
     @AppStorage(OpeningPreferences.hapticsKey) private var openingHaptics: Bool = true
+    @AppStorage(ThroSpotlight.enabledKey) private var spotlight: Bool = true
     private let onBack: () -> Void
     private let onReplayOpening: (() -> Void)?
     /// PD-017. Where the file comes from and what the file system says about backups. Closures
@@ -1197,7 +1239,7 @@ public struct SettingsScreen: View {
                         }
                         .frame(minHeight: 52)
                         .overlay(alignment: .bottom) { Rectangle().fill(ThroColor.colorBorderDefault).frame(height: 1) }
-                        Text("A light tap on every key, a firmer one when a visit is saved, and a distinct one for a bust and for a leg won — so those two are felt without looking at the phone.")
+                        Text("A light tap on every key, a firmer one when a visit is saved, and its own sensation for a bust, a checkout coming up, an undo, a leg, and the match — so the ones that matter are felt without looking at the phone.")
                             .thro(ThroTypography.metadata)
                             .foregroundStyle(ThroColor.colorTextSecondary)
                             .fixedSize(horizontal: false, vertical: true)
@@ -1212,6 +1254,21 @@ public struct SettingsScreen: View {
                                 .padding(.top, ThroSpacing.spacing2)
                         }
                         Text("The silent switch silences the sound whatever this says. Reduce Motion shows the finished mark instead of the throw.")
+                            .thro(ThroTypography.metadata)
+                            .foregroundStyle(ThroColor.colorTextSecondary)
+                    }
+                    group("Search") {
+                        HStack(spacing: 12) {
+                            Icon(.search, size: 18).foregroundStyle(ThroColor.colorTextSecondary)
+                            Toggle(isOn: $spotlight) {
+                                Text("Find these on this phone").thro(ThroTypography.body)
+                                    .foregroundStyle(ThroColor.colorTextPrimary)
+                            }
+                            .tint(ThroColor.colorSurfaceBrand)
+                        }
+                        .frame(minHeight: 52)
+                        .overlay(alignment: .bottom) { Rectangle().fill(ThroColor.colorBorderDefault).frame(height: 1) }
+                        Text("Your matches, the people who play here and your clubs appear in this iPhone's own search. The index is on the phone, is never sent to Apple, and is not shared with your other devices. Turning this off removes what is already there.")
                             .thro(ThroTypography.metadata)
                             .foregroundStyle(ThroColor.colorTextSecondary)
                     }

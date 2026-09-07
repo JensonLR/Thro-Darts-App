@@ -17,6 +17,8 @@ final class RoutingTests: XCTestCase {
         .match(MatchId("7F2A-9C31")),
         .person("person-1"),
         .club("club-1"),
+        .newMatch,
+        .continueLatest,
     ]
 
     /// Every route can be written as a link and read back as itself.
@@ -62,6 +64,16 @@ final class RoutingTests: XCTestCase {
         XCTAssertEqual(ThroRoute(url: URL(string: "thro://match/7F2A")!), .match(MatchId("7F2A")))
         XCTAssertEqual(ThroRoute(url: URL(string: "thro://person/p1")!), .person("p1"))
         XCTAssertEqual(ThroRoute(url: URL(string: "thro://club/c1")!), .club("c1"))
+    }
+
+    /// The two addresses a Shortcut and the Action Button use. `continue` is late-bound on purpose:
+    /// a Shortcut saved in March must still mean *the one I am in the middle of* in December, which
+    /// naming a match id would freeze at the moment the Shortcut was made.
+    func testTheActionAddressesAreNamedNotFrozen() {
+        XCTAssertEqual(ThroRoute(url: URL(string: "thro://new")!), .newMatch)
+        XCTAssertEqual(ThroRoute(url: URL(string: "thro://continue")!), .continueLatest)
+        XCTAssertEqual(ThroRoute.continueLatest.url.absoluteString, "thro://continue")
+        XCTAssertNotEqual(ThroRoute.continueLatest, ThroRoute.match(MatchId("continue")))
     }
 
     /// A link this build cannot read opens nothing.

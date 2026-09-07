@@ -39,6 +39,16 @@ public enum ThroRoute: Equatable, Hashable, Sendable {
     case person(String)
     /// A club, league or tournament this device keeps.
     case club(String)
+    /// Start a new match. An action rather than a place, and an address all the same: it is what a
+    /// Shortcut, the Action Button and a widget all want to name, and there is nowhere else to send
+    /// them that means the same thing.
+    case newMatch
+    /// The match this phone walked away from, whichever it is.
+    ///
+    /// Late-bound on purpose: a Shortcut saved in March must still mean *the one I am in the middle
+    /// of* in December, so the address names the question and the app answers it. Naming a match id
+    /// would freeze the answer at the moment the Shortcut was made.
+    case continueLatest
 }
 
 extension ThroRoute {
@@ -68,6 +78,8 @@ extension ThroRoute {
         case let .match(id): path = "m/\(escape(id.value))"
         case let .person(id): path = "p/\(escape(id))"
         case let .club(id): path = "e/\(escape(id))"
+        case .newMatch: path = "new"
+        case .continueLatest: path = "continue"
         }
         // Every path above is now percent-encoded, so this cannot fail. The fallback exists because
         // a force-unwrap in a URL builder is how a crash reaches a player through a shared link.
@@ -88,6 +100,10 @@ extension ThroRoute {
             self = .tab(tab)
         case ("settings", _):
             self = .settings
+        case ("new", _):
+            self = .newMatch
+        case ("continue", _):
+            self = .continueLatest
         case ("m", let id?), ("match", let id?):
             guard !id.isEmpty else { return nil }
             self = .match(MatchId(id))
@@ -134,6 +150,15 @@ extension ThroRoute {
 /// because a route must be applied exactly once: a second application would send a player back to
 /// the same place every time the view re-evaluated.
 public final class ThroRouter: ObservableObject {
+    /// The one router.
+    ///
+    /// A singleton is worth justifying. An `AppIntent` — "Hey Siri, start a match", the Action
+    /// Button, a Shortcut — runs outside any view and has no way to reach a `@StateObject`, and
+    /// neither has a Spotlight result's handler. The alternative is threading a router through
+    /// every entry point the system can invoke, which is the same object with more places to get it
+    /// wrong. The state it holds is one optional route.
+    public static let shared = ThroRouter()
+
     @Published public private(set) var pending: ThroRoute?
 
     public init() {}
