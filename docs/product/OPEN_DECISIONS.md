@@ -196,7 +196,9 @@ instead of what counted will be believed, because at visit granularity nothing c
 difference. All three in-rules are now scored; the engine refuses none of them.
 
 ## OD-016 — What a club, league or tournament may show, and to whom
-**Status:** OPEN · **Impact:** privacy, safeguarding, product surface
+**Status: CLOSED, 2026-09-07 — decided by the founder as PD-009.** **A public front, a private inside** — a club's name, badge, kind and published fixtures are public; members, results and announcements are members-only, and a member recorded as a minor is never listed to anyone but an admin.
+
+The reasoning below is kept, because it is why the decision had to be theirs.
 
 The founder asked for clubs and leagues to hold their own data and be visible in the app. Every
 question below has been answered *provisionally and restrictively* in `packages/organisation`, and
@@ -223,7 +225,9 @@ anyone but an admin. But it is a privacy decision about other people's children 
 engineering's to take.
 
 ## OD-017 — Whether members may message each other, and what protects that
-**Status:** OPEN · **Impact:** safeguarding, moderation, legal · **Blocks:** any private messaging
+**Status: CLOSED, 2026-09-07 — decided by the founder as PD-009.** **Announcements only** — broadcast, from an official, with an author on the record. Member-to-member messaging is not built and is not to be built until the founder has taken safeguarding advice. The refusals in `packages/organisation` stay: nobody recorded as a minor, or whose age is not established, is reached until OD-010 is answered.
+
+The reasoning below is kept, because it is why the decision had to be theirs.
 
 The founder asked for the app to "become a hub for them to communicate with member and arrange
 things". What is built is **announcements only**: broadcast, from an official or admin, to a
@@ -250,7 +254,9 @@ sports club with junior members is specific.
 off, subs are due, the AGM is Tuesday. A club that needs a private word has a phone.
 
 ## OD-018 — How a fixture is agreed
-**Status:** OPEN · **Impact:** product surface, competition integrity
+**Status: CLOSED, 2026-09-07 — decided by the founder as PD-009.** **The official's list** — an official schedules, moves and cancels; agreeing a fixture happens off the app. Propose-and-accept is deferred, not refused.
+
+The reasoning below is kept, because it is why the decision had to be theirs.
 
 `Fixture` is deliberately thin: a date, two sides, a venue, and a state that says whether it is
 still going ahead. It carries no result, because a result belongs to the match aggregate and its

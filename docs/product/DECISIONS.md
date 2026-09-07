@@ -765,3 +765,70 @@ would carry it without a schema change to the engine's contract.
   remaining of 2. "86,000 exhaustive transitions on two independent implementations" was true of one
   out-rule in three. It now covers all three from a remaining of 1: **258,516** transitions.
 
+## PD-009 — Clubs and leagues: what is public, who may be reached, and how a fixture is agreed
+
+**Status: decided by the founder, 2026-09-07.** Closes OD-016, OD-017 and OD-018.
+
+### Decided
+
+**A public front, a private inside** (OD-016). A club's name, badge, kind and *published* fixtures are
+public, so a league can advertise a new season. Members, results and announcements are members-only.
+**A member recorded as a minor is never listed to anyone but an admin** — that is not a separate
+decision, it is the same one applied to the one case where getting it wrong matters.
+
+**Announcements only** (OD-017). A club reaches its members by broadcast, from an official or admin,
+with an author on the record and no private channel anywhere. Member-to-member messaging is not
+built, and is not to be built until the founder has taken safeguarding advice. `packages/organisation`
+already enforces the rest: an announcement reaches nobody recorded as a minor, or whose age is not
+established, until OD-010 is answered. Both refusals stay.
+
+**The official's list** (OD-018). An official schedules, moves and cancels fixtures; agreeing them
+happens off the app. It is what the model already supports, it matches how most small leagues run,
+and it is reversible — propose-and-accept can be added on top without changing what is stored.
+
+### Why these, in the founder's words and mine
+
+The founder chose all three from the shortlist engineering recommended, which is worth writing down
+plainly: the recommendations were engineering's reading, the decisions are the founder's, and if the
+reading was wrong the decision is still theirs to change.
+
+### What each costs
+
+- **Public front.** A club page is a page anyone can find, so a club's name and badge are published
+  the moment it exists. There is no takedown flow and no claim process; a club that objects to
+  another club's name has nowhere to go yet.
+- **Announcements only.** A player who wants a private word with a captain uses a phone. That is a
+  real gap and it is the right gap to have while OD-010 is open.
+- **The official's list.** A postponement agreed between two captains is not on the record, so a
+  league decided by a walkover has nothing in the app to point at. Propose-and-accept is the fix and
+  it is deferred, not refused.
+
+## PD-010 — The club, league and profile screens are designed from the existing system
+
+**Status: commissioned by the founder, 2026-09-07.**
+
+The founder: *"id want you to use the design system & /design to build the screens."*
+
+`docs/design/DESIGN_UNSPECIFIED.md` says the screens the export does not draw may not be invented by
+engineering. This is the founder lifting that for one named set — the club, league, tournament and
+profile screens — and directing that they be designed **from the approved system rather than from
+scratch**. That is a narrower authority than it sounds, and the narrowness is the point:
+
+1. **Tokens only.** Every colour, size, radius, weight and duration comes from the generated token
+   layer. No new value is introduced, and the contrast gate applies as it does everywhere.
+2. **Approved components first.** A screen is assembled from the components already extracted from
+   the export. Where the system genuinely lacks something, a new component is drawn *in the system's
+   own idiom*, recorded in `DESIGN_INVENTORY.md` as engineering-drawn rather than exported, and put
+   in front of the founder as a proposal — not slipped in.
+3. **The canvas is the review surface.** The screens are published as artboards the founder can look
+   at and change before any of them is built, so a design decision is taken by looking rather than by
+   reading a diff.
+4. **This does not extend.** It covers the club, league, tournament and profile screens named here.
+   Every other unspecified screen — the participant attestation flow, the abandoned-match state, the
+   authentication surface — stays where it was, and B3 still stands for them.
+
+### How to reverse
+
+The founder replaces any of it with a commissioned design. Nothing here is load-bearing on anything
+else; the components are Swift files and the canvas is a record of what was proposed and when.
+

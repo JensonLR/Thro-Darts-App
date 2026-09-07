@@ -46,7 +46,12 @@ public enum class OrgRole { MEMBER, OFFICIAL, ADMIN }
 
 /** An action a person may want to take inside an organisation. */
 public enum class OrgAction {
-    /** Read the organisation's own page: its name, branding, and public fixtures. */
+    /**
+     * Read the organisation's own page: its name, badge, kind and published fixtures.
+     *
+     * Public, by PD-009 — a league advertising a new season needs a page a stranger can open. It is
+     * the only public action, and everything below it needs a membership.
+     */
     VIEW,
     /** See who else is a member. */
     VIEW_MEMBERS,
@@ -74,11 +79,31 @@ public object Permissions {
         OrgRole.ADMIN to OrgAction.entries.toSet(),
     )
 
+    /** The one action a stranger may take (PD-009): the front of a club is public. */
+    private val public: Set<OrgAction> = setOf(OrgAction.VIEW)
+
     public fun may(role: OrgRole, action: OrgAction): Boolean = action in allowed.getValue(role)
 
-    /** A person who is not a member may do nothing at all — not even VIEW, until OD-016 says so. */
+    /**
+     * A public front and a private inside (PD-009). A person with no membership may open the page
+     * and see nothing else; everything past the front door needs one.
+     */
     public fun may(membership: Membership?, action: OrgAction): Boolean =
-        membership != null && may(membership.role, action)
+        if (membership == null) action in public else may(membership.role, action)
+
+    /**
+     * Who a viewer may see on the membership list.
+     *
+     * A member recorded as a MINOR — or whose age is not established, which is treated the same way
+     * for the same reason as everywhere else — is listed **only to an admin**. That is the one case
+     * where getting the visibility rule wrong matters, so it is a function rather than a convention:
+     * a caller cannot render the list without going through it.
+     */
+    public fun visibleMembers(to: Membership?, members: List<Membership>): List<Membership> {
+        if (!may(to, OrgAction.VIEW_MEMBERS)) return emptyList()
+        if (to?.role == OrgRole.ADMIN) return members
+        return members.filter { it.ageBand == AgeBand.ADULT }
+    }
 }
 
 /**

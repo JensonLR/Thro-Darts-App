@@ -35,8 +35,9 @@ class OrganisationTest {
                              "$role and $action")
             }
         }
-        // A person with no membership is not a member with no role: they are outside.
-        for (action in OrgAction.entries) {
+        // A public front and a private inside (PD-009): a stranger may open the page and nothing else.
+        assertTrue(Permissions.may(null, OrgAction.VIEW), "a club's front is public")
+        for (action in OrgAction.entries - OrgAction.VIEW) {
             assertFalse(Permissions.may(null, action), "a stranger may not $action")
         }
         // A member cannot announce, and an official cannot change who is a member. Both are the
@@ -44,6 +45,32 @@ class OrganisationTest {
         assertFalse(Permissions.may(member(OrgRole.MEMBER), OrgAction.ANNOUNCE))
         assertFalse(Permissions.may(member(OrgRole.OFFICIAL), OrgAction.MANAGE_MEMBERS))
         assertTrue(Permissions.may(member(OrgRole.ADMIN), OrgAction.MANAGE_MEMBERS))
+    }
+
+    /**
+     * A member recorded as a minor, or whose age is not established, is listed only to an admin
+     * (PD-009). A function rather than a convention, so a caller cannot render the list without it.
+     */
+    @Test
+    fun `a minor is never listed to anyone but an admin, and a stranger sees no list at all`() {
+        val members = listOf(
+            member(OrgRole.MEMBER, AgeBand.ADULT, "adult"),
+            member(OrgRole.OFFICIAL, AgeBand.MINOR, "junior"),
+            member(OrgRole.MEMBER, AgeBand.UNKNOWN, "unstated"),
+        )
+        assertEquals(emptyList(), Permissions.visibleMembers(null, members), "a stranger sees no list")
+        assertEquals(
+            listOf(PersonId("adult")),
+            Permissions.visibleMembers(member(OrgRole.MEMBER), members).map { it.person },
+            "a member sees the adults",
+        )
+        assertEquals(
+            listOf(PersonId("adult")),
+            Permissions.visibleMembers(member(OrgRole.OFFICIAL), members).map { it.person },
+            "and so does an official: running a club is not a reason to see a child's name",
+        )
+        assertEquals(members, Permissions.visibleMembers(member(OrgRole.ADMIN), members),
+                     "an admin sees everybody, because somebody has to")
     }
 
     // ---------------------------------------------------------------- branding
