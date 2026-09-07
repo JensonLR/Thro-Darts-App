@@ -250,21 +250,97 @@ final class ConformanceTests: XCTestCase {
         )
     }
 
-    /// A format the engine cannot score honestly must be refused at construction, not scored as
-    /// something else. `in_rule` is stored on every match and round-tripped through the database; for
-    /// two of its three values the engine has no scoring rule, because it works at visit granularity
-    /// and the opening dart's position inside a visit is not recoverable from a visit total. Before
-    /// this guard, a match created with double-in was scored as straight-in and was silently wrong.
+    /// Double-in, and the capture rule that makes it scorable at visit granularity (PD-008).
     ///
-    /// The initialiser refuses with a precondition, which cannot be caught here, so this holds the
-    /// named rule the initialiser asks — the same rule, by the same name, as the Kotlin engine's.
-    func testOnlyAnInRuleTheEngineCanScoreIsScorable() {
-        XCTAssertTrue(InRule.straight.isScorable)
-        XCTAssertFalse(InRule.double.isScorable)
-        XCTAssertFalse(InRule.master.isScorable)
-        // and a format built on the one scorable rule still constructs
-        let f = MatchFormat(startingScore: 501, inRule: .straight, outRule: .double,
-                            legs: Structure(mode: .firstTo, target: 3), throwFirst: PlayerId("A"))
-        XCTAssertEqual(f.inRule, .straight)
+    /// The founder asked for it because leagues and tournaments play it. Before PD-008 the format was
+    /// refused rather than scored as straight-in and silently wrong (OD-015). The rule: a visit thrown
+    /// while the player has not opened records the score FROM the opening dart onward, and zero means
+    /// they did not open — what the scorer calls at the oche, and it costs no statistic, because a
+    /// visit is three darts whether it opened or not.
+    ///
+    /// Written against the Swift engine independently of the Kotlin one; the corpus is what holds
+    /// them to each other.
+    func testUnderDoubleInNothingScoresUntilAPlayerOpensAndOnlyAnOpeningTotalCan() {
+        let a = PlayerId("A"), b = PlayerId("B")
+        let format = MatchFormat(startingScore: 501, inRule: .double, outRule: .double,
+                                 legs: Structure(mode: .firstTo, target: 2), throwFirst: a)
+        let start = MatchState.start(format: format, home: a, away: b)
+        XCTAssertEqual(start.opened[a], false, "double-in starts closed")
+        XCTAssertEqual(start.opened[b], false)
+        XCTAssertTrue(InRule.double.requiresOpening)
+        XCTAssertTrue(InRule.master.requiresOpening)
+        XCTAssertFalse(InRule.straight.requiresOpening)
+        XCTAssertEqual(MatchState.start(format: MatchFormat(
+            startingScore: 501, inRule: .straight, outRule: .double,
+            legs: Structure(mode: .firstTo, target: 2), throwFirst: a), home: a, away: b).opened[a], true)
+
+        // A visit that does not open scores nothing and does not open the player.
+        guard case .accepted(let afterMiss, let effect, _) = Engine.apply(start, .visit(a, 0)) else {
+            return XCTFail("a visit that did not open is still a visit")
+        }
+        XCTAssertEqual(effect, .scored)
+        XCTAssertEqual(afterMiss.remaining[a], 501, "nothing counts before the double")
+        XCTAssertEqual(afterMiss.opened[a], false, "and they are still not in")
+        XCTAssertEqual(afterMiss.thrower, b, "the turn still rotates")
+
+        // Both directions over the whole range, so neither the table nor the guard can be trimmed.
+        for total in 0...180 {
+            let openable = total == 0 || RuleTables.openingTotals(.double).contains(total)
+            switch Engine.apply(start, .visit(a, total)) {
+            case .accepted: XCTAssertTrue(openable, "\(total) was accepted but cannot open")
+            case .rejected(let reason):
+                XCTAssertFalse(openable, "\(total) can open but was rejected as \(reason)")
+                if !RuleTables.impossibleVisitTotals.contains(total) && total <= 180 {
+                    XCTAssertEqual(reason, .IMPOSSIBLE_OPENING_TOTAL,
+                                   "\(total) is a possible visit; it is the OPENING that is impossible")
+                }
+            }
+        }
+        XCTAssertEqual(RuleTables.openingTotals(.double).max(), 170, "the bull opens: D25+T20+T20")
+        XCTAssertTrue(RuleTables.openingTotals(.double).contains(41), "D1 then 19 and 20")
+        XCTAssertFalse(RuleTables.openingTotals(.double).contains(1), "the smallest double is 2")
+        XCTAssertEqual(RuleTables.openingTotals(.master).max(), 180, "master-in admits trebles")
+        // Opening and checking out are the same set, for every rule: a checkout is free darts then a
+        // finisher, an opening is an opener then free darts, and addition commutes.
+        XCTAssertEqual(RuleTables.openingTotals(.double), RuleTables.checkouts(.double))
+        XCTAssertEqual(RuleTables.openingTotals(.straight), RuleTables.checkouts(.straight))
+        // The floor of a checkout set is the rule's own, not the constant 2: under straight-out a
+        // single 1 finishes. Both engines hardcoded 2 and would have busted a player finishing from 1.
+        XCTAssertTrue(RuleTables.checkouts(.straight).contains(1))
+        XCTAssertFalse(RuleTables.checkouts(.double).contains(1))
+
+        // Opening is per player, and it survives to the end of the leg.
+        guard case .accepted(let bIn, _, _) = Engine.apply(afterMiss, .visit(b, 40)) else {
+            return XCTFail("40 opens")
+        }
+        XCTAssertEqual(bIn.remaining[b], 461)
+        XCTAssertEqual(bIn.opened[b], true)
+        if case .rejected(let reason) = Engine.apply(bIn, .visit(a, 180)) {
+            XCTAssertEqual(reason, .IMPOSSIBLE_OPENING_TOTAL, "one player opening does not open the other")
+        } else {
+            XCTFail("A is still closed, so 180 cannot be theirs")
+        }
+
+        // A new leg closes the door again; a bust reverts the score but never the opening.
+        let short = MatchFormat(startingScore: 40, inRule: .double, outRule: .double,
+                                legs: Structure(mode: .firstTo, target: 2), throwFirst: a)
+        guard case .accepted(let won, let wonEffect, _) =
+                Engine.apply(MatchState.start(format: short, home: a, away: b),
+                             .visit(a, 40, dartsUsed: 1, dartsAtDouble: 1)) else {
+            return XCTFail("D20 from 40 wins the leg")
+        }
+        XCTAssertEqual(wonEffect, .leg_won)
+        XCTAssertEqual(won.opened[a], false, "a new leg is a new opening")
+        XCTAssertEqual(won.opened[b], false)
+
+        let tight = MatchFormat(startingScore: 30, inRule: .double, outRule: .double,
+                                legs: Structure(mode: .firstTo, target: 2), throwFirst: a)
+        guard case .accepted(let bust, let bustEffect, _) =
+                Engine.apply(MatchState.start(format: tight, home: a, away: b), .visit(a, 40)) else {
+            return XCTFail("40 from 30 busts")
+        }
+        XCTAssertEqual(bustEffect, .bust)
+        XCTAssertEqual(bust.remaining[a], 30)
+        XCTAssertEqual(bust.opened[a], true, "opening survives the bust that follows it")
     }
 }

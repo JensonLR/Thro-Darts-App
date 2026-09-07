@@ -20,14 +20,14 @@ public enum OutRule: String, Sendable { case double, master, straight }
 public enum InRule: String, Sendable {
     case straight, double, master
 
-    /// Whether this engine can score a leg under this in-rule honestly.
+    /// Whether a player must open before anything scores.
     ///
-    /// The engine scores a visit, not a dart. Under double-in or master-in only the darts from the
-    /// opening one onward count, so the counted total for an opening visit cannot be derived from
-    /// the visit total: T20, T20, D10 while unopened scores 20, not 140. What the client records on
-    /// an unopened visit is a capture rule of the same kind PD-001 settled for darts at a double,
-    /// and it is not decided (OD-015). All three values remain storable; only one is scorable.
-    public var isScorable: Bool { self == .straight }
+    /// The engine scores a visit, not a dart, so this needed a capture rule before it could be
+    /// scored honestly at all. PD-008 settled it: what a visit records while the player has not
+    /// opened is the score FROM the opening dart onward, and zero means they did not open. That is
+    /// what the scorer calls at the oche, it costs no statistic — a visit is three darts either way
+    /// — and a non-zero total no opening sequence can make is refused.
+    public var requiresOpening: Bool { self != .straight }
 }
 
 /// Whether the right to start alternates every leg, or only between sets. Real competitions differ.
@@ -83,17 +83,6 @@ public struct MatchFormat: Sendable {
         alternation: Alternation = .perLeg
     ) {
         precondition(startingScore > 1, "starting score must exceed 1")
-        // The engine scores a visit, not a dart. Under double-in or master-in only the darts from
-        // the opening one onward count, so the counted total for an opening visit cannot be derived
-        // from the visit total alone — a player who throws T20, T20, D10 while unopened scores 20,
-        // not 140. Deciding what the client records on an unopened visit is a capture rule of the
-        // same kind PD-001 settled for darts at a double, and it is not decided (OD-015). Until it
-        // is, a format the engine cannot score honestly is refused here rather than scored as
-        // straight-in and silently wrong. The storage keeps all three values; nothing may make one.
-        precondition(
-            inRule.isScorable,
-            "in-rule \(inRule) is not scored: the visit-level capture rule for an opening visit is undecided (OD-015)"
-        )
         self.startingScore = startingScore
         self.inRule = inRule
         self.outRule = outRule
@@ -135,6 +124,11 @@ public enum RejectionReason: String, Sendable {
     case DARTS_AT_DOUBLE_INVALID
     case NOT_YOUR_TURN
     case MATCH_COMPLETE
+    /// A non-zero total recorded by a player who has not opened, that no sequence beginning with a
+    /// legal opening segment can make. Distinct from IMPOSSIBLE_VISIT_TOTAL because the total is
+    /// perfectly possible for an opened player: 180 is three trebles, and three trebles cannot open
+    /// a double-in leg.
+    case IMPOSSIBLE_OPENING_TOTAL
 }
 
 public enum BustReason: String, Sendable { case BELOW_ZERO, REMAINDER_ONE, NOT_CHECKOUT_POSSIBLE }
@@ -163,6 +157,9 @@ public struct MatchState: Sendable {
     public var thrower: PlayerId?
     public var winner: PlayerId?
     public var visitsInLeg: Int
+    /// Who has opened in the current leg (PD-008). Under straight-in both are open from the first
+    /// dart; this resets with every leg and every set, because opening is a fact about a leg.
+    public var opened: [PlayerId: Bool]
 
     public var isComplete: Bool { winner != nil }
 
@@ -188,7 +185,8 @@ public struct MatchState: Sendable {
             setStarter: format.throwFirst,
             thrower: format.throwFirst,
             winner: nil,
-            visitsInLeg: 0
+            visitsInLeg: 0,
+            opened: [home: !format.inRule.requiresOpening, away: !format.inRule.requiresOpening]
         )
     }
 }

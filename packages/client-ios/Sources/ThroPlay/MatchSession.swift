@@ -118,6 +118,21 @@ public final class MatchSession: ObservableObject {
     public var checkable: Set<Int> { RuleTables.checkouts(record.outRule) }
     public var throwerOnAFinish: Bool { thrower.map { checkable.contains(remaining($0)) } ?? false }
 
+    /// Whether the thrower still has to open (PD-008). Nothing they score counts until they do, and
+    /// the screen has to say so — a player watching their 60 not go on the board and not being told
+    /// why is the worst thing a scoring app can do.
+    public var throwerMustOpen: Bool {
+        guard let seat = thrower else { return false }
+        return record.inRule.requiresOpening && !(state.opened[seat.playerId] ?? true)
+    }
+    public var inRuleLabel: String? {
+        switch record.inRule {
+        case .straight: return nil
+        case .double: return "Double in"
+        case .master: return "Master in"
+        }
+    }
+
     public var formatLabel: String {
         record.legsMode == .bestOf ? "\(record.startingScore) · Bo\(record.legsTarget)"
                                    : "\(record.startingScore) · First to \(record.legsTarget)"
@@ -357,6 +372,10 @@ public enum Copy {
         case .MATCH_COMPLETE: return "The match is already complete."
         case .DARTS_USED_INVALID: return "Only a leg-winning visit can use fewer than three darts."
         case .DARTS_AT_DOUBLE_INVALID: return "That number of darts at a double is not possible from this score."
+        // Under double-in the score recorded is what counted, from the opening double onward — so a
+        // total no sequence starting with a double can make did not happen. 180 is three trebles.
+        case .IMPOSSIBLE_OPENING_TOTAL:
+            return "\(total) cannot be scored starting on a double. Enter only what counted, from the double."
         }
     }
 

@@ -21,15 +21,16 @@ public enum class InRule {
     ;
 
     /**
-     * Whether this engine can score a leg under this in-rule honestly.
+     * Whether a player must open before anything scores.
      *
-     * The engine scores a visit, not a dart. Under double-in or master-in only the darts from the
-     * opening one onward count, so the counted total for an opening visit cannot be derived from the
-     * visit total: T20, T20, D10 while unopened scores 20, not 140. What the client records on an
-     * unopened visit is a capture rule of the same kind PD-001 settled for darts at a double, and it
-     * is not decided (OD-015). All three values remain storable; only one is scorable.
+     * The engine scores a visit, not a dart, so this needed a capture rule before it could be
+     * scored honestly at all — the founder asked for double-in because leagues and tournaments play
+     * it, and PD-008 settled how a visit records it: what is recorded on a visit thrown while the
+     * player has not opened is the score FROM the opening dart onward, and zero means they did not
+     * open. That is what the scorer calls at the oche, it costs no statistic (a visit is three darts
+     * either way), and a non-zero total that no opening sequence can make is refused.
      */
-    public val isScorable: Boolean get() = this == STRAIGHT
+    public val requiresOpening: Boolean get() = this != STRAIGHT
 }
 
 /** Whether the right to start alternates every leg, or only between sets. Real competitions differ. */
@@ -73,17 +74,6 @@ public data class MatchFormat(
 ) {
     init {
         require(startingScore > 1) { "starting score must exceed 1" }
-        // The engine scores a visit, not a dart. Under double-in or master-in, only the darts from
-        // the opening one onward count, so the counted total for an opening visit cannot be derived
-        // from the visit total alone — a player who throws T20, T20, D10 while unopened scores 20,
-        // not 140. Deciding what the client records on an unopened visit is a capture rule of the
-        // same kind PD-001 settled for darts at a double, and it is not decided (OD-015). Until it
-        // is, a format the engine cannot score honestly is refused here rather than scored as
-        // straight-in and silently wrong. The storage keeps all three values; nothing may make one.
-        require(inRule.isScorable) {
-            "in-rule ${'$'}inRule is not scored: the visit-level capture rule for an opening visit is " +
-                "undecided (OD-015). Only straight-in can be scored honestly today."
-        }
     }
 }
 
@@ -107,6 +97,14 @@ public sealed interface Command {
 
 public enum class RejectionReason {
     IMPOSSIBLE_VISIT_TOTAL,
+
+    /**
+     * A non-zero total recorded by a player who has not opened, that no sequence beginning with a
+     * legal opening segment can make. Distinct from IMPOSSIBLE_VISIT_TOTAL because the total is
+     * perfectly possible for an opened player: 180 is three trebles, and three trebles cannot open
+     * a double-in leg. The message a client shows differs, so the reason does too.
+     */
+    IMPOSSIBLE_OPENING_TOTAL,
     VISIT_TOTAL_OUT_OF_RANGE,
     DARTS_USED_INVALID,
     DARTS_AT_DOUBLE_INVALID,
@@ -145,6 +143,12 @@ public data class MatchState(
     val thrower: PlayerId?,
     val winner: PlayerId? = null,
     val visitsInLeg: Int = 0,
+    /**
+     * Who has opened in the current leg (PD-008). Under straight-in both are open from the first
+     * dart; under double-in or master-in a player scores nothing until they open, and this resets
+     * with every leg and every set, because opening is a fact about a leg and not about a match.
+     */
+    val opened: Map<PlayerId, Boolean> = emptyMap(),
 ) {
     public val isComplete: Boolean get() = winner != null
 
@@ -157,6 +161,7 @@ public data class MatchState(
                 "throwFirst must be one of the competitors"
             }
             val zero = mapOf(home to 0, away to 0)
+            val open = !format.inRule.requiresOpening
             return MatchState(
                 format = format,
                 home = home,
@@ -170,6 +175,7 @@ public data class MatchState(
                 legStarter = format.throwFirst,
                 setStarter = format.throwFirst,
                 thrower = format.throwFirst,
+                opened = mapOf(home to open, away to open),
             )
         }
     }

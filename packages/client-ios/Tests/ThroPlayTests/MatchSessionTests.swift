@@ -378,4 +378,51 @@ final class MatchSessionTests: XCTestCase {
         XCTAssertTrue(s.isComplete)
         XCTAssertNil(s.announcement)
     }
+
+    // MARK: double in (PD-008)
+
+    /// The founder asked for double-in because leagues and tournaments play it. The scorer records
+    /// what counted — the score from the opening double onward — and zero when it did not come. The
+    /// screen has to say so, because a player whose 60 does not go on the board and is not told why
+    /// will believe the app is broken, and they will be right to.
+    func testUnderDoubleInTheScreenSaysWhoIsNotInAndRefusesATotalThatCannotOpen() throws {
+        let s = try MatchSession.start(
+            NewMatch(homeName: "Jenson", awayName: "Alex", inRule: .double, legsTarget: 3), in: journal)
+        XCTAssertEqual(s.inRuleLabel, "Double in", "and the format row says which match this is")
+        XCTAssertTrue(s.throwerMustOpen, "nobody is in at the start")
+
+        // 180 is three trebles, so it cannot be the counted total of a visit that opened.
+        s.quick(180)
+        XCTAssertNotNil(s.notice, "a refusal is shown, not swallowed")
+        XCTAssertTrue(s.notice!.text.contains("starting on a double"), s.notice!.text)
+        XCTAssertEqual(s.remaining(.home), 501, "and nothing was scored")
+        XCTAssertEqual(s.thrower, .home, "nor did the turn move")
+
+        // A visit that did not open is a real visit: it scores nothing, and the turn rotates.
+        s.quick(0)
+        XCTAssertEqual(s.remaining(.home), 501)
+        XCTAssertEqual(s.thrower, .away)
+        XCTAssertTrue(s.throwerMustOpen, "and the away player is not in either")
+
+        // Opening scores from the double onward and the message goes away for that player.
+        s.quick(60)
+        XCTAssertEqual(s.remaining(.away), 441)
+        XCTAssertEqual(s.thrower, .home)
+        XCTAssertTrue(s.throwerMustOpen, "home still has to open")
+        s.quick(40)
+        XCTAssertEqual(s.remaining(.home), 461)
+        XCTAssertFalse(s.throwerMustOpen, "away is in, so nothing is said about them")
+
+        // Once in, 180 is fine — the same total the same player was refused three visits ago.
+        s.quick(180)
+        XCTAssertEqual(s.remaining(.away), 261)
+        XCTAssertNil(s.notice)
+
+        // A straight-in match says nothing about opening at all.
+        let plain = try MatchSession.start(NewMatch(homeName: "A", awayName: "B"), in: journal)
+        XCTAssertNil(plain.inRuleLabel)
+        XCTAssertFalse(plain.throwerMustOpen)
+        plain.quick(180)
+        XCTAssertEqual(plain.remaining(.home), 321, "and 180 opens a straight-in leg like any other visit")
+    }
 }

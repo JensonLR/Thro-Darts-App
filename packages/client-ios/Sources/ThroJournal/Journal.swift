@@ -87,16 +87,19 @@ public struct NewMatch: Sendable {
     public let homeName: String
     public let awayName: String
     public let startingScore: Int
+    public let inRule: InRule
     public let outRule: OutRule
     public let legsMode: StructureMode
     public let legsTarget: Int
     public let throwFirst: Seat
 
-    public init(homeName: String, awayName: String, startingScore: Int = 501, outRule: OutRule = .double,
-                legsMode: StructureMode = .bestOf, legsTarget: Int = 5, throwFirst: Seat = .home) {
+    public init(homeName: String, awayName: String, startingScore: Int = 501, inRule: InRule = .straight,
+                outRule: OutRule = .double, legsMode: StructureMode = .bestOf, legsTarget: Int = 5,
+                throwFirst: Seat = .home) {
         self.homeName = homeName
         self.awayName = awayName
         self.startingScore = startingScore
+        self.inRule = inRule
         self.outRule = outRule
         self.legsMode = legsMode
         self.legsTarget = legsTarget
@@ -109,6 +112,7 @@ public struct MatchRecord: Equatable, Sendable {
     public let homeName: String
     public let awayName: String
     public let startingScore: Int
+    public let inRule: InRule
     public let outRule: OutRule
     public let legsMode: StructureMode
     public let legsTarget: Int
@@ -116,7 +120,7 @@ public struct MatchRecord: Equatable, Sendable {
     public let startedAt: Date
 
     public var format: MatchFormat {
-        MatchFormat(startingScore: startingScore, inRule: .straight, outRule: outRule,
+        MatchFormat(startingScore: startingScore, inRule: inRule, outRule: outRule,
                     legs: Structure(mode: legsMode, target: legsTarget), throwFirst: throwFirst.playerId)
     }
 
@@ -333,7 +337,8 @@ public final class Journal {
               legs_target    INTEGER NOT NULL,
               throw_first    TEXT NOT NULL,
               started_at     TEXT NOT NULL,
-              device_id      TEXT NOT NULL
+              device_id      TEXT NOT NULL,
+              in_rule        TEXT NOT NULL DEFAULT 'straight'
             );
             """)
         // The journal's own facts about itself. Small on purpose: the only thing in it is the
@@ -371,6 +376,12 @@ public final class Journal {
         if !columns.contains("corrects_seq") {
             try exec(h, "ALTER TABLE journal ADD COLUMN corrects_seq INTEGER;")
         }
+        // Journals written before double-in have no in-rule. The default is straight, which is what
+        // every match in them actually was — the engine refused any other value at the time — so this
+        // is a fact being written down, not a guess being made.
+        if try !columnNames(h, table: "local_match").contains("in_rule") {
+            try exec(h, "ALTER TABLE local_match ADD COLUMN in_rule TEXT NOT NULL DEFAULT 'straight';")
+        }
         // Append-only, enforced by the database rather than by discipline — the same property the
         // server's grants give evidence.event. Corrections, when they come, are new events.
         try exec(h, """
@@ -389,20 +400,20 @@ public final class Journal {
     public func createMatch(_ m: NewMatch, id: MatchId = MatchId(UUID().uuidString), startedAt: Date = Date()) throws -> MatchRecord {
         try run("""
             INSERT INTO local_match (match_id, home_name, away_name, starting_score, out_rule, legs_mode, legs_target,
-                               throw_first, started_at, device_id)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+                               throw_first, started_at, device_id, in_rule)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
             """, [
                 .text(id.value), .text(m.homeName), .text(m.awayName), .int(Int64(m.startingScore)),
                 .text(m.outRule.rawValue), .text(m.legsMode == .bestOf ? "bestOf" : "firstTo"),
                 .int(Int64(m.legsTarget)), .text(m.throwFirst.rawValue),
-                .text(Journal.iso.string(from: startedAt)), .text(deviceId.value),
+                .text(Journal.iso.string(from: startedAt)), .text(deviceId.value), .text(m.inRule.rawValue),
             ])
         return try match(id)
     }
 
     public func match(_ id: MatchId) throws -> MatchRecord {
         var found: MatchRecord?
-        try run("SELECT * FROM local_match WHERE match_id = ?;", [.text(id.value)]) { s in
+        try run("SELECT \(Journal.matchColumns) FROM local_match WHERE match_id = ?;", [.text(id.value)]) { s in
             found = Journal.record(from: s)
         }
         guard let found else { throw JournalError.matchNotFound(id.value) }
@@ -412,11 +423,18 @@ public final class Journal {
     /// Every match on this device, newest first.
     public func matches() throws -> [MatchRecord] {
         var out: [MatchRecord] = []
-        try run("SELECT * FROM local_match ORDER BY started_at DESC, rowid DESC;", []) { s in
+        try run("SELECT \(Journal.matchColumns) FROM local_match ORDER BY started_at DESC, rowid DESC;", []) { s in
             out.append(Journal.record(from: s))
         }
         return out
     }
+
+    /// Named, in this order, so a column added by ALTER cannot silently shift the ones below it.
+    /// `SELECT *` was doing exactly that, and adding in_rule was the change that would have found it.
+    static let matchColumns = """
+        match_id, home_name, away_name, starting_score, out_rule, legs_mode, legs_target, \
+        throw_first, started_at, in_rule
+        """
 
     private static func record(from s: OpaquePointer) -> MatchRecord {
         MatchRecord(
@@ -424,6 +442,7 @@ public final class Journal {
             homeName: text(s, 1),
             awayName: text(s, 2),
             startingScore: Int(sqlite3_column_int64(s, 3)),
+            inRule: InRule(rawValue: text(s, 9)) ?? .straight,
             outRule: OutRule(rawValue: text(s, 4)) ?? .double,
             legsMode: text(s, 5) == "firstTo" ? .firstTo : .bestOf,
             legsTarget: Int(sqlite3_column_int64(s, 6)),

@@ -13,7 +13,8 @@ import json, sys, hashlib
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent))
 from generate import (ACHIEVABLE_3, IMPOSSIBLE_3, CHECKOUTS, ONE_DART, SEGMENTS,
-                      DOUBLE_SEGMENTS, classify, bogeys, bust_on_exact, min_darts, rule_tables)
+                      DOUBLE_SEGMENTS, classify, bogeys, bust_on_exact, min_darts, rule_tables,
+                      OPENING, OPENERS, unopenable)
 
 OUT = Path(__file__).parent
 fails, checks = [], 0
@@ -45,6 +46,27 @@ check("exact-score bust set under double-out",
       bust_on_exact("double") == [159, 162, 165, 168, 171, 174, 177, 180],
       str(bust_on_exact("double")))
 # 167 is a genuine 3-dart finish (T20 T19 D25); 168 is not. A classic discriminator.
+# --- opening, and the rule that makes double-in scorable (PD-008) ---
+check("the largest double-in opening total is 170 (D25 T20 T20)", max(OPENING["double"]) == 170)
+check("41 can open a double-in leg (D1 19 20)", 41 in OPENING["double"])
+check("1 cannot open: the smallest double is 2", 1 not in OPENING["double"])
+check("three trebles cannot open a double-in leg", 180 not in OPENING["double"])
+check("master-in admits a treble, so 180 opens", 180 in OPENING["master"])
+check("straight-in opens on anything that scores", 1 in OPENING["straight"])
+# Not a coincidence, and asserted because it would catch either table being wrong: a checkout is
+# free darts then a finishing segment; an opening is an opening segment then free darts. The segment
+# sets are the same and addition commutes.
+for _r in OPENERS:
+    check(f"opening and checkout totals are the same set under {_r}",
+          OPENING[_r] == CHECKOUTS[_r], f"symmetric difference {sorted(OPENING[_r] ^ CHECKOUTS[_r])[:8]}")
+# The floor of a checkout set is the rule's own, not the constant 2 — both engines hardcoded 2 and
+# would have busted a player finishing from 1 under straight-out.
+check("a single 1 finishes a straight-out leg", min(CHECKOUTS["straight"]) == 1)
+check("the smallest double-out checkout is 2", min(CHECKOUTS["double"]) == 2)
+check("the smallest master-out checkout is 2", min(CHECKOUTS["master"]) == 2)
+check("straight-out from 1 wins the leg, and is in the exhaustive table",
+      classify(1, 1, "straight")[0] == "leg_won")
+
 check("167 is finishable", 167 in CHECKOUTS["double"])
 check("168 is not finishable", 168 not in CHECKOUTS["double"])
 check("169 is neither achievable nor finishable",

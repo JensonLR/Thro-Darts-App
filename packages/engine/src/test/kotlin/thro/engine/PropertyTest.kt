@@ -4,6 +4,7 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
+import kotlin.test.assertIs
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
@@ -186,25 +187,109 @@ class PropertyTest {
     }
 
     /**
-     * A format the engine cannot score honestly must be refused at construction, not scored as
-     * something else. `in_rule` is stored on every match and round-tripped through the database; for
-     * two of its three values the engine has no scoring rule, because it works at visit granularity
-     * and the opening dart's position inside a visit is not recoverable from a visit total. Before
-     * this guard, a match created with double-in was scored as straight-in and was silently wrong.
+     * Double-in, and the capture rule that makes it scorable at visit granularity (PD-008).
+     *
+     * The founder asked for it because leagues and tournaments play it. The engine works on visits,
+     * not darts, so before this it refused the format rather than score it as straight-in and be
+     * silently wrong (OD-015). PD-008 settled the rule: a visit thrown while the player has not
+     * opened records the score FROM the opening dart onward, and zero means they did not open. That
+     * is what the scorer calls at the oche and it costs no statistic, because a visit is three darts
+     * whether it opened or not.
+     *
+     * Everything below is derived from the generated table, never listed here — the table is
+     * enumerated from the dartboard, and enumeration corrected two guesses that seemed obvious: the
+     * bull opens (so the largest opening total is D25 + T20 + T20 = 170, not 160), and 41 IS
+     * openable (D1 then 19 and 20).
      */
     @Test
-    fun `an in-rule the engine cannot score is refused, not scored as straight-in`() {
-        assertTrue(InRule.STRAIGHT.isScorable)
-        assertFalse(InRule.DOUBLE.isScorable)
-        assertFalse(InRule.MASTER.isScorable)
-        for (rule in InRule.entries.filter { !it.isScorable }) {
-            val thrown = assertFailsWith<IllegalArgumentException> {
-                MatchFormat(
-                    startingScore = 501, inRule = rule, outRule = OutRule.DOUBLE,
-                    legs = Structure(StructureMode.FIRST_TO, 3), throwFirst = PlayerId("A"),
-                )
+    fun `under double-in nothing scores until a player opens, and only an opening total can`() {
+        val format = MatchFormat(
+            startingScore = 501, inRule = InRule.DOUBLE, outRule = OutRule.DOUBLE,
+            legs = Structure(StructureMode.FIRST_TO, 2), throwFirst = PlayerId("A"),
+        )
+        val a = PlayerId("A")
+        val b = PlayerId("B")
+        val start = MatchState.start(format, a, b)
+        assertEquals(false, start.opened.getValue(a), "double-in starts closed")
+        assertEquals(false, start.opened.getValue(b))
+        assertTrue(InRule.DOUBLE.requiresOpening)
+        assertTrue(InRule.MASTER.requiresOpening)
+        assertFalse(InRule.STRAIGHT.requiresOpening)
+
+        // Straight-in is open from the first dart, and every total three darts can make is an
+        // opening total, so nothing about it changes.
+        val open = MatchState.start(format.copy(inRule = InRule.STRAIGHT), a, b)
+        assertEquals(true, open.opened.getValue(a))
+        assertEquals(
+            RuleTables.openingTotals(InRule.STRAIGHT),
+            (1..180).filter { it !in RuleTables.IMPOSSIBLE_VISIT_TOTALS }.toSet(),
+        )
+
+        // A visit that does not open scores nothing and does not open the player.
+        val missed = Engine.apply(start, Command.RecordVisit(a, 0))
+        val afterMiss = assertIs<Outcome.Accepted>(missed)
+        assertEquals(Effect.SCORED, afterMiss.effect)
+        assertEquals(501, afterMiss.state.remaining.getValue(a), "nothing counts before the double")
+        assertEquals(false, afterMiss.state.opened.getValue(a), "and they are still not in")
+        assertEquals(b, afterMiss.state.thrower, "the turn still rotates")
+
+        // A total no opening sequence can make is refused — and it is a DIFFERENT refusal from a
+        // total three darts cannot make, because 180 is perfectly possible once you are in.
+        assertTrue(180 in (0..180).filterNot { it in RuleTables.IMPOSSIBLE_VISIT_TOTALS })
+        assertEquals(
+            Outcome.Rejected(RejectionReason.IMPOSSIBLE_OPENING_TOTAL),
+            Engine.apply(start, Command.RecordVisit(a, 180)),
+            "three trebles cannot open a double-in leg",
+        )
+        assertEquals(
+            Outcome.Rejected(RejectionReason.IMPOSSIBLE_VISIT_TOTAL),
+            Engine.apply(start, Command.RecordVisit(a, 179)),
+            "and a total no three darts can make is still that, not an opening problem",
+        )
+        // Every unopenable total is refused, and every opening total is accepted. Both directions,
+        // over the whole range, so neither the table nor the guard can be trimmed unnoticed.
+        for (total in 0..180) {
+            val outcome = Engine.apply(start, Command.RecordVisit(a, total))
+            val openable = total == 0 || total in RuleTables.openingTotals(InRule.DOUBLE)
+            if (openable) {
+                assertIs<Outcome.Accepted>(outcome, "$total can open a double-in leg")
+            } else {
+                assertIs<Outcome.Rejected>(outcome, "$total cannot open a double-in leg")
             }
-            assertTrue(thrown.message!!.contains("OD-015"), "the refusal must name the open decision")
         }
+        assertEquals(170, RuleTables.openingTotals(InRule.DOUBLE).max(), "the bull opens: D25+T20+T20")
+        assertTrue(41 in RuleTables.openingTotals(InRule.DOUBLE), "D1 then 19 and 20")
+        assertFalse(1 in RuleTables.openingTotals(InRule.DOUBLE), "the smallest double is 2")
+        assertEquals(180, RuleTables.openingTotals(InRule.MASTER).max(), "master-in admits trebles")
+
+        // Opening scores from the opening dart onward, and the player stays open for the leg.
+        val opened = assertIs<Outcome.Accepted>(Engine.apply(afterMiss.state, Command.RecordVisit(b, 40)))
+        assertEquals(461, opened.state.remaining.getValue(b))
+        assertEquals(true, opened.state.opened.getValue(b))
+        // A is still closed, so 180 is still refused for A even though B is in: opening is per player.
+        assertEquals(
+            Outcome.Rejected(RejectionReason.IMPOSSIBLE_OPENING_TOTAL),
+            Engine.apply(opened.state, Command.RecordVisit(a, 180)),
+            "one player opening does not open the other",
+        )
+        val aIn = assertIs<Outcome.Accepted>(Engine.apply(opened.state, Command.RecordVisit(a, 40)))
+        assertEquals(461, aIn.state.remaining.getValue(a))
+        assertEquals(true, aIn.state.opened.getValue(a))
+        val again = assertIs<Outcome.Accepted>(Engine.apply(aIn.state, Command.RecordVisit(b, 180)))
+        assertEquals(281, again.state.remaining.getValue(b), "180 is fine once you are in")
+
+        // A new leg closes the door again, for both players.
+        var s = MatchState.start(format.copy(startingScore = 40), a, b)
+        val won = assertIs<Outcome.Accepted>(Engine.apply(s, Command.RecordVisit(a, 40, dartsUsed = 1, dartsAtDouble = 1)))
+        assertEquals(Effect.LEG_WON, won.effect)
+        assertEquals(false, won.state.opened.getValue(a), "a new leg is a new opening")
+        assertEquals(false, won.state.opened.getValue(b))
+
+        // A bust reverts the score, never the opening: the double was thrown and it landed.
+        s = MatchState.start(format.copy(startingScore = 30), a, b)
+        val bust = assertIs<Outcome.Accepted>(Engine.apply(s, Command.RecordVisit(a, 40)))
+        assertEquals(Effect.BUST, bust.effect)
+        assertEquals(30, bust.state.remaining.getValue(a))
+        assertEquals(true, bust.state.opened.getValue(a), "opening survives the bust that follows it")
     }
 }

@@ -300,6 +300,35 @@ final class JournalTests: XCTestCase {
         try j.append(.visit(Seat.away.playerId, 45), to: MatchId("old"))
         try j.retractLastVisit(in: MatchId("old"))
         XCTAssertEqual(try j.replayVisits(MatchId("old")).visits.map(\.visitTotal), [60])
+        // That journal also predates double-in, so it has no in-rule. It reads back as straight —
+        // which is not a guess: the engine refused every other value at the time it was written.
+        XCTAssertEqual(try j.match(MatchId("old")).inRule, .straight)
+        XCTAssertEqual(try j.match(MatchId("old")).outRule, .double, "and the columns did not shift")
+        XCTAssertEqual(try j.match(MatchId("old")).legsTarget, 3)
+        XCTAssertEqual(try j.match(MatchId("old")).homeName, "A")
+    }
+
+    /// A double-in match keeps its in-rule across a close and reopen, and the state it replays to
+    /// knows nobody is in yet. Before PD-008 the journal stored no in-rule at all and every record
+    /// claimed straight-in, so a double-in match would have replayed as a different match.
+    func testADoubleInMatchIsStoredAndReplayedAsDoubleIn() throws {
+        let j = try open()
+        let m = try j.createMatch(NewMatch(homeName: "A", awayName: "B", inRule: .double, legsTarget: 3))
+        XCTAssertEqual(m.inRule, .double)
+        XCTAssertEqual(m.format.inRule, .double, "and the format it rebuilds carries it")
+        XCTAssertEqual(m.initialState.opened[Seat.home.playerId], false, "nobody is in at the start")
+
+        // 0 does not open; 40 does; and the replay agrees after a close and reopen.
+        try j.append(.visit(Seat.home.playerId, 0), to: m.id)
+        try j.append(.visit(Seat.away.playerId, 40), to: m.id)
+        let reopened = try open()
+        let record = try reopened.match(m.id)
+        XCTAssertEqual(record.inRule, .double, "the in-rule survives the file")
+        let replay = try reopened.replayVisits(m.id)
+        XCTAssertEqual(replay.state.remaining[Seat.home.playerId], 501, "a visit that did not open scores nothing")
+        XCTAssertEqual(replay.state.remaining[Seat.away.playerId], 461)
+        XCTAssertEqual(replay.state.opened[Seat.home.playerId], false)
+        XCTAssertEqual(replay.state.opened[Seat.away.playerId], true)
     }
 
     // MARK: device identity

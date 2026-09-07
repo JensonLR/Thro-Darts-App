@@ -3,6 +3,8 @@ package thro.engine
 import java.io.File
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
+import kotlin.test.assertNotEquals
 import kotlin.test.assertTrue
 import kotlin.test.fail
 
@@ -235,10 +237,31 @@ class ConformanceTest {
 
     @Test
     fun `rule tables match the generated spec version`() {
-        assertEquals("1.2.0", RuleTables.SPEC_VERSION)
+        // 1.3.0 added the opening tables, which is what made double-in scorable (PD-008).
+        assertEquals("1.3.0", RuleTables.SPEC_VERSION)
         assertEquals(180, RuleTables.MAX_VISIT_TOTAL)
         assertEquals(170, RuleTables.checkouts(OutRule.DOUBLE).max())
         assertEquals(180, RuleTables.checkouts(OutRule.MASTER).max())
         assertEquals(21, RuleTables.ONE_DART_FINISHES_DOUBLE.size)
+        // Opening and checking out are the same set, for every rule — which is not a coincidence and
+        // is worth asserting because it would catch either table being wrong. A checkout is up to two
+        // free darts and then a finishing segment; an opening is an opening segment and then up to two
+        // free darts. The segment sets are the same and addition commutes, so the totals are too. It
+        // holds at the top as well: a double-in leg opens on D25+T20+T20 and a double-out leg finishes
+        // from T20+T20+D25, both 170.
+        assertEquals(170, RuleTables.openingTotals(InRule.DOUBLE).max())
+        assertEquals(180, RuleTables.openingTotals(InRule.MASTER).max())
+        assertEquals(RuleTables.openingTotals(InRule.DOUBLE), RuleTables.checkouts(OutRule.DOUBLE))
+        assertEquals(RuleTables.openingTotals(InRule.MASTER), RuleTables.checkouts(OutRule.MASTER))
+        assertEquals(RuleTables.openingTotals(InRule.STRAIGHT), RuleTables.checkouts(OutRule.STRAIGHT))
+        assertTrue(41 in RuleTables.openingTotals(InRule.DOUBLE), "D1, 19, 20")
+        assertFalse(180 in RuleTables.openingTotals(InRule.DOUBLE), "three trebles cannot open")
+        // And the floor of a checkout set is the rule's own, not the constant 2. Under straight-out a
+        // single 1 finishes, so 1 is a checkout — both engines hardcoded a floor of 2 and would have
+        // busted a player who finished from 1. It was invisible because the exhaustive table covered
+        // double-out alone; it now covers all three, from a remaining of 1.
+        assertTrue(1 in RuleTables.checkouts(OutRule.STRAIGHT), "a single 1 finishes a straight-out leg")
+        assertFalse(1 in RuleTables.checkouts(OutRule.DOUBLE))
+        assertFalse(1 in RuleTables.checkouts(OutRule.MASTER))
     }
 }

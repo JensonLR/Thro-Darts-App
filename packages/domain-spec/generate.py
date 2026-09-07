@@ -19,7 +19,7 @@ import json, os, sys, itertools, hashlib
 from pathlib import Path
 
 OUT = Path(__file__).parent
-SPEC_VERSION = "1.2.0"
+SPEC_VERSION = "1.3.0"
 
 # ---------------------------------------------------------------- the dartboard
 SINGLES  = set(range(1, 21))
@@ -33,6 +33,9 @@ DOUBLE_SEGMENTS = DOUBLES | {BULL}
 # Master-out admits a double or a treble.
 MASTER_SEGMENTS = DOUBLE_SEGMENTS | TREBLES
 FINISHERS = {"double": DOUBLE_SEGMENTS, "master": MASTER_SEGMENTS, "straight": SEGMENTS - {0}}
+# What may OPEN a leg, by in-rule. The same segment sets as the finishers, and for the same reason:
+# the bull is a double, and master admits a treble. Straight-in opens on anything that scores.
+OPENERS = {"double": DOUBLE_SEGMENTS, "master": MASTER_SEGMENTS, "straight": SEGMENTS - {0}}
 
 def achievable_totals(n_darts):
     """Every total reachable with exactly n darts (a miss scores 0, so fewer darts is a subset)."""
@@ -58,6 +61,37 @@ def checkout_set(out_rule, max_darts=3):
 
 CHECKOUTS = {r: checkout_set(r) for r in FINISHERS}
 ONE_DART  = {r: sorted(v for v in finishes_in(1, r) if v > 0) for r in FINISHERS}
+
+def opening_totals(in_rule):
+    """Every counted total a visit can record while the player has not yet opened.
+
+    This is the rule that makes double-in scorable at visit granularity, and it is the whole of
+    PD-008. The engine scores a visit, not a dart; under double-in the darts before the opening one
+    score nothing, so what the scorer records — and what they call at the oche — is the score FROM
+    the opening dart onward. Zero means the player did not open.
+
+    So an opening total is a legal opening segment plus up to two free darts after it: the player
+    may open on the first dart and throw two more, on the second and throw one, or on the third and
+    throw none. Everything before the opener contributes nothing and is not recorded, which loses no
+    statistic this repository computes, because a visit is three darts either way.
+
+    Enumerated, never listed: under double-in the largest is D20+T20+T20 = 160, and 41 — which no
+    sequence beginning with a double can make — is not in the set."""
+    out = set()
+    for f in OPENERS[in_rule]:
+        for rest in achievable_totals(2):
+            t = f + rest
+            if 0 < t <= 180:
+                out.add(t)
+    return out
+
+OPENING = {r: opening_totals(r) for r in OPENERS}
+
+def unopenable(in_rule):
+    """Totals three darts CAN make but no sequence beginning with a legal opener can. Under
+    straight-in this is empty by construction; under double-in it is the list that makes the
+    rejection meaningful."""
+    return sorted(v for v in ACHIEVABLE_3 if v > 0 and v not in OPENING[in_rule])
 
 def bogeys(out_rule):
     """Unfinishable values at or below the maximum checkout — the classic trap list."""
@@ -116,8 +150,16 @@ def rule_tables():
         "doubleSegments": sorted(DOUBLE_SEGMENTS),
         "impossibleVisitTotals": IMPOSSIBLE_3,
         "maxVisitTotal": max(ACHIEVABLE_3),
+        "inRules": {
+            r: {
+                "openingSegments": sorted(OPENERS[r]),
+                "maxOpeningTotal": max(OPENING[r]),
+                "unopenableTotals": unopenable(r),
+            } for r in ("double", "master", "straight")
+        },
         "outRules": {
             r: {
+                "minCheckout": min(CHECKOUTS[r]),
                 "maxCheckout": max(CHECKOUTS[r]),
                 "bogeyNumbers": bogeys(r),
                 "oneDartFinishes": ONE_DART[r],
@@ -431,13 +473,14 @@ def emit_kotlin(tables, path):
     L.append("")
     for name, t in (("DOUBLE", d), ("MASTER", m), ("STRAIGHT", st)):
         L.append("    private val BOGEYS_%s: IntArray = intArrayOf(%s)" % (name, ints(t["bogeyNumbers"])))
+        L.append("    private const val MIN_%s: Int = %d" % (name, t["minCheckout"]))
         L.append("    private const val MAX_%s: Int = %d" % (name, t["maxCheckout"]))
     L.append("")
     L.append("    public val ONE_DART_FINISHES_DOUBLE: Set<Int> = setOf(%s)" % ints(d["oneDartFinishes"]))
     L.append("")
-    L.append("    private val CHECKOUTS_DOUBLE: Set<Int> = build(MAX_DOUBLE, BOGEYS_DOUBLE)")
-    L.append("    private val CHECKOUTS_MASTER: Set<Int> = build(MAX_MASTER, BOGEYS_MASTER)")
-    L.append("    private val CHECKOUTS_STRAIGHT: Set<Int> = build(MAX_STRAIGHT, BOGEYS_STRAIGHT)")
+    L.append("    private val CHECKOUTS_DOUBLE: Set<Int> = build(MIN_DOUBLE, MAX_DOUBLE, BOGEYS_DOUBLE)")
+    L.append("    private val CHECKOUTS_MASTER: Set<Int> = build(MIN_MASTER, MAX_MASTER, BOGEYS_MASTER)")
+    L.append("    private val CHECKOUTS_STRAIGHT: Set<Int> = build(MIN_STRAIGHT, MAX_STRAIGHT, BOGEYS_STRAIGHT)")
     L.append("")
     L.append("    public fun checkouts(outRule: OutRule): Set<Int> = when (outRule) {")
     L.append("        OutRule.DOUBLE -> CHECKOUTS_DOUBLE")
@@ -445,10 +488,40 @@ def emit_kotlin(tables, path):
     L.append("        OutRule.STRAIGHT -> CHECKOUTS_STRAIGHT")
     L.append("    }")
     L.append("")
-    L.append("    private fun build(max: Int, bogeys: IntArray): Set<Int> {")
+    L.append("    /**")
+    L.append("     * Counted totals a visit can record while the player has not yet opened (PD-008).")
+    L.append("     *")
+    L.append("     * A legal opening segment plus up to two free darts after it. Under double-in the")
+    L.append("     * bull opens, so the largest is D25+T20+T20 = %d; the totals three darts can make" % tables["inRules"]["double"]["maxOpeningTotal"])
+    L.append("     * but no opening sequence can are %s." % ints(tables["inRules"]["double"]["unopenableTotals"]))
+    L.append("     */")
+    for name in ("DOUBLE", "MASTER", "STRAIGHT"):
+        t = tables["inRules"][name.lower()]
+        L.append("    private val UNOPENABLE_%s: IntArray = intArrayOf(%s)" % (name, ints(t["unopenableTotals"])))
+        L.append("    private const val MAX_OPENING_%s: Int = %d" % (name, t["maxOpeningTotal"]))
+    L.append("")
+    L.append("    private val OPENING_DOUBLE: Set<Int> = opening(MAX_OPENING_DOUBLE, UNOPENABLE_DOUBLE)")
+    L.append("    private val OPENING_MASTER: Set<Int> = opening(MAX_OPENING_MASTER, UNOPENABLE_MASTER)")
+    L.append("    private val OPENING_STRAIGHT: Set<Int> = opening(MAX_OPENING_STRAIGHT, UNOPENABLE_STRAIGHT)")
+    L.append("")
+    L.append("    public fun openingTotals(inRule: InRule): Set<Int> = when (inRule) {")
+    L.append("        InRule.DOUBLE -> OPENING_DOUBLE")
+    L.append("        InRule.MASTER -> OPENING_MASTER")
+    L.append("        InRule.STRAIGHT -> OPENING_STRAIGHT")
+    L.append("    }")
+    L.append("")
+    L.append("    private fun opening(max: Int, unopenable: IntArray): Set<Int> {")
+    L.append("        val bad = unopenable.toHashSet()")
+    L.append("        val out = HashSet<Int>(max)")
+    L.append("        for (v in 1..max) if (v !in bad && v !in IMPOSSIBLE_VISIT_TOTALS) out.add(v)")
+    L.append("        return out")
+    L.append("    }")
+    L.append("")
+    L.append("    /** The floor is the rule's own: under straight-out a single 1 finishes. */")
+    L.append("    private fun build(min: Int, max: Int, bogeys: IntArray): Set<Int> {")
     L.append("        val bad = bogeys.toHashSet()")
     L.append("        val out = HashSet<Int>(max)")
-    L.append("        for (v in 2..max) if (v !in bad) out.add(v)")
+    L.append("        for (v in min..max) if (v !in bad) out.add(v)")
     L.append("        return out")
     L.append("    }")
     L.append("}")
@@ -482,13 +555,14 @@ def emit_swift(tables, path):
     L.append("")
     for name, t in (("double", d), ("master", m), ("straight", st)):
         L.append("    private static let bogeys%s: Set<Int> = [%s]" % (name.capitalize(), ints(t["bogeyNumbers"])))
+        L.append("    private static let min%s = %d" % (name.capitalize(), t["minCheckout"]))
         L.append("    private static let max%s = %d" % (name.capitalize(), t["maxCheckout"]))
     L.append("")
     L.append("    public static let oneDartFinishesDouble: Set<Int> = [%s]" % ints(d["oneDartFinishes"]))
     L.append("")
-    L.append("    private static let checkoutsDouble = build(maxDouble, bogeysDouble)")
-    L.append("    private static let checkoutsMaster = build(maxMaster, bogeysMaster)")
-    L.append("    private static let checkoutsStraight = build(maxStraight, bogeysStraight)")
+    L.append("    private static let checkoutsDouble = build(minDouble, maxDouble, bogeysDouble)")
+    L.append("    private static let checkoutsMaster = build(minMaster, maxMaster, bogeysMaster)")
+    L.append("    private static let checkoutsStraight = build(minStraight, maxStraight, bogeysStraight)")
     L.append("")
     L.append("    public static func checkouts(_ outRule: OutRule) -> Set<Int> {")
     L.append("        switch outRule {")
@@ -498,9 +572,38 @@ def emit_swift(tables, path):
     L.append("        }")
     L.append("    }")
     L.append("")
-    L.append("    private static func build(_ max: Int, _ bogeys: Set<Int>) -> Set<Int> {")
+    L.append("    /// Counted totals a visit can record while the player has not yet opened (PD-008):")
+    L.append("    /// a legal opening segment plus up to two free darts after it. Under double-in the")
+    L.append("    /// bull opens, so the largest is D25+T20+T20 = %d." % tables["inRules"]["double"]["maxOpeningTotal"])
+    for name in ("double", "master", "straight"):
+        t = tables["inRules"][name]
+        L.append("    private static let unopenable%s: Set<Int> = [%s]" % (name.capitalize(), ints(t["unopenableTotals"])))
+        L.append("    private static let maxOpening%s = %d" % (name.capitalize(), t["maxOpeningTotal"]))
+    L.append("")
+    L.append("    private static let openingDouble = opening(maxOpeningDouble, unopenableDouble)")
+    L.append("    private static let openingMaster = opening(maxOpeningMaster, unopenableMaster)")
+    L.append("    private static let openingStraight = opening(maxOpeningStraight, unopenableStraight)")
+    L.append("")
+    L.append("    public static func openingTotals(_ inRule: InRule) -> Set<Int> {")
+    L.append("        switch inRule {")
+    L.append("        case .double: return openingDouble")
+    L.append("        case .master: return openingMaster")
+    L.append("        case .straight: return openingStraight")
+    L.append("        }")
+    L.append("    }")
+    L.append("")
+    L.append("    private static func opening(_ max: Int, _ unopenable: Set<Int>) -> Set<Int> {")
     L.append("        var out = Set<Int>(minimumCapacity: max)")
-    L.append("        for v in 2...max where !bogeys.contains(v) { out.insert(v) }")
+    L.append("        for v in 1...max where !unopenable.contains(v) && !impossibleVisitTotals.contains(v) {")
+    L.append("            out.insert(v)")
+    L.append("        }")
+    L.append("        return out")
+    L.append("    }")
+    L.append("")
+    L.append("    /// The floor is the rule's own: under straight-out a single 1 finishes.")
+    L.append("    private static func build(_ min: Int, _ max: Int, _ bogeys: Set<Int>) -> Set<Int> {")
+    L.append("        var out = Set<Int>(minimumCapacity: max)")
+    L.append("        for v in min...max where !bogeys.contains(v) { out.insert(v) }")
     L.append("        return out")
     L.append("    }")
     L.append("}")
@@ -537,12 +640,18 @@ def main():
         p = OUT / "vectors" / "core-transitions.jsonl"
         n = 0
         with open(p, "w") as fh:
-            for rem in range(2, 502):
-                for vt in sorted(ACHIEVABLE_3):
-                    eff, reason, new = classify(rem, vt, "double")
-                    fh.write(json.dumps({"remaining": rem, "visitTotal": vt, "outRule": "double",
-                                         "effect": eff, "reason": reason, "newRemaining": new},
-                                        separators=(",", ":")) + "\n"); n += 1
+            # Every out-rule, and from a remaining of 1. It covered double-out from 2 only, so two
+            # rules in three were never exhausted and the one transition where the engines disagreed
+            # with this spec — finishing from 1 under straight-out, which a single 1 does — was
+            # outside the table entirely. A gap in an exhaustive check is worse than no check,
+            # because the number in the README reads as if it covered everything.
+            for out_rule in ("double", "master", "straight"):
+                for rem in range(1, 502):
+                    for vt in sorted(ACHIEVABLE_3):
+                        eff, reason, new = classify(rem, vt, out_rule)
+                        fh.write(json.dumps({"remaining": rem, "visitTotal": vt, "outRule": out_rule,
+                                             "effect": eff, "reason": reason, "newRemaining": new},
+                                            separators=(",", ":")) + "\n"); n += 1
         # Deliberately excluded from the manifest and the total: it is regenerated in CI rather
         # than committed (8.6 MB), so counting it would make the committed manifest churn on every
         # full run and turn the staleness gate into noise.

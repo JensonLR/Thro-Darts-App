@@ -38,6 +38,24 @@ public object Engine {
             return Outcome.Rejected(RejectionReason.DARTS_AT_DOUBLE_INVALID)
         }
 
+        // Opening (PD-008). A player who has not opened records the score FROM the opening dart
+        // onward — that is what the scorer calls, and it is the only thing a visit total can carry
+        // honestly, since the engine never sees the individual darts. Zero means they did not open.
+        // A non-zero total must be one an opening sequence can make: 180 is three trebles, and three
+        // trebles cannot open a double-in leg, so recording it here is not a mis-key but a claim
+        // about darts that cannot have been thrown.
+        val wasOpen = state.opened[cmd.player] ?: true
+        if (!wasOpen && cmd.visitTotal != 0 &&
+            cmd.visitTotal !in RuleTables.openingTotals(state.format.inRule)
+        ) {
+            return Outcome.Rejected(RejectionReason.IMPOSSIBLE_OPENING_TOTAL)
+        }
+        val opened = if (wasOpen || cmd.visitTotal != 0) {
+            state.opened + (cmd.player to true)
+        } else {
+            state.opened
+        }
+
         val before = state.remaining.getValue(cmd.player)
         val left = before - cmd.visitTotal
         val checkouts = RuleTables.checkouts(state.format.outRule)
@@ -69,6 +87,9 @@ public object Engine {
                     // remaining reverts to the pre-visit total — not to a per-dart position
                     thrower = state.opponentOf(cmd.player),
                     visitsInLeg = state.visitsInLeg + 1,
+                    // A bust reverts the score, never the opening: the double was thrown and it
+                    // landed. Taking it back would make a player open twice in one leg.
+                    opened = opened,
                 ),
                 effect = Effect.BUST,
                 bustReason = bust,
@@ -85,6 +106,7 @@ public object Engine {
                     remaining = state.remaining + (cmd.player to left),
                     thrower = state.opponentOf(cmd.player),
                     visitsInLeg = state.visitsInLeg + 1,
+                    opened = opened,
                 ),
                 effect = Effect.SCORED,
             )
@@ -167,7 +189,14 @@ public object Engine {
             legStarter = starter,
             thrower = starter,
             visitsInLeg = 0,
+            opened = freshOpening(state),
         )
+    }
+
+    /** Opening is a fact about a leg, so every new leg and every new set closes the door again. */
+    private fun freshOpening(state: MatchState): Map<PlayerId, Boolean> {
+        val open = !state.format.inRule.requiresOpening
+        return mapOf(state.home to open, state.away to open)
     }
 
     private fun nextSet(
@@ -190,6 +219,7 @@ public object Engine {
             setStarter = starter,
             thrower = starter,
             visitsInLeg = 0,
+            opened = freshOpening(state),
         )
     }
 

@@ -87,6 +87,9 @@ public struct MatchSetupScreen: View {
     @State private var game: Int = 501
     @State private var length: Int = 5
     @State private var first: Seat = .home
+    /// Straight or double in. The engine also scores master-in, which competitions define and this
+    /// screen does not offer, because no one asks for it at a pub board.
+    @State private var inRule: InRule = .straight
     @FocusState private var focused: NameField?
     private let problem: String?
     private let onBack: () -> Void
@@ -129,6 +132,8 @@ public struct MatchSetupScreen: View {
                     ThroDivider()
                     choice("Game", SegmentedControl([(301, "301"), (501, "501"), (701, "701")], selection: $game))
                     choice("Length", SegmentedControl([(3, "Bo3"), (5, "Bo5"), (7, "Bo7"), (9, "Bo9")], selection: $length))
+                    choice("Start on", SegmentedControl([(InRule.straight, "Any"), (InRule.double, "Double in")],
+                                                        selection: $inRule))
                     choice("Throws first", SegmentedControl([(Seat.home, homeName), (Seat.away, awayName)], selection: $first))
                     ThroDivider()
                     HStack(alignment: .top, spacing: 10) {
@@ -138,7 +143,8 @@ public struct MatchSetupScreen: View {
                             .foregroundStyle(ThroColor.colorTextSecondary)
                     }
                     ThroButton("Continue", variant: .primary, size: .large, fullWidth: true) {
-                        onStart(NewMatch(homeName: homeName, awayName: awayName, startingScore: game, outRule: .double,
+                        onStart(NewMatch(homeName: homeName, awayName: awayName, startingScore: game,
+                                         inRule: inRule, outRule: .double,
                                          legsMode: .bestOf, legsTarget: length, throwFirst: first))
                     }
                 }
@@ -202,6 +208,7 @@ public struct MatchReadyScreen: View {
                         Tag("\(session.record.startingScore)")
                         Tag(session.lengthLabel)
                         Tag(session.outRuleLabel)
+                        if let inRule = session.inRuleLabel { Tag(inRule) }
                     }
                     ThroButton(session.visits.isEmpty ? "Start scoring" : "Continue scoring",
                                variant: .primary, size: .large, fullWidth: true, action: onStart)
@@ -277,7 +284,18 @@ public struct ScoringScreen: View {
                 .padding(.top, ThroSpacing.spacing2)
                 .padding(.bottom, ThroSpacing.spacing1)
                 .layoutPriority(-1)
-            if session.bust == nil, session.throwerOnAFinish, let seat = session.thrower {
+            if session.bust == nil, session.throwerMustOpen, let seat = session.thrower {
+                // Not in. This is said before anything else, because a player whose 60 does not go on
+                // the board must be told why on the same frame. Type and colour from the token layer;
+                // no component is invented for it, since the export draws no double-in screen.
+                Text("\(session.name(seat)) is not in. Enter what counts from the double — 0 if it did not come.")
+                    .thro(ThroTypography.metadata)
+                    .foregroundStyle(ThroColor.colorTextSecondary)
+                    .multilineTextAlignment(.center)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.top, ThroSpacing.spacing2)
+                    .accessibilityAddTraits(.isStaticText)
+            } else if session.bust == nil, session.throwerOnAFinish, let seat = session.thrower {
                 // The hero already shows the number in brand green; the card names the fact, as the
                 // export's checkout screen does with its value hidden.
                 CheckoutCard(required: session.remaining(seat), compact: true, hideValue: true)
