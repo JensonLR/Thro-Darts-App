@@ -23,3 +23,8 @@ tasks.test {
     useJUnitPlatform()
     testLogging { showStandardStreams = true }
 }
+
+// A local convenience for capturing real kill-test numbers by hand; the test itself does not use it.
+tasks.register("printTestClasspath") {
+    doLast { println(sourceSets["test"].runtimeClasspath.asPath) }
+}

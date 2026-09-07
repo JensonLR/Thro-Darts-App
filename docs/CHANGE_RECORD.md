@@ -688,6 +688,32 @@ a test holds it to exactly those two so the shape of that decision cannot be qui
 claim. The measurement on a real Android device is outstanding, in the same way OD-020's watch
 measurement is.
 
+### And the kill test now runs on a build server
+
+ADR-011 requires a kill test and a power-cut test on every release candidate, and says in terms that
+**an unowned manual test is a test that runs once.** The kill test was automated — and needed a
+phone, a Mac, a cable and a person, so on a push nothing checked it at all.
+
+The Kotlin journal made a second one possible with no hardware. A JVM is forked, writes visits
+through the journal's own transaction discipline until it has acknowledged forty, and is sent
+**SIGKILL** — `destroyForcibly`, not a polite stop, and a *process* rather than a thread, because a
+thread cannot be killed and stopping one politely tests the happy path. The acknowledgement is
+printed and flushed only after the commit returns, so an acknowledgement is a claim that the row is
+on disk, which is the claim under test. What survives is then adjudicated by `Kill.verdict`, ported
+from `KillProbe.verdict` so both platforms are judged by the same rule: one-directional, because a
+kill discards a buffered acknowledgement for a write that did land, so the journal may hold **more**
+than was acknowledged, never less, and never a hole.
+
+A run by hand while writing it: 207 acknowledgements, 414 visits, SIGKILL, `integrity_check` ok, 414
+rows, no holes. Nothing acknowledged was lost, and what survived reopened under the configuration
+and replayed through the engine — because a file that passes an integrity check and cannot be read
+by the app is not a pass either.
+
+**It is not a durability test and must never be quoted as one.** The kernel, the filesystem and the
+drive all keep running through a `SIGKILL`; a journal that only ever reached the OS page cache
+passes this and would still lose data to a pulled battery. That is the fourth row of the runbook's
+table, and the whole reason ADR-011 asks for two tests. The power-cut test still needs hands.
+
 ## Nothing here is a convention
 
 Each competitive property is asserted by something that fails when it is removed.
