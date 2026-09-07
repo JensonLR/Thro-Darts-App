@@ -49,8 +49,18 @@ public struct Badge: View {
                      weight: .bold, relativeTo: .caption, tabularNumerals: true)
     }
     private var fill: Color { accent ?? ThroColor.throGreenTint }
-    /// Chosen, never configured.
-    private var ink: Color { accent == nil ? ThroColor.throGreen : ThroColor.colorTextInverse }
+
+    /// Chosen, never configured — and now actually chosen.
+    ///
+    /// This read `accent == nil ? throGreen : colorTextInverse`, which is **always chalk on any
+    /// accent**. That is right by luck on a dark green and wrong on a club's yellow, where chalk on
+    /// yellow is about 1.4:1. `Branding.kt` has stated the rule since clubs shipped and
+    /// `BrandingTest` sweeps the colour cube to prove it holds; the Swift never implemented it. A
+    /// guarantee asserted on one side of a port is not a guarantee.
+    private var ink: Color {
+        guard let accent else { return ThroColor.throGreen }   // the untinted brand badge
+        return AccentBranding.textOn(accent)
+    }
     private var shape: RoundedRectangle {
         RoundedRectangle(cornerRadius: ThroSpacing.radiusCard, style: .continuous)
     }

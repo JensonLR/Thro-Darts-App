@@ -189,7 +189,11 @@ public struct ClubScreen: View {
     public var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             HStack(spacing: 0) {
-                BackChevron(action: onBack)
+                // The -12 pulls the chevron's own touch target back to the screen gutter. It used to
+                // sit on the whole HStack, which shifted every trailing item 12 points off the right
+                // edge — so "Announce", being last, was cropped. A negative inset belongs to the
+                // thing it is insetting, never to the row that contains it.
+                BackChevron(action: onBack).padding(.leading, -12)
                 Spacer()
                 if let onEdit {
                     Button(action: onEdit) {
@@ -208,7 +212,6 @@ public struct ClubScreen: View {
                 }
             }
             .padding(.top, ThroSpacing.spacing3)
-            .padding(.leading, -12)
             ScrollView {
                 VStack(alignment: .leading, spacing: 0) {
                     OrganisationHeader(initials: club.initials, name: club.name, kind: club.kind.label,
@@ -291,14 +294,34 @@ public struct ClubScreen: View {
                        onAction: onFixtures)
             .padding(.top, ThroSpacing.spaceSectionGap)
         ThroDivider().padding(.top, ThroSpacing.spacing2)
-        ForEach(Array(club.fixtures.filter { !$0.state.isTerminal }.prefix(3))) { f in
+        ForEach(Array(club.upcomingFixtures.prefix(3))) { f in
             FixtureRow(fixture: f)
             ThroDivider()
         }
-        if club.fixtures.filter({ !$0.state.isTerminal }).isEmpty {
-            Text(club.mayManageFixtures ? "Nothing scheduled. You keep this list." : "Nothing scheduled.")
+        // Recently played, which this page used to hide entirely. A club with a season behind it and
+        // nothing booked said "Nothing scheduled", which reads as a club that has never played.
+        if !club.playedFixtures.isEmpty {
+            Eyebrow(club.upcomingFixtures.isEmpty ? "Last played" : "Recently played")
+                .padding(.top, ThroSpacing.spacing4)
+            ThroDivider().padding(.top, ThroSpacing.spacing1)
+            ForEach(Array(club.playedFixtures.prefix(club.upcomingFixtures.isEmpty ? 3 : 2))) { f in
+                FixtureRow(fixture: f)
+                ThroDivider()
+            }
+        }
+        if club.fixtures.isEmpty {
+            Text(club.mayManageFixtures ? "No fixtures yet. You keep this list." : "No fixtures yet.")
                 .thro(ThroTypography.body)
                 .foregroundStyle(ThroColor.colorTextSecondary)
+                .padding(.vertical, ThroSpacing.spacing3)
+        } else if club.upcomingFixtures.isEmpty {
+            // The two are different facts and the page must not show the second as the first.
+            Text(club.mayManageFixtures
+                 ? "Nothing scheduled — every fixture here has been played or cancelled. You keep this list."
+                 : "Nothing scheduled. Everything here has been played or cancelled.")
+                .thro(ThroTypography.body)
+                .foregroundStyle(ThroColor.colorTextSecondary)
+                .fixedSize(horizontal: false, vertical: true)
                 .padding(.vertical, ThroSpacing.spacing3)
         }
         sectionHeading("Members", action: "See all", onAction: onSeeMembers)
@@ -617,9 +640,8 @@ public struct ProfileScreen: View {
 
     public var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            HStack(spacing: 0) { BackChevron(action: onBack); Spacer() }
+            HStack(spacing: 0) { BackChevron(action: onBack).padding(.leading, -12); Spacer() }
                 .padding(.top, ThroSpacing.spacing3)
-                .padding(.leading, -12)
             ScrollView {
                 VStack(alignment: .leading, spacing: 0) {
                     HStack(spacing: ThroSpacing.spacing4) {

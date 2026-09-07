@@ -204,6 +204,18 @@ public struct Club: Identifiable, Equatable, Sendable {
     /// How many members the list is not showing, and why. Shown rather than a quietly shorter list.
     public var hiddenMembers: Int { members.count - visibleMembers.count }
 
+    /// Still to come, newest first. `postponed` counts: it has not been played and it is still on.
+    public var upcomingFixtures: [Fixture] { fixtures.filter { !$0.state.isTerminal } }
+
+    /// Played, most recent first. **Cancelled is not played** — nobody threw — so it is in neither
+    /// list, which is why these two do not sum to `fixtures`.
+    public var playedFixtures: [Fixture] { fixtures.filter { $0.state == .played } }
+
+    /// Whether this organisation has ever had a fixture at all. Distinct from having nothing
+    /// scheduled: the club page used to show the second as the first, so a club with a season behind
+    /// it and nothing booked read as one that had never played.
+    public var hasEverHadAFixture: Bool { !fixtures.isEmpty }
+
     public var mayAnnounce: Bool { (yourRole ?? .member) >= .official && isMember }
     public var mayManageFixtures: Bool { (yourRole ?? .member) >= .official && isMember }
     public var mayManageMembers: Bool { yourRole == .admin }

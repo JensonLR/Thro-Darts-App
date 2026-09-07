@@ -513,9 +513,16 @@ public struct NewClubScreen: View {
                         SegmentedControl(OrgKind.allCases.map { (kind: OrgKind) in (kind, kind.label) },
                                          selection: $kind)
                     }
-                    ThroTextField("Accent colour", text: $accent, placeholder: "0F3D2E",
-                                  helper: "Optional. Six hex digits — the club's own colour. Text on it is chosen for you so it always reads.",
-                                  error: accentError)
+                    // Swatches drawn AS the badge will be drawn, rather than six hex digits typed
+                    // blind. The initials on each are in whichever neutral THRØ chooses for that
+                    // colour, so the choice is made by looking at the result.
+                    AccentPicker(hex: $accent, initials: Club(id: "", name: name.isEmpty ? "New" : name,
+                                                              kind: kind, meta: "").initials)
+                    if let accentError {
+                        Text(accentError)
+                            .thro(ThroTypography.metadata)
+                            .foregroundStyle(ThroColor.colorStatusError)
+                    }
                     Note("A club you start is kept on this phone. Nobody else can see it, and nothing about it is sent anywhere.")
                 }
                 .padding(.horizontal, ThroSpacing.spaceScreenGutter)
@@ -802,9 +809,12 @@ public struct EditClubScreen: View {
                         Spacer(minLength: 0)
                     }
                     ThroTextField("Name", text: $name)
-                    ThroTextField("Accent colour", text: $accent, placeholder: "0F3D2E",
-                                  helper: "Six hex digits, or blank for THRØ's own.",
-                                  error: accentError)
+                    AccentPicker(hex: $accent, initials: club.initials)
+                    if let accentError {
+                        Text(accentError)
+                            .thro(ThroTypography.metadata)
+                            .foregroundStyle(ThroColor.colorStatusError)
+                    }
                     Note("The badge is resized and written out again on this phone, and everything the "
                          + "original carried — including where a photograph was taken — is dropped. Nothing "
                          + "has left the phone: an image is checked when it is published, and there is "
