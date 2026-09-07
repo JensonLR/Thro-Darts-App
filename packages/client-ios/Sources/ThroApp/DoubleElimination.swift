@@ -13,6 +13,10 @@ import Foundation
 /// Which side of a double-elimination draw a match sits on.
 public enum Bracket: String, Equatable, Sendable {
     case winners, losers, final
+    /// The group stage of a groups tournament (PD-021). It is not a bracket in the knockout sense —
+    /// it is a set of round robins — but it is the same question a stored fixture has to answer:
+    /// *which part of this tournament are you?*
+    case group
 }
 
 /// A double-elimination draw, computed from the entrants and whatever has been played.

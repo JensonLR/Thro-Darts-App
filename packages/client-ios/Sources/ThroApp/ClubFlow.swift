@@ -185,6 +185,37 @@ public final class ClubStore: ObservableObject {
         write { try $0.setUnit(unit.rawValue, on: clubId) }
     }
 
+    /// How a groups tournament is shaped (PD-021). Refused by the book once a group match has a
+    /// result, because changing how many qualify then changes what those matches were for.
+    @discardableResult
+    public func setGroups(count: Int, qualifiers: Int, on clubId: String) -> Bool {
+        write { try $0.setGroups(count: count, qualifiers: qualifiers, on: clubId) }
+    }
+
+    /// Creates the fixtures for one group's round robin (PD-021).
+    @discardableResult
+    public func drawGroup(_ number: Int, in clubId: String, when: Date, venue: String) -> Bool {
+        guard let club = club(clubId), let groups = club.groups else {
+            writeProblem = "this tournament has no groups to draw"
+            return false
+        }
+        let ready = groups.readyToDraw(group: number)
+        guard !ready.isEmpty else {
+            writeProblem = "that group is already drawn"
+            return false
+        }
+        return write { book in
+            for match in ready {
+                guard let sides = match.playable else { continue }
+                try book.addFixture(to: clubId, title: "\(sides.home.name) v \(sides.away.name)",
+                                    when: when, venue: venue,
+                                    homeTeam: sides.home.id, awayTeam: sides.away.id,
+                                    round: match.round, slot: match.slot,
+                                    bracket: Bracket.group.rawValue)
+            }
+        }
+    }
+
     @discardableResult
     public func rename(_ clubId: String, to name: String, accentHex: String?) -> Bool {
         write { try $0.updateClub(id: clubId, name: name, accentHex: accentHex) }
@@ -374,7 +405,9 @@ public final class ClubStore: ObservableObject {
                     shape: stored.shape.flatMap(TournamentShape.init(rawValue:)),
                     pointsForWin: stored.pointsForWin,
                     pointsForDraw: stored.pointsForDraw,
-                    unit: stored.unit.flatMap(ResultUnit.init(rawValue:)))
+                    unit: stored.unit.flatMap(ResultUnit.init(rawValue:)),
+                    groupCount: stored.groupCount,
+                    qualifiersPerGroup: stored.qualifiersPerGroup)
     }
 
     /// A stored result as the screens want it, or nil.
@@ -539,7 +572,8 @@ public struct ClubsFlow: View {
                                      onEdit: editAction(id, if: c.mayEditIdentity),
                                      onRecord: resultAction(id, if: c.mayRecordResults),
                                      onDraw: drawAction(id, if: c.mayManageFixtures),
-                                     onDraw2: bracketDrawAction(id, if: c.mayManageFixtures))
+                                     onDraw2: bracketDrawAction(id, if: c.mayManageFixtures),
+                                     onDrawGroup: groupDrawAction(id, if: c.mayManageFixtures))
                 }
             } else { gone }
 
@@ -600,6 +634,11 @@ public struct ClubsFlow: View {
                                    }
                                    if let unit = edits.unit, unit != c.unit {
                                        guard store.setUnit(unit, on: id) else { return }
+                                   }
+                                   if let count = edits.groupCount, let through = edits.qualifiersPerGroup,
+                                      count != c.groupCount || through != c.qualifiersPerGroup {
+                                       guard store.setGroups(count: count, qualifiers: through, on: id)
+                                       else { return }
                                    }
                                    route = .club(id)
                                },
@@ -742,6 +781,13 @@ public struct ClubsFlow: View {
         guard allowed else { return nil }
         return { bracket, round in
             store.drawRound(round, in: id, when: ClubsFlow.nextWeek(), venue: "", bracket: bracket)
+        }
+    }
+
+    private func groupDrawAction(_ id: String, if allowed: Bool) -> ((Int) -> Void)? {
+        guard allowed else { return nil }
+        return { number in
+            store.drawGroup(number, in: id, when: ClubsFlow.nextWeek(), venue: "")
         }
     }
 
@@ -1183,6 +1229,9 @@ public struct EditClubScreen: View {
         /// A league's points (PD-019). Unchanged for a club and a tournament, which have no table.
         public let pointsForWin: Int
         public let pointsForDraw: Int
+        /// A groups tournament's setup (PD-021), when it may still be set.
+        public let groupCount: Int?
+        public let qualifiersPerGroup: Int?
         /// A league's unit (PD-022), when it may still be set. Nil means leave it as it is — which
         /// is what it always means once a result exists, because the store refuses it then anyway.
         public let unit: ResultUnit?
@@ -1197,6 +1246,8 @@ public struct EditClubScreen: View {
     @State private var win: String
     @State private var draw: String
     @State private var unit: ResultUnit
+    @State private var groupCount: String
+    @State private var qualifiers: String
     private let onBack: () -> Void
     private let onSave: (Edits) -> Void
     private let onDelete: () -> Void
@@ -1211,9 +1262,21 @@ public struct EditClubScreen: View {
         _win = State(initialValue: "\(club.pointsForWin)")
         _draw = State(initialValue: "\(club.pointsForDraw)")
         _unit = State(initialValue: club.unit ?? .legs)
+        _groupCount = State(initialValue: club.groupCount.map { "\($0)" } ?? "")
+        _qualifiers = State(initialValue: club.qualifiersPerGroup.map { "\($0)" } ?? "")
         self.onBack = onBack
         self.onSave = onSave
         self.onDelete = onDelete
+    }
+
+    /// The two numbers, once both are whole and at least one. Named apart from the section that
+    /// draws them, because a type cannot have two members with the same name — which is what the
+    /// first version of this had.
+    private var groupSetup: (count: Int, qualifiers: Int)? {
+        guard let c = Int(groupCount.trimmingCharacters(in: .whitespaces)),
+              let q = Int(qualifiers.trimmingCharacters(in: .whitespaces)),
+              c >= 1, q >= 1 else { return nil }
+        return (c, q)
     }
 
     private var points: (win: Int, draw: Int)? {
@@ -1246,6 +1309,7 @@ public struct EditClubScreen: View {
                     ThroTextField("Name", text: $name)
                     AccentPicker(hex: $accent, initials: club.initials)
                     if club.kind == .league { scoring }
+                    if club.shape == .groups { grouping }
                     if let accentError {
                         Text(accentError)
                             .thro(ThroTypography.metadata)
@@ -1268,7 +1332,9 @@ public struct EditClubScreen: View {
                              removeBadge: removeBadge,
                              pointsForWin: points?.win ?? club.pointsForWin,
                              pointsForDraw: points?.draw ?? club.pointsForDraw,
-                             unit: (club.kind == .league && club.unitIsStillOpen) ? unit : nil))
+                             groupCount: club.setupIsStillOpen ? groupSetup?.count : nil,
+                             qualifiersPerGroup: club.setupIsStillOpen ? groupSetup?.qualifiers : nil,
+                             unit: (club.kind == .league && club.setupIsStillOpen) ? unit : nil))
             }
             .padding(.horizontal, ThroSpacing.spaceScreenGutter)
             .padding(.bottom, ThroSpacing.spacing6)
@@ -1302,6 +1368,41 @@ public struct EditClubScreen: View {
         }
     }
 
+    /// How a groups tournament is shaped (PD-021).
+    ///
+    /// **Asked, never guessed.** How many groups and how many go through decide what every match in
+    /// the tournament is for, and they are set before it starts. Like the league's unit, they may be
+    /// changed only while no result depends on them.
+    @ViewBuilder private var grouping: some View {
+        VStack(alignment: .leading, spacing: ThroSpacing.spacing3) {
+            Text("Groups")
+                .thro(ThroTypography.labelStrong.weight(.semibold))
+                .foregroundStyle(ThroColor.colorTextSecondary)
+            if club.setupIsStillOpen {
+                HStack(spacing: ThroSpacing.spacing4) {
+                    ThroTextField("How many groups", text: $groupCount)
+                    ThroTextField("Top how many through", text: $qualifiers)
+                }
+                if groupSetup == nil {
+                    Text("Both are whole numbers, and both are at least one.")
+                        .thro(ThroTypography.metadata)
+                        .foregroundStyle(ThroColor.colorStatusError)
+                }
+                Note("Entrants are dealt into the groups snake-wise over the order they were "
+                     + "entered. **You can change this until the first result goes in, and not "
+                     + "after** — changing how many qualify once people have played changes what "
+                     + "those matches were for.")
+            } else {
+                Text(club.groupCount.map { "\($0) groups, top \(club.qualifiersPerGroup ?? 0) through" }
+                     ?? "Never set")
+                    .thro(ThroTypography.body)
+                    .foregroundStyle(ThroColor.colorTextPrimary)
+                Note("**Settled.** Matches have been played under this, and half the field would "
+                     + "find out afterwards that the thing they were competing for had moved.")
+            }
+        }
+    }
+
     /// What this league's results are counted in (PD-022).
     ///
     /// **Offered only while there is nothing to reinterpret.** Once a result is in, changing the unit
@@ -1314,7 +1415,7 @@ public struct EditClubScreen: View {
             Text("Results counted in")
                 .thro(ThroTypography.labelStrong.weight(.semibold))
                 .foregroundStyle(ThroColor.colorTextSecondary)
-            if club.unitIsStillOpen {
+            if club.setupIsStillOpen {
                 SegmentedControl(ResultUnit.allCases.map { (u: ResultUnit) in (u, u.label) },
                                  selection: $unit)
                 Text(unit.summary)

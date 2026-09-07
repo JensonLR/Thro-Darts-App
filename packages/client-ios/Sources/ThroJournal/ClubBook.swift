@@ -89,6 +89,11 @@ public struct StoredClub: Equatable, Sendable {
     /// whether THRØ should have a standard at all.
     public let pointsForWin: Int
     public let pointsForDraw: Int
+    /// How a groups tournament is set up (PD-021): how many groups, and how many go through from
+    /// each. Nil until an admin says — they decide what every match in the tournament is for, and
+    /// nothing guesses them.
+    public let groupCount: Int?
+    public let qualifiersPerGroup: Int?
     /// What this league's results are counted in (PD-022): `legs`, `matches` or `points`.
     ///
     /// **Nil is a real answer**, not a default: a league made before this was asked has none, and it
@@ -184,7 +189,7 @@ public final class ClubBook {
     public static let tournamentShapes: Set<String> = ["knockout", "groups", "roundRobin", "doubleElimination"]
     /// The brackets a drawn match can belong to. A knockout uses none of them: it has one bracket, so
     /// naming it would be naming the only thing there is.
-    public static let brackets: Set<String> = ["winners", "losers", "final"]
+    public static let brackets: Set<String> = ["winners", "losers", "final", "group"]
     /// What a league's results are counted in (PD-022). The three ways darts leagues actually run.
     public static let resultUnits: Set<String> = ["legs", "matches", "points"]
     /// What a win and a draw are worth when a league does not say. The common answer in pub and
@@ -274,7 +279,8 @@ public final class ClubBook {
         // Leagues and tournaments arrived after the word for them did (PD-019, PD-020, PD-021).
         // Everything below is additive, so a club written before today reads back exactly as it was:
         // no shape, no teams, no results, and its fixtures still a title somebody typed.
-        for column in ["shape TEXT", "points_win INTEGER", "points_draw INTEGER", "result_unit TEXT"]
+        for column in ["shape TEXT", "points_win INTEGER", "points_draw INTEGER", "result_unit TEXT",
+                       "group_count INTEGER", "qualifiers_per_group INTEGER"]
         where !clubColumns.contains(String(column.split(separator: " ")[0])) {
             try Journal.exec(h, "ALTER TABLE club ADD COLUMN \(column);")
         }
@@ -362,6 +368,7 @@ public final class ClubBook {
                           badgeAssetId: nil, shape: shape,
                           pointsForWin: ClubBook.defaultPointsForWin,
                           pointsForDraw: ClubBook.defaultPointsForDraw,
+                          groupCount: nil, qualifiersPerGroup: nil,
                           unit: unit)
     }
 
@@ -380,6 +387,25 @@ public final class ClubBook {
         }
         guard results == 0 else { throw ClubBookError.unitIsSettled(results) }
         try run("UPDATE club SET result_unit = ? WHERE club_id = ?;", [.text(unit), .text(clubId)])
+    }
+
+    /// How a groups tournament is shaped (PD-021): how many groups, how many go through from each.
+    ///
+    /// **Refused once a group match has a result**, for the same reason the result unit is: changing
+    /// how many qualify after people have played changes what those matches were for, and half the
+    /// field would find out afterwards that the thing they were competing for had moved.
+    public func setGroups(count: Int, qualifiers: Int, on clubId: String) throws {
+        guard count >= 1, qualifiers >= 1 else {
+            throw ClubBookError.unknownValue(field: "group setup", value: "both are at least one")
+        }
+        try requireClub(clubId)
+        var results = 0
+        try run("SELECT COUNT(*) FROM fixture_result WHERE club_id = ?;", [.text(clubId)]) { s in
+            results = Int(sqlite3_column_int64(s, 0))
+        }
+        guard results == 0 else { throw ClubBookError.unitIsSettled(results) }
+        try run("UPDATE club SET group_count = ?, qualifiers_per_group = ? WHERE club_id = ?;",
+                [.int(Int64(count)), .int(Int64(qualifiers)), .text(clubId)])
     }
 
     /// What a win and a draw are worth in this league. Refused if either is negative — a league that
@@ -408,7 +434,7 @@ public final class ClubBook {
         var out: [StoredClub] = []
         try run("""
             SELECT club_id, name, kind, accent_hex, created_at, badge_asset_id, shape,
-                   points_win, points_draw, result_unit
+                   points_win, points_draw, result_unit, group_count, qualifiers_per_group
             FROM club ORDER BY name COLLATE NOCASE;
             """, []) { s in
             let kind = Journal.text(s, 2)
@@ -429,6 +455,8 @@ public final class ClubBook {
                 pointsForDraw: ClubBook.points(s, 8, or: ClubBook.defaultPointsForDraw),
                 // A unit this build does not know reads back as none, and a league says so rather
                 // than the screens labelling every number with a word nobody chose.
+                groupCount: ClubBook.positive(s, 10),
+                qualifiersPerGroup: ClubBook.positive(s, 11),
                 unit: {
                     guard sqlite3_column_type(s, 9) != SQLITE_NULL else { return nil }
                     let value = Journal.text(s, 9)
@@ -774,6 +802,14 @@ public final class ClubBook {
     public func clearResult(fixture fixtureId: String, in clubId: String) throws {
         try run("DELETE FROM fixture_result WHERE club_id = ? AND fixture_id = ?;",
                 [.text(clubId), .text(fixtureId)])
+    }
+
+    /// A count read back, or nil when the column is null or holds something that is not a count.
+    /// Nought groups is not a setup somebody chose; it is a row that should not exist.
+    static func positive(_ s: OpaquePointer, _ index: Int32) -> Int? {
+        guard sqlite3_column_type(s, index) != SQLITE_NULL else { return nil }
+        let value = Int(sqlite3_column_int64(s, index))
+        return value >= 1 ? value : nil
     }
 
     /// A points column read back, or the default when the column is null — which it is for every

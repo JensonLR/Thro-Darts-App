@@ -202,15 +202,15 @@ final class LeagueTests: XCTestCase {
     /// something else — so the screen stops offering it and the store refuses it.
     func testTheUnitIsOpenUntilThereIsAResultToReinterpret() {
         let empty = league(teams: ["a", "b"], fixtures: [fixture("1", "a", "b")])
-        XCTAssertTrue(empty.unitIsStillOpen)
+        XCTAssertTrue(empty.setupIsStillOpen)
 
         let played = league(teams: ["a", "b"], fixtures: [fixture("1", "a", "b", word(3, 1))])
-        XCTAssertFalse(played.unitIsStillOpen)
+        XCTAssertFalse(played.setupIsStillOpen)
 
         // A cancelled or postponed fixture is not a result, so it settles nothing.
         let scheduled = league(teams: ["a", "b"],
                                fixtures: [fixture("1", "a", "b"), fixture("2", "b", "a")])
-        XCTAssertTrue(scheduled.unitIsStillOpen)
+        XCTAssertTrue(scheduled.setupIsStillOpen)
     }
 
     // MARK: - the three kinds are three things

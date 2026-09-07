@@ -462,14 +462,18 @@ public struct TournamentScreen: View {
     private let onDraw: ((Int) -> Void)?
     /// The same, for a shape with more than one bracket.
     private let onDraw2: ((Bracket, Int) -> Void)?
+    /// And for one group's round robin.
+    private let onDrawGroup: ((Int) -> Void)?
 
     public init(tournament: Club, badge: Image? = nil, onBack: @escaping () -> Void = {},
                 onEntrants: @escaping () -> Void = {}, onFixtures: @escaping () -> Void = {},
                 onAnnounce: @escaping () -> Void = {}, onEdit: (() -> Void)? = nil,
                 onRecord: ((Fixture) -> Void)? = nil, onDraw: ((Int) -> Void)? = nil,
-                onDraw2: ((Bracket, Int) -> Void)? = nil) {
+                onDraw2: ((Bracket, Int) -> Void)? = nil,
+                onDrawGroup: ((Int) -> Void)? = nil) {
         self.onDraw = onDraw
         self.onDraw2 = onDraw2
+        self.onDrawGroup = onDrawGroup
         self.tournament = tournament
         self.badge = badge
         self.onBack = onBack
@@ -506,6 +510,7 @@ public struct TournamentScreen: View {
                     shape
                     draw
                     doubleDraw
+                    groupStage
                     entrants
                     fixtures
                     if tournament.shape == .roundRobin { table }
@@ -592,6 +597,96 @@ public struct TournamentScreen: View {
                     .foregroundStyle(ThroColor.colorTextTertiary)
                     .fixedSize(horizontal: false, vertical: true)
             }
+        }
+    }
+
+    // MARK: - groups (PD-021)
+
+    /// The group stage, and the knockout the qualifiers feed.
+    @ViewBuilder private var groupStage: some View {
+        if tournament.groupsNeedSetup {
+            Eyebrow("The groups").padding(.top, ThroSpacing.spaceSectionGap)
+            Note("**This tournament has not been told how it is shaped.** How many groups, and how "
+                 + "many go through from each, decide what every match in it is for — so THRØ asks "
+                 + "rather than guessing. Set them on Edit, before the first result goes in.",
+                 icon: .triangleAlert)
+                .padding(.top, ThroSpacing.spacing3)
+        } else if let groups = tournament.groups {
+            Eyebrow("The groups").padding(.top, ThroSpacing.spaceSectionGap)
+            Text("\(groups.groups.count) group\(groups.groups.count == 1 ? "" : "s"), top "
+                 + "\(groups.qualifiersPerGroup) through from each")
+                .thro(ThroTypography.body)
+                .foregroundStyle(ThroColor.colorTextSecondary)
+                .padding(.top, ThroSpacing.spacing2)
+            ForEach(groups.groups) { group in
+                groupBlock(group, of: groups)
+            }
+            groupKnockout(groups)
+            Note("Entrants are dealt into groups **snake-wise** over the order they were entered — "
+                 + "first seed to A, second to B, and back down again — so group A does not get both "
+                 + "the first and the third of them. THRØ has no rating (OD-001), so that order is "
+                 + "the order they went in.")
+                .padding(.top, ThroSpacing.spacing4)
+        }
+    }
+
+    @ViewBuilder private func groupBlock(_ group: Groups.Group, of groups: Groups) -> some View {
+        roundHeader("Group \(group.name)", ready: groups.readyToDraw(group: group.number).count) {
+            onDrawGroup?(group.number)
+        }
+        if group.entrants.count < 2 {
+            Text("Only \(group.entrants.count) entrant\(group.entrants.count == 1 ? "" : "s") in "
+                 + "this group — there is nothing to play.")
+                .thro(ThroTypography.metadata)
+                .foregroundStyle(ThroColor.colorTextSecondary)
+                .fixedSize(horizontal: false, vertical: true)
+                .padding(.vertical, ThroSpacing.spacing3)
+        } else {
+            LeagueTableView(rows: group.table, pointsForWin: tournament.pointsForWin,
+                            pointsForDraw: tournament.pointsForDraw, unit: tournament.unit)
+                .padding(.top, ThroSpacing.spacing2)
+            ForEach(group.matches) { match in
+                drawRow(match)
+                ThroDivider()
+            }
+        }
+    }
+
+    /// The knockout after the groups — which waits, on purpose.
+    @ViewBuilder private func groupKnockout(_ groups: Groups) -> some View {
+        Text("The knockout")
+            .thro(ThroTypography.heading3.weight(.bold))
+            .foregroundStyle(ThroColor.colorTextPrimary)
+            .padding(.top, ThroSpacing.spacing5)
+        ForEach(groups.clashes, id: \.self) { clash in
+            Note(clash, icon: .triangleAlert, tone: ThroColor.colorStatusError)
+                .padding(.top, ThroSpacing.spacing3)
+        }
+        if let knockout = groups.knockout {
+            if let champion = knockout.champion {
+                Text("\(champion.name) wins it.")
+                    .thro(ThroTypography.heading3.weight(.bold))
+                    .foregroundStyle(ThroColor.colorTextPrimary)
+                    .padding(.top, ThroSpacing.spacing3)
+            }
+            ForEach(Array(knockout.rounds.enumerated()), id: \.offset) { index, matches in
+                roundHeader(TournamentScreen.roundName(index + 1, of: knockout.rounds.count),
+                            ready: knockout.readyToDraw(round: index + 1).count) {
+                    onDraw2?(.winners, index + 1)
+                }
+                ForEach(matches) { match in
+                    drawRow(match)
+                    ThroDivider()
+                }
+            }
+        } else {
+            // Deliberate. A bracket built from half-played tables shows people through who are not.
+            Text("The knockout is drawn when every group has finished. A bracket built from a "
+                 + "half-played table would show people through who are not.")
+                .thro(ThroTypography.body)
+                .foregroundStyle(ThroColor.colorTextSecondary)
+                .fixedSize(horizontal: false, vertical: true)
+                .padding(.vertical, ThroSpacing.spacing3)
         }
     }
 
@@ -694,13 +789,6 @@ public struct TournamentScreen: View {
                 .thro(ThroTypography.body)
                 .foregroundStyle(ThroColor.colorTextSecondary)
                 .padding(.vertical, ThroSpacing.spacing3)
-        } else if tournament.shape == .groups {
-            Eyebrow("The draw").padding(.top, ThroSpacing.spaceSectionGap)
-            Note("**A groups tournament is not drawn yet.** How many groups, how big, and how many "
-                 + "go through are set before it starts and nothing here asks — so THRØ will not "
-                 + "guess at them and hand you a bracket you did not choose. A knockout draws itself "
-                 + "today.", icon: .triangleAlert)
-                .padding(.top, ThroSpacing.spacing3)
         }
     }
 

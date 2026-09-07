@@ -340,6 +340,11 @@ public struct Club: Identifiable, Equatable, Sendable {
     public let teams: [Team]
     /// A tournament's shape (PD-021). Nil for anything else.
     public let shape: TournamentShape?
+    /// How a groups tournament is set up (PD-021): how many groups, and how many go through from
+    /// each. **Both nil until an admin says**, because neither is THRØ's to guess — they are set
+    /// before a tournament starts and they decide what every match in it is for.
+    public let groupCount: Int?
+    public let qualifiersPerGroup: Int?
     /// What this league's results are counted in (PD-022). **Nil is a real answer** — a league made
     /// before this was asked has none, and nothing guesses one for it.
     public let unit: ResultUnit?
@@ -352,10 +357,13 @@ public struct Club: Identifiable, Equatable, Sendable {
                 verified: Bool = false, yourRole: OrgRole? = nil, members: [ClubMember] = [],
                 fixtures: [Fixture] = [], announcements: [Announcement] = [],
                 badgeAssetId: String? = nil, teams: [Team] = [], shape: TournamentShape? = nil,
-                pointsForWin: Int = 2, pointsForDraw: Int = 1, unit: ResultUnit? = nil) {
+                pointsForWin: Int = 2, pointsForDraw: Int = 1, unit: ResultUnit? = nil,
+                groupCount: Int? = nil, qualifiersPerGroup: Int? = nil) {
         self.teams = teams
         self.shape = shape
         self.unit = unit
+        self.groupCount = groupCount
+        self.qualifiersPerGroup = qualifiersPerGroup
         self.pointsForWin = pointsForWin
         self.pointsForDraw = pointsForDraw
         self.badgeAssetId = badgeAssetId
@@ -457,21 +465,8 @@ public struct Club: Identifiable, Equatable, Sendable {
     }
 
     private var computedTable: [TableRow] {
-        var rows: [String: TableRow.Tally] = [:]
-        for team in teams { rows[team.id] = TableRow.Tally() }
-        for fixture in fixtures {
-            guard let home = fixture.homeTeamId, let away = fixture.awayTeamId,
-                  let result = fixture.result,
-                  rows[home] != nil, rows[away] != nil else { continue }
-            rows[home]?.add(scored: result.home, conceded: result.away, source: result.source)
-            rows[away]?.add(scored: result.away, conceded: result.home, source: result.source)
-        }
-        return teams.compactMap { team -> TableRow? in
-            guard let tally = rows[team.id] else { return nil }
-            return TableRow(team: team, tally: tally,
-                            pointsForWin: pointsForWin, pointsForDraw: pointsForDraw)
-        }
-        .sorted(by: TableRow.before)
+        TableRow.table(teams: teams, fixtures: fixtures,
+                       pointsForWin: pointsForWin, pointsForDraw: pointsForDraw)
     }
 
     /// Fixtures somebody has to act on: played, and nobody has said what happened. The league screen
@@ -492,6 +487,25 @@ public struct Club: Identifiable, Equatable, Sendable {
         return Draw.of(entrants: teams, fixtures: fixtures)
     }
 
+    /// The groups stage and the knockout that follows it, for a tournament that is one (PD-021).
+    ///
+    /// Nil until an admin has said how many groups and how many qualify. That is not a default
+    /// waiting to be overridden: those two numbers decide what every match in the tournament is for,
+    /// they are set before it starts, and a tournament that guessed them would be telling entrants
+    /// something nobody chose.
+    public var groups: Groups? {
+        guard kind == .tournament, shape == .groups,
+              let groupCount, let qualifiersPerGroup, teams.count >= 2 else { return nil }
+        return Groups.of(entrants: teams, fixtures: fixtures, groups: groupCount,
+                         qualifiers: qualifiersPerGroup,
+                         pointsForWin: pointsForWin, pointsForDraw: pointsForDraw)
+    }
+
+    /// Whether a groups tournament is still waiting to be told how it is shaped.
+    public var groupsNeedSetup: Bool {
+        kind == .tournament && shape == .groups && (groupCount == nil || qualifiersPerGroup == nil)
+    }
+
     /// The double-elimination draw, for a tournament that is one (PD-021).
     ///
     /// Derived on every read, like the knockout and the table, so it cannot come to disagree with
@@ -501,8 +515,14 @@ public struct Club: Identifiable, Equatable, Sendable {
         return DoubleElimination.of(entrants: teams, fixtures: fixtures)
     }
 
-    /// Whether the unit may still be changed (PD-022): only while there is nothing to reinterpret.
-    public var unitIsStillOpen: Bool { !fixtures.contains { $0.result != nil } }
+    /// Whether the things that decide **what results mean** may still be changed: a league's unit
+    /// (PD-022), and a groups tournament's shape (PD-021).
+    ///
+    /// Only while there is nothing to reinterpret. Once one result exists, changing either turns
+    /// every number already entered into a claim about something else — and half a field would find
+    /// out afterwards that what they were competing for had moved. The store refuses it as well; a
+    /// screen agreeing with a store is not a screen being trusted.
+    public var setupIsStillOpen: Bool { !fixtures.contains { $0.result != nil } }
 
     /// Whether this league has enough to show a table at all. Two teams and one result: below that
     /// a table is a list of zeroes, which looks like a season nobody has won a game in.
@@ -554,6 +574,31 @@ public struct TableRow: Identifiable, Equatable, Sendable {
     /// Results in this row that nothing checked. Named rather than computed at the call site,
     /// because "played minus evidenced" is the kind of arithmetic a screen gets subtly wrong.
     public var unevidenced: Int { played - evidenced }
+
+    /// A table over any set of teams and any set of fixtures.
+    ///
+    /// Pulled out of `Club` so a **group** can have one too (PD-021): a group is a round robin over
+    /// part of the field, and its standings are the same arithmetic over fewer rows. One
+    /// implementation, so a group's table and a league's cannot come to disagree about what a point
+    /// is worth or what separates two teams level on them.
+    static func table(teams: [Team], fixtures: [Fixture],
+                      pointsForWin: Int, pointsForDraw: Int) -> [TableRow] {
+        var rows: [String: Tally] = [:]
+        for team in teams { rows[team.id] = Tally() }
+        for fixture in fixtures {
+            guard let home = fixture.homeTeamId, let away = fixture.awayTeamId,
+                  let result = fixture.result,
+                  rows[home] != nil, rows[away] != nil else { continue }
+            rows[home]?.add(scored: result.home, conceded: result.away, source: result.source)
+            rows[away]?.add(scored: result.away, conceded: result.home, source: result.source)
+        }
+        return teams.compactMap { team -> TableRow? in
+            guard let tally = rows[team.id] else { return nil }
+            return TableRow(team: team, tally: tally,
+                            pointsForWin: pointsForWin, pointsForDraw: pointsForDraw)
+        }
+        .sorted(by: before)
+    }
 
     init(team: Team, tally: Tally, pointsForWin: Int, pointsForDraw: Int) {
         self.team = team
