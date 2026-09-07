@@ -193,6 +193,10 @@ public struct DoubleElimination: Equatable, Sendable {
         case .winners: source = round >= 1 && round <= winners.count ? winners[round - 1] : []
         case .losers: source = round >= 1 && round <= losers.count ? losers[round - 1] : []
         case .final: source = [round == 1 ? grandFinal : reset].compactMap { $0 }
+        // A double-elimination tournament has no group stage. Written out rather than left to a
+        // `default`, so the day a fifth part of a tournament exists the compiler asks about this
+        // function too — which is exactly what adding `.group` did, and it was right to.
+        case .group: source = []
         }
         return source.filter { $0.fixture == nil && !$0.isWalkover && $0.playable != nil }
     }
