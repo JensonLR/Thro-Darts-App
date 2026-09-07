@@ -1,7 +1,7 @@
 # Running the iOS client
 
 > **Verification status, 2026-09-07.** Every package compiles and every test passes on macOS CI —
-> 368 tests in all: 55 design, 90 journal, 61 scoring session and share card, 139 opening, app and clubs, 23 Lock Screen, wall and widgets — and the
+> 379 tests in all: 55 design, 90 journal, 61 scoring session and share card, 150 opening, app and clubs, 23 Lock Screen, wall and widgets — and the
 > Xcode app builds for the iOS simulator on
 > CI with Xcode 26.6, on every push that touches them. **The app has run on a phone**: the founder's,
 > the evening of 2026-09-05, a full best-of-3 from setup to result, in dark mode, on an iPhone 14 Pro Max
@@ -18,7 +18,7 @@
 | `packages/client-ios` → `ThroDesign` | the approved components as SwiftUI | 55 design tests on macOS, every push |
 | `packages/client-ios` → `ThroJournal` | the on-device journal (ADR-006), with retractions (PD-004), and its own device identity; and the **club book**, the separate database a captain's roster and fixture list live in | 90 journal tests on macOS, every push — 43 on the journal itself, 14 on the device's book of clubs and people, 14 on the export and what it refuses to read back, 8 on images, and 11 on the league book — teams, results, units and what the database refuses to write |
 | `packages/client-ios` → `ThroPlay` | setup, ready, scoring, result, undo, the bust and leg announcements, double-in (PD-008), the checkout route (PD-013), confirming the result (PD-011) and the share card | 61 session tests on macOS, every push |
-| `packages/client-ios` → `ThroApp` | Home, tabs, Settings, the root view, the opening (PD-007), and the club, league, tournament and profile screens under Discover (PD-009, PD-010) | 139 app tests on macOS, every push: 13 on the opening (timeline, the tagline's read time, cues, easings, geometry, the throw, the chalk stroke, the wall's dust, the dart), 15 on Home's reading of the journal, the device identity, the shelf and what a delete refuses to do (PD-026), 5 on the club rules the screens obey, 13 on the mapping between the club book and those screens, 7 on who may have a picture, who is told why not, and what a page's top bar offers, 15 on a club, a league and a tournament being three different things, 10 on the knockout draw — the seeding identities for every bracket to 256, the byes, a whole tournament played through, and a knockout match that cannot end level — 10 on double elimination, including a whole one played out and every entrant but the champion checked to have lost exactly twice, and 10 on groups then knockout, including that nobody is drawn against their own group in the first round across all fifteen setups — the table's arithmetic and its total ordering, where each result came from, and what each tournament shape counts. The layouts themselves are drawn, not tested — and until 2026-09-07 nothing checked that a screen could be reached at all, which is how the club editor sat unroutable |
+| `packages/client-ios` → `ThroApp` | Home, tabs, Settings, the root view, the opening (PD-007), and the club, league, tournament and profile screens under Discover (PD-009, PD-010) | 150 app tests on macOS, every push: 13 on the opening (timeline, the tagline's read time, cues, easings, geometry, the throw, the chalk stroke, the wall's dust, the dart), 15 on Home's reading of the journal, the device identity, the shelf and what a delete refuses to do (PD-026), 5 on the club rules the screens obey, 13 on the mapping between the club book and those screens, 7 on who may have a picture, who is told why not, and what a page's top bar offers, 15 on a club, a league and a tournament being three different things, 10 on the knockout draw — the seeding identities for every bracket to 256, the byes, a whole tournament played through, and a knockout match that cannot end level — 10 on double elimination, including a whole one played out and every entrant but the champion checked to have lost exactly twice, and 10 on groups then knockout, including that nobody is drawn against their own group in the first round across all fifteen setups — the table's arithmetic and its total ordering, where each result came from, and what each tournament shape counts. The layouts themselves are drawn, not tested — and until 2026-09-07 nothing checked that a screen could be reached at all, which is how the club editor sat unroutable |
 | `apps/ios/ThroDarts.xcodeproj` | the app target: thirteen lines that mount `ThroApp`, the ten embedded faces with their licences, the icon and the launch screen (PD-006) | `xcodebuild` for the iOS simulator, every push; `check_fonts.py` on Linux, every push |
 
 ## Running it on the phone, step by step
@@ -580,6 +580,16 @@ until PD-013 — now carries the route from the engine's own table, per out-rule
 conformance corpus to be a legal finish of exactly that number under exactly that rule.
 
 ## What is not built
+
+**Two approved components describe a server THRØ does not have, and no screen constructs either.**
+`SyncState` — *"Synced · This match is saved to THRØ"* — and `OfflineState` — *"Changes will sync
+when connection returns"* — are in the design system and are drawn nowhere in this build, because
+nothing leaves the phone and a screen showing either would tell a player something untrue about
+their own darts. They stay because the design system is the founder's and a component is not
+deleted for being early. But they are a **trap** rather than merely unused: the obvious thing to do
+when sync is built is to reach for `SyncState`, and that ships copy claiming a server confirmed a
+result before any server has. `tools/check_absence_claims.py` holds that no screen constructs
+either, on every push, so the trap cannot spring by accident.
 
 **All four tournament shapes draw themselves** (PD-021) — a knockout, a groups stage and the
 knockout after it, a round robin's table, and double elimination with its losers' bracket and a final

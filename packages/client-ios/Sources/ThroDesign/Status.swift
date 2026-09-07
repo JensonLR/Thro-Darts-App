@@ -64,6 +64,14 @@ public struct Snackbar: View {
 // MARK: - Offline
 
 /// `state/OfflineState`. Inline variant carries the title only.
+//
+// **Nothing in this app constructs it, and nothing may until sync exists.** Its wording is the
+// approved design's and describes a server: THRØ has none, nothing leaves the phone, and a screen
+// showing this would tell a player something that is not true about their own darts. The component
+// stays because the design system is the founder's and a component is not deleted for being early
+// — but it is a **trap**, not merely unused: the next person to build sync will reach for it and
+// ship copy claiming a server confirmed a result before any server has. `check_absence_claims.py`
+// holds that no screen constructs either of these two, and that is the guard rather than a comment.
 public struct OfflineState: View {
     private let title: String
     private let message: String
@@ -110,6 +118,14 @@ public struct OfflineState: View {
 // MARK: - Sync
 
 /// `state/SyncState`. Four states, the design's wording.
+//
+// **Nothing in this app constructs it, and nothing may until sync exists.** Its wording is the
+// approved design's and describes a server: THRØ has none, nothing leaves the phone, and a screen
+// showing this would tell a player something that is not true about their own darts. The component
+// stays because the design system is the founder's and a component is not deleted for being early
+// — but it is a **trap**, not merely unused: the next person to build sync will reach for it and
+// ship copy claiming a server confirmed a result before any server has. `check_absence_claims.py`
+// holds that no screen constructs either of these two, and that is the guard rather than a comment.
 public struct SyncState: View {
     public enum State: String, Sendable { case syncing, synced, queued, failed }
 

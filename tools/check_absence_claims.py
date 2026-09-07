@@ -96,6 +96,25 @@ CLAIMS = [
         forbidden=r"\b(INSERT\s+INTO|DELETE\s+FROM|UPDATE\s+\w+\s+SET)\b",
     ),
     Claim(
+        what="no screen shows a sync or offline state, because there is nothing to sync with",
+        why=("`SyncState` and `OfflineState` are approved components whose wording describes a "
+             "server — *\"This match is saved to THRØ\"*, *\"Changes will sync when connection "
+             "returns\"*. There is no server. They are constructed nowhere, which makes them a trap "
+             "rather than a defect: the obvious move when sync is built is to reach for SyncState, "
+             "and that ships copy claiming a server confirmed a result before any server has. The "
+             "components stay — the design system is the founder's — and this holds them unused."),
+        sentences=[
+            ("docs/runbooks/CLIENT_IOS.md",
+             r"no screen constructs either"),
+            ("packages/client-ios/Sources/ThroDesign/Status.swift",
+             r"Nothing in this app constructs it, and nothing may until sync exists"),
+        ],
+        where=CLIENT,
+        # Construction, not declaration: `public struct SyncState: View` has no bracket after the
+        # name, and `SyncState(...)` anywhere is a screen about to say something untrue.
+        forbidden=r"\b(SyncState|OfflineState)\s*\(",
+    ),
+    Claim(
         what="there is no account, sign-in or credential store in the client",
         why=("B4 — the authentication and identity-claim surface — is a founder blocker and the "
              "design for it does not exist. Settings says *Account and profile · Not built*. An "

@@ -118,6 +118,22 @@ public final class AppStore: ObservableObject {
         (try? AppStore.container()).map(BackupPolicy.read) ?? .unknown("the data folder could not be found")
     }
 
+    /// What the diagnostics folder holds, read on demand for the same reason `backupState` is: it
+    /// is a fact about the file system now.
+    public var diagnosticsHeld: ThroDiagnostics.Held {
+        guard let dir = try? AppStore.container(), let folder = try? ThroDiagnostics.folder(in: dir) else {
+            return ThroDiagnostics.Held(count: 0, bytes: 0, newest: nil)
+        }
+        return ThroDiagnostics.held(in: folder)
+    }
+
+    /// Deletes every collected report. The switch going off removes what was collected rather than
+    /// only stopping new arrivals — the rule Spotlight's switch follows, for the same reason.
+    public func forgetDiagnostics() {
+        guard let dir = try? AppStore.container(), let folder = try? ThroDiagnostics.folder(in: dir) else { return }
+        ThroDiagnostics.forget(in: folder)
+    }
+
     /// Everything this device holds, as one file the player can keep (PD-017).
     ///
     /// Written to a temporary file so it can be shared. Nothing is sent anywhere by this: the
@@ -283,6 +299,8 @@ public struct ThroRootView: View {
     @State private var openClub: String?
     /// Whether this phone's own search field finds matches, people and clubs (on by default).
     @AppStorage(ThroSpotlight.enabledKey) private var spotlight: Bool = true
+    /// Whether iOS may tell this app how it performed. Off by default; Settings explains it.
+    @AppStorage(ThroDiagnostics.enabledKey) private var diagnostics: Bool = false
     /// PD-007: the opening plays once, at cold launch, over whatever the app shows first.
     @State private var opening = true
     /// The opening withdraws its own motion under this setting; the handover has to withdraw too,
@@ -329,7 +347,9 @@ public struct ThroRootView: View {
             // cold launch the in-memory handle is gone, so anything still running is orphaned.
             LiveBoard.clearStale()
             project()
+            collect()
         }
+        .onChange(of: diagnostics) { _, _ in collect() }
         // Keyed on what is actually indexable rather than on a count: a club being renamed changes
         // no count, and an index that only noticed additions would keep showing the old name.
         .onChange(of: searchable) { _, _ in reindex(); project() }
@@ -352,6 +372,17 @@ public struct ThroRootView: View {
     private func reindex() {
         ThroSpotlight.index(matches: store.matches + store.archived,
                             people: clubs.people, clubs: clubs.clubs, enabled: spotlight)
+    }
+
+    /// Subscribes to MetricKit, or stops. Off by default and stopped the moment the switch goes
+    /// off — the reports themselves are deleted by Settings at the same time.
+    private func collect() {
+        #if os(iOS)
+        guard diagnostics, let dir = try? AppStore.container() else {
+            return ThroMetricSubscriber.shared.stop()
+        }
+        ThroMetricSubscriber.shared.start(in: dir)
+        #endif
     }
 
     /// Rewrites the small file the widgets read. A no-op on a build with no App Group.
@@ -422,7 +453,9 @@ public struct ThroRootView: View {
             SettingsScreen(onBack: { showingSettings = false },
                            onReplayOpening: { showingSettings = false; opening = true },
                            backupState: { store.backupState },
-                           makeExport: { try store.exportEverything(clubs: clubs.book) })
+                           makeExport: { try store.exportEverything(clubs: clubs.book) },
+                           diagnosticsHeld: { store.diagnosticsHeld },
+                           onForgetDiagnostics: store.forgetDiagnostics)
                 .throAppearance(Appearance(stored: appearanceRaw))
         } else {
             VStack(spacing: 0) {
@@ -1199,6 +1232,10 @@ public struct SettingsScreen: View {
     @AppStorage(OpeningPreferences.soundKey) private var openingSound: Bool = true
     @AppStorage(OpeningPreferences.hapticsKey) private var openingHaptics: Bool = true
     @AppStorage(ThroSpotlight.enabledKey) private var spotlight: Bool = true
+    /// PD-017's neighbour: what the phone can say about how the app performed on it. **Off by
+    /// default**, because this is the one thing in the app the player gains nothing from — theirs
+    /// to turn on rather than theirs to discover and turn off.
+    @AppStorage(ThroDiagnostics.enabledKey) private var diagnostics: Bool = false
     private let onBack: () -> Void
     private let onReplayOpening: (() -> Void)?
     /// PD-017. Where the file comes from and what the file system says about backups. Closures
@@ -1206,6 +1243,10 @@ public struct SettingsScreen: View {
     /// device's data — and so a test can drive both without a journal on disk.
     private let backupState: () -> BackupPolicy.State
     private let makeExport: (() throws -> URL)?
+    /// What the diagnostics folder holds, and how to empty it. Closures for the same reason the
+    /// two above are: Settings is a screen, not a second owner of the device's data.
+    private let diagnosticsHeld: () -> ThroDiagnostics.Held
+    private let onForgetDiagnostics: () -> Void
     @State private var exported: URL?
     @State private var exportProblem: String?
     @State private var picking = false
@@ -1213,11 +1254,15 @@ public struct SettingsScreen: View {
 
     public init(onBack: @escaping () -> Void, onReplayOpening: (() -> Void)? = nil,
                 backupState: @escaping () -> BackupPolicy.State = { .unknown("no data folder in this build") },
-                makeExport: (() throws -> URL)? = nil) {
+                makeExport: (() throws -> URL)? = nil,
+                diagnosticsHeld: @escaping () -> ThroDiagnostics.Held = { .init(count: 0, bytes: 0, newest: nil) },
+                onForgetDiagnostics: @escaping () -> Void = {}) {
         self.onBack = onBack
         self.onReplayOpening = onReplayOpening
         self.backupState = backupState
         self.makeExport = makeExport
+        self.diagnosticsHeld = diagnosticsHeld
+        self.onForgetDiagnostics = onForgetDiagnostics
     }
 
     private var appearance: Binding<Appearance> {
@@ -1294,6 +1339,32 @@ public struct SettingsScreen: View {
                         Text("Your matches, the people who play here and your clubs appear in this iPhone's own search. The index is on the phone, is never sent to Apple, and is not shared with your other devices. Turning this off removes what is already there.")
                             .thro(ThroTypography.metadata)
                             .foregroundStyle(ThroColor.colorTextSecondary)
+                    }
+                    group("How the app performs") {
+                        HStack(spacing: 12) {
+                            Icon(.shield, size: 18).foregroundStyle(ThroColor.colorTextSecondary)
+                            Toggle(isOn: $diagnostics) {
+                                Text("Collect performance reports").thro(ThroTypography.body)
+                                    .foregroundStyle(ThroColor.colorTextPrimary)
+                            }
+                            .tint(ThroColor.colorSurfaceBrand)
+                        }
+                        .frame(minHeight: 52)
+                        .overlay(alignment: .bottom) { Rectangle().fill(ThroColor.colorBorderDefault).frame(height: 1) }
+                        Text("iOS can tell THRØ how long it took to open, when it froze and how much memory it used, at most once a day. The reports are written to this phone and go nowhere. Turning this off deletes the ones already collected.")
+                            .thro(ThroTypography.metadata)
+                            .foregroundStyle(ThroColor.colorTextSecondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                            // Off means gone, not merely stopped. A switch that left the collected
+                            // reports behind would be a switch that lies, which is the rule the
+                            // Spotlight switch above already follows.
+                            .onChange(of: diagnostics) { _, on in if !on { onForgetDiagnostics() } }
+                        if diagnostics {
+                            Text(ThroDiagnostics.sentence(diagnosticsHeld()))
+                                .thro(ThroTypography.metadata)
+                                .foregroundStyle(ThroColor.colorTextSecondary)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
                     }
                     group("Your darts") {
                         // PD-017. Both halves are told. A player who learns their darts are in
