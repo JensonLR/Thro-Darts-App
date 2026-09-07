@@ -425,4 +425,38 @@ final class MatchSessionTests: XCTestCase {
         plain.quick(180)
         XCTAssertEqual(plain.remaining(.home), 321, "and 180 opens a straight-in leg like any other visit")
     }
+
+    // MARK: - checkout routes (PD-013)
+
+    /// The screen shows a route only when there is one, and it is the route the generator derived
+    /// for exactly that number. Which route is best is a preference the founder decided to take a
+    /// position on; that the route is a legal finish of this number is not, and both engines check
+    /// that arithmetically for every entry in the table.
+    func testTheRouteAppearsOnlyOnAFinishAndIsTheOneDerivedForThatNumber() throws {
+        let s = try session()
+        XCTAssertTrue(s.throwerRoute.isEmpty, "501 is not a finish, so nothing is suggested")
+
+        bringHomeToAFinish(s)
+        XCTAssertTrue(s.throwerOnAFinish)
+        XCTAssertEqual(s.throwerRoute, ["T20", "T19", "D12"], "141 under double-out")
+        XCTAssertEqual(s.throwerRoute, RuleTables.route(141, .double))
+    }
+
+    /// The route follows the match's OWN out-rule, not a fixed one. This is the same failure the
+    /// statistics had once — replayed under a hardcoded 501/double-out while the scoreboard used the
+    /// stored format — so it is held here rather than assumed.
+    func testTheRouteFollowsTheMatchsOwnOutRule() throws {
+        let straight = try MatchSession.start(
+            NewMatch(homeName: "A", awayName: "B", outRule: .straight), in: journal)
+        straight.quick(180); straight.quick(60)
+        straight.quick(180); straight.quick(60)
+        XCTAssertEqual(straight.remaining(.home), 141)
+        XCTAssertEqual(straight.thrower, .home)
+        XCTAssertEqual(straight.throwerRoute, RuleTables.route(141, .straight))
+
+        // And the parameter genuinely matters: the two rules answer differently for a number a
+        // single dart can finish outright.
+        XCTAssertEqual(RuleTables.route(20, .double), ["D10"], "double-out must finish on a double")
+        XCTAssertEqual(RuleTables.route(20, .straight), ["20"], "straight-out is thrown at twenty")
+    }
 }

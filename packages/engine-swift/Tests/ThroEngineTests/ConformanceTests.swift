@@ -343,4 +343,62 @@ final class ConformanceTests: XCTestCase {
         XCTAssertEqual(bust.remaining[a], 30)
         XCTAssertEqual(bust.opened[a], true, "opening survives the bust that follows it")
     }
+
+    // MARK: - checkout routes (PD-013)
+
+    /// Which route is best is a preference and THRØ takes a position on it. Whether a route is a
+    /// LEGAL FINISH is not a preference, and that is what this holds — arithmetically, for every
+    /// route in every rule, rather than against a chart somebody typed. It also proves the encoded
+    /// table survived being parsed, which is the one thing the generator cannot check for us.
+    func testEveryRouteIsALegalFinishOfExactlyThatRemaining() {
+        var throwScore: [String: Int] = ["25": 25, "Bull": 50]
+        for n in 1...20 {
+            throwScore["\(n)"] = n
+            throwScore["D\(n)"] = 2 * n
+            throwScore["T\(n)"] = 3 * n
+        }
+        let doubles = Set(stride(from: 2, through: 40, by: 2)).union([50])
+        let trebles = Set(stride(from: 3, through: 60, by: 3))
+        let finishers: [OutRule: Set<Int>] = [
+            .double: doubles,
+            .master: doubles.union(trebles),
+            .straight: doubles.union(trebles).union(Set(1...20)).union([25]),
+        ]
+
+        for rule in [OutRule.double, .master, .straight] {
+            let checkouts = RuleTables.checkouts(rule)
+            for remaining in checkouts.sorted() {
+                guard let route = RuleTables.route(remaining, rule) else {
+                    return XCTFail("\(rule) \(remaining) has no route")
+                }
+                XCTAssertTrue((1...3).contains(route.count), "\(rule) \(remaining): \(route)")
+                let scores = route.map { throwScore[$0] ?? -1 }
+                XCTAssertFalse(scores.contains(-1), "\(rule) \(remaining): \(route) names a throw that does not exist")
+                XCTAssertEqual(scores.reduce(0, +), remaining, "\(rule) \(remaining): \(route) does not sum to it")
+                XCTAssertTrue(finishers[rule]!.contains(scores.last ?? 0),
+                              "\(rule) \(remaining): \(route) does not finish on a legal segment")
+                for i in 0..<(scores.count - 1) {
+                    XCTAssertLessThan(scores.prefix(i + 1).reduce(0, +), remaining,
+                                      "\(rule) \(remaining): \(route) finishes before its last dart")
+                }
+            }
+            // A number with no finish is offered no route, rather than one that cannot be thrown.
+            for n in 1...180 where !checkouts.contains(n) {
+                XCTAssertNil(RuleTables.route(n, rule), "\(rule) \(n) is a bogey and must have no route")
+            }
+        }
+    }
+
+    /// A handful anyone who plays darts can check by eye. If the rule stops producing them, look.
+    func testTheConventionalFinishesAreTheConventionalFinishes() {
+        let known: [Int: String] = [
+            170: "T20 T20 Bull", 167: "T20 T19 Bull", 164: "T20 T18 Bull", 161: "T20 T17 Bull",
+            160: "T20 T20 D20", 158: "T20 T20 D19", 141: "T20 T19 D12", 110: "T20 Bull",
+            100: "T20 D20", 96: "T20 D18", 90: "T18 D18", 81: "T19 D12", 60: "20 D20",
+            50: "Bull", 41: "9 D16", 40: "D20", 32: "D16", 2: "D1",
+        ]
+        for (remaining, want) in known {
+            XCTAssertEqual(RuleTables.route(remaining, .double)?.joined(separator: " "), want, "\(remaining)")
+        }
+    }
 }

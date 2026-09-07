@@ -8,6 +8,7 @@ import kotlin.test.assertIs
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
+import kotlin.test.fail
 
 /**
  * Property tests over the whole transition space.
@@ -291,5 +292,60 @@ class PropertyTest {
         assertEquals(Effect.BUST, bust.effect)
         assertEquals(30, bust.state.remaining.getValue(a))
         assertEquals(true, bust.state.opened.getValue(a), "opening survives the bust that follows it")
+    }
+
+    /**
+     * The checkout routes THRØ shows (PD-013).
+     *
+     * Which route is best is a preference and the app takes a position on it. Whether a route is a
+     * LEGAL FINISH is not a preference, and that is what this holds — arithmetically, for every
+     * route in every rule, rather than against a chart somebody typed. It also proves the encoded
+     * table survived being parsed, which is the one thing the generator cannot check for us.
+     */
+    @Test
+    fun `every route THRO shows is a legal finish of exactly that remaining`() {
+        val throwScore = buildMap {
+            for (n in 1..20) { put("$n", n); put("D$n", 2 * n); put("T$n", 3 * n) }
+            put("25", 25); put("Bull", 50)
+        }
+        val finishers = mapOf(
+            OutRule.DOUBLE to (2..40 step 2).toSet() + 50,
+            OutRule.MASTER to (2..40 step 2).toSet() + 50 + (3..60 step 3).toSet(),
+            OutRule.STRAIGHT to (1..20).toSet() + (2..40 step 2).toSet() + (3..60 step 3).toSet() + 25 + 50,
+        )
+        for (rule in OutRule.entries) {
+            val checkouts = RuleTables.checkouts(rule)
+            for (remaining in checkouts) {
+                val route = RuleTables.route(remaining, rule)
+                assertNotNull(route, "$rule $remaining has no route")
+                assertTrue(route.size in 1..3, "$rule $remaining is ${route.size} darts: $route")
+                val scores = route.map { throwScore[it] ?: fail("$rule $remaining: '$it' is not a throw") }
+                assertEquals(remaining, scores.sum(), "$rule $remaining: $route does not sum to it")
+                assertTrue(scores.last() in finishers.getValue(rule),
+                           "$rule $remaining: $route does not finish on a legal segment")
+                for (i in 0 until scores.size - 1) {
+                    assertTrue(scores.take(i + 1).sum() < remaining,
+                               "$rule $remaining: $route finishes before its last dart")
+                }
+            }
+            // A number with no finish is offered no route, rather than a route that cannot be thrown.
+            for (bogey in 1..180) {
+                if (bogey !in checkouts) assertNull(RuleTables.route(bogey, rule), "$rule $bogey is a bogey")
+            }
+        }
+    }
+
+    /** A handful anyone who plays darts can check by eye. If the rule stops producing them, look. */
+    @Test
+    fun `the conventional finishes are the conventional finishes`() {
+        val known = mapOf(
+            170 to "T20 T20 Bull", 167 to "T20 T19 Bull", 164 to "T20 T18 Bull", 161 to "T20 T17 Bull",
+            160 to "T20 T20 D20", 158 to "T20 T20 D19", 141 to "T20 T19 D12", 110 to "T20 Bull",
+            100 to "T20 D20", 96 to "T20 D18", 90 to "T18 D18", 81 to "T19 D12", 60 to "20 D20",
+            50 to "Bull", 41 to "9 D16", 40 to "D20", 32 to "D16", 2 to "D1",
+        )
+        for ((remaining, want) in known) {
+            assertEquals(want, RuleTables.route(remaining, OutRule.DOUBLE)?.joinToString(" "), "$remaining")
+        }
     }
 }

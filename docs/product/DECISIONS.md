@@ -832,3 +832,56 @@ scratch**. That is a narrower authority than it sounds, and the narrowness is th
 The founder replaces any of it with a commissioned design. Nothing here is load-bearing on anything
 else; the components are Swift files and the canvas is a record of what was proposed and when.
 
+
+---
+
+## PD-013 — THRØ shows one checkout route, and says so
+
+**Status: decided by the founder, 2026-09-07.**
+
+Asked whether the app should suggest a finish, and told plainly that most finishes have several
+legal routes and that players genuinely disagree — so showing one asserts a preference rather than
+a fact — the founder chose **show the conventional route always**.
+
+### Decided
+
+Whenever the thrower is on a finish, the route appears under the remaining score. It is one route.
+THRØ takes a position on which.
+
+### What is a fact and what is a preference
+
+The distinction is the whole of this entry, because only one half is defensible:
+
+- **A preference:** which of several legal routes is best. Nobody can settle that, and THRØ is not
+  going to pretend to. The rule that picks one is written down in `packages/domain-spec/generate.py`
+  in full, so anybody can read what THRØ prefers and why, and disagree with it specifically.
+- **A fact:** whether a route is a legal finish of exactly that number under exactly that match's
+  out-rule. That is arithmetic, and it is checked for **every route in every rule** — 2,988 property
+  checks in the spec validator, and again in both engines: the darts sum to the remaining, the last
+  one lands on a legal finishing segment, no earlier dart finishes it, and nothing is longer than
+  three darts. A number with no finish gets no route rather than an unthrowable one.
+
+### The rule, in one paragraph
+
+Fewest darts. On the last dart, prefer the finishing double by a stated order — 32 and 40 first
+because they are the two doubles the game is taught around, then the rest of the even doubles, then
+the odd ones (a missed odd double leaves an odd number), then the bull, because it is the smallest
+target on the board. On every dart before it, prefer the highest-scoring single or treble, and where
+a single and a treble score the same, the single — nobody aiming for nine aims at treble three. On a
+three-dart finish, pick the first dart that way among those leaving a two-dart finish, then repeat.
+
+Derived, that rule produces the conventional chart for the finishes people actually look up: 170 is
+T20 T20 Bull, 167 is T20 T19 Bull, 160 is T20 T20 D20, 141 is T20 T19 D12, 100 is T20 D20, 90 is
+T18 D18, 81 is T19 D12, 60 is 20 D20, 41 is 9 D16. Where it differs from a chart somebody has seen,
+both routes are legal — this one is derived, so it can be checked rather than argued about.
+
+### What it cost
+
+Nothing in the export had to be invented: **`CheckoutCard` already draws a route** and had simply
+never been given one. The engine is untouched — a route is a display, not a rule, and no outcome
+anywhere depends on it.
+
+### How to reverse
+
+Stop passing `session.throwerRoute` to `CheckoutCard` and the card is exactly what it was. The table
+stays generated and costs nothing.

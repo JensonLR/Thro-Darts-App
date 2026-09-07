@@ -297,8 +297,10 @@ public struct ScoringScreen: View {
                     .accessibilityAddTraits(.isStaticText)
             } else if session.bust == nil, session.throwerOnAFinish, let seat = session.thrower {
                 // The hero already shows the number in brand green; the card names the fact, as the
-                // export's checkout screen does with its value hidden.
-                CheckoutCard(required: session.remaining(seat), compact: true, hideValue: true)
+                // export's checkout screen does with its value hidden — and now carries the route
+                // (PD-013), which is the slot the export drew and nothing had ever filled.
+                CheckoutCard(required: session.remaining(seat), route: session.throwerRoute,
+                             compact: true, hideValue: true)
                     .padding(.top, ThroSpacing.spacing2)
             }
             if let seat = session.thrower {

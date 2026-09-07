@@ -62,6 +62,111 @@ def checkout_set(out_rule, max_darts=3):
 CHECKOUTS = {r: checkout_set(r) for r in FINISHERS}
 ONE_DART  = {r: sorted(v for v in finishes_in(1, r) if v > 0) for r in FINISHERS}
 
+# ---------------------------------------------------------------- checkout routes (PD-013)
+#
+# THRØ shows one route to a finish. That is a POSITION, not a fact: most finishes have several legal
+# routes and players disagree about which is best, so the founder decided (PD-013) that the app takes
+# a position rather than staying silent. What follows is that position, written as a rule so that
+# every route is derivable and checkable rather than a table somebody typed.
+#
+# The rule, in full:
+#   1. Fewest darts.
+#   2. On the LAST dart, prefer the finishing double by the order below.
+#   3. On every dart BEFORE it, prefer a treble (highest first), then a single (highest first).
+#      A double, the outer bull or the bull is used as a scoring dart only when nothing else reaches.
+#   4. On a three-dart finish, choose the first dart by (3) among those that leave a two-dart finish,
+#      then apply (2) and (3) to what is left.
+#
+# The order in (2) puts 32 and 40 first because they are the two doubles the game is taught around,
+# then the rest of the even doubles, then the odd ones — a missed odd double leaves an odd number —
+# and the bull last, because it is the smallest target on the board. Where this differs from a chart
+# somebody has seen, both routes are legal. This one is derived, so it can be checked.
+DOUBLE_ORDER = [16, 20, 12, 18, 10, 8, 14, 6, 4, 2] + list(range(19, 0, -2))
+
+def named(kind, n):
+    """The name a player would say: T20, D16, 20, 25, Bull."""
+    return {"S": str(n), "D": "D%d" % n, "T": "T%d" % n}[kind] if kind != "B" else ("Bull" if n == 50 else "25")
+
+THROW_SCORE = {}
+for _n in range(1, 21):
+    THROW_SCORE[named("S", _n)] = _n
+    THROW_SCORE[named("D", _n)] = 2 * _n
+    THROW_SCORE[named("T", _n)] = 3 * _n
+THROW_SCORE["25"] = OUTER_BULL
+THROW_SCORE["Bull"] = BULL
+
+# Scoring darts, best first: by score, and where a single and a treble score the same, the SINGLE —
+# nobody aiming for nine aims at treble three. Then, only as a fallback, everything else: a route
+# that needs a double to score is still a route, and is better than no route.
+SCORING_FIRST = [t for _, _, t in sorted(
+    [(-n, 0, named("S", n)) for n in range(1, 21)] + [(-3 * n, 1, named("T", n)) for n in range(1, 21)])]
+SCORING_LAST   = [named("D", n) for n in range(20, 0, -1)] + ["Bull", "25"]
+
+def finisher_names(out_rule):
+    """Legal finishing throws, in the order THRØ prefers them."""
+    order = []
+    if out_rule == "straight":
+        # A straight-out finish of 17 is thrown at 17, not at a double that happens to equal it.
+        order += [named("S", n) for n in range(1, 21)]
+    order += [named("D", n) for n in DOUBLE_ORDER]
+    order += ["Bull"]
+    if out_rule in ("master", "straight"):
+        order += [named("T", n) for n in range(20, 0, -1)]
+    if out_rule == "straight":
+        order += ["25"]
+    legal = FINISHERS[out_rule]
+    seen, out = set(), []
+    for t in order:
+        if THROW_SCORE[t] in legal and t not in seen:
+            seen.add(t); out.append(t)
+    return out
+
+def scoring_for(value):
+    """The throw THRØ would aim at to score exactly `value`, or None."""
+    for t in SCORING_FIRST:
+        if THROW_SCORE[t] == value: return t
+    for t in SCORING_LAST:
+        if THROW_SCORE[t] == value: return t
+    return None
+
+def route_of_length(remaining, out_rule, darts):
+    if darts == 1:
+        for f in finisher_names(out_rule):
+            if THROW_SCORE[f] == remaining: return [f]
+        return None
+    if darts == 2:
+        # Two passes: a scoring dart THRØ would actually aim at, and then anything that reaches.
+        for pool in (SCORING_FIRST, SCORING_FIRST + SCORING_LAST):
+            for f in finisher_names(out_rule):
+                need = remaining - THROW_SCORE[f]
+                if need <= 0: continue
+                for t in pool:
+                    if THROW_SCORE[t] == need: return [t, f]
+        return None
+    for t in SCORING_FIRST + SCORING_LAST:
+        need = remaining - THROW_SCORE[t]
+        if need <= 0: continue
+        rest = route_of_length(need, out_rule, darts - 1)
+        if rest: return [t] + rest
+    return None
+
+def route(remaining, out_rule):
+    for d in (1, 2, 3):
+        r = route_of_length(remaining, out_rule, d)
+        if r: return r
+    return None
+
+def routes(out_rule):
+    return {v: route(v, out_rule) for v in sorted(CHECKOUTS[out_rule])}
+
+def encode_routes(table):
+    """One string per rule: `170=T20,T20,D20|167=T20,T19,Bull|…`.
+
+    A map literal of 170 entries is a lot of generated code and, in Kotlin, a lot of bytecode in one
+    initialiser. A string parsed once is smaller, and the parse is five lines that a test can hold.
+    """
+    return "|".join("%d=%s" % (v, ",".join(r)) for v, r in sorted(table.items()) if r)
+
 def opening_totals(in_rule):
     """Every counted total a visit can record while the player has not yet opened.
 
@@ -165,6 +270,9 @@ def rule_tables():
                 "oneDartFinishes": ONE_DART[r],
                 "bustOnExactScore": bust_on_exact(r),
                 "minDartsToFinish": {str(s): min_darts(s, r) for s in (301, 501, 701)},
+                # PD-013: one route per finish, derived by the stated rule above. A position, not
+                # a fact — see the comment on DOUBLE_ORDER.
+                "routes": encode_routes(routes(r)),
             } for r in ("double", "master", "straight")
         },
         "invariants": {
@@ -478,6 +586,34 @@ def emit_kotlin(tables, path):
     L.append("")
     L.append("    public val ONE_DART_FINISHES_DOUBLE: Set<Int> = setOf(%s)" % ints(d["oneDartFinishes"]))
     L.append("")
+    L.append("    /**")
+    L.append("     * One route to each finish (PD-013). A POSITION, not a fact: most finishes have")
+    L.append("     * several legal routes and players disagree about which is best. The founder decided")
+    L.append("     * the app shows one rather than staying silent, and these are derived by a stated")
+    L.append("     * rule in the generator so every route is checkable rather than typed.")
+    L.append("     *")
+    L.append("     * Encoded as one string per rule and parsed once: a map literal of %d entries is a" % len(d["routes"].split("|")))
+    L.append("     * lot of bytecode in one initialiser, and the parse is five lines a test can hold.")
+    L.append("     */")
+    for name, t in (("DOUBLE", d), ("MASTER", m), ("STRAIGHT", st)):
+        L.append('    private const val ROUTES_%s: String = "%s"' % (name, t["routes"]))
+    L.append("")
+    L.append("    private fun parseRoutes(encoded: String): Map<Int, List<String>> =")
+    L.append("        encoded.split('|').associate { entry ->")
+    L.append("            val eq = entry.indexOf('=')")
+    L.append("            entry.substring(0, eq).toInt() to entry.substring(eq + 1).split(',')")
+    L.append("        }")
+    L.append("")
+    L.append("    private val ROUTE_TABLES: Map<OutRule, Map<Int, List<String>>> = mapOf(")
+    L.append("        OutRule.DOUBLE to parseRoutes(ROUTES_DOUBLE),")
+    L.append("        OutRule.MASTER to parseRoutes(ROUTES_MASTER),")
+    L.append("        OutRule.STRAIGHT to parseRoutes(ROUTES_STRAIGHT),")
+    L.append("    )")
+    L.append("")
+    L.append("    /** The route THRØ shows for `remaining`, or null when there is no finish. */")
+    L.append("    public fun route(remaining: Int, outRule: OutRule): List<String>? =")
+    L.append("        ROUTE_TABLES.getValue(outRule)[remaining]")
+    L.append("")
     L.append("    private val CHECKOUTS_DOUBLE: Set<Int> = build(MIN_DOUBLE, MAX_DOUBLE, BOGEYS_DOUBLE)")
     L.append("    private val CHECKOUTS_MASTER: Set<Int> = build(MIN_MASTER, MAX_MASTER, BOGEYS_MASTER)")
     L.append("    private val CHECKOUTS_STRAIGHT: Set<Int> = build(MIN_STRAIGHT, MAX_STRAIGHT, BOGEYS_STRAIGHT)")
@@ -559,6 +695,38 @@ def emit_swift(tables, path):
         L.append("    private static let max%s = %d" % (name.capitalize(), t["maxCheckout"]))
     L.append("")
     L.append("    public static let oneDartFinishesDouble: Set<Int> = [%s]" % ints(d["oneDartFinishes"]))
+    L.append("")
+    L.append("    /// One route to each finish (PD-013). A POSITION, not a fact: most finishes have")
+    L.append("    /// several legal routes and players disagree about which is best. The founder decided")
+    L.append("    /// the app shows one rather than staying silent, and these are derived by a stated rule")
+    L.append("    /// in the generator, so every route is checkable rather than typed.")
+    L.append("    ///")
+    L.append("    /// Encoded as one string per rule and parsed once, for the reason the Kotlin gives.")
+    for name, t in (("double", d), ("master", m), ("straight", st)):
+        L.append('    private static let routes%s = "%s"' % (name.capitalize(), t["routes"]))
+    L.append("")
+    L.append("    private static func parseRoutes(_ encoded: String) -> [Int: [String]] {")
+    L.append("        var out: [Int: [String]] = [:]")
+    L.append("        for entry in encoded.split(separator: \"|\") {")
+    L.append("            let parts = entry.split(separator: \"=\")")
+    L.append("            guard parts.count == 2, let n = Int(parts[0]) else { continue }")
+    L.append("            out[n] = parts[1].split(separator: \",\").map(String.init)")
+    L.append("        }")
+    L.append("        return out")
+    L.append("    }")
+    L.append("")
+    L.append("    private static let routeTableDouble = parseRoutes(routesDouble)")
+    L.append("    private static let routeTableMaster = parseRoutes(routesMaster)")
+    L.append("    private static let routeTableStraight = parseRoutes(routesStraight)")
+    L.append("")
+    L.append("    /// The route THRØ shows for `remaining`, or nil when there is no finish.")
+    L.append("    public static func route(_ remaining: Int, _ outRule: OutRule) -> [String]? {")
+    L.append("        switch outRule {")
+    L.append("        case .double: return routeTableDouble[remaining]")
+    L.append("        case .master: return routeTableMaster[remaining]")
+    L.append("        case .straight: return routeTableStraight[remaining]")
+    L.append("        }")
+    L.append("    }")
     L.append("")
     L.append("    private static let checkoutsDouble = build(minDouble, maxDouble, bogeysDouble)")
     L.append("    private static let checkoutsMaster = build(minMaster, maxMaster, bogeysMaster)")

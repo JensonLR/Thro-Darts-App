@@ -118,6 +118,20 @@ public final class MatchSession: ObservableObject {
     public var checkable: Set<Int> { RuleTables.checkouts(record.outRule) }
     public var throwerOnAFinish: Bool { thrower.map { checkable.contains(remaining($0)) } ?? false }
 
+    /// The route THRØ shows for the thrower's remaining (PD-013), or empty when there is no finish.
+    ///
+    /// **A position, not a fact.** Most finishes have several legal routes and players disagree
+    /// about which is best; the founder decided the app shows one rather than staying silent. Every
+    /// route is derived by a stated rule in `packages/domain-spec` and checked arithmetically in
+    /// both engines, so what is shown is always a legal finish of exactly this number under exactly
+    /// this match's out-rule — which is the part that would be a defect to get wrong.
+    ///
+    /// The export's `CheckoutCard` already draws a route; it had simply never been given one.
+    public var throwerRoute: [String] {
+        guard let seat = thrower else { return [] }
+        return RuleTables.route(remaining(seat), record.outRule) ?? []
+    }
+
     /// Whether the thrower still has to open (PD-008). Nothing they score counts until they do, and
     /// the screen has to say so — a player watching their 60 not go on the board and not being told
     /// why is the worst thing a scoring app can do.

@@ -14,7 +14,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent))
 from generate import (ACHIEVABLE_3, IMPOSSIBLE_3, CHECKOUTS, ONE_DART, SEGMENTS,
                       DOUBLE_SEGMENTS, classify, bogeys, bust_on_exact, min_darts, rule_tables,
-                      OPENING, OPENERS, unopenable)
+                      OPENING, OPENERS, unopenable, FINISHERS, THROW_SCORE, routes, route)
 
 OUT = Path(__file__).parent
 fails, checks = [], 0
@@ -171,6 +171,39 @@ for fname, meta in manifest["files"].items():
             else:
                 thrower = "B" if cmd["player"] == "A" else "A"
         vec_checked += 1
+
+# ---- checkout routes (PD-013) -----------------------------------------------------
+#
+# The route THRØ shows is a preference. Whether it is a LEGAL FINISH is not, and that is what these
+# check — arithmetically, for every route in every rule, rather than against a chart somebody typed.
+for _rule in ("double", "master", "straight"):
+    _table = routes(_rule)
+    check(f"{_rule}: every checkout has a route", set(_table) == CHECKOUTS[_rule],
+          str(sorted(set(CHECKOUTS[_rule]) - set(_table))[:6]))
+    for _rem, _r in _table.items():
+        if _r is None:
+            check(f"{_rule} {_rem}: has a route", False); continue
+        check(f"{_rule} {_rem}: at most three darts", len(_r) <= 3, str(_r))
+        check(f"{_rule} {_rem}: every dart is a throw that exists",
+              all(t in THROW_SCORE for t in _r), str(_r))
+        check(f"{_rule} {_rem}: the darts sum to the remaining",
+              sum(THROW_SCORE[t] for t in _r) == _rem, f"{_r} sums to {sum(THROW_SCORE[t] for t in _r)}")
+        check(f"{_rule} {_rem}: the last dart is a legal finisher",
+              THROW_SCORE[_r[-1]] in FINISHERS[_rule], str(_r))
+        check(f"{_rule} {_rem}: no dart before the last finishes it early",
+              all(sum(THROW_SCORE[t] for t in _r[:i + 1]) < _rem for i in range(len(_r) - 1)), str(_r))
+    check(f"{_rule}: a number with no finish has no route",
+          all(route(v, _rule) is None for v in bogeys(_rule)))
+
+# A handful of finishes anyone who plays darts can check by eye. These are not the rule — the rule is
+# in the generator — but if the rule ever stops producing them, somebody should look at it on purpose.
+KNOWN = {170: "T20 T20 Bull", 167: "T20 T19 Bull", 164: "T20 T18 Bull", 161: "T20 T17 Bull",
+         160: "T20 T20 D20", 158: "T20 T20 D19", 141: "T20 T19 D12", 110: "T20 Bull",
+         100: "T20 D20", 96: "T20 D18", 90: "T18 D18", 81: "T19 D12", 60: "20 D20",
+         50: "Bull", 41: "9 D16", 40: "D20", 32: "D16", 2: "D1"}
+for _rem, _want in KNOWN.items():
+    check(f"double-out {_rem} is the conventional route", " ".join(route(_rem, "double")) == _want,
+          " ".join(route(_rem, "double")))
 
 print(f"{checks} property checks, {vec_checked} vectors replayed")
 if fails:
