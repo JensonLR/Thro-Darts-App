@@ -27,6 +27,21 @@ jobs:
       - name: Counts
         run: python3 tools/check_test_counts.py
 
+  # A screen that compiles, is documented, and that nobody using the app can open, is a claim in the
+  # pull request that is not true on the phone. This repository has done that three times — most
+  # recently the club edit screen, which meant no club could be renamed, recoloured, given a badge or
+  # deleted. No test here constructs a screen, so the suite cannot see it and this job does.
+  reachable:
+    name: Every screen is reachable
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Reachability
+        run: python3 tools/check_screens_reachable.py
+
   conformance:
     name: Scoring rules and conformance corpus
     runs-on: ubuntu-latest

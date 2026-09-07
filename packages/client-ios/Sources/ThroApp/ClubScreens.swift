@@ -77,10 +77,13 @@ struct FixtureRow: View {
 struct MemberRow: View {
     let member: ClubMember
     var showRoleTag: Bool = true
+    /// Their picture, when this device holds one. A roster reads as faces where there are faces and
+    /// as initials where there are not, rather than as one or the other everywhere.
+    var picture: Image? = nil
 
     var body: some View {
         HStack(spacing: ThroSpacing.spacing3) {
-            PlayerIdentity(PlayerRef(name: member.name), size: .small)
+            PlayerIdentity(PlayerRef(name: member.name), size: .small, picture: picture)
             Spacer(minLength: ThroSpacing.spacing2)
             if showRoleTag, member.role != .member { Tag(member.role.label, tone: member.role == .admin ? .brand : .neutral) }
         }
@@ -164,15 +167,20 @@ public struct ClubScreen: View {
     private let onSeeMembers: () -> Void
     private let onFixtures: () -> Void
     private let badge: Image?
+    /// A member's picture, looked up rather than held: the store decodes each file once and this
+    /// screen asks for it, so a roster does not read the same bytes off disk on every frame.
+    private let picture: (ClubMember) -> Image?
     /// Nil when the viewer may not change the club. Absent rather than disabled, for the reason the
     /// members list gives: an admin-only action shown greyed out tells a member what they are missing.
     private let onEdit: (() -> Void)?
 
-    public init(club: Club, badge: Image? = nil, onBack: @escaping () -> Void = {},
+    public init(club: Club, badge: Image? = nil, picture: @escaping (ClubMember) -> Image? = { _ in nil },
+                onBack: @escaping () -> Void = {},
                 onAnnounce: @escaping () -> Void = {}, onSeeMembers: @escaping () -> Void = {},
                 onFixtures: @escaping () -> Void = {}, onEdit: (() -> Void)? = nil) {
         self.club = club
         self.badge = badge
+        self.picture = picture
         self.onBack = onBack
         self.onAnnounce = onAnnounce
         self.onSeeMembers = onSeeMembers
@@ -328,7 +336,7 @@ public struct ClubScreen: View {
             .padding(.top, ThroSpacing.spaceSectionGap)
         ThroDivider().padding(.top, ThroSpacing.spacing2)
         ForEach(Array(club.visibleMembers.prefix(3))) { m in
-            MemberRow(member: m, showRoleTag: false)
+            MemberRow(member: m, showRoleTag: false, picture: picture(m))
             ThroDivider()
         }
         if club.members.isEmpty {
@@ -363,15 +371,18 @@ public struct ClubMembersScreen: View {
     private let onAdd: (() -> Void)?
     private let onRemove: ((String) -> Void)?
     private let onOpen: ((ClubMember) -> Void)?
+    private let picture: (ClubMember) -> Image?
 
     public init(club: Club, onBack: @escaping () -> Void = {},
                 onAdd: (() -> Void)? = nil, onRemove: ((String) -> Void)? = nil,
-                onOpen: ((ClubMember) -> Void)? = nil) {
+                onOpen: ((ClubMember) -> Void)? = nil,
+                picture: @escaping (ClubMember) -> Image? = { _ in nil }) {
         self.club = club
         self.onBack = onBack
         self.onAdd = onAdd
         self.onRemove = onRemove
         self.onOpen = onOpen
+        self.picture = picture
     }
 
     public var body: some View {
@@ -384,10 +395,10 @@ public struct ClubMembersScreen: View {
                     ForEach(club.visibleMembers) { m in
                         HStack(spacing: 0) {
                             if let onOpen {
-                                Button { onOpen(m) } label: { MemberRow(member: m) }
+                                Button { onOpen(m) } label: { MemberRow(member: m, picture: picture(m)) }
                                     .buttonStyle(.plain)
                             } else {
-                                MemberRow(member: m)
+                                MemberRow(member: m, picture: picture(m))
                             }
                             if let onRemove {
                                 Button { onRemove(m.id) } label: {
@@ -626,15 +637,28 @@ public struct ProfileScreen: View {
     private let heading: String
     private let figures: [Figure]
     private let clubs: [Club]
+    /// Their picture, when they have one (PD-014).
+    private let picture: Image?
+    /// Why they have no picture, for the one viewer who would otherwise go looking for the control.
+    /// Never shown alongside `onEditPicture` — a screen says either "here is how" or "here is why
+    /// not", and showing both would mean one of them is wrong.
+    private let pictureNote: String?
+    /// Nil unless this viewer may set it. Absent rather than disabled, as everywhere else here.
+    private let onEditPicture: (() -> Void)?
     private let onBack: () -> Void
 
     public init(name: String, meta: String, heading: String = "Last 20 legs",
-                figures: [Figure], clubs: [Club], onBack: @escaping () -> Void = {}) {
+                figures: [Figure], clubs: [Club], picture: Image? = nil,
+                pictureNote: String? = nil, onEditPicture: (() -> Void)? = nil,
+                onBack: @escaping () -> Void = {}) {
         self.name = name
         self.meta = meta
         self.heading = heading
         self.figures = figures
         self.clubs = clubs
+        self.picture = picture
+        self.pictureNote = pictureNote
+        self.onEditPicture = onEditPicture
         self.onBack = onBack
     }
 
@@ -645,7 +669,7 @@ public struct ProfileScreen: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 0) {
                     HStack(spacing: ThroSpacing.spacing4) {
-                        PlayerIdentity(PlayerRef(name: name), size: .large)
+                        PlayerIdentity(PlayerRef(name: name), size: .large, picture: picture)
                         Spacer(minLength: 0)
                     }
                     Text(meta)
@@ -654,6 +678,21 @@ public struct ProfileScreen: View {
                         .padding(.top, ThroSpacing.spacing2)
                     HStack(spacing: 6) { Tag("Not rated"); Tag("Self-reported") }
                         .padding(.top, ThroSpacing.spacing2)
+                    if let onEditPicture {
+                        Button(action: onEditPicture) {
+                            Text(picture == nil ? "Add a picture" : "Change picture")
+                                .thro(ThroTypography.label.weight(.semibold))
+                                .foregroundStyle(ThroColor.colorTextBrand)
+                        }
+                        .buttonStyle(.plain)
+                        .frame(minHeight: ThroSpacing.touchTargetMinimum, alignment: .leading)
+                    } else if let pictureNote {
+                        Text(pictureNote)
+                            .thro(ThroTypography.metadata)
+                            .foregroundStyle(ThroColor.colorTextTertiary)
+                            .fixedSize(horizontal: false, vertical: true)
+                            .padding(.top, ThroSpacing.spacing2)
+                    }
 
                     Eyebrow(heading).padding(.top, ThroSpacing.spaceSectionGap)
                     VStack(alignment: .leading, spacing: ThroSpacing.spacing4) {

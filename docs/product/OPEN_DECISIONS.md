@@ -391,3 +391,33 @@ reconciliation it needs is built, so nothing is lost by waiting.
 **Must not be decided by:** an assumption that a watch behaves like a phone under `fullfsync`. That
 is the whole question, and it is measurable rather than arguable.
 
+
+## OD-021 — Whether a person on this phone may have a picture, and how their age would be known
+**Status:** OPEN · **Impact:** one screen, and the rule PD-014 already set
+
+PD-014 settled who may have a picture: **nobody under 18, and nobody of unestablished age.** A club
+member has an age band because the club's admin is asked for one when they add them, so the rule can
+be applied. A **person on this phone** — one of the two names typed at the oche before a match — has
+no age band at all. The `person` table holds a name and a creation date, and there is nowhere in the
+app that asks.
+
+So by PD-014, applied honestly, a local person may not have a picture. That is what the app now does,
+and the person's page says which rule and why rather than merely having no picture on it.
+
+The founder asked for pictures for "players", so this is the part of that ask which is **not** built,
+and it is not built because the alternative would have been to invent an answer to this:
+
+- Is somebody asked for a person's age when they type a name at the oche? That is a question in the
+  middle of setting up a game of darts, asked about a person who is standing next to them.
+- Or does a local person simply never have a picture, and a picture is something you get by being in
+  a club — which is where an admin has already been asked?
+- Or does a person's picture arrive only with an account (B4), where the person answers for their own
+  age rather than somebody answering for them?
+
+**Engineering's reading:** the third. A picture of somebody is theirs, and the one person who should
+be asked their age is the person in the photograph. A club admin answering for a member is already a
+compromise PD-014 accepted because a roster has to work before anybody has an account; extending that
+to "whoever is holding the phone answers for whoever is playing" widens it in the wrong direction, on
+the surface where THRØ has the least idea who anybody is.
+
+**Must not be decided by:** the fact that it would be easy to add a column. It would.

@@ -4,7 +4,6 @@ import ThroTokens
 import ThroDesign
 import ThroJournal
 import ThroPlay
-import PhotosUI
 
 // Clubs on the phone, wired to the book that holds them (PD-009, PD-010).
 //
@@ -301,6 +300,11 @@ public enum ClubRoute: Equatable {
     case newFixture(String)
     case announce(String)
     case member(club: String, member: String)
+    /// The club's own name, colour and badge. **This case is why the badge picker did nothing**:
+    /// `EditClubScreen` was written, tested and never routed to, so no club on a phone could be
+    /// renamed, recoloured or given a badge. Nothing was broken — it simply could not be reached.
+    case edit(String)
+    case memberPicture(club: String, member: String)
 }
 
 /// The Clubs tab.
@@ -353,10 +357,32 @@ public struct ClubsFlow: View {
         case .club(let id):
             if let c = club(id) {
                 ClubScreen(club: c,
+                           badge: store.image(c.badgeAssetId),
+                           picture: { store.image($0.avatarAssetId) },
                            onBack: { route = .list },
                            onAnnounce: { route = .announce(id) },
                            onSeeMembers: { route = .members(id) },
-                           onFixtures: { route = .fixtures(id) })
+                           onFixtures: { route = .fixtures(id) },
+                           onEdit: editAction(id, if: c.mayEditIdentity))
+            } else { gone }
+
+        case .edit(let id):
+            if let c = club(id) {
+                EditClubScreen(club: c, currentBadge: store.image(c.badgeAssetId),
+                               onBack: { route = .club(id) },
+                               onSave: { name, accent, picked, removeBadge in
+                                   guard store.rename(id, to: name, accentHex: accent) else { return }
+                                   // Two writes, and the second only if the picture actually changed.
+                                   // A save that touched nothing must not rewrite the file and drop
+                                   // the badge on the way past.
+                                   if picked != nil || removeBadge {
+                                       guard store.setBadge(picked, on: id) else { return }
+                                   }
+                                   route = .club(id)
+                               },
+                               onDelete: {
+                                   if store.delete(id) { route = .list }
+                               })
             } else { gone }
 
         case .members(let id):
@@ -364,7 +390,8 @@ public struct ClubsFlow: View {
                 ClubMembersScreen(club: c, onBack: { route = .club(id) },
                                   onAdd: addMemberAction(id, if: c.mayManageMembers),
                                   onRemove: removeMemberAction(id, if: c.mayManageMembers),
-                                  onOpen: { route = .member(club: id, member: $0.id) })
+                                  onOpen: { route = .member(club: id, member: $0.id) },
+                                  picture: { store.image($0.avatarAssetId) })
             } else { gone }
 
         case .newMember(let id):
@@ -390,12 +417,36 @@ public struct ClubsFlow: View {
 
         case .member(let clubId, let memberId):
             if let c = club(clubId), let m = c.visibleMembers.first(where: { $0.id == memberId }) {
+                let refusal = PicturePolicy.refusal(for: m.ageBand)
                 ProfileScreen(name: m.name,
                               meta: "\(m.role.label) · \(c.name) · joined \(m.joined)",
                               heading: "Figures",
                               figures: ClubsFlow.figures(for: m),
                               clubs: [c],
+                              picture: store.image(m.avatarAssetId),
+                              // The reason, but only to the person who could otherwise have set one.
+                              // To anybody else it is a fact about a member they cannot act on.
+                              pictureNote: c.mayManageMembers ? refusal : nil,
+                              onEditPicture: pictureAction(clubId, memberId,
+                                                           if: c.mayManageMembers && refusal == nil),
                               onBack: { route = .members(clubId) })
+            } else { gone }
+
+        case .memberPicture(let clubId, let memberId):
+            if let c = club(clubId), let m = c.visibleMembers.first(where: { $0.id == memberId }),
+               c.mayManageMembers {
+                EditMemberPictureScreen(member: m, club: c,
+                                        current: store.image(m.avatarAssetId),
+                                        onBack: { route = .member(club: clubId, member: memberId) },
+                                        onSave: { picked, removed in
+                                            guard picked != nil || removed else {
+                                                route = .member(club: clubId, member: memberId)
+                                                return
+                                            }
+                                            if store.setAvatar(picked, forMember: memberId, in: clubId) {
+                                                route = .member(club: clubId, member: memberId)
+                                            }
+                                        })
             } else { gone }
 
         case .announce(let id):
@@ -419,6 +470,14 @@ public struct ClubsFlow: View {
 
     private func moveFixtureAction(_ id: String, if allowed: Bool) -> ((String, FixtureState) -> Void)? {
         allowed ? { store.move($0, in: id, to: $1) } : nil
+    }
+
+    private func editAction(_ id: String, if allowed: Bool) -> (() -> Void)? {
+        allowed ? { route = .edit(id) } : nil
+    }
+
+    private func pictureAction(_ clubId: String, _ memberId: String, if allowed: Bool) -> (() -> Void)? {
+        allowed ? { route = .memberPicture(club: clubId, member: memberId) } : nil
     }
 
     /// What this device can honestly say about a member's darts, which is nothing.
@@ -706,6 +765,12 @@ public struct PersonScreen: View {
                           ProfileScreen.Figure(value: $0.value, label: $0.label, unavailable: $0.note)
                       },
                       clubs: clubs,
+                      // A person on this phone has no recorded age — the person table holds a name
+                      // and nothing else — so by the app's own rule they may not have a picture, and
+                      // the page says which rule rather than simply having no picture on it.
+                      // Recording an age for somebody whose name was typed at an oche is a product
+                      // decision, not an engineering one, and it is OD-021.
+                      pictureNote: PicturePolicy.refusal(for: .unknown),
                       onBack: onBack)
             .task { load() }
     }
@@ -744,7 +809,6 @@ public struct EditClubScreen: View {
     private let currentBadge: Image?
     @State private var name: String
     @State private var accent: String
-    @State private var picked: PhotosPickerItem?
     @State private var pickedData: Data?
     @State private var removeBadge = false
     private let onBack: () -> Void
@@ -773,41 +837,17 @@ public struct EditClubScreen: View {
         guard let typed = typedAccent, accentColour == nil else { return nil }
         return "Six hex digits, like 0F3D2E. \"\(typed)\" is not a colour."
     }
-    /// What the badge will look like once this is saved.
-    private var preview: Image? {
-        if removeBadge { return nil }
-        if let pickedData { return Image.thro(data: pickedData) }
-        return currentBadge
-    }
 
     public var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             TopBar("Edit", eyebrow: club.name, onBack: onBack)
             ScrollView {
                 VStack(alignment: .leading, spacing: ThroSpacing.spacing5) {
-                    HStack(spacing: ThroSpacing.spacing4) {
-                        Badge(club.initials, size: 72, accent: accentColour, image: preview)
-                        VStack(alignment: .leading, spacing: ThroSpacing.spacing2) {
-                            PhotosPicker(selection: $picked, matching: .images) {
-                                Text(preview == nil ? "Choose a badge" : "Change badge")
-                                    .thro(ThroTypography.label.weight(.semibold))
-                                    .foregroundStyle(ThroColor.colorTextBrand)
-                            }
-                            if preview != nil {
-                                Button {
-                                    removeBadge = true
-                                    pickedData = nil
-                                    picked = nil
-                                } label: {
-                                    Text("Remove badge")
-                                        .thro(ThroTypography.label.weight(.semibold))
-                                        .foregroundStyle(ThroColor.colorStatusError)
-                                }
-                                .buttonStyle(.plain)
-                            }
-                        }
-                        Spacer(minLength: 0)
-                    }
+                    // The one picker, rather than this screen's own copy of one. A member's
+                    // picture is chosen with the same control, which is how the two stay alike.
+                    PicturePicker(subject: .organisation(initials: club.initials, accent: accentColour),
+                                  size: 72, current: currentBadge, refusedBecause: nil,
+                                  picked: $pickedData, removed: $removeBadge)
                     ThroTextField("Name", text: $name)
                     AccentPicker(hex: $accent, initials: club.initials)
                     if let accentError {
@@ -834,14 +874,72 @@ public struct EditClubScreen: View {
             .padding(.bottom, ThroSpacing.spacing6)
         }
         .background(ThroColor.colorBackgroundPrimary.ignoresSafeArea())
-        // `.task(id:)` rather than `.onChange`: it is one spelling on every version this app
-        // supports, it is already async, and it cancels itself if the picker changes again while a
-        // large photograph is still loading.
-        .task(id: picked) {
-            guard let picked else { return }
-            pickedData = try? await picked.loadTransferable(type: Data.self)
-            removeBadge = false
-        }
     }
 }
 
+/// A member's picture.
+///
+/// One thing on one screen, which is honest about what this build can change about a person: their
+/// picture, and nothing else. Their role and their age are set when they are added and there is no
+/// way to change either — `ClubBook` has no write for it — so this screen does not pretend there is.
+///
+/// It is reachable only for a member who may actually have a picture. The refusal is still built,
+/// because `PicturePicker` refuses on its own and a screen that depends on its caller having checked
+/// is a screen that breaks the day somebody routes to it differently.
+public struct EditMemberPictureScreen: View {
+    private let member: ClubMember
+    private let club: Club
+    private let current: Image?
+    @State private var picked: Data?
+    @State private var removed = false
+    private let onBack: () -> Void
+    private let onSave: (Data?, Bool) -> Void
+
+    public init(member: ClubMember, club: Club, current: Image? = nil,
+                onBack: @escaping () -> Void = {},
+                onSave: @escaping (Data?, Bool) -> Void = { _, _ in }) {
+        self.member = member
+        self.club = club
+        self.current = current
+        self.onBack = onBack
+        self.onSave = onSave
+    }
+
+    private var refusal: String? { PicturePolicy.refusal(for: member.ageBand) }
+    /// Nothing picked and nothing removed is not a save, it is a change of mind.
+    private var changed: Bool { picked != nil || removed }
+
+    public var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            TopBar("Picture", eyebrow: member.name, onBack: onBack)
+            ScrollView {
+                VStack(alignment: .leading, spacing: ThroSpacing.spacing5) {
+                    PicturePicker(subject: .person(initials: member.initials), size: 88,
+                                  current: current, refusedBecause: refusal,
+                                  picked: $picked, removed: $removed)
+                    Note("The picture is resized and written out again on this phone, and everything "
+                         + "the original carried — including where a photograph was taken — is "
+                         + "dropped. Nothing has left the phone: an image is checked when it is "
+                         + "published, and there is nowhere to publish to yet.")
+                    // Said on the screen where somebody is putting a real person's face into an app,
+                    // rather than only in a document nobody on a phone will read.
+                    Note("\(member.name) has not been asked. This is \(club.name)'s copy of a "
+                         + "picture of somebody who has no account here and cannot remove it "
+                         + "themselves — so use one they would be happy to be shown by.",
+                         icon: .shield)
+                }
+                .padding(.horizontal, ThroSpacing.spaceScreenGutter)
+                .padding(.vertical, ThroSpacing.spacing5)
+            }
+            if refusal == nil {
+                ThroButton("Save", variant: .primary, size: .large, fullWidth: true,
+                           disabled: !changed) {
+                    onSave(picked, removed)
+                }
+                .padding(.horizontal, ThroSpacing.spaceScreenGutter)
+                .padding(.bottom, ThroSpacing.spacing6)
+            }
+        }
+        .background(ThroColor.colorBackgroundPrimary.ignoresSafeArea())
+    }
+}

@@ -1,7 +1,8 @@
 # Running the iOS client
 
-> **Verification status, 2026-09-07.** Every package compiles and every test passes on macOS CI — 89
-> tests: 22 design, 17 journal, 28 scoring session, 22 opening, app and clubs — and the Xcode app builds for the iOS simulator on
+> **Verification status, 2026-09-07.** Every package compiles and every test passes on macOS CI —
+> 189 tests in all: 36 design, 67 journal, 45 scoring session, 41 opening, app and clubs — and the
+> Xcode app builds for the iOS simulator on
 > CI with Xcode 26.6, on every push that touches them. **The app has run on a phone**: the founder's,
 > the evening of 2026-09-05, a full best-of-3 from setup to result, in dark mode, on an iPhone 14 Pro Max
 > (MQ9P3ZD/A) running iOS 26.6.1. Nine screenshots came back; what they showed is under "First run on
@@ -13,11 +14,11 @@
 |---|---|---|
 | `packages/design-tokens` | the generated tokens as a Swift package, `ThroTokens` | `build.py --check`; consumed by every build below |
 | `packages/engine-swift` | the scoring engine | conformance corpus on Linux, every push |
-| `packages/statistics-swift` | the statistics layer, honest about its basis | twenty tests on Linux, every push |
-| `packages/client-ios` → `ThroDesign` | the approved components as SwiftUI | tests on macOS, every push |
-| `packages/client-ios` → `ThroJournal` | the on-device journal (ADR-006), with retractions (PD-004), and its own device identity; and the **club book**, the separate database a captain's roster and fixture list live in | forty-six tests on macOS, every push — twenty-four on the journal, fourteen on the device's book of clubs and people, and eight on images |
-| `packages/client-ios` → `ThroPlay` | setup, ready, scoring, result, undo, the bust and leg announcements, double-in (PD-008), the checkout route (PD-013) and confirming the result (PD-011) | thirty-six session tests on macOS, every push |
-| `packages/client-ios` → `ThroApp` | Home, tabs, Settings, the root view, the opening (PD-007), and the club, league, tournament and profile screens under Discover (PD-009, PD-010) | thirty-one tests on macOS, every push: thirteen on the opening (timeline, the tagline's read time, cues, easings, geometry, the throw, the chalk stroke, the wall's dust, the dart), four on Home's reading of the journal and the device identity, five on the club rules the screens obey, and nine on the mapping between the club book and those screens. The layouts themselves are drawn, not tested |
+| `packages/statistics-swift` | the statistics layer, honest about its basis | 25 statistics tests on Linux, every push |
+| `packages/client-ios` → `ThroDesign` | the approved components as SwiftUI | 36 design tests on macOS, every push |
+| `packages/client-ios` → `ThroJournal` | the on-device journal (ADR-006), with retractions (PD-004), and its own device identity; and the **club book**, the separate database a captain's roster and fixture list live in | 67 journal tests on macOS, every push — 32 on the journal itself, 14 on the device's book of clubs and people, 13 on the export and what it refuses to read back, and 8 on images |
+| `packages/client-ios` → `ThroPlay` | setup, ready, scoring, result, undo, the bust and leg announcements, double-in (PD-008), the checkout route (PD-013) and confirming the result (PD-011) | 45 session tests on macOS, every push |
+| `packages/client-ios` → `ThroApp` | Home, tabs, Settings, the root view, the opening (PD-007), and the club, league, tournament and profile screens under Discover (PD-009, PD-010) | 41 app tests on macOS, every push: 13 on the opening (timeline, the tagline's read time, cues, easings, geometry, the throw, the chalk stroke, the wall's dust, the dart), 7 on Home's reading of the journal and the device identity, 5 on the club rules the screens obey, 11 on the mapping between the club book and those screens, and 5 on who may have a picture and who is told why not. The layouts themselves are drawn, not tested — and until 2026-09-07 nothing checked that a screen could be reached at all, which is how the club editor sat unroutable |
 | `apps/ios/ThroDarts.xcodeproj` | the app target: thirteen lines that mount `ThroApp`, the ten embedded faces with their licences, the icon and the launch screen (PD-006) | `xcodebuild` for the iOS simulator, every push; `check_fonts.py` on Linux, every push |
 
 ## Running it on the phone, step by step
@@ -185,17 +186,33 @@ exactly what CI does (`xcodebuild -scheme ThroDarts -destination 'generic/platfo
   figure it cannot support is a dash with the reason — a checkout percentage is refused outright for
   somebody who has played under more than one out-rule, because whether a visit began on a finish
   depends on the rule.
-- **A club's badge.** An admin taps **Edit** on their club to change its name, its accent, or to
-  pick a badge from the photo library (PD-014). The image is resized to badge size on the phone and
+- **Badges and pictures (PD-014).** An admin taps **Edit** on their club, league or tournament to
+  change its name, its colour, or to pick a badge from the photo library; and **Add a picture** on a
+  member's page to give them one. Both use the same control. An image is resized on the phone and
   written out again carrying nothing it came with — including where a photograph was taken. Removing
   it removes the file. Nothing has left the phone: an image is screened when it is published, and
-  there is nowhere to publish to yet, which the screen says rather than implying otherwise. Member
-  pictures are refused for anybody the app does not know to be an adult, which today is everybody a
-  club has not recorded an age for — that is the rule working, not a gap.
+  there is nowhere to publish to yet, which the screen says rather than implying otherwise.
+
+  A member's picture is offered **only** for somebody recorded as an adult. For a minor, or for
+  anybody whose age was never given, there is no picker at all — an admin sees the reason instead of
+  a control that would refuse them, and the two reasons are different sentences because only one of
+  them can ever change. A person on this phone — one of the two names typed at an oche — has no
+  recorded age anywhere, so they have no picture either, and their page says so. Whether they should
+  be able to is **OD-021**, and it is the founder's to answer.
+
+  **Until 2026-09-07 none of this was reachable.** `EditClubScreen` was written and documented, and
+  `ClubRoute` had no case for it: no club on a phone could be renamed, recoloured, badged or deleted,
+  and nothing pointed the club page at its own badge. `ClubStore.setAvatar` was public and tested and
+  called from nowhere. This runbook described the Edit screen as though you could open it. Every test
+  was green, because no test here builds a screen — `tools/check_screens_reachable.py` now fails a
+  build on a screen nothing constructs or a route case nothing assigns.
 - **Discover — clubs, leagues and tournaments.** *No clubs yet* with one action: **Start a club**.
   What you start is kept on this phone and nowhere else. A club has a name, a kind (club, league or
-  tournament) and — if you want one — its own accent colour, typed as six hex digits, with the badge
-  previewing as you type. Inside it: a roster you keep, and a fixture list an official keeps.
+  tournament) and — if you want one — its own colour, picked from thirteen swatches or from the
+  phone's own colour well. **Each swatch is drawn as the badge will be**, with the club's real
+  initials on it, and underneath it the screen says what the initials read at — 12.4:1, say. You
+  never choose the colour they are set in: THRØ picks whichever of its two colours reads better on
+  yours, which is why there is nothing you can pick that makes the badge unreadable. Inside it: a roster you keep, and a fixture list an official keeps.
   Adding somebody asks their **age**, and says on the spot what follows from the answer — a member
   under 18, or one whose age is not given, is listed only to an admin and is reached by no
   announcement, until THRØ has taken safeguarding advice (OD-010). A fixture can be postponed,

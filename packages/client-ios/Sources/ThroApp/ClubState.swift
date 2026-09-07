@@ -219,6 +219,9 @@ public struct Club: Identifiable, Equatable, Sendable {
     public var mayAnnounce: Bool { (yourRole ?? .member) >= .official && isMember }
     public var mayManageFixtures: Bool { (yourRole ?? .member) >= .official && isMember }
     public var mayManageMembers: Bool { yourRole == .admin }
+    /// Changing the club's own name, colour and badge, and deleting it. An admin's, like the roster:
+    /// what a club is *called* is not an official's to change.
+    public var mayEditIdentity: Bool { yourRole == .admin }
 
     /// Who an announcement would reach, and who it would not.
     public var delivery: (reaches: Int, of: Int, withheld: Withheld) {

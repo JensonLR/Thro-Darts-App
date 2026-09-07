@@ -135,11 +135,16 @@ public struct PlayerIdentity: View {
     private let player: PlayerRef
     private let size: Size
     private let align: Align
+    /// Their picture, when they have one (PD-014). Defaulted, so every call site that has no picture
+    /// to give draws exactly the initials it drew before.
+    private let picture: Image?
 
-    public init(_ player: PlayerRef, size: Size = .medium, align: Align = .leading) {
+    public init(_ player: PlayerRef, size: Size = .medium, align: Align = .leading,
+                picture: Image? = nil) {
         self.player = player
         self.size = size
         self.align = align
+        self.picture = picture
     }
 
     private var mark: CGFloat {
@@ -189,14 +194,52 @@ public struct PlayerIdentity: View {
     }
 
     private var initialsMark: some View {
-        Text(player.initials)
-            .thro(ThroTypeRole(family: .sport, size: (mark * 0.38).rounded(), lineHeight: (mark * 0.38).rounded(),
-                               weight: .bold, relativeTo: .caption, tabularNumerals: true))
-            .foregroundStyle(ThroColor.colorTextSecondary)
-            .frame(width: mark, height: mark)
-            .background(Circle().fill(ThroColor.colorSurfaceSecondary))
-            .overlay(Circle().strokeBorder(ThroColor.colorBorderStrong, lineWidth: 1))
-            .accessibilityHidden(true)
+        PersonMark(initials: player.initials, size: mark, picture: picture)
+    }
+}
+
+/// The circle a person is drawn as: their picture when they have one, their initials when they do
+/// not.
+///
+/// **Extracted from `PlayerIdentity`, not drawn beside it.** A person already had a mark in this
+/// system, and adding a second one so a picture could be shown somewhere else would have left two
+/// things that must be kept looking alike. This is that same mark with more callers, so a person is
+/// the same object in a match, in a roster and on their own page. `Badge`'s rounded square stays a
+/// club's, and the two still never read as the same kind of thing in a list.
+///
+/// It says nothing about who *may* have a picture — `ImagePolicy` decides that, and it decides it
+/// where the picture is stored rather than where one is drawn.
+public struct PersonMark: View {
+    private let initials: String
+    private let size: CGFloat
+    private let picture: Image?
+
+    public init(initials: String, size: CGFloat = 40, picture: Image? = nil) {
+        self.initials = initials
+        self.size = size
+        self.picture = picture
+    }
+
+    public var body: some View {
+        Group {
+            if let picture {
+                picture
+                    .resizable()
+                    .aspectRatio(contentMode: .fill)
+                    .frame(width: size, height: size)
+                    .clipShape(Circle())
+            } else {
+                Text(initials)
+                    .thro(ThroTypeRole(family: .sport, size: (size * 0.38).rounded(),
+                                       lineHeight: (size * 0.38).rounded(),
+                                       weight: .bold, relativeTo: .caption, tabularNumerals: true))
+                    .foregroundStyle(ThroColor.colorTextSecondary)
+                    .frame(width: size, height: size)
+                    .background(Circle().fill(ThroColor.colorSurfaceSecondary))
+            }
+        }
+        .overlay(Circle().strokeBorder(ThroColor.colorBorderStrong, lineWidth: 1))
+        .accessibilityHidden(true)
     }
 }
 

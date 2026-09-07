@@ -38,12 +38,30 @@ accent with `Badge`, `Tag` and `Icon.circleCheck` on it. Nothing in either intro
 the export's own icon set (`extracted/components/core/icons.js`) and had simply not been carried into
 `ThroDesign` yet. Their path data is verbatim, as every other glyph's is.
 
-**The club editor and its picker (PD-014).** `EditClubScreen` is `TopBar`, `Badge`, `ThroTextField`
-and `ThroButton`, plus the platform's own `PhotosPicker` — the same standing as the `DatePicker` on a
-fixture and the `Toggle` in Settings: it is the operating system's control, not a component the
-export was expected to draw. `Badge` gained one parameter, an optional image that fills the same
+**The club editor and its picker (PD-014).** `EditClubScreen` is `TopBar`, `PicturePicker`,
+`ThroTextField`, `AccentPicker` and `ThroButton`. The picker wraps the platform's own `PhotosPicker`
+— the same standing as the `DatePicker` on a fixture and the `Toggle` in Settings: it is the
+operating system's control, not a component the export was expected to draw. **Until 2026-09-07 no
+route reached this screen**, so none of it was on a phone; that is recorded in the change record and
+is now checked mechanically by `tools/check_screens_reachable.py`. `Badge` gained one parameter, an optional image that fills the same
 rounded square the initials would, so a list of clubs stays a list of one shape whether or not
 anybody has uploaded anything. No new component, and no new value.
+
+**Picking a colour, and the guarantee that was only kept on one side (PD-014, PD-010).** Three
+elements here are engineering-drawn and are recorded rather than slipped in:
+
+| Component | Where | Why it is not exported, and what it borrows |
+|---|---|---|
+| `AccentPicker` | `ThroDesign/Accent.swift` | Thirteen swatches and the platform's own `ColorPicker`. **Each swatch is drawn as the badge itself will be drawn** — the club's real initials, in whichever neutral THRØ picks for that colour — so the choice is made by looking at the outcome rather than imagining it. No new value: every swatch is a club's content and the well is the operating system's control, the same standing as the `DatePicker` on a fixture. |
+| `AccentBranding` | `ThroDesign/Accent.swift` | Not a component — the arithmetic that decides which neutral goes on an accent. It exists because `Branding.kt` had stated that rule since clubs shipped, `BrandingTest` swept the cube to prove it, the pull request claimed it — and `Badge` set its initials in `colorTextInverse` unconditionally, which is chalk on a club's yellow at about 1.4:1. **A guarantee asserted on one side of a port is not a guarantee.** The two neutrals are fixed sRGB rather than the semantic tokens, because those swap with the appearance and a badge is a fixed-colour surface. |
+| `PersonMark` | `ThroDesign/Forms.swift` | The circle `PlayerIdentity` has always drawn, **extracted** so a person can be marked at any size and carry a picture. Not a new element: same face, same 0.38 proportion, same fill and border. Drawing a second person-mark beside the first would have left two things that must be kept looking alike, which is the mistake `Badge` was careful not to make in the other direction. |
+
+**The picture picker is one control now, not one per screen (PD-014).** `PicturePicker`
+(`ThroApp/PicturePicker.swift`) is `Badge` or `PersonMark` beside the platform's `PhotosPicker`, and
+it is used by both the club editor and a member's picture. It **refuses before it offers**: where
+PD-014 says no picture — anybody not established as an adult — there is no picker at all, only the
+reason. A disabled control whose only outcome is a refusal would be worse than none, and here it
+would be worse than cosmetic.
 
 **The confirm-result screen is composition too (PD-011).** `ConfirmResultScreen` is `TopBar`,
 `MatchSummary`, `PlayerIdentity`, `ThroButton` and `VerificationState` as they already exist. The one
@@ -56,11 +74,20 @@ adding a fixture (`ThroApp/ClubFlow.swift`) are built from `ThroTextField`, `Seg
 `ThroButton`, `Badge` and `TopBar` as they already exist. Two things in them are worth stating
 because they are the kind of thing that gets slipped in:
 
-- **The accent is a hex field, not a swatch palette.** A palette would mean engineering choosing a
-  set of colours, and PD-010's first condition is that no value enters that the token layer does not
-  have. A club's own colour belongs to the club, so it is typed, previewed live on `Badge`, and
-  refused when it is not a colour. That is only safe because `packages/organisation` proves no colour
-  in the cube can make the app unreadable — without that proof, a free colour field would be reckless.
+- **The accent was a hex field. It is now a palette and a colour well, and that is a change of
+  position worth stating rather than quietly editing.** The original reasoning was that a palette
+  would mean engineering choosing a set of colours, and PD-010's first condition is that no value
+  enters that the token layer does not have. The founder's answer: *"Can we use a better option than
+  hex codes for colour select, not very user friendly."* They were right, and the original reasoning
+  confused two things. A club's colour is **content**, like its name — it belongs to the club, not to
+  THRØ — so offering thirteen suggestions is no more a design token than offering a placeholder name
+  is. `AccentSwatch.palette` is recorded here as engineering-chosen content, not as tokens, and
+  nothing in it is used anywhere but as a club's own accent.
+
+  What made the change safe is unchanged and is the whole reason it is allowed: `packages/organisation`
+  proves by sweeping the colour cube that **no** colour a club can pick makes the app unreadable, so
+  the free colour well beside the swatches needs no curation. Since 2026-09-07 the Swift proves it
+  too — see `AccentBranding` below, which is a defect this recorded guarantee did not prevent.
 - **The date is picked with the platform's own `DatePicker`.** It is the operating system's control,
   not a component the export was expected to draw — the same standing as the `Toggle` already in
   Settings and the keyboard already under every text field. It is styled with the brand tint and

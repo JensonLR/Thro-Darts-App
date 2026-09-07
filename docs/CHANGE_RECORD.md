@@ -235,6 +235,24 @@ A club can have a badge today: picked, resized, stripped, stored on the device, 
 initials would be, and swept off disk when nothing points at it. **Nothing has left the phone**, and
 the screen says so rather than implying an image has been checked when nothing has checked it.
 
+**Since 2026-09-07 a member can have a picture too, and all of it is reachable.** One control does
+both — the same picker for a club's badge and a person's picture — and a person's mark is the circle
+`PlayerIdentity` has always drawn, extracted so it can be shown at any size rather than a second
+person-mark drawn beside the first. It **refuses before it offers**: where PD-014 says no picture
+there is no picker, only the reason, and the reason is asked of `ImagePolicy` rather than restated,
+so the screen cannot drift into offering what the book will throw on. The two refusals are different
+sentences because they are different facts — an age that was never recorded can be recorded; being
+under 18 is not a setting.
+
+**A person on this phone still has none, and that is the rule rather than a gap.** The `person` table
+holds a name; nowhere asks an age; an unknown age means no picture. Their page says which rule and
+why. Recording an age for somebody whose name was typed at an oche is a product decision and is now
+**OD-021** — engineering's reading is that the person in the photograph is the one who should be
+asked, which arrives with accounts (B4).
+
+The honest part of this entry is the last: none of the badge half worked before that date. The picker
+existed inside a screen `ClubRoute` had no case for. See *Corrections to my own work*.
+
 ### A match that will not finish: two endings, and the player picks (PD-016)
 
 Somebody leaves, the pub shuts, a player is injured. The app had no answer at all: a half-played
@@ -452,6 +470,9 @@ The full list is long and every entry is in the git history. The ones that matte
 - **I wrote a Kotlin test with no `@Test` on it**, which is a test that never runs. Caught by reading the file back before pushing, and it is why the count checker below counts Kotlin's annotations rather than its function names.
 - **The README's counts drifted twice more in this round alone**, in the very commit that was correcting them: 27 design tests where there are 29, and 56 journal tests where there are 64. Both were mine, both were guesses at arithmetic I could have run. `tools/check_test_counts.py` now counts the declarations per target, holds the README's stated number to them, and runs in CI — and it was perturbed by one to prove it fails, because a check that cannot fail is not a check.
 - **I built seven screens and wired none of them to anything.** The club, league and profile screens compiled, were tested, were published on a canvas — and no code in the app constructed a single one of them; the Discover tab still said *not in this build*. A design commission that ends at the compiler is not delivered, and the round was not finished when I said the screens were built.
+- **I did it again with the club editor, and this time the documents described it as though you could open it.** `EditClubScreen` — the name, the colour, the badge, and deleting a club — was written and documented, and `ClubRoute` had no case for it. Nothing constructed it, `ClubScreen.onEdit` was never passed, and `ClubScreen.badge:` was never given the club's own badge either. So on a phone: no club, league or tournament could be renamed, recoloured, badged or deleted, and its page showed initials while its badge sat in the store. `ClubStore.setAvatar` was the same shape — public, two tests, no caller — which made the founder's *"no option for profile pictures for players, clubs, leagues or tournaments yet"* right on all four counts, when I had first written it down as half right. The runbook meanwhile said *"an admin taps Edit on their club"*. **Every test was green and every one was honest**: no test in this repository constructs a screen, so the suite is shaped to miss exactly this. `tools/check_screens_reachable.py` now fails a build on a screen nothing constructs or a route case nothing assigns; it was run against the previous commit to prove it names `EditClubScreen`, and perturbed to prove the route half fires too.
+- **The design inventory recorded a decision the code had already reversed.** It said the club accent *"is a hex field, not a swatch palette"* and gave the reasoning, three days after the founder asked for a better picker and I replaced it with thirteen swatches and a colour well. Both are defensible; keeping the old reasoning on the record while shipping the opposite is not. The entry now says what changed, what the original argument got wrong (a club's colour is content, like its name, not a design token), and what makes the change safe — which is the cube sweep, and is the one part that did not change.
+- **The runbook's test counts were a hundred short.** It said 89 tests where there are 189, and its table said "forty-six", "thirty-six", "thirty-one" for targets holding 67, 45 and 41. `tools/check_test_counts.py` had held the README to its sources since the last time this happened and nothing held anything else, so the drift moved to the document nobody was checking. It now holds twenty-five stated counts across both documents, including the sub-counts that must sum to their totals, and it fails both when a number is wrong **and** when a sentence is reworded so its number disappears — because a check that silently stops checking looks exactly like a check that passes.
 - **The journal read its match rows with `SELECT *`.** That worked for exactly as long as the table never changed — and adding `in_rule` for double-in is precisely the change that shifts a column index, so the read would have started returning the wrong field for every match already on the device. Named columns now, in one constant both reads share.
 - **My first club badge invented a mark for a person** — a green-tinted circle — when the system already draws one. The canvas and the Swift were both corrected and `Badge` is organisations only. A design system you have already extracted is the first place to look, not the last.
 - **The contrast refusal I wrote for club branding could never fire.** With the brand's two neutrals 17.4:1 apart, the worst any colour in the cube does against the better of them is 4.17:1, above the floor. Rather than write a test that asserts a refusal which cannot happen, the refusal is documented as a guard on the *palette* and the headroom is asserted by sweeping the cube.
