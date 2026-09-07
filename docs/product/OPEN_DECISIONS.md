@@ -176,3 +176,34 @@ reads attestation, never the label.
 
 **Escalate if:** the design intends `thro-recorded` to imply corroboration, which would make it a
 higher trust claim than the domain can support.
+
+## OD-015 — What a client records on a visit that has not opened, under double-in
+**Status:** OPEN · **Impact:** scoring correctness, competitive integrity, capture
+
+`MatchFormat` carries an in-rule with three values, the database stores all three
+(`V006__match_aggregate.sql` allows `straight`, `double`, `master`), and **the engine scores only
+one of them**. Until 2026-09-07 a match created with double-in was scored as straight-in, silently
+and with no warning; that is now refused at construction in both engines, naming this entry.
+
+The reason is not laziness, it is granularity. The engine's unit is a visit, not a dart. Under
+double-in, a player's score does not begin until a dart lands in a double, and **only the darts from
+that one onward count**. A player who throws treble twenty, treble twenty, double ten while unopened
+scores twenty — not one hundred and forty. A visit total of 140 and a visit total of 20 are the same
+three darts, and nothing in a visit total says which dart opened.
+
+So double-in cannot be scored from what is captured today. It needs a **capture rule**: what the
+client asks for, and records, on a visit thrown while unopened. That is the same kind of decision
+PD-001 settled for darts thrown at a double, and it has the same shape — every extra thing asked for
+is friction at the oche, and every thing not asked for is a statistic that cannot be computed
+honestly later.
+
+**Must not be decided by:** an engine that assumes the opening dart was the last one, or the first
+one, or that the whole visit counts. Each of those is a different game.
+
+**Blocked until:** the founder decides whether THRØ supports double-in at all, and if so what the
+scoring screen asks for on an unopened visit.
+
+**Interim position:** straight-in only. The other two values remain storable, because the spec has
+three and storage should not lose what the domain may later gain, but nothing may construct a match
+in a rule the engine cannot score. `InRule.isScorable` is that rule, by that name, in both engines,
+and a test in each holds it.

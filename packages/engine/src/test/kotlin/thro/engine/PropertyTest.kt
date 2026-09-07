@@ -2,6 +2,8 @@ package thro.engine
 
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
+import kotlin.test.assertFalse
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
@@ -181,5 +183,28 @@ class PropertyTest {
         assertEquals(5, Structure(StructureMode.BEST_OF, 9).winsRequired)
         assertEquals(5, Structure(StructureMode.FIRST_TO, 5).winsRequired)
         assertEquals(2, Structure(StructureMode.BEST_OF, 3).winsRequired)
+    }
+
+    /**
+     * A format the engine cannot score honestly must be refused at construction, not scored as
+     * something else. `in_rule` is stored on every match and round-tripped through the database; for
+     * two of its three values the engine has no scoring rule, because it works at visit granularity
+     * and the opening dart's position inside a visit is not recoverable from a visit total. Before
+     * this guard, a match created with double-in was scored as straight-in and was silently wrong.
+     */
+    @Test
+    fun `an in-rule the engine cannot score is refused, not scored as straight-in`() {
+        assertTrue(InRule.STRAIGHT.isScorable)
+        assertFalse(InRule.DOUBLE.isScorable)
+        assertFalse(InRule.MASTER.isScorable)
+        for (rule in InRule.entries.filter { !it.isScorable }) {
+            val thrown = assertFailsWith<IllegalArgumentException> {
+                MatchFormat(
+                    startingScore = 501, inRule = rule, outRule = OutRule.DOUBLE,
+                    legs = Structure(StructureMode.FIRST_TO, 3), throwFirst = PlayerId("A"),
+                )
+            }
+            assertTrue(thrown.message!!.contains("OD-015"), "the refusal must name the open decision")
+        }
     }
 }

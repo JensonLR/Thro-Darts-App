@@ -249,4 +249,22 @@ final class ConformanceTests: XCTestCase {
             alternation: (j["alternateStart"] as? String) == "perSet" ? .perSet : .perLeg
         )
     }
+
+    /// A format the engine cannot score honestly must be refused at construction, not scored as
+    /// something else. `in_rule` is stored on every match and round-tripped through the database; for
+    /// two of its three values the engine has no scoring rule, because it works at visit granularity
+    /// and the opening dart's position inside a visit is not recoverable from a visit total. Before
+    /// this guard, a match created with double-in was scored as straight-in and was silently wrong.
+    ///
+    /// The initialiser refuses with a precondition, which cannot be caught here, so this holds the
+    /// named rule the initialiser asks — the same rule, by the same name, as the Kotlin engine's.
+    func testOnlyAnInRuleTheEngineCanScoreIsScorable() {
+        XCTAssertTrue(InRule.straight.isScorable)
+        XCTAssertFalse(InRule.double.isScorable)
+        XCTAssertFalse(InRule.master.isScorable)
+        // and a format built on the one scorable rule still constructs
+        let f = MatchFormat(startingScore: 501, inRule: .straight, outRule: .double,
+                            legs: Structure(mode: .firstTo, target: 3), throwFirst: PlayerId("A"))
+        XCTAssertEqual(f.inRule, .straight)
+    }
 }

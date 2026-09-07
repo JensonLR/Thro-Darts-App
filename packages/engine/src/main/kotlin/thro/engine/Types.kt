@@ -14,7 +14,23 @@ public value class PlayerId(public val value: String)
 
 public enum class OutRule { DOUBLE, MASTER, STRAIGHT }
 
-public enum class InRule { STRAIGHT, DOUBLE, MASTER }
+public enum class InRule {
+    STRAIGHT,
+    DOUBLE,
+    MASTER,
+    ;
+
+    /**
+     * Whether this engine can score a leg under this in-rule honestly.
+     *
+     * The engine scores a visit, not a dart. Under double-in or master-in only the darts from the
+     * opening one onward count, so the counted total for an opening visit cannot be derived from the
+     * visit total: T20, T20, D10 while unopened scores 20, not 140. What the client records on an
+     * unopened visit is a capture rule of the same kind PD-001 settled for darts at a double, and it
+     * is not decided (OD-015). All three values remain storable; only one is scorable.
+     */
+    public val isScorable: Boolean get() = this == STRAIGHT
+}
 
 /** Whether the right to start alternates every leg, or only between sets. Real competitions differ. */
 public enum class Alternation { PER_LEG, PER_SET }
@@ -55,7 +71,20 @@ public data class MatchFormat(
     val throwFirst: PlayerId,
     val alternation: Alternation = Alternation.PER_LEG,
 ) {
-    init { require(startingScore > 1) { "starting score must exceed 1" } }
+    init {
+        require(startingScore > 1) { "starting score must exceed 1" }
+        // The engine scores a visit, not a dart. Under double-in or master-in, only the darts from
+        // the opening one onward count, so the counted total for an opening visit cannot be derived
+        // from the visit total alone — a player who throws T20, T20, D10 while unopened scores 20,
+        // not 140. Deciding what the client records on an unopened visit is a capture rule of the
+        // same kind PD-001 settled for darts at a double, and it is not decided (OD-015). Until it
+        // is, a format the engine cannot score honestly is refused here rather than scored as
+        // straight-in and silently wrong. The storage keeps all three values; nothing may make one.
+        require(inRule.isScorable) {
+            "in-rule ${'$'}inRule is not scored: the visit-level capture rule for an opening visit is " +
+                "undecided (OD-015). Only straight-in can be scored honestly today."
+        }
+    }
 }
 
 public sealed interface Command {
