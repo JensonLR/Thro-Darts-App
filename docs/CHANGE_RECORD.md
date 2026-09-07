@@ -622,6 +622,17 @@ measures 11.24:1 light and 8.75:1 dark. **The pair is now in `PAIRS_TEXT`**, so 
 on every push and the next person reaching for the token that reads like the right one is stopped by
 a check rather than by a screenshot.
 
+The general rule came out of it too: `check_tokens_exist.py` now fails on **any raw pigment painted
+as a surface** in `ThroApp` or `ThroPlay`. The `thro*` tokens are the pigments the appearance-aware
+tokens are mixed from and they do not flip, so a screen painted with one is right in one mode and
+wrong in the other. `ThroDesign` may use them — mixing the semantics out of them is its job — and so
+may the opening, which paints the launch field before any of this applies.
+
+**And the first version of that check did not check.** It knew `.background(ThroColor.x)` and not
+`.background { ThroColor.x }` — and a `Color` *is* a view in SwiftUI, so the shape the defect
+actually had was the shape it could not see. Putting the defect back and watching the check pass is
+the only way to find that out; it now knows both, and putting the defect back fails it.
+
 **Inside a match, the two reveals were cuts.** A bust and a won leg — the two things PD-005 exists
 to announce — put a card on the screen on one frame and took it off on the next. The scrim fades
 now and the card lands on `motionEasingImpact`, which is the same physics as the strike that caused

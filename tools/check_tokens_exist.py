@@ -23,6 +23,30 @@ GENERATED = ROOT / "packages/design-tokens/generated/ThroTokens.swift"
 SOURCES = [ROOT / "packages/client-ios/Sources", ROOT / "packages/client-ios/Tests"]
 NAMESPACES = ("ThroColor", "ThroSpacing", "ThroType", "ThroMotion")
 
+# The raw brand palette. These are the pigments — `chalk` is the near-white, `ink` is the dark,
+# `green` is the field — and **they do not flip with the appearance**, because they are what the
+# appearance-aware tokens are built out of. A screen that paints a surface with one of them is
+# therefore right in one mode and wrong in the other.
+#
+# This is not hypothetical. Home's masthead was written as `throChalkSunken` under `throChalk` text,
+# on the reading that "sunken" meant the board's dark surface. It is a light neutral. **1.08:1** — the
+# wordmark on the first screen of the app, invisible. The design's contrast gate checks token pairs
+# it has been told about and this was a pairing no pair covered, so nothing failed.
+#
+# The rule: a screen may use a semantic token as a surface (`colorBackground*`, `colorSurface*`,
+# `colorStatus*`), never a pigment. `ThroDesign` may — building the semantics out of the pigments is
+# its job — and so may the opening, which paints the launch field before any of this applies and
+# says so in its own header.
+# Two shapes, because SwiftUI has two. `.background(ThroColor.x)` / `.fill(ThroColor.x)` names the
+# colour inside a call; `.background { ThroColor.x }` and `ZStack { ThroColor.x; ... }` put it on a
+# line of its own, because a `Color` **is** a view. The first version of this check only knew the
+# first shape, and re-introducing the exact defect it was written for did not fail it — which is the
+# only way to find out that a check does not check.
+PAINTED = re.compile(r"(?:background|fill)\(\s*ThroColor\.(thro[A-Z]\w*)"
+                     r"|^\s*ThroColor\.(thro[A-Z]\w*)\b")
+SCREEN_LAYERS = ("ThroApp/", "ThroPlay/")
+PIGMENT_EXEMPT = ("ThroApp/LaunchSequence.swift",)
+
 
 def declared() -> dict[str, set[str]]:
     out: dict[str, set[str]] = {}
@@ -53,6 +77,16 @@ def main() -> int:
             rel = path.relative_to(ROOT)
             for number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
                 code = line.split("//")[0]
+                painted = PAINTED.search(code)
+                pigment_name = painted and (painted.group(1) or painted.group(2))
+                if (pigment_name
+                        and any(layer in str(rel) for layer in SCREEN_LAYERS)
+                        and not any(str(rel).endswith(e) for e in PIGMENT_EXEMPT)):
+                    problems.append(
+                        f"{rel}:{number}: ThroColor.{pigment_name} is a raw pigment painted as a "
+                        f"surface. It does not flip with the appearance, so this is right in one mode "
+                        f"and wrong in the other. Use a colorBackground*/colorSurface* token."
+                    )
                 for namespace, name in re.findall(r"\b(%s)\.(\w+)" % "|".join(NAMESPACES), code):
                     used += 1
                     if name in tokens[namespace]:
@@ -61,11 +95,12 @@ def main() -> int:
                     where = f" — it is {elsewhere[0]}.{name}" if elsewhere else ""
                     problems.append(f"{rel}:{number}: no {namespace}.{name}{where}")
     if problems:
-        print("Tokens that do not exist:", file=sys.stderr)
+        print("Tokens that do not exist, or pigments used as surfaces:", file=sys.stderr)
         for problem in sorted(set(problems)):
             print(f"  {problem}", file=sys.stderr)
         return 1
-    print(f"ok: {used} token references, every one declared")
+    print(f"ok: {used} token references, every one declared; no raw pigment painted as a surface "
+          f"outside {'/'.join(p.rsplit('/', 1)[-1] for p in PIGMENT_EXEMPT)}")
     return 0
 
 
