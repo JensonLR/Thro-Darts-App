@@ -38,6 +38,21 @@ accent with `Badge`, `Tag` and `Icon.circleCheck` on it. Nothing in either intro
 the export's own icon set (`extracted/components/core/icons.js`) and had simply not been carried into
 `ThroDesign` yet. Their path data is verbatim, as every other glyph's is.
 
+**Three entry screens are composition, not new components.** Starting a club, adding a member and
+adding a fixture (`ThroApp/ClubFlow.swift`) are built from `ThroTextField`, `SegmentedControl`,
+`ThroButton`, `Badge` and `TopBar` as they already exist. Two things in them are worth stating
+because they are the kind of thing that gets slipped in:
+
+- **The accent is a hex field, not a swatch palette.** A palette would mean engineering choosing a
+  set of colours, and PD-010's first condition is that no value enters that the token layer does not
+  have. A club's own colour belongs to the club, so it is typed, previewed live on `Badge`, and
+  refused when it is not a colour. That is only safe because `packages/organisation` proves no colour
+  in the cube can make the app unreadable — without that proof, a free colour field would be reckless.
+- **The date is picked with the platform's own `DatePicker`.** It is the operating system's control,
+  not a component the export was expected to draw — the same standing as the `Toggle` already in
+  Settings and the keyboard already under every text field. It is styled with the brand tint and
+  nothing else.
+
 ## Participant app — screens
 
 | Group | Screens |

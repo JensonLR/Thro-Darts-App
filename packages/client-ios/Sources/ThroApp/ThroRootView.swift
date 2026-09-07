@@ -125,6 +125,9 @@ public final class AppStore: ObservableObject {
 ///     @main struct ThroDartsApp: App { var body: some Scene { WindowGroup { ThroRootView() } } }
 public struct ThroRootView: View {
     @StateObject private var store: AppStore
+    /// The clubs this device holds. Its own store because it is its own database, for the reason
+    /// `ClubBook` gives: a roster is edited and a journal never is.
+    @StateObject private var clubs = ClubStore()
     @AppStorage(Appearance.storageKey) private var appearanceRaw: String = Appearance.system.rawValue
     @State private var showingSettings = false
     /// PD-007: the opening plays once, at cold launch, over whatever the app shows first.
@@ -177,7 +180,7 @@ public struct ThroRootView: View {
         case .home: HomeScreen(store: store)
         case .play: PlayLandingScreen(store: store)
         case .live: NotBuiltScreen(title: "Live")
-        case .discover: NotBuiltScreen(title: "Discover")
+        case .discover: ClubsFlow(store: clubs)
         case .you: YouScreen(onSettings: { showingSettings = true })
         }
     }

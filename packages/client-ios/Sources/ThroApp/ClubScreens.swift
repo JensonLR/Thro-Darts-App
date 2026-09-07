@@ -90,28 +90,34 @@ struct MemberRow: View {
 
 // MARK: - Clubs
 
-/// The Clubs tab: what you belong to, and one line about what is public.
+/// The Clubs tab: what you keep, and one line about what is public.
+///
+/// The action here is **start a club**, not *find one*. Finding somebody else's club needs a
+/// connection and this build has none, and a button that cannot do what it says is worse than no
+/// button — so the thing that is real is the one on the screen, and the thing that is not is a
+/// sentence instead.
 public struct ClubsScreen: View {
     private let clubs: [Club]
     private let onOpen: (Club) -> Void
-    private let onSearch: () -> Void
+    private let onCreate: () -> Void
 
     public init(clubs: [Club], onOpen: @escaping (Club) -> Void = { _ in },
-                onSearch: @escaping () -> Void = {}) {
+                onCreate: @escaping () -> Void = {}) {
         self.clubs = clubs
         self.onOpen = onOpen
-        self.onSearch = onSearch
+        self.onCreate = onCreate
     }
 
     public var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            TopBar("Clubs")
+            TopBar("Clubs", actions: clubs.isEmpty ? []
+                   : [TopBar.Action(icon: .plus, label: "Start a club", action: onCreate)])
             ScrollView {
                 VStack(alignment: .leading, spacing: 0) {
                     if clubs.isEmpty {
                         EmptyState(title: "No clubs yet",
-                                   message: "A club or league's front page is public. What is inside it — members, results, announcements — is not.",
-                                   actionLabel: "Search for a club", onAction: onSearch)
+                                   message: "Start one and keep its roster and fixtures here. A club or league's front page is public; what is inside it — members, results, announcements — is not.",
+                                   actionLabel: "Start a club", onAction: onCreate)
                             .padding(.top, ThroSpacing.spacing6)
                     } else {
                         Eyebrow("Yours").padding(.top, ThroSpacing.spacing5)
@@ -126,17 +132,16 @@ public struct ClubsScreen: View {
                             .buttonStyle(.plain)
                             ThroDivider()
                         }
-                        Eyebrow("Find one").padding(.top, ThroSpacing.spaceSectionGap)
                         Text("A club or league's front page is public. What is inside it — members, results, announcements — is not.")
                             .thro(ThroTypography.body)
                             .foregroundStyle(ThroColor.colorTextSecondary)
                             .fixedSize(horizontal: false, vertical: true)
-                            .padding(.top, ThroSpacing.spacing2)
-                        ThroButton("Search for a club", variant: .secondary, size: .large,
-                                   fullWidth: true, action: onSearch)
+                            .padding(.top, ThroSpacing.spaceSectionGap)
+                        ThroButton("Start another", variant: .secondary, size: .large,
+                                   fullWidth: true, action: onCreate)
                             .padding(.top, ThroSpacing.spacing4)
                     }
-                    Note("Nothing here has left this phone. Clubs are not connected to anything yet.")
+                    Note("Nothing here has left this phone. Joining somebody else's club needs an account and a connection, and this build has neither.")
                         .padding(.top, ThroSpacing.spaceSectionGap)
                 }
                 .padding(.horizontal, ThroSpacing.spaceScreenGutter)
@@ -153,13 +158,15 @@ public struct ClubScreen: View {
     private let onBack: () -> Void
     private let onAnnounce: () -> Void
     private let onSeeMembers: () -> Void
+    private let onFixtures: () -> Void
 
     public init(club: Club, onBack: @escaping () -> Void = {}, onAnnounce: @escaping () -> Void = {},
-                onSeeMembers: @escaping () -> Void = {}) {
+                onSeeMembers: @escaping () -> Void = {}, onFixtures: @escaping () -> Void = {}) {
         self.club = club
         self.onBack = onBack
         self.onAnnounce = onAnnounce
         self.onSeeMembers = onSeeMembers
+        self.onFixtures = onFixtures
     }
 
     private var accent: Color { club.accentHex.flatMap { Color.thro(hex: $0) } ?? ThroColor.throGreen }
@@ -199,11 +206,18 @@ public struct ClubScreen: View {
 
     /// What anyone may see: the club exists, and when it plays.
     @ViewBuilder private var front: some View {
-        Eyebrow("Next fixtures").padding(.top, ThroSpacing.spacing5)
+        sectionHeading("Next fixtures", action: "See all", onAction: onFixtures)
+            .padding(.top, ThroSpacing.spacing5)
         ThroDivider().padding(.top, ThroSpacing.spacing2)
         ForEach(Array(club.fixtures.filter { !$0.state.isTerminal }.prefix(3))) { f in
             FixtureRow(fixture: f)
             ThroDivider()
+        }
+        if club.fixtures.filter({ !$0.state.isTerminal }).isEmpty {
+            Text("Nothing scheduled.")
+                .thro(ThroTypography.body)
+                .foregroundStyle(ThroColor.colorTextSecondary)
+                .padding(.vertical, ThroSpacing.spacing3)
         }
         // The boundary, stated rather than implied — a page that simply stops looks broken.
         VStack(alignment: .leading, spacing: 0) {
@@ -254,20 +268,46 @@ public struct ClubScreen: View {
             }
             .padding(.top, ThroSpacing.spacing2)
         }
-        HStack(alignment: .firstTextBaseline) {
-            Eyebrow("Members")
-            Spacer()
-            Button(action: onSeeMembers) {
-                Text("See all")
-                    .thro(ThroTypography.metadata.weight(.semibold))
-                    .foregroundStyle(ThroColor.colorTextBrand)
-            }
+        sectionHeading("Fixtures", action: club.mayManageFixtures ? "Keep the list" : "See all",
+                       onAction: onFixtures)
+            .padding(.top, ThroSpacing.spaceSectionGap)
+        ThroDivider().padding(.top, ThroSpacing.spacing2)
+        ForEach(Array(club.fixtures.filter { !$0.state.isTerminal }.prefix(3))) { f in
+            FixtureRow(fixture: f)
+            ThroDivider()
         }
-        .padding(.top, ThroSpacing.spaceSectionGap)
+        if club.fixtures.filter({ !$0.state.isTerminal }).isEmpty {
+            Text(club.mayManageFixtures ? "Nothing scheduled. You keep this list." : "Nothing scheduled.")
+                .thro(ThroTypography.body)
+                .foregroundStyle(ThroColor.colorTextSecondary)
+                .padding(.vertical, ThroSpacing.spacing3)
+        }
+        sectionHeading("Members", action: "See all", onAction: onSeeMembers)
+            .padding(.top, ThroSpacing.spaceSectionGap)
         ThroDivider().padding(.top, ThroSpacing.spacing2)
         ForEach(Array(club.visibleMembers.prefix(3))) { m in
             MemberRow(member: m, showRoleTag: false)
             ThroDivider()
+        }
+        if club.members.isEmpty {
+            Text(club.mayManageMembers ? "Nobody on the roster yet. You keep it." : "Nobody on the roster yet.")
+                .thro(ThroTypography.body)
+                .foregroundStyle(ThroColor.colorTextSecondary)
+                .padding(.vertical, ThroSpacing.spacing3)
+        }
+    }
+
+    /// An eyebrow with the one link that belongs beside it. The export puts the link on the
+    /// baseline of the eyebrow, so it is built once rather than three times.
+    private func sectionHeading(_ title: String, action: String, onAction: @escaping () -> Void) -> some View {
+        HStack(alignment: .firstTextBaseline) {
+            Eyebrow(title)
+            Spacer()
+            Button(action: onAction) {
+                Text(action)
+                    .thro(ThroTypography.metadata.weight(.semibold))
+                    .foregroundStyle(ThroColor.colorTextBrand)
+            }
         }
     }
 }
@@ -276,21 +316,59 @@ public struct ClubScreen: View {
 public struct ClubMembersScreen: View {
     private let club: Club
     private let onBack: () -> Void
+    /// Nil when the viewer may not manage the roster: the control is absent rather than disabled,
+    /// because an admin-only action shown greyed out tells a member what they are missing.
+    private let onAdd: (() -> Void)?
+    private let onRemove: ((String) -> Void)?
+    private let onOpen: ((ClubMember) -> Void)?
 
-    public init(club: Club, onBack: @escaping () -> Void = {}) {
+    public init(club: Club, onBack: @escaping () -> Void = {},
+                onAdd: (() -> Void)? = nil, onRemove: ((String) -> Void)? = nil,
+                onOpen: ((ClubMember) -> Void)? = nil) {
         self.club = club
         self.onBack = onBack
+        self.onAdd = onAdd
+        self.onRemove = onRemove
+        self.onOpen = onOpen
     }
 
     public var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            TopBar("Members", eyebrow: club.name, onBack: onBack)
+            TopBar("Members", eyebrow: club.name, onBack: onBack,
+                   actions: onAdd.map { [TopBar.Action(icon: .plus, label: "Add a member", action: $0)] } ?? [])
             ScrollView {
                 VStack(alignment: .leading, spacing: 0) {
                     ThroDivider().padding(.top, ThroSpacing.spacing4)
                     ForEach(club.visibleMembers) { m in
-                        MemberRow(member: m)
+                        HStack(spacing: 0) {
+                            if let onOpen {
+                                Button { onOpen(m) } label: { MemberRow(member: m) }
+                                    .buttonStyle(.plain)
+                            } else {
+                                MemberRow(member: m)
+                            }
+                            if let onRemove {
+                                Button { onRemove(m.id) } label: {
+                                    Icon(.x, size: 18)
+                                        .foregroundStyle(ThroColor.colorTextSecondary)
+                                        .frame(width: 44, height: 44)
+                                }
+                                .buttonStyle(.plain)
+                                .accessibilityLabel("Remove \(m.name)")
+                            }
+                        }
                         ThroDivider()
+                    }
+                    if club.visibleMembers.isEmpty && club.hiddenMembers == 0 {
+                        if let onAdd {
+                            EmptyState(title: "Nobody here yet",
+                                       message: "Add the people who play for this club. Each person's age is asked, because who is listed and who is reached follows from it.",
+                                       actionLabel: "Add a member", onAction: onAdd)
+                                .padding(.top, ThroSpacing.spacing6)
+                        } else {
+                            EmptyState(title: "Nobody here yet", message: "An admin keeps the roster.")
+                                .padding(.top, ThroSpacing.spacing6)
+                        }
                     }
                     // Said, not silently shorter. An official is told they cannot see them either.
                     if club.hiddenMembers > 0 {
@@ -318,11 +396,16 @@ public struct FixturesScreen: View {
     private let club: Club
     private let onBack: () -> Void
     private let onAdd: () -> Void
+    /// Nil when the viewer may not keep the list. Cancelled and played are terminal, which is why
+    /// the controls disappear once a fixture is in one of them rather than failing when tapped.
+    private let onMove: ((String, FixtureState) -> Void)?
 
-    public init(club: Club, onBack: @escaping () -> Void = {}, onAdd: @escaping () -> Void = {}) {
+    public init(club: Club, onBack: @escaping () -> Void = {}, onAdd: @escaping () -> Void = {},
+                onMove: ((String, FixtureState) -> Void)? = nil) {
         self.club = club
         self.onBack = onBack
         self.onAdd = onAdd
+        self.onMove = onMove
     }
 
     private var upcoming: [Fixture] { club.fixtures.filter { !$0.state.isTerminal } }
@@ -337,7 +420,11 @@ public struct FixturesScreen: View {
                     if !upcoming.isEmpty {
                         Eyebrow("To come").padding(.top, ThroSpacing.spacing4)
                         ThroDivider().padding(.top, ThroSpacing.spacing1)
-                        ForEach(upcoming) { f in FixtureRow(fixture: f); ThroDivider() }
+                        ForEach(upcoming) { f in
+                            FixtureRow(fixture: f)
+                            if let onMove { moves(f, onMove) }
+                            ThroDivider()
+                        }
                     }
                     if !done.isEmpty {
                         Eyebrow("Played").padding(.top, ThroSpacing.spaceSectionGap)
@@ -360,6 +447,28 @@ public struct FixturesScreen: View {
         }
         .background(ThroColor.colorBackgroundPrimary.ignoresSafeArea())
     }
+
+    /// The moves a fixture has left. `played` and `cancelled` are not offered back out of, because
+    /// the domain refuses them and an app that offers a refusal is an app that lies.
+    private func moves(_ f: Fixture, _ move: @escaping (String, FixtureState) -> Void) -> some View {
+        HStack(spacing: ThroSpacing.spacing2) {
+            ForEach([FixtureState.postponed, .played, .cancelled].filter { $0 != f.state }, id: \.rawValue) { to in
+                ThroButton(label(to), variant: to == .cancelled ? .destructive : .ghost,
+                           size: .small) { move(f.id, to) }
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(.bottom, ThroSpacing.spacing3)
+    }
+
+    private func label(_ s: FixtureState) -> String {
+        switch s {
+        case .postponed: return "Postpone"
+        case .played: return "Played"
+        case .cancelled: return "Cancel"
+        case .scheduled: return "Reschedule"
+        }
+    }
 }
 
 /// Composing an announcement, and who it will not reach (PD-009, and OD-010 while it is open).
@@ -372,20 +481,26 @@ public struct AnnounceScreen: View {
     @State private var subject: String = ""
     @State private var body_: String = ""
     private let onBack: () -> Void
-    private let onSend: (String, String) -> Void
+    /// Nil when there is nowhere to send it, which in this build is always: an announcement needs a
+    /// connection and an identity, and neither exists (Gate 6, B4). The screen is still reachable
+    /// because everything it says about **who would be reached** is true today and is the part an
+    /// official most needs to see. The send is refused with the reason rather than pretended, which
+    /// is the whole difference between an unfinished feature and a dishonest one.
+    private let onSend: ((String, String) -> Void)?
 
     public init(club: Club, onBack: @escaping () -> Void = {},
-                onSend: @escaping (String, String) -> Void = { _, _ in }) {
+                onSend: ((String, String) -> Void)? = nil) {
         self.club = club
         self.onBack = onBack
         self.onSend = onSend
     }
 
-    private var canSend: Bool {
+    private var written: Bool {
         !subject.trimmingCharacters(in: .whitespaces).isEmpty
             && !body_.trimmingCharacters(in: .whitespaces).isEmpty
-            && club.delivery.reaches > 0
     }
+
+    private var canSend: Bool { written && club.delivery.reaches > 0 && onSend != nil }
 
     public var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -407,12 +522,15 @@ public struct AnnounceScreen: View {
             VStack(spacing: ThroSpacing.spacing3) {
                 ThroButton("Send to \(club.delivery.reaches) member\(club.delivery.reaches == 1 ? "" : "s")",
                            variant: .primary, size: .large, fullWidth: true, disabled: !canSend) {
-                    onSend(subject, body_)
+                    onSend?(subject, body_)
                 }
-                Text("Your name is on it. Every member sees who sent it.")
+                Text(onSend == nil
+                     ? "Nothing can be sent yet: an announcement needs a connection and this build has none. What is above is what would happen when it does."
+                     : "Your name is on it. Every member sees who sent it.")
                     .thro(ThroTypography.metadata)
                     .foregroundStyle(ThroColor.colorTextSecondary)
                     .multilineTextAlignment(.center)
+                    .fixedSize(horizontal: false, vertical: true)
             }
             .padding(.horizontal, ThroSpacing.spaceScreenGutter)
             .padding(.bottom, ThroSpacing.spacing6)
@@ -463,14 +581,16 @@ public struct ProfileScreen: View {
 
     private let name: String
     private let meta: String
+    private let heading: String
     private let figures: [Figure]
     private let clubs: [Club]
     private let onBack: () -> Void
 
-    public init(name: String, meta: String, figures: [Figure], clubs: [Club],
-                onBack: @escaping () -> Void = {}) {
+    public init(name: String, meta: String, heading: String = "Last 20 legs",
+                figures: [Figure], clubs: [Club], onBack: @escaping () -> Void = {}) {
         self.name = name
         self.meta = meta
+        self.heading = heading
         self.figures = figures
         self.clubs = clubs
         self.onBack = onBack
@@ -494,7 +614,7 @@ public struct ProfileScreen: View {
                     HStack(spacing: 6) { Tag("Not rated"); Tag("Self-reported") }
                         .padding(.top, ThroSpacing.spacing2)
 
-                    Eyebrow("Last 20 legs").padding(.top, ThroSpacing.spaceSectionGap)
+                    Eyebrow(heading).padding(.top, ThroSpacing.spaceSectionGap)
                     VStack(alignment: .leading, spacing: ThroSpacing.spacing4) {
                         ForEach(Array(stride(from: 0, to: figures.count, by: 3)), id: \.self) { start in
                             HStack(alignment: .top, spacing: ThroSpacing.spacing4) {

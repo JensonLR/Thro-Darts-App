@@ -282,6 +282,29 @@ without those the figures are unattributable and cannot be compared to a later r
 The half-typed entry buffer is **UI draft state in a separate non-evidence table**. It must never be
 foldable into the journal.
 
+### Reference data is not evidence, and lives in its own database
+
+The device also holds a **club book** (`ThroJournal/ClubBook.swift`, `clubs.sqlite`): the clubs,
+leagues and tournaments a person keeps, with their rosters and fixture lists (PD-009). It is a
+separate SQLite file from the journal, deliberately.
+
+The journal's whole story is that nothing in it is ever edited — two triggers enforce it, and every
+correction is a new event that supersedes an old one. A roster is the opposite: a member leaves, a
+fixture is postponed, a name typed wrong is fixed. Putting mutable rows in the same file as
+append-only evidence would leave the file's guarantee true only of some of its tables, which is the
+kind of qualification nobody remembers a year later. Two files, two rules, both stated in one line.
+
+It **keeps the measured durability configuration** — WAL, `synchronous=FULL`, `fullfsync`,
+`checkpoint_fullfsync`, all read back on open — because there is no reason to write a captain's
+roster less carefully than a leg, and because the same open path then verifies both.
+
+When sync exists, the server is authoritative for a club: membership, roles and fixtures come from
+it, and this book becomes the device's side of the reconciliation this ADR already specifies — a
+watch and a phone, or a phone and a server, are the same problem. Nothing about the local shape
+prejudges that: the client's `Club` carries the viewer's role as a value rather than assuming it,
+and today's mapping supplies `admin` for the one honest reason that a club nobody else can see is
+one its keeper keeps.
+
 ## Scoring authority — three mechanisms
 
 A single writer is not sufficient on its own, because the approved dispute screen shows a per-leg
