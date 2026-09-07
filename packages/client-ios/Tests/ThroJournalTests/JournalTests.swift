@@ -301,4 +301,35 @@ final class JournalTests: XCTestCase {
         try j.retractLastVisit(in: MatchId("old"))
         XCTAssertEqual(try j.replayVisits(MatchId("old")).visits.map(\.visitTotal), [60])
     }
+
+    // MARK: device identity
+
+    /// The journal's identity belongs to the journal, not to whatever the caller happens to have.
+    ///
+    /// It used to come from `UserDefaults` on every open. That file can be lost while the journal
+    /// survives — a restore that brings back Application Support but not the preferences — and a new
+    /// identity would restart `device_seq` at 1 for a match that already had rows. ADR-006's gapless
+    /// per-device sequence is precisely what the server uses to notice a device is missing events, so
+    /// one device would arrive as two, each with its own sequence and neither with a gap to report.
+    func testTheJournalKeepsTheDeviceIdentityItWasCreatedWithEvenIfTheCallerForgetsIt() throws {
+        let first = try Journal(path: path, deviceId: DeviceId("the-original"))
+        XCTAssertEqual(first.deviceId, DeviceId("the-original"))
+        XCTAssertNil(first.deviceIdSupersededCallers, "nothing was superseded on the first open")
+        let m = try first.createMatch(NewMatch(homeName: "A", awayName: "B"))
+        _ = try first.append(.visit(Seat.home.playerId, 60), to: m.id)
+
+        // the caller has lost its copy and made a new one
+        let second = try Journal(path: path, deviceId: DeviceId("a-fresh-one"))
+        XCTAssertEqual(second.deviceId, DeviceId("the-original"), "the journal's identity wins")
+        XCTAssertEqual(second.deviceIdSupersededCallers, DeviceId("a-fresh-one"),
+                       "and the disagreement is a fact, not a thing to swallow")
+
+        // so the sequence continues rather than restarting under a second identity
+        let next = try second.append(.visit(Seat.away.playerId, 60), to: m.id)
+        XCTAssertEqual(next.deviceSeq, 2)
+        XCTAssertEqual(next.deviceId, DeviceId("the-original"))
+        let entries = try second.entries(for: m.id)
+        XCTAssertEqual(Set(entries.map(\.deviceId)), [DeviceId("the-original")],
+                       "one device, one stream")
+    }
 }

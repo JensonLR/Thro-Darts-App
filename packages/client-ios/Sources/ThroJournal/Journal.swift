@@ -187,7 +187,21 @@ public struct ReplayedVisit: Equatable, Sendable {
 
 public final class Journal {
     private let handle: OpaquePointer
-    public let deviceId: DeviceId
+    /// The identity every row in this journal is written under.
+    ///
+    /// It belongs to the journal, not to the caller. The first open writes the identity it was given;
+    /// every open after that reads back the one already there and uses it, whatever it was passed.
+    /// The caller's copy used to live in `UserDefaults`, which can be lost while the journal file
+    /// survives — a restore that brings back Application Support but not the preferences, say. A new
+    /// identity would restart `device_seq` at 1 for a match that already had rows, and ADR-006's
+    /// gapless per-device sequence is what the server uses to notice a device is missing events. One
+    /// device would arrive at the server as two, each with its own sequence, and neither with a gap
+    /// to report.
+    public private(set) var deviceId: DeviceId
+    /// The identity the caller asked for, when the journal already had a different one. Nothing is
+    /// rewritten and nothing is refused — the rows are still this device's rows — but the disagreement
+    /// is a fact about this install and is not swallowed.
+    public private(set) var deviceIdSupersededCallers: DeviceId?
     public let configuration: DurabilityConfiguration
 
     /// Opens (creating if needed) the journal at `path` and verifies the configuration is in force.
@@ -198,12 +212,50 @@ public final class Journal {
             throw JournalError.sqlite("could not open \(path)")
         }
         handle = h
-        self.deviceId = deviceId
         self.configuration = configuration
-        // If either throws, Swift still runs deinit for a fully initialised class instance, which
-        // closes the handle — closing it here as well would close it twice.
+        // If any of these throws, Swift still runs deinit for a fully initialised class instance,
+        // which closes the handle — closing it here as well would close it twice. `deviceId` is
+        // assigned before they run for the same reason.
+        self.deviceId = deviceId
+        self.deviceIdSupersededCallers = nil
         try Journal.configure(h, configuration)
         try Journal.migrate(h)
+        let settled = try Journal.settleDeviceId(h, asked: deviceId)
+        self.deviceId = settled.inForce
+        self.deviceIdSupersededCallers = settled.superseded
+    }
+
+    /// The journal's own identity, written once and read back for ever after.
+    static func settleDeviceId(
+        _ h: OpaquePointer, asked: DeviceId,
+    ) throws -> (inForce: DeviceId, superseded: DeviceId?) {
+        var existing: String?
+        var read: OpaquePointer?
+        guard sqlite3_prepare_v2(h, "SELECT value FROM meta WHERE key = 'device_id';", -1, &read, nil) == SQLITE_OK,
+              let r = read else {
+            throw JournalError.sqlite("could not read the journal's device identity")
+        }
+        defer { sqlite3_finalize(r) }
+        if sqlite3_step(r) == SQLITE_ROW, let c = sqlite3_column_text(r, 0) { existing = String(cString: c) }
+
+        guard let existing else {
+            var write: OpaquePointer?
+            guard sqlite3_prepare_v2(h, "INSERT INTO meta (key, value) VALUES ('device_id', ?);", -1, &write, nil) == SQLITE_OK,
+                  let w = write else {
+                throw JournalError.sqlite("could not write the journal's device identity")
+            }
+            defer { sqlite3_finalize(w) }
+            // Bound against a buffer this function owns until the statement is finalised, as `run`
+            // does and for the same reason: a bridged Swift String's buffer lives for one call.
+            guard let owned = strdup(asked.value) else { throw JournalError.sqlite("strdup failed") }
+            defer { free(owned) }
+            sqlite3_bind_text(w, 1, owned, -1, nil)
+            guard sqlite3_step(w) == SQLITE_DONE else {
+                throw JournalError.sqlite("could not write the journal's device identity: \(String(cString: sqlite3_errmsg(h)))")
+            }
+            return (asked, nil)
+        }
+        return (DeviceId(existing), existing == asked.value ? nil : asked)
     }
 
     deinit { sqlite3_close(handle) }
@@ -282,6 +334,15 @@ public final class Journal {
               throw_first    TEXT NOT NULL,
               started_at     TEXT NOT NULL,
               device_id      TEXT NOT NULL
+            );
+            """)
+        // The journal's own facts about itself. Small on purpose: the only thing in it is the
+        // identity every row is written under, which must not live anywhere the journal file can
+        // outlive.
+        try exec(h, """
+            CREATE TABLE IF NOT EXISTS meta (
+              key   TEXT PRIMARY KEY,
+              value TEXT NOT NULL
             );
             """)
         try exec(h, """
