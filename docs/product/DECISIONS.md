@@ -658,3 +658,110 @@ was; it is still skippable by a tap and still once per cold launch. The dart's d
 the brand's palette and not a rendering of any manufacturer's barrel. Every judgement above was made from
 frames rendered at 430×932 from a line-for-line port of the frame function; **the phone is still where
 motion, sound and touch are judged**, and the founder's eye on the device is the only test that counts.
+
+### Amendment, the next day — the founder's sixth look, and the seventh version
+
+The founder watched the sixth version on the phone: "Thats better maybe half a second shorter at the
+end. the creation of the O with line through logo needs work as you can see breakage at the bottom
+right & doesnt feel very dynamic or cinematic or engaging, need a fresh idea. apply any other upgrades
+that arent a regression."
+
+**Decided by the founder:** half a second off the end, and a fresh idea for how the Ø comes into being.
+
+**The breakage was structural, not a tuning error.** Two chalk strokes ran out from the dart's
+crossings at 135° and 315° and met at 45° and 225°. A stroke thins to a point where it leads, so the
+ring closed on two hairline pinches that never filled; the bottom-right one is the one the founder
+saw. Two tapered ends cannot meet in a whole ring, and no amount of overlap would have fixed it.
+
+**The fresh idea: the ring is not drawn at all.** The strike sends a shock out through the board, and
+it is not round — it is stretched along the dart's own line, so it reaches the mark's radius first
+exactly where the dart crosses it and last square to that. Where it crosses, the chalk is **set**, at
+full width, on the frame it arrives. The ring lights up from the dart's line and races round both ways
+until two lit fronts merge. Nothing tapers anywhere, so the fronts can only overlap; 45° cannot break
+again, and a test holds the band at full width along its whole length so nothing can put a taper back.
+
+What that buys beyond the fix:
+
+1. The shock leaves the point on the frame of the thud and reaches the ring exactly as the ring's
+   segment begins, so the 0.38 s between the hit and the mark — previously the emptiest stretch in the
+   film — is now the shock travelling.
+2. It is seen as what it throws: chalk off the board, riding the same front that sets the ring, so the
+   dust arriving and the chalk lighting are one event. Dust rather than a drawn wave, because a stroked
+   ring at these radii traces the dart's own barrel and reads as an outline round it; and only outside
+   0.72 of the ring's radius, because closer in it reads as bristles on the dart. Both were built,
+   looked at, and rejected.
+3. The leading edge falls off in **strength** over eleven degrees, never in width, and closes up as the
+   fronts converge, so the ring arrives whole rather than popping.
+4. The ring becoming whole lands as light: a flare around the whole ring, gone in a sixth of a second.
+   That is the difference between a mark appearing and a mark being made.
+
+**The timing.** The half second comes out of the hold and nothing else — every other cut is where it
+was — so the opening is **4.86 s** and the tagline still has **0.87 s** of stillness. That is two
+thirds again what the fifth version gave it, which was the version the founder could not read. The
+ceiling in the test is the founder's number in both directions and is back under five seconds.
+
+**Cost, plainly.** The tagline has less time than the sixth version gave it; that is the founder's
+call, and 0.87 s is still above the floor the test defends. The frame is drawn, not tested: judged at
+430×932 from a line-for-line browser port, and **the phone is where motion, sound and touch are
+judged**.
+
+## PD-008 — Under double-in, a visit records what counted, from the opening dart
+
+**Status: decided on the founder's instruction, 2026-09-07.**
+
+The founder: *"yes want double in option as theres leagues & tournaments that are double in."*
+
+### The problem this settles
+
+The engine scores a visit, not a dart. Under double-in the darts before the opening one score nothing,
+so a visit total alone cannot say what counted: T20, T20, D10 while unopened scores 20, not 140. That
+was **OD-015**, and until it was decided the engine refused double-in and master-in at construction
+rather than score them as straight-in and be silently wrong.
+
+### Decided
+
+**What a visit records while the player has not opened is the score from the opening dart onward.
+Zero means they did not open.**
+
+- It is what the scorer calls at the oche: "not in… not in… forty" means the forty counted.
+- It costs no statistic. A visit is three darts whether it opened or not, so darts thrown and the
+  3-dart average are untouched, and a visit that did not open correctly drags the average down.
+- The only thing not recorded is how many darts preceded the opener, and nothing in this repository
+  computes anything from that.
+- A non-zero total that no sequence beginning with a legal opener can make is refused, under its own
+  reason (`IMPOSSIBLE_OPENING_TOTAL`) rather than the impossible-visit one — because 180 is a
+  perfectly possible visit and an impossible opening, and the two want different words on screen.
+
+The table is enumerated from the dartboard, never listed, and enumeration corrected two things that
+looked obvious: **the bull opens**, so the largest double-in opening total is D25 + T20 + T20 = **170**
+and not 160; and **41 is openable** (D1, then 19 and 20).
+
+Master-in is implemented at the same time and by the same rule, because it is the same mechanism with
+a different opener set, and leaving it refused would have been an arbitrary hole. Match setup offers
+*Any* and *Double in* only, because no one asks for master-in at a pub board; the domain still carries
+it for a competition that defines it.
+
+### What it costs, stated plainly
+
+A player who opens on their third dart and scores nothing more has a visit of, say, 40 recorded
+against three darts thrown. That is correct. But if a scorer enters the **whole visit** rather than
+what counted — 140 for T20, T20, D10 — the app will take it, because 140 is a legal opening total
+(D20, T20, 40). Nothing can catch that at visit granularity; it is the same class of trust the app
+already places in the scorer for every other number they key. The screen says what to enter, on the
+frame it matters, which is the mitigation available.
+
+### How to reverse
+
+Record darts individually for unopened visits instead. That is a bigger capture change (three entries
+per visit rather than one) and it is what a dart-level client would do anyway; the journal's rows
+would carry it without a schema change to the engine's contract.
+
+### Two defects this found, both older than it
+
+- **The generated checkout table was built from a hardcoded floor of 2**, so 1 was missing from the
+  straight-out set. A single 1 finishes a straight-out leg, so both engines would have busted a player
+  who did. The floor is now the rule's own, carried from the spec.
+- That was invisible because **the exhaustive transition table only ever covered double-out**, from a
+  remaining of 2. "86,000 exhaustive transitions on two independent implementations" was true of one
+  out-rule in three. It now covers all three from a remaining of 1: **258,516** transitions.
+

@@ -1,7 +1,7 @@
 # Running the iOS client
 
-> **Verification status, 2026-09-07.** Every package compiles and every test passes on macOS CI — 82
-> tests: 22 design, 16 journal, 27 scoring session, 17 opening and app — and the Xcode app builds for the iOS simulator on
+> **Verification status, 2026-09-07.** Every package compiles and every test passes on macOS CI — 84
+> tests: 22 design, 17 journal, 28 scoring session, 17 opening and app — and the Xcode app builds for the iOS simulator on
 > CI with Xcode 26.6, on every push that touches them. **The app has run on a phone**: the founder's,
 > the evening of 2026-09-05, a full best-of-3 from setup to result, in dark mode, on an iPhone 14 Pro Max
 > (MQ9P3ZD/A) running iOS 26.6.1. Nine screenshots came back; what they showed is under "First run on
@@ -271,23 +271,38 @@ What to check on the next run, in this order:
    puts the keyboard away; so does dragging the form. Please say whether *Next* moved the cursor —
    that is the one behaviour this build could not verify without a device.
 7. With VoiceOver on, a bust: focus lands on the card and it reads as one sentence, then *Continue*.
-8. The home-screen icon: the mark in chalk on green. Then the opening, sixth version: a lit spot far
-   off in the dark under a beam from above; a real dart coming in from the lower left, crossing a
-   screen and a half at one constant angle, smeared by its own speed, while the wall closes and every
-   speck of chalk on it streams outward past you; then the hit — a flash on the frame of the thud, the
-   heavy buzz, the frame shaking, chalk knocked off the board and falling, the shaft and flights
-   whipping while the barrel stays dead still, and a shadow under the dart where it stands out of the
-   board; a thin line of chalk running out from each crossing with the stroke filling in behind it
-   until the ring is whole, with the chalk sound; the mark taking its place in THRØ as T, H, R are
-   struck in beside it, a firm tap each; the tagline arriving under it; then **stillness, and time to
-   read it**; Home fading up — five and a third seconds. Silent switch on: no sound. A tap goes
-   straight to Home. Settings → Opening → *Play the opening again* replays it. **Is the bottom line
-   readable now — long enough, big enough?** That is what this version is for. Then: **does the dart
-   feel thrown and flying? Does the wall come at you? Does the hit land? Do the sounds fit?** Each of
-   the three sounds can be replaced by a recorded one under the same filename. **Is the wordmark
-   right?** Its letters are Archivo ExtraBold and the Ø now carries their exact weight, measured off
-   the face; say if the supplied wordmark is not that face. With Reduce Motion on, the name and the
-   tagline, still, for a second and a tenth.
+8. The home-screen icon: the mark in chalk on green. Then the opening, **seventh version**: a lit
+   spot far off in the dark under a beam from above; a real dart coming in from the lower left,
+   crossing a screen and a half at one constant angle, smeared by its own speed, while the wall closes
+   and every speck of chalk on it streams outward past you; then the hit — a flash on the frame of the
+   thud, the heavy buzz, the frame shaking, the shaft and flights whipping while the barrel stays dead
+   still, a shadow under the dart where it stands out of the board, and **chalk blown off the board,
+   travelling outward along the dart's own line**; then the ring, which is **struck into being rather
+   than drawn**: where that shock crosses the mark's radius the chalk is set at full width, so the
+   ring lights up from the dart and races round both ways until it closes — and **closes with a
+   flare**; the mark taking its place in THRØ as T, H, R are struck in beside it, a firm tap each; the
+   tagline arriving under it; then stillness; Home fading up — **four and nine tenths seconds**.
+   Silent switch on: no sound. A tap goes straight to Home. Settings → Opening → *Play the opening
+   again* replays it.
+
+   **The two things this version is for.** First: **is there any break in the ring now, at the bottom
+   right or anywhere else?** The old version had one, and it was structural — two chalk strokes met
+   there and each thinned to a point. Nothing tapers any more, so a break should be impossible; say if
+   you see one. Second: **does the ring's arrival feel like something happening?** It should read as
+   the strike making the mark, not as a circle being drawn.
+
+   Then, as before: **does the dart feel thrown and flying? Does the wall come at you? Does the hit
+   land? Do the sounds fit?** Each of the three sounds can be replaced by a recorded one under the
+   same filename. **Is the bottom line still long enough to read at 0.87 s?** — half a second shorter
+   than the version you read it on. **Is the wordmark right?** Its letters are Archivo ExtraBold and
+   the Ø carries their exact weight, measured off the face; say if the supplied wordmark is not that
+   face. With Reduce Motion on, the name and the tagline, still, for a second and a tenth.
+
+   **Double in.** Match setup now has a *Start on* row: *Any* or *Double in*. Start a double-in match
+   and check: nothing scores until a double lands; the screen says who is not in and what to enter;
+   entering 180 while not in is refused with a reason (three trebles cannot open); entering what
+   counted from the double scores it; a new leg closes the door again for both players.
+
 9. The faces: numerals on the scoring screen in IBM Plex Sans Condensed, everything else in Archivo,
    and no *Fonts not embedded* notice on Home.
 
@@ -323,21 +338,24 @@ pull request. The workflow has not yet been run against a real key; the first ru
 
 The app icon is the mark in chalk on the brand green, generated by `docs/design/brand/render_mark.py`
 from geometry measured against the founder's artwork. The static launch screen is the green field
-alone. The app's first frames are the opening (PD-007, sixth version): one shot. It opens on a place —
-a lit spot far off in a dark hall, under a beam from above, with chalk dust on it. A real dart — a fine
-point, a tapered barrel with grip rings, a collar, a slim shaft, standard flights carrying the mark —
-comes in from the lower left at the mark's 45° and never changes direction. It crosses a screen and a
-half as the camera's aim catches it, blurred by exactly its own speed, then closes slowly while the
-wall comes on: the wall's apparent size is one over its distance and the distance closes at a constant
-rate, so every speck of chalk on it slides outward from the spot being aimed at and draws into a
-streak. At the strike, on the frame of the thud: a flash at the point, a heavy haptic, the frame
-shaking, chalk knocked off the board and falling, the board giving and holding while the shaft and
-flights whip and the tungsten does not, and a shadow under the dart where it stands out of the board.
-From the point, a thin line of chalk runs both ways from each crossing and the stroke fills in behind
-it until the ring is whole. Then the mark takes its place as the Ø of THRØ — carrying the letters'
-own weight, measured off Archivo ExtraBold — and T, H, R are struck in beside it with a firm haptic
-each; the tagline arrives under it as the last letter sets, and is then left alone, still, for one and
-a third seconds, which is the reading. Five and a third seconds, once per cold launch; a tap skips it
+alone. The app's first frames are the opening (PD-007, seventh version): one shot. It opens on a
+place — a lit spot far off in a dark hall, under a beam from above, with chalk dust on it. A real dart
+— a fine point, a tapered barrel with grip rings, a collar, a slim shaft, standard flights carrying
+the mark — comes in from the lower left at the mark's 45° and never changes direction. It crosses a
+screen and a half as the camera's aim catches it, blurred by exactly its own speed, then closes slowly
+while the wall comes on: the wall's apparent size is one over its distance and the distance closes at
+a constant rate, so every speck of chalk on it slides outward from the spot being aimed at and draws
+into a streak. At the strike, on the frame of the thud: a flash at the point, a heavy haptic, the
+frame shaking, the board giving and holding while the shaft and flights whip and the tungsten does
+not, a shadow under the dart, and a shock out through the board — seen as chalk blown off it, stretched
+along the dart's own line. **The ring is not drawn; it is set.** Where the shock crosses the mark's
+radius the chalk is set at full width on that frame, so the ring lights up from the dart's line and
+races round both ways until two lit fronts merge, and flares as it closes. Nothing tapers, so there is
+no seam that can break — which is what the sixth version's bottom right did. Then the mark takes its
+place as the Ø of THRØ — carrying the letters' own weight, measured off Archivo ExtraBold — and T, H,
+R are struck in beside it with a firm haptic each; the tagline arrives under it as the last letter
+sets, and is then left alone, still, for 0.87 s, which is the reading. Four and nine tenths seconds,
+once per cold launch; a tap skips it
 in a fifth of a second. Sound plays through the ambient session, so the silent switch silences it;
 Settings → Opening has switches for the sound and the haptics and *Play the opening again*. With Reduce
 Motion on it shows the name and the tagline and fades, silently, with nothing moving, holding them for

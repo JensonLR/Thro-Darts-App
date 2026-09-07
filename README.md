@@ -32,7 +32,7 @@ database.
 | 1 | Architecture | Closed — 15 decision records, hostile-reviewed and corrected |
 | 2 | Repository foundation | Event schema and the command path, proved against a real Postgres |
 | 3 | Design ingestion | Token pipeline generating Swift, Kotlin and CSS from one source |
-| 4 | Competitive core | Scoring engine passing 86,000 exhaustive transitions |
+| 4 | Competitive core | Scoring engine passing 258,516 exhaustive transitions, across all three out-rules |
 | 5 | Offline match lifecycle | Domain core closed — grants, per-device streams, reconciliation. On-device journal built on iOS under the measured configuration (`ThroJournal`); Android not started |
 | 6 | Vertical slice | An iOS slice exists for a match between two people on one phone — setup, scoring, result, journaled. **The slice with identity is still blocked** on the authentication *surface* (B4); ADR-008's mechanism is built |
 | 7 | Trust and provenance | Closed — attestation, disputes, adjudication, quarantine, eligibility |
@@ -44,8 +44,8 @@ database.
 
 | | |
 |---|---|
-| Scoring rules | 436 property checks against independent darts facts |
-| Scoring engine | 86,000 exhaustive transitions + 64 corpus cases, **on two independent implementations** — both of them in CI on every push, and a runner that cannot find the table now fails instead of skipping itself |
+| Scoring rules | 449 property checks against independent darts facts |
+| Scoring engine | **258,516 exhaustive transitions** + 64 corpus cases, **on two independent implementations** — both of them in CI on every push, and a runner that cannot find the table now fails instead of skipping itself. The table covered double-out alone until 2026-09-07, which is how a straight-out finish from 1 stayed wrong in both engines; it now covers every out-rule from a remaining of 1 |
 | Statistics honesty | 20 tests — an uncomputable figure says so; an approximate one is never a point value |
 | Trust and eligibility | 30 tests — a label can never disagree with the provenance under it |
 | Authorization | 21 tests — the conflict-of-interest rule, and age as a dimension |
@@ -56,11 +56,11 @@ database.
 | Design tokens | 58 contrast pairs, absolute thresholds, 0 unrecorded breaches; every recorded exception carries the measured ratio it was raised at and fails if it worsens |
 | Design components | 61 components audited mechanically against a baseline ratchet |
 | Statistics honesty, Swift | The same 20 tests, ported case for case, on Linux |
-| On-device journal | 16 tests — configuration read back on open, append-only by trigger, replay throws on a corrupt row, a retraction supersedes and never deletes, an old journal upgrades on open, and the device identity a journal was created with survives a caller that has forgotten it |
-| Scoring session | 27 tests — every PD-001 branch; engine → journal commit → screen, never another order; undo as a retraction, including of the visit that ended a match; a bust or a won leg holds the keypad until both players have seen it (PD-005) |
+| On-device journal | 17 tests — configuration read back on open, append-only by trigger, replay throws on a corrupt row, a retraction supersedes and never deletes, an old journal upgrades on open, the device identity a journal was created with survives a caller that has forgotten it, and a double-in match is stored and replayed as one |
+| Scoring session | 28 tests — every PD-001 branch; engine → journal commit → screen, never another order; undo as a retraction, including of the visit that ended a match; a bust or a won leg holds the keypad until both players have seen it (PD-005); and under double-in the screen says who is not in and refuses a total that cannot open (PD-008) |
 | Design layer | 22 tests — every icon parses inside its own grid, every type role sits on the approved scale, an error state says what happened, what is safe and what to do, and an unknown stored appearance falls back to *System* rather than guessing. Four of them hold the type faces: every role resolves to one of the ten embedded faces, and weights the families lack land on their nearest face |
 | The opening and the app shell | 17 tests — the opening's cuts are contiguous and it is no longer than its own reasons, its cues land on their beats, the tagline is left still long enough to read, Reduce Motion has no motion and no cues, and the mark keeps its measured proportions as it becomes the wordmark's Ø; a match whose rows will not replay stays on the list saying so, rather than vanishing from it; and a lost device identity is corrected from the journal rather than left disagreeing with it |
-| iOS app | Builds for the iOS simulator on every push that touches it. Run on the founder's phone three times (2026-09-05 / 06), setup to result, each run's findings fixed and confirmed on the next; the opening was watched there on five further occasions, once for each of its first five versions (see the runbook, and PD-007's amendments). The sixth opening has not yet been on a phone. Carries the founder's mark as icon and launch screen and embeds the two type families under the SIL Open Font License (PD-006); `apps/ios/check_fonts.py` holds the fonts, licences and assets to the code on every push |
+| iOS app | Builds for the iOS simulator on every push that touches it. Run on the founder's phone three times (2026-09-05 / 06), setup to result, each run's findings fixed and confirmed on the next; the opening was watched there on six further occasions, once for each of its first six versions (see the runbook, and PD-007's amendments). The seventh opening has not yet been on a phone. Carries the founder's mark as icon and launch screen and embeds the two type families under the SIL Open Font License (PD-006); `apps/ios/check_fonts.py` holds the fonts, licences and assets to the code on every push |
 
 **Nothing here is production ready**, and no claim of security, offline reliability or rating
 validity is made anywhere in this repository. There is an iOS client that scores a match between two people on
@@ -226,6 +226,8 @@ is removed.
 | The journal runs only under the configuration that was measured | `Journal.verifyInForce` reads every pragma back on open and refuses anything else |
 | Scoring has no compile-time path to a network | The client package graph has no network target to depend on |
 | A mis-keyed visit is corrected, never edited | A retraction row in the append-only journal supersedes it (PD-004); replay skips what it strikes and the struck row stays |
+| Nothing scores until a player opens | `MatchState.opened`, per player and per leg; a non-zero total no opening sequence can make is refused under its own reason (PD-008) |
+| A rule table's floor is the rule's own | The checkout set's minimum comes from the spec, not the constant 2 — a single 1 finishes a straight-out leg, and both engines used to bust it |
 
 ## What is deliberately not decided here
 
