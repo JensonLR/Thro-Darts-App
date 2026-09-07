@@ -282,12 +282,19 @@ def rule_tables():
     }
 
 # ---------------------------------------------------------------- vectors
-def fmt(out_rule="double", start=501, first_to=5, sets=False):
+def fmt(out_rule="double", start=501, first_to=5, sets=None, legs_per_set=None,
+        alternate="perLeg"):
+    """A match format. `sets` promotes it to set play: `first_to` then means legs per set.
+
+    The shape was here from the beginning and no vector used it, which is how set play came to be
+    implemented in two engines and exercised by nothing at all.
+    """
     f = {"game": "X01", "startingScore": start, "inRule": "straight", "outRule": out_rule,
          "structure": {"kind": "legs", "firstTo": first_to},
-         "throwFirst": "A", "alternateStart": "perLeg"}
+         "throwFirst": "A", "alternateStart": alternate}
     if sets:
-        f["structure"] = {"kind": "sets", "firstTo": 3, "legsPerSet": {"firstTo": 3}}
+        f["structure"] = {"kind": "sets", "firstTo": sets,
+                          "legsPerSet": {"firstTo": legs_per_set or first_to}}
     return f
 
 def case(cid, desc, commands, expect, format_=None):
@@ -309,7 +316,26 @@ def simulate(commands, format_):
     rem = {"A": start, "B": start}; legs = {"A": 0, "B": 0}
     thrower, outcomes, winner = format_["throwFirst"], [], None
     leg_starter, leg_no = format_["throwFirst"], 1
-    target = format_["structure"].get("firstTo", 5)
+    structure = format_["structure"]
+
+    # Set play, stated as the rule rather than read off an implementation:
+    #
+    #   * a **set** is won by the player who first wins the required number of legs IN THAT SET;
+    #   * the **match** is won by the player who first wins the required number of sets;
+    #   * a new set starts both counters again, and its legs are numbered from 1 — because a set is
+    #     a match within a match, and "leg 3 of set 2" is what a scorer calls;
+    #   * the right to throw first in a **set** alternates; under `perSet` alternation the set's
+    #     starter also opens every leg within it, and under `perLeg` it changes hands every leg.
+    #
+    # With no set structure the legs unit decides the match, which is what every other family uses.
+    playing_sets = structure.get("kind") == "sets"
+    target = (structure["legsPerSet"]["firstTo"] if playing_sets
+              else structure.get("firstTo", 5))
+    sets_target = structure.get("firstTo", 1) if playing_sets else None
+    legs_in_set = {"A": 0, "B": 0}
+    sets_won = {"A": 0, "B": 0}
+    set_no, set_starter = 1, format_["throwFirst"]
+    per_set = format_.get("alternateStart") == "perSet"
     for c in commands:
         if winner:
             outcomes.append({"seq": c["seq"], "result": "rejected", "reason": "MATCH_COMPLETE"}); continue
@@ -337,25 +363,44 @@ def simulate(commands, format_):
         rem[p] = new
         if eff == "leg_won":
             legs[p] += 1
-            # A leg that decides the match is reported as such: the effect a client renders differs,
-            # and a corpus that blurred them would let an engine confuse the two.
-            if legs[p] >= target:
+            legs_in_set[p] += 1
+            took_leg_unit = (legs_in_set[p] if playing_sets else legs[p]) >= target
+            if not took_leg_unit:
+                leg_no += 1
+                leg_starter = set_starter if per_set else ("B" if leg_starter == "A" else "A")
+                thrower = leg_starter
+                rem = {"A": start, "B": start}
+            elif not playing_sets:
+                # A leg that decides the match is reported as such: the effect a client renders
+                # differs, and a corpus that blurred them would let an engine confuse the two.
                 winner = p
                 eff = "match_won"
             else:
-                leg_no += 1
-                leg_starter = "B" if leg_starter == "A" else "A"
-                thrower = leg_starter
-                rem = {"A": start, "B": start}
+                sets_won[p] += 1
+                if sets_won[p] >= sets_target:
+                    winner = p
+                    eff = "match_won"
+                else:
+                    eff = "set_won"
+                    set_no += 1
+                    leg_no = 1
+                    legs_in_set = {"A": 0, "B": 0}
+                    set_starter = "B" if set_starter == "A" else "A"
+                    leg_starter = set_starter
+                    thrower = set_starter
+                    rem = {"A": start, "B": start}
         else:
             thrower = "B" if p == "A" else "A"
         o = {"seq": c["seq"], "result": "accepted", "effect": eff}
         if reason: o["reason"] = reason
         outcomes.append(o)
-    return {"outcomes": outcomes,
-            "state": {"matchState": "complete" if winner else "in_progress",
-                      "currentLeg": leg_no, "throwerId": None if winner else thrower,
-                      "remaining": rem, "legsWon": legs, "winnerId": winner}}
+    state = {"matchState": "complete" if winner else "in_progress",
+             "currentLeg": leg_no, "throwerId": None if winner else thrower,
+             "remaining": rem, "legsWon": legs, "winnerId": winner}
+    if playing_sets:
+        state["setsWon"] = sets_won
+        state["currentSet"] = set_no
+    return {"outcomes": outcomes, "state": state}
 
 
 def path_to(target, start=501):
@@ -491,6 +536,107 @@ def build_match_vectors():
         cases.append(case(f"match.first-to-{first_to}.completes",
                           f"A wins first to {first_to}; a further visit is rejected as the match is complete.",
                           cmds, simulate(cmds, f), f))
+    return cases
+
+def build_sets_vectors():
+    """Set play — implemented in two engines and, until this family, exercised by nothing.
+
+    `Effect.SET_WON` was mapped in both conformance runners and produced by no vector;
+    `Alternation.PER_SET` was parsed by both and reached by no vector. A format real competitions
+    use constantly was carried by the type system and checked by nobody.
+
+    The rule these expectations are derived from, stated before any of them:
+
+      * a **set** is won by the player who first wins the required number of legs IN THAT SET;
+      * the **match** is won by the player who first wins the required number of sets;
+      * a new set starts its leg count again and numbers its legs from 1, because a set is a match
+        within a match and "leg 3 of set 2" is what a scorer calls;
+      * the right to open a **set** alternates; under `perSet` alternation that player also opens
+        every leg inside it, and under `perLeg` the opening changes hands every leg.
+
+    Four cases, each isolating one thing a set format does that a leg format does not.
+    """
+    cases = []
+
+    def leg_won_by_opener(seq, opener):
+        """One leg, opened and won by `opener` in three visits: 180 + 180 + 141 = 501."""
+        other = "B" if opener == "A" else "A"
+        return ([visit(seq, opener, 180, 3), visit(seq + 1, other, 60, 3),
+                 visit(seq + 2, opener, 180, 3), visit(seq + 3, other, 60, 3),
+                 visit(seq + 4, opener, 141, 3)], seq + 5)
+
+    def leg_won_against_the_opener(seq, opener):
+        """One leg opened by `opener` and won by the other player, who needs a fourth turn."""
+        winner = "B" if opener == "A" else "A"
+        return ([visit(seq, opener, 60, 3), visit(seq + 1, winner, 180, 3),
+                 visit(seq + 2, opener, 60, 3), visit(seq + 3, winner, 180, 3),
+                 visit(seq + 4, opener, 60, 3), visit(seq + 5, winner, 141, 3)], seq + 6)
+
+    def run(f, winners):
+        """`winners` names who takes each leg; who OPENS it is derived, never asserted.
+
+        Written this way after getting it wrong by hand: naming the opener as well let a case claim
+        a leg was opened by the player whose turn it was not, and the whole rest of that case
+        desynchronised into rejections and busts that still produced a plausible-looking vector.
+        The opener follows from the rule — the set's opener alternates, and inside a set the
+        opening either stays with them (`perSet`) or changes hands every leg (`perLeg`).
+        """
+        per_set = f.get("alternateStart") == "perSet"
+        legs_target = f["structure"]["legsPerSet"]["firstTo"]
+        cmds, seq = [], 1
+        opener = set_opener = f["throwFirst"]
+        in_set = {"A": 0, "B": 0}
+        for winner in winners:
+            block, seq = (leg_won_by_opener(seq, opener) if opener == winner
+                          else leg_won_against_the_opener(seq, opener))
+            cmds += block
+            in_set[winner] += 1
+            if in_set[winner] >= legs_target:
+                in_set = {"A": 0, "B": 0}
+                set_opener = "B" if set_opener == "A" else "A"
+                opener = set_opener
+            else:
+                opener = set_opener if per_set else ("B" if opener == "A" else "A")
+        return cmds, seq
+
+    # 1. A set is taken and the match goes on. Legs first-to-2 inside sets first-to-2, per-leg
+    #    alternation: A takes leg 1, B opens leg 2 and takes it, A opens leg 3 and takes the set —
+    #    so the third leg reports `set_won` rather than `match_won`, which is the distinction this
+    #    whole family exists for.
+    f = fmt(sets=2, legs_per_set=2)
+    cmds, _ = run(f, ["A", "B", "A"])
+    cases.append(case("sets.first-set-taken-match-continues",
+                      "Legs first to 2 inside sets first to 2: taking the second leg of a set "
+                      "reports set_won, not match_won, and the match continues with the leg count "
+                      "back at 1.",
+                      cmds, simulate(cmds, f), f))
+
+    # 2. A set can be LOST and the match continue. B takes set 1, A takes set 2, and the set
+    #    counter reads 1-1 — which a counter that only ever tracked the leader would get wrong.
+    cmds, _ = run(f, ["B", "B", "A", "A"])
+    cases.append(case("sets.a-set-lost-and-the-match-continues",
+                      "B takes the first set, A takes the second: the set counter reads one each "
+                      "and the match is still in progress.",
+                      cmds, simulate(cmds, f), f))
+
+    # 3. `perSet` alternation: the set's opener opens EVERY leg in it, so A throws first in both
+    #    legs of set 1 — exactly where per-leg and per-set formats diverge, and a divergence a
+    #    wrong implementation gets wrong silently, because the scores still add up either way.
+    f2 = fmt(sets=2, legs_per_set=2, alternate="perSet")
+    cmds2, _ = run(f2, ["A", "A", "B"])
+    cases.append(case("sets.per-set-alternation-keeps-one-starter",
+                      "Under perSet alternation the set's opener opens every leg in it, and the "
+                      "right to open alternates between sets rather than between legs.",
+                      cmds2, simulate(cmds2, f2), f2))
+
+    # 4. The match ends on the SETS unit, not the legs one. A wins four legs and two sets; the
+    #    deciding leg reports `match_won` and a visit after it is refused.
+    cmds3, seq3 = run(f2, ["A", "A", "A", "A"])
+    cmds3.append(visit(seq3, "A", 60, 3))
+    cases.append(case("sets.match-ends-on-the-sets-unit",
+                      "Two sets of two legs each: the deciding leg reports match_won, and a "
+                      "further visit is rejected as the match is complete.",
+                      cmds3, simulate(cmds3, f2), f2))
     return cases
 
 def build_double_attempt_vectors():
@@ -798,6 +944,7 @@ def main():
                         ("checkouts.jsonl", build_checkout_vectors()),
                         ("leg-rotation.jsonl", build_rotation_vectors()),
                         ("match-completion.jsonl", build_match_vectors()),
+                        ("sets-and-legs.jsonl", build_sets_vectors()),
                         ("double-attempts.jsonl", build_double_attempt_vectors()),
                         ("adversarial.jsonl", build_adversarial_vectors())):
         p, n = write_jsonl(name, cases); total += n

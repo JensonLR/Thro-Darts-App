@@ -736,6 +736,48 @@ decides: 1.4.3 exempts text in an inactive component. What the numbers show is t
 a disabled button is there and cannot comfortably read what it says. Which treatment replaces the
 multiplier is the founder's call; the item now carries the evidence for making it.
 
+## Set play was implemented in two engines and checked by nobody
+
+`CONFORMANCE_CORPUS.md` listed three families as not built and said of one of them that *"set
+structure is implemented and exercised by `match-completion`"*.
+
+It was implemented and exercised by **nothing**. No committed vector carried a set structure at all.
+`Effect.SET_WON` was mapped in both conformance runners and produced by no case. `Alternation.PER_SET`
+was parsed by both and reached by none. The Swift runner even carried a comment explaining that sets
+were deliberately not parsed *because the Kotlin runner does not parse them either and the corpus
+carries no set structure today* — a correct description of a hole, sitting in the file that would
+have closed it.
+
+Sets are not an edge case. Every televised match and a great many league formats are played in them.
+A whole competition format was carried by the type system, and the document that was supposed to say
+so said the opposite.
+
+**`sets-and-legs.jsonl` is that family**: four cases, each isolating one thing a set format does that
+a leg format does not — a set taken while the match continues (`set_won`, not `match_won`); a set
+*lost* and the counter reading one each; `perSet` alternation, where the set's opener opens every leg
+inside it, which is exactly where the two alternation rules diverge and where a wrong implementation
+is wrong silently because the scores still add up; and a match that ends on the **sets** unit rather
+than the legs one. Both conformance runners gained the branch together, because a runner that read a
+key its counterpart ignored would make the two platforms disagree about a vector neither engine got
+wrong.
+
+**The expectations are derived, not asserted.** `generate.py`'s simulator was extended from the rule
+written out first — a set is won by taking its legs, the match by taking its sets, a new set counts
+from nothing and numbers its legs from 1, the right to open a set alternates — and the Kotlin engine,
+written weeks earlier, agrees with all four cases.
+
+**And building it found a second hole, in the validator.** `validate.py` re-derives every case from
+`classify` alone and knew only about legs, so a `set_won` looked like an ordinary visit: it never
+reset the scores at a set boundary, and the next leg's first visit came out a bust. A new family
+found a gap in the checking rather than in an engine, which is what a new family is for. 2,988
+property checks became 3,064; 64 vectors became 68.
+
+**One mistake of mine on the way, worth keeping.** The first draft of the family named both the
+opener and the winner of each leg by hand. Naming the opener let a case claim a leg was opened by the
+player whose turn it was not — and the whole rest of that case desynchronised into rejections and
+busts while still producing a plausible-looking vector full of numbers. The builder derives the
+opener from the rule now and only the winner is named.
+
 ## Nothing here is a convention
 
 Each competitive property is asserted by something that fails when it is removed.

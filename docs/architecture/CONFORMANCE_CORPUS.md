@@ -41,18 +41,29 @@ packages/domain-spec/
   vectors/double-attempts.jsonl     6 cases
   vectors/leg-rotation.jsonl        2 cases
   vectors/match-completion.jsonl    3 cases
+  vectors/sets-and-legs.jsonl       4 cases
   vectors/adversarial.jsonl         3 cases, hand-written, append-only
 ```
 
-64 cases and 393 commands across those six committed files, plus the exhaustive table, run against
+68 cases and 468 commands across those seven committed files, plus the exhaustive table, run against
 both engines on every push.
 
-**Not built yet**, and named here so they stay visible rather than disappearing with the old layout:
-`sets-and-legs` (set structure is implemented and exercised by `match-completion`, but has no family
-of its own), `undo-and-correction`, and `idempotency`. The last two are properties of the command
-path rather than of the engine, and are covered today by the API's integration suites against a real
-PostgreSQL — which is a weaker guarantee than a shared corpus, because it holds one implementation
-rather than every implementation.
+**`sets-and-legs` was built on 2026-09-07**, and the note it replaces was wrong in a way worth
+recording: it said set structure was *"implemented and exercised by `match-completion`"*. It was
+implemented and exercised by **nothing**. No committed vector carried a set structure; `Effect.SET_WON`
+was mapped in both conformance runners and produced by no case; `Alternation.PER_SET` was parsed by
+both and reached by none. A whole competition format that real darts uses constantly was carried by
+the type system and checked by nobody, and the line in this document said otherwise.
+
+Building it found a second hole, this time in the validator: `validate.py` re-derives each case from
+`classify` alone and knew only about legs, so a `set_won` looked like an ordinary visit — it never
+reset the scores at a set boundary and the next leg's first visit came out a bust. That is a new
+family finding a gap in the checking rather than in an engine, which is what a new family is for.
+
+**Still not built**, and named here so they stay visible: `undo-and-correction` and `idempotency`.
+Both are properties of the command path rather than of the engine, and are covered today by the API's
+integration suites against a real PostgreSQL — which is a weaker guarantee than a shared corpus,
+because it holds one implementation rather than every implementation.
 
 JSONL rather than one array, so a failing line number maps directly to a case and diffs stay
 reviewable. JSON rather than YAML, to avoid float and boolean-coercion ambiguity.

@@ -127,6 +127,12 @@ for fname, meta in manifest["files"].items():
         start = c["setup"]["format"]["startingScore"]
         rem = {"A": start, "B": start}
         leg_starter = c["setup"]["format"]["throwFirst"]
+        # Set play. Validate re-derives the replay from `classify` alone and knew only about legs,
+        # so a `set_won` looked like an ordinary visit: it never reset the scores at a set boundary
+        # and the next leg's first visit came out a bust. That is the sets family finding a hole in
+        # the validator rather than in an engine, which is what a new family is for.
+        set_starter = leg_starter
+        per_set = c["setup"]["format"].get("alternateStart") == "perSet"
         thrower = leg_starter; done = False
         for cmd, exp in zip(c["commands"], c["expect"]["outcomes"]):
             if done:
@@ -154,7 +160,8 @@ for fname, meta in manifest["files"].items():
             # A leg that decides the match is reported as match_won; the replay must accept either
             # label for the same transition rather than treating the distinction as a mismatch.
             eff_expected = exp.get("effect")
-            same = (eff_expected == eff) or (eff == "leg_won" and eff_expected == "match_won")
+            same = (eff_expected == eff) or (
+                eff == "leg_won" and eff_expected in ("match_won", "set_won"))
             check(f"{c['id']} seq{cmd['seq']} effect agrees", same,
                   f"expected {eff_expected} got {eff}")
             if eff_expected == "match_won": done = True
@@ -166,7 +173,13 @@ for fname, meta in manifest["files"].items():
                 # a winner at the end — that fired on the FIRST leg win and made every later command
                 # look like it should have been rejected.
                 rem = {"A": start, "B": start}
-                leg_starter = "B" if leg_starter == "A" else "A"
+                if eff_expected == "set_won":
+                    # The set changes hands and its opener alternates; inside a set the opening
+                    # either stays with them (perSet) or changes every leg (perLeg).
+                    set_starter = "B" if set_starter == "A" else "A"
+                    leg_starter = set_starter
+                else:
+                    leg_starter = set_starter if per_set else ("B" if leg_starter == "A" else "A")
                 thrower = leg_starter
             else:
                 thrower = "B" if cmd["player"] == "A" else "A"

@@ -221,33 +221,46 @@ final class ConformanceTests: XCTestCase {
             if let wantLeg = ws["currentLeg"] as? Int, wantLeg != state.currentLeg {
                 failures.append("\(id): currentLeg \(state.currentLeg) != \(wantLeg)")
             }
+            // Set play (the `sets-and-legs` family). Absent from every other family, so these are
+            // checked only when the vector carries them — a set format is a different match, not
+            // an extra field on this one.
+            if let wantSets = ws["setsWon"] as? [String: Int] {
+                for (p, v) in wantSets {
+                    let got = state.setsWon[PlayerId(p)] ?? -1
+                    if got != v { failures.append("\(id): setsWon[\(p)] \(got) != \(v)") }
+                }
+            }
+            if let wantSet = ws["currentSet"] as? Int, wantSet != state.currentSet {
+                failures.append("\(id): currentSet \(state.currentSet) != \(wantSet)")
+            }
         }
         return commands.count
     }
 
     private func format(_ j: [String: Any]) -> MatchFormat {
         let structure = j["structure"] as? [String: Any] ?? [:]
-        let legs: Structure
-        if let firstTo = structure["firstTo"] as? Int {
-            legs = Structure(mode: .firstTo, target: firstTo)
-        } else if let bestOf = structure["bestOf"] as? Int {
-            legs = Structure(mode: .bestOf, target: bestOf)
-        } else {
-            legs = Structure(mode: .firstTo, target: 1)
-        }
-        // Sets are deliberately NOT parsed here, because the Kotlin runner does not parse them
-        // either and the corpus carries no set structure today. A runner that read a key its
-        // counterpart ignores would make the two platforms disagree about a vector neither engine
-        // got wrong — which would discredit the comparison rather than test it.
+        // A sets structure carries the SETS unit at the top and the legs unit inside `legsPerSet`.
+        // Both runners gained this branch together with the `sets-and-legs` family: until then
+        // neither parsed sets, so a whole competition format was implemented in two engines and
+        // reached by no vector at all. `Effect.SET_WON` was mapped here and produced by nothing.
+        let playingSets = (structure["kind"] as? String) == "sets"
+        let legsFrom = playingSets ? (structure["legsPerSet"] as? [String: Any] ?? [:]) : structure
         return MatchFormat(
             startingScore: j["startingScore"] as? Int ?? 501,
             inRule: InRule(rawValue: (j["inRule"] as? String) ?? "straight") ?? .straight,
             outRule: OutRule(rawValue: (j["outRule"] as? String) ?? "double") ?? .double,
-            legs: legs,
-            sets: nil,
+            legs: unit(legsFrom),
+            sets: playingSets ? unit(structure) : nil,
             throwFirst: PlayerId(j["throwFirst"] as? String ?? "A"),
             alternation: (j["alternateStart"] as? String) == "perSet" ? .perSet : .perLeg
         )
+    }
+
+    /// A `firstTo` / `bestOf` pair, wherever it appears — the legs unit or the sets unit.
+    private func unit(_ o: [String: Any]) -> Structure {
+        if let firstTo = o["firstTo"] as? Int { return Structure(mode: .firstTo, target: firstTo) }
+        if let bestOf = o["bestOf"] as? Int { return Structure(mode: .bestOf, target: bestOf) }
+        return Structure(mode: .firstTo, target: 1)
     }
 
     /// Double-in, and the capture rule that makes it scorable at visit granularity (PD-008).

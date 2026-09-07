@@ -126,6 +126,17 @@ class ConformanceTest {
         if (wantLeg != null && wantLeg != state.currentLeg) {
             failures += "$id: currentLeg ${state.currentLeg} != $wantLeg"
         }
+        // Set play (the `sets-and-legs` family). Absent from every other family, so these are
+        // checked only when the vector carries them — a set format is a different match, not an
+        // extra field on this one.
+        ws.opt("setsWon")?.obj()?.forEach { (p, v) ->
+            val got = state.setsWon.getValue(PlayerId(p))
+            if (got != v.int()) failures += "$id: setsWon[$p] $got != ${v.int()}"
+        }
+        val wantSet = ws.opt("currentSet")?.int()
+        if (wantSet != null && wantSet != state.currentSet) {
+            failures += "$id: currentSet ${state.currentSet} != $wantSet"
+        }
         return cmds.size
     }
 
@@ -139,10 +150,12 @@ class ConformanceTest {
 
     private fun format(f: Map<String, J>): MatchFormat {
         val structure = f.getValue("structure").obj()
-        val legs = Structure(
-            mode = if (structure.containsKey("firstTo")) StructureMode.FIRST_TO else StructureMode.BEST_OF,
-            target = (structure.opt("firstTo") ?: structure.getValue("bestOf")).int(),
-        )
+        // A sets structure carries the SETS unit at the top and the legs unit inside `legsPerSet`.
+        // Until the `sets-and-legs` family this branch did not exist in either runner, so a whole
+        // competition format was implemented in two engines and reached by no vector at all.
+        val playingSets = structure.opt("kind")?.str() == "sets"
+        val legsFrom = if (playingSets) structure.getValue("legsPerSet").obj() else structure
+        val legs = unit(legsFrom)
         return MatchFormat(
             startingScore = f.getValue("startingScore").int(),
             inRule = when (f.getValue("inRule").str()) {
@@ -156,11 +169,18 @@ class ConformanceTest {
                 else -> OutRule.DOUBLE
             },
             legs = legs,
+            sets = if (playingSets) unit(structure) else null,
             throwFirst = PlayerId(f.getValue("throwFirst").str()),
             alternation = if (f.opt("alternateStart")?.str() == "perSet") Alternation.PER_SET
                           else Alternation.PER_LEG,
         )
     }
+
+    /** A `firstTo` / `bestOf` pair, wherever it appears — the legs unit or the sets unit. */
+    private fun unit(o: Map<String, J>): Structure = Structure(
+        mode = if (o.containsKey("firstTo")) StructureMode.FIRST_TO else StructureMode.BEST_OF,
+        target = (o.opt("firstTo") ?: o.getValue("bestOf")).int(),
+    )
 
     /**
      * The exhaustive transition table, when CI has generated it. Every reachable remaining against
