@@ -52,6 +52,57 @@ struct BackChevron: View {
     }
 }
 
+/// The bar at the top of a page that has its own full-bleed header underneath — a club, a league, a
+/// tournament, a profile. Back on the left, worded actions on the right.
+///
+/// **This exists because four screens hand-rolled it and all four were wrong the same way.** The
+/// founder, on a screenshot: *"no back button on view screen for clubs etc. still ugly cropped view
+/// as seen in ss top right."* The back chevron was off the left edge of the phone and "Announce" was
+/// cut in half by the right edge.
+///
+/// The cause was mine, twice over. The first version put a −12 inset on the whole row, which shifted
+/// every trailing item off the right edge. The correction moved that inset onto the chevron — the
+/// right principle, *a negative inset belongs to the thing it is insetting* — and missed that **the
+/// row had no gutter to inset from at all**. So the chevron went to x = −12, and the last action sat
+/// flush against the screen edge with nothing to spare.
+///
+/// The geometry, written down once so it cannot be got wrong a third time:
+///
+///  - `BackChevron` draws its 20-point glyph at the **leading edge** of its own 44-point target.
+///  - So a row with the screen gutter on it, and no inset anywhere, lands the glyph exactly on the
+///    gutter — where the text below it starts — while the touch target still reaches into the
+///    margin. **The negative inset was never needed; the gutter was.**
+///  - Every action is `fixedSize`, so a label is never squeezed into an ellipsis by a neighbour, and
+///    the `Spacer` yields before the words do.
+struct PageBar: View {
+    struct Action: Identifiable {
+        let label: String
+        let action: () -> Void
+        var id: String { label }
+    }
+
+    let onBack: () -> Void
+    var actions: [Action] = []
+
+    var body: some View {
+        HStack(spacing: ThroSpacing.spacing4) {
+            BackChevron(action: onBack)
+            Spacer(minLength: ThroSpacing.spacing2)
+            ForEach(actions) { action in
+                Button(action.label, action: action.action)
+                    .thro(ThroTypography.label.weight(.semibold))
+                    .foregroundStyle(ThroColor.colorTextBrand)
+                    .buttonStyle(.plain)
+                    .lineLimit(1)
+                    .fixedSize(horizontal: true, vertical: false)
+                    .frame(minHeight: ThroSpacing.touchTargetMinimum)
+            }
+        }
+        .padding(.horizontal, ThroSpacing.spaceScreenGutter)
+        .padding(.top, ThroSpacing.spacing3)
+    }
+}
+
 struct FixtureRow: View {
     let fixture: Fixture
     var body: some View {
@@ -191,6 +242,14 @@ public struct ClubScreen: View {
         self.onEdit = onEdit
     }
 
+    /// The bar's actions, built where their types are declared rather than inline in a view builder.
+    static func actions(edit: (() -> Void)?, announce: (() -> Void)?) -> [PageBar.Action] {
+        var out: [PageBar.Action] = []
+        if let edit { out.append(PageBar.Action(label: "Edit", action: edit)) }
+        if let announce { out.append(PageBar.Action(label: "Announce", action: announce)) }
+        return out
+    }
+
     private var accent: Color { club.accentHex.flatMap { Color.thro(hex: $0) } ?? ThroColor.throGreen }
     private var roleLine: String? {
         guard let r = club.yourRole else { return nil }
@@ -199,30 +258,8 @@ public struct ClubScreen: View {
 
     public var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            HStack(spacing: 0) {
-                // The -12 pulls the chevron's own touch target back to the screen gutter. It used to
-                // sit on the whole HStack, which shifted every trailing item 12 points off the right
-                // edge — so "Announce", being last, was cropped. A negative inset belongs to the
-                // thing it is insetting, never to the row that contains it.
-                BackChevron(action: onBack).padding(.leading, -12)
-                Spacer()
-                if let onEdit {
-                    Button(action: onEdit) {
-                        Text("Edit")
-                            .thro(ThroTypography.label.weight(.semibold))
-                            .foregroundStyle(ThroColor.colorTextBrand)
-                    }
-                    .padding(.trailing, ThroSpacing.spacing4)
-                }
-                if club.mayAnnounce {
-                    Button(action: onAnnounce) {
-                        Text("Announce")
-                            .thro(ThroTypography.label.weight(.semibold))
-                            .foregroundStyle(ThroColor.colorTextBrand)
-                    }
-                }
-            }
-            .padding(.top, ThroSpacing.spacing3)
+            PageBar(onBack: onBack, actions: ClubScreen.actions(edit: onEdit,
+                                                               announce: club.mayAnnounce ? onAnnounce : nil))
             ScrollView {
                 VStack(alignment: .leading, spacing: 0) {
                     OrganisationHeader(initials: club.initials, name: club.name, kind: club.kind.label,
@@ -699,8 +736,7 @@ public struct ProfileScreen: View {
 
     public var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            HStack(spacing: 0) { BackChevron(action: onBack).padding(.leading, -12); Spacer() }
-                .padding(.top, ThroSpacing.spacing3)
+            PageBar(onBack: onBack)
             ScrollView {
                 VStack(alignment: .leading, spacing: 0) {
                     HStack(spacing: ThroSpacing.spacing4) {

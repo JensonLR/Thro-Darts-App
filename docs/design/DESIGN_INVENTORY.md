@@ -56,6 +56,19 @@ elements here are engineering-drawn and are recorded rather than slipped in:
 | `AccentBranding` | `ThroDesign/Accent.swift` | Not a component — the arithmetic that decides which neutral goes on an accent. It exists because `Branding.kt` had stated that rule since clubs shipped, `BrandingTest` swept the cube to prove it, the pull request claimed it — and `Badge` set its initials in `colorTextInverse` unconditionally, which is chalk on a club's yellow at about 1.4:1. **A guarantee asserted on one side of a port is not a guarantee.** The two neutrals are fixed sRGB rather than the semantic tokens, because those swap with the appearance and a badge is a fixed-colour surface. |
 | `PersonMark` | `ThroDesign/Forms.swift` | The circle `PlayerIdentity` has always drawn, **extracted** so a person can be marked at any size and carry a picture. Not a new element: same face, same 0.38 proportion, same fill and border. Drawing a second person-mark beside the first would have left two things that must be kept looking alike, which is the mistake `Badge` was careful not to make in the other direction. |
 
+**The page bar is one component now, not four hand-rolled rows.** A club, a league, a tournament and
+a profile all have a full-bleed header of their own, so none of them uses `TopBar` — and each grew its
+own row of back-chevron-plus-actions. All four were wrong the same way: the row carried no screen
+gutter, so the chevron's negative inset put it **off the left edge of the phone** and the last action
+sat flush against the right one and was cropped. The founder found it on a screenshot.
+
+`PageBar` (`ThroApp/ClubScreens.swift`) is that row, once: `BackChevron`, a `Spacer`, and worded
+actions, with `spaceScreenGutter` on the row itself. It is assembly, not a new element — and the rule
+it encodes is the one `TopBar` and `MatchHeader` already followed and these four did not: **a negative
+horizontal inset belongs to a component that applies the gutter it is insetting from.**
+`tools/check_screen_bars.py` now fails a build on a `BackChevron` built anywhere but here, and on any
+negative horizontal inset outside `ThroDesign`.
+
 **The picture picker is one control now, not one per screen (PD-014).** `PicturePicker`
 (`ThroApp/PicturePicker.swift`) is `Badge` or `PersonMark` beside the platform's `PhotosPicker`, and
 it is used by both the club editor and a member's picture. It **refuses before it offers**: where

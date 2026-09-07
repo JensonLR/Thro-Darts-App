@@ -32,7 +32,7 @@ jobs:
   # recently the club edit screen, which meant no club could be renamed, recoloured, given a badge or
   # deleted. No test here constructs a screen, so the suite cannot see it and this job does.
   reachable:
-    name: Every screen is reachable
+    name: Every screen is reachable, and its bar is a component
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -41,6 +41,12 @@ jobs:
           python-version: "3.11"
       - name: Reachability
         run: python3 tools/check_screens_reachable.py
+
+      # And a screen you can open still has to be usable. Four pages hand-rolled the same top bar
+      # and all four put the back chevron off the left edge of the phone and cropped the last action
+      # off the right. The founder found it on a screenshot; this finds it on a push.
+      - name: Top bars
+        run: python3 tools/check_screen_bars.py
 
   conformance:
     name: Scoring rules and conformance corpus

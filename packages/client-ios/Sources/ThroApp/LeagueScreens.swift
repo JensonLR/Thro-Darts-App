@@ -270,24 +270,9 @@ public struct LeagueScreen: View {
 
     public var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            HStack(spacing: 0) {
-                BackChevron(action: onBack).padding(.leading, -12)
-                Spacer()
-                if let onEdit {
-                    Button("Edit", action: onEdit)
-                        .thro(ThroTypography.label.weight(.semibold))
-                        .foregroundStyle(ThroColor.colorTextBrand)
-                        .buttonStyle(.plain)
-                        .padding(.trailing, ThroSpacing.spacing4)
-                }
-                if league.mayAnnounce {
-                    Button("Announce", action: onAnnounce)
-                        .thro(ThroTypography.label.weight(.semibold))
-                        .foregroundStyle(ThroColor.colorTextBrand)
-                        .buttonStyle(.plain)
-                }
-            }
-            .padding(.top, ThroSpacing.spacing3)
+            PageBar(onBack: onBack,
+                    actions: ClubScreen.actions(edit: onEdit,
+                                                announce: league.mayAnnounce ? onAnnounce : nil))
             ScrollView {
                 VStack(alignment: .leading, spacing: 0) {
                     OrganisationHeader(initials: league.initials, name: league.name,
@@ -505,24 +490,9 @@ public struct TournamentScreen: View {
 
     public var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            HStack(spacing: 0) {
-                BackChevron(action: onBack).padding(.leading, -12)
-                Spacer()
-                if let onEdit {
-                    Button("Edit", action: onEdit)
-                        .thro(ThroTypography.label.weight(.semibold))
-                        .foregroundStyle(ThroColor.colorTextBrand)
-                        .buttonStyle(.plain)
-                        .padding(.trailing, ThroSpacing.spacing4)
-                }
-                if tournament.mayAnnounce {
-                    Button("Announce", action: onAnnounce)
-                        .thro(ThroTypography.label.weight(.semibold))
-                        .foregroundStyle(ThroColor.colorTextBrand)
-                        .buttonStyle(.plain)
-                }
-            }
-            .padding(.top, ThroSpacing.spacing3)
+            PageBar(onBack: onBack,
+                    actions: ClubScreen.actions(edit: onEdit,
+                                                announce: tournament.mayAnnounce ? onAnnounce : nil))
             ScrollView {
                 VStack(alignment: .leading, spacing: 0) {
                     OrganisationHeader(initials: tournament.initials, name: tournament.name,

@@ -66,7 +66,7 @@ ANCHORED = [
      [f"{IOS}/ThroAppTests/ClubStateTests.swift"]),
     ("docs/runbooks/CLIENT_IOS.md", r"(\d+) on the mapping between the club book",
      [f"{IOS}/ThroAppTests/ClubStoreTests.swift"]),
-    ("docs/runbooks/CLIENT_IOS.md", r"(\d+) on who may have a picture",
+    ("docs/runbooks/CLIENT_IOS.md", r"(\d+) on who may have a picture, who is told",
      [f"{IOS}/ThroAppTests/PictureTests.swift"]),
     ("docs/runbooks/CLIENT_IOS.md", r"(\d+) on a club, a league and a tournament being three",
      [f"{IOS}/ThroAppTests/LeagueTests.swift"]),

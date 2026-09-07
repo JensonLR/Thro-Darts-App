@@ -78,6 +78,20 @@ final class PictureTests: XCTestCase {
         XCTAssertFalse((PicturePolicy.refusal(for: .minor) ?? "").contains("account"))
     }
 
+    /// The top bar's actions: what is offered, in what order, and what is left out.
+    ///
+    /// **The bar itself is the thing that was broken**, and no test here can see a layout — that is
+    /// `tools/check_screen_bars.py`'s job. What is testable is that the bar is asked for the right
+    /// actions: an action nobody may take is absent rather than present and refusing, which is the
+    /// rule every other control on these screens follows.
+    func testTheTopBarOffersOnlyTheActionsTheViewerMayTake() {
+        XCTAssertEqual(ClubScreen.actions(edit: nil, announce: nil).map(\.label), [])
+        XCTAssertEqual(ClubScreen.actions(edit: {}, announce: nil).map(\.label), ["Edit"])
+        XCTAssertEqual(ClubScreen.actions(edit: nil, announce: {}).map(\.label), ["Announce"])
+        XCTAssertEqual(ClubScreen.actions(edit: {}, announce: {}).map(\.label), ["Edit", "Announce"],
+                       "and in that order, because Announce is the one furthest from the back button")
+    }
+
     /// Renaming, recolouring, badging and deleting a club are an admin's. An official runs fixtures
     /// and announcements; what the club is *called* is not theirs to change.
     func testOnlyAnAdminMayEditAClubsIdentity() {
