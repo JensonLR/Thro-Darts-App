@@ -13,6 +13,10 @@ public final class AppStore: ObservableObject {
         public let legsHome: Int
         public let legsAway: Int
         public let complete: Bool
+        /// Why this match's own rows could not be replayed, when they could not. A match whose
+        /// journal is unreadable is still a match that happened: it stays on the list and says so,
+        /// rather than disappearing and leaving the player to wonder whether they imagined it.
+        public let unreadable: String?
         public var id: MatchId { record.id }
     }
 
@@ -23,6 +27,9 @@ public final class AppStore: ObservableObject {
     @Published public var tab: BottomBar.Tab = .home
     @Published public var flow: Flow?
     @Published public private(set) var matches: [HomeMatch] = []
+    /// Why the list of matches could not be read, when it could not. An empty list and an unreadable
+    /// one are different facts and the screen must not show the second as the first.
+    @Published public private(set) var listProblem: String?
 
     public init() {
         do {
@@ -60,15 +67,36 @@ public final class AppStore: ObservableObject {
         return fresh
     }
 
+    /// Reads the journal, and says so when it cannot.
+    ///
+    /// Both of the failures here used to be swallowed. `matches()` throwing produced an empty list,
+    /// so a journal that could not be read showed the same screen as a journal with nothing in it —
+    /// "No matches yet" over a database full of them. And a record whose replay threw was dropped
+    /// from the list entirely, which is worse: the journal refuses to replay a corrupt row **on
+    /// purpose**, and the app answered by hiding the match. Evidence that exists must never be
+    /// shown as evidence that does not.
     public func refresh() {
-        guard let journal else { matches = []; return }
-        let records = (try? journal.matches()) ?? []
-        matches = records.compactMap { record in
-            guard let state = try? journal.replay(record.id) else { return nil }
-            return HomeMatch(record: record,
-                             legsHome: state.legsWonTotal[Seat.home.playerId] ?? 0,
-                             legsAway: state.legsWonTotal[Seat.away.playerId] ?? 0,
-                             complete: state.isComplete)
+        guard let journal else { matches = []; listProblem = nil; return }
+        let records: [MatchRecord]
+        do {
+            records = try journal.matches()
+            listProblem = nil
+        } catch {
+            matches = []
+            listProblem = "\(error)"
+            return
+        }
+        matches = records.map { record in
+            do {
+                let state = try journal.replay(record.id)
+                return HomeMatch(record: record,
+                                 legsHome: state.legsWonTotal[Seat.home.playerId] ?? 0,
+                                 legsAway: state.legsWonTotal[Seat.away.playerId] ?? 0,
+                                 complete: state.isComplete, unreadable: nil)
+            } catch {
+                return HomeMatch(record: record, legsHome: 0, legsAway: 0,
+                                 complete: false, unreadable: "\(error)")
+            }
         }
     }
 }
@@ -154,7 +182,18 @@ public struct HomeScreen: View {
                         .padding(.top, ThroSpacing.spacing4)
                     if let problem = store.openProblem {
                         block {
-                            EmptyState(title: "The journal could not be opened", message: problem)
+                            ErrorState(title: "The journal could not be opened",
+                                       what: problem,
+                                       safe: "Nothing has been lost. The journal is a file on this device and it has not been written to.",
+                                       todo: "Close the app and open it again. If it keeps happening, say so — this is the file every match on this phone lives in.")
+                        }
+                    } else if let problem = store.listProblem {
+                        block {
+                            ErrorState(title: "Your matches could not be read",
+                                       what: problem,
+                                       safe: "Every match is still on this device. This screen could not read the list; it did not delete anything.",
+                                       todo: "Close the app and open it again.",
+                                       actionLabel: "Try again") { store.refresh() }
                         }
                     } else if store.matches.isEmpty {
                         block {
@@ -199,7 +238,7 @@ public struct MatchRow: View {
     }
 
     public var body: some View {
-        Button(action: onOpen) {
+        Button(action: { if match.unreadable == nil { onOpen() } }) {
             VStack(alignment: .leading, spacing: ThroSpacing.spacing1) {
                 HStack(alignment: .firstTextBaseline) {
                     Text("\(match.record.homeName) v \(match.record.awayName)")
@@ -207,26 +246,40 @@ public struct MatchRow: View {
                         .foregroundStyle(ThroColor.colorTextPrimary)
                         .lineLimit(1)
                     Spacer()
-                    Text("\(match.legsHome)–\(match.legsAway)")
-                        .thro(ThroTypography.heading3.family(.sport).weight(.bold))
-                        .foregroundStyle(ThroColor.colorTextPrimary)
+                    if match.unreadable == nil {
+                        Text("\(match.legsHome)–\(match.legsAway)")
+                            .thro(ThroTypography.heading3.family(.sport).weight(.bold))
+                            .foregroundStyle(ThroColor.colorTextPrimary)
+                    }
                 }
                 HStack(spacing: ThroSpacing.spacing2) {
                     Text("\(match.record.startingScore) · Bo\(match.record.legsTarget) · \(match.record.startedAt.formatted(date: .abbreviated, time: .shortened))")
                         .thro(ThroTypography.metadata)
                         .foregroundStyle(ThroColor.colorTextSecondary)
                     Spacer()
-                    if match.complete {
+                    if match.unreadable != nil {
+                        // The score is not shown because it is not known. A match whose rows will not
+                        // replay must not be opened into a scoring screen built on a state that could
+                        // not be rebuilt, and must not be quietly dropped from the list either.
+                        Tag("Cannot be read", tone: .error)
+                    } else if match.complete {
                         VerificationState(.selfReported, compact: true)
                     } else {
                         Tag("In progress", tone: .info)
                     }
+                }
+                if let problem = match.unreadable {
+                    Text(problem)
+                        .thro(ThroTypography.metadata)
+                        .foregroundStyle(ThroColor.colorStatusError)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
             }
             .padding(.vertical, ThroSpacing.spacing3)
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        .disabled(match.unreadable != nil)
     }
 }
 

@@ -350,3 +350,76 @@ public struct EmptyState: View {
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 }
+
+/// `state/ErrorState`. The export's shape exactly: an alert with an uppercase title beside a warning
+/// glyph, then up to three labelled lines — **what happened**, **what is safe**, **what to do** — on
+/// the error surface inside an error border, with an optional secondary action.
+///
+/// The three labels are the point of it. A message that says only what broke leaves the player to
+/// guess whether their match survived, which is the question they actually have. A component that
+/// makes room for that answer is one an engineer cannot forget to give.
+public struct ErrorState: View {
+    private let title: String
+    private let what: String?
+    private let safe: String?
+    private let todo: String?
+    private let actionLabel: String
+    private let onAction: (() -> Void)?
+
+    public init(title: String = "Something went wrong", what: String? = nil, safe: String? = nil,
+                todo: String? = nil, actionLabel: String = "Try again", onAction: (() -> Void)? = nil) {
+        self.title = title
+        self.what = what
+        self.safe = safe
+        self.todo = todo
+        self.actionLabel = actionLabel
+        self.onAction = onAction
+    }
+
+    /// One labelled line of an error: the label the export gives it, and what this occurrence has
+    /// to say under it.
+    public struct Line: Identifiable, Equatable {
+        public let label: String
+        public let value: String
+        public var id: String { label }
+    }
+
+    /// The labelled lines that have something to say, in the export's order.
+    var lines: [Line] {
+        [("What happened", what), ("What is safe", safe), ("What to do", todo)]
+            .compactMap { label, value in value.map { Line(label: label, value: $0) } }
+    }
+
+    public var body: some View {
+        VStack(alignment: .leading, spacing: ThroSpacing.spacing3) {
+            HStack(spacing: ThroSpacing.spacing2) {
+                Icon(.triangleAlert, size: 18)
+                Text(title)
+                    .thro(ThroTypography.label.weight(.bold).tracking(em: 0.04).uppercase(true))
+            }
+            .foregroundStyle(ThroColor.colorStatusError)
+            ForEach(lines) { line in
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(line.label)
+                        .thro(ThroTypography.eyebrow)
+                        .foregroundStyle(ThroColor.colorTextSecondary)
+                    Text(line.value)
+                        .thro(ThroTypography.body)
+                        .foregroundStyle(ThroColor.colorTextPrimary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+            if let onAction {
+                ThroButton(actionLabel, variant: .secondary, action: onAction)
+            }
+        }
+        .padding(ThroSpacing.spacing4)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(ThroColor.colorStatusErrorSurface)
+        .overlay(RoundedRectangle(cornerRadius: ThroSpacing.radiusCard)
+            .strokeBorder(ThroColor.colorStatusError, lineWidth: 1))
+        .clipShape(RoundedRectangle(cornerRadius: ThroSpacing.radiusCard))
+        .accessibilityElement(children: .combine)
+        .accessibilityAddTraits(.isStaticText)
+    }
+}
