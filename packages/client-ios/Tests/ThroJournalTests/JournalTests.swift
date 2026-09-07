@@ -832,4 +832,83 @@ final class JournalTests: XCTestCase {
         XCTAssertEqual(byLeg[1]?.map(\.visitTotal), [101], "the OLDER match is leg 1")
         XCTAssertEqual(byLeg[2]?.map(\.visitTotal), [60], "and the newer one is above it")
     }
+
+    // MARK: a replay returns what was stored
+
+    /// The server has answered replays this way since the command path shipped — *"a replay returns
+    /// the stored response, including a stored refusal"* — and the journal did not. A duplicate
+    /// command id hit the UNIQUE constraint and reached the player as *"Not saved, so not
+    /// recorded"* for a visit that **was** saved, which is the worst shape a durability error can
+    /// have.
+    func testAReplayedVisitReturnsTheStoredRowAndWritesNothing() throws {
+        let j = try open()
+        let m = try j.createMatch(NewMatch(homeName: "A", awayName: "B"))
+        let first = try j.append(.visit(Seat.home.playerId, 60), to: m.id, commandId: "cmd-1")
+        let again = try j.append(.visit(Seat.home.playerId, 60), to: m.id, commandId: "cmd-1")
+        XCTAssertEqual(first, again, "the stored row, returned verbatim")
+        XCTAssertEqual(try j.entries(for: m.id).count, 1, "and nothing was written a second time")
+        XCTAssertEqual(try j.entries(for: m.id).first?.deviceSeq, 1, "so the sequence did not advance")
+    }
+
+    /// Two different commands claiming one id is corruption, not a retry, and is refused.
+    func testACommandIdOfferedForADifferentCommandIsRefused() throws {
+        let j = try open()
+        let m = try j.createMatch(NewMatch(homeName: "A", awayName: "B"))
+        try j.append(.visit(Seat.home.playerId, 60), to: m.id, commandId: "cmd-1")
+        XCTAssertThrowsError(try j.append(.visit(Seat.away.playerId, 100), to: m.id, commandId: "cmd-1")) { error in
+            guard case let .commandIdReused(id, _)? = error as? JournalError else {
+                return XCTFail("expected commandIdReused, got \(error)")
+            }
+            XCTAssertEqual(id, "cmd-1")
+        }
+        XCTAssertEqual(try j.entries(for: m.id).count, 1, "and nothing was written")
+    }
+
+    /// A replay is answered **before** the ending is checked. A retry of a visit that landed must
+    /// not be refused on the ground that the match has since been retired — the row is already
+    /// there, and telling the caller otherwise is the same lie the UNIQUE constraint used to tell.
+    func testAReplayIsAnsweredEvenAfterTheMatchHasEnded() throws {
+        let j = try open()
+        let m = try j.createMatch(NewMatch(homeName: "A", awayName: "B"))
+        let landed = try j.append(.visit(Seat.home.playerId, 60), to: m.id, commandId: "cmd-1")
+        try j.end(m.id, as: .retired(by: .away))
+        XCTAssertEqual(landed, try j.append(.visit(Seat.home.playerId, 60), to: m.id, commandId: "cmd-1"))
+        // A genuinely new visit is still refused, which is the rule the replay must not weaken.
+        XCTAssertThrowsError(try j.append(.visit(Seat.away.playerId, 60), to: m.id)) { error in
+            XCTAssertEqual(error as? JournalError, .alreadyEnded(.retired(by: .away)))
+        }
+    }
+
+    /// The other three writes answer a replay too: a retraction, an attestation and an ending.
+    func testEveryWriteAnswersAReplay() throws {
+        let j = try open()
+        let m = try threeVisits(j)
+        let undo = try j.retractLastVisit(in: m.id, commandId: "undo-1")
+        XCTAssertEqual(undo, try j.retractLastVisit(in: m.id, commandId: "undo-1"))
+
+        let said = try j.attest(m.id, seat: .home, agrees: true, commandId: "att-1")
+        XCTAssertEqual(said, try j.attest(m.id, seat: .home, agrees: true, commandId: "att-1"))
+
+        let over = try j.end(m.id, as: .abandoned, commandId: "end-1")
+        XCTAssertEqual(over, try j.end(m.id, as: .abandoned, commandId: "end-1"))
+        // Not a licence to end twice: a SECOND ending, with its own id, is still refused.
+        XCTAssertThrowsError(try j.end(m.id, as: .retired(by: .home))) { error in
+            XCTAssertEqual(error as? JournalError, .alreadyEnded(.abandoned))
+        }
+
+        XCTAssertEqual(try j.entries(for: m.id).count, 6, "three visits, an undo, an attestation, an ending")
+    }
+
+    /// The instant a write returns is the instant the journal holds. It was not: the returned entry
+    /// carried sub-millisecond precision the stored ISO-8601 string cannot express, so a replay
+    /// returned a row that differed from the one the first call handed back — by a value nothing in
+    /// the app could see and every comparison could.
+    func testTheInstantReturnedIsTheInstantStored() throws {
+        let j = try open()
+        let m = try j.createMatch(NewMatch(homeName: "A", awayName: "B"))
+        let precise = Date(timeIntervalSince1970: 1_700_000_000.123_456)
+        let written = try j.append(.visit(Seat.home.playerId, 60), to: m.id, occurredAt: precise)
+        XCTAssertEqual(written, try j.entries(for: m.id).first)
+        XCTAssertEqual(written.occurredAt.timeIntervalSince1970, 1_700_000_000.123, accuracy: 0.0005)
+    }
 }

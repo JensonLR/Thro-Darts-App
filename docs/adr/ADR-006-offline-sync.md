@@ -435,3 +435,34 @@ client. An import that pretended to do it would produce a journal whose sequence
 wrote rows it did not. Reading an export is therefore read-only until sync exists, and a test asserts
 that reading one writes nothing.
 
+## Amendment, 2026-09-07 — a replay returns what was stored, on the device too
+
+The server has answered a repeated command this way since the command path shipped: **a replay
+returns the stored response, including a stored refusal.** `CommandHandler` looks the command id up
+before it does anything else and hands back `CommandResult.Replayed`. Neither journal did, and
+neither had a test that said so.
+
+The consequence was not theoretical. `command_id TEXT NOT NULL UNIQUE` means a repeat hit the
+constraint, the insert threw, the transaction rolled back, and the caller was told the write had
+failed — which the client turns into *"Not saved, so not recorded"* for a visit that **was** saved.
+That is the worst shape a durability error can take: the record is right and the player is told it
+is not, and the correction they make next puts the score in twice.
+
+Both journals now check the id first and return the stored row. Three details are the decision
+rather than the mechanism:
+
+- **The replay is answered before the ending is checked.** A retry of a visit that landed must not
+  be refused on the ground that the match has since been retired; the row is already there. A
+  genuinely new visit after an ending is still refused, and a test holds both directions.
+- **A command id offered for a *different* command is refused, not accepted.** Two commands claiming
+  one identity is corruption, and returning the stored row would silently swallow the second. It
+  throws `commandIdReused` / `CommandIdReused` naming what is already stored and what was asked for.
+- **The instant a write returns is the instant the journal holds.** It was not: the returned entry
+  carried the caller's sub-millisecond precision while the stored ISO-8601 string carries
+  milliseconds, so a replay handed back a row that differed from the one the first call returned. The
+  timestamp is now round-tripped through the stored format before it is used, on both platforms.
+
+**Nothing in either client passes a command id yet** — every caller takes the default UUID, so no
+behaviour a player can see changes today. This is the property the reconciliation above needs before
+it can be built: sync replays commands by id, and a journal that answers a replay with an error
+cannot take part in one.

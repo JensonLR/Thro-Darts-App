@@ -23,6 +23,10 @@ public enum JournalError: Error, Equatable, CustomStringConvertible {
     case matchNotFound(String)
     /// An undo was asked for and there is no standing visit to strike.
     case nothingToRetract
+    /// A command id already in this journal was offered again for a **different** command. A repeat
+    /// of the same command is a retry and returns what was stored; this is the other case, and it is
+    /// corruption rather than a retry — two different things claiming one identity.
+    case commandIdReused(commandId: String, stored: String)
     /// The journal holds a command the engine rejects on replay. That is corruption, and a replay
     /// that shrugged past it would rebuild a match that never happened.
     case replayRejected(seq: Int64, reason: String)
@@ -37,6 +41,8 @@ public enum JournalError: Error, Equatable, CustomStringConvertible {
             return "PRAGMA \(p) requested \(w) but the database reports \(g); the measured configuration is not in force"
         case .matchNotFound(let id): return "no match \(id) in this journal"
         case .nothingToRetract: return "there is no visit to undo"
+        case let .commandIdReused(id, stored):
+            return "command id \(id) is already in this journal, for \(stored)"
         case let .replayRejected(seq, reason): return "journal entry \(seq) rejected on replay: \(reason)"
         case let .alreadyEnded(e):
             switch e {
@@ -664,8 +670,20 @@ public final class Journal {
             throw JournalError.sqlite("player \(player.value) is not a seat in a local match")
         }
 
+        let at = Journal.stamped(occurredAt)
         try Journal.exec(handle, "BEGIN IMMEDIATE;")
         do {
+            // A replay returns what was stored — and it is checked FIRST, before the ending, because
+            // a retry of a visit that landed must not be refused on the ground that the match has
+            // since been retired. The server has answered replays this way since the command path
+            // shipped.
+            if let stored = try replayed(commandId, describe: "visit \(visitTotal) for \(seat.rawValue)", matches: {
+                $0.kind == .visit && $0.matchId == matchId && $0.seat == seat &&
+                    $0.visitTotal == visitTotal && $0.dartsUsed == dartsUsed && $0.dartsAtDouble == dartsAtDouble
+            }) {
+                try Journal.exec(handle, "COMMIT;")
+                return stored
+            }
             // A retired or abandoned match takes no more darts (PD-016). Inside the transaction, so
             // the check and the insert cannot be separated by another writer.
             if let already = Journal.ending(try entries(for: matchId)) {
@@ -685,13 +703,13 @@ public final class Journal {
                     .text(seat.rawValue), .int(Int64(visitTotal)),
                     dartsUsed.map { Param.int(Int64($0)) } ?? Param.null,
                     dartsAtDouble.map { Param.int(Int64($0)) } ?? Param.null,
-                    .text(Journal.iso.string(from: occurredAt)),
+                    .text(Journal.iso.string(from: at)),
                 ])
             // COMMIT is where the barrier happens.
             try Journal.exec(handle, "COMMIT;")
             return JournalEntry(matchId: matchId, deviceId: deviceId, deviceSeq: next, commandId: commandId,
                                 kind: .visit, seat: seat, visitTotal: visitTotal, dartsUsed: dartsUsed,
-                                dartsAtDouble: dartsAtDouble, correctsSeq: nil, occurredAt: occurredAt)
+                                dartsAtDouble: dartsAtDouble, correctsSeq: nil, occurredAt: at)
         } catch {
             try? Journal.exec(handle, "ROLLBACK;")
             throw error
@@ -706,8 +724,15 @@ public final class Journal {
     @discardableResult
     public func retractLastVisit(in matchId: MatchId,
                                  occurredAt: Date = Date(), commandId: String = UUID().uuidString) throws -> JournalEntry {
+        let at = Journal.stamped(occurredAt)
         try Journal.exec(handle, "BEGIN IMMEDIATE;")
         do {
+            if let stored = try replayed(commandId, describe: "a retraction on \(matchId.value)", matches: {
+                $0.kind == .retraction && $0.matchId == matchId
+            }) {
+                try Journal.exec(handle, "COMMIT;")
+                return stored
+            }
             let all = try entries(for: matchId)
             // An ended match is closed to corrections too (PD-016). Undoing the last visit of a
             // retired match would change the scoreline behind a result that has already been given
@@ -729,12 +754,12 @@ public final class Journal {
                 VALUES (?, ?, ?, ?, 'retraction', ?, 0, NULL, NULL, ?, ?);
                 """, [
                     .text(matchId.value), .text(deviceId.value), .int(next), .text(commandId),
-                    .text(target.seat.rawValue), .int(target.deviceSeq), .text(Journal.iso.string(from: occurredAt)),
+                    .text(target.seat.rawValue), .int(target.deviceSeq), .text(Journal.iso.string(from: at)),
                 ])
             try Journal.exec(handle, "COMMIT;")
             return JournalEntry(matchId: matchId, deviceId: deviceId, deviceSeq: next, commandId: commandId,
                                 kind: .retraction, seat: target.seat, visitTotal: 0, dartsUsed: nil,
-                                dartsAtDouble: nil, correctsSeq: target.deviceSeq, occurredAt: occurredAt)
+                                dartsAtDouble: nil, correctsSeq: target.deviceSeq, occurredAt: at)
         } catch {
             try? Journal.exec(handle, "ROLLBACK;")
             throw error
@@ -755,9 +780,16 @@ public final class Journal {
     @discardableResult
     public func attest(_ matchId: MatchId, seat: Seat, agrees: Bool,
                        occurredAt: Date = Date(), commandId: String = UUID().uuidString) throws -> JournalEntry {
+        let at = Journal.stamped(occurredAt)
         let kind: JournalEntry.Kind = agrees ? .confirmation : .contest
         try Journal.exec(handle, "BEGIN IMMEDIATE;")
         do {
+            if let stored = try replayed(commandId, describe: "\(kind.rawValue) by \(seat.rawValue) on \(matchId.value)", matches: {
+                $0.kind == kind && $0.matchId == matchId && $0.seat == seat
+            }) {
+                try Journal.exec(handle, "COMMIT;")
+                return stored
+            }
             var next: Int64 = 1
             try run("SELECT COALESCE(MAX(device_seq), 0) + 1 FROM journal WHERE match_id = ? AND device_id = ?;",
                     [.text(matchId.value), .text(deviceId.value)]) { s in
@@ -769,12 +801,12 @@ public final class Journal {
                 VALUES (?, ?, ?, ?, ?, ?, 0, NULL, NULL, NULL, ?);
                 """, [
                     .text(matchId.value), .text(deviceId.value), .int(next), .text(commandId),
-                    .text(kind.rawValue), .text(seat.rawValue), .text(Journal.iso.string(from: occurredAt)),
+                    .text(kind.rawValue), .text(seat.rawValue), .text(Journal.iso.string(from: at)),
                 ])
             try Journal.exec(handle, "COMMIT;")
             return JournalEntry(matchId: matchId, deviceId: deviceId, deviceSeq: next, commandId: commandId,
                                 kind: kind, seat: seat, visitTotal: 0, dartsUsed: nil,
-                                dartsAtDouble: nil, correctsSeq: nil, occurredAt: occurredAt)
+                                dartsAtDouble: nil, correctsSeq: nil, occurredAt: at)
         } catch {
             try? Journal.exec(handle, "ROLLBACK;")
             throw error
@@ -795,8 +827,15 @@ public final class Journal {
     @discardableResult
     public func end(_ matchId: MatchId, as ending: Ending,
                     occurredAt: Date = Date(), commandId: String = UUID().uuidString) throws -> JournalEntry {
+        let at = Journal.stamped(occurredAt)
         try Journal.exec(handle, "BEGIN IMMEDIATE;")
         do {
+            if let stored = try replayed(commandId, describe: "\(ending.kind.rawValue) on \(matchId.value)", matches: {
+                $0.kind == ending.kind && $0.matchId == matchId
+            }) {
+                try Journal.exec(handle, "COMMIT;")
+                return stored
+            }
             let all = try entries(for: matchId)
             if let already = Journal.ending(all) {
                 throw JournalError.alreadyEnded(already)
@@ -818,12 +857,12 @@ public final class Journal {
                 VALUES (?, ?, ?, ?, ?, ?, 0, NULL, NULL, NULL, ?);
                 """, [
                     .text(matchId.value), .text(deviceId.value), .int(next), .text(commandId),
-                    .text(ending.kind.rawValue), .text(seat.rawValue), .text(Journal.iso.string(from: occurredAt)),
+                    .text(ending.kind.rawValue), .text(seat.rawValue), .text(Journal.iso.string(from: at)),
                 ])
             try Journal.exec(handle, "COMMIT;")
             return JournalEntry(matchId: matchId, deviceId: deviceId, deviceSeq: next, commandId: commandId,
                                 kind: ending.kind, seat: seat, visitTotal: 0, dartsUsed: nil,
-                                dartsAtDouble: nil, correctsSeq: nil, occurredAt: occurredAt)
+                                dartsAtDouble: nil, correctsSeq: nil, occurredAt: at)
         } catch {
             try? Journal.exec(handle, "ROLLBACK;")
             throw error
@@ -900,6 +939,48 @@ public final class Journal {
         return entries.filter { $0.kind.isScoring && !superseded.contains($0.deviceSeq) }
     }
 
+    /// The instant as it will be **stored**: whatever survives the format both platforms share.
+    ///
+    /// Round-tripped rather than rounded, so it is provably the value that will be read back. A
+    /// write used to return an entry carrying sub-millisecond precision while the journal held a
+    /// millisecond one, so the value handed to the caller was not the value in the file — harmless
+    /// until something compared them, which a replay does and a sync client would.
+    static func stamped(_ at: Date) -> Date { Journal.iso.date(from: Journal.iso.string(from: at)) ?? at }
+
+    /// The row a command id already wrote, if any — searched across the whole journal rather than
+    /// one match, because a command id is unique in the file and a retry that named the wrong match
+    /// is exactly the confusion this exists to catch.
+    func entry(commandId: String) throws -> JournalEntry? {
+        var found: JournalEntry?
+        try run("""
+            SELECT match_id, device_id, device_seq, command_id, seat, visit_total, darts_used, darts_at_double, occurred_at,
+                   kind, corrects_seq
+            FROM journal WHERE command_id = ?;
+            """, [.text(commandId)]) { s in
+            found = Journal.row(from: s)
+        }
+        return found
+    }
+
+    /// What a replay of `commandId` returns, or nil when this is the first time it has been seen.
+    ///
+    /// **The server has answered replays this way since the command path shipped** — *a replay
+    /// returns the stored response, including a stored refusal* — and this journal did not. A
+    /// duplicate id hit the UNIQUE constraint and reached the player as *"Not saved, so not
+    /// recorded"* for a visit that **was** saved, which is the worst shape a durability error can
+    /// have. ADR-006's sync will replay commands by id, so this is also the property that has to
+    /// exist before it can.
+    func replayed(_ commandId: String, describe: String,
+                  matches: (JournalEntry) -> Bool) throws -> JournalEntry? {
+        guard let stored = try entry(commandId: commandId) else { return nil }
+        guard matches(stored) else {
+            throw JournalError.commandIdReused(
+                commandId: commandId,
+                stored: "\(stored.kind.rawValue) on \(stored.matchId.value) (asked: \(describe))")
+        }
+        return stored
+    }
+
     /// Every committed row for a match — visits and retractions — in the order committed on this device.
     public func entries(for matchId: MatchId) throws -> [JournalEntry] {
         var out: [JournalEntry] = []
@@ -908,23 +989,28 @@ public final class Journal {
                    kind, corrects_seq
             FROM journal WHERE match_id = ? ORDER BY rowid;
             """, [.text(matchId.value)]) { s in
-            out.append(JournalEntry(
-                matchId: MatchId(Journal.text(s, 0)),
-                deviceId: DeviceId(Journal.text(s, 1)),
-                deviceSeq: sqlite3_column_int64(s, 2),
-                commandId: Journal.text(s, 3),
-                // NOT `?? .visit`. A kind this build does not know is a row it cannot interpret,
-                // and interpreting it as a visit would put a score in the match that nobody threw.
-                kind: JournalEntry.Kind(rawValue: Journal.text(s, 9)) ?? .unknown,
-                seat: Seat(rawValue: Journal.text(s, 4)) ?? .home,
-                visitTotal: Int(sqlite3_column_int64(s, 5)),
-                dartsUsed: Journal.optionalInt(s, 6),
-                dartsAtDouble: Journal.optionalInt(s, 7),
-                correctsSeq: sqlite3_column_type(s, 10) == SQLITE_NULL ? nil : sqlite3_column_int64(s, 10),
-                occurredAt: Journal.iso.date(from: Journal.text(s, 8)) ?? Date(timeIntervalSince1970: 0)
-            ))
+            out.append(Journal.row(from: s))
         }
         return out
+    }
+
+    /// One journal row, in the column order both readers select.
+    private static func row(from s: OpaquePointer) -> JournalEntry {
+        JournalEntry(
+            matchId: MatchId(Journal.text(s, 0)),
+            deviceId: DeviceId(Journal.text(s, 1)),
+            deviceSeq: sqlite3_column_int64(s, 2),
+            commandId: Journal.text(s, 3),
+            // NOT `?? .visit`. A kind this build does not know is a row it cannot interpret,
+            // and interpreting it as a visit would put a score in the match that nobody threw.
+            kind: JournalEntry.Kind(rawValue: Journal.text(s, 9)) ?? .unknown,
+            seat: Seat(rawValue: Journal.text(s, 4)) ?? .home,
+            visitTotal: Int(sqlite3_column_int64(s, 5)),
+            dartsUsed: Journal.optionalInt(s, 6),
+            dartsAtDouble: Journal.optionalInt(s, 7),
+            correctsSeq: sqlite3_column_type(s, 10) == SQLITE_NULL ? nil : sqlite3_column_int64(s, 10),
+            occurredAt: Journal.iso.date(from: Journal.text(s, 8)) ?? Date(timeIntervalSince1970: 0)
+        )
     }
 
     /// Folds the journal through the engine and returns the state it rebuilds. A rejection during

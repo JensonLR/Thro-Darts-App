@@ -249,6 +249,17 @@ public class Journal private constructor(
         internal val iso: DateTimeFormatter =
             DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'").withZone(java.time.ZoneOffset.UTC)
 
+        /**
+         * The instant as it will be **stored**: milliseconds, because that is what the ISO format
+         * both platforms share carries.
+         *
+         * Without this a write returned an entry whose `occurredAt` had nanoseconds and the journal
+         * held one that did not, so the value a caller was handed was not the value in the file.
+         * Harmless until something compared them — which the replay tests do, and which a sync
+         * client would.
+         */
+        internal fun stamped(at: Instant): Instant = at.truncatedTo(java.time.temporal.ChronoUnit.MILLIS)
+
         internal fun instant(text: String): Instant =
             runCatching { Instant.parse(text) }.getOrElse { Instant.EPOCH }
 
@@ -452,6 +463,7 @@ public class Journal private constructor(
         occurredAt: Instant = Instant.now(),
         commandId: String = UUID.randomUUID().toString(),
     ): JournalEntry {
+        val at = stamped(occurredAt)
         val visit = command as? thro.engine.Command.RecordVisit
             ?: throw JournalException.Sqlite("unsupported command")
         val seat = Seat.of(visit.player)
@@ -459,6 +471,15 @@ public class Journal private constructor(
 
         exec(connection, "BEGIN IMMEDIATE;")
         try {
+            // A replay returns what was stored — and it is checked FIRST, before the ending, because
+            // a retry of a visit that landed must not be refused on the ground that the match has
+            // since been retired. The server has answered replays this way since the command path
+            // shipped.
+            replayed(commandId, "visit ${visit.visitTotal} for ${seat.stored}") {
+                it.kind == JournalEntry.Kind.VISIT && it.matchId == matchId && it.seat == seat &&
+                    it.visitTotal == visit.visitTotal && it.dartsUsed == visit.dartsUsed &&
+                    it.dartsAtDouble == visit.dartsAtDouble
+            }?.let { exec(connection, "COMMIT;"); return it }
             // A retired or abandoned match takes no more darts (PD-016). Inside the transaction, so
             // the check and the insert cannot be separated by another writer.
             ending(entriesUnlocked(matchId))?.let { throw JournalException.AlreadyEnded(it) }
@@ -482,14 +503,14 @@ public class Journal private constructor(
                 } else {
                     s.setNull(8, java.sql.Types.INTEGER)
                 }
-                s.setString(9, iso.format(occurredAt))
+                s.setString(9, iso.format(at))
                 s.executeUpdate()
             }
             // COMMIT is where the barrier happens.
             exec(connection, "COMMIT;")
             return JournalEntry(
                 matchId, deviceId, next, commandId, JournalEntry.Kind.VISIT, seat,
-                visit.visitTotal, visit.dartsUsed, visit.dartsAtDouble, null, occurredAt,
+                visit.visitTotal, visit.dartsUsed, visit.dartsAtDouble, null, at,
             )
         } catch (e: Throwable) {
             runCatching { exec(connection, "ROLLBACK;") }
@@ -506,8 +527,12 @@ public class Journal private constructor(
         occurredAt: Instant = Instant.now(),
         commandId: String = UUID.randomUUID().toString(),
     ): JournalEntry {
+        val at = stamped(occurredAt)
         exec(connection, "BEGIN IMMEDIATE;")
         try {
+            replayed(commandId, "a retraction on ${matchId.value}") {
+                it.kind == JournalEntry.Kind.RETRACTION && it.matchId == matchId
+            }?.let { exec(connection, "COMMIT;"); return it }
             val all = entriesUnlocked(matchId)
             // An ended match is closed to corrections too (PD-016). Undoing the last visit of a
             // retired match would change the scoreline behind a result already given to somebody.
@@ -516,12 +541,12 @@ public class Journal private constructor(
             val next = nextSeq(matchId)
             insertNonScoring(
                 matchId, next, commandId, JournalEntry.Kind.RETRACTION, target.seat,
-                target.deviceSeq, occurredAt,
+                target.deviceSeq, at,
             )
             exec(connection, "COMMIT;")
             return JournalEntry(
                 matchId, deviceId, next, commandId, JournalEntry.Kind.RETRACTION, target.seat,
-                0, null, null, target.deviceSeq, occurredAt,
+                0, null, null, target.deviceSeq, at,
             )
         } catch (e: Throwable) {
             runCatching { exec(connection, "ROLLBACK;") }
@@ -545,13 +570,17 @@ public class Journal private constructor(
         occurredAt: Instant = Instant.now(),
         commandId: String = UUID.randomUUID().toString(),
     ): JournalEntry {
+        val at = stamped(occurredAt)
         val kind = if (agrees) JournalEntry.Kind.CONFIRMATION else JournalEntry.Kind.CONTEST
         exec(connection, "BEGIN IMMEDIATE;")
         try {
+            replayed(commandId, "${kind.stored} by ${seat.stored} on ${matchId.value}") {
+                it.kind == kind && it.matchId == matchId && it.seat == seat
+            }?.let { exec(connection, "COMMIT;"); return it }
             val next = nextSeq(matchId)
-            insertNonScoring(matchId, next, commandId, kind, seat, null, occurredAt)
+            insertNonScoring(matchId, next, commandId, kind, seat, null, at)
             exec(connection, "COMMIT;")
-            return JournalEntry(matchId, deviceId, next, commandId, kind, seat, 0, null, null, null, occurredAt)
+            return JournalEntry(matchId, deviceId, next, commandId, kind, seat, 0, null, null, null, at)
         } catch (e: Throwable) {
             runCatching { exec(connection, "ROLLBACK;") }
             throw e
@@ -573,8 +602,12 @@ public class Journal private constructor(
         occurredAt: Instant = Instant.now(),
         commandId: String = UUID.randomUUID().toString(),
     ): JournalEntry {
+        val at = stamped(occurredAt)
         exec(connection, "BEGIN IMMEDIATE;")
         try {
+            replayed(commandId, "${ending.kind.stored} on ${matchId.value}") {
+                it.kind == ending.kind && it.matchId == matchId
+            }?.let { exec(connection, "COMMIT;"); return it }
             ending(entriesUnlocked(matchId))?.let { throw JournalException.AlreadyEnded(it) }
             val next = nextSeq(matchId)
             // An abandonment has no seat, and the column will not take a null. HOME is written as a
@@ -582,10 +615,10 @@ public class Journal private constructor(
             // before it looks at the seat. A test proves the placeholder is inert by storing the
             // other one and reading the same answer, which is stronger than this comment.
             val seat = (ending as? Ending.Retired)?.by ?: Seat.HOME
-            insertNonScoring(matchId, next, commandId, ending.kind, seat, null, occurredAt)
+            insertNonScoring(matchId, next, commandId, ending.kind, seat, null, at)
             exec(connection, "COMMIT;")
             return JournalEntry(
-                matchId, deviceId, next, commandId, ending.kind, seat, 0, null, null, null, occurredAt,
+                matchId, deviceId, next, commandId, ending.kind, seat, 0, null, null, null, at,
             )
         } catch (e: Throwable) {
             runCatching { exec(connection, "ROLLBACK;") }
@@ -602,6 +635,49 @@ public class Journal private constructor(
     /** Every committed row for a match, in the order committed on this device. */
     public fun entries(matchId: MatchId): List<JournalEntry> = entriesUnlocked(matchId)
 
+    /**
+     * The row a command id already wrote, if any — searched across the whole journal rather than
+     * one match, because a command id is unique in the file and a retry that named the wrong match
+     * is exactly the confusion this is here to catch.
+     */
+    private fun entry(commandId: String): JournalEntry? {
+        connection.prepareStatement(
+            """
+            SELECT match_id, device_id, device_seq, command_id, seat, visit_total, darts_used,
+                   darts_at_double, occurred_at, kind, corrects_seq
+            FROM journal WHERE command_id = ?;
+            """.trimIndent(),
+        ).use { s ->
+            s.setString(1, commandId)
+            s.executeQuery().use { r -> if (r.next()) return read(r) }
+        }
+        return null
+    }
+
+    /**
+     * What a replay of `commandId` returns, or null when this is the first time it has been seen.
+     *
+     * **The server has had this since the command path shipped** — *"a replay returns the stored
+     * response, including a stored refusal"* — and the on-device journal did not. A duplicate id hit
+     * the UNIQUE constraint and reached the player as *"Not saved, so not recorded"* for a visit
+     * that **was** saved, which is the worst shape a durability error can have. ADR-006's sync will
+     * replay commands by id, so this is also the property that has to exist before it can.
+     *
+     * @param describe what the caller is trying to write, used only in the conflict message.
+     * @param matches whether the stored row IS that command. False means two different commands are
+     *   claiming one id, which is corruption and is refused.
+     */
+    private fun replayed(commandId: String, describe: String, matches: (JournalEntry) -> Boolean): JournalEntry? {
+        val stored = entry(commandId) ?: return null
+        if (!matches(stored)) {
+            throw JournalException.CommandIdReused(
+                commandId,
+                "${stored.kind.stored} on ${stored.matchId.value} (asked: $describe)",
+            )
+        }
+        return stored
+    }
+
     private fun entriesUnlocked(matchId: MatchId): List<JournalEntry> {
         val out = mutableListOf<JournalEntry>()
         connection.prepareStatement(
@@ -612,31 +688,27 @@ public class Journal private constructor(
             """.trimIndent(),
         ).use { s ->
             s.setString(1, matchId.value)
-            s.executeQuery().use { r ->
-                while (r.next()) {
-                    out.add(
-                        JournalEntry(
-                            matchId = MatchId(r.getString(1)),
-                            deviceId = DeviceId(r.getString(2)),
-                            deviceSeq = r.getLong(3),
-                            commandId = r.getString(4),
-                            // NOT a fallback to a visit. A kind this build does not know is a row it
-                            // cannot interpret, and interpreting it as a visit would put a score in
-                            // the match that nobody threw.
-                            kind = JournalEntry.Kind.of(r.getString(10)),
-                            seat = Seat.of(r.getString(5)) ?: Seat.HOME,
-                            visitTotal = r.getInt(6),
-                            dartsUsed = optionalInt(r, 7),
-                            dartsAtDouble = optionalInt(r, 8),
-                            correctsSeq = optionalLong(r, 11),
-                            occurredAt = instant(r.getString(9)),
-                        ),
-                    )
-                }
-            }
+            s.executeQuery().use { r -> while (r.next()) out.add(read(r)) }
         }
         return out
     }
+
+    /** One journal row, in the column order both readers select. */
+    private fun read(r: ResultSet) = JournalEntry(
+        matchId = MatchId(r.getString(1)),
+        deviceId = DeviceId(r.getString(2)),
+        deviceSeq = r.getLong(3),
+        commandId = r.getString(4),
+        // NOT a fallback to a visit. A kind this build does not know is a row it cannot interpret,
+        // and interpreting it as a visit would put a score in the match that nobody threw.
+        kind = JournalEntry.Kind.of(r.getString(10)),
+        seat = Seat.of(r.getString(5)) ?: Seat.HOME,
+        visitTotal = r.getInt(6),
+        dartsUsed = optionalInt(r, 7),
+        dartsAtDouble = optionalInt(r, 8),
+        correctsSeq = optionalLong(r, 11),
+        occurredAt = instant(r.getString(9)),
+    )
 
     /**
      * Folds the journal through the engine and returns the state it rebuilds, with each visit as

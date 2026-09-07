@@ -41,6 +41,17 @@ public sealed class JournalException(message: String) : Exception(message) {
     public class NothingToRetract : JournalException("there is no visit to undo")
 
     /**
+     * A command id already in this journal was offered again for a **different** command.
+     *
+     * A repeat of the same command is a retry and returns what was stored; this is the other case,
+     * and it is corruption rather than a retry — two different things claiming one identity. It is
+     * refused loudly instead of being written as a second row, because the id is what a server uses
+     * to recognise a command it has already seen.
+     */
+    public class CommandIdReused(public val commandId: String, public val stored: String) :
+        JournalException("command id $commandId is already in this journal, for $stored")
+
+    /**
      * The journal holds a command the engine rejects on replay. That is corruption, and a replay
      * that shrugged past it would rebuild a match that never happened.
      */

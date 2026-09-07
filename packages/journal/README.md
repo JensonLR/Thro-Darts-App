@@ -6,7 +6,7 @@ same schema, the same append-only triggers, the same gapless per-device sequence
 through the engine, the same refusal to interpret a row a later build wrote.
 
 ```bash
-gradle test          # 32 tests
+gradle test          # 39 tests
 python3 ../../tools/check_journal_parity.py
 ```
 
@@ -58,8 +58,11 @@ committed visit survives a battery being pulled on Android.
 ## What is here, and what an Android client still needs
 
 Here: matches, the append path with its transaction, retraction (PD-004), attestation (PD-011),
-endings (PD-016), the shelf and the one delete (PD-026), replay with per-seat leg ordinals, and the
-device identity the journal keeps even when the caller forgets it.
+endings (PD-016), the shelf and the one delete (PD-026), replay with per-seat leg ordinals, the
+device identity the journal keeps even when the caller forgets it, and the idempotency the server
+has always had — **a replay returns the stored response**, on both platforms, checked before the
+ending so a retry of a visit that landed is never refused on the ground that the match has since
+been retired.
 
 Still to come, and none of it started: the club book, images, the export, and an Android UI. The
 iOS client's `ThroPlay` and `ThroApp` have no counterpart, and this package deliberately says

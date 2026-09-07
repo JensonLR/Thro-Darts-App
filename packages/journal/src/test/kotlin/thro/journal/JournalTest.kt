@@ -487,6 +487,92 @@ class JournalTest {
         }
     }
 
+    // MARK: a replay returns what was stored
+
+    /**
+     * The server has answered replays this way since the command path shipped — *"a replay returns
+     * the stored response, including a stored refusal"* — and the journal did not. A duplicate
+     * command id hit the UNIQUE constraint and reached the player as *"Not saved, so not
+     * recorded"* for a visit that **was** saved, which is the worst shape a durability error can
+     * have.
+     */
+    @Test fun aReplayedVisitReturnsTheStoredRowAndWritesNothing() {
+        open().use { j ->
+            val m = j.createMatch(NewMatch("A", "B"))
+            val first = j.append(visit(Seat.HOME, 60), m.id, commandId = "cmd-1")
+            val again = j.append(visit(Seat.HOME, 60), m.id, commandId = "cmd-1")
+            assertEquals(first, again, "the stored row, returned verbatim")
+            assertEquals(1, j.entries(m.id).size, "and nothing was written a second time")
+            assertEquals(1L, j.entries(m.id).single().deviceSeq, "so the sequence did not advance")
+        }
+    }
+
+    /** Two different commands claiming one id is corruption, not a retry, and is refused. */
+    @Test fun aCommandIdOfferedForADifferentCommandIsRefused() {
+        open().use { j ->
+            val m = j.createMatch(NewMatch("A", "B"))
+            j.append(visit(Seat.HOME, 60), m.id, commandId = "cmd-1")
+            val e = assertFailsWith<JournalException.CommandIdReused> {
+                j.append(visit(Seat.AWAY, 100), m.id, commandId = "cmd-1")
+            }
+            assertEquals("cmd-1", e.commandId)
+            assertEquals(1, j.entries(m.id).size, "and nothing was written")
+        }
+    }
+
+    /**
+     * A replay is answered **before** the ending is checked. A retry of a visit that landed must
+     * not be refused on the ground that the match has since been retired — the row is already
+     * there, and telling the caller otherwise is the same lie the UNIQUE constraint used to tell.
+     */
+    @Test fun aReplayIsAnsweredEvenAfterTheMatchHasEnded() {
+        open().use { j ->
+            val m = j.createMatch(NewMatch("A", "B"))
+            val landed = j.append(visit(Seat.HOME, 60), m.id, commandId = "cmd-1")
+            j.end(m.id, Ending.Retired(Seat.AWAY))
+            assertEquals(landed, j.append(visit(Seat.HOME, 60), m.id, commandId = "cmd-1"))
+            // A genuinely new visit is still refused, which is the rule the replay must not weaken.
+            assertFailsWith<JournalException.AlreadyEnded> { j.append(visit(Seat.AWAY, 60), m.id) }
+        }
+    }
+
+    /** The other three writes answer a replay too: a retraction, an attestation and an ending. */
+    @Test fun everyWriteAnswersAReplay() {
+        open().use { j ->
+            val m = threeVisits(j)
+            val undo = j.retractLastVisit(m.id, commandId = "undo-1")
+            assertEquals(undo, j.retractLastVisit(m.id, commandId = "undo-1"))
+
+            val said = j.attest(m.id, Seat.HOME, agrees = true, commandId = "att-1")
+            assertEquals(said, j.attest(m.id, Seat.HOME, agrees = true, commandId = "att-1"))
+
+            val over = j.end(m.id, Ending.Abandoned, commandId = "end-1")
+            assertEquals(over, j.end(m.id, Ending.Abandoned, commandId = "end-1"))
+            // Not a licence to end twice: a SECOND ending, with its own id, is still refused.
+            assertFailsWith<JournalException.AlreadyEnded> { j.end(m.id, Ending.Retired(Seat.HOME)) }
+
+            assertEquals(6, j.entries(m.id).size, "three visits, an undo, an attestation, an ending")
+        }
+    }
+
+    /**
+     * The instant a write returns is the instant the journal holds.
+     *
+     * It was not. The returned entry carried the caller's nanoseconds while the stored row carried
+     * milliseconds, so a replay handed back a row that differed from the one the first call
+     * returned — by a value nothing in the app could see and every comparison could. Found by the
+     * replay tests above and pinned here, because the property is worth naming.
+     */
+    @Test fun theInstantReturnedIsTheInstantStored() {
+        open().use { j ->
+            val m = j.createMatch(NewMatch("A", "B"))
+            val precise = Instant.parse("2026-09-07T14:30:05.250999999Z")
+            val written = j.append(visit(Seat.HOME, 60), m.id, occurredAt = precise)
+            assertEquals(j.entries(m.id).single(), written)
+            assertEquals(Instant.parse("2026-09-07T14:30:05.250Z"), written.occurredAt)
+        }
+    }
+
     // MARK: the two platforms store the same words
 
     /**
