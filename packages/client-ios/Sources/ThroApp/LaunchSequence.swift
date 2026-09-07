@@ -50,11 +50,15 @@ public struct LaunchTimeline: Equatable, Sendable {
     /// When the root begins the cross-fade to Home.
     public var finishAt: Double { exit.start }
 
-    /// The lit spot to 280 ms; the flight to 1680; the strike's beat to 2060; the ring to 2580; the word
-    /// to 3420; the hold, in which the tagline arrives and is then left alone, to 4960; the cross-fade to
-    /// 5360. Longer than the fifth version by 660 ms, all of it at the end, because the founder asked for
-    /// the tagline to be readable and 0.55 s was not enough to read it in.
-    public static let standard = LaunchTimeline(cuts: [0, 0.28, 1.68, 2.06, 2.58, 3.42, 4.96, 5.36])
+    /// The lit spot to 280 ms; the flight to 1680; the strike's beat, through which the shock travels
+    /// out, to 2060; the ring it sets to 2580; the word to 3420; the hold, in which the tagline arrives
+    /// and is then left alone, to 4460; the cross-fade to 4860.
+    ///
+    /// The sixth version held the tagline for 1.37 s and the founder read it and asked for "maybe half a
+    /// second shorter at the end". That half second comes out of the hold and nothing else, so the
+    /// tagline still has 0.87 s of stillness — two thirds again what the fifth version gave it, which
+    /// was the version they could not read.
+    public static let standard = LaunchTimeline(cuts: [0, 0.28, 1.68, 2.06, 2.58, 3.42, 4.46, 4.86])
     /// Reduce Motion: the finished composition from the first frame, long enough to read it, the fade.
     public static let reduced = LaunchTimeline(cuts: [0, 0, 0, 0, 0, 0, 1.10, 1.40])
     /// When T, H and R are struck in, as fractions of the word segment — after the mark is in its slot.
@@ -186,9 +190,51 @@ public struct MarkGeometry: Equatable, Sendable {
 
     /// The unit vector along the axis, lower-left to upper-right, in a y-down frame.
     public static let axis = CGVector(dx: CGFloat(0.5).squareRoot(), dy: -CGFloat(0.5).squareRoot())
-    /// Where the dart's line meets the ring, as screen angles, lower left and upper right: the chalk
-    /// strokes that form the ring start from the dart, both ways round.
+    /// Where the dart's line meets the ring, as screen angles, lower left and upper right: the ring is
+    /// set from the dart, both ways round.
     public static let crossingAngles: [Double] = [135, 315]
+
+    // MARK: - the strike's shock, and the ring it sets
+    //
+    // The mark is not drawn on. Earlier versions ran a chalk stroke out from each crossing and let the
+    // two meet — and because a stroke thins to a point where it leads, the ring closed on two hairline
+    // pinches, at 45° and 225°, which never filled. The founder saw the one at the bottom right. That
+    // is structural: two tapered ends cannot meet in a whole ring.
+    //
+    // So the ring is not drawn now. The strike sends a shock out through the board, and it is not
+    // round: it is stretched along the dart's own line, so it reaches the mark's radius first exactly
+    // where the dart crosses it and last square to that. Where the shock crosses the radius the chalk
+    // is SET — at full width, on the frame it arrives — so the ring lights up from the dart's line and
+    // races round both ways until it closes. Two lit fronts merge. Nothing tapers, so there is no seam
+    // that can break.
+
+    /// How much further the shock reaches along the dart's line than square to it.
+    public static let shockStretch: Double = 0.30
+    /// The shock's reach at a screen angle, as a multiple of its scalar size. A shock leaves the point
+    /// round and is shaped by the board as it travels, so the stretch comes in over the first part of
+    /// the journey and is complete by the time the front reaches the ring — where it is the whole point.
+    /// Without that it draws a lozenge around the dart's own body instead of a wave leaving it.
+    public static func shockReach(_ degrees: Double, at size: Double = 1) -> Double {
+        let shaping = min(1, max(0, size / shockTouches))
+        return 1 + shockStretch * shaping * cos(2 * (degrees - crossingAngles[0]) * .pi / 180)
+    }
+    /// The shock size at which its front first touches the ring — on the dart's line.
+    public static var shockTouches: Double { 1 / (1 + shockStretch) }
+    /// The shock size at which it has passed every part of the ring — square to the dart's line.
+    public static var shockClears: Double { 1 / (1 - shockStretch) }
+    /// How far, in degrees either way from each crossing, a shock of size `s` has set the ring.
+    /// Zero when the front first touches; ninety — a closed ring — when it has passed all of it.
+    public static func litDegrees(shock s: Double) -> Double {
+        guard s > shockTouches else { return 0 }
+        guard s < shockClears else { return 90 }
+        return acos(min(1, max(-1, (1 / s - 1) / shockStretch))) * 90 / .pi
+    }
+
+    /// A point on the ring's centreline at a screen angle.
+    public func onRing(_ c: CGPoint, degrees: Double, radiusScale s: CGFloat = 1) -> CGPoint {
+        let phi = degrees * .pi / 180, r = ringCentreRadius * s
+        return CGPoint(x: c.x + r * CGFloat(cos(phi)), y: c.y + r * CGFloat(sin(phi)))
+    }
 
     /// A point `d` along the axis from the centre, offset `v` across it.
     public func onAxis(_ c: CGPoint, _ d: CGFloat, _ v: CGFloat = 0) -> CGPoint {
@@ -590,6 +636,15 @@ struct LaunchFrame: View {
         static let flashSeconds = 0.13                   // the light of the strike, brightest on its first frame
         static let stampSeconds = 0.05                   // a letter is struck on, not faded in
         static let settleSeconds = 0.20
+        static let shockRunOn: Double = 1.15             // how fast the shock leaves the mark behind, per second
+        static let shockAlpha = 0.60                     // the shock at its brightest, out of the point
+        static let hotDegrees = 9.0                      // how far behind its front the set chalk is still hot
+        static let frontDegrees = 11.0                   // the leading edge, which falls off in strength, never in width
+        static let frontSteps = 5
+        static let shockMotes = 74                       // the chalk the shock throws off the board
+        static let shockInner = 0.72                     // it is only drawn out near the ring, in ring radii
+        static let shockScatter = 0.34                   // how ragged its front is
+        static let closeFlash = 0.17                     // the light of the ring becoming whole
         static let taglineSeconds = LaunchTimeline.taglineSeconds
         static let tagline = "FROM THE PUB BOARD TO THE WORLD STAGE"
     }
@@ -728,54 +783,140 @@ struct LaunchFrame: View {
                      colour: chalk, lit: inBeam)
         }
 
-        // The ring. Chalk is laid down the way a hand lays it: a thin line runs out first from each
-        // crossing, both ways, and the stroke fills in behind it — so what is on the board is always a
-        // line being drawn, and never a fat crescent.
-        if pRing > 0 {
-            let pulse = animated ? 1 + CGFloat(Easing.damped(sinceRing, amplitude: 0.035, hertz: 5.5, decay: 0.16)) : 1
+        // The ring, struck into being rather than drawn. The shock leaves the point on the frame of the
+        // thud and is stretched along the dart's own line, so it reaches the mark's radius first where
+        // the dart crosses it — exactly as the ring's segment begins — and last square to that. Where it
+        // crosses, the chalk is set at full width on the frame it arrives, so the ring lights up from
+        // the dart's line and races round both ways until two lit fronts merge. Nothing tapers, so there
+        // is no pinch at 45° or 225° for the ring to break on.
+        let toRing = timeline.ring.start - timeline.impact.start
+        var shock = MarkGeometry.shockClears
+        if animated {
+            if sinceImpact <= 0 { shock = 0 }
+            else if sinceImpact < toRing { shock = MarkGeometry.shockTouches * Easing.impact(sinceImpact / toRing) }
+            else {
+                shock = MarkGeometry.shockTouches
+                    + (MarkGeometry.shockClears - MarkGeometry.shockTouches) * Double(pRing)
+                    + Tune.shockRunOn * max(0, t - timeline.ring.end)
+            }
+        }
+        let lit = MarkGeometry.litDegrees(shock: shock)
+        let pulse = animated ? 1 + CGFloat(Easing.damped(sinceRing, amplitude: 0.035, hertz: 5.5, decay: 0.16)) : 1
+
+        // The leading edge closes up as the two fronts come together, so the ring arrives whole rather
+        // than popping from four soft ends to one hard band.
+        let frontFade = 1 - Easing.unit((lit - 74) / 16)
+        let front = min(lit, Tune.frontDegrees * frontFade)
+
+        if lit > 0 {
             let rough = 0.055 * (1 - pMove)
-            let lead = Double(pRing), fill = Easing.unit((Double(pRing) - 0.26) / 0.74)
-            var ring = Path()
-            if fill < 1 {
-                let half = 90 * fill, taper = min(16, half), overlap = 1.5
-                if half > 0 {
-                    for angle in MarkGeometry.crossingAngles {
-                        ring.addPath(geo.ringBand(at: centre, fromDegrees: angle - overlap, sweepDegrees: half + overlap, taperDegrees: taper, radiusScale: pulse, roughness: rough))
-                        ring.addPath(geo.ringBand(at: centre, fromDegrees: angle - half, sweepDegrees: half + overlap, taperDegrees: taper, taperAtStart: true, radiusScale: pulse, roughness: rough))
-                    }
-                }
+            if lit >= 90 {
+                context.fill(geo.ringShape(at: centre, radiusScale: pulse, roughness: rough), with: .color(chalk))
             } else {
-                ring = geo.ringShape(at: centre, radiusScale: pulse, roughness: rough)
-            }
-            var heads: [Double] = []
-            if lead < 1 {
-                for angle in MarkGeometry.crossingAngles { heads.append(angle + 90 * lead); heads.append(angle - 90 * lead) }
-                let thin = StrokeStyle(lineWidth: geo.ringWidth * 0.20, lineCap: .round)
-                for angle in MarkGeometry.crossingAngles {
-                    context.stroke(geo.ringArc(at: centre, fromDegrees: angle, sweepDegrees: 90 * lead, radiusScale: pulse), with: .color(chalk.opacity(0.92)), style: thin)
-                    context.stroke(geo.ringArc(at: centre, fromDegrees: angle - 90 * lead, sweepDegrees: 90 * lead, radiusScale: pulse), with: .color(chalk.opacity(0.92)), style: thin)
+                // Solid chalk behind, and a leading edge that falls off in STRENGTH over `front` degrees
+                // — never in width. A width taper is exactly what pinched the old ring shut at 45° and
+                // 225°, and nothing here may bring it back: every step below spans the ring from inner
+                // to outer radius, so two fronts merging can only ever overlap.
+                let solid = max(0, lit - front)
+                if solid > 0 {
+                    var behind = Path()
+                    for angle in MarkGeometry.crossingAngles {
+                        behind.addPath(geo.ringBand(at: centre, fromDegrees: angle - solid, sweepDegrees: 2 * solid,
+                                                    taperDegrees: 0, radiusScale: pulse, roughness: rough))
+                    }
+                    context.fill(behind, with: .color(chalk))
                 }
-            }
-            context.fill(ring, with: .color(chalk))
-            // the bright head of each stroke, where the chalk is touching the board, and the dust it lifts
-            if lead < 1 && animated {
-                context.drawLayer { glow in
-                    glow.addFilter(.blur(radius: geo.ringWidth * 0.22))
-                    for a in heads {
-                        let phi = a * Double.pi / 180, rr = geo.ringCentreRadius * pulse
-                        let c = CGPoint(x: centre.x + rr * CGFloat(cos(phi)), y: centre.y + rr * CGFloat(sin(phi)))
-                        glow.fill(Path(ellipseIn: CGRect(x: c.x - geo.ringWidth * 0.20, y: c.y - geo.ringWidth * 0.20,
-                                                         width: geo.ringWidth * 0.40, height: geo.ringWidth * 0.40)),
-                                  with: .color(ThroColor.throChalkRaised.opacity(0.6)))
+                if front > 0 {
+                    for k in 0..<Tune.frontSteps {
+                        let span = front / Double(Tune.frontSteps)
+                        let a0 = solid + span * Double(k)
+                        var edge = Path()
+                        for angle in MarkGeometry.crossingAngles {
+                            edge.addPath(geo.ringBand(at: centre, fromDegrees: angle + a0, sweepDegrees: span,
+                                                      taperDegrees: 0, radiusScale: pulse, roughness: rough))
+                            edge.addPath(geo.ringBand(at: centre, fromDegrees: angle - a0 - span, sweepDegrees: span,
+                                                      taperDegrees: 0, radiusScale: pulse, roughness: rough))
+                        }
+                        context.fill(edge, with: .color(chalk.opacity(1 - 0.86 * Double(k) / Double(Tune.frontSteps))))
                     }
                 }
-                for (i, a) in heads.enumerated() {
-                    let phi = a * Double.pi / 180, rr = geo.ringCentreRadius * pulse
-                    let c = CGPoint(x: centre.x + rr * CGFloat(cos(phi)), y: centre.y + rr * CGFloat(sin(phi)))
-                    puff(&context, at: c, since: 0.05, count: 2, seed: 60 + i, life: 0.30,
-                         direction: CGVector(dx: CGFloat(cos(phi + Double.pi / 2)), dy: CGFloat(sin(phi + Double.pi / 2))),
-                         spread: 200, speed: 26 * geo.unit / 260, size: 0.7, colour: chalk)
+            }
+
+            // the chalk is hot where it has just been set, and cools behind the front
+            if lit < 90 && animated {
+                let hot = min(Tune.hotDegrees, max(1, front))
+                var glowing = Path()
+                for angle in MarkGeometry.crossingAngles {
+                    glowing.addPath(geo.ringBand(at: centre, fromDegrees: angle + lit - hot, sweepDegrees: hot,
+                                                 taperDegrees: 0, radiusScale: pulse, roughness: rough))
+                    glowing.addPath(geo.ringBand(at: centre, fromDegrees: angle - lit, sweepDegrees: hot,
+                                                 taperDegrees: 0, radiusScale: pulse, roughness: rough))
                 }
+                context.fill(glowing, with: .color(ThroColor.throChalkRaised.opacity(0.9 * frontFade)))
+
+                let fronts = MarkGeometry.crossingAngles.flatMap { [$0 + lit, $0 - lit] }
+                context.drawLayer { glow in
+                    glow.addFilter(.blur(radius: geo.ringWidth * 0.26))
+                    for a in fronts {
+                        let c = geo.onRing(centre, degrees: a, radiusScale: pulse)
+                        glow.fill(Path(ellipseIn: CGRect(x: c.x - geo.ringWidth * 0.26, y: c.y - geo.ringWidth * 0.26,
+                                                         width: geo.ringWidth * 0.52, height: geo.ringWidth * 0.52)),
+                                  with: .color(ThroColor.throChalkRaised.opacity(0.55)))
+                    }
+                }
+                // and the dust the shock lifts off the board as it passes, thrown outward
+                for (i, a) in fronts.enumerated() {
+                    let phi = a * Double.pi / 180
+                    puff(&context, at: geo.onRing(centre, degrees: a, radiusScale: pulse), since: 0.05,
+                         count: 2, seed: 60 + i, life: 0.30,
+                         direction: CGVector(dx: CGFloat(cos(phi)), dy: CGFloat(sin(phi))),
+                         spread: 150, speed: 30 * geo.unit / 260, size: 0.7, colour: chalk)
+                }
+            }
+        }
+
+        // The shock itself, seen as what it throws: chalk off the board, flung outward from the point and
+        // riding exactly the front that sets the ring, so the dust reaching the mark's radius on the
+        // dart's line and the chalk lighting there are one event. It is dust rather than a drawn wave
+        // because a stroked ring at these radii traces the dart's own barrel and reads as an outline
+        // around it, which is a worse thing than no wave at all.
+        if animated && shock > 0.02 && shock < MarkGeometry.shockClears * 1.5 {
+            let age = shock / MarkGeometry.shockClears
+            let alpha = Tune.shockAlpha * max(0, 1 - age * age * 0.72) * min(1, shock / 0.10)
+            var rng = Grain(seed: 4177)
+            let r0 = geo.ringCentreRadius * pulse
+            for _ in 0..<Tune.shockMotes {
+                let deg = 360 * Double(rng.next())
+                let jitter = 1 + Tune.shockScatter * (Double(rng.next()) - 0.72)
+                let reach = shock * MarkGeometry.shockReach(deg, at: shock) * jitter
+                // only out where the shock is doing its work. Closer in it draws a fan of short
+                // strokes against the barrel and reads as bristles on the dart rather than chalk off
+                // the board — and there is nothing being made in there anyway.
+                guard reach > Tune.shockInner else { continue }
+                let phi = deg * .pi / 180
+                let rr = r0 * CGFloat(reach)
+                let head = CGPoint(x: centre.x + rr * CGFloat(cos(phi)), y: centre.y + rr * CGFloat(sin(phi)))
+                let back = rr - max(geo.ringWidth * 0.95, rr * 0.20)
+                let tail = CGPoint(x: centre.x + back * CGFloat(cos(phi)), y: centre.y + back * CGFloat(sin(phi)))
+                var streak = Path()
+                streak.move(to: tail); streak.addLine(to: head)
+                let bright = alpha * (0.35 + 0.65 * Double(rng.next()))
+                context.stroke(streak, with: .color(ThroColor.throChalkRaised.opacity(bright)),
+                               style: StrokeStyle(lineWidth: max(0.5, geo.ringWidth * 0.10 * CGFloat(1 - 0.4 * age)),
+                                                  lineCap: .round))
+            }
+        }
+
+        // The ring closing is the beat the strike has been building to, so it lands as light: a flare
+        // around the whole ring on the frame it becomes whole, gone in a sixth of a second. Without it
+        // the ring simply stops arriving, which is the difference between a mark appearing and a mark
+        // being made.
+        if animated && sinceRing >= 0 && sinceRing < Tune.closeFlash {
+            let q = 1 - sinceRing / Tune.closeFlash
+            context.drawLayer { flare in
+                flare.addFilter(.blur(radius: geo.ringWidth * CGFloat(0.35 + 0.9 * (1 - q))))
+                flare.fill(geo.ringShape(at: centre, radiusScale: pulse),
+                           with: .color(ThroColor.throChalkRaised.opacity(0.55 * q * q)))
             }
         }
 

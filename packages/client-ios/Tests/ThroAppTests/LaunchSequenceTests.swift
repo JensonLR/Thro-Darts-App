@@ -13,14 +13,20 @@ final class LaunchSequenceTests: XCTestCase {
             XCTAssertEqual(s.count, 7)
             XCTAssertEqual(s.first?.start, 0)
             for (a, b) in zip(s, s.dropFirst()) { XCTAssertEqual(a.end, b.start, "\(a.name) must hand straight to \(b.name)") }
-            // This ceiling was five seconds, which was engineering's own rule and not the founder's. The
-            // founder asked for the tagline to be readable — "visible just a little bit longer so people
-            // can read it properly" — and 5.36 s is what that costs. The rule is restated, not deleted,
-            // and every extra millisecond of it is in the hold where the reading happens.
-            XCTAssertLessThanOrEqual(timeline.total, 5.5, "an opening is a door, not a wait")
+            // The ceiling was engineering's own five seconds, then 5.5 when the founder asked for the
+            // tagline to be readable. They have now read it at 1.37 s and asked for "maybe half a second
+            // shorter at the end", so the opening is back under five and the ceiling with it. It is the
+            // founder's number in both directions; the rule is restated, never deleted.
+            XCTAssertLessThanOrEqual(timeline.total, 5.0, "an opening is a door, not a wait")
         }
-        XCTAssertEqual(LaunchTimeline.standard.total, 5.36, accuracy: 1e-9)
-        XCTAssertEqual(LaunchTimeline.standard.finishAt, 4.96, accuracy: 1e-9)
+        XCTAssertEqual(LaunchTimeline.standard.total, 4.86, accuracy: 1e-9)
+        XCTAssertEqual(LaunchTimeline.standard.finishAt, 4.46, accuracy: 1e-9)
+        // The half second came out of the hold and nowhere else: every other cut is where it was.
+        XCTAssertEqual(LaunchTimeline.standard.flight.end, 1.68, accuracy: 1e-9)
+        XCTAssertEqual(LaunchTimeline.standard.impact.end, 2.06, accuracy: 1e-9)
+        XCTAssertEqual(LaunchTimeline.standard.ring.end, 2.58, accuracy: 1e-9)
+        XCTAssertEqual(LaunchTimeline.standard.word.end, 3.42, accuracy: 1e-9)
+        XCTAssertEqual(LaunchTimeline.standard.exit.duration, 0.40, accuracy: 1e-9)
         // The founder's first verdict was "too fast"; the flight is a whole shot of its own.
         XCTAssertGreaterThanOrEqual(LaunchTimeline.standard.flight.duration, 1.2)
         // The lit spot is on screen before the throw, so the eye has somewhere to be.
@@ -32,8 +38,12 @@ final class LaunchSequenceTests: XCTestCase {
     /// long enough to be read before anything begins to fade. It had 0.53 s, which was not enough.
     func testTheTaglineIsLeftAloneLongEnoughToRead() {
         let t = LaunchTimeline.standard
-        XCTAssertGreaterThanOrEqual(t.taglineSettledFor, 1.2, "the tagline must be readable, not glimpsed")
-        XCTAssertEqual(t.taglineSettledFor, 1.3748, accuracy: 1e-6)
+        // The founder set this number twice. At 0.53 s they could not read it; at 1.37 s they could, and
+        // asked for half a second back. 0.87 s is that, and it is still two thirds again the version they
+        // could not read — so the floor here is the founder's judgement, not engineering's taste.
+        XCTAssertGreaterThanOrEqual(t.taglineSettledFor, 0.85, "the tagline must be readable, not glimpsed")
+        XCTAssertEqual(t.taglineSettledFor, 0.8748, accuracy: 1e-6)
+        XCTAssertEqual(LaunchTimeline.standard.hold.duration, 1.04, accuracy: 1e-9)
         // it arrives as the last letter sets, inside the word segment, and has finished before the hold's end
         XCTAssertGreaterThan(t.taglineAt, t.word.start + t.word.duration * LaunchTimeline.stampFractions[2])
         XCTAssertLessThan(t.taglineAt, t.word.end)
@@ -198,18 +208,83 @@ final class LaunchSequenceTests: XCTestCase {
         XCTAssertEqual(MarkGeometry.Ratios.mark.tip, 0.643, accuracy: 1e-9)
     }
 
-    func testAChalkStrokeIsTheRingsWidthAndThinsOnlyAtItsLeadingEnd() {
+    /// The ring is struck into being by the strike's shock, not drawn on by a stick.
+    ///
+    /// The founder saw the old mechanism fail: "breakage at the bottom right". That was structural, not
+    /// a tuning error. Two chalk strokes ran out from the dart's crossings and met at 45° and 225°, and
+    /// a stroke thins to a point where it leads — so the ring closed on two hairline pinches that never
+    /// filled. Two tapered ends cannot meet in a whole ring.
+    ///
+    /// So the ring is set rather than drawn. The shock is stretched along the dart's own line, reaches
+    /// the mark's radius first exactly where the dart crosses it and last square to that, and sets the
+    /// chalk at FULL WIDTH wherever it crosses. What these assertions defend is that: the ignition runs
+    /// from nothing to a closed ring, it is monotone, and the band never narrows anywhere along it — so
+    /// two fronts merging can only overlap, and 45° cannot break again.
+    func testTheRingIsSetByTheShockAtFullWidthSoItCannotBreakWhereTheFrontsMeet() {
         let g = MarkGeometry(tipToTip: 361)
         let c = CGPoint(x: 200, y: 200)
-        // a full stroke with no taper spans outer to inner radius
-        let whole = g.ringShape(at: c)
-        XCTAssertEqual(whole.boundingRect.width, 2 * g.ringOuter, accuracy: 0.5)
-        // a quarter stroke thinning over its last thirty degrees still starts at full width
-        let stroke = g.ringBand(at: c, fromDegrees: 0, sweepDegrees: 90, taperDegrees: 30)
-        XCTAssertFalse(stroke.isEmpty)
-        XCTAssertEqual(stroke.boundingRect.maxX, c.x + g.ringOuter, accuracy: 0.5, "full width where the stroke begins")
-        XCTAssertLessThan(stroke.boundingRect.maxY, c.y + g.ringOuter - 0.5, "a point, not a full end, where it leads")
-        XCTAssertTrue(g.ringBand(at: c, fromDegrees: 0, sweepDegrees: 0, taperDegrees: 10).isEmpty)
+
+        // The shock reaches furthest along the dart's line and least square to it.
+        for angle in MarkGeometry.crossingAngles {
+            XCTAssertEqual(MarkGeometry.shockReach(angle), 1 + MarkGeometry.shockStretch, accuracy: 1e-12)
+            XCTAssertEqual(MarkGeometry.shockReach(angle + 90), 1 - MarkGeometry.shockStretch, accuracy: 1e-12)
+        }
+        // A shock leaves the point round and is shaped as it travels, so it does not trace the dart.
+        XCTAssertEqual(MarkGeometry.shockReach(135, at: 0), 1, accuracy: 1e-12)
+        XCTAssertGreaterThan(MarkGeometry.shockReach(135, at: MarkGeometry.shockTouches), 1.29)
+
+        // Ignition: nothing until the front touches, a closed ring once it has passed all of it, and
+        // strictly increasing in between. 45° — where the founder saw the break — is the last to light.
+        XCTAssertEqual(MarkGeometry.litDegrees(shock: 0), 0)
+        XCTAssertEqual(MarkGeometry.litDegrees(shock: MarkGeometry.shockTouches), 0)
+        XCTAssertEqual(MarkGeometry.litDegrees(shock: MarkGeometry.shockClears), 90)
+        XCTAssertEqual(MarkGeometry.litDegrees(shock: 99), 90, "and stays closed as the shock runs on")
+        var previous = -1.0
+        for step in 0...200 {
+            let s = MarkGeometry.shockTouches
+                + (MarkGeometry.shockClears - MarkGeometry.shockTouches) * Double(step) / 200
+            let lit = MarkGeometry.litDegrees(shock: s)
+            XCTAssertGreaterThanOrEqual(lit, previous, "the ring is set once and never un-set")
+            XCTAssertLessThanOrEqual(lit, 90)
+            previous = lit
+        }
+        XCTAssertGreaterThan(previous, 89.999, "and it does close")
+
+        // The band the shock sets is full width from inner to outer radius everywhere along it — which is
+        // the whole guarantee. A 20° band and a 60° band have the same radial thickness at their ends.
+        func thickness(_ band: Path, at degrees: Double) -> CGFloat {
+            // the band's extent along the ray at this angle, found from its bounding box in a rotated frame
+            let phi = degrees * .pi / 180
+            var lo = CGFloat.infinity, hi = -CGFloat.infinity
+            band.forEach { element in
+                let points: [CGPoint]
+                switch element {
+                case .move(to: let p): points = [p]
+                case .line(to: let p): points = [p]
+                default: points = []
+                }
+                for p in points {
+                    let along = (p.x - c.x) * CGFloat(cos(phi)) + (p.y - c.y) * CGFloat(sin(phi))
+                    let across = -(p.x - c.x) * CGFloat(sin(phi)) + (p.y - c.y) * CGFloat(cos(phi))
+                    guard abs(across) < g.ringWidth * 0.30 else { continue }
+                    lo = min(lo, along); hi = max(hi, along)
+                }
+            }
+            return hi - lo
+        }
+        let short = g.ringBand(at: c, fromDegrees: 100, sweepDegrees: 20, taperDegrees: 0)
+        let long = g.ringBand(at: c, fromDegrees: 100, sweepDegrees: 60, taperDegrees: 0)
+        XCTAssertEqual(thickness(short, at: 100), g.ringWidth, accuracy: 0.6, "full width at the start")
+        XCTAssertEqual(thickness(short, at: 120), g.ringWidth, accuracy: 0.6, "and at the leading end")
+        XCTAssertEqual(thickness(long, at: 160), g.ringWidth, accuracy: 0.6, "however far it has run")
+        XCTAssertEqual(g.ringShape(at: c).boundingRect.width, 2 * g.ringOuter, accuracy: 0.5)
+        XCTAssertTrue(g.ringBand(at: c, fromDegrees: 0, sweepDegrees: 0, taperDegrees: 0).isEmpty)
+
+        // A point on the ring is where the fronts and their glow are put, so it must be the centreline.
+        let east = g.onRing(c, degrees: 0)
+        XCTAssertEqual(east.x - c.x, g.ringCentreRadius, accuracy: 1e-9)
+        XCTAssertEqual(east.y, c.y, accuracy: 1e-9)
+
         // Chalk on a board has a rough edge, and it is the same roughness at the same angle on every
         // frame — otherwise the edge crawls while the ring sits still.
         var lo = CGFloat.infinity, hi = -CGFloat.infinity
@@ -221,12 +296,10 @@ final class LaunchSequenceTests: XCTestCase {
         XCTAssertLessThan(lo, 0.2); XCTAssertGreaterThan(hi, 0.8, "the edge actually varies")
         let rough = g.ringShape(at: c, radiusScale: 1, roughness: 0.06)
         XCTAssertFalse(rough.isEmpty)
-        XCTAssertNotEqual(rough.boundingRect.width, whole.boundingRect.width, "roughness moves the edge")
-        XCTAssertEqual(rough.boundingRect.width, whole.boundingRect.width, accuracy: g.ringWidth * 0.12, "but only a little")
+        XCTAssertEqual(rough.boundingRect.width, g.ringShape(at: c).boundingRect.width,
+                       accuracy: g.ringWidth * 0.12, "roughness moves the edge, but only a little")
     }
 
-    /// The chalk dust on the wall is a fixed scatter: it is generated once, it is the same every run, and
-    /// each speck's brightness lands in a tier the frame function can draw in one pass.
     func testTheWallsDustIsFixedAndItsBrightnessIsInRange() {
         let dust = LaunchFrame.wallDust
         XCTAssertEqual(dust.count, 420)
