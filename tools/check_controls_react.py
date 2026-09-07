@@ -24,6 +24,12 @@ not a thing a unit test can see. So it is checked here, mechanically, on the sou
 
 Rules 2 and 3 are skipped for buttons inside a `.confirmationDialog`/`.alert` block, which are the
 system's to draw and must not be restyled.
+
+**`ShareLink` is held to the same three rules**, and it was not: the export's share control was a
+bare `Text` with no style and no tap target, so a finger landing beside the words landed on nothing
+— the exact complaint that produced this file, on a control it did not look at. A `ShareLink` is a
+button the player taps; that it comes from SwiftUI does not make it the system's to draw when we
+have given it our own label.
 """
 import pathlib
 import re
@@ -32,7 +38,8 @@ import sys
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 SOURCES = ROOT / "packages/client-ios/Sources"
 
-BUTTON = re.compile(r"(?:^|[^A-Za-z])Button\s*(?:\(|\{)")
+BUTTON = re.compile(r"(?:^|[^A-Za-z])(?:Button|ShareLink)\s*(?:\(|\{)")
+SHARE = re.compile(r"(?:^|[^A-Za-z])ShareLink\s*\(")
 # A button the system draws. `Button("Title") { action }` — the title-and-action initialiser, with
 # no label view — is reserved in this codebase for the buttons inside a `.confirmationDialog` or
 # `.alert`, which iOS lays out and styles itself and which would look like nothing else on the phone
@@ -41,7 +48,13 @@ BUTTON = re.compile(r"(?:^|[^A-Za-z])Button\s*(?:\(|\{)")
 # presents a dialog.
 SYSTEM = re.compile(r"Button\(\s*\"")
 DIALOG = (".confirmationDialog(", ".alert(")
-TARGET = ("throTapTarget", "throRowTapTarget", "contentShape", "touchTarget")
+TARGET = ("throTapTarget", "throRowTapTarget", "contentShape", "touchTarget", "ThroButtonFace")
+
+# `ThroButtonFace` is in that list because it *is* a tap target: it draws the whole control at the
+# size the design gives it and closes with a `contentShape`. Trusting a name is exactly the
+# narrowing this file's docstring warns about, so the name is not trusted — `face_is_a_target()`
+# below reads the component and holds it to that, and the vocabulary entry fails with it.
+FACE = "packages/client-ios/Sources/ThroDesign/Components.swift"
 
 # Rule 4: an icon-only control is named. These are the views that draw nothing a screen reader can
 # read, so a label built only from them says nothing at all; any OTHER capitalised view is presumed
@@ -95,9 +108,41 @@ def label(block: str) -> str:
     return "\n".join(out)
 
 
+def face_is_a_target() -> str | None:
+    """`ThroButtonFace` must still be the thing TARGET says it is.
+
+    A word in a list of accepted targets is worth exactly as much as the component behind it. If
+    somebody removes the `contentShape` or the minimum height from the face, every control built on
+    it silently stops having a hit area larger than its ink — and this file would go on passing them
+    all, which is worse than never having accepted the name.
+    """
+    path = ROOT / FACE
+    if not path.exists():
+        return f"{FACE} is missing, and TARGET accepts ThroButtonFace as a tap target"
+    text = path.read_text(encoding="utf-8")
+    start = text.find("public struct ThroButtonFace")
+    if start < 0:
+        return ("ThroButtonFace is accepted as a tap target and no longer exists. Either restore it "
+                "or take it out of TARGET.")
+    # Bounded at the next top-level declaration, not read to the end of the file. Unbounded, the
+    # `.contentShape(` of some later component satisfied this and the check passed with the face's
+    # own removed — the exact false comfort it exists to prevent, found by removing it and watching
+    # this stay green.
+    rest = text[start:]
+    end = rest.find("\npublic ", 1)
+    body = rest if end < 0 else rest[:end]
+    missing = [need for need in (".contentShape(", "minHeight:") if need not in body]
+    if missing:
+        return (f"ThroButtonFace is accepted as a tap target but no longer carries "
+                f"{' and '.join(missing)} — every control built on it lost its hit area.")
+    return None
+
+
 def main() -> int:
     problems: list[str] = []
     buttons = 0
+    if problem := face_is_a_target():
+        problems.append(problem)
     for path in sorted(SOURCES.rglob("*.swift")):
         text = path.read_text(encoding="utf-8")
         lines = text.splitlines()
@@ -111,7 +156,7 @@ def main() -> int:
                 )
             if not BUTTON.search(code):
                 continue
-            if SYSTEM.search(code):
+            if SYSTEM.search(code) and not SHARE.search(code):
                 if not any(d in text for d in DIALOG):
                     problems.append(
                         f"{rel}:{i + 1}: Button(\"…\") {{ … }} is the system's dialog button, and "
@@ -119,19 +164,20 @@ def main() -> int:
                     )
                 continue
             buttons += 1
+            kind = "ShareLink" if SHARE.search(code) else "Button"
             block = statement(lines, i)
             if ".buttonStyle(" not in block:
-                problems.append(f"{rel}:{i + 1}: a Button with no .buttonStyle — it will not react.")
+                problems.append(f"{rel}:{i + 1}: a {kind} with no .buttonStyle — it will not react.")
             if not any(t in block for t in TARGET):
                 problems.append(
-                    f"{rel}:{i + 1}: a Button whose label reaches no tap target — a finger landing "
+                    f"{rel}:{i + 1}: a {kind} whose label reaches no tap target — a finger landing "
                     f"beside the ink lands on nothing. Add throTapTarget() or throRowTapTarget()."
                 )
             # A control whose label draws only a glyph is silent to VoiceOver. A glyph is not a name.
             drawn = label(block)
             if "Icon(" in drawn and ".accessibilityLabel" not in block and not (set(VIEW.findall(drawn)) - MUTE):
                 problems.append(
-                    f"{rel}:{i + 1}: an icon-only Button with no .accessibilityLabel — it says "
+                    f"{rel}:{i + 1}: an icon-only {kind} with no .accessibilityLabel — it says "
                     f"nothing at all to a screen reader."
                 )
     if problems:

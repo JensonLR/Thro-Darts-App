@@ -75,6 +75,13 @@ jobs:
       - name: The Xcode project holds together
         run: python3 tools/check_xcode_project.py
 
+      # And the one picture this app makes that leaves the phone. A share card is a raster: it
+      # cannot be tapped for a basis and cannot be corrected once it is in somebody's group chat, so
+      # it has to be the same picture whoever drew it. Most colour tokens resolve by the phone's
+      # light or dark trait; the brand ones do not, and this holds the card to those.
+      - name: The share card looks the same whoever draws it
+        run: python3 tools/check_share_card_tokens.py
+
   journal:
     name: The on-device journal, on Android's half
     runs-on: ubuntu-latest

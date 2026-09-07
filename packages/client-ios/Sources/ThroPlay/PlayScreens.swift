@@ -797,6 +797,10 @@ public struct EndMatchConfirmCard: View {
 public struct MatchResultScreen: View {
     @ObservedObject private var session: MatchSession
     @AppStorage(Appearance.storageKey) private var appearanceRaw: String = Appearance.system.rawValue
+    /// The share card, drawn once the screen is up and redrawn whenever what it would say changes.
+    /// Nil until then, and the control is not offered while it is — a share button that produced
+    /// nothing would be worse than one that arrives a moment later.
+    @State private var card: Image?
     private let onDone: () -> Void
     private let onPlayAgain: () -> Void
     private let onReopen: () -> Void
@@ -835,6 +839,19 @@ public struct MatchResultScreen: View {
                                 .fixedSize(horizontal: false, vertical: true)
                         }
                         Tag("Not rated", tone: .neutral, icon: .info).padding(.top, ThroSpacing.spacing4)
+                        // Sharing sits here rather than with Done and Play again, because this is
+                        // the moment somebody wants it — they have just read "Ann wins" — and
+                        // because PD-025's two finishing actions are two on purpose.
+                        //
+                        // Offered only once the picture exists and only on a match that is over.
+                        // Everything the card claims is on the card: `ThroShareCard` says why.
+                        if let card, session.isComplete {
+                            ShareLink(item: card, preview: SharePreview(session.resultHeadline, image: card)) {
+                                ThroButtonFace("Share the result", variant: .secondary, size: .medium)
+                            }
+                            .buttonStyle(ThroPressStyle(radius: ThroSpacing.radiusControl))
+                            .accessibilityHint("Makes a picture of this result, with how it was verified written on it.")
+                        }
                     }
                     ThroDivider(inset: ThroSpacing.spaceScreenGutter)
                     ForEach(Array(Seat.allCases.enumerated()), id: \.element) { index, seat in
@@ -920,6 +937,13 @@ public struct MatchResultScreen: View {
         }
         .background(ThroColor.colorBackgroundPrimary.ignoresSafeArea())
         .throAppearance(Appearance(stored: appearanceRaw))
+        // Keyed on the copy itself, so the picture is redrawn exactly when what it would say
+        // changes — a confirmation arriving, a dispute, a retraction — and at no other time. A
+        // card carrying "self-reported" after both players have confirmed would be stale in the
+        // one direction that matters.
+        .task(id: shareCopy) { [copy = shareCopy] in
+            card = await ThroShareCard.image(for: copy)
+        }
         // Undoing the visit that won a match reopens it. An ended match must NOT reopen: the engine
         // never said it was complete, so `state.isComplete` is false for a perfectly ended match and
         // this would have bounced straight back to the keypad on a retirement.
@@ -927,6 +951,10 @@ public struct MatchResultScreen: View {
             if !state.isComplete && session.ending == nil { onReopen() }
         }
     }
+
+    /// What the card would say about this match right now. Captured into the drawing task by value,
+    /// so the render never reaches back into the session from another context.
+    private var shareCopy: ThroShareCard.Copy { ThroShareCard.copy(for: session) }
 
     private func section<Content: View>(@ViewBuilder _ content: () -> Content) -> some View {
         VStack(alignment: .leading, spacing: ThroSpacing.spacing4) { content() }

@@ -25,7 +25,7 @@ ROOT = pathlib.Path(__file__).resolve().parent.parent
 # README row label -> the test directories it covers.
 ROWS = {
     "| On-device journal |": ["packages/client-ios/Tests/ThroJournalTests"],
-    "| Scoring session |": ["packages/client-ios/Tests/ThroPlayTests"],
+    "| Scoring session and the share card |": ["packages/client-ios/Tests/ThroPlayTests"],
     "| Design layer |": ["packages/client-ios/Tests/ThroDesignTests"],
     "| The opening, the app shell and the club screens |": ["packages/client-ios/Tests/ThroAppTests"],
     "| Statistics honesty |": ["packages/statistics/src/test"],
@@ -46,7 +46,7 @@ ANCHORED = [
     ("docs/runbooks/CLIENT_IOS.md", r"(\d+) Lock Screen", [f"{IOS}/ThroLiveKitTests"]),
     ("docs/runbooks/CLIENT_IOS.md", r"(\d+) design,", [f"{IOS}/ThroDesignTests"]),
     ("docs/runbooks/CLIENT_IOS.md", r"(\d+) journal,", [f"{IOS}/ThroJournalTests"]),
-    ("docs/runbooks/CLIENT_IOS.md", r"(\d+) scoring session,", [f"{IOS}/ThroPlayTests"]),
+    ("docs/runbooks/CLIENT_IOS.md", r"(\d+) scoring session and share card", [f"{IOS}/ThroPlayTests"]),
     ("docs/runbooks/CLIENT_IOS.md", r"(\d+) opening, app and clubs", [f"{IOS}/ThroAppTests"]),
     ("docs/runbooks/CLIENT_IOS.md", r"(\d+) design tests", [f"{IOS}/ThroDesignTests"]),
     ("docs/runbooks/CLIENT_IOS.md", r"(\d+) journal tests", [f"{IOS}/ThroJournalTests"]),
@@ -81,7 +81,10 @@ ANCHORED = [
 # Kotlin declares a test with an annotation on the line before the function, so both are counted the
 # way each language actually writes one. A Kotlin `fun` with no @Test does not run — which is a
 # mistake made in this repository once already — so counting the annotations is also the check for it.
-COUNTERS = {".swift": re.compile(r"^\s+func test", re.M),
+# An attribute may sit on the same line as the declaration — `@MainActor func testX()` is one, and
+# a plain `^\s+func test` did not see it. A test that exists and is not counted makes the stated
+# number wrong in the direction that looks safe, and would hide a deletion later.
+COUNTERS = {".swift": re.compile(r"^\s+(?:@\w+(?:\([^)]*\))?\s+)*func test", re.M),
             ".kt": re.compile(r"^\s+@Test\b", re.M)}
 
 

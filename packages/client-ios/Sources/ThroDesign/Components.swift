@@ -82,6 +82,48 @@ public struct ThroButton: View {
         self.action = action
     }
 
+    public var body: some View {
+        Button(action: action) {
+            ThroButtonFace(title, variant: variant, size: size, icon: loading ? .loader : icon,
+                           iconAfter: iconAfter, fullWidth: fullWidth)
+        }
+        .buttonStyle(ThroPressStyle(radius: ThroSpacing.radiusControl))
+        .disabled(disabled || loading)
+        .opacity(disabled ? 0.38 : 1)
+        .accessibilityAddTraits(loading ? .updatesFrequently : [])
+    }
+}
+
+/// A button's face, without the button.
+///
+/// Extracted so a control SwiftUI insists on constructing itself — a `ShareLink` is the one — can
+/// still wear the design's button rather than a bare line of text. It used to be inline in
+/// `ThroButton`, and the export's share control was consequently a `Text`: no pressed state, and a
+/// hit area the size of the ink, which is precisely the complaint `check_controls_react.py` exists
+/// to answer. One face rather than two means a share control cannot drift away from a button that
+/// sits next to it.
+///
+/// This is a face, not a control: it has no action and adds no accessibility traits. Whatever wraps
+/// it supplies both.
+public struct ThroButtonFace: View {
+    private let title: String
+    private let variant: ThroButton.Variant
+    private let size: ThroButton.Size
+    private let icon: ThroIcon?
+    private let iconAfter: ThroIcon?
+    private let fullWidth: Bool
+
+    public init(_ title: String, variant: ThroButton.Variant = .primary,
+                size: ThroButton.Size = .medium, icon: ThroIcon? = nil,
+                iconAfter: ThroIcon? = nil, fullWidth: Bool = false) {
+        self.title = title
+        self.variant = variant
+        self.size = size
+        self.icon = icon
+        self.iconAfter = iconAfter
+        self.fullWidth = fullWidth
+    }
+
     private var height: CGFloat {
         switch size { case .large: return 56; case .medium: return 48; case .small: return ThroSpacing.touchTargetMinimum }
     }
@@ -121,31 +163,21 @@ public struct ThroButton: View {
     }
 
     public var body: some View {
-        Button(action: action) {
-            HStack(spacing: ThroSpacing.spacing2) {
-                if loading {
-                    Icon(.loader, size: 18)
-                } else if let icon {
-                    Icon(icon, size: 18)
-                }
-                Text(title).thro(role).lineLimit(1)
-                if let iconAfter { Icon(iconAfter, size: 18) }
-            }
-            .padding(.horizontal, paddingX)
-            .frame(maxWidth: fullWidth ? .infinity : nil, minHeight: height)
-            .foregroundStyle(foreground)
-            .background(background)
-            .overlay(
-                RoundedRectangle(cornerRadius: ThroSpacing.radiusControl)
-                    .strokeBorder(border, lineWidth: ThroSpacing.borderWidthStrong)
-            )
-            .clipShape(RoundedRectangle(cornerRadius: ThroSpacing.radiusControl))
-            .contentShape(RoundedRectangle(cornerRadius: ThroSpacing.radiusControl))
+        HStack(spacing: ThroSpacing.spacing2) {
+            if let icon { Icon(icon, size: 18) }
+            Text(title).thro(role).lineLimit(1)
+            if let iconAfter { Icon(iconAfter, size: 18) }
         }
-        .buttonStyle(ThroPressStyle(radius: ThroSpacing.radiusControl))
-        .disabled(disabled || loading)
-        .opacity(disabled ? 0.38 : 1)
-        .accessibilityAddTraits(loading ? .updatesFrequently : [])
+        .padding(.horizontal, paddingX)
+        .frame(maxWidth: fullWidth ? .infinity : nil, minHeight: height)
+        .foregroundStyle(foreground)
+        .background(background)
+        .overlay(
+            RoundedRectangle(cornerRadius: ThroSpacing.radiusControl)
+                .strokeBorder(border, lineWidth: ThroSpacing.borderWidthStrong)
+        )
+        .clipShape(RoundedRectangle(cornerRadius: ThroSpacing.radiusControl))
+        .contentShape(RoundedRectangle(cornerRadius: ThroSpacing.radiusControl))
     }
 }
 

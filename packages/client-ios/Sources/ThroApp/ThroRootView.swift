@@ -1302,11 +1302,15 @@ public struct SettingsScreen: View {
                             }
                             .padding(.top, ThroSpacing.spacing2)
                             if let exported {
+                                // A button's face rather than a line of text. It was a bare `Text`:
+                                // no pressed state and a hit area the size of the ink, which is the
+                                // founder's original complaint on a control `check_controls_react`
+                                // was not looking at. It looks at ShareLink now.
                                 ShareLink(item: exported) {
-                                    Text("Save or send \(exported.lastPathComponent)")
-                                        .thro(ThroTypography.body.weight(.semibold))
-                                        .foregroundStyle(ThroColor.colorTextBrand)
+                                    ThroButtonFace("Save or send \(exported.lastPathComponent)",
+                                                   variant: .secondary, size: .medium)
                                 }
+                                .buttonStyle(ThroPressStyle(radius: ThroSpacing.radiusControl))
                             }
                             if let exportProblem {
                                 Snackbar(exportProblem, tone: .error)

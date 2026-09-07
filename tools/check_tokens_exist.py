@@ -45,7 +45,36 @@ NAMESPACES = ("ThroColor", "ThroSpacing", "ThroType", "ThroMotion")
 PAINTED = re.compile(r"(?:background|fill)\(\s*ThroColor\.(thro[A-Z]\w*)"
                      r"|^\s*ThroColor\.(thro[A-Z]\w*)\b")
 SCREEN_LAYERS = ("ThroApp/", "ThroPlay/")
-PIGMENT_EXEMPT = ("ThroApp/LaunchSequence.swift",)
+
+# Two files paint pigments deliberately, and each of them has to say why.
+#
+#  - **The opening** paints the launch field before any appearance applies, and says so in its own
+#    header.
+#  - **The share card** is not a screen. It is a raster that leaves the phone, and a picture that
+#    changed with the *sender's* light-or-dark setting would have two people in one group chat
+#    posting cards that did not match, with no way to tell a theme from a defect. It is held to the
+#    OPPOSITE rule — every colour on it must be the same in both traits — by
+#    `check_share_card_tokens.py`, and the exemption below is granted only for a file that check is
+#    actually looking at. An exemption nothing else covers is a hole with a comment on it.
+PIGMENT_EXEMPT = ("ThroApp/LaunchSequence.swift", "ThroPlay/ShareCard.swift")
+HELD_ELSEWHERE = {"ThroPlay/ShareCard.swift": "check_share_card_tokens"}
+
+
+def exemptions_are_covered() -> list[str]:
+    """Every exemption that claims another check holds the file must be telling the truth."""
+    import importlib
+    problems = []
+    for suffix, module_name in HELD_ELSEWHERE.items():
+        try:
+            module = importlib.import_module(module_name)
+        except ImportError:
+            problems.append(f"{suffix} is exempt from the pigment rule because {module_name}.py "
+                            f"holds it to the opposite one, and that file is gone.")
+            continue
+        if not any(covered.endswith(suffix) for covered in getattr(module, "CARD", ())):
+            problems.append(f"{suffix} is exempt from the pigment rule because {module_name}.py "
+                            f"holds it to the opposite one, and it no longer does.")
+    return problems
 
 
 def declared() -> dict[str, set[str]]:
@@ -94,6 +123,8 @@ def main() -> int:
                     elsewhere = [n for n in NAMESPACES if name in tokens[n]]
                     where = f" — it is {elsewhere[0]}.{name}" if elsewhere else ""
                     problems.append(f"{rel}:{number}: no {namespace}.{name}{where}")
+    problems.extend(exemptions_are_covered())
+
     if problems:
         print("Tokens that do not exist, or pigments used as surfaces:", file=sys.stderr)
         for problem in sorted(set(problems)):
