@@ -82,6 +82,13 @@ jobs:
       - name: The share card looks the same whoever draws it
         run: python3 tools/check_share_card_tokens.py
 
+      # And the identifier that decides whether the widgets can see anything at all. A mismatch
+      # between the Swift and either entitlements file produces NO error: the container simply is
+      # not there, the app writes nothing, the widget reads nothing, and both look like a phone
+      # with no match on it.
+      - name: The App Group holds together
+        run: python3 tools/check_app_group.py
+
   journal:
     name: The on-device journal, on Android's half
     runs-on: ubuntu-latest

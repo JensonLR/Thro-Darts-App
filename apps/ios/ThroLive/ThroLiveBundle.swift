@@ -13,6 +13,11 @@ import WidgetKit
 struct ThroLiveBundle: WidgetBundle {
     var body: some Widget {
         ThroMatchLiveActivity()
+        // The Home Screen and Lock Screen widgets, in the same extension. A widget bundle may hold
+        // both a Live Activity and static widgets, so decision 6B needed no second target — only
+        // the App Group both processes read the projection through. See ThroWidgets.swift.
+        ThroBoardWidget()
+        ThroLockWidget()
     }
 }
 

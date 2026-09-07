@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!-- The one container the app and its widget extension share.
+	     The journal does NOT live here: ADR-006 measured it in Application Support and it stays
+	     there. What lives here is a small regenerable projection of it, so a widget can draw four
+	     numbers without linking SQLite and a scoring engine. See ThroLiveKit/Projection.swift.
+	     This string appears in three files and tools/check_app_group.py holds them in agreement —
+	     a typo in one produces a widget that is permanently empty with no error anywhere. -->
+	<key>com.apple.security.application-groups</key>
+	<array>
+		<string>group.app.thro.darts</string>
+	</array>
+</dict>
+</plist>

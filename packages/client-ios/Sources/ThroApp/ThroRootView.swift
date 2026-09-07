@@ -4,6 +4,7 @@ import UniformTypeIdentifiers
 import ThroTokens
 import ThroDesign
 import ThroJournal
+import ThroLiveKit
 import ThroPlay
 
 /// The app's state: the journal, what is in it, and which tab or flow is showing.
@@ -274,6 +275,10 @@ public struct ThroRootView: View {
     /// Where an incoming link asked to go, until a screen can take it there. The shared one, because
     /// an App Intent and a Spotlight result both arrive from outside any view.
     @ObservedObject private var router = ThroRouter.shared
+    /// The leg in play, as the app's one holder of it. The scoring session pushes here for the wall
+    /// screen (club TV mode); reading it for the widgets' file means there is one live state rather
+    /// than two that can disagree about what is on the board.
+    @ObservedObject private var venue = ThroVenue.shared
     /// The club a link named, handed to the Discover tab and cleared as it lands.
     @State private var openClub: String?
     /// Whether this phone's own search field finds matches, people and clubs (on by default).
@@ -323,10 +328,16 @@ public struct ThroRootView: View {
             // A scoreboard that outlived the app that started it is a score nobody is keeping. On a
             // cold launch the in-memory handle is gone, so anything still running is orphaned.
             LiveBoard.clearStale()
+            project()
         }
         // Keyed on what is actually indexable rather than on a count: a club being renamed changes
         // no count, and an index that only noticed additions would keep showing the old name.
-        .onChange(of: searchable) { _, _ in reindex() }
+        .onChange(of: searchable) { _, _ in reindex(); project() }
+        // The widgets' file is rewritten whenever what it would say changes. The leg is keyed
+        // separately from the rest, because a visit changes the leg and nothing else — and a widget
+        // still showing 141 after three darts is the failure the projection exists to avoid.
+        .onChange(of: venue.state) { _, _ in project() }
+        .onChange(of: store.week) { _, _ in project() }
     }
 
     /// A fingerprint of everything Spotlight would hold, so a rename reindexes as surely as an add.
@@ -341,6 +352,12 @@ public struct ThroRootView: View {
     private func reindex() {
         ThroSpotlight.index(matches: store.matches + store.archived,
                             people: clubs.people, clubs: clubs.clubs, enabled: spotlight)
+    }
+
+    /// Rewrites the small file the widgets read. A no-op on a build with no App Group.
+    private func project() {
+        ThroProjectionWriter.write(matches: store.matches, week: store.week, clubs: clubs.clubs,
+                                   live: venue.state, liveFormat: venue.format)
     }
 
     /// Goes where a link asked, once, if the place still exists.
