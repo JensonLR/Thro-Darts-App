@@ -11,6 +11,15 @@ optional, or deferred), or escalate it.
 recorded here so it can be revisited. `DECIDED` — resolved; move to the decision register
 or an ADR.
 
+**Nine more are waiting in `IOS_PLATFORM_OPPORTUNITIES.md`** and are deliberately not numbered
+here yet: the Apple Watch scope, club TV mode, the deployment target, whether and when there is a
+backend, the realtime architecture, how an extension reads the app's data, Live Activity scope,
+where share cards are rendered, and the identity mechanism. They are stated there in full with
+options, a recommendation and a slot to fill in. They become OD-### entries if the founder wants
+them tracked here rather than answered in one pass — minting numbers for decisions nobody has been
+asked yet would put nine `OPEN` rows in this register on engineering's say-so, which is the
+opposite of what it is for.
+
 ---
 
 ## OD-001 — Final THRØ Rating model
