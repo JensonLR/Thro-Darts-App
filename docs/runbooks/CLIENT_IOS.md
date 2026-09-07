@@ -1,6 +1,6 @@
 # Running the iOS client
 
-> **Verification status, 2026-09-07.** Every package compiles and every test passes on macOS CI — 80
+> **Verification status, 2026-09-07.** Every package compiles and every test passes on macOS CI — 81
 > tests: 22 design, 16 journal, 27 scoring session, 16 opening and app — and the Xcode app builds for the iOS simulator on
 > CI with Xcode 26.6, on every push that touches them. **The app has run on a phone**: the founder's,
 > the evening of 2026-09-05, a full best-of-3 from setup to result, in dark mode, on an iPhone 14 Pro Max

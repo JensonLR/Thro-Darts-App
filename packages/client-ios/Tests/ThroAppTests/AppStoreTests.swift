@@ -61,8 +61,10 @@ final class AppStoreTests: XCTestCase {
         XCTAssertEqual(store.matches.count, 1)
         XCTAssertNil(store.listProblem)
 
-        // Take the table away behind the store's back: listing must now fail, and be reported.
-        try j.exec("DROP TABLE match;")
+        // Take the table out of reach behind the store's back: listing must now fail, and be
+        // reported. Renaming rather than dropping leaves the journal's foreign key intact, so this
+        // tests the read path and not SQLite's own reaction to a missing parent table.
+        try j.exec("ALTER TABLE local_match RENAME TO local_match_moved;")
         store.refresh()
         XCTAssertNotNil(store.listProblem, "an unreadable list is not an empty one")
         XCTAssertTrue(store.matches.isEmpty, "and nothing is invented to fill it")
