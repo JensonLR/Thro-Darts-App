@@ -383,6 +383,7 @@ public final class ClubStore: ObservableObject {
                                      uniquingKeysWith: { first, _ in first })
         let fixtures = try book.fixtures(of: stored.id).map { f in
             Fixture(id: f.id, title: f.title, when: ClubStore.when.string(from: f.when),
+                    at: f.when,
                     venue: f.venue, state: FixtureState(rawValue: f.state) ?? .scheduled,
                     homeTeamId: f.homeTeamId, awayTeamId: f.awayTeamId,
                     result: ClubStore.result(results[f.id]),

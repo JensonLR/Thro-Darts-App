@@ -83,6 +83,15 @@ public struct Fixture: Identifiable, Equatable, Sendable {
     public let id: String
     public let title: String
     public let when: String
+    /// The real instant, when the caller has it. `when` above is that instant already formatted for
+    /// a row, which is the wrong thing to hand to a reminder, a calendar or anything else that has
+    /// to do arithmetic on it.
+    ///
+    /// Optional so a fixture assembled for a bracket test — where a date means nothing — needs no
+    /// invented one, and because the failure that leaves is the safe one: a fixture without an
+    /// instant is offered no reminder and no calendar entry, rather than one at a guessed time.
+    /// `ClubStoreTests` holds that the store's own mapping always carries it.
+    public let at: Date?
     public let venue: String
     public let state: FixtureState
     /// The two teams, in a league (PD-019). Nil in a club, whose fixtures are a typed title.
@@ -97,12 +106,14 @@ public struct Fixture: Identifiable, Equatable, Sendable {
     /// Which bracket, under double elimination (PD-021). Nil in a knockout, which has one.
     public let bracket: String?
 
-    public init(id: String, title: String, when: String, venue: String, state: FixtureState = .scheduled,
+    public init(id: String, title: String, when: String, at: Date? = nil, venue: String,
+                state: FixtureState = .scheduled,
                 homeTeamId: String? = nil, awayTeamId: String? = nil, result: MatchResult? = nil,
                 round: Int? = nil, slot: Int? = nil, bracket: String? = nil) {
         self.id = id
         self.title = title
         self.when = when
+        self.at = at
         self.venue = venue
         self.state = state
         self.homeTeamId = homeTeamId

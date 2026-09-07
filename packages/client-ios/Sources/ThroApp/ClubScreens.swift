@@ -548,6 +548,10 @@ public struct FixturesScreen: View {
                         ThroDivider().padding(.top, ThroSpacing.spacing1)
                         ForEach(upcoming) { f in
                             row(f)
+                            // What this phone can do with a fixture, for anybody looking at it —
+                            // not only the official who keeps the list. A reminder and a calendar
+                            // entry belong to the player, not to the club.
+                            FixturePlanControls(fixture: f)
                             if let onMove { moves(f, onMove) }
                             ThroDivider()
                         }
@@ -575,6 +579,17 @@ public struct FixturesScreen: View {
                            + "scored in THRØ, or an official's word marked as theirs. Never a bare "
                            + "number, and the two are never drawn the same way.")
                         .padding(.top, ThroSpacing.spaceSectionGap)
+                    // Said once, here, rather than under every row. A reminder never leaves the
+                    // phone; a calendar entry goes into an app that is not THRØ and may well sync
+                    // to iCloud, and finding the venue hands the words to Maps. Each of those is
+                    // the player's own action, and each is worth knowing before it is taken.
+                    Note("A reminder is scheduled by this phone and delivered by it — nothing is "
+                         + "sent anywhere. **Adding a fixture to your calendar puts it in your "
+                         + "calendar app**, which is not THRØ and may sync wherever you have it set "
+                         + "to; THRØ asks only for permission to add, never to read. Finding the "
+                         + "venue searches Maps for the venue exactly as it is typed here — THRØ "
+                         + "does not know where it is.")
+                        .padding(.top, ThroSpacing.spacing4)
                 }
                 .padding(.horizontal, ThroSpacing.spaceScreenGutter)
                 .padding(.bottom, ThroSpacing.spacing6)

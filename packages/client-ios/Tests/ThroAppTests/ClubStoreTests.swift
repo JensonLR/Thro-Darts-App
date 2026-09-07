@@ -42,6 +42,28 @@ final class ClubStoreTests: XCTestCase {
         XCTAssertEqual(club.initials, "F", "\"The\" carries no information at badge size")
     }
 
+    /// **The mapping carries the fixture's real instant, not only its formatted line.**
+    ///
+    /// `Fixture.when` is a row's wording — *"Tue 9 Sep 19:30"* — and the wrong thing to hand to
+    /// anything that has to do arithmetic on it. A reminder, a calendar entry and every future
+    /// surface that needs a date read `at`, and a mapping that quietly stopped setting it would
+    /// take those controls off the screen with nothing failing anywhere. That is the failure this
+    /// whole file exists for: a guarantee stops being kept in the mapping.
+    func testTheMappingCarriesTheFixturesRealInstantAndNotOnlyItsWording() throws {
+        let s = try store()
+        XCTAssertTrue(s.createClub(name: "The Feathers", kind: .club, accentHex: "#0F3D2E"))
+        let club = s.clubs[0]
+        let when = Date(timeIntervalSince1970: 1_800_000_000)
+        XCTAssertTrue(s.addFixture(to: club.id, title: "Home to The Bell", when: when,
+                                   venue: "The Red Lion"))
+
+        let fixture = try XCTUnwrap(s.clubs[0].fixtures.first)
+        XCTAssertEqual(fixture.at, when, "the instant the fixture was stored at")
+        XCTAssertFalse(fixture.when.isEmpty, "and the row still has its own wording")
+        // And it is enough to plan with, which is the reason it is carried at all.
+        XCTAssertNotNil(FixturePlan.calendarEntry(for: fixture))
+    }
+
     /// A club is counted in people, and a league is counted in **teams** (PD-019).
     ///
     /// This test used to make a league and assert it said "2 members", which was the whole defect

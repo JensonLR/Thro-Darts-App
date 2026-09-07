@@ -47,6 +47,12 @@
 			</array>
 		</dict>
 	</dict>
+	<!-- EventKit, WRITE ONLY. `requestWriteOnlyAccessToEvents()` is the narrowest thing EventKit
+	     offers that can still add an event, and it is what the app asks for: THRØ cannot see what
+	     else is in the player's calendar. There is deliberately no NSCalendarsFullAccessUsageDescription,
+	     because full access would work too and would be asking for something this app has no use for. -->
+	<key>NSCalendarsWriteOnlyAccessUsageDescription</key>
+	<string>THRØ adds a fixture to your calendar when you ask it to. It never reads your calendar.</string>
 	<key>NSSupportsLiveActivities</key>
 	<true/>
 	<key>ITSAppUsesNonExemptEncryption</key>
