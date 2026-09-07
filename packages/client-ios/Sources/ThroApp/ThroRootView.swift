@@ -90,8 +90,8 @@ public struct ThroRootView: View {
         ZStack {
             content
             if opening {
-                LaunchSequenceView {
-                    withAnimation(.easeInOut(duration: LaunchTimeline.standard.exit.duration)) { opening = false }
+                LaunchSequenceView { fade in
+                    withAnimation(.easeInOut(duration: fade)) { opening = false }
                 }
                 .transition(.opacity)
                 .zIndex(1)
