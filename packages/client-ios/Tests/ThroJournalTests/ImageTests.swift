@@ -80,15 +80,30 @@ final class ImageTests: XCTestCase {
 
         let clean = try ImageIntake.reEncode(original)
         XCTAssertFalse(ImageIntake.carriesMetadata(clean),
-                       "the re-encoded image still carries EXIF, GPS or IPTC")
+                       "the re-encoded image still says where it came from")
         XCTAssertFalse(ImageTests.contains(clean, "taken at home"),
                        "the comment planted in the original is still somewhere in the bytes")
 
-        // The encoder writes a TIFF block of its own — orientation, resolution, compression — and
-        // that is not provenance. Said here rather than left as a silent exclusion above.
-        if let source = CGImageSourceCreateWithData(clean as CFData, nil),
-           let props = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [CFString: Any],
-           let tiff = props[kCGImagePropertyTIFFDictionary] as? [CFString: Any] {
+        // What DOES survive, named rather than left as a silent exclusion in the predicate: the
+        // encoder writes an EXIF block of its own holding the pixel dimensions and the colour space
+        // of the file it is writing, and a TIFF block holding orientation and resolution. Neither
+        // says anything about where the image came from — and the GPS and IPTC blocks, which say
+        // nothing else, are gone entirely.
+        guard let source = CGImageSourceCreateWithData(clean as CFData, nil),
+              let props = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [CFString: Any] else {
+            return XCTFail("the re-encoded image cannot be read back")
+        }
+        XCTAssertNil(props[kCGImagePropertyGPSDictionary], "where it was taken must not survive")
+        XCTAssertNil(props[kCGImagePropertyIPTCDictionary], "who made it must not survive")
+        if let exif = props[kCGImagePropertyExifDictionary] as? [CFString: Any] {
+            XCTAssertNil(exif[kCGImagePropertyExifUserComment])
+            XCTAssertNil(exif[kCGImagePropertyExifDateTimeOriginal], "when it was taken must not survive")
+            XCTAssertNil(exif[kCGImagePropertyExifMakerNote])
+            // What it may still contain is the encoder's own account of the file it wrote — the
+            // pixel dimensions and the colour space. That is asserted nowhere, because which keys
+            // ImageIO chooses to write is ImageIO's business and not a promise THRØ makes.
+        }
+        if let tiff = props[kCGImagePropertyTIFFDictionary] as? [CFString: Any] {
             XCTAssertNil(tiff[kCGImagePropertyTIFFArtist], "an artist is provenance and must not survive")
             XCTAssertNil(tiff[kCGImagePropertyTIFFDateTime], "a timestamp is provenance and must not survive")
             XCTAssertNil(tiff[kCGImagePropertyTIFFMake])

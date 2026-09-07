@@ -92,21 +92,42 @@ public enum ImageIntake {
         return out as Data
     }
 
-    /// Whether these bytes carry metadata that came from wherever the image came from.
+    /// Two whole blocks that exist for nothing but provenance: where it was taken, and who by.
+    static let provenanceBlocks: [CFString] = [kCGImagePropertyGPSDictionary, kCGImagePropertyIPTCDictionary]
+
+    /// Provenance keys inside blocks an encoder also writes for its own reasons.
     ///
-    /// EXIF, GPS and IPTC: the blocks that say where a photograph was taken, on what, by whom and
-    /// when. **Not TIFF**, which a JPEG encoder writes for itself — orientation, resolution,
-    /// compression — and which says nothing about provenance. Including it here would make this
-    /// predicate mean "was written by an encoder", which is true of every JPEG in the world and
-    /// would make the test that uses it worthless in the other direction.
+    /// The EXIF and TIFF blocks are not evidence of anything by themselves: ImageIO writes an EXIF
+    /// block containing the pixel dimensions and the colour space of the file it is writing, and a
+    /// TIFF block containing the orientation and the resolution. Treating their mere presence as
+    /// "carries metadata" would make that phrase mean "was written by an encoder" — true of every
+    /// JPEG in the world, and useless in the direction that matters. So the keys are named.
+    static let provenanceKeys: [(CFString, [CFString])] = [
+        (kCGImagePropertyExifDictionary, [
+            kCGImagePropertyExifUserComment, kCGImagePropertyExifDateTimeOriginal,
+            kCGImagePropertyExifDateTimeDigitized, kCGImagePropertyExifMakerNote,
+            kCGImagePropertyExifSubjectLocation,
+        ]),
+        (kCGImagePropertyTIFFDictionary, [
+            kCGImagePropertyTIFFArtist, kCGImagePropertyTIFFDateTime, kCGImagePropertyTIFFMake,
+            kCGImagePropertyTIFFModel, kCGImagePropertyTIFFCopyright,
+        ]),
+    ]
+
+    /// Whether these bytes carry anything that says where the image came from.
+    ///
+    /// Not "whether they carry any metadata": see `provenanceKeys`. The test that uses this does not
+    /// trust it alone — it also searches the output bytes for text planted in the input, which is the
+    /// check a narrowed predicate cannot talk its way around.
     public static func carriesMetadata(_ data: Data) -> Bool {
         guard let source = CGImageSourceCreateWithData(data as CFData, nil),
               let props = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [CFString: Any] else {
             return false
         }
-        for key in [kCGImagePropertyExifDictionary, kCGImagePropertyGPSDictionary,
-                    kCGImagePropertyIPTCDictionary] {
-            if props[key] != nil { return true }
+        for block in provenanceBlocks where props[block] != nil { return true }
+        for (block, keys) in provenanceKeys {
+            guard let dictionary = props[block] as? [CFString: Any] else { continue }
+            for key in keys where dictionary[key] != nil { return true }
         }
         return false
     }
