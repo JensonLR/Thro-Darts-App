@@ -578,3 +578,83 @@ flights face-on and edge-on, the mark on the flights, and the fold into the bar.
 **Cost.** The dart's design is a drawing in the brand's palette and not a rendering of any product; it
 should not be read as a particular manufacturer's barrel. The beam is a few points of chalk over the
 field and disappears with the light. The phone is still where motion, sound and touch are judged.
+
+### Amendment, the next day — the founder's fifth look, and the sixth version
+
+The founder watched the fifth version on the phone: "Feels like the end screen with the bottom text
+should be visible just a little bit longer so people can read it properly. Also any further visual
+upgrades to the intro."
+
+**Decided by the founder:** the tagline must be readable, not glimpsed.
+
+**What that cost, stated plainly.** The tagline had been still, at full strength and alone with the
+name for 0.53 seconds. It now has 1.37. The hold grew from 0.90 s to 1.54 s, and the tagline arrives
+earlier — as the last letter sets rather than after the mark has finished moving — so the composition
+assembles as one gesture instead of two. The opening is **5.36 seconds**, up from 4.70.
+
+The tests had held the opening under five seconds with the message "an opening is a door, not a wait".
+That rule was engineering's, not the founder's. It is restated at 5.5 seconds with the founder's reason
+recorded here, rather than deleted, and a new test holds the thing they actually asked for: the tagline
+must be settled and alone for at least 1.2 seconds. Every added millisecond is in the hold, where the
+reading happens; nothing before it was slowed.
+
+**The upgrades.** Each of these is a fault found by rendering the frame function at full phone size and
+looking at it, or by a critic reading the code against the frames — not a preference:
+
+1. **The flight had no flight in it.** The dart hung in the middle of the frame for 1.2 seconds while
+   what read as diagonal rain fell behind it. It now enters from the lower left and crosses a screen and
+   a half, at the mark's 45° throughout, smeared by exactly its own speed, still closing at the strike.
+2. **The wall never approached.** Its growth was a power curve that did nothing for the first quarter of
+   the flight and everything in the last. It is now perspective: apparent size is one over distance, and
+   the distance closes at a constant proportional rate, so the wall doubles every 0.43 of the flight and
+   no part of the throw is without approach in it. The chalk dust sits at fixed places on the wall and is
+   drawn through the same perspective, so every speck slides outward from the spot being aimed at and
+   draws itself into a streak. Nothing else looks like flying at a surface, and it is why the dust no
+   longer reads as rain: it also falls away from the lit spot, so the corners stay dark.
+3. **The light was aimed at the dart's grip**, not at the spot the point enters — and the chalk it
+   knocked off erupted 180 points from where the light flared. The aim is now the spot, and it hands off
+   to the ring's centre as the chalk takes over: the light that lit the spot becomes the light the ring
+   is drawn in.
+4. **The strike was the emptiest frame in the film**, and measurably darker than the frame before it.
+   It now flashes on the frame of the thud rather than easing in a tenth of a second late, throws chalk
+   dust with grit in it, leaves a scuff on the board, and the dart casts a shadow, so it stands out of
+   the board instead of lying on it like a decal.
+5. **The tungsten squashed.** It does not. The board gives and holds — the point drives in and comes back
+   a little — while the shaft and the flights whip and the barrel stays dead still.
+6. **The forming ring read as two fat crescents.** Chalk is now laid the way a hand lays it: a thin line
+   runs out from each crossing, both ways, and the stroke fills in behind it, with a bright head where the
+   stick is touching, dust off that head, and an edge roughness that is the same at the same angle on
+   every frame so it never crawls. The chalk starts at full speed the instant the thud lands.
+7. **Half of every roll drew the far pair of flights in front of the near pair**, so the tail flipped
+   light and dark as it turned. Which pair is in front is the sign of the roll, not its size. The roll is
+   half a turn over the flight instead of 1.6, so the flights no longer strobe, and the far pair is now
+   the opaque shaded side of a flight rather than a see-through one.
+8. **The Ø was 17% lighter in stroke than the letters it stands in.** Its proportions are now measured off
+   Archivo ExtraBold itself rather than chosen: rendered at 300 pt the face's cap is 206 px, its H stem
+   0.261 cap, its O 0.524 cap in outer radius with a side stroke of 0.269 cap, and its Ø's slash 0.130 cap.
+   The wordmark's Ø is those numbers. **The founder's own mark is untouched** — 0.364 / 0.250 / 0.040 /
+   0.643, the reconstruction of their artwork — and a test holds it that way. Only the Ø-for-the-wordmark,
+   which was engineering's, has changed.
+9. **The letters faded in through a sage grey the palette does not contain.** They are struck on now, over
+   50 ms, and they land after the mark is home in its slot rather than against a mark still in transit.
+10. **The tagline's size was hardcoded at 13 pt** and at the widest moment of its track-in would have run
+    off the edge of a phone narrower than 375 pt. It is a seventeenth of the name's cap height now, capped
+    to what the screen will hold at the widest tracking it reaches.
+11. **Dynamic Type could pull the composition apart**, because the wordmark's geometry is measured against
+    letters that would scale while the geometry did not. The opening's type is `fixedSize`.
+12. **A tap skipped into the full-length cross-fade.** A skip now fades in 0.22 s, and Reduce Motion's fade
+    is its own rather than the standard timeline's.
+13. Smaller: the camera breathes through the flight as a carried camera does; the impact shake moved off
+    16 and 23 Hz, which a 60 Hz clock aliases, to 11 and 17; the vignette closes a little as the name
+    settles; and a few chalk motes drift down through the hold, so the end of the film is quiet rather
+    than frozen.
+
+**Unchanged:** the shot itself — one constant angle, the strike, the ring earned from it, the mark
+becoming the Ø of the name as the finish — the sounds, the haptics, the tagline's words, the palette, the
+mark, and Reduce Motion's stillness. Thirteen tests hold it, up from eleven.
+
+**Cost, again plainly.** 5.36 seconds is a longer choice against Apple's launch-screen guidance than 4.70
+was; it is still skippable by a tap and still once per cold launch. The dart's design remains a drawing in
+the brand's palette and not a rendering of any manufacturer's barrel. Every judgement above was made from
+frames rendered at 430×932 from a line-for-line port of the frame function; **the phone is still where
+motion, sound and touch are judged**, and the founder's eye on the device is the only test that counts.
