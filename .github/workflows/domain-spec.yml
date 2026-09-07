@@ -139,6 +139,22 @@ jobs:
         working-directory: packages/competition
         run: gradle test --no-daemon
 
+  organisation:
+    name: Clubs, leagues and the safeguarding boundary
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with: { distribution: temurin, java-version: "21" }
+      - uses: gradle/actions/setup-gradle@v4
+      # Asserts the whole authority table of an organisation rather than examples of it; that a club's
+      # accent can never make the app unreadable, by sweeping the colour cube rather than trusting a
+      # threshold; and that an announcement reaches nobody whose age is minor OR unknown until
+      # somebody has answered OD-010. The last one is the reason this job exists.
+      - name: Organisation
+        working-directory: packages/organisation
+        run: gradle test --no-daemon
+
   tokens:
     name: Design tokens and contrast
     runs-on: ubuntu-latest

@@ -195,3 +195,99 @@ What it cost is in PD-008 and stated there rather than here: a scorer who enters
 instead of what counted will be believed, because at visit granularity nothing can tell the
 difference. All three in-rules are now scored; the engine refuses none of them.
 
+## OD-016 — What a club, league or tournament may show, and to whom
+**Status:** OPEN · **Impact:** privacy, safeguarding, product surface
+
+The founder asked for clubs and leagues to hold their own data and be visible in the app. Every
+question below has been answered *provisionally and restrictively* in `packages/organisation`, and
+each answer is a placeholder for yours, not a decision.
+
+| Question | What the code does today | What it would mean to change it |
+|---|---|---|
+| May a non-member see a club's page? | **No.** `Permissions.may(null, …)` is false for every action, including VIEW. | A public club page is a discovery feature and probably what a league wants. It also makes the membership list a privacy decision rather than a members-only one. |
+| May a member see the membership list? | **Yes** — `VIEW_MEMBERS` is a member right. | If juniors are listed, this is a safeguarding surface as well as a privacy one. |
+| Who admits and removes members? | **Admins only.** An official may announce and manage fixtures, but not change who belongs. | Officials doing it is more convenient and gives more people the power to remove someone. |
+| Can a person belong to many clubs? | Nothing prevents it; nothing depends on it. | A "home club" concept would change the profile and probably the rating. |
+
+**Options, if it helps to choose from a shortlist:**
+
+- **A — members only.** Nothing about a club is visible until you are in it. Safest, worst for
+  discovery, and probably wrong for a league that wants to advertise a new season.
+- **B — a public front, a private inside.** Name, badge, kind and *published* fixtures are public;
+  members, results and announcements are not. This is what most sports club apps do.
+- **C — the club decides, per field.** The most flexible and the most ways to get it wrong; it also
+  means someone at every club has to understand the settings.
+
+Engineering's reading: **B**, with the membership list members-only and juniors never listed to
+anyone but an admin. But it is a privacy decision about other people's children and it is not
+engineering's to take.
+
+## OD-017 — Whether members may message each other, and what protects that
+**Status:** OPEN · **Impact:** safeguarding, moderation, legal · **Blocks:** any private messaging
+
+The founder asked for the app to "become a hub for them to communicate with member and arrange
+things". What is built is **announcements only**: broadcast, from an official or admin, to a
+membership, with an author on the record and no private channel anywhere. And a member whose age is
+MINOR *or UNKNOWN* receives nothing at all until OD-010 is answered — enforced in
+`Announcements.deliver`, not documented and hoped for.
+
+**Member-to-member messaging is not built, not stubbed, and not behind a flag.** It is absent,
+because the controls it needs would determine its data model and building the model first would
+prejudge them:
+
+- Can an adult start a conversation with a member recorded as a minor? Under what consent?
+- Is there moderation, and is it before or after the fact? Who does it — the club, or THRØ?
+- How is a message reported, and who sees the report?
+- How long is a message kept, and who can delete it — the sender, the club, or nobody?
+- Does a club's own official have any privileged view of it? (If yes, say so to members. If no, say
+  that too.)
+
+**Must not be decided by:** engineering, and not by looking at what other apps do. Two of these are
+legal questions in every jurisdiction THRØ would operate in, and the safeguarding regime for a
+sports club with junior members is specific.
+
+**The honest interim:** announcements cover the actual jobs a club secretary has — the fixture is
+off, subs are due, the AGM is Tuesday. A club that needs a private word has a phone.
+
+## OD-018 — How a fixture is agreed
+**Status:** OPEN · **Impact:** product surface, competition integrity
+
+`Fixture` is deliberately thin: a date, two sides, a venue, and a state that says whether it is
+still going ahead. It carries no result, because a result belongs to the match aggregate and its
+provenance, and a fixture that could assert one would be a second, unverified place a score could
+come from.
+
+What is not modelled, because leagues genuinely differ:
+
+- Does an official schedule fixtures, or do captains agree them between themselves?
+- Who may postpone, and does the other side have to accept?
+- Is there a deadline, and what happens when a fixture is never played — void, or awarded?
+- Does a fixture need a marker, and is that a role?
+
+**Options:** **A — the fixture list is the official's**, and everything else happens off the app
+(simplest, matches most small leagues). **B — propose and accept**, with both sides on the record
+(more work, and the record is worth having when a league is decided by a walkover). **C — a league
+constitution**, configured per organisation (the most general and the most to get wrong).
+
+Engineering's reading: **A first**, because it is what the model already supports and it is
+reversible; **B** the moment a league asks for it.
+
+## OD-019 — Logos, avatars, and what happens to an image somebody uploads
+**Status:** OPEN · **Impact:** safeguarding, moderation, storage cost, legal
+
+`AssetRef` is an opaque handle and this repository stores nothing and fetches nothing. That is
+deliberate: the moment an image is accepted, questions follow that are not engineering's.
+
+- Is an uploaded image checked before it is shown, and by what — a person, a service, or nothing?
+- A profile picture of a junior member: who may see it? (This is OD-010 again, in a second place.)
+- What happens to a club's badge when the club leaves, or to a photo when a person deletes their
+  account? Deletion in the app, or deletion from storage, and how quickly?
+- Who is responsible for a copyright claim on a club badge — the club, or THRØ?
+- Are images resized and re-encoded on the way in? (Engineering's recommendation: yes, always, and
+  strip every piece of metadata — a phone photo carries the place it was taken.)
+
+**The one part that is engineering's and is done:** `packages/organisation` already guarantees that
+whatever colour a club picks, the app stays readable — the text on an accent is chosen rather than
+configured, and a sweep of the colour cube proves no choice falls below the contrast floor. The same
+discipline has no equivalent for an image; a photograph cannot be made safe by arithmetic.
+

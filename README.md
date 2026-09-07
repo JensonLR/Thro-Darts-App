@@ -51,6 +51,7 @@ database.
 | Authorization | 21 tests — the conflict-of-interest rule, and age as a dimension |
 | Rating projection | 14 tests — reproducible from a watermark pair; OD-001 stays open |
 | Competition structure | 13 tests — bracket identities exhaustive for every field size to 1024 |
+| Clubs, leagues and tournaments | 7 tests — the whole authority table rather than examples of it; that no accent a club can pick makes the app unreadable, proved by sweeping the colour cube; and that an announcement reaches nobody whose age is minor **or unknown** until OD-010 is answered |
 | Schema and privileges | 71 property assertions against a real PostgreSQL |
 | Command path | 9 integration suites, 169 assertions end to end against a real PostgreSQL |
 | Design tokens | 58 contrast pairs, absolute thresholds, 0 unrecorded breaches; every recorded exception carries the measured ratio it was raised at and fails if it worsens |
@@ -85,6 +86,8 @@ packages/
   statistics-swift/  The same figures in Swift, the same twenty tests
   client-ios/     The iOS client as packages: ThroDesign, ThroJournal, ThroPlay, ThroApp
   competition/    Bracket structure — byes, rounds, walkovers
+  organisation/   Clubs, leagues and tournaments: membership, branding that cannot break the app,
+                  announcements that cannot reach a child before the question is answered
   trust/          Provenance, derived verification, rating eligibility, reconciliation
   authz/          Relationship-based authorization, and age as a dimension
   rating/         Rating as a versioned replayable projection
@@ -237,4 +240,9 @@ is removed.
   fails if one ever does. Every player is provisional and nothing is published.
 - **OD-010 — safeguarding obligations.** The age *dimension* exists at every decision; no action
   carries an age requirement, because the thresholds are a legal question this repository does not
-  answer.
+  answer. It now has a second edge: a club's announcements reach no member recorded as a minor, or
+  whose age is not established, until it is answered — enforced, not documented.
+- **OD-016 to OD-019 — clubs and leagues.** What a club shows and to whom; whether members may
+  message each other and what protects that; how a fixture is agreed; and what happens to an image
+  somebody uploads. The domain is built and tested; each entry carries the options and engineering's
+  reading of them, and none of them is engineering's to take.
