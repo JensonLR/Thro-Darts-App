@@ -1,12 +1,21 @@
 import Foundation
-#if canImport(ActivityKit)
+#if os(iOS)
 import ActivityKit
 #endif
 
-// The ActivityKit half. Everything here is behind `canImport`, so `ThroLiveKit` still builds — and
-// `ThroLiveState` is still tested — on a build that has no ActivityKit at all.
+// The ActivityKit half, behind `#if os(iOS)`.
+//
+// **Not `canImport(ActivityKit)`, which is what this said first and which does not work.** The
+// module exists on macOS — `canImport` is true there — and every one of its entry points is marked
+// `@available(macOS, unavailable)`, so the guard admitted the code and the compiler then refused
+// every call inside it. `canImport` answers *does this module exist*, not *is its API usable here*,
+// and for a framework that ships everywhere and works in one place those are different questions.
+// Found by CI on macOS, which is the build that would have shipped it.
+//
+// `ThroLiveState` and its copy live next door with no guard at all, so the part that can be wrong is
+// still compiled and tested wherever the tests run.
 
-#if canImport(ActivityKit)
+#if os(iOS)
 
 /// The scoreboard on the Lock Screen and in the Dynamic Island.
 ///
@@ -32,10 +41,6 @@ public struct ThroMatchActivityAttributes: ActivityAttributes {
         self.format = format
     }
 }
-
-#endif
-
-#if canImport(ActivityKit)
 
 /// Starts, updates and ends the one scoreboard.
 ///

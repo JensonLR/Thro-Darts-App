@@ -2,18 +2,20 @@ import Foundation
 import ThroJournal
 import ThroLiveKit
 
-/// The one place `ThroPlay` talks to ActivityKit, so every `#if canImport` guard is here rather than
+/// The one place `ThroPlay` talks to ActivityKit, so every platform guard is here rather than
 /// scattered through a view.
 ///
-/// On a platform with no ActivityKit — a Linux-shaped build, a macOS test run — every call is a
-/// no-op and the scoring screen is none the wiser. That is the point of putting the guard behind a
-/// type: a view riddled with conditional compilation is a view nobody can read.
+/// Off iOS every call is a no-op and the scoring screen is none the wiser. That is the point of
+/// putting the guard behind a type: a view riddled with conditional compilation is a view nobody can
+/// read. The guard is `#if os(iOS)` and not `canImport(ActivityKit)` — the module exists on macOS
+/// with every entry point marked unavailable, so `canImport` lets the code in and the compiler then
+/// refuses each call.
 public struct LiveBoard {
     public init() {}
 
     /// Puts the scoreboard up for a match that is still being played.
     func start(_ session: MatchSession) {
-        #if canImport(ActivityKit)
+        #if os(iOS)
         // A finished match gets no scoreboard: there is nothing live about it, and the result
         // screen is where a result belongs.
         guard session.winner == nil, session.ending == nil else { return }
@@ -24,21 +26,21 @@ public struct LiveBoard {
     }
 
     func update(_ state: ThroLiveState) {
-        #if canImport(ActivityKit)
+        #if os(iOS)
         ThroLiveScoreboard.shared.update(state)
         #endif
     }
 
     /// Takes it down, leaving a decided match up long enough to be read.
     func finish(_ session: MatchSession) {
-        #if canImport(ActivityKit)
+        #if os(iOS)
         ThroLiveScoreboard.shared.end(session.liveState)
         #endif
     }
 
     /// Clears anything a previous launch left behind.
     public static func clearStale() {
-        #if canImport(ActivityKit)
+        #if os(iOS)
         ThroLiveScoreboard.shared.endAnythingLeftOver()
         #endif
     }
