@@ -139,9 +139,30 @@ One thing the draw has to catch that the result screen cannot: **a knockout matc
 The result screen accepts a draw because a league fixture may legitimately be one, so the tournament
 names it as a problem and advances nobody, rather than quietly producing a round with no winner.
 
-**Still not drawn: groups.** How many groups, how big, and how many go through are set before a
-tournament starts, and nothing asks — so THRØ will not guess and hand somebody a bracket they did not
-choose. The page says which of the four shapes draws itself today and which does not.
+**Double elimination and groups followed the same week, so all four shapes draw themselves.**
+
+The losers' bracket is the part that looks right and is not, and three things about it would have been
+plausibly wrong. The **drop-in is reversed**, so somebody is not put straight back against the player
+who has just knocked them out. An **unplayed winners' match produces a loser who is coming**, not a
+bye — collapsing those two would draw a whole losers' round as walkovers and advance the wrong people.
+And **two entrants have no losers' side at all**, so the grand final's challenger is the loser of the
+winners' final; a bracket built for eight gets that wrong by reaching for a round that is not there.
+The property the format is *defined* by is checked by playing whole tournaments out and counting:
+every entrant but the champion lost exactly twice.
+
+Groups needed two numbers THRØ does not get to pick — how many groups, and how many go through — so it
+asks, and a tournament that has not been told says so instead of showing a bracket nobody chose. The
+entrants are dealt **snake-wise**, because straight dealing puts the strongest into the earliest
+groups. The knockout **waits** for every group to finish, because a bracket built from a half-played
+table shows people through who are not.
+
+And the part that had to be proved rather than eyeballed: seeding that knockout from the group tables.
+Ordering the qualifiers position-major is right *almost* always — and I checked instead of assuming.
+It is wrong at three groups with two through, where the bracket pairs the second group's winner
+against its own runner-up, and at five groups with three. So the order is repaired, and the test
+asserts the strong property — **nobody is drawn against their own group in the first round** — across
+all fifteen setups from two to six groups and one to three through, with a second test naming the two
+cases the repair exists for.
 
 **What a result is counted in** was the other half of this (PD-022). `3–1` on its own does not mean
 anything, so a league declares legs, matches or points when it is made, and the unit travels with the

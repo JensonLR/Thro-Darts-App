@@ -291,6 +291,26 @@ three fixes above are confirmed on the device. The status bar text follows each 
 
 Still to add: the screenshots themselves into `docs/runbooks/screenshots/`.
 
+**Sixth look, 2026-09-07 at 13:54, on a build transferred from a Mac.** One screenshot, of a club
+called *The Lockdown Inn*, and it found a defect two rounds of tests, a design review and a canvas had
+all missed:
+
+| Seen | Cause | Change |
+|---|---|---|
+| **no back button on the club page** — a sliver of the chevron at the very left edge | the top row carried no screen gutter, so the chevron's own −12 inset put its glyph at x = −12 | one `PageBar` for all four pages that have their own header, with `spaceScreenGutter` on the row and **no negative inset anywhere** — `BackChevron` already draws its glyph at the leading edge of its 44-point target |
+| **"Announce" cropped by the right edge** | the same missing gutter: the last action sat flush against the screen edge with nothing to spare | the same fix, plus `fixedSize` on every action so a label can never be squeezed into an ellipsis |
+
+The founder had reported the cropping once before and it had been "fixed" once before — by moving the
+inset off the row and onto the chevron, which was the right principle and left the row with no gutter
+to inset from. `TopBar` and `MatchHeader` never had the bug, because they apply the gutter themselves.
+`tools/check_screen_bars.py` now fails a build on a `BackChevron` built anywhere but `PageBar`, or a
+negative horizontal inset outside `ThroDesign`.
+
+What the same screenshot confirmed working: the club's accent colour and badge, *YOU ARE AN ADMIN*,
+*Club · No members yet*, **Last played** with the played fixture under it and the *Nothing scheduled —
+every fixture here has been played or cancelled* line that tells that state apart from having no
+fixtures at all, and the five-tab bar with Discover selected.
+
 **Then the founder decided** (PD-003): the player chooses the appearance. The You tab now carries
 System / Light / Dark; setup and scoring stay dark as drawn.
 
@@ -528,6 +548,12 @@ is 44 points, not the export's 40; the checkout card shows the number and no rou
 route table exists in this repository.
 
 ## What is not built
+
+**All four tournament shapes draw themselves** (PD-021) — a knockout, a groups stage and the
+knockout after it, a round robin's table, and double elimination with its losers' bracket and a final
+that may be played twice. What is *not* built is a way to set a groups tournament's group sizes from
+anywhere but Edit, and any draw at all for a shape THRØ has not been told the setup of: it says so
+rather than guessing.
 
 No network, sync or server calls of any kind — the module graph has no network target, which is how
 LATENCY_BUDGETS.md's structural requirement is enforced. No attestation, no rating (OD-001), no
