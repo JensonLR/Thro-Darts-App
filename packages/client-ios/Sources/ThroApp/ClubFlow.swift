@@ -938,6 +938,9 @@ public struct NewClubScreen: View {
             .padding(.horizontal, ThroSpacing.spaceScreenGutter)
             .padding(.bottom, ThroSpacing.spacing6)
         }
+        // The screen arrives (PD-027): one beat, on the design's own curve,
+        // withdrawn entirely under Reduce Motion.
+        .throEntrance(0)
         .background(ThroColor.colorBackgroundPrimary.ignoresSafeArea())
     }
 
@@ -1084,6 +1087,9 @@ public struct NewMemberScreen: View {
             .padding(.horizontal, ThroSpacing.spaceScreenGutter)
             .padding(.bottom, ThroSpacing.spacing6)
         }
+        // The screen arrives (PD-027): one beat, on the design's own curve,
+        // withdrawn entirely under Reduce Motion.
+        .throEntrance(0)
         .background(ThroColor.colorBackgroundPrimary.ignoresSafeArea())
     }
 }
@@ -1142,6 +1148,9 @@ public struct NewFixtureScreen: View {
             .padding(.horizontal, ThroSpacing.spaceScreenGutter)
             .padding(.bottom, ThroSpacing.spacing6)
         }
+        // The screen arrives (PD-027): one beat, on the design's own curve,
+        // withdrawn entirely under Reduce Motion.
+        .throEntrance(0)
         .background(ThroColor.colorBackgroundPrimary.ignoresSafeArea())
     }
 }
@@ -1342,6 +1351,9 @@ public struct EditClubScreen: View {
             .padding(.horizontal, ThroSpacing.spaceScreenGutter)
             .padding(.bottom, ThroSpacing.spacing6)
         }
+        // The screen arrives (PD-027): one beat, on the design's own curve,
+        // withdrawn entirely under Reduce Motion.
+        .throEntrance(0)
         .background(ThroColor.colorBackgroundPrimary.ignoresSafeArea())
     }
 
@@ -1505,6 +1517,9 @@ public struct EditMemberPictureScreen: View {
                 .padding(.bottom, ThroSpacing.spacing6)
             }
         }
+        // The screen arrives (PD-027): one beat, on the design's own curve,
+        // withdrawn entirely under Reduce Motion.
+        .throEntrance(0)
         .background(ThroColor.colorBackgroundPrimary.ignoresSafeArea())
     }
 }

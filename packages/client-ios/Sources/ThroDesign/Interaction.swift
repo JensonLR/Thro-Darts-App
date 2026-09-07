@@ -384,3 +384,41 @@ public extension View {
     /// Marks this as the `index`-th block of a screen, counting from the top.
     func throEntrance(_ index: Int) -> some View { modifier(ThroEntrance(index: index)) }
 }
+
+/// Something that lands rather than appears — a result, a won leg, a number that has just been
+/// decided.
+///
+/// **The one gesture the design already owns.** `motionScaleImpact` is 1.02: what an impact comes
+/// *out* by. `ThroPressStyle` uses its inverse for a press going in. This is the impact itself, on
+/// `motionEasingImpact`, which overshoots and settles — so the result screen's score arrives with
+/// the same physics as a dart hitting a board, and does it with a token that was already there
+/// rather than a number somebody picked.
+///
+/// Used sparingly and deliberately: **on the outcome of a match, and nothing else.** A screen where
+/// everything lands is a screen where nothing does.
+public struct ThroLanding: ViewModifier {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    private let delay: Double
+    @State private var landed = false
+
+    public init(delay: Double = 0) { self.delay = delay }
+
+    public func body(content: Content) -> some View {
+        let settled = landed || reduceMotion
+        return content
+            .scaleEffect(settled ? 1 : ThroMotion.motionScaleImpact)
+            .opacity(settled ? 1 : 0)
+            .onAppear {
+                guard !reduceMotion else { return }
+                let c = ThroMotion.motionEasingImpact
+                withAnimation(.timingCurve(Double(c.0), Double(c.1), Double(c.2), Double(c.3),
+                                           duration: ThroMotion.motionDurationEmphasis).delay(delay)) {
+                    landed = true
+                }
+            }
+    }
+}
+
+public extension View {
+    func throLanding(delay: Double = 0) -> some View { modifier(ThroLanding(delay: delay)) }
+}

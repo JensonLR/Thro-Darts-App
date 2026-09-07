@@ -210,6 +210,9 @@ public struct ClubsScreen: View {
                 .padding(.bottom, ThroSpacing.spacing6)
             }
         }
+        // The screen arrives (PD-027): one beat, on the design's own curve,
+        // withdrawn entirely under Reduce Motion.
+        .throEntrance(0)
         .background(ThroColor.colorBackgroundPrimary.ignoresSafeArea())
     }
 }
@@ -272,6 +275,9 @@ public struct ClubScreen: View {
                 .padding(.bottom, ThroSpacing.spacing6)
             }
         }
+        // The screen arrives (PD-027): one beat, on the design's own curve,
+        // withdrawn entirely under Reduce Motion.
+        .throEntrance(0)
         .background(ThroColor.colorBackgroundPrimary.ignoresSafeArea())
     }
 
@@ -481,6 +487,9 @@ public struct ClubMembersScreen: View {
                 .padding(.bottom, ThroSpacing.spacing6)
             }
         }
+        // The screen arrives (PD-027): one beat, on the design's own curve,
+        // withdrawn entirely under Reduce Motion.
+        .throEntrance(0)
         .background(ThroColor.colorBackgroundPrimary.ignoresSafeArea())
     }
 }
@@ -571,6 +580,9 @@ public struct FixturesScreen: View {
                 .padding(.bottom, ThroSpacing.spacing6)
             }
         }
+        // The screen arrives (PD-027): one beat, on the design's own curve,
+        // withdrawn entirely under Reduce Motion.
+        .throEntrance(0)
         .background(ThroColor.colorBackgroundPrimary.ignoresSafeArea())
     }
 
@@ -661,6 +673,9 @@ public struct AnnounceScreen: View {
             .padding(.horizontal, ThroSpacing.spaceScreenGutter)
             .padding(.bottom, ThroSpacing.spacing6)
         }
+        // The screen arrives (PD-027): one beat, on the design's own curve,
+        // withdrawn entirely under Reduce Motion.
+        .throEntrance(0)
         .background(ThroColor.colorBackgroundPrimary.ignoresSafeArea())
     }
 
@@ -804,6 +819,9 @@ public struct ProfileScreen: View {
                 .padding(.bottom, ThroSpacing.spacing6)
             }
         }
+        // The screen arrives (PD-027): one beat, on the design's own curve,
+        // withdrawn entirely under Reduce Motion.
+        .throEntrance(0)
         .background(ThroColor.colorBackgroundPrimary.ignoresSafeArea())
     }
 }

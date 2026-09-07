@@ -289,6 +289,9 @@ public struct LeagueScreen: View {
                 .padding(.bottom, ThroSpacing.spacing6)
             }
         }
+        // The screen arrives (PD-027): one beat, on the design's own curve,
+        // withdrawn entirely under Reduce Motion.
+        .throEntrance(0)
         .background(ThroColor.colorBackgroundPrimary.ignoresSafeArea())
     }
 
@@ -511,6 +514,9 @@ public struct TournamentScreen: View {
                 .padding(.bottom, ThroSpacing.spacing6)
             }
         }
+        // The screen arrives (PD-027): one beat, on the design's own curve,
+        // withdrawn entirely under Reduce Motion.
+        .throEntrance(0)
         .background(ThroColor.colorBackgroundPrimary.ignoresSafeArea())
     }
 
@@ -1012,6 +1018,9 @@ public struct TeamsScreen: View {
                 .padding(.bottom, ThroSpacing.spacing6)
             }
         }
+        // The screen arrives (PD-027): one beat, on the design's own curve,
+        // withdrawn entirely under Reduce Motion.
+        .throEntrance(0)
         .background(ThroColor.colorBackgroundPrimary.ignoresSafeArea())
         // Removing a team is not undoable and takes fixtures with it, so it is confirmed with the
         // number in the question rather than with a bare "are you sure".
@@ -1117,6 +1126,9 @@ public struct NewTeamScreen: View {
                 .padding(.horizontal, ThroSpacing.spaceScreenGutter)
                 .padding(.bottom, ThroSpacing.spacing6)
         }
+        // The screen arrives (PD-027): one beat, on the design's own curve,
+        // withdrawn entirely under Reduce Motion.
+        .throEntrance(0)
         .background(ThroColor.colorBackgroundPrimary.ignoresSafeArea())
     }
 }
@@ -1201,6 +1213,9 @@ public struct RecordResultScreen: View {
             .padding(.horizontal, ThroSpacing.spaceScreenGutter)
             .padding(.bottom, ThroSpacing.spacing6)
         }
+        // The screen arrives (PD-027): one beat, on the design's own curve,
+        // withdrawn entirely under Reduce Motion.
+        .throEntrance(0)
         .background(ThroColor.colorBackgroundPrimary.ignoresSafeArea())
     }
 
@@ -1381,6 +1396,9 @@ public struct NewTeamFixtureScreen: View {
                 .padding(.bottom, ThroSpacing.spacing6)
             }
         }
+        // The screen arrives (PD-027): one beat, on the design's own curve,
+        // withdrawn entirely under Reduce Motion.
+        .throEntrance(0)
         .background(ThroColor.colorBackgroundPrimary.ignoresSafeArea())
     }
 

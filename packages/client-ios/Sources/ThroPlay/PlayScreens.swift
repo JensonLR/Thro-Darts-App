@@ -194,6 +194,9 @@ public struct MatchSetupScreen: View {
             }
             .scrollDismissesKeyboard(.interactively)
         }
+        // The screen arrives (PD-027): one beat, on the design's own curve,
+        // withdrawn entirely under Reduce Motion.
+        .throEntrance(0)
         .background(ThroColor.colorBackgroundPrimary.ignoresSafeArea())
         .throAppearance(Appearance(stored: appearanceRaw))
     }
@@ -290,6 +293,9 @@ public struct MatchReadyScreen: View {
                 .padding(.horizontal, ThroSpacing.spaceScreenGutter)
             }
         }
+        // The screen arrives (PD-027): one beat, on the design's own curve,
+        // withdrawn entirely under Reduce Motion.
+        .throEntrance(0)
         .background(ThroColor.colorBackgroundPrimary.ignoresSafeArea())
         .throAppearance(Appearance(stored: appearanceRaw))
     }
@@ -767,6 +773,10 @@ public struct MatchResultScreen: View {
             TopBar("Result", eyebrow: "Local match", onBack: onDone)
             ScrollView {
                 VStack(alignment: .leading, spacing: 0) {
+                    // The reveal (PD-027). This screen is the app's one unveiling: the outcome
+                    // lands on the design's own impact curve — the same 1.02 a dart's strike comes
+                    // out by — and everything under it arrives in the order it is read. It used to
+                    // be there, whole, on the first frame.
                     section {
                         MatchSummary(
                             headline: session.resultHeadline,
@@ -774,6 +784,7 @@ public struct MatchResultScreen: View {
                             score: "\(session.legsWon(.home))–\(session.legsWon(.away))",
                             opponent: "\(session.name(.home)) v \(session.name(.away)) · \(session.formatLabel)"
                         )
+                        .throLanding()
                         if let detail = session.resultDetail {
                             Text(detail)
                                 .thro(ThroTypography.metadata)
@@ -783,11 +794,12 @@ public struct MatchResultScreen: View {
                         Tag("Not rated", tone: .neutral, icon: .info).padding(.top, ThroSpacing.spacing4)
                     }
                     ThroDivider(inset: ThroSpacing.spaceScreenGutter)
-                    ForEach(Seat.allCases, id: \.self) { seat in
+                    ForEach(Array(Seat.allCases.enumerated()), id: \.element) { index, seat in
                         section {
                             SectionHeader(session.name(seat))
                             StatGrid(session.statistics(for: seat).map(\.item))
                         }
+                        .throEntrance(index + 1)
                         ThroDivider(inset: ThroSpacing.spaceScreenGutter)
                     }
                     section {
@@ -839,6 +851,7 @@ public struct MatchResultScreen: View {
                                        fullWidth: true, action: onConfirmResult)
                         }
                     }
+                    .throEntrance(3)
                     ThroDivider(inset: ThroSpacing.spaceScreenGutter)
                     if let proposal = session.retraction {
                         RetractionCard(proposal: proposal, playerName: session.name(proposal.seat),
@@ -857,6 +870,7 @@ public struct MatchResultScreen: View {
                             ThroButton("Done", variant: .primary, size: .large, fullWidth: true, action: onDone)
                             ThroButton("Play again", variant: .secondary, size: .large, fullWidth: true, action: onPlayAgain)
                         }
+                        .throEntrance(4)
                     }
                 }
             }
@@ -939,6 +953,9 @@ public struct ConfirmResultScreen: View {
                 .padding(.vertical, ThroSpacing.spacing5)
             }
         }
+        // The screen arrives (PD-027): one beat, on the design's own curve,
+        // withdrawn entirely under Reduce Motion.
+        .throEntrance(0)
         .background(ThroColor.colorBackgroundPrimary.ignoresSafeArea())
         .throAppearance(Appearance(stored: appearanceRaw))
     }

@@ -1230,6 +1230,9 @@ public struct SettingsScreen: View {
                 }
             }
         }
+        // The screen arrives (PD-027): one beat, on the design's own curve,
+        // withdrawn entirely under Reduce Motion.
+        .throEntrance(0)
         .background(ThroColor.colorBackgroundPrimary.ignoresSafeArea())
         .fileImporter(isPresented: $picking, allowedContentTypes: [.json]) { result in
             inspection = SettingsScreen.inspect(result)
@@ -1369,6 +1372,9 @@ public struct NotBuiltScreen: View {
                     .padding(.horizontal, ThroSpacing.spaceScreenGutter)
             }
         }
+        // The screen arrives (PD-027): one beat, on the design's own curve,
+        // withdrawn entirely under Reduce Motion.
+        .throEntrance(0)
         .background(ThroColor.colorBackgroundPrimary.ignoresSafeArea())
     }
 }
