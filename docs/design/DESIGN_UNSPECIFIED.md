@@ -89,7 +89,26 @@ Sourced by reading the whole export: 61 components, 33 participant screens, 9 or
     contested match, which has no representation.
 13. **`bye` and `walkover` states on `TournamentProgress`**, which supports only won/lost/active/future.
 14. **Loading state for any screen.** `LoadingState` exists and is used by none of the 42 screens.
-15. **Disabled appearance** beyond a flat opacity multiplier (which produces real contrast failures).
+15. **Disabled appearance** beyond a flat opacity multiplier. **Measured, 2026-09-07**, so this item
+    is a number rather than an assertion — and still a design commission, not engineering's to
+    answer. `ThroButton` dims the whole control to 0.38 and the keypad to 0.4; composited over the
+    page that gives:
+
+    | control | enabled | disabled |
+    |---|---|---|
+    | primary button label, light | 11.24:1 | **2.10:1** |
+    | primary button label, dark | 8.75:1 | **2.78:1** |
+    | secondary button label, light | 17.39:1 | **2.45:1** |
+    | secondary button border, light | 1.70:1 | **1.21:1** |
+    | keypad key label, light | 18.81:1 | **2.66:1** |
+
+    **This is not a WCAG failure**, and saying so matters: 1.4.3 exempts *"text that is part of an
+    inactive user interface component"*, so a disabled control is outside the requirement. What the
+    numbers show is a quality question — at 2.1:1 a player can see that a button is there and cannot
+    comfortably read what it says, and the secondary button's border at 1.21:1 has effectively gone.
+    A treatment that kept the shape and dropped the emphasis (a neutral surface, a tertiary label)
+    would read better than a flat multiplier, but **which** treatment is the founder's to choose, so
+    engineering has measured it and stopped.
 16. **`Dialog` and `Sheet` modal behaviour** — scrim, focus trap, dismissal, initial focus.
     `--color-scrim` is defined and unused; both currently claim `aria-modal` without being modal.
     **Partly decided by the founder, 2026-09-06 (PD-005):** the bust and won-leg card over the scoring

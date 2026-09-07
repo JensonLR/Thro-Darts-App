@@ -714,6 +714,28 @@ drive all keep running through a `SIGKILL`; a journal that only ever reached the
 passes this and would still lose data to a pulled battery. That is the fourth row of the runbook's
 table, and the whole reason ADR-011 asks for two tests. The power-cut test still needs hands.
 
+### Two more guards, and one measurement that stops short on purpose
+
+**An icon-only control is now required to have a name.** A `Button` whose label draws a glyph and
+nothing else is silent to VoiceOver — a screen reader announces "button" and stops, because a
+chevron is not a word. `check_controls_react.py` gained that as its fourth rule. It found nothing:
+every icon-only control in the client is named. That is the right outcome for a check written after
+a near miss rather than after a defect, and it is only worth having because it was made to fail
+first — the first version passed on a button whose label had been emptied, because it counted
+`.buttonStyle(ThroPressStyle(...))` as "the label draws something". It reads the label alone now.
+
+**And the disabled appearance was measured rather than fixed.** `DESIGN_UNSPECIFIED` item 15 said a
+flat opacity multiplier "produces real contrast failures" and had said it since the audit. It is a
+design commission, and PD-015 released four of those and not this one — so engineering may not
+answer it. What engineering can do is turn the assertion into numbers: `ThroButton`'s 0.38 takes a
+primary label from 11.24:1 to **2.10:1** and a secondary button's border from 1.70:1 to **1.21:1**,
+which has effectively gone; the keypad's 0.4 takes a key from 18.81:1 to 2.66:1.
+
+**It is not a WCAG failure** and the entry says so, because the difference matters to whoever
+decides: 1.4.3 exempts text in an inactive component. What the numbers show is that a player can see
+a disabled button is there and cannot comfortably read what it says. Which treatment replaces the
+multiplier is the founder's call; the item now carries the evidence for making it.
+
 ## Nothing here is a convention
 
 Each competitive property is asserted by something that fails when it is removed.

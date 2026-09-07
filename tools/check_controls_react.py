@@ -18,6 +18,9 @@ not a thing a unit test can see. So it is checked here, mechanically, on the sou
      if the style is missing altogether.
   3. **Every `Button` label reaches a tap target.** One of `throTapTarget`, `throRowTapTarget`,
      `contentShape`, or a `touchTargetMinimum` frame must appear inside the label.
+  4. **Every icon-only `Button` is named.** A control whose label draws a glyph and nothing else is
+     silent to VoiceOver: a chevron is not a word, and a screen reader announces "button" and
+     stops.
 
 Rules 2 and 3 are skipped for buttons inside a `.confirmationDialog`/`.alert` block, which are the
 system's to draw and must not be restyled.
@@ -40,6 +43,13 @@ SYSTEM = re.compile(r"Button\(\s*\"")
 DIALOG = (".confirmationDialog(", ".alert(")
 TARGET = ("throTapTarget", "throRowTapTarget", "contentShape", "touchTarget")
 
+# Rule 4: an icon-only control is named. These are the views that draw nothing a screen reader can
+# read, so a label built only from them says nothing at all; any OTHER capitalised view is presumed
+# to draw something with words in it, which is why `PlayerIdentity` in a row makes it not icon-only.
+MUTE = {"Button", "Icon", "HStack", "VStack", "ZStack", "Group", "Spacer", "Circle", "Rectangle",
+        "RoundedRectangle", "Capsule", "Color", "Image", "Divider", "ThroDivider", "Badge"}
+VIEW = re.compile(r"\b([A-Z]\w*)\s*\(")
+
 
 def statement(lines: list[str], start: int) -> str:
     """The `Button` and everything modifying it, however long its label runs.
@@ -60,6 +70,26 @@ def statement(lines: list[str], start: int) -> str:
         if here < indent:
             break
         if here == indent and not line.lstrip().startswith((".", "}")):
+            break
+        out.append(line)
+    return "\n".join(out)
+
+
+def label(block: str) -> str:
+    """Just the label — the part that draws — without the modifiers applied to the Button.
+
+    The distinction matters for rule 4: `.buttonStyle(ThroPressStyle(...))` is a capitalised name
+    followed by a bracket and draws nothing, so counting it as "this label draws something" made the
+    rule pass on a button with no label at all. Found by removing a real `accessibilityLabel` and
+    watching the check stay green.
+    """
+    lines = block.splitlines()
+    if not lines:
+        return block
+    indent = len(lines[0]) - len(lines[0].lstrip())
+    out = [lines[0]]
+    for line in lines[1:]:
+        if line.strip() and len(line) - len(line.lstrip()) == indent and line.lstrip().startswith("."):
             break
         out.append(line)
     return "\n".join(out)
@@ -97,12 +127,20 @@ def main() -> int:
                     f"{rel}:{i + 1}: a Button whose label reaches no tap target — a finger landing "
                     f"beside the ink lands on nothing. Add throTapTarget() or throRowTapTarget()."
                 )
+            # A control whose label draws only a glyph is silent to VoiceOver. A glyph is not a name.
+            drawn = label(block)
+            if "Icon(" in drawn and ".accessibilityLabel" not in block and not (set(VIEW.findall(drawn)) - MUTE):
+                problems.append(
+                    f"{rel}:{i + 1}: an icon-only Button with no .accessibilityLabel — it says "
+                    f"nothing at all to a screen reader."
+                )
     if problems:
         print("Controls that do not react:", file=sys.stderr)
         for problem in problems:
             print(f"  {problem}", file=sys.stderr)
         return 1
-    print(f"ok: {buttons} controls, every one styled and every one with a tap target")
+    print(f"ok: {buttons} controls, every one styled, every one with a tap target, "
+          f"and every icon-only one named")
     return 0
 
 
