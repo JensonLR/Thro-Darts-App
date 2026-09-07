@@ -92,14 +92,20 @@ public enum ImageIntake {
         return out as Data
     }
 
-    /// Whether these bytes carry any metadata at all. Used by the test that proves the above.
+    /// Whether these bytes carry metadata that came from wherever the image came from.
+    ///
+    /// EXIF, GPS and IPTC: the blocks that say where a photograph was taken, on what, by whom and
+    /// when. **Not TIFF**, which a JPEG encoder writes for itself — orientation, resolution,
+    /// compression — and which says nothing about provenance. Including it here would make this
+    /// predicate mean "was written by an encoder", which is true of every JPEG in the world and
+    /// would make the test that uses it worthless in the other direction.
     public static func carriesMetadata(_ data: Data) -> Bool {
         guard let source = CGImageSourceCreateWithData(data as CFData, nil),
               let props = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [CFString: Any] else {
             return false
         }
         for key in [kCGImagePropertyExifDictionary, kCGImagePropertyGPSDictionary,
-                    kCGImagePropertyIPTCDictionary, kCGImagePropertyTIFFDictionary] {
+                    kCGImagePropertyIPTCDictionary] {
             if props[key] != nil { return true }
         }
         return false

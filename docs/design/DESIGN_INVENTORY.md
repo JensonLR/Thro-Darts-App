@@ -38,6 +38,13 @@ accent with `Badge`, `Tag` and `Icon.circleCheck` on it. Nothing in either intro
 the export's own icon set (`extracted/components/core/icons.js`) and had simply not been carried into
 `ThroDesign` yet. Their path data is verbatim, as every other glyph's is.
 
+**The club editor and its picker (PD-014).** `EditClubScreen` is `TopBar`, `Badge`, `ThroTextField`
+and `ThroButton`, plus the platform's own `PhotosPicker` — the same standing as the `DatePicker` on a
+fixture and the `Toggle` in Settings: it is the operating system's control, not a component the
+export was expected to draw. `Badge` gained one parameter, an optional image that fills the same
+rounded square the initials would, so a list of clubs stays a list of one shape whether or not
+anybody has uploaded anything. No new component, and no new value.
+
 **The confirm-result screen is composition too (PD-011).** `ConfirmResultScreen` is `TopBar`,
 `MatchSummary`, `PlayerIdentity`, `ThroButton` and `VerificationState` as they already exist. The one
 thing it adds is words: the label alone would flatter what happened, so the screen says in plain text

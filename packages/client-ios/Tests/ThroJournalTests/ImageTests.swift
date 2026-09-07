@@ -19,6 +19,9 @@ final class ImageTests: XCTestCase {
         try super.setUpWithError()
         directory = URL(fileURLWithPath: NSTemporaryDirectory())
             .appendingPathComponent("thro-images-\(UUID().uuidString)")
+        // `ImageStore` makes its own folder; the club book does not, and three of these open one
+        // here directly. Nothing else was wrong with those tests.
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
     }
 
     override func tearDown() {
@@ -28,14 +31,14 @@ final class ImageTests: XCTestCase {
 
     /// A JPEG of `size`×`size` carrying GPS coordinates and an EXIF block — a phone photograph, in
     /// the one respect that matters here.
-    private func photograph(size: Int = 1200) throws -> Data {
+    private func photograph(size: Int = 1200, colour: CGFloat = 0.24) throws -> Data {
         let space = CGColorSpaceCreateDeviceRGB()
         guard let context = CGContext(data: nil, width: size, height: size, bitsPerComponent: 8,
                                       bytesPerRow: 0, space: space,
                                       bitmapInfo: CGImageAlphaInfo.noneSkipLast.rawValue) else {
             throw XCTSkip("this machine cannot make a bitmap")
         }
-        context.setFillColor(CGColor(red: 0.06, green: 0.24, blue: 0.18, alpha: 1))
+        context.setFillColor(CGColor(red: 0.06, green: colour, blue: 0.18, alpha: 1))
         context.fill(CGRect(x: 0, y: 0, width: size, height: size))
         guard let image = context.makeImage() else { throw XCTSkip("no image from the context") }
 
@@ -64,13 +67,39 @@ final class ImageTests: XCTestCase {
 
     /// The one that matters. A club badge uploaded by a fifteen-year-old carries their house, and
     /// passing the original bytes through would publish it.
+    ///
+    /// Checked two ways, because the first alone could be satisfied by a predicate that simply stops
+    /// looking: the EXIF, GPS and IPTC blocks must be absent from the re-encoded image, **and** the
+    /// text planted in the original must not appear anywhere in its bytes. The second is the one
+    /// that cannot be talked around.
     func testWhereTheImageWasTakenDoesNotSurviveIntake() throws {
         let original = try photograph()
         XCTAssertTrue(ImageIntake.carriesMetadata(original), "the fixture is not a photograph without it")
+        XCTAssertTrue(ImageTests.contains(original, "taken at home"),
+                      "the fixture's comment is not in its bytes, so the second check would prove nothing")
 
         let clean = try ImageIntake.reEncode(original)
         XCTAssertFalse(ImageIntake.carriesMetadata(clean),
-                       "the re-encoded image still carries metadata it came with")
+                       "the re-encoded image still carries EXIF, GPS or IPTC")
+        XCTAssertFalse(ImageTests.contains(clean, "taken at home"),
+                       "the comment planted in the original is still somewhere in the bytes")
+
+        // The encoder writes a TIFF block of its own — orientation, resolution, compression — and
+        // that is not provenance. Said here rather than left as a silent exclusion above.
+        if let source = CGImageSourceCreateWithData(clean as CFData, nil),
+           let props = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [CFString: Any],
+           let tiff = props[kCGImagePropertyTIFFDictionary] as? [CFString: Any] {
+            XCTAssertNil(tiff[kCGImagePropertyTIFFArtist], "an artist is provenance and must not survive")
+            XCTAssertNil(tiff[kCGImagePropertyTIFFDateTime], "a timestamp is provenance and must not survive")
+            XCTAssertNil(tiff[kCGImagePropertyTIFFMake])
+            XCTAssertNil(tiff[kCGImagePropertyTIFFModel], "the camera is provenance and must not survive")
+        }
+    }
+
+    /// Whether a run of bytes appears anywhere in the file. Crude on purpose: it makes no assumption
+    /// about which block a string would have been written into.
+    private static func contains(_ data: Data, _ text: String) -> Bool {
+        data.range(of: Data(text.utf8)) != nil
     }
 
     func testAPhotographIsBroughtDownToTheSizeABadgeIsDrawnAt() throws {
@@ -95,8 +124,13 @@ final class ImageTests: XCTestCase {
         XCTAssertEqual(try store.assetIds().count, 0)
     }
 
-    /// The id is a digest of the stored bytes, so the same picture twice is one file — and a
+    /// The id is a digest of the STORED bytes, so the same picture twice is one file — and a
     /// different picture can never land on an id something else already points at.
+    ///
+    /// "The same picture" means the same after intake, which is why the two sizes below are one
+    /// asset and the two colours are two: a 600 px and an 800 px photograph of the same flat colour
+    /// re-encode to identical bytes, and storing them twice would be storing the same file twice.
+    /// That is the digest doing its job, and the first version of this test asserted the opposite.
     func testTheSamePictureStoredTwiceIsOneFileAndADifferentOneIsNot() throws {
         let store = try ImageStore(directory: directory)
         let first = try store.put(try photograph(size: 800))
@@ -104,8 +138,11 @@ final class ImageTests: XCTestCase {
         XCTAssertEqual(first, again)
         XCTAssertEqual(try store.assetIds(), [first])
 
-        let other = try store.put(try photograph(size: 600))
-        XCTAssertNotEqual(first, other)
+        XCTAssertEqual(try store.put(try photograph(size: 600)), first,
+                       "the same colour at a different size is the same picture once it is stored")
+
+        let other = try store.put(try photograph(size: 800, colour: 0.71))
+        XCTAssertNotEqual(first, other, "a different picture is a different asset")
         XCTAssertEqual(try store.assetIds().count, 2)
 
         XCTAssertNotNil(store.data(first))
