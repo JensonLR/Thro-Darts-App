@@ -1,7 +1,7 @@
 # Running the iOS client
 
 > **Verification status, 2026-09-07.** Every package compiles and every test passes on macOS CI —
-> 379 tests in all: 55 design, 90 journal, 61 scoring session and share card, 150 opening, app and clubs, 23 Lock Screen, wall and widgets — and the
+> 380 tests in all: 55 design, 90 journal, 61 scoring session and share card, 150 opening, app and clubs, 24 Lock Screen, wall and widgets — and the
 > Xcode app builds for the iOS simulator on
 > CI with Xcode 26.6, on every push that touches them. **The app has run on a phone**: the founder's,
 > the evening of 2026-09-05, a full best-of-3 from setup to result, in dark mode, on an iPhone 14 Pro Max

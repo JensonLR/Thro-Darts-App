@@ -61,6 +61,14 @@ public struct ThroProjection: Codable, Equatable, Sendable {
     /// Legs recorded in the last seven days, on the same reasoning.
     public let legsThisWeek: Int
 
+    /// **`writtenAt` is stamped through the format it will be written in.**
+    ///
+    /// A `Date` carries sub-millisecond precision and the ISO-8601 string this file is written in
+    /// does not, so a projection built from `Date()` did not read back as itself: what the file said
+    /// and what the app believed it had said were different instants. Harmless here — nothing
+    /// compares them — right up until something does, which is exactly how the journal's own
+    /// timestamp bug reached a player. The same fix, for the same reason: the instant this claims to
+    /// have been written is the instant the file will actually say.
     public init(version: Int = ThroProjection.format,
                 writtenAt: Date,
                 live: ThroLiveState? = nil,
@@ -69,12 +77,19 @@ public struct ThroProjection: Codable, Equatable, Sendable {
                 matches: Int = 0,
                 legsThisWeek: Int = 0) {
         self.version = version
-        self.writtenAt = writtenAt
+        self.writtenAt = ThroProjection.stamped(writtenAt)
         self.live = live
         self.liveFormat = liveFormat
         self.nextFixture = nextFixture
         self.matches = matches
         self.legsThisWeek = legsThisWeek
+    }
+
+    /// The instant, as the file can express it. Anything finer is lost on the way to disk, so it is
+    /// lost here too rather than being carried in memory as a difference nobody can see.
+    public static func stamped(_ date: Date) -> Date {
+        let iso = ISO8601DateFormatter()
+        return iso.date(from: iso.string(from: date)) ?? date
     }
 
     /// How long a widget's contents may be presented as current.

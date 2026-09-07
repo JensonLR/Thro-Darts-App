@@ -107,17 +107,45 @@ final class ProjectionTests: XCTestCase {
     /// legs — because a count carries its own sample, and there is no room on a widget for the
     /// basis an average would need. A `3-dart average` field appearing here would be a claim on a
     /// surface none of the honesty layer's machinery can reach.
-    func testNothingOnTheProjectionIsAFigureThatNeedsABasis() throws {
+    ///
+    /// The whole key set, not a list of banned words. The first version searched for substrings and
+    /// failed on `liveFormat`, which contains "form" and is a match format — a check that produces
+    /// a false alarm on the first real field it sees is a check people learn to edit rather than
+    /// read. Naming the set instead means a field added tomorrow fails this until somebody says out
+    /// loud what it is, which is the decision that actually needs making.
+    func testTheProjectionCarriesExactlyTheseFieldsAndTheyAreAllCounts() throws {
         let data = try ThroProjectionStore.encoder.encode(projection())
         let object = try XCTUnwrap(try JSONSerialization.jsonObject(with: data) as? [String: Any])
-        for key in object.keys {
-            let lowered = key.lowercased()
-            for banned in ["average", "avg", "checkout", "percent", "rating", "form", "rank"] {
-                XCTAssertFalse(lowered.contains(banned), "\(key) is a figure that needs a basis")
-            }
-        }
+
+        XCTAssertEqual(Set(object.keys),
+                       ["version", "writtenAt", "live", "liveFormat", "nextFixture",
+                        "matches", "legsThisWeek"],
+                       "a new field on a widget needs a reason said out loud")
+
+        // The two numbers a phone with no match shows. Both are counts: a count carries its own
+        // sample, which is the only kind of figure that fits where a basis will not.
         XCTAssertEqual(object["matches"] as? Int, 12)
         XCTAssertEqual(object["legsThisWeek"] as? Int, 9)
+        // And the leg carries remainders and legs — a scoreboard — and no derived figure at all.
+        let live = try XCTUnwrap(object["live"] as? [String: Any])
+        XCTAssertEqual(Set(live.keys),
+                       ["homeName", "awayName", "homeRemaining", "awayRemaining",
+                        "homeLegs", "awayLegs", "thrower", "checkout"])
+    }
+
+    /// **What the file says is what the app believes it said.**
+    ///
+    /// A `Date` carries sub-millisecond precision and the ISO-8601 string this is written in does
+    /// not, so a projection built from `Date()` did not read back as itself. Harmless while nothing
+    /// compares them and exactly how the journal's own timestamp bug reached a player — *"Not saved,
+    /// so not recorded"* for a visit that was saved. Caught here by the round-trip test rather than
+    /// by somebody's phone.
+    func testTheInstantItClaimsIsTheInstantTheFileCanHold() {
+        let awkward = Date(timeIntervalSince1970: 1_800_000_000.123_456)
+        let projection = ThroProjection(writtenAt: awkward)
+        XCTAssertEqual(projection.writtenAt, ThroProjection.stamped(awkward))
+        XCTAssertTrue(ThroProjectionStore.write(projection, to: url))
+        XCTAssertEqual(ThroProjectionStore.read(from: url)?.writtenAt, projection.writtenAt)
     }
 
     /// The group id is written down in three places — here, and the two entitlements files — and a
