@@ -30,6 +30,7 @@ ROWS = {
     "| The opening, the app shell and the club screens |": ["packages/client-ios/Tests/ThroAppTests"],
     "| Statistics honesty |": ["packages/statistics/src/test"],
     "| Statistics honesty, Swift |": ["packages/statistics-swift/Tests"],
+    "| On-device journal, Android |": ["packages/journal/src/test"],
 }
 
 IOS = "packages/client-ios/Tests"

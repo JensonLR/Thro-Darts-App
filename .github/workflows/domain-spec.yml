@@ -61,6 +61,27 @@ jobs:
       - name: Tokens exist
         run: python3 tools/check_tokens_exist.py
 
+  journal:
+    name: The on-device journal, on Android's half
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+      - uses: gradle/actions/setup-gradle@v4
+
+      - name: Journal
+        working-directory: packages/journal
+        run: gradle test --no-daemon
+
+      # A journal is a file, and a file outlives the process that wrote it. The two implementations
+      # must agree about what is ON DISK or a row written on one phone is unreadable on the other —
+      # silently, because both readers refuse a row they cannot interpret rather than guess.
+      - name: The two journals agree on disk
+        run: python3 tools/check_journal_parity.py
+
   conformance:
     name: Scoring rules and conformance corpus
     runs-on: ubuntu-latest

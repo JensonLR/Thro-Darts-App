@@ -146,6 +146,14 @@ caveats above stand and are not softened by the code existing: the SE-class iPho
 reference device are unmeasured, the power-cut test is outstanding, and the app has been built and
 tested on CI but not yet run on a phone.
 
+**The Android half of that storage now exists too** (`packages/journal`): the same schema, the same
+append-only triggers including PD-026's narrowed delete, the same gapless per-device sequence, the
+same replay through the Kotlin engine. It is a second *rendering* rather than a second design, and
+that is checked rather than trusted — `tools/check_journal_parity.py` compares the columns of both
+tables in order, both triggers verbatim, and the stored row kinds, on every push. What it is not is
+a durability claim: those tests run on the JVM's SQLite, not Android's, and the paragraph above says
+what is missing.
+
 Two properties of the phone's numbers are worth keeping:
 
 - **The phone sits between the two Macs**: slower than the MacBook Air (P95 0.55–0.73 ms), faster
@@ -165,7 +173,14 @@ What this does **not** close:
   yet. Twelve times of headroom makes it unlikely that the SE-class run overturns this — and
   "unlikely" is a prediction, not a measurement, which is the distinction this ADR exists to
   enforce.
-- **The Android reference device has not been measured at all.**
+- **The Android reference device has not been measured at all.** As of 2026-09-07 the Android
+  *journal* exists (`packages/journal`, Kotlin, 32 tests) and the measurement does not, and the two
+  must not be confused. That package sets WAL and `synchronous=FULL` and reads **both** back; it
+  does **not** set `fullfsync` or `checkpoint_fullfsync`, because Apple's `F_FULLSYNC` has no Android
+  equivalent and SQLite would store the pragma and read it back as 1 while nothing had happened to
+  the hardware — a verification that always passes, which is worse than none. So the Android journal
+  asks only for what it can confirm, a test holds it to exactly those two pragmas, and **no
+  durability figure is claimed for Android by anything in this repository.**
 
 One limit of the probe itself, worth stating so the numbers are not over-read: **it measures
 latency, not durability.** The guard test proves the pragmas changed the system's behaviour; it does

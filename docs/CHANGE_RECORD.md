@@ -651,6 +651,43 @@ what *generic* looked like from the inside: an app whose motion was Apple's rath
 withdraws completely under Reduce Motion, and the stagger caps at six blocks, because the eighth
 section of a long screen arriving a third of a second late is a wait rather than choreography.
 
+## Gate 5's other half: the journal on Android
+
+Gate 5 had read *"on-device journal built on iOS … Android not started"* since the journal shipped,
+and it was the one large item on the list that was neither a design commission, a legal question,
+nor blocked on hardware somebody has to hold. `packages/journal` is that half.
+
+**It is the same journal, not a second one.** The same schema, the same two append-only triggers
+including PD-026's narrowing of the delete, the same gapless per-device sequence, the same replay
+through the engine, the same refusal to interpret a row a later build wrote. ADR-002 argues the
+domain is one domain rendered on several platforms; a journal that agreed with the iOS one only by
+convention would be the counter-example rather than the proof.
+
+**So the agreement is checked rather than trusted.** For the *engine* that claim is held by 258,516
+exhaustive transitions run against both implementations. For the journal it was held by nothing —
+two files, written weeks apart in two languages. A journal is a file, and a file outlives the process
+that wrote it, so what has to agree is what is written down:
+`tools/check_journal_parity.py` compares the columns of `local_match` and `journal` **in order**
+(both readers address columns by index), both triggers verbatim once whitespace is normalised, and
+the stored row kinds — which Kotlin's upper-case enum cases must serialise to. Each of those three
+dimensions was re-broken to watch the check fail on it, because the pigment check earlier in this
+round had already shown that a check nobody has seen fail is a check nobody has tested.
+
+If one platform wrote `retirement` and the other `RETIREMENT`, every ending would read back as a row
+the other build cannot interpret. Both readers **refuse** such a row rather than guess — which is
+right, and which is exactly why that failure would be silent, total, and found by a player.
+
+**And two things are not claimed.** These 32 tests run on the JVM's SQLite, not Android's, so what
+they prove is the schema, the triggers, the replay and the API rather than how a device's storage
+behaves. More importantly, **no Android durability number is claimed at all.** ADR-006's P95 of
+1.64 ms is an iPhone measurement of an Apple barrier. Android has no `F_FULLSYNC`, and SQLite will
+happily accept `PRAGMA fullfsync` on any platform and read it back as 1 while nothing has happened
+to the hardware — a verification that always passes, which is worse than no verification. So the
+Android configuration asks for the two pragmas that mean something everywhere, reads both back, and
+a test holds it to exactly those two so the shape of that decision cannot be quietly widened into a
+claim. The measurement on a real Android device is outstanding, in the same way OD-020's watch
+measurement is.
+
 ## Nothing here is a convention
 
 Each competitive property is asserted by something that fails when it is removed.
