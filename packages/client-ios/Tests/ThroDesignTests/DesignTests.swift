@@ -216,4 +216,35 @@ final class DesignTests: XCTestCase {
         XCTAssertGreaterThan(ThroDynamicType.scoringCeiling, DynamicTypeSize.large,
                              "the ceiling is an ACCESSIBILITY size, not a cap on ordinary text")
     }
+
+    // MARK: - PD-024: the scoring screen reflows instead of stopping
+
+    /// **The screen changes shape at exactly the size text used to stop growing.**
+    ///
+    /// That is the property that makes this an addition rather than a redesign: no size loses
+    /// anything it had, and no size below the threshold gains a scrolling region it never needed. A
+    /// threshold that drifted below it would put a scroll view under the thumb of a player scoring at
+    /// an ordinary text size, which is the thing the ceiling existed to prevent.
+    func testTheScreenReflowsAtExactlyTheSizeTextUsedToStop() {
+        for size in [DynamicTypeSize.xSmall, .large, .xxxLarge, .accessibility1] {
+            XCTAssertFalse(ThroDynamicType.reflows(at: size),
+                           "\(size) scored without scrolling before and must still")
+            XCTAssertEqual(ThroDynamicType.ceiling(reflowing: false), ThroDynamicType.scoringCeiling)
+        }
+        for size in [DynamicTypeSize.accessibility2, .accessibility3, .accessibility4, .accessibility5] {
+            XCTAssertTrue(ThroDynamicType.reflows(at: size),
+                          "\(size) is past the old cap, so it reflows rather than being clamped")
+        }
+    }
+
+    /// A reflowing screen grows all the way. The point of PD-024 is that a player who needs
+    /// `.accessibility5` gets it on the numbers they read — so a ceiling that reflowed and then
+    /// stopped somewhere short would be the change without the benefit.
+    func testAReflowingScreenGrowsToTheReadingCeiling() {
+        XCTAssertEqual(ThroDynamicType.ceiling(reflowing: true), ThroDynamicType.readingCeiling)
+        XCTAssertEqual(ThroDynamicType.ceiling(reflowing: true), .accessibility5)
+        XCTAssertGreaterThan(ThroDynamicType.ceiling(reflowing: true),
+                             ThroDynamicType.ceiling(reflowing: false),
+                             "reflowing must buy the player something")
+    }
 }

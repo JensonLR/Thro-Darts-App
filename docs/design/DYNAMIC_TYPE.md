@@ -29,18 +29,33 @@ The choice on that screen is between:
    journal rather than an inconvenience.
 2. **Text that stops growing.** What this does.
 
-The thing that would serve that player properly is neither: a scoring screen that **reflows** at
-accessibility sizes — the upper region scrolling above a pinned keypad, or a single-column layout
-with the remaining score and the keypad only. That is a screen the export does not draw, so it is a
-**design commission**, not something engineering should invent. It is the next item on this contract
-when somebody wants it.
+**That was the state until 2026-09-07, and PD-024 changed it.** The founder was given the two shapes
+that would serve that player properly — the upper region scrolling above a pinned keypad, or a
+single-column layout with the remaining score and the keypad only — and chose the first.
+
+So the screen now **reflows** past `.accessibility1` rather than stopping there:
+
+- Everything **above the keypad** grows to `.accessibility5` like every reading screen, and scrolls.
+- The **keypad keeps `.accessibility1`** at every size. That is what *pinned* means, and it is the
+  original reason for the cap rather than a leftover of it: option 1 above is still true, and a
+  keypad that moves under a thumb is still worse than one that is small.
+- The **threshold is the old ceiling itself**, so the screen changes shape at exactly the size text
+  used to stop growing. Nothing below it gains a scroll region it never needed.
+- The cards that stand in the keypad's place — the PD-001 question, a retraction, ending a match —
+  grow with everything else, because they are read rather than tapped at speed.
+
+The limit above is therefore **lifted for what a player reads and kept for what they tap**, which is
+the honest split: the two halves of that screen were never answering the same question.
 
 ## What holds it
 
-`ThroDynamicType.scoringCeiling` and `throScoringTypeCeiling()` in `ThroDesign/Interaction.swift`.
-`DesignTests` asserts the ceiling is the accessibility size named here, and that the reading ceiling
-is genuinely above it — a ceiling that quietly became the same value everywhere would be this
-contract failing in the direction that costs the most.
+`ThroDynamicType.scoringCeiling`, `reflows(at:)`, `ceiling(reflowing:)`,
+`throScoringTypeCeiling(reflowing:)` and `throPinnedKeypadTypeCeiling()` in
+`ThroDesign/Interaction.swift`. `DesignTests` asserts the ceiling is the accessibility size named
+here, that the reading ceiling is genuinely above it — a ceiling that quietly became the same value
+everywhere would be this contract failing in the direction that costs the most — and, for PD-024,
+that the reflow threshold is exactly the old ceiling and that a reflowing screen really does reach
+`.accessibility5` rather than stopping somewhere short.
 
 Two mechanisms were already in place and stay:
 

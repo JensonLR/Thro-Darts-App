@@ -167,23 +167,53 @@ public enum ThroHaptics {
 ///   minimum. Past this size the choice is between a keypad that scrolls under the player's thumb
 ///   mid-visit and text that stops growing, and this takes the second.
 ///
-/// **This is a real limit, stated rather than hidden.** A player who needs `.accessibility5` gets
-/// `.accessibility1` while scoring. The alternative that would serve them properly is a scoring
-/// screen that reflows — the upper region scrolling above a pinned keypad — and that is a screen the
-/// export does not draw, so it is a design commission rather than something to invent here. It is
-/// recorded in `docs/design/DYNAMIC_TYPE.md` so it can be revisited deliberately.
+/// **That limit is now lifted, and PD-024 is how.** It used to be a real one — a player who needed
+/// `.accessibility5` got `.accessibility1` while scoring — and this file said so rather than hiding
+/// it. `DYNAMIC_TYPE.md` named two shapes that would serve that player properly and said choosing was
+/// a design commission, not engineering's; the founder chose the first: **the upper region scrolls
+/// above a pinned keypad.**
+///
+/// Past the scoring ceiling the screen reflows. Everything above the keypad — the remaining score,
+/// the leg state, the checkout route, the turn indicator — grows to the reading ceiling and scrolls.
+/// **The keypad does not.** It keeps the scoring ceiling at every size, which is what *pinned* means
+/// and is the whole reason the cap existed: a keypad that moves under the player's thumb mid-visit
+/// turns a mis-key into a wrong number in an evidence journal, and that is worse than a small key.
+///
+/// So the two halves of the screen answer two different questions. Above the keypad, *can the player
+/// read this?* — and it scales all the way. At the keypad, *is the key where their thumb expects it?*
+/// — and it does not move.
 public enum ThroDynamicType {
-    /// Where a screen that must fit without scrolling stops growing.
+    /// Where the keypad stops growing, at every size. Also the size the screen reflows **above**.
     public static let scoringCeiling: DynamicTypeSize = .accessibility1
 
     /// Where everything else stops, which is where iOS stops.
     public static let readingCeiling: DynamicTypeSize = .accessibility5
+
+    /// Whether the scoring screen reflows at this size: the upper region scrolling, the keypad
+    /// pinned (PD-024).
+    ///
+    /// The threshold is the scoring ceiling itself, so the screen changes shape at exactly the size
+    /// text used to stop growing — no size loses anything it had, and none gains a scroll bar it did
+    /// not need.
+    public static func reflows(at size: DynamicTypeSize) -> Bool { size > scoringCeiling }
+
+    /// What the screen's text is capped at, given whether it is reflowing.
+    public static func ceiling(reflowing: Bool) -> DynamicTypeSize {
+        reflowing ? readingCeiling : scoringCeiling
+    }
 }
 
 public extension View {
-    /// The ceiling for a screen that must fit without scrolling. Only the scoring screen uses it,
-    /// and a test asserts that the reading screens do not.
-    func throScoringTypeCeiling() -> some View {
+    /// The scoring screen's ceiling (PD-024). Below the reflow threshold it is the scoring ceiling,
+    /// because nothing scrolls; above it the text grows to the reading ceiling and the upper region
+    /// scrolls instead. The keypad applies the scoring ceiling to itself either way.
+    func throScoringTypeCeiling(reflowing: Bool = false) -> some View {
+        dynamicTypeSize(...ThroDynamicType.ceiling(reflowing: reflowing))
+    }
+
+    /// The keypad's own ceiling, applied inside the screen's. Pinned means fixed: the key under a
+    /// thumb is the same size and in the same place at every text setting.
+    func throPinnedKeypadTypeCeiling() -> some View {
         dynamicTypeSize(...ThroDynamicType.scoringCeiling)
     }
 }

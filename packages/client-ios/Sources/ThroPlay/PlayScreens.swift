@@ -303,6 +303,9 @@ public struct ScoringScreen: View {
     @AppStorage(Appearance.storageKey) private var appearanceRaw: String = Appearance.system.rawValue
     @AppStorage(ScoringPreferences.keepScreenAwakeKey) private var keepScreenAwake: Bool = true
     @AppStorage(ThroHaptics.enabledKey) private var haptics: Bool = true
+    /// The player's own text size, read **before** this screen caps it — the cap is applied to the
+    /// body below, so what arrives here is what they actually asked for.
+    @Environment(\.dynamicTypeSize) private var typeSize
     private let onLeave: () -> Void
     private let onComplete: () -> Void
 
@@ -318,31 +321,21 @@ public struct ScoringScreen: View {
                 MatchHeader(competition: "\(session.name(.home)) v \(session.name(.away))", format: session.formatLabel,
                             onBack: onLeave,
                             onEnd: session.mayEndShort ? session.offerToEnd : nil)
-                // Everything above the keypad shares the height the keypad leaves. Nothing scrolls
-                // and nothing is cut off: when a phone is short, the hero numeral yields first.
-                upper
-                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-                // One place at a time, in the keypad's own space — the precedent PromptCard and
-                // RetractionCard already set. Ending outranks a retraction proposal: a player who
-                // reaches for the way out while an undo is offered means the way out.
-                if let flow = session.endFlow {
-                    switch flow {
-                    case .choosing:
-                        EndMatchCard(session: session, onChoose: session.proposeEnding, onCancel: session.cancelEnding)
-                    case let .confirming(ending):
-                        EndMatchConfirmCard(session: session, ending: ending,
-                                            onConfirm: session.confirmEnding, onCancel: session.cancelEnding)
-                    }
-                } else if let prompt = session.prompt {
-                    PromptCard(prompt: prompt, onAnswer: session.answer, onCancel: session.cancelPrompt)
-                } else if let proposal = session.retraction {
-                    RetractionCard(proposal: proposal, playerName: session.name(proposal.seat),
-                                   onConfirm: session.confirmRetraction, onCancel: session.cancelRetraction)
+                // Everything above the keypad shares the height the keypad leaves. At ordinary text
+                // sizes nothing scrolls and nothing is cut off: when a phone is short, the hero
+                // numeral yields first.
+                //
+                // **Past the scoring ceiling it scrolls instead (PD-024)**, so a player who needs the
+                // largest text gets it on the numbers they read rather than being capped at
+                // `.accessibility1`. The keypad below is unaffected on purpose — see `lower`.
+                if reflows {
+                    ScrollView { upper }
+                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
                 } else {
-                    ScoreKeypad(value: session.entry, disabled: session.isComplete || session.announcement != nil,
-                                onDigit: session.digit, onQuick: session.quick,
-                                onMiss: session.miss, onClear: session.undoKey, onEnter: session.enter)
+                    upper
+                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
                 }
+                lower
             }
             if let announcement = session.announcement {
                 AnnouncementOverlay(announcement: announcement, session: session, onContinue: session.acknowledge)
@@ -350,8 +343,10 @@ public struct ScoringScreen: View {
         }
         .background(ThroColor.colorBackgroundPrimary.ignoresSafeArea())
         .throAppearance(Appearance(stored: appearanceRaw))
-        // PD-015. The one screen that must fit without scrolling, so the one screen with a ceiling.
-        .throScoringTypeCeiling()
+        // PD-015, amended by PD-024. Below the reflow threshold this is the one screen that must fit
+        // without scrolling, so it is the one screen with a ceiling. Above it, the upper region
+        // scrolls and the text grows the rest of the way.
+        .throScoringTypeCeiling(reflowing: reflows)
         .onReceive(session.$state) { state in
             if state.isComplete { onComplete() }
         }
@@ -368,6 +363,41 @@ public struct ScoringScreen: View {
         }
         .onAppear { setIdleTimer(disabled: keepScreenAwake) }
         .onDisappear { setIdleTimer(disabled: false) }
+    }
+
+    /// Whether the screen has changed shape for a player who needs large text (PD-024).
+    private var reflows: Bool { ThroDynamicType.reflows(at: typeSize) }
+
+    /// The keypad, or whatever is standing in its place.
+    ///
+    /// One place at a time, in the keypad's own space — the precedent `PromptCard` and
+    /// `RetractionCard` already set. Ending outranks a retraction proposal: a player who reaches for
+    /// the way out while an undo is offered means the way out.
+    ///
+    /// **The keypad keeps the scoring ceiling at every text size**, which is what *pinned* means: the
+    /// key under a thumb is the same size and in the same place whatever the player's setting. The
+    /// cards do not — they carry the PD-001 question and a retraction's explanation, which are things
+    /// to be read, so they grow with everything else above them.
+    @ViewBuilder private var lower: some View {
+        if let flow = session.endFlow {
+            switch flow {
+            case .choosing:
+                EndMatchCard(session: session, onChoose: session.proposeEnding, onCancel: session.cancelEnding)
+            case let .confirming(ending):
+                EndMatchConfirmCard(session: session, ending: ending,
+                                    onConfirm: session.confirmEnding, onCancel: session.cancelEnding)
+            }
+        } else if let prompt = session.prompt {
+            PromptCard(prompt: prompt, onAnswer: session.answer, onCancel: session.cancelPrompt)
+        } else if let proposal = session.retraction {
+            RetractionCard(proposal: proposal, playerName: session.name(proposal.seat),
+                           onConfirm: session.confirmRetraction, onCancel: session.cancelRetraction)
+        } else {
+            ScoreKeypad(value: session.entry, disabled: session.isComplete || session.announcement != nil,
+                        onDigit: session.digit, onQuick: session.quick,
+                        onMiss: session.miss, onClear: session.undoKey, onEnter: session.enter)
+                .throPinnedKeypadTypeCeiling()
+        }
     }
 
     private var upper: some View {

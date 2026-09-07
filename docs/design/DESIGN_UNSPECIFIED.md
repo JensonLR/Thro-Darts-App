@@ -13,10 +13,12 @@ Sourced by reading the whole export: 61 components, 33 participant screens, 9 or
    faces grow with the player's setting. What was missing was the *contract* at the top of the
    range, and it is now written down in `docs/design/DYNAMIC_TYPE.md`: reading screens scale to
    `.accessibility5` and scroll; the scoring screen stops at `.accessibility1`, because it must fit
-   without scrolling and holds a keypad already at the minimum touch target. **That is a real limit
-   for a player who needs the largest text and it is stated rather than discovered.** The thing that
-   would serve them properly is a scoring screen that reflows at accessibility sizes — the upper
-   region scrolling above a pinned keypad — and that remains a design commission, listed there.
+   without scrolling and holds a keypad already at the minimum touch target. That was a real
+   limit for a player who needs the largest text, and it is now **lifted (PD-024, 2026-09-07)**: past
+   `.accessibility1` the upper region scrolls and its text grows to `.accessibility5`, while the
+   keypad keeps the old ceiling — pinned, because a keypad that moves under a thumb mid-visit is the
+   thing the cap existed to prevent. The founder chose that shape from the two `DYNAMIC_TYPE.md`
+   named; engineering did not pick it, and **no design commission is outstanding on this item.**
 2. ~~**Focus, hover and pressed appearance.**~~ **COMMISSIONED (PD-015) AND BUILT ON THE CLIENT,
    2026-09-07.** `ThroPressStyle` replaces `.buttonStyle(.plain)` — which was SwiftUI for *do
    nothing at all* — on the keypad and its Enter key. A press goes in by the inverse of the design's

@@ -1115,6 +1115,44 @@ Stop offering the two buttons. Rows already written stay readable, because the j
 it does not know as `unknown` and refuses to replay rather than guessing — which is also what an
 older build does with these rows today.
 
+## PD-024 — The scoring screen reflows instead of capping a player's text
+
+**Asked** 2026-09-07. **Answered** 2026-09-07: the upper region scrolls above a pinned keypad.
+
+PD-015 wrote down a real accessibility limit rather than hiding it: reading screens scale to
+`.accessibility5`, and **the scoring screen stopped at `.accessibility1`**, because it must fit
+without scrolling and holds a keypad whose targets are already at the minimum. A player who needs the
+largest text got smaller text at the oche.
+
+`DYNAMIC_TYPE.md` named two shapes that would serve that player properly and said choosing between
+them was a design commission, not engineering's. The founder chose the first.
+
+**Above the keypad, the screen scrolls and the text grows all the way.** The remaining score, the leg
+state, the checkout route and the turn indicator go to `.accessibility5` like every reading screen.
+
+**The keypad does not move.** It keeps `.accessibility1` at every text size, and that is not a
+leftover of the old cap — it is the whole reason the cap existed:
+
+> A keypad that moves under the player's thumb mid-visit turns a mis-key into a wrong number in an
+> evidence journal, which is worse than a small key.
+
+So the two halves of the screen answer two different questions. Above: *can the player read this?* —
+and it scales. At the keypad: *is the key where their thumb expects it?* — and it does not move.
+
+**The threshold is the old ceiling itself**, so the screen changes shape at exactly the size text used
+to stop growing. No size loses anything it had, and no size below it gains a scrolling region it never
+needed — which matters, because a scroll view under the thumb of somebody scoring at an ordinary text
+size is the thing PD-015's cap existed to prevent. A test holds both ends of that.
+
+The cards that stand in the keypad's place — the PD-001 question, a retraction proposal, the
+end-a-match choice — **do** grow, because they are things to be read rather than things to be tapped
+at speed.
+
+### How to reverse
+
+`ThroDynamicType.reflows(at:)` returning false everywhere restores PD-015's behaviour exactly, and the
+limit goes back to being stated rather than solved.
+
 ## PD-023 — A player's picture arrives with their account, and not before (closing OD-021)
 
 **Asked** 2026-09-07. **Answered** 2026-09-07: a picture arrives with an account.
