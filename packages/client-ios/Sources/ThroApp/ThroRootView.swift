@@ -272,6 +272,9 @@ public struct ThroRootView: View {
     @State private var viewing: LocalPerson?
     /// PD-007: the opening plays once, at cold launch, over whatever the app shows first.
     @State private var opening = true
+    /// The opening withdraws its own motion under this setting; the handover has to withdraw too,
+    /// or a person who asked for none would still be shown the app growing towards them.
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     public init() { _store = StateObject(wrappedValue: AppStore()) }
     public init(store: AppStore) { _store = StateObject(wrappedValue: store) }
@@ -279,9 +282,17 @@ public struct ThroRootView: View {
     public var body: some View {
         ZStack {
             content
+                // The app does not sit waiting behind the opening and then get uncovered: it comes
+                // *towards* the viewer as the opening leaves, by the same 2% the design's impact
+                // magnitude defines. One movement, in one direction, rather than a cut.
+                .scaleEffect(opening && !reduceMotion ? 2 - ThroMotion.motionScaleImpact : 1)
+                .opacity(opening && !reduceMotion ? 0 : 1)
             if opening {
                 LaunchSequenceView { fade in
-                    withAnimation(.easeInOut(duration: fade)) { opening = false }
+                    // `.easeInOut` was Apple's curve on the single most important transition in the
+                    // app — the handover from the opening to the product. `throExit` is the
+                    // design's own (PD-027).
+                    withAnimation(.throExit(fade)) { opening = false }
                 }
                 .transition(.opacity)
                 .zIndex(1)
@@ -879,26 +890,91 @@ public struct MatchRow: View {
     }
 }
 
-/// The Play tab: the way in to a new match.
+/// The Play tab: the way in to a match.
+///
+/// **It was one empty state and a button** — the founder's *bare and basic* in its purest form, on
+/// the tab whose whole job is to start a game. What it lacked was not decoration but the two facts a
+/// person opening it actually has: the match they walked away from, and what they last played.
+///
+/// Both come from the journal. Nothing here is remembered separately from the record, so nothing
+/// here can be out of step with it.
 public struct PlayLandingScreen: View {
     @ObservedObject var store: AppStore
 
     public init(store: AppStore) { self.store = store }
 
+    private var inProgress: AppStore.HomeMatch? {
+        store.matches.first { !$0.complete && $0.unreadable == nil }
+    }
+
+    /// The format of the last match started on this phone, described. Not a setting and not a
+    /// preference — the record, read back, which is why it cannot drift from what was played.
+    private var lastFormat: String? {
+        guard let last = store.matches.first?.record else { return nil }
+        let legs = last.legsMode == .bestOf ? "Best of \(last.legsTarget)" : "First to \(last.legsTarget)"
+        let out = last.outRule == .double ? "double out" : "straight out"
+        let inRule = last.inRule == .double ? ", double in" : ""
+        return "\(last.startingScore) · \(legs) · \(out)\(inRule)"
+    }
+
     public var body: some View {
         VStack(spacing: 0) {
             TopBar("Play", large: true)
             ScrollView {
-                VStack(alignment: .leading, spacing: ThroSpacing.spacing4) {
-                    EmptyState(title: "Score a match",
-                               message: "Two players, one phone. Every visit is saved to this device before it is shown, so a crash loses nothing.",
-                               actionLabel: "Start match") { store.flow = .new }
+                VStack(alignment: .leading, spacing: 0) {
+                    if let match = inProgress {
+                        block { ContinueCard(match: match) { store.flow = .resume(match.id) } }
+                            .throEntrance(0)
+                    }
+                    block {
+                        if inProgress == nil {
+                            Text("Two players, one phone.")
+                                .thro(ThroTypography.heading2.weight(.bold))
+                                .foregroundStyle(ThroColor.colorTextPrimary)
+                        }
+                        ThroButton(inProgress == nil ? "Start match" : "Start another",
+                                   variant: inProgress == nil ? .primary : .secondary,
+                                   size: .large, fullWidth: true) { store.flow = .new }
+                        if let lastFormat {
+                            Text("Last time: \(lastFormat).")
+                                .thro(ThroTypography.metadata)
+                                .foregroundStyle(ThroColor.colorTextSecondary)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                    }
+                    .throEntrance(1)
+                    block {
+                        SectionHeader("How this works")
+                        Note("**Every visit is committed to this device before the screen changes.** "
+                             + "A crash between two darts loses nothing, because the score you can "
+                             + "see has already been written down.")
+                        Note("**Nothing leaves the phone.** There is no network code in this app at "
+                             + "all — not switched off, not present. Your matches are yours until "
+                             + "you export them.")
+                    }
+                    .throEntrance(2)
+                    if !store.matches.isEmpty {
+                        block {
+                            SectionHeader("Lately", meta: "\(store.matches.count) on this device")
+                            ForEach(store.matches.prefix(3)) { match in
+                                MatchRow(match: match) { store.flow = .resume(match.id) }
+                                ThroDivider()
+                            }
+                        }
+                        .throEntrance(3)
+                    }
                 }
-                .padding(.vertical, ThroSpacing.spacing6)
-                .padding(.horizontal, ThroSpacing.spaceScreenGutter)
+                .padding(.bottom, ThroSpacing.spacing6)
             }
         }
         .background(ThroColor.colorBackgroundPrimary.ignoresSafeArea())
+    }
+
+    private func block<Content: View>(@ViewBuilder _ content: () -> Content) -> some View {
+        VStack(alignment: .leading, spacing: ThroSpacing.spacing3) { content() }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.vertical, ThroSpacing.spacing6)
+            .padding(.horizontal, ThroSpacing.spaceScreenGutter)
     }
 }
 
@@ -934,11 +1010,13 @@ public struct YouScreen: View {
             TopBar("You", actions: [TopBar.Action(icon: .settings, label: "Settings", action: onSettings)], large: true)
             ScrollView {
                 VStack(alignment: .leading, spacing: 0) {
-                    EmptyState(title: "Profile not in this build",
-                               message: "Your profile, rating and passport need THRØ's servers. This build scores matches and keeps them on the device; nothing else is connected yet. Settings are behind the gear above.")
-                        .padding(.top, ThroSpacing.spacing6)
+                    // **What is here comes first, and what is not comes last.** This screen used to
+                    // open on "Profile not in this build" — a large empty state saying no, above two
+                    // lists of real things the person owns. The sentence is still here and still
+                    // says exactly the same thing; it is at the bottom, where an absence belongs,
+                    // rather than being the first thing a person sees about themselves.
                     if !people.isEmpty {
-                        Eyebrow("Who plays on this phone").padding(.top, ThroSpacing.spaceSectionGap)
+                        Eyebrow("Who plays on this phone").padding(.top, ThroSpacing.spacing6)
                         ThroDivider().padding(.top, ThroSpacing.spacing2)
                         ForEach(people) { person in
                             Button { onPerson(person) } label: {
@@ -984,9 +1062,16 @@ public struct YouScreen: View {
                             ThroDivider()
                         }
                     }
+                    Eyebrow("Not in this build").padding(.top, ThroSpacing.spaceSectionGap)
+                    Note("**Your profile, your passport and your rating need THRØ's servers.** This "
+                         + "build scores matches and keeps them on the device; nothing else is "
+                         + "connected yet, and there is no network code in the app to connect it. "
+                         + "Settings are behind the gear above.")
+                        .padding(.top, ThroSpacing.spacing3)
                 }
                 .padding(.horizontal, ThroSpacing.spaceScreenGutter)
                 .padding(.bottom, ThroSpacing.spacing6)
+                .throEntrance(0)
             }
         }
         .background(ThroColor.colorBackgroundPrimary.ignoresSafeArea())

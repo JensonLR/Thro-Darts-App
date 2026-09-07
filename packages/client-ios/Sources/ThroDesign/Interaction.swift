@@ -370,7 +370,7 @@ public struct ThroEntrance: ViewModifier {
         let shown = arrived || reduceMotion
         return content
             .opacity(shown ? 1 : 0)
-            .offset(y: shown ? 0 : ThroMotion.motionTravelMedium)
+            .offset(y: shown ? 0 : ThroSpacing.motionTravelMedium)
             .onAppear {
                 guard !reduceMotion else { return }
                 withAnimation(.throEnter().delay(Double(min(index, ThroEntrance.stagger)) * ThroEntrance.step)) {

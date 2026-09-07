@@ -55,6 +55,12 @@ jobs:
       - name: Controls react
         run: python3 tools/check_controls_react.py
 
+      # And a token that does not exist fails a macOS build several minutes in, having already spent
+      # a runner. `motionScaleImpact` is ThroMotion's and `motionTravelMedium` is ThroSpacing's; this
+      # says so in under a second, on Linux, before any of that starts.
+      - name: Tokens exist
+        run: python3 tools/check_tokens_exist.py
+
   conformance:
     name: Scoring rules and conformance corpus
     runs-on: ubuntu-latest
