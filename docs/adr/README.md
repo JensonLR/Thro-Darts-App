@@ -25,6 +25,9 @@ a guess wearing a suit.
 ## Standing constraint on all of them
 
 Founder decisions **B1** (which statistics THRØ shows, and whether `dartsUsed` is captured) and
-**B2** (whether a unilateral self-report moves rating) are open. Every decision here is required to
+**B2** (whether a unilateral self-report moves rating) have both since been **decided** — see PD-001
+and PD-002 in [`../product/DECISIONS.md`](../product/DECISIONS.md). **B3** (the participant
+attestation and error surfaces) and **B4** (the authentication surface) remain open, and are design
+commissions rather than decisions engineering may take. Every decision here is required to
 keep **both answers reachable without a data migration**. Where that costs something, the cost is
 stated in the record.

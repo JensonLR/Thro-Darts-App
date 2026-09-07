@@ -23,7 +23,7 @@ mistakes this snapshot for the live design project.
 - `extracted/tokens.css` — the complete token layer: brand + semantic colour for **both**
   light and dark themes, typography scale, spacing, radius, borders, elevation, motion
   (including reduced-motion overrides).
-- `extracted/components/` — **61 components** in 11 families: core, data, development,
+- `extracted/components/` — **61 components** in 10 families: core, data, development,
   forms, identity, navigation, organiser, rating, scoring, state.
 - `extracted/ui_kits/thro-app/` — **33 participant screens** in 9 groups
   (Start 2, Home 3, Play 6, Live 4, Tournament 4, Shadow 4, Discover 2, You 4, Account 4)

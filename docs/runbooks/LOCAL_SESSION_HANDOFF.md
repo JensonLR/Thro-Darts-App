@@ -1,11 +1,19 @@
 # Handoff to a local Claude Code session on macOS
 
-> **Superseded in part on 2026-09-05.** The founder has directed the build of the iOS client, and
-> it exists: `packages/client-ios` (design system, journal, Play slice, app shell) and an Xcode app at
-> `apps/ios/ThroDarts.xcodeproj`, all green on CI (40 package tests on macOS; the app built for the iOS
-> simulator). None of it has run on a phone. The
-> local session's job now is in **"Now: run the app"** below. The "What NOT to do" rule against
-> building the client is void; the rest of the rules stand.
+> **Superseded on 2026-09-07.** This page was written when nothing had run on a phone. Since then the
+> iOS client has been built and **run on the founder's phone three times** (2026-09-05 and 06, setup to
+> result), each run's findings fixed and confirmed on the next. CI is green on 75 package tests on
+> macOS — 20 design, 15 journal, 27 scoring session, 13 opening — plus an `xcodebuild` of the app for
+> the iOS simulator on every push that touches it.
+>
+> **Read [`CLIENT_IOS.md`](CLIENT_IOS.md) instead**: it is the current runbook, it says where the
+> clone is (`~/Thro-Darts-App`, not the older second clone this page points at), and it says what to
+> look at on each screen. What is still outstanding is named there and in
+> [`DURABILITY_KILL_TEST.md`](DURABILITY_KILL_TEST.md): an SE-class device, an Android device, and the
+> power-cut test.
+>
+> Kept for the rules below, which still stand — the "What NOT to do" rule against building the client
+> is the one exception, and it is void.
 
 ## Now: run the app
 
