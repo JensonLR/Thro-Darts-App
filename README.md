@@ -67,7 +67,7 @@ database.
 validity is made anywhere in this repository. There is an iOS client that scores a match between two people on
 one phone and keeps it there — built and tested on CI and run on the founder's phone ([`docs/runbooks/CLIENT_IOS.md`](docs/runbooks/CLIENT_IOS.md)); a TestFlight workflow can put a build on the phone from the phone once the founder's App Store Connect key exists as repository secrets, and has not yet been run against one ([`docs/runbooks/TESTFLIGHT.md`](docs/runbooks/TESTFLIGHT.md)).
 It talks to nothing: there is no product API and no deployment — the command path is a tested handler, not a running service. The one thing that does speak HTTP is the playtest harness described below, which runs on a laptop, authenticates nobody, and is not the product.
-Claims are made only where evidence exists — see [`FOUNDATION_ACCEPTANCE.md`](FOUNDATION_ACCEPTANCE.md).
+Claims are made only where evidence exists — see [`FOUNDATION_ACCEPTANCE.md`](FOUNDATION_ACCEPTANCE.md), and [`docs/CHANGE_RECORD.md`](docs/CHANGE_RECORD.md) for the full account of what was decided, what was verified, and every defect found on the way — including the ones that were mine.
 
 **Two decisions are recorded as taken on delegated authority** ([`docs/product/DECISIONS.md`](docs/product/DECISIONS.md)),
 each with its reversal path. Two remain open and need design work only the founder can commission:
