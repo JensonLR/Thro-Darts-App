@@ -81,6 +81,52 @@ The founder answered three of the four decisions this waited on, recorded as **P
 
 **OD-019** — what happens to an image somebody uploads — came back the same week as **PD-014**, and a club can have a badge now. See *Images* below.
 
+### Three kinds, three screens (PD-019, PD-020, PD-021)
+
+The founder, looking at the built screens: *"screen view for club league & tournament are all the
+same, this seems wrong, lazy & ugly, really think about what should be visible for each admin style."*
+
+Right about the screens, and right about the cause. One screen had been drawn and the word at the top
+changed, because **nobody had decided what the other two are**. Deciding that came first, and all
+three answers were the founder's:
+
+- **PD-019 — a league is made of teams.** Its roster is teams, its fixtures are team v team, its
+  table's rows are teams. Its *members* are the people who run it, which is a different list from its
+  competitors — and showing one under the other's name is precisely what made the three pages one
+  page.
+- **PD-020 — a result comes from two places and always says which.** A match scored in THRØ carries
+  every visit and every dart. An official's word carries their word. **Both count for the table**,
+  because a league that only worked when every player used THRØ is not a product, it is a demand —
+  and they are never averaged, never merged, and never drawn the same way. Only the first may ever
+  inform a rating.
+- **PD-021 — a tournament is one of four shapes**, chosen when it is made and never after: knockout
+  with byes, groups then knockout, round robin, double elimination. All four at once, deliberately: a
+  shape added later is not a feature bolted on, it is a second design of the same screens.
+
+What each admin now sees is different because what each thing *is* is different: a club leads with
+its next fixture, a league with **the results nobody has entered yet** — the one thing only the
+person looking at the page can fix — and a tournament with its shape and what that shape means for
+the field it actually has.
+
+**The guarantee is in the database, not in the views.** `fixture_result` carries a CHECK that refuses
+a scored result with no match to point at and an official's word with nobody's name on it. A result
+whose provenance cannot be shown is the one thing PD-020 says must never reach a table, so it is
+unwritable rather than something every screen has to remember to ask. The read drops one anyway if it
+finds one, and the store's mapping drops it a third time — the same answer three times, in the same
+direction.
+
+**The table is derived, never stored**, so a standing cannot come to disagree with the fixtures under
+it, and every row carries how many of its results were evidenced. What a win is worth is the
+league's, not THRØ's: stored, shown, editable, defaulted to the common 2 and 1 — and **OD-022** asks
+the founder the question underneath it, which is whether a result's *unit* needs declaring before two
+leagues ever sit next to each other, because a stored `3–1` with no unit on it cannot be
+reinterpreted later.
+
+**What is not built, said rather than implied:** the tournament draw. Rounds and slots against
+fixtures is the next thing. The page holds the shape, the entrants, and the arithmetic — matches to
+play, byes to give, who gets them and why — and says on the screen where it stops, because half a
+bracket looks broken and reads as a bug.
+
 ### The screens (PD-010)
 
 The founder: *"id want you to use the design system & /design to build the screens."*
