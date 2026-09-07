@@ -1,3 +1,4 @@
+import Foundation
 import XCTest
 @testable import ThroApp
 @testable import ThroJournal
@@ -75,5 +76,37 @@ final class AppStoreTests: XCTestCase {
         XCTAssertTrue(store.matches.isEmpty)
         XCTAssertNil(store.listProblem, "nothing to read is not a failure to read")
         XCTAssertNil(store.openProblem)
+    }
+
+    /// The journal refusing a second identity is only half the guarantee. If the caller's own copy
+    /// is left holding the identity the journal just rejected, the next thing to ask for one — a
+    /// sync client naming this device to a server — names the device the journal's rows do not, and
+    /// one device arrives as two after all. So the journal's answer is written back.
+    func testTheJournalsIdentityCorrectsTheCallersRatherThanJustDisagreeingWithIt() throws {
+        let suite = "thro.tests.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer { UserDefaults.standard.removePersistentDomain(forName: suite) }
+
+        // A first open settles the journal on the identity it was created with.
+        let first = try Journal(path: path, deviceId: DeviceId("the-original"))
+        defaults.set("the-original", forKey: AppStore.deviceIdKey)
+        XCTAssertFalse(AppStore.reconcileDeviceId(first, in: defaults),
+                       "nothing to correct while the two agree")
+        XCTAssertEqual(defaults.string(forKey: AppStore.deviceIdKey), "the-original")
+
+        // UserDefaults is then lost, so the caller asks with a fresh identity. The journal keeps its
+        // own — and the caller's copy is corrected to match it.
+        defaults.removeObject(forKey: AppStore.deviceIdKey)
+        let asked = AppStore.deviceId(in: defaults)
+        XCTAssertNotEqual(asked, "the-original", "a lost identity is regenerated, not remembered")
+
+        let second = try Journal(path: path, deviceId: DeviceId(asked))
+        XCTAssertEqual(second.deviceId, DeviceId("the-original"), "the journal keeps its own")
+        XCTAssertEqual(second.deviceIdSupersededCallers, DeviceId(asked), "and says what it refused")
+
+        XCTAssertTrue(AppStore.reconcileDeviceId(second, in: defaults), "the caller is corrected")
+        XCTAssertEqual(defaults.string(forKey: AppStore.deviceIdKey), "the-original",
+                       "and asking again now gives the journal's identity, not a third one")
+        XCTAssertEqual(AppStore.deviceId(in: defaults), "the-original")
     }
 }

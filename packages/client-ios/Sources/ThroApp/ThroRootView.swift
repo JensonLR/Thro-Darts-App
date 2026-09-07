@@ -54,17 +54,36 @@ public final class AppStore: ObservableObject {
                                                   appropriateFor: nil, create: true)
         let dir = support.appendingPathComponent("THRO", isDirectory: true)
         try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
-        return try Journal(path: dir.appendingPathComponent("journal.sqlite").path, deviceId: DeviceId(deviceId()))
+        let opened = try Journal(path: dir.appendingPathComponent("journal.sqlite").path,
+                                 deviceId: DeviceId(deviceId()))
+        reconcileDeviceId(opened)
+        return opened
     }
+
+    static let deviceIdKey = "thro.journal.deviceId"
 
     /// A random identifier for this install. It names the device in the journal's sequence and is
     /// not a secret and not a hardware identifier.
-    static func deviceId() -> String {
-        let key = "thro.journal.deviceId"
-        if let existing = UserDefaults.standard.string(forKey: key) { return existing }
+    static func deviceId(in defaults: UserDefaults = .standard) -> String {
+        if let existing = defaults.string(forKey: deviceIdKey) { return existing }
         let fresh = UUID().uuidString
-        UserDefaults.standard.set(fresh, forKey: key)
+        defaults.set(fresh, forKey: deviceIdKey)
         return fresh
+    }
+
+    /// The journal's identity is this device's identity, and the caller's copy is corrected to it.
+    ///
+    /// The journal already refuses to take a new identity once it has one, so a cleared
+    /// `UserDefaults` cannot restart `device_seq`. But refusing is only half of it: without this the
+    /// journal would be right about itself while every other reader of `deviceId()` — a sync client
+    /// naming this device to a server, say — held the identity the journal had just rejected, which
+    /// is the same one-device-arriving-as-two that the refusal exists to prevent, only quieter.
+    /// Returns whether anything was corrected.
+    @discardableResult
+    static func reconcileDeviceId(_ journal: Journal, in defaults: UserDefaults = .standard) -> Bool {
+        guard journal.deviceIdSupersededCallers != nil else { return false }
+        defaults.set(journal.deviceId.value, forKey: deviceIdKey)
+        return true
     }
 
     /// Reads the journal, and says so when it cannot.
