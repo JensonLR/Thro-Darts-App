@@ -907,13 +907,20 @@ public final class Journal {
     /// another are different legs, and pooling them would merge two players' best legs into one and
     /// put six visits into a first-nine average. This repository has made that exact mistake once
     /// already, by sharing visit ordinals between the two competitors.
+    ///
+    /// **Oldest first**, so leg 1 is the first leg this person played on this device and the highest
+    /// ordinal is the most recent. `matches()` returns newest first, so this reverses it. That
+    /// direction is not cosmetic: PD-018's form figure takes the *highest* ordinals as the recent
+    /// ones, and under the other numbering it would have described a player's oldest darts as their
+    /// current form. `historyNumbersLegsOldestFirst` holds it, because nothing else would notice —
+    /// every figure computed before PD-018 was order-independent.
     public func history(of personId: String) throws -> PersonHistory {
         var pooled: [ReplayedVisit] = []
         var legOffset = 0
         var matches = 0, legsWon = 0, unreadable = 0, abandoned = 0, retired = 0
         var outRules: Set<String> = []
 
-        for record in try self.matches() {
+        for record in try self.matches().reversed() {
             let seats = Seat.allCases.filter { record.playerId($0) == personId }
             guard !seats.isEmpty else { continue }
             matches += 1

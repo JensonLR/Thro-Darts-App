@@ -1,5 +1,6 @@
 import XCTest
 import SwiftUI
+import ThroTokens
 @testable import ThroDesign
 
 final class DesignTests: XCTestCase {
@@ -125,5 +126,94 @@ final class DesignTests: XCTestCase {
         }
         XCTAssertEqual(VerificationLabel.selfReported.help, "Entered by a player. Not independently confirmed.")
         XCTAssertEqual(VerificationLabel.throVerified.help, "Recorded in THRØ and confirmed by the organiser.")
+    }
+
+    // MARK: - PD-015: how far a figure can be trusted, drawn
+
+    /// The guarantee is in the type. It is not possible to put a dash or a range on a screen
+    /// without saying why it is one, because `unavailable` and `range` take the reason as a
+    /// non-optional argument and there is no other way to build a `StatItem` that is not exact.
+    func testAnUnavailableFigureCannotBeDrawnWithoutAReason() {
+        let missing = StatItem.unavailable("Checkout %", why: "No visit has begun on a finish.")
+        XCTAssertEqual(missing.value, "—", "never a zero, which would read as bad at darts")
+        XCTAssertEqual(missing.confidence, .unavailable)
+        XCTAssertNotNil(missing.note)
+
+        let ranged = StatItem.range("3-dart average", "58.4–61.2", why: "One visit did not record its darts.")
+        XCTAssertEqual(ranged.confidence, .range)
+        XCTAssertNotNil(ranged.note)
+
+        // Only the exact case may go without one, and only because an exact figure explains itself.
+        XCTAssertNil(StatItem.exact("180s", "3").note)
+    }
+
+    /// The gap PD-015 closes. Before it, all three bases were drawn in `colorTextPrimary` at the same
+    /// weight, so the one thing the honesty layer exists to say was the one thing the screen did not.
+    func testTheThreeBasesAreNotDrawnTheSame() {
+        XCTAssertEqual(StatGrid.valueColour(.exact), ThroColor.colorTextPrimary)
+        XCTAssertEqual(StatGrid.valueColour(.range), ThroColor.colorTextPrimary)
+        XCTAssertEqual(StatGrid.valueColour(.unavailable), ThroColor.colorTextSecondary,
+                       "a figure that is not a fact must not be drawn at full strength")
+        XCTAssertNotEqual(StatGrid.valueColour(.exact), StatGrid.valueColour(.unavailable))
+    }
+
+    /// Colour is not available to a screen reader, so the basis is spoken. "Dash" would tell
+    /// somebody nothing at all, and a range read out as "58.4 to 61.2" is a different claim from
+    /// "58.4 dash 61.2", which is what the raw string would give.
+    func testAScreenReaderIsToldTheBasisInWords() {
+        let missing = StatGrid.spoken(.unavailable("Checkout %", why: "No visit has begun on a finish."))
+        XCTAssertTrue(missing.contains("not available"), missing)
+        XCTAssertFalse(missing.contains("—"), "the dash is never read out")
+        XCTAssertTrue(missing.contains("No visit"), "and the reason is read with it")
+
+        let ranged = StatGrid.spoken(.range("3-dart average", "58.4–61.2", why: "One visit is unknown."))
+        XCTAssertTrue(ranged.contains("between 58.4 and 61.2"), ranged)
+        XCTAssertFalse(ranged.contains("–"), "the en dash is spoken as a word")
+
+        let exact = StatGrid.spoken(.exact("180s", "3"))
+        XCTAssertEqual(exact, "180s, 3", "the common case is not qualified")
+    }
+
+    // MARK: - PD-015: pressed, focus and haptics
+
+    /// A press goes in by exactly as much as the design says an impact comes out. Derived from the
+    /// token rather than typed, so the two can never drift apart.
+    func testAPressIsTheInverseOfTheImpactScale() {
+        XCTAssertEqual(ThroPressStyle.pressedScale, 2 - ThroMotion.motionScaleImpact, accuracy: 0.0001)
+        XCTAssertLessThan(ThroPressStyle.pressedScale, 1, "a press goes in, not out")
+        XCTAssertGreaterThan(ThroMotion.motionScaleImpact, 1, "and an impact comes out")
+    }
+
+    /// Four events, four sensations. A keypad that buzzed identically for a digit and for a bust
+    /// would be telling the player nothing they could use without looking at the screen — which is
+    /// the entire reason a haptic is worth having at a dartboard.
+    func testTheFourHapticsAreFourDifferentThings() {
+        let all: [ThroHaptics.Event] = [.key, .commit, .refused, .legWon]
+        XCTAssertEqual(Set(all.map(ThroHaptics.weight)).count, 4)
+        XCTAssertNotEqual(ThroHaptics.weight(.refused), ThroHaptics.weight(.legWon),
+                          "something went wrong and something went right are not the same sensation")
+        XCTAssertNotEqual(ThroHaptics.weight(.key), ThroHaptics.weight(.commit),
+                          "a digit and a saved visit are not the same event")
+    }
+
+    /// The player's answer is stored under a key that is a contract with every install that has
+    /// saved one. `ScoringPreferences` forwards to this, so Settings and the keypad cannot disagree
+    /// about which switch they are reading.
+    func testTheHapticsSettingHasOneKey() {
+        XCTAssertEqual(ThroHaptics.enabledKey, "thro.haptics")
+    }
+
+    // MARK: - PD-015: the Dynamic Type contract
+
+    /// The contract in `docs/design/DYNAMIC_TYPE.md`: reading screens go all the way, and the one
+    /// screen that must fit without scrolling stops. A ceiling that quietly became the same value
+    /// everywhere would be the contract failing in the direction that costs the most — a player who
+    /// needs large text losing it on every screen rather than on one.
+    func testTheScoringCeilingIsBelowTheReadingCeiling() {
+        XCTAssertEqual(ThroDynamicType.scoringCeiling, .accessibility1)
+        XCTAssertEqual(ThroDynamicType.readingCeiling, .accessibility5)
+        XCTAssertLessThan(ThroDynamicType.scoringCeiling, ThroDynamicType.readingCeiling)
+        XCTAssertGreaterThan(ThroDynamicType.scoringCeiling, DynamicTypeSize.large,
+                             "the ceiling is an ACCESSIBILITY size, not a cap on ordinary text")
     }
 }

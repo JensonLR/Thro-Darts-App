@@ -75,6 +75,24 @@ public data class VisitRecord(
     val dartsAtDouble: Int? = null,
 )
 
+/**
+ * A player's recent scoring, and how much of it there was.
+ *
+ * The window is carried WITH the figure on purpose (PD-018): "58.4" alone is a claim, and
+ * "58.4 over 10 legs" is a description. A screen that showed the number without the sample would
+ * turn the second into the first.
+ */
+public data class Form(
+    val average: Stat,
+    /** Completed legs this covers. Never more than [window], and possibly fewer. */
+    val legs: Int,
+    /** The most it would have looked at. */
+    val window: Int,
+) {
+    /** Whether there is a figure at all. False means too few legs, not a player who scores nothing. */
+    public val isAvailable: Boolean get() = average.basis != Basis.UNAVAILABLE
+}
+
 public object Statistics {
 
     // ---------------------------------------------------------------- exact from visit totals
@@ -280,4 +298,55 @@ public object Statistics {
         val counts = visits.filter { it.legOrdinal in wonLegs }.groupingBy { it.legOrdinal }.eachCount()
         return Stat.exact(counts.values.min().toDouble(), wonLegs.size)
     }
+
+    /**
+     * How a player has been scoring lately, over their most recent completed legs.
+     *
+     * **This is not a rating and must never be labelled as one** (PD-018). A rating is a claim about
+     * strength relative to other players, computed by a model, and OD-001 leaves that model open
+     * precisely because no model here has been validated against real matches. This is a
+     * description of what somebody has actually scored, over a window they can see, computed by the
+     * same audited three-dart average a single match uses. Nothing seeds a rating from it.
+     *
+     * The window is legs rather than matches or days: matches vary from three legs to twenty-one,
+     * so "last five matches" is not a fixed amount of darts, and a player who plays once a month
+     * would have no form at all under a time window.
+     *
+     * Below [MINIMUM_FORM_LEGS] it is unavailable rather than thin. One leg is a performance; the
+     * shortest thing anybody in darts calls a match is a best of three, which is the smallest sample
+     * this is willing to describe as form. That floor is a stated position, not a statistical
+     * result, and it is the number to argue with.
+     *
+     * A leg counts only when it is complete — somebody won it. A leg still being thrown is a
+     * snapshot mid-flight, and including it would move the figure between visits of the same leg.
+     */
+    public fun recentForm(
+        visits: List<VisitRecord>,
+        window: Int = FORM_WINDOW_LEGS,
+        minimum: Int = MINIMUM_FORM_LEGS,
+    ): Form {
+        val completed = visits.filter { it.wonLeg }.map { it.legOrdinal }.toSet()
+        // Highest ordinals are the most recent: the pooled history numbers legs oldest-first.
+        val recent = completed.sortedDescending().take(window).toSet()
+        val sample = visits.filter { it.legOrdinal in recent }
+
+        if (recent.size < minimum) {
+            val short = minimum - recent.size
+            return Form(
+                average = Stat.unavailable(
+                    "Form needs $minimum completed legs and there ${if (recent.size == 1) "is" else "are"} " +
+                        "${recent.size}. $short more to go.",
+                ),
+                legs = recent.size,
+                window = window,
+            )
+        }
+        return Form(average = threeDartAverage(sample), legs = recent.size, window = window)
+    }
+
+    /** The most recent legs a form figure looks at. */
+    public const val FORM_WINDOW_LEGS: Int = 10
+
+    /** Below this many completed legs there is no form figure, only a small number of legs. */
+    public const val MINIMUM_FORM_LEGS: Int = 3
 }

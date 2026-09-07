@@ -35,7 +35,9 @@ let package = Package(
             dependencies: [.product(name: "ThroTokens", package: "design-tokens")],
             path: "Sources/ThroDesign"
         ),
-        .testTarget(name: "ThroDesignTests", dependencies: ["ThroDesign"], path: "Tests/ThroDesignTests"),
+        .testTarget(name: "ThroDesignTests",
+                    dependencies: ["ThroDesign", .product(name: "ThroTokens", package: "design-tokens")],
+                    path: "Tests/ThroDesignTests"),
 
         // ADR-006's on-device journal: SQLite under the measured durability configuration, verified
         // in force on every open, append-only by trigger, replayed through the engine. Reaches the

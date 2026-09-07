@@ -527,34 +527,90 @@ public enum PersonSummary {
                 + "whether a visit began on a finish depends on the rule. Pooling them would not be a "
                 + "checkout percentage of anything.")
         }
+        // PD-018. Labelled "Recent form", never "Rating": OD-001 leaves the rating model open, and
+        // the difference between "what you have been scoring" and "how good you are" is the whole
+        // reason this is allowed to ship while that stays open. The window is in the label, because
+        // a number without its sample is a claim rather than a description.
+        let form = Statistics.recentForm(records)
+        var formLine = StatPresentation.line("Recent form", form.average, kind: .average)
+        if form.isAvailable {
+            formLine = StatLine(label: formLine.label, value: formLine.value,
+                                note: [formLine.note,
+                                       "Your 3-dart average over your last \(form.legs) completed leg"
+                                       + (form.legs == 1 ? "" : "s") + ". Not a rating."]
+                                    .compactMap { $0 }.joined(separator: " "))
+        }
+
         var lines: [StatLine] = [
-            StatLine(label: "Matches", value: "\(history.matches)",
-                     note: history.unreadable > 0
-                         ? "\(history.unreadable) more could not be replayed and are not counted here."
-                         : nil),
+            StatLine(label: "Matches", value: matchesValue(history),
+                     note: matchesNote(history)),
             StatLine(label: "Legs won", value: "\(history.legsWon)", note: nil),
+            formLine,
             StatPresentation.line("3-dart average", Statistics.threeDartAverage(records), kind: .average),
             StatPresentation.line("Checkout %", checkout, kind: .percent),
             StatPresentation.line("180s", Statistics.maximums(records), kind: .count),
             StatPresentation.line("Highest checkout", Statistics.highestCheckout(records), kind: .count),
         ]
         if history.matches == 0 {
-            lines = lines.map {
-                StatLine(label: $0.label, value: $0.label == "Matches" || $0.label == "Legs won" ? "0" : "—",
-                         note: $0.note ?? "No matches on this device yet.")
+            // A count of zero is a fact; every other figure is unavailable rather than zero, and now
+            // says so in its drawn form as well as its words (PD-015).
+            lines = lines.map { line in
+                let isCount = line.label == "Matches" || line.label == "Legs won"
+                return StatLine(label: line.label, value: isCount ? "0" : "—",
+                                note: line.note ?? "No matches on this device yet.",
+                                confidence: isCount ? .exact : .unavailable)
             }
         }
         return lines
+    }
+
+    /// Matches played out, with the ones that ended short named rather than folded in (PD-016).
+    /// "12" meaning "nine played out and three walked away from" is a different claim to the one it
+    /// looks like, so the count says which.
+    private static func matchesValue(_ h: Journal.PersonHistory) -> String { "\(h.matches)" }
+
+    private static func matchesNote(_ h: Journal.PersonHistory) -> String? {
+        var parts: [String] = []
+        if h.retired > 0 { parts.append("\(h.retired) ended in a retirement") }
+        if h.abandoned > 0 { parts.append("\(h.abandoned) abandoned with no result") }
+        if h.unreadable > 0 {
+            parts.append("\(h.unreadable) more could not be replayed and are not counted here")
+        }
+        guard !parts.isEmpty else { return nil }
+        return parts.joined(separator: "; ") + "."
     }
 }
 
 /// A statistic as text. EXACT is a number; BOUNDED is a range and says so; UNAVAILABLE is a dash
 /// and says why. A bounded figure is never collapsed to a point value.
+///
+/// `confidence` is carried through to the view (PD-015). It used to stop here: `line` read the
+/// basis, chose the wording, and threw the basis away — so the screen received three kinds of
+/// figure that it drew identically, and the one thing the honesty layer exists to communicate was
+/// the one thing it could not.
 public struct StatLine: Identifiable, Equatable, Sendable {
     public let label: String
     public let value: String
     public let note: String?
+    public let confidence: StatItem.Confidence
     public var id: String { label }
+
+    public init(label: String, value: String, note: String?,
+                confidence: StatItem.Confidence = .exact) {
+        self.label = label
+        self.value = value
+        self.note = note
+        self.confidence = confidence
+    }
+
+    /// The drawn form, with the reason required where the design requires it.
+    public var item: StatItem {
+        switch confidence {
+        case .exact: return .exact(label, value, note: note)
+        case .range: return .range(label, value, why: note ?? "The exact figure is not known.")
+        case .unavailable: return .unavailable(label, why: note ?? "Not available.")
+        }
+    }
 }
 
 public enum StatPresentation {
@@ -564,13 +620,16 @@ public enum StatPresentation {
         switch stat.basis {
         case .exact:
             // Exact can still carry a disclosure — a first nine that excludes legs ended before nine darts.
-            return StatLine(label: label, value: format(stat.value ?? 0, kind), note: stat.note)
+            return StatLine(label: label, value: format(stat.value ?? 0, kind), note: stat.note,
+                            confidence: .exact)
         case .bounded:
             let lower = format(stat.lower ?? 0, kind), upper = format(stat.upper ?? 0, kind)
             return StatLine(label: label, value: "\(lower)–\(upper)",
-                            note: stat.note ?? "Range — the exact figure is not known")
+                            note: stat.note ?? "Range — the exact figure is not known",
+                            confidence: .range)
         case .unavailable:
-            return StatLine(label: label, value: "—", note: stat.note ?? "Not available")
+            return StatLine(label: label, value: "—", note: stat.note ?? "Not available",
+                            confidence: .unavailable)
         }
     }
 

@@ -468,6 +468,7 @@ public struct YouScreen: View {
 public struct SettingsScreen: View {
     @AppStorage(Appearance.storageKey) private var appearanceRaw: String = Appearance.system.rawValue
     @AppStorage(ScoringPreferences.keepScreenAwakeKey) private var keepScreenAwake: Bool = true
+    @AppStorage(ThroHaptics.enabledKey) private var haptics: Bool = true
     @AppStorage(OpeningPreferences.soundKey) private var openingSound: Bool = true
     @AppStorage(OpeningPreferences.hapticsKey) private var openingHaptics: Bool = true
     private let onBack: () -> Void
@@ -508,6 +509,22 @@ public struct SettingsScreen: View {
                         Text("While scoring, the phone does not sleep between visits.")
                             .thro(ThroTypography.metadata)
                             .foregroundStyle(ThroColor.colorTextSecondary)
+                        // PD-015. Default on: the point of a haptic at a dartboard is that it is
+                        // felt while the player is looking at the board. Off is offered because a
+                        // phone buzzing in a pocket through a match is somebody else's idea of help.
+                        HStack(spacing: 12) {
+                            Icon(.target, size: 18).foregroundStyle(ThroColor.colorTextSecondary)
+                            Toggle(isOn: $haptics) {
+                                Text("Haptics").thro(ThroTypography.body).foregroundStyle(ThroColor.colorTextPrimary)
+                            }
+                            .tint(ThroColor.colorSurfaceBrand)
+                        }
+                        .frame(minHeight: 52)
+                        .overlay(alignment: .bottom) { Rectangle().fill(ThroColor.colorBorderDefault).frame(height: 1) }
+                        Text("A light tap on every key, a firmer one when a visit is saved, and a distinct one for a bust and for a leg won — so those two are felt without looking at the phone.")
+                            .thro(ThroTypography.metadata)
+                            .foregroundStyle(ThroColor.colorTextSecondary)
+                            .fixedSize(horizontal: false, vertical: true)
                     }
                     group("Opening") {
                         // PD-007 v2: the throw that opens the app, its sound and its haptic. Sound goes

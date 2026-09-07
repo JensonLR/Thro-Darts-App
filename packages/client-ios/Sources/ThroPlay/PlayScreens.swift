@@ -302,6 +302,7 @@ public struct ScoringScreen: View {
     @ObservedObject private var session: MatchSession
     @AppStorage(Appearance.storageKey) private var appearanceRaw: String = Appearance.system.rawValue
     @AppStorage(ScoringPreferences.keepScreenAwakeKey) private var keepScreenAwake: Bool = true
+    @AppStorage(ThroHaptics.enabledKey) private var haptics: Bool = true
     private let onLeave: () -> Void
     private let onComplete: () -> Void
 
@@ -349,11 +350,22 @@ public struct ScoringScreen: View {
         }
         .background(ThroColor.colorBackgroundPrimary.ignoresSafeArea())
         .throAppearance(Appearance(stored: appearanceRaw))
+        // PD-015. The one screen that must fit without scrolling, so the one screen with a ceiling.
+        .throScoringTypeCeiling()
         .onReceive(session.$state) { state in
             if state.isComplete { onComplete() }
         }
         // A match ended short is over too, and leaves for the same screen (PD-016).
         .onReceive(session.$ending) { if $0 != nil { onComplete() } }
+        // PD-015. A bust and a won leg are the two things a player needs to know without looking at
+        // the phone, so they are the two that get a distinct sensation rather than the keypad's tap.
+        .onReceive(session.$announcement) { announcement in
+            switch announcement {
+            case .bust: ThroHaptics.play(.refused, enabled: haptics)
+            case .legWon: ThroHaptics.play(.legWon, enabled: haptics)
+            case nil: break
+            }
+        }
         .onAppear { setIdleTimer(disabled: keepScreenAwake) }
         .onDisappear { setIdleTimer(disabled: false) }
     }
@@ -742,7 +754,7 @@ public struct MatchResultScreen: View {
                     ForEach(Seat.allCases, id: \.self) { seat in
                         section {
                             SectionHeader(session.name(seat))
-                            StatGrid(session.statistics(for: seat).map { StatItem(label: $0.label, value: $0.value, note: $0.note) })
+                            StatGrid(session.statistics(for: seat).map(\.item))
                         }
                         ThroDivider(inset: ThroSpacing.spaceScreenGutter)
                     }

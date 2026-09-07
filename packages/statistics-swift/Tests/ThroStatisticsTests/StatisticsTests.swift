@@ -314,4 +314,98 @@ final class StatisticsTests: XCTestCase {
                           "explanations are sentences, not codes: \(note)")
         }
     }
+
+    // MARK: - recent form (PD-018)
+
+    /// N completed 501 legs in 9 darts, numbered oldest-first as the pooled history numbers them.
+    private func fastLegs(_ n: Int, from: Int = 1) -> [VisitRecord] {
+        (from ..< from + n).flatMap { leg in
+            [v(leg, 1, 180, 3, 501, 321),
+             v(leg, 2, 180, 3, 321, 141),
+             v(leg, 3, 141, 3, 141, 0, won: true)]
+        }
+    }
+
+    /// N completed 501 legs in 18 darts — real darts, a real finish, a much lower average.
+    private func slowLegs(_ n: Int, from: Int = 1) -> [VisitRecord] {
+        (from ..< from + n).flatMap { leg in
+            [v(leg, 1, 100, 3, 501, 401),
+             v(leg, 2, 100, 3, 401, 301),
+             v(leg, 3, 100, 3, 301, 201),
+             v(leg, 4, 100, 3, 201, 101),
+             v(leg, 5, 60, 3, 101, 41),
+             v(leg, 6, 41, 3, 41, 0, won: true)]
+        }
+    }
+
+    func testFormIsUnavailableBelowThreeLegsAndSaysHowManyMoreAreNeeded() {
+        let two = Statistics.recentForm(fastLegs(2))
+        XCTAssertEqual(two.average.basis, .unavailable)
+        XCTAssertEqual(two.legs, 2)
+        XCTAssertFalse(two.isAvailable)
+        XCTAssertTrue(two.average.note!.contains("1 more"), two.average.note!)
+
+        let three = Statistics.recentForm(fastLegs(3))
+        XCTAssertEqual(three.average.basis, .exact)
+        XCTAssertEqual(three.legs, 3)
+        XCTAssertTrue(three.isAvailable)
+    }
+
+    /// The floor is not "nearly zero legs is fine". A single leg is a performance, and a profile
+    /// reading "Form 167.0" off one nine-darter is the failure this prevents.
+    func testOneLegIsNeverAFormFigure() {
+        let one = Statistics.recentForm(fastLegs(1))
+        XCTAssertEqual(one.average.basis, .unavailable)
+        XCTAssertNil(one.average.value)
+        XCTAssertEqual(one.legs, 1)
+    }
+
+    func testFormLooksAtTheMostRecentLegsAndNoMoreThanTheWindow() {
+        let old = fastLegs(12)                  // legs 1...12, 501 in 9 darts -> 167.0
+        let recent = slowLegs(3, from: 13)      // legs 13...15, 501 in 18 darts -> 83.5
+        let form = Statistics.recentForm(old + recent)
+
+        XCTAssertEqual(form.legs, 10, "the window, not everything ever thrown")
+        XCTAssertEqual(form.window, 10)
+
+        // Legs 6...15: seven fast and three slow. This checks WHICH legs were taken; the average
+        // formula itself is tested above, so recomputing it here is deliberate and not circular.
+        let expected = (7 * 501.0 + 3 * 501.0) * 3 / Double(7 * 9 + 3 * 18)
+        XCTAssertEqual(form.average.value!, expected, accuracy: 0.001)
+
+        // And it really is the recent end: without the three slow legs the answer is a clean 167.
+        XCTAssertEqual(Statistics.recentForm(old).average.value!, 167.0, accuracy: 0.001)
+        // Taking the OLDEST ten instead would give exactly 167 here, so this fails if the window is
+        // read from the wrong end — which is the mistake the pooled history's numbering invites.
+        XCTAssertGreaterThan(abs(form.average.value! - 167.0), 1.0)
+    }
+
+    /// Form is the same audited average over a window, so the same missing evidence bounds it. A
+    /// form figure that quietly turned a range into a point would be the honesty layer failing in
+    /// the one place a player is most likely to read a number as a fact about themselves.
+    func testFormIsARangeWhenALegWinningVisitDidNotRecordItsDarts() {
+        let incomplete = fastLegs(3).map { visit -> VisitRecord in
+            visit.wonLeg && visit.legOrdinal == 3
+                ? VisitRecord(legOrdinal: visit.legOrdinal, visitOrdinal: visit.visitOrdinal,
+                              visitTotal: visit.visitTotal, dartsUsed: nil, bust: visit.bust,
+                              remainingBefore: visit.remainingBefore, remainingAfter: visit.remainingAfter,
+                              wonLeg: visit.wonLeg, dartsAtDouble: visit.dartsAtDouble)
+                : visit
+        }
+        let form = Statistics.recentForm(incomplete)
+        XCTAssertEqual(form.average.basis, .bounded)
+        XCTAssertNil(form.average.value, "a range is not a point")
+        XCTAssertNotNil(form.average.lower)
+        XCTAssertNotNil(form.average.upper)
+    }
+
+    /// A leg still being thrown is a snapshot, not a completed performance.
+    func testAnUnfinishedLegIsNotCountedTowardsForm() {
+        let done = fastLegs(3)
+        let plusUnfinished = done + [v(4, 1, 180, 3, 501, 321)]
+        XCTAssertEqual(Statistics.recentForm(plusUnfinished).legs, 3)
+        XCTAssertEqual(Statistics.recentForm(done).average.value,
+                       Statistics.recentForm(plusUnfinished).average.value,
+                       "an in-flight leg must not move the figure between visits")
+    }
 }

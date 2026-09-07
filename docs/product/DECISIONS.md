@@ -1114,3 +1114,66 @@ claimed to have won would be attesting to a claim that was never made.
 Stop offering the two buttons. Rows already written stay readable, because the journal reads a kind
 it does not know as `unknown` and refuses to replay rather than guessing — which is also what an
 older build does with these rows today.
+
+## PD-018 — A descriptive form figure, never called a rating
+
+**Asked** 2026-09-07. **Answered** 2026-09-07: a descriptive form figure, never called a rating.
+
+**OD-001 stays open.** No rating model in this repository has been validated against real matches,
+and PD-002 says no unvalidated model may be published. That leaves a profile with nothing on it
+that says how somebody has been playing, which the founder chose to fix without touching OD-001.
+
+**Recent form** is a player's three-dart average over their most recent completed legs, computed by
+the same audited `Statistics.threeDartAverage` a single match uses, through the same honesty layer.
+It is a description of what somebody has actually scored. It is **not** a claim about strength
+relative to other players, it is never labelled a rating, and nothing seeds a rating from it.
+
+Four choices inside it, each with a reason rather than a number picked to feel right:
+
+1. **The window is legs, not matches or days.** A match runs from three legs to twenty-one, so
+   "your last five matches" is not a fixed amount of darts; and a player who plays once a month
+   would have no form at all under a time window. Ten legs.
+2. **Below three completed legs there is no figure**, only a note saying how many more are needed.
+   One leg is a performance. The shortest thing anybody in darts calls a match is a best of three,
+   which is the smallest sample this is willing to describe as form. **That floor is a stated
+   position, not a statistical result**, and it is the number to argue with.
+3. **A leg counts only when somebody has won it.** A leg still being thrown is a snapshot mid-flight,
+   and counting it would move the figure between visits of the same leg.
+4. **The window travels with the figure.** "58.4" is a claim; "58.4 over your last 10 completed
+   legs" is a description. The screen shows both, and the words "Not a rating" with them.
+
+Where the underlying average is bounded — a leg-winning visit that did not record its darts — the
+form figure is a range too. It inherits the honesty layer rather than escaping it, which is the
+whole reason it is computed there and not in the view.
+
+### How to reverse
+
+Delete the line from the profile. `Statistics.recentForm` has no other caller, and nothing is
+derived from it.
+
+## PD-017 — An export the player controls, and iCloud backup
+
+**Asked** 2026-09-07. **Answered** 2026-09-07: both.
+
+PD-012 put everything on the phone. A lost, broken or wiped phone therefore loses every match ever
+played on it, and the app did not even warn about it.
+
+- **iCloud** is what actually saves people, because it needs no discipline. The journal and the club
+  book ride the ordinary device backup, so restoring a phone restores the history. It also means a
+  player's darts history is in Apple's backup, which is a thing to say out loud in the app rather
+  than leave for somebody to discover.
+- **An export** is what makes it theirs: a file they can keep, move to a new phone, or hand to a
+  league secretary. Nothing leaves the phone unless they send it.
+
+Neither alone covers the real cases, which is why the founder chose both.
+
+**An import never merges into an existing journal.** A journal is append-only with a gapless
+per-device sequence, and merging two of them is the reconciliation problem ADR-006 specifies for
+sync — which is not built. An import that pretended to do it would produce a journal whose sequence
+lies. So an import is read-only until sync exists: it opens the file, shows what is in it, and does
+not write it into the live journal.
+
+### How to reverse
+
+Remove the export from Settings and stop marking the container for backup. Files already exported
+stay readable, because the format is the journal's own rows and is documented.

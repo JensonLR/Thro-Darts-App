@@ -679,4 +679,72 @@ final class MatchSessionTests: XCTestCase {
         XCTAssertEqual(reopened.ending, .abandoned, "and is read back from the journal, not assumed")
         XCTAssertEqual(reopened.remaining(.home), 321)
     }
+
+    // MARK: - the form figure (PD-018)
+
+    /// One 501 leg won in nine darts, written straight to the journal.
+    ///
+    /// Through the journal rather than through the session on purpose: these tests are about what a
+    /// PROFILE says, and driving the keypad's prompt-and-announcement state machine four times over
+    /// would test that instead, and break the moment a starting score happened to be a checkout.
+    private func completeALeg(in matchId: MatchId) throws {
+        try journal.append(.visit(Seat.home.playerId, 180), to: matchId)
+        try journal.append(.visit(Seat.away.playerId, 60), to: matchId)
+        try journal.append(.visit(Seat.home.playerId, 180), to: matchId)
+        try journal.append(.visit(Seat.away.playerId, 60), to: matchId)
+        try journal.append(.visit(Seat.home.playerId, 141, dartsUsed: 3, dartsAtDouble: 1), to: matchId)
+    }
+
+    private func oneLegMatch(for personId: String) throws -> MatchRecord {
+        try journal.createMatch(NewMatch(homeName: "Jenson", awayName: "Alex",
+                                         legsMode: .firstTo, legsTarget: 1, homePlayerId: personId))
+    }
+
+    /// The label is the guarantee. OD-001 leaves the rating model open because no model here has
+    /// been validated, and the difference between "what you have been scoring" and "how good you
+    /// are" is the whole reason this is allowed to ship while that stays open.
+    func testTheFormFigureIsNeverCalledARating() throws {
+        let me = "person-form"
+        for _ in 0 ..< 4 { try completeALeg(in: try oneLegMatch(for: me).id) }
+
+        let figures = try PersonSummary.figures(for: me, in: journal)
+        let form = figures.first { $0.label == "Recent form" }
+        XCTAssertNotNil(form, "the profile shows it")
+        XCTAssertFalse(figures.contains { $0.label.lowercased().contains("rating") },
+                       "nothing on a profile is called a rating while OD-001 is open")
+        XCTAssertEqual(form?.note?.contains("Not a rating."), true, form?.note ?? "no note")
+        XCTAssertEqual(form?.note?.contains("last 4 completed legs"), true, form?.note ?? "no note")
+        XCTAssertEqual(form?.confidence, .exact)
+        XCTAssertEqual(form?.value, "167.0", "501 in nine darts, four times over")
+    }
+
+    /// Below the floor it is unavailable and says how many more legs are needed — never a thin
+    /// number presented as form, and never a zero.
+    func testFormIsUnavailableUntilThereAreEnoughLegs() throws {
+        let me = "person-thin"
+        try completeALeg(in: try oneLegMatch(for: me).id)
+
+        let form = try PersonSummary.figures(for: me, in: journal).first { $0.label == "Recent form" }
+        XCTAssertEqual(form?.value, "—", "a dash, never a zero")
+        XCTAssertEqual(form?.confidence, .unavailable, "and drawn as the fact it is not (PD-015)")
+        XCTAssertEqual(form?.note?.contains("2 more"), true, form?.note ?? "no note")
+    }
+
+    /// PD-016 again, from the profile's side: a match that ended short is counted and named, because
+    /// "played 12" meaning "nine played out and three walked away from" is a different claim.
+    func testTheMatchCountNamesTheOnesThatEndedShort() throws {
+        let me = "person-ended"
+        try completeALeg(in: try oneLegMatch(for: me).id)
+
+        for ending in [Ending.retired(by: .away), .abandoned] {
+            let m = try journal.createMatch(NewMatch(homeName: "Jenson", awayName: "Alex", homePlayerId: me))
+            try journal.append(.visit(Seat.home.playerId, 60), to: m.id)
+            try journal.end(m.id, as: ending)
+        }
+
+        let matches = try PersonSummary.figures(for: me, in: journal).first { $0.label == "Matches" }
+        XCTAssertEqual(matches?.value, "3")
+        XCTAssertEqual(matches?.note?.contains("1 ended in a retirement"), true, matches?.note ?? "no note")
+        XCTAssertEqual(matches?.note?.contains("1 abandoned with no result"), true, matches?.note ?? "no note")
+    }
 }

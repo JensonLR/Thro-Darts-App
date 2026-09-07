@@ -662,4 +662,35 @@ final class JournalTests: XCTestCase {
         XCTAssertEqual(history.abandoned, 1)
         XCTAssertEqual(history.visits.count, 3, "every dart thrown counts, including in the abandoned one")
     }
+
+    /// Leg 1 is the first leg this person played on this device; the highest ordinal is the most
+    /// recent. `matches()` returns newest first, so pooling has to reverse it.
+    ///
+    /// Nothing before PD-018 would have noticed this: every pooled figure — averages, first nine,
+    /// best leg — is order-independent, so the numbering could run either way and every test still
+    /// passed. The form figure takes the HIGHEST ordinals as the recent ones, so under the other
+    /// direction it would have described a player's oldest darts as their current form. This is the
+    /// only thing holding the direction.
+    func testHistoryNumbersLegsOldestFirst() throws {
+        let j = try open()
+        let me = "person-1"
+        // Two one-leg matches, the second played a day later. Different scores so they are telling
+        // apart by their darts rather than by their ordinals.
+        let first = try j.createMatch(NewMatch(homeName: "A", awayName: "B", startingScore: 101,
+                                               legsTarget: 1, homePlayerId: me),
+                                      startedAt: Date(timeIntervalSince1970: 1_000))
+        try j.append(.visit(Seat.home.playerId, 101, dartsUsed: 3, dartsAtDouble: 1), to: first.id)
+
+        let second = try j.createMatch(NewMatch(homeName: "A", awayName: "C", startingScore: 101,
+                                                legsTarget: 1, homePlayerId: me),
+                                       startedAt: Date(timeIntervalSince1970: 2_000))
+        try j.append(.visit(Seat.home.playerId, 60), to: second.id)
+        try j.append(.visit(Seat.away.playerId, 60), to: second.id)
+
+        let history = try j.history(of: me)
+        let byLeg = Dictionary(grouping: history.visits, by: { $0.legOrdinal })
+        XCTAssertEqual(byLeg.keys.sorted(), [1, 2])
+        XCTAssertEqual(byLeg[1]?.map(\.visitTotal), [101], "the OLDER match is leg 1")
+        XCTAssertEqual(byLeg[2]?.map(\.visitTotal), [60], "and the newer one is above it")
+    }
 }

@@ -258,6 +258,10 @@ public struct TurnIndicator: View {
 public struct ScoreKeypad: View {
     public static let quick: [Int] = [180, 140, 100, 60, 45, 26]
 
+    /// Whether the phone answers in the hand (PD-015). Read here rather than passed in, because a
+    /// player's answer to "should this buzz" belongs to the player and not to every caller.
+    @AppStorage(ThroHaptics.enabledKey) private var haptics: Bool = true
+
     private let value: String
     private let disabled: Bool
     private let onDigit: (String) -> Void
@@ -305,14 +309,14 @@ public struct ScoreKeypad: View {
                 }
                 .accessibilityLabel("Undo")
             }
-            Button(action: onEnter) {
+            Button(action: { ThroHaptics.play(.commit, enabled: haptics); onEnter() }) {
                 Text(value.isEmpty ? "Enter score" : "Enter \(value)")
                     .thro(ThroTypography.bodyLarge.weight(.bold).uppercase(true).tracking(em: 0.04))
                     .foregroundStyle(ThroColor.throChalk)
                     .frame(maxWidth: .infinity, minHeight: ThroSpacing.touchTargetScoring)
                     .background(RoundedRectangle(cornerRadius: ThroSpacing.radiusKeypad).fill(ThroColor.colorSurfaceBrand))
             }
-            .buttonStyle(.plain)
+            .buttonStyle(ThroPressStyle())
             .disabled(value.isEmpty)
             .opacity(value.isEmpty ? 0.4 : 1)
         }
@@ -329,9 +333,10 @@ public struct ScoreKeypad: View {
 
     private func key<Label: View>(minHeight: CGFloat = ThroSpacing.touchTargetScoring,
                                   background: Color = ThroColor.colorSurfacePrimary,
+                                  haptic: ThroHaptics.Event = .key,
                                   action: @escaping () -> Void,
                                   @ViewBuilder label: () -> Label) -> some View {
-        Button(action: action) {
+        Button(action: { ThroHaptics.play(haptic, enabled: haptics); action() }) {
             label()
                 .foregroundStyle(ThroColor.colorTextPrimary)
                 .frame(maxWidth: .infinity, minHeight: minHeight)
@@ -339,26 +344,65 @@ public struct ScoreKeypad: View {
                 .overlay(RoundedRectangle(cornerRadius: ThroSpacing.radiusKeypad).strokeBorder(ThroColor.colorBorderDefault, lineWidth: 1))
                 .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
+        // PD-015. Was `.plain`, which is SwiftUI for "do nothing at all" — the one surface a player
+        // touches sixty times a leg gave no acknowledgement that a key had been hit.
+        .buttonStyle(ThroPressStyle(pressedFill: ThroColor.colorSurfaceSecondary))
     }
 }
 
-/// One figure on a result. `note` is where a bounded or unavailable statistic explains itself; the
-/// export's Stat has no such slot (DESIGN_UNSPECIFIED #9), so it is rendered in the metadata role.
+/// One figure on a result, drawn according to how far it can be trusted (PD-015).
+///
+/// **The gap this closes** was named as `DESIGN_UNSPECIFIED` #9: the export draws exactly one kind
+/// of statistic — a confident number — and THRØ's honesty layer produces three. Until this, all
+/// three were drawn identically: `58.4`, `58.4–61.2` and `—` were the same weight, the same colour
+/// and the same size, so the one thing the honesty layer exists to communicate was the one thing
+/// the screen did not show. A reader had to notice the shape of the string.
+///
+/// **The guarantee is in the type, not in the drawing.** `range` and `unavailable` take a
+/// non-optional reason, so it is not possible to put a dash or a range on a screen without saying
+/// why it is one. That is the failure this is really guarding: a figure that lost its qualification
+/// somewhere between the statistics layer and the view.
 public struct StatItem: Identifiable, Equatable, Sendable {
+    /// How far the figure can be trusted. Mirrors `ThroStatistics.Basis`, restated here because the
+    /// design package must not depend on the statistics package to know how to draw a number.
+    public enum Confidence: Sendable, Equatable { case exact, range, unavailable }
+
     public let label: String
     public let value: String
     public let note: String?
+    public let confidence: Confidence
     public var id: String { label }
 
-    public init(label: String, value: String, note: String? = nil) {
+    private init(label: String, value: String, note: String?, confidence: Confidence) {
         self.label = label
         self.value = value
         self.note = note
+        self.confidence = confidence
+    }
+
+    /// A figure derived with certainty. `note` is optional here and only here — an exact figure may
+    /// still disclose something (a first nine that excludes short legs), but it need not.
+    public static func exact(_ label: String, _ value: String, note: String? = nil) -> StatItem {
+        StatItem(label: label, value: value, note: note, confidence: .exact)
+    }
+
+    /// An interval. `why` is required: a range with no explanation reads as indecision rather than
+    /// as the precise statement of what the evidence supports that it is.
+    public static func range(_ label: String, _ value: String, why: String) -> StatItem {
+        StatItem(label: label, value: value, note: why, confidence: .range)
+    }
+
+    /// Not computable. The value is always the em dash — never a zero, which would read as
+    /// *they are bad at darts* rather than *this cannot be worked out*.
+    public static func unavailable(_ label: String, why: String) -> StatItem {
+        StatItem(label: label, value: "—", note: why, confidence: .unavailable)
     }
 }
 
 /// The two-column figures grid from MatchSummary.jsx, usable on its own.
+///
+/// Three drawn forms, one per confidence (PD-015). Colour alone would not carry it — a screen
+/// reader gets no colour — so the basis is also spoken in the accessibility label.
 public struct StatGrid: View {
     private let stats: [StatItem]
 
@@ -371,9 +415,16 @@ public struct StatGrid: View {
             ForEach(stats) { s in
                 VStack(alignment: .leading, spacing: 2) {
                     Eyebrow(s.label)
-                    Text(s.value)
-                        .thro(ThroTypography.heading2.family(.sport).weight(.bold))
-                        .foregroundStyle(ThroColor.colorTextPrimary)
+                    HStack(alignment: .firstTextBaseline, spacing: ThroSpacing.spacing2) {
+                        Text(s.value)
+                            .thro(ThroTypography.heading2.family(.sport).weight(.bold))
+                            .foregroundStyle(StatGrid.valueColour(s.confidence))
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.6)   // a range is twice as long as a point value
+                        // Only a range is marked. The confident case is the common one and labelling
+                        // it would make every figure look qualified; the dash marks itself.
+                        if s.confidence == .range { Tag("Range", tone: .neutral) }
+                    }
                     if let note = s.note {
                         Text(note)
                             .thro(ThroTypography.metadata)
@@ -381,9 +432,28 @@ public struct StatGrid: View {
                             .fixedSize(horizontal: false, vertical: true)
                     }
                 }
-                .accessibilityElement(children: .combine)
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel(StatGrid.spoken(s))
             }
         }
+    }
+
+    /// Full strength for a fact; the quieter neutral for a figure that is not one. Both neutrals are
+    /// on the contrast matrix, so neither can fall below the floor.
+    static func valueColour(_ c: StatItem.Confidence) -> Color {
+        c == .unavailable ? ThroColor.colorTextSecondary : ThroColor.colorTextPrimary
+    }
+
+    /// What a screen reader says. The basis is spoken because it is the part a sighted reader gets
+    /// from weight and colour, and "dash" would tell somebody nothing at all.
+    static func spoken(_ s: StatItem) -> String {
+        let head: String
+        switch s.confidence {
+        case .exact: head = "\(s.label), \(s.value)"
+        case .range: head = "\(s.label), between \(s.value.replacingOccurrences(of: "–", with: " and "))"
+        case .unavailable: head = "\(s.label), not available"
+        }
+        return [head, s.note].compactMap { $0 }.joined(separator: ". ")
     }
 }
 

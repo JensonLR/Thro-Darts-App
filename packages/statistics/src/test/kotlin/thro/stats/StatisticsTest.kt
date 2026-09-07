@@ -328,4 +328,104 @@ class StatisticsTest {
                 "explanations are sentences, not codes: ${s.note}")
         }
     }
+
+    // ---- recent form (PD-018) ----
+
+    /** N completed 501 legs in 9 darts, numbered oldest-first as the pooled history numbers them. */
+    private fun fastLegs(n: Int, from: Int = 1) = (from until from + n).flatMap { leg ->
+        listOf(
+            v(leg, 1, 180, 3, 501, 321),
+            v(leg, 2, 180, 3, 321, 141),
+            v(leg, 3, 141, 3, 141, 0, won = true),
+        )
+    }
+
+    /** N completed 501 legs in 18 darts — real darts, a real finish, a much lower average. */
+    private fun slowLegs(n: Int, from: Int = 1) = (from until from + n).flatMap { leg ->
+        listOf(
+            v(leg, 1, 100, 3, 501, 401),
+            v(leg, 2, 100, 3, 401, 301),
+            v(leg, 3, 100, 3, 301, 201),
+            v(leg, 4, 100, 3, 201, 101),
+            v(leg, 5, 60, 3, 101, 41),
+            v(leg, 6, 41, 3, 41, 0, won = true),
+        )
+    }
+
+    @Test
+    fun `form is unavailable below three legs and says how many more are needed`() {
+        val two = Statistics.recentForm(fastLegs(2))
+        assertEquals(Basis.UNAVAILABLE, two.average.basis)
+        assertEquals(2, two.legs)
+        assertTrue(!two.isAvailable)
+        assertTrue(two.average.note!!.contains("1 more"), two.average.note!!)
+
+        val three = Statistics.recentForm(fastLegs(3))
+        assertEquals(Basis.EXACT, three.average.basis)
+        assertEquals(3, three.legs)
+        assertTrue(three.isAvailable)
+    }
+
+    /**
+     * The floor is not "nearly zero legs is fine". A single leg is a performance, and a profile
+     * reading "Form 167.0" off one nine-darter is the failure this prevents.
+     */
+    @Test
+    fun `one leg is never a form figure`() {
+        val one = Statistics.recentForm(fastLegs(1))
+        assertEquals(Basis.UNAVAILABLE, one.average.basis)
+        assertNull(one.average.value)
+        assertEquals(1, one.legs)
+    }
+
+    @Test
+    fun `form looks at the most recent legs and no more than the window`() {
+        val old = fastLegs(12)                 // legs 1..12, 501 in 9 darts -> 167.0
+        val recent = slowLegs(3, from = 13)    // legs 13..15, 501 in 18 darts -> 83.5
+        val form = Statistics.recentForm(old + recent)
+
+        assertEquals(10, form.legs, "the window, not everything ever thrown")
+        assertEquals(10, form.window)
+
+        // Legs 6..15: seven fast and three slow. This checks WHICH legs were taken; the average
+        // formula itself is tested above, so recomputing it here is deliberate and not circular.
+        val expected = (7 * 501.0 + 3 * 501.0) * 3 / (7 * 9 + 3 * 18)
+        assertTrue(abs(form.average.value!! - expected) < 0.001, "${form.average.value} vs $expected")
+
+        // And it really is the recent end: without the three slow legs the answer is a clean 167.
+        assertTrue(abs(Statistics.recentForm(old).average.value!! - 167.0) < 0.001)
+        // Taking the OLDEST ten instead would give exactly 167 here, so this fails if the window
+        // is read from the wrong end — which is the mistake the pooled history's numbering invites.
+        assertTrue(abs(form.average.value!! - 167.0) > 1.0)
+    }
+
+    /**
+     * Form is the same audited average over a window, so the same missing evidence bounds it. A form
+     * figure that quietly turned a range into a point would be the honesty layer failing in the one
+     * place a player is most likely to read a number as a fact about themselves.
+     */
+    @Test
+    fun `form is a range when a leg-winning visit did not record its darts`() {
+        val incomplete = fastLegs(3).map {
+            if (it.wonLeg && it.legOrdinal == 3) it.copy(dartsUsed = null) else it
+        }
+        val form = Statistics.recentForm(incomplete)
+        assertEquals(Basis.BOUNDED, form.average.basis)
+        assertNull(form.average.value, "a range is not a point")
+        assertNotNull(form.average.lower)
+        assertNotNull(form.average.upper)
+    }
+
+    /** A leg still being thrown is a snapshot, not a completed performance. */
+    @Test
+    fun `an unfinished leg is not counted towards form`() {
+        val done = fastLegs(3)
+        val plusUnfinished = done + listOf(v(4, 1, 180, 3, 501, 321))
+        assertEquals(3, Statistics.recentForm(plusUnfinished).legs)
+        assertEquals(
+            Statistics.recentForm(done).average.value,
+            Statistics.recentForm(plusUnfinished).average.value,
+            "an in-flight leg must not move the figure between visits",
+        )
+    }
 }
