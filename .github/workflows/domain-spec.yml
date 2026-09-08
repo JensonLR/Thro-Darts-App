@@ -111,6 +111,14 @@ jobs:
       - name: The wall can be given a screen
         run: python3 tools/check_scene_manifest.py
 
+      # And the type, read from the font files rather than from their names. A face that does not
+      # register does not raise: iOS falls back, every screen still draws, and the app looks like
+      # every other app — the founder's "no generic slop anywhere" arriving as a build problem. The
+      # worst of the three ways in is a file whose PostScript name is not the one the Swift asks
+      # for, because the family still registers and only the weight is wrong.
+      - name: The bundle carries the faces the design system asks for
+        run: python3 tools/check_bundle_faces.py
+
   journal:
     name: The on-device journal, on Android's half
     runs-on: ubuntu-latest

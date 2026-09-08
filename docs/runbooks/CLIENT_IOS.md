@@ -209,6 +209,11 @@ The directions on that screen are held mechanically, because they are the one ki
 somewhere else can falsify silently: `tools/check_readiness_directions.py` fails a build if a
 control the screen names — **Share the result**, **Remind me**, **Add to calendar**, **Find the
 venue**, and the two Settings groups — is not drawn under that name in the file that draws it.
+Two more guards cover the property-list keys these surfaces are made of:
+`tools/check_scene_manifest.py` for the external-display scene, and `tools/check_bundle_faces.py`
+for `NSSupportsLiveActivities`, the calendar usage description, and the ten type faces — which it
+reads out of the `.ttf` files themselves, because it is the PostScript name inside the file and not
+the filename that `UIFont` matches.
 
 #### If the widgets show nothing
 
