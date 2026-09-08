@@ -562,10 +562,15 @@ public struct FixturesScreen: View {
                         ForEach(done) { f in row(f); ThroDivider() }
                     }
                     if club.fixtures.isEmpty {
+                        // The sentence said *add one* and the only control was the `+` glyph in
+                        // the bar. On an empty screen the thing to do next is the whole page, so
+                        // it gets the button every other empty state in this app has.
                         EmptyState(title: "No fixtures yet",
                                    message: club.mayManageFixtures
                                         ? "Add one and it appears on the club's public page."
-                                        : "An official adds them.")
+                                        : "An official adds them.",
+                                   actionLabel: club.mayManageFixtures ? "Add a fixture" : nil,
+                                   onAction: onAdd)
                             .padding(.top, ThroSpacing.spacing6)
                     }
                     // Two different true sentences, because PD-020 changed one of them for leagues

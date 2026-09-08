@@ -1375,11 +1375,16 @@ public struct NewTeamFixtureScreen: View {
     @State private var when: Date
     private let onBack: () -> Void
     private let onAdd: (String, String, String, Date, String) -> Void
+    /// Where to go when there is nobody to make a fixture between. Optional because a viewer who
+    /// may not keep the list has nowhere to be sent — see `notEnough`.
+    private let onAddTeams: (() -> Void)?
 
     public init(club: Club, now: Date = Date(), onBack: @escaping () -> Void = {},
+                onAddTeams: (() -> Void)? = nil,
                 onAdd: @escaping (String, String, String, Date, String) -> Void = { _, _, _, _, _ in }) {
         self.club = club
         self.onBack = onBack
+        self.onAddTeams = onAddTeams
         self.onAdd = onAdd
         _homeId = State(initialValue: club.teams.first?.id ?? "")
         _awayId = State(initialValue: club.teams.dropFirst().first?.id ?? "")
@@ -1387,6 +1392,32 @@ public struct NewTeamFixtureScreen: View {
         var start = Calendar.current.date(byAdding: .day, value: 7, to: now) ?? now
         start = Calendar.current.date(bySettingHour: 20, minute: 0, second: 0, of: start) ?? start
         _when = State(initialValue: start)
+    }
+
+    /// **A dead end until now.** This screen said *add them first* and offered nothing but Back:
+    /// somebody who came here to add a fixture was told what was missing and left to find their own
+    /// way to the list. An admin gets the way there; anybody else is told who keeps it, because
+    /// sending them to a screen that will refuse them is worse than the sentence alone.
+    @ViewBuilder private var notEnough: some View {
+        let noun = club.competitorNoun.many.lowercased()
+        EmptyState(title: "Not enough \(noun)",
+                   message: NewTeamFixtureScreen.notEnoughNote(
+                        entered: club.teams.count, noun: noun,
+                        kind: club.kind.label.lowercased(), mayManage: onAddTeams != nil),
+                   actionLabel: onAddTeams == nil ? nil : "Add \(noun)",
+                   onAction: onAddTeams)
+    }
+
+    /// What the screen says when there is nobody to make a fixture between.
+    ///
+    /// Static so the two readers can be told apart in a test. The one who may not keep the list is
+    /// **not** told to add them: this screen is reached from a control an admin has, so somebody
+    /// else arriving here has no list to add to and telling them otherwise sends them looking.
+    static func notEnoughNote(entered: Int, noun: String, kind: String, mayManage: Bool) -> String {
+        let there = entered == 1 ? "is one" : "are none"
+        return "A fixture is between two of them, and there \(there) so far. "
+             + (mayManage ? "Add them first, then come back."
+                          : "An admin of this \(kind) keeps that list.")
     }
 
     private func name(_ id: String) -> String { club.teams.first { $0.id == id }?.name ?? "" }
@@ -1399,10 +1430,7 @@ public struct NewTeamFixtureScreen: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: ThroSpacing.spacing5) {
                     if club.teams.count < 2 {
-                        EmptyState(title: "Not enough \(club.competitorNoun.many.lowercased())",
-                                   message: "A fixture is between two of them, and there "
-                                          + "\(club.teams.count == 1 ? "is one" : "are none") "
-                                          + "so far. Add them first.")
+                        notEnough
                     } else {
                         picker("Home", selection: $homeId)
                         picker("Away", selection: $awayId)

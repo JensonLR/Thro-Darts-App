@@ -244,4 +244,26 @@ final class LeagueTests: XCTestCase {
         XCTAssertEqual(org(.league, .admin).competitorNoun.many, "Teams")
         XCTAssertEqual(org(.tournament, .admin).competitorNoun.many, "Entrants")
     }
+
+    /// **This screen was a dead end.** It said *add them first* and offered nothing but Back:
+    /// somebody who came to add a fixture was told what was missing and left to find the list
+    /// themselves. It carries the way there now — and the moment it does, the sentence has to know
+    /// which reader it is talking to, because sending somebody without the right to a screen that
+    /// refuses them is worse than the sentence on its own.
+    func testTheNotEnoughNoteSaysSomethingDifferentToSomebodyWhoCannotFixIt() {
+        let admin = NewTeamFixtureScreen.notEnoughNote(entered: 1, noun: "teams", kind: "league",
+                                                       mayManage: true)
+        let watcher = NewTeamFixtureScreen.notEnoughNote(entered: 1, noun: "teams", kind: "league",
+                                                         mayManage: false)
+        XCTAssertNotEqual(admin, watcher)
+        XCTAssertTrue(admin.contains("Add them first"), admin)
+        XCTAssertFalse(watcher.contains("Add them"),
+                       "this tells somebody to do a thing they will be refused: \(watcher)")
+        XCTAssertTrue(watcher.contains("An admin of this league"), watcher)
+
+        // And it counts what is actually there, in the singular and the plural.
+        XCTAssertTrue(admin.contains("is one"), admin)
+        XCTAssertTrue(NewTeamFixtureScreen.notEnoughNote(entered: 0, noun: "teams", kind: "league",
+                                                         mayManage: true).contains("are none"))
+    }
 }

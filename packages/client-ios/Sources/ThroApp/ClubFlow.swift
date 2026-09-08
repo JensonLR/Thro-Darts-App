@@ -698,7 +698,8 @@ public struct ClubsFlow: View {
                         }
                     }
                 } else {
-                    NewTeamFixtureScreen(club: c, onBack: { route = .fixtures(id) }) { home, away, title, when, venue in
+                    NewTeamFixtureScreen(club: c, onBack: { route = .fixtures(id) },
+                                         onAddTeams: c.mayManageTeams ? { route = .teams(id) } : nil) { home, away, title, when, venue in
                         if store.addFixture(to: id, title: title, when: when, venue: venue,
                                             homeTeam: home, awayTeam: away) {
                             route = .fixtures(id)
