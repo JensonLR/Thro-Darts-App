@@ -1,5 +1,8 @@
+import Foundation
 import XCTest
+import ThroEngine
 @testable import ThroApp
+@testable import ThroJournal
 
 /// The screen that answers the founder's *"not sure I can see or test majority of this."*
 ///
@@ -193,6 +196,48 @@ final class ReadinessTests: XCTestCase {
         let working = ThroReadiness.surfaces(busy).filter { $0.state == .on }.count
         XCTAssertTrue(ThroReadiness.summary(ThroReadiness.surfaces(busy))
                         .contains("\(working) of these are working"))
+    }
+
+    // MARK: the two counts that come from this phone's own matches
+
+    /// **The defect this pair was written to fix.** The first version excluded an abandoned match
+    /// from the share-card count, reasoning that a match nobody won has no scoreline — true of the
+    /// scoreline, false of the card. `MatchResultScreen` puts **Share the result** behind
+    /// `session.isComplete` and nothing else, and `ThroShareCard` draws an abandoned match with no
+    /// score and the sentence *"Nothing is claimed about who won."* So the row would have told the
+    /// founder they had nothing to share, about a match with a share button under it — which is the
+    /// exact class of failure this whole screen exists to stop.
+    ///
+    /// Built on a real journal rather than a hand-made record, for the reason `SpotlightTests`
+    /// gives: a fixture proves the formatter, and the formatter is not the part that breaks.
+    func testEveryCompleteMatchIsCountedAsShareableIncludingAnAbandonedOne() throws {
+        let path = NSTemporaryDirectory() + "thro-readiness-\(UUID().uuidString).sqlite"
+        defer { for s in ["", "-wal", "-shm"] { try? FileManager.default.removeItem(atPath: path + s) } }
+        let journal = try Journal(path: path, deviceId: DeviceId("test-device"))
+        let record = try journal.createMatch(NewMatch(homeName: "Ann", awayName: "Bea"))
+
+        let won = AppStore.HomeMatch(record: record, legsHome: 2, legsAway: 1, complete: true,
+                                     unreadable: nil)
+        let retired = AppStore.HomeMatch(record: record, legsHome: 1, legsAway: 0, complete: true,
+                                         unreadable: nil, ending: .retired(by: .away))
+        let abandoned = AppStore.HomeMatch(record: record, legsHome: 1, legsAway: 1, complete: true,
+                                           unreadable: nil, ending: .abandoned)
+        let open = AppStore.HomeMatch(record: record, legsHome: 0, legsAway: 0, complete: false,
+                                      unreadable: nil)
+        // A match whose rows will not replay never reaches a result screen, so it has no button.
+        let broken = AppStore.HomeMatch(record: record, legsHome: 0, legsAway: 0, complete: true,
+                                        unreadable: "the rows will not replay")
+
+        XCTAssertEqual(ThroReadiness.shareable([won, retired, abandoned, open, broken]), 3)
+        XCTAssertEqual(ThroReadiness.shareable([abandoned]), 1,
+                       "an abandoned match has a share button under it and gets a card without a "
+                     + "scoreline; excluding it sends somebody looking for nothing")
+        XCTAssertEqual(ThroReadiness.shareable([open, broken]), 0)
+
+        XCTAssertTrue(ThroReadiness.beingScored([won, open]))
+        XCTAssertFalse(ThroReadiness.beingScored([won, retired, abandoned]))
+        XCTAssertFalse(ThroReadiness.beingScored([broken]),
+                       "a match that will not replay has no remainders to put on a Lock Screen")
     }
 
     /// The wall screen is the one row with no button, because no app may attach a display. The row

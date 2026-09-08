@@ -394,13 +394,8 @@ public struct ThroRootView: View {
     private func readiness() -> ThroReadiness.Facts {
         let everything = store.matches + store.archived
         return ThroReadiness.Facts(
-            // The Live Activity follows the leg being scored, so this is the same question it asks:
-            // a match that is open and readable. An unreadable one has no remainders to show.
-            matchInProgress: everything.contains { !$0.complete && $0.unreadable == nil },
-            // What the share card could be made from. An abandoned match is deliberately not
-            // counted: it finished without a result, and the card refuses to draw a scoreline for
-            // one — so counting it here would send somebody looking for a button that is not there.
-            finishedMatches: everything.filter { $0.complete && $0.unreadable == nil && $0.ending != .abandoned }.count,
+            matchInProgress: ThroReadiness.beingScored(everything),
+            finishedMatches: ThroReadiness.shareable(everything),
             datedFixtures: clubs.clubs.flatMap(\.fixtures).filter { $0.at != nil }.count,
             spotlightOn: spotlight,
             diagnosticsOn: diagnostics,

@@ -434,6 +434,33 @@ public extension ThroReadiness {
     }
 }
 
+/// The two counts that come from this phone's own matches.
+///
+/// **They live here, next to the sentences they feed, because the first version of them got the
+/// rule wrong.** It excluded an abandoned match from the share-card count, reasoning that a match
+/// nobody won has no scoreline to print — which is true of the *scoreline* and false of the
+/// *card*: `MatchResultScreen` offers **Share the result** on every complete match, and
+/// `ThroShareCard` draws an abandoned one with no score and the sentence *"Nothing is claimed
+/// about who won."* A readiness row saying somebody had nothing to share, about a match with a
+/// share button under it, is the exact failure this whole screen exists to stop.
+public extension ThroReadiness {
+
+    /// How many matches on this phone have a share card behind them.
+    ///
+    /// Every **complete** match, whatever ended it — won, retired or abandoned — because that is
+    /// precisely the condition the result screen puts the control behind. One exclusion: a match
+    /// whose rows will not replay never reaches a result screen at all, so it has no button.
+    static func shareable(_ matches: [AppStore.HomeMatch]) -> Int {
+        matches.filter { $0.complete && $0.unreadable == nil }.count
+    }
+
+    /// Whether a match is open right now — the same question the Live Activity asks, since it
+    /// follows the leg being scored. An unreadable match has no remainders to put on a Lock Screen.
+    static func beingScored(_ matches: [AppStore.HomeMatch]) -> Bool {
+        matches.contains { !$0.complete && $0.unreadable == nil }
+    }
+}
+
 /// The screen that says what this build can do, and where to look for each of it.
 ///
 /// It takes its facts through a closure rather than reading them, for the reason the whole app is
