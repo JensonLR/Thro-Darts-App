@@ -96,15 +96,46 @@ public enum BackupPolicy {
         guard FileManager.default.fileExists(atPath: url.path) else {
             return .unknown("there is nothing at \(url.path) to have a flag")
         }
-        // Present at all → excluded. The contents are not read, because iOS does not read them.
-        if getxattr(url.path, attribute, nil, 0, 0, 0) >= 0 { return .excluded }
-        // Not there is what *included* is: the absence of an exclusion is an inclusion. Any other
-        // failure is reported rather than guessed — reading a flag and assuming a flag are the two
-        // things this type exists to keep apart.
-        guard errno == ENOATTR else {
+        let size = getxattr(url.path, attribute, nil, 0, 0, 0)
+        guard size >= 0 else {
+            // Not there is what *included* is: the absence of an exclusion is an inclusion. Any
+            // other failure is reported rather than guessed — reading a flag and assuming a flag
+            // are the two things this type exists to keep apart.
+            guard errno == ENOATTR else {
+                return .unknown("the backup flag could not be read: errno \(errno)")
+            }
+            return .included
+        }
+        guard size > 0 else { return .included }
+        var bytes = [UInt8](repeating: 0, count: size)
+        guard getxattr(url.path, attribute, &bytes, bytes.count, 0, 0) == size else {
             return .unknown("the backup flag could not be read: errno \(errno)")
         }
-        return .included
+        return excludes(Data(bytes)) ? .excluded : .included
+    }
+
+    /// What the attribute's contents mean.
+    ///
+    /// **Presence is not exclusion, and assuming it was cost another round.** The obvious rule —
+    /// the attribute is there, so the folder is excluded — is what the pre-Foundation technique
+    /// wrote (a single byte, 1) and what most code that touches this expects. It is not what
+    /// `URL.setResourceValues(isExcludedFromBackup: false)` does: rather than removing the
+    /// attribute, Foundation writes an explicit **false** into it, so a folder somebody had just
+    /// *included* through the framework read back as excluded here. CI caught it on the one
+    /// assertion in the suite that writes the flag off through Foundation and reads it back through
+    /// this type — which is precisely why that cross-check was kept when the rest of the fixture
+    /// moved to the file system.
+    ///
+    /// So the contents decide, in both forms: a property list holding a boolean, and the single
+    /// byte. The plist is tried first — a `false` plist is mostly non-zero bytes, so the byte rule
+    /// would read it as *excluded*, which is the same mistake one layer down.
+    static func excludes(_ data: Data) -> Bool {
+        if let plist = try? PropertyListSerialization.propertyList(from: data, options: [],
+                                                                  format: nil),
+           let number = plist as? NSNumber {
+            return number.boolValue
+        }
+        return data.contains { $0 != 0 }
     }
 
     /// What Settings says about it, in words rather than a flag.

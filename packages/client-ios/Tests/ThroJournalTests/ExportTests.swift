@@ -396,4 +396,33 @@ final class ExportTests: XCTestCase {
             return XCTFail("and so must something that is not json")
         }
     }
+
+    /// **Presence is not exclusion.** The attribute the backup flag *is* comes in two forms, and
+    /// the obvious rule — it is there, so the folder is excluded — is wrong about one of them.
+    ///
+    /// The pre-Foundation technique writes a single byte. `URL.setResourceValues` writes a property
+    /// list, and for `isExcludedFromBackup = false` it writes an explicit **false** into the
+    /// attribute rather than removing it — so a folder somebody had just *included* through the
+    /// framework read back as excluded. CI caught that on the one assertion in this file that writes
+    /// the flag off through Foundation and reads it back through `BackupPolicy`, which is why that
+    /// cross-check was kept when the rest of the fixture moved to the file system.
+    ///
+    /// The plist is tried before the byte rule on purpose: a `false` plist is mostly non-zero bytes,
+    /// so reading it as a byte would call it excluded — the same mistake one layer down.
+    func testTheFlagIsWhatTheAttributeSaysAndNotMerelyThatItIsThere() throws {
+        // The single byte, both ways round.
+        XCTAssertTrue(BackupPolicy.excludes(Data([1])))
+        XCTAssertFalse(BackupPolicy.excludes(Data([0])))
+
+        // Foundation's own form, both ways round.
+        for (value, excluded) in [(true, true), (false, false)] {
+            let plist = try PropertyListSerialization.data(fromPropertyList: NSNumber(value: value),
+                                                          format: .binary, options: 0)
+            XCTAssertEqual(BackupPolicy.excludes(plist), excluded,
+                           "a property list holding \(value) means excluded: \(excluded)")
+        }
+
+        // Nothing at all asserts nothing, and is not an exclusion.
+        XCTAssertFalse(BackupPolicy.excludes(Data()))
+    }
 }
