@@ -176,7 +176,15 @@ final class ExportTests: XCTestCase {
         XCTAssertTrue(BackupPolicy.sentence(.excluded).contains("Export"), "and says what to do about it")
 
         // And including it again puts it back, so the app can repair what it finds.
-        XCTAssertEqual(BackupPolicy.include(excluded), .included)
+        //
+        // **Through `including`, so a failed write and a lost write are told apart.** This line
+        // failed on CI with `("excluded") is not equal to ("included")` and nothing else, and the
+        // two stories behind that read identically from `include`: either `setResourceValues` threw
+        // — swallowed, until now — or it returned success and the flag was still on disk.
+        let repair = BackupPolicy.including(excluded)
+        XCTAssertNil(repair.wrote, "setting the flag threw: \(String(describing: repair.wrote))")
+        XCTAssertEqual(repair.state, .included,
+                       "the write reported success and the folder is still excluded — \(dir.path)")
     }
 
     /// **A `URL` remembers what it last read, and this must not.**
@@ -221,11 +229,13 @@ final class ExportTests: XCTestCase {
         try url.setResourceValues(exclude)
         XCTAssertEqual(BackupPolicy.read(url), .excluded, "the fixture for this half did not take")
 
-        let reported = BackupPolicy.include(url)
+        let attempt = BackupPolicy.including(url)
+        let reported = attempt.state
         let independent = BackupPolicy.read(URL(fileURLWithPath: dir.path))
         let throughTheCaller = BackupPolicy.read(dir)
         let paths = "wrote through \(url.path); read \(dir.path)"
 
+        XCTAssertNil(attempt.wrote, "setting the flag threw: \(String(describing: attempt.wrote))")
         XCTAssertEqual(independent, .included,
                        "the write did not land on disk at all — \(paths)")
         XCTAssertEqual(reported, .included,

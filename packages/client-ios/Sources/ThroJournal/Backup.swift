@@ -37,7 +37,18 @@ public enum BackupPolicy {
     /// guidance to exclude regenerable data does not apply to it, and including it is the decision
     /// rather than the absence of one.
     @discardableResult
-    public static func include(_ url: URL) -> State {
+    public static func include(_ url: URL) -> State { including(url).state }
+
+    /// The same, and what the write itself said.
+    ///
+    /// **The two failures look identical from the outside, and that cost a round.** When `include`
+    /// comes back `.excluded`, either the write threw or the write landed nowhere — and the player
+    /// -facing answer is the same for both, so the error was swallowed and CI could only report
+    /// `("excluded") is not equal to ("included")`. Settings still wants the state and nothing else;
+    /// a test wants to tell the two apart. So the state is what `include` returns and the error is
+    /// what this one adds, rather than a third `State` case that would make Settings say *could not*
+    /// about a folder whose exclusion it can read perfectly well.
+    static func including(_ url: URL) -> (state: State, wrote: Error?) {
         // **A URL built from the path, exactly as `read` does.** This is the fourth round on one
         // defect, and each round removed one participant that carried a memoised value; this
         // removes the last one. The write used to go through `var target = url` — a copy of
@@ -55,12 +66,14 @@ public enum BackupPolicy {
         } catch {
             // Setting it failed; the read below still says what is true, which is the part that
             // matters. A failure to WRITE the flag while the value is already right is not a problem
-            // worth telling a player about.
-            return read(url)
+            // worth telling a player about — but it is carried out of here, because a caller that
+            // asked for an inclusion and did not get one deserves to know which of the two things
+            // went wrong.
+            return (read(url), error)
         }
         // `url`, not `target`: what this returns has to be the answer a caller gets from `read(url)`
         // a moment later, and Settings does exactly that through a URL it built itself.
-        return read(url)
+        return (read(url), nil)
     }
 
     /// What the file system says right now.
