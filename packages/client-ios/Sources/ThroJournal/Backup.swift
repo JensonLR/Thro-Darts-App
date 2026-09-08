@@ -38,7 +38,16 @@ public enum BackupPolicy {
     /// rather than the absence of one.
     @discardableResult
     public static func include(_ url: URL) -> State {
-        var target = url
+        // **A URL built from the path, exactly as `read` does.** This is the fourth round on one
+        // defect, and each round removed one participant that carried a memoised value; this
+        // removes the last one. The write used to go through `var target = url` — a copy of
+        // whatever the caller had already read or written through — and CI caught the write
+        // through that copy not being visible to a read a line later, on the same directory, while
+        // the same write through an uncached URL always was. Two functions that answer the same
+        // question about the same file must reach it the same way, so both build their own value
+        // from the path and neither inherits a cache from anybody.
+        var target = URL(fileURLWithPath: url.path)
+        target.removeAllCachedResourceValues()
         do {
             var values = URLResourceValues()
             values.isExcludedFromBackup = false
@@ -49,11 +58,8 @@ public enum BackupPolicy {
             // worth telling a player about.
             return read(url)
         }
-        // **`url`, not `target`.** What this returns has to be the same answer a caller gets from
-        // `read(url)` a moment later — Settings does exactly that, through a URL it built itself.
-        // Reading through `target` was one operation and the caller's read was another, on values
-        // that had been mutated a different number of times; CI found them disagreeing about the
-        // same directory. `read` builds its own URL from the path, so this is one operation now.
+        // `url`, not `target`: what this returns has to be the answer a caller gets from `read(url)`
+        // a moment later, and Settings does exactly that through a URL it built itself.
         return read(url)
     }
 

@@ -209,15 +209,31 @@ final class ExportTests: XCTestCase {
         XCTAssertEqual(BackupPolicy.read(url), .included,
                        "the URL remembers being excluded; the file system does not")
 
-        // And the same through the policy's own writer, which is where it actually went wrong.
-        // **Both halves carry the paths.** These two lines disagreed on CI about the same directory,
-        // and there is no Swift on the machine this was written on, so the assertion has to be the
-        // thing that says why: a mismatch here is either the write not landing or the two URLs not
-        // naming the same file, and the message tells them apart without another round.
+        // And the same through the policy's own writer, which is where it actually went wrong —
+        // three times.
+        //
+        // **Three assertions rather than one, each naming a different layer.** There is no Swift on
+        // the machine this is written on, so CI is the only way to run it and a failure that says
+        // only `("excluded") is not equal to ("included")` costs a whole round to learn nothing
+        // from. This failed exactly that way once already. Now the three possible stories are told
+        // apart in one run: the write never landed, the write landed and `include`'s own read
+        // missed it, or two reads of the same path disagree with each other.
         try url.setResourceValues(exclude)
-        let paths = "wrote through \(url.path); reading \(dir.path)"
-        XCTAssertEqual(BackupPolicy.include(url), .included, "include did not clear it — \(paths)")
-        XCTAssertEqual(BackupPolicy.read(dir), .included, "a different URL disagrees — \(paths)")
+        XCTAssertEqual(BackupPolicy.read(url), .excluded, "the fixture for this half did not take")
+
+        let reported = BackupPolicy.include(url)
+        let independent = BackupPolicy.read(URL(fileURLWithPath: dir.path))
+        let throughTheCaller = BackupPolicy.read(dir)
+        let paths = "wrote through \(url.path); read \(dir.path)"
+
+        XCTAssertEqual(independent, .included,
+                       "the write did not land on disk at all — \(paths)")
+        XCTAssertEqual(reported, .included,
+                       "include reported \(reported) while an independent read of the same path "
+                     + "says \(independent) — \(paths)")
+        XCTAssertEqual(throughTheCaller, .included,
+                       "two reads of the same path disagree: \(throughTheCaller) here, "
+                     + "\(independent) a line earlier — \(paths)")
     }
 
     // MARK: reading one back
