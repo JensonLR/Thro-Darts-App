@@ -352,7 +352,18 @@ PAIRS_TEXT = [("--color-text-primary", "--color-background-primary"),
               # token because it reads like the right one.
               ("--thro-chalk", "--color-background-brand"),
               ("--color-text-brand", "--color-background-primary"),
-              ("--color-text-achievement", "--color-background-primary")]
+              ("--color-text-achievement", "--color-background-primary"),
+              # SLATE's board. Every board ink is checked against ALL THREE board grounds rather
+              # than against the one a component happens to sit on, because the board is one radial
+              # gradient and a figure can land anywhere in it. The board law — nothing on a board is
+              # lighter than `board-lit` or darker than `board-sunken` — is what makes those three
+              # the complete set of grounds, so this is the whole matrix and not a sample of it.
+              ("--color-text-on-board", "--color-board-lit"),
+              ("--color-text-on-board", "--color-board-field"),
+              ("--color-text-on-board", "--color-board-sunken"),
+              ("--color-text-on-board-secondary", "--color-board-lit"),
+              ("--color-text-on-board-secondary", "--color-board-field"),
+              ("--color-text-on-board-secondary", "--color-board-sunken")]
 # Which surface each status colour is actually shown on, read off the export rather than assumed from
 # the token's name. Only five of the nine statuses have a surface of their own; the gate used to look for
 # `--color-status-<name>-surface` for all nine, so four of them silently resolved to nothing and were
@@ -378,7 +389,13 @@ PAIRS_UI = [("--color-border-default", "--color-background-primary"),
             ("--color-focus-ring", "--color-background-brand"),
             ("--color-focus-ring", "--color-background-inverse"),
             ("--color-chart-reference", "--color-background-primary"),
-            ("--color-chart-primary", "--color-chart-secondary")]
+            ("--color-chart-primary", "--color-chart-secondary"),
+            # The boundary ink, on every ground it can be drawn on. `border-default` is 1.26–1.42:1
+            # and carries a "decorative rule" exception; this replaces it on the board side at
+            # 4.12:1 in the worst case, which is above 1.4.11's 3:1 with no exception at all.
+            ("--color-mark-on-board", "--color-board-lit"),
+            ("--color-mark-on-board", "--color-board-field"),
+            ("--color-mark-on-board", "--color-board-sunken")]
 
 def contrast_report(doc):
     """Every pair, checked. A pair whose tokens cannot be resolved is a breach, not a silent skip:

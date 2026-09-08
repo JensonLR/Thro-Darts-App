@@ -900,3 +900,107 @@ The full list is long and every entry is in the git history. The ones that matte
 - **Both widgets sent every tap to the same place, in three states that are not the same thing.** `widgetURL` was `thro://continue` on the board and on the Lock Screen accessory, whatever they were drawing. On a live scoreboard that is right. On the one reading *Tuesday · Feathers v Bell · 8pm* it opened the Play tab with nothing on it — no crash, no error, no failing test, and nothing whatever to do with the fixture somebody had just tapped; a destination that ignores what is drawn above it is a link to somebody else's content. Each state now goes to the screen that holds what it is showing: the match being scored, the Live tab that lists every fixture this phone's clubs have not finished with, or — on a phone with neither, and on one whose file has never been written — the one action that is real. A fixture already past is not drawn, so it is not linked to either. The test is the whole loop: the URL the widget would carry, parsed by the app's own parser. Either half alone would have passed while the two disagreed, which is exactly how a widget comes to open the wrong screen with every test green.
 - **Presence is not exclusion, and assuming it was cost one more round on the same flag.** After the attribute became the source of truth, `read` said *excluded* whenever the attribute was there. That is right for the pre-Foundation form — a single byte, 1 — and wrong for Foundation's: `URL.setResourceValues(isExcludedFromBackup: false)` does not remove the attribute, it writes an explicit **false** into it. So a folder somebody had just *included* through the framework read back as excluded. It was caught on the one assertion in the file that writes the flag off through Foundation and reads it back through `BackupPolicy` — exactly the cross-check that was kept when the rest of the fixture moved to the file system, and the reason for keeping it. The contents decide now, in both forms, with the property list tried first: a `false` plist is mostly non-zero bytes, so the byte rule would call it excluded, which is the same mistake one layer down. And the two findings are not rivals — Foundation skips a write its cache thinks is redundant **and** writes an explicit false rather than removing; each explains a different red run, and neither would have been found by reasoning about the other.
 - **And the last red on that flag was the host, proved rather than asserted.** Rounds 18 and 19 of twenty failed with `set→included ... on disk: no such attribute` **after `setxattr` returned success** — the fixture's own write, gone a millisecond later. `com.apple.metadata:` is the Spotlight daemon's namespace, and an attribute written there on a folder under `/var/folders` is not the test's to keep. Saying so is exactly the excuse this session has refused all day, so it is not asserted: the loop no longer needs the fixture to hold. It asserts the contract that is true from **either** starting state — after `include`, included — and counts the rounds that did start from an exclusion, failing if none of twenty did, so a fixture that stopped working altogether still fails rather than quietly turning the loop into twenty no-ops. Nothing about `BackupPolicy` is asserted less; what changed is that the test stopped depending on something outside it.
+
+## SLATE, step one: the keypad had no keys
+
+The founder, after using the build: *"I have been using the app & still think the UI is generic &
+like every other app… we want utterly beautiful, reactive & engaging UI & UX across all screens."*
+
+Twelve agents worked four directions and chose **SLATE**: THRØ is a slate that is being written on,
+and everything the app knows is chalk on it — what is certain is written firmly, what is uncertain
+is written faintly with the reason beside it, and what was superseded is struck through at 45° and
+left where it is. The app never erases because the journal never erases: a retraction is an `INSERT`
+carrying `corrects_seq` (`Journal.swift:725`), and the screen will now say the same thing the record
+does. It was the only one of the four whose distinctiveness comes from THRØ's own data rather than
+from a metaphor laid over it.
+
+This is step one of eight, and it is deliberately the smallest: one component, no screen file
+touched, no motion, no layout change. What it found is why it goes first.
+
+### Three measured defects, none of which would fail a test
+
+**The keys had no edges.** Every key on the scoring keypad drew a 1 pt `colorBorderDefault` outline.
+Measured against the surface underneath it: **1.37:1 in light, 1.26:1 in dark**. WCAG 1.4.11 asks
+3:1 of a control's boundary. The contrast gate already carried those two ratios as recorded
+exceptions reading *"decorative rule"* — which is an accurate description of a boundary nobody can
+see. A player looking at the scoring screen was not seeing keys; they were seeing digits with gaps
+between them, and every "the buttons feel generic" reading starts there. `colorMarkOnBoard` measures
+**5.30:1** on a key face and 4.12:1 at the very centre of the lamp, with no exception recorded.
+
+**The press was never visible.** `key()` built its face inside the label —
+`.background(RoundedRectangle().fill(...))`, opaque, full frame — and then asked
+`ThroPressStyle(pressedFill:)` for a pressed colour. `ThroPressStyle` draws that colour with
+`.background`, which is *behind* the label. The pressed fill was drawn underneath an opaque surface
+and **has never been visible on any build**. The only acknowledgement a key has ever given is a 2%
+scale and the haptic — on the one surface a player touches sixty times a leg, and the exact
+complaint that opened this line of work: *"sometimes when i press close to them they dont react."*
+It could not be fixed from the call site: `isPressed` exists inside a `ButtonStyle` and nowhere else,
+so `ChalkKeyStyle` owns the face, the boundary and the press together.
+
+**The Enter key's resting label measured 2.20:1.** The whole control was drawn at `opacity(0.4)`
+when nothing had been typed. Fading a control composites its label towards its background, and
+contrast is a ratio between the two — so the fade moves both numbers at once and legibility
+collapses faster than brightness does. Composited: **2.20:1 in light, 2.92:1 in dark**, on the one
+control in this app that commits evidence. WCAG 2.1 exempts inactive components from the contrast
+minimum entirely, which is precisely why the contrast gate never saw it.
+
+The same arithmetic still applies to `ThroButtonFace`, which fades at 0.38: every disabled button in
+the app measures between **1.91:1 and 3.48:1**. That is recorded as a dated exception rather than
+fixed here — the paper side gets `colorBackgroundRecessed` when SLATE reaches it, and changing every
+button in the app is not a thing to smuggle into a change scoped to the keypad.
+
+**And the six most-used keys were the smallest ones.** The quick totals took
+`touchTargetMinimum` (44) while the digits beside them took `touchTargetScoring` (64). They are one
+size now, and that size is the style's default, so a new key inherits it.
+
+### What was built
+
+`ThroDesign/Geometry.swift` — `Easing` and `MarkGeometry` moved out of `ThroApp/LaunchSequence.swift`
+byte for byte. Both were already `public` and depend on nothing but SwiftUI. The opening's thirteen
+tests hold with no change to a single assertion; the whole cost of the move is one `import` in the
+test file.
+
+`ThroDesign/Chalk.swift` — three terminations and no others. `ChalkRule` is a filled band sampled
+every 4 pt whose half-width is modulated by `MarkGeometry.chalkEdge`, the same function that
+roughens the mark's own ring, and deterministic in its seed so it never crawls between frames.
+`ChalkBox` is four of those with square corners, because nothing on a board is rounded.
+`ChalkStrike` is the founder's mark's own bar, pointed at both ends at 45°, at 1.35× a figure's
+width and 0.085 of its cap.
+
+Six new tokens, all `color*`, all flipping, **and both values dark green** — a board is a board in
+either appearance, so the rule that `color*` flips and `thro*` does not survives intact and nothing
+has to paint a pigment to draw a board. Eighteen new contrast pairs: every board ink against every
+board ground in both traits, because the board is one gradient and a figure can land anywhere in it.
+No new failures and no new exceptions.
+
+### Two corrections to the specification
+
+- **`ChalkBox` is a `Shape`, not an `InsettableShape`.** `InsettableShape` exists so `.strokeBorder`
+  can inset a stroke by half its width. A chalk rule is not a stroke — it is a filled band whose own
+  edges carry the roughness — and stroking a rough outline would double the roughness and halve the
+  weight. It is filled, so it is a `Shape`, and the type says so.
+- **`Grain` and `Speck` did not move.** The specification said the four geometry types were "already
+  `public`". `Grain` is `internal` and `Speck` is nested inside `LaunchFrame`; moving them would
+  have been an access change dressed as a move. They are wanted by `ChalkField`, which is the
+  board's background, and they move with it as a change that says what it is.
+
+### And one number of my own to correct
+
+The specification put the resting Enter key at 1.41:1. Recomposited from the tokens it actually
+draws with, it is **2.20:1 in light and 2.92:1 in dark**. Both are far below the 4.5:1 floor and the
+defect is the same defect; the figure quoted above is the one I measured, not the one I was handed.
+
+### Two guards, each perturbed until it failed
+
+`tools/check_no_dimming.py` — an `.opacity()` whose argument mentions availability is a breach.
+Perturbed twice: putting the old Enter fade back fails it, and "fixing" `ThroButtonFace` so its
+recorded exception matches nothing also fails it, because a stale exception is a hole with a date on
+it. This is a design law and not a WCAG gate, and it says so: WCAG's exemption for inactive
+components is exactly why the contrast gate is allowed to look away from the state this rule is
+about.
+
+`tools/check_controls_react.py` — `TARGET` accepted `ThroButtonFace` by name and proved it by reading
+the component. It now holds a table, so `ChalkKeyStyle` is accepted on the same terms and by the same
+proof. Perturbed three ways: strip its `contentShape` and it fails, rename the struct and it fails,
+and take the name out of `TARGET` while keeping the proof and it fails *that* way too — a proof that
+guards nothing is worth reporting.

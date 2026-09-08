@@ -16,6 +16,12 @@ public enum ThroColor {
     public static let colorBackgroundRaised = Color("colorBackgroundRaised", bundle: .module)
     /// light #EFEDE7   dark #1B1F1D
     public static let colorBackgroundSecondary = Color("colorBackgroundSecondary", bundle: .module)
+    /// light #0F3D2E   dark #0A2C21
+    public static let colorBoardField = Color("colorBoardField", bundle: .module)
+    /// light #174F3C   dark #123A2C
+    public static let colorBoardLit = Color("colorBoardLit", bundle: .module)
+    /// light #0A2A20   dark #071F18
+    public static let colorBoardSunken = Color("colorBoardSunken", bundle: .module)
     /// light #0F3D2E   dark #57A385
     public static let colorBorderBrand = Color("colorBorderBrand", bundle: .module)
     /// light #DFDCD3   dark #2C312E
@@ -38,6 +44,8 @@ public enum ThroColor {
     public static let colorChartSecondary = Color("colorChartSecondary", bundle: .module)
     /// light #174F3C   dark #57A385
     public static let colorFocusRing = Color("colorFocusRing", bundle: .module)
+    /// light #8FB3A4   dark #7FA695
+    public static let colorMarkOnBoard = Color("colorMarkOnBoard", bundle: .module)
     /// light rgba(16,18,17,0.48)   dark rgba(8,10,9,0.64)
     public static let colorScrim = Color("colorScrim", bundle: .module)
     /// light #8A4B17   dark #DE9557
@@ -86,6 +94,10 @@ public enum ThroColor {
     public static let colorTextInverse = Color("colorTextInverse", bundle: .module)
     /// light #A7ADAA   dark #717875
     public static let colorTextInverseSecondary = Color("colorTextInverseSecondary", bundle: .module)
+    /// light #F7F6F2   dark #EFEDE7
+    public static let colorTextOnBoard = Color("colorTextOnBoard", bundle: .module)
+    /// light #ADB9B3   dark #A8BDB2
+    public static let colorTextOnBoardSecondary = Color("colorTextOnBoardSecondary", bundle: .module)
     /// light #101211   dark #F7F6F2
     public static let colorTextPrimary = Color("colorTextPrimary", bundle: .module)
     /// light #5C6360   dark #A7ADAA
@@ -171,6 +183,7 @@ public enum ThroSpacing {
     public static let radiusSmall: CGFloat = 2
     public static let radiusStatus: CGFloat = 999
     public static let radiusXlarge: CGFloat = 14
+    public static let spaceChalkRuleWeight: CGFloat = 3
     public static let spaceControlPadX: CGFloat = 20
     public static let spaceControlPadY: CGFloat = 14
     public static let spaceGroupGap: CGFloat = 16

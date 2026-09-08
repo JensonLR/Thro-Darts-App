@@ -1,6 +1,9 @@
 import XCTest
 import SwiftUI
 import ThroTokens
+// `Easing` and `MarkGeometry` are ThroDesign's since SLATE B.0. The assertions below are
+// unchanged — this import is the whole cost of the move.
+import ThroDesign
 @testable import ThroApp
 
 /// PD-007's opening, sixth version: the timeline and its cues, the easings it runs on, the throw as the

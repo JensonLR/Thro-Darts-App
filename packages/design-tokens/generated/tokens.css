@@ -72,6 +72,13 @@
   --color-chart-negative: var(--thro-error);
   --color-focus-ring: var(--thro-green-deep);
   --color-scrim: rgba(16,18,17,0.48);
+  --color-board-lit: #174F3C;
+  --color-board-field: #0F3D2E;
+  --color-board-sunken: #0A2A20;
+  --color-text-on-board: #F7F6F2;
+  --color-text-on-board-secondary: #ADB9B3;
+  --color-mark-on-board: #8FB3A4;
+  --space-chalk-rule-weight: 3px;
   --font-ui: "Archivo","Archivo Variable",system-ui,-apple-system,"Segoe UI",sans-serif;
   --font-sport: "IBM Plex Sans Condensed","Archivo",system-ui,sans-serif;
   --typography-family-ui: var(--font-ui);
@@ -223,6 +230,12 @@
   --color-chart-negative: #E8756A;
   --color-focus-ring: var(--thro-green-onink);
   --color-scrim: rgba(8,10,9,0.64);
+  --color-board-lit: #123A2C;
+  --color-board-field: #0A2C21;
+  --color-board-sunken: #071F18;
+  --color-text-on-board: #EFEDE7;
+  --color-text-on-board-secondary: #A8BDB2;
+  --color-mark-on-board: #7FA695;
   --elevation-1: 0 1px 0 0 var(--color-border-default);
   --elevation-2: 0 2px 8px rgba(0,0,0,0.40);
   --elevation-3: 0 8px 24px rgba(0,0,0,0.55);

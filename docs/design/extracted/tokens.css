@@ -137,6 +137,22 @@
 --color-chart-negative:var(--thro-error);
 --color-focus-ring:var(--thro-green-deep);
 --color-scrim:rgba(16,18,17,0.48);
+/* ---- The board (SLATE). A dark green field under one lamp, and the chalk on it.
+   These are semantic tokens and they FLIP, but both values are dark green: a board is a board in
+   either appearance, and what changes between traits is which dark green and which chalk, exactly as
+   a real board changes under the light in the room. That keeps the rule that `color*` flips and
+   `thro*` does not, so nothing has to paint a pigment to draw a board.
+   THE BOARD LAW: no drawing operation on a board may produce a pixel lighter than board-lit or
+   darker than board-sunken, except ink and status ink. So board-lit is the worst ground for every
+   light ink and board-sunken is the best, both are named, and the matrix below measures what
+   actually renders rather than an assumed midpoint. ---- */
+--color-board-lit:#174F3C;
+--color-board-field:#0F3D2E;
+--color-board-sunken:#0A2A20;
+--color-text-on-board:#F7F6F2;
+--color-text-on-board-secondary:#ADB9B3;
+--color-mark-on-board:#8FB3A4; /* the boundary ink: every rule, box and key edge on a board */
+--space-chalk-rule-weight:3px;
 }
 
 /* ---- Semantic aliases: DARK (scoring, live, venues, broadcast) ---- */
@@ -185,6 +201,12 @@
 --color-chart-negative:#E8756A;
 --color-focus-ring:var(--thro-green-onink);
 --color-scrim:rgba(8,10,9,0.64);
+--color-board-lit:#123A2C;
+--color-board-field:#0A2C21;
+--color-board-sunken:#071F18;
+--color-text-on-board:#EFEDE7;
+--color-text-on-board-secondary:#A8BDB2;
+--color-mark-on-board:#7FA695;
 }
 
 :root{

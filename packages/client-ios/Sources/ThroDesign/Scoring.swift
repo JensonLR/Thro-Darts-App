@@ -339,26 +339,32 @@ public struct ScoreKeypad: View {
     public var body: some View {
         VStack(spacing: ThroSpacing.spacing2) {
             HStack(spacing: ThroSpacing.spacing2) {
-                ForEach(ScoreKeypad.quick, id: \.self) { q in
-                    key(minHeight: ThroSpacing.touchTargetMinimum, background: ThroColor.colorSurfaceSecondary, action: { onQuick(q) }) {
-                        Text("\(q)").thro(ThroTypography.label.family(.sport))
+                ForEach(Array(ScoreKeypad.quick.enumerated()), id: \.element) { total in
+                    key(action: { onQuick(total.element) },
+                        seedAngle: Double(total.offset) * 37) {
+                        Text("\(total.element)").thro(ThroTypography.label.family(.sport))
                     }
-                    .accessibilityLabel("Score \(q)")
+                    .accessibilityLabel("Score \(total.element)")
                 }
             }
-            ForEach([[1, 2, 3], [4, 5, 6], [7, 8, 9]], id: \.self) { row in
+            ForEach(Array([[1, 2, 3], [4, 5, 6], [7, 8, 9]].enumerated()), id: \.element) { row in
                 HStack(spacing: ThroSpacing.spacing2) {
-                    ForEach(row, id: \.self) { d in
-                        key(action: { onDigit(String(d)) }) { digit("\(d)") }
+                    ForEach(Array(row.element.enumerated()), id: \.element) { column in
+                        // Every key gets its own seed, so no two chalk boxes on the keypad wander
+                        // identically. A grid of identical hand-drawn boxes is a stamped grid.
+                        key(action: { onDigit(String(column.element)) },
+                            seedAngle: Double(row.offset * 3 + column.offset) * 53 + 211) {
+                            digit("\(column.element)")
+                        }
                     }
                 }
             }
             HStack(spacing: ThroSpacing.spacing2) {
-                key(action: onMiss) {
+                key(action: onMiss, seedAngle: 401) {
                     Text("Miss").thro(ThroTypography.label.weight(.bold).uppercase(true).tracking(em: 0.04))
                 }
-                key(action: { onDigit("0") }) { digit("0") }
-                key(background: ThroColor.colorSurfaceSecondary, action: onClear) {
+                key(action: { onDigit("0") }, seedAngle: 457) { digit("0") }
+                key(action: onClear, seedAngle: 509) {
                     Icon(.undo2, size: 24)
                 }
                 .accessibilityLabel("Undo")
@@ -366,18 +372,15 @@ public struct ScoreKeypad: View {
             Button(action: { ThroHaptics.play(.commit, enabled: haptics); onEnter() }) {
                 Text(value.isEmpty ? "Enter score" : "Enter \(value)")
                     .thro(ThroTypography.bodyLarge.weight(.bold).uppercase(true).tracking(em: 0.04))
-                    .foregroundStyle(ThroColor.throChalk)
-                    .frame(maxWidth: .infinity, minHeight: ThroSpacing.touchTargetScoring)
-                    .background(RoundedRectangle(cornerRadius: ThroSpacing.radiusKeypad).fill(ThroColor.colorSurfaceBrand))
+                    .foregroundStyle(ScoreKeypad.ink(ready: !value.isEmpty, disabled: disabled))
             }
-            .buttonStyle(ThroPressStyle())
+            .buttonStyle(ChalkKeyStyle(ScoreKeypad.enterLighting(ready: !value.isEmpty, disabled: disabled),
+                                       seedAngle: 577))
             .disabled(value.isEmpty)
-            .opacity(value.isEmpty ? 0.4 : 1)
         }
         .padding(.vertical, ThroSpacing.spacing4)
         .padding(.horizontal, ThroSpacing.spaceScreenGutter)
-        .background(ThroColor.colorBackgroundPrimary)
-        .opacity(disabled ? 0.4 : 1)
+        .background(ThroColor.colorBoardField)
         .disabled(disabled)
         // **What has been typed, said out loud.** The Enter key is the readout — it reads
         // "Enter 141" — and a sighted player sees it change under their thumb. A VoiceOver player's
@@ -395,22 +398,47 @@ public struct ScoreKeypad: View {
         Text(text).thro(ThroTypography.heading2.family(.sport).weight(.semibold))
     }
 
-    private func key<Label: View>(minHeight: CGFloat = ThroSpacing.touchTargetScoring,
-                                  background: Color = ThroColor.colorSurfacePrimary,
-                                  haptic: ThroHaptics.Event = .key,
+    /// Which board ground the Enter key sits on. Availability is a place in the light, never an
+    /// opacity: the resting Enter key used to be the whole control at 0.4, which composited its
+    /// label down to **2.20:1** in light and 2.92:1 in dark — below the 4.5:1 floor on the one
+    /// control in this app that commits evidence. Out of the light it measures 7.60:1, and ready it
+    /// measures 8.75:1, with the ground moving in the direction a player expects: the key they can
+    /// press is the brightest thing on the board.
+    static func enterLighting(ready: Bool, disabled: Bool) -> ChalkKeyStyle.Lighting {
+        (ready && !disabled) ? .lit : .sunken
+    }
+
+    /// Full chalk when the key can be pressed, the quieter chalk when it cannot. Both are on the
+    /// contrast matrix against all three board grounds, so neither can fall below its floor.
+    static func ink(ready: Bool, disabled: Bool) -> Color {
+        (ready && !disabled) ? ThroColor.colorTextOnBoard : ThroColor.colorTextOnBoardSecondary
+    }
+
+    /// The ink on every other key. A disabled keypad recedes by losing the brightest chalk, not by
+    /// fading towards its own background — 6.00:1 rather than a ghost.
+    static func keyInk(disabled: Bool) -> Color {
+        disabled ? ThroColor.colorTextOnBoardSecondary : ThroColor.colorTextOnBoard
+    }
+
+    /// Where an ordinary key sits. Out of the light when the keypad is not accepting a score, so a
+    /// player can see at a glance that the board is not listening.
+    static func keyLighting(disabled: Bool) -> ChalkKeyStyle.Lighting {
+        disabled ? .sunken : .field
+    }
+
+    private func key<Label: View>(haptic: ThroHaptics.Event = .key,
                                   action: @escaping () -> Void,
+                                  seedAngle: Double,
                                   @ViewBuilder label: () -> Label) -> some View {
         Button(action: { ThroHaptics.play(haptic, enabled: haptics); action() }) {
-            label()
-                .foregroundStyle(ThroColor.colorTextPrimary)
-                .frame(maxWidth: .infinity, minHeight: minHeight)
-                .background(RoundedRectangle(cornerRadius: ThroSpacing.radiusKeypad).fill(background))
-                .overlay(RoundedRectangle(cornerRadius: ThroSpacing.radiusKeypad).strokeBorder(ThroColor.colorBorderDefault, lineWidth: 1))
-                .contentShape(Rectangle())
+            label().foregroundStyle(ScoreKeypad.keyInk(disabled: disabled))
         }
-        // PD-015. Was `.plain`, which is SwiftUI for "do nothing at all" — the one surface a player
-        // touches sixty times a leg gave no acknowledgement that a key had been hit.
-        .buttonStyle(ThroPressStyle(pressedFill: ThroColor.colorSurfaceSecondary))
+        // PD-015, and SLATE B.3. `ThroPressStyle(pressedFill:)` draws the pressed colour with
+        // `.background`, which is BEHIND the label — and the label carried an opaque background of
+        // its own, so the pressed fill was never visible. Sixty taps a leg on a control whose only
+        // acknowledgement was a 2% scale. `ChalkKeyStyle` owns the face, the boundary and the press
+        // together, because `isPressed` exists inside a `ButtonStyle` and nowhere else.
+        .buttonStyle(ChalkKeyStyle(ScoreKeypad.keyLighting(disabled: disabled), seedAngle: seedAngle))
     }
 }
 

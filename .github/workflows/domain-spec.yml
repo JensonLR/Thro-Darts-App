@@ -55,6 +55,14 @@ jobs:
       - name: Controls react
         run: python3 tools/check_controls_react.py
 
+      # SLATE's rule: a control a player cannot use is drawn on a darker ground, never faded.
+      # Fading composites a label towards its background, so it moves both sides of the contrast
+      # ratio at once — the resting Enter key measured 2.20:1 that way, on the one control in this
+      # app that commits evidence. WCAG exempts inactive components from the contrast minimum
+      # entirely, which is exactly why this cannot be left to the contrast gate.
+      - name: Unavailable is never a fade
+        run: python3 tools/check_no_dimming.py
+
       # And a token that does not exist fails a macOS build several minutes in, having already spent
       # a runner. `motionScaleImpact` is ThroMotion's and `motionTravelMedium` is ThroSpacing's; this
       # says so in under a second, on Linux, before any of that starts.

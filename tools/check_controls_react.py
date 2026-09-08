@@ -48,13 +48,27 @@ SHARE = re.compile(r"(?:^|[^A-Za-z])ShareLink\s*\(")
 # presents a dialog.
 SYSTEM = re.compile(r"Button\(\s*\"")
 DIALOG = (".confirmationDialog(", ".alert(")
-TARGET = ("throTapTarget", "throRowTapTarget", "contentShape", "touchTarget", "ThroButtonFace")
+TARGET = ("throTapTarget", "throRowTapTarget", "contentShape", "touchTarget", "ThroButtonFace",
+          "ChalkKeyStyle")
 
-# `ThroButtonFace` is in that list because it *is* a tap target: it draws the whole control at the
-# size the design gives it and closes with a `contentShape`. Trusting a name is exactly the
-# narrowing this file's docstring warns about, so the name is not trusted — `face_is_a_target()`
-# below reads the component and holds it to that, and the vocabulary entry fails with it.
-FACE = "packages/client-ios/Sources/ThroDesign/Components.swift"
+# Two of those are names of components rather than modifiers, and they are in the list because each
+# one *is* a tap target: it gives the control the size the design says and closes with a
+# `contentShape`. Trusting a name is exactly the narrowing this file's docstring warns about, so the
+# names are not trusted — `vocabulary_is_honest()` reads each component and holds it to that, and a
+# vocabulary entry fails with the component behind it.
+#
+#   `ThroButtonFace` builds the face inside the label.
+#   `ChalkKeyStyle` (SLATE B.3) does it from the `ButtonStyle` instead, because a chalk key's face,
+#   its boundary and its pressed state are one drawing and `isPressed` is only readable there.
+#
+# The declaration each is found by is spelled out, because "the name appears in the file" would be
+# satisfied by a comment mentioning it.
+PROVIDERS = {
+    "ThroButtonFace": ("packages/client-ios/Sources/ThroDesign/Components.swift",
+                       "public struct ThroButtonFace"),
+    "ChalkKeyStyle": ("packages/client-ios/Sources/ThroDesign/Chalk.swift",
+                      "public struct ChalkKeyStyle"),
+}
 
 # Rule 4: an icon-only control is named. These are the views that draw nothing a screen reader can
 # read, so a label built only from them says nothing at all; any OTHER capitalised view is presumed
@@ -108,41 +122,48 @@ def label(block: str) -> str:
     return "\n".join(out)
 
 
-def face_is_a_target() -> str | None:
-    """`ThroButtonFace` must still be the thing TARGET says it is.
+def vocabulary_is_honest() -> list[str]:
+    """Every component `TARGET` accepts by name must still be the thing it says it is.
 
     A word in a list of accepted targets is worth exactly as much as the component behind it. If
-    somebody removes the `contentShape` or the minimum height from the face, every control built on
-    it silently stops having a hit area larger than its ink — and this file would go on passing them
-    all, which is worse than never having accepted the name.
+    somebody removes the `contentShape` or the minimum height from one of them, every control built
+    on it silently stops having a hit area larger than its ink — and this file would go on passing
+    them all, which is worse than never having accepted the name.
     """
-    path = ROOT / FACE
-    if not path.exists():
-        return f"{FACE} is missing, and TARGET accepts ThroButtonFace as a tap target"
-    text = path.read_text(encoding="utf-8")
-    start = text.find("public struct ThroButtonFace")
-    if start < 0:
-        return ("ThroButtonFace is accepted as a tap target and no longer exists. Either restore it "
-                "or take it out of TARGET.")
-    # Bounded at the next top-level declaration, not read to the end of the file. Unbounded, the
-    # `.contentShape(` of some later component satisfied this and the check passed with the face's
-    # own removed — the exact false comfort it exists to prevent, found by removing it and watching
-    # this stay green.
-    rest = text[start:]
-    end = rest.find("\npublic ", 1)
-    body = rest if end < 0 else rest[:end]
-    missing = [need for need in (".contentShape(", "minHeight:") if need not in body]
-    if missing:
-        return (f"ThroButtonFace is accepted as a tap target but no longer carries "
-                f"{' and '.join(missing)} — every control built on it lost its hit area.")
-    return None
+    problems: list[str] = []
+    for name, (where, declaration) in PROVIDERS.items():
+        if name not in TARGET:
+            problems.append(f"{name} is held to the tap-target contract but TARGET no longer "
+                            f"accepts it, so the proof guards nothing.")
+            continue
+        path = ROOT / where
+        if not path.exists():
+            problems.append(f"{where} is missing, and TARGET accepts {name} as a tap target")
+            continue
+        text = path.read_text(encoding="utf-8")
+        start = text.find(declaration)
+        if start < 0:
+            problems.append(f"{name} is accepted as a tap target and no longer exists. Either "
+                            f"restore it or take it out of TARGET.")
+            continue
+        # Bounded at the next top-level declaration, not read to the end of the file. Unbounded, the
+        # `.contentShape(` of some later component satisfied this and the check passed with the
+        # face's own removed — the exact false comfort it exists to prevent, found by removing it
+        # and watching this stay green.
+        rest = text[start:]
+        end = rest.find("\npublic ", 1)
+        body = rest if end < 0 else rest[:end]
+        missing = [need for need in (".contentShape(", "minHeight:") if need not in body]
+        if missing:
+            problems.append(f"{name} is accepted as a tap target but no longer carries "
+                            f"{' and '.join(missing)} — every control built on it lost its hit area.")
+    return problems
 
 
 def main() -> int:
     problems: list[str] = []
     buttons = 0
-    if problem := face_is_a_target():
-        problems.append(problem)
+    problems.extend(vocabulary_is_honest())
     for path in sorted(SOURCES.rglob("*.swift")):
         text = path.read_text(encoding="utf-8")
         lines = text.splitlines()

@@ -13,6 +13,9 @@ public data class ThroColors(
     public val colorBackgroundPrimary: Color,
     public val colorBackgroundRaised: Color,
     public val colorBackgroundSecondary: Color,
+    public val colorBoardField: Color,
+    public val colorBoardLit: Color,
+    public val colorBoardSunken: Color,
     public val colorBorderBrand: Color,
     public val colorBorderDefault: Color,
     public val colorBorderFocus: Color,
@@ -24,6 +27,7 @@ public data class ThroColors(
     public val colorChartReference: Color,
     public val colorChartSecondary: Color,
     public val colorFocusRing: Color,
+    public val colorMarkOnBoard: Color,
     public val colorStatusDisputed: Color,
     public val colorStatusError: Color,
     public val colorStatusErrorSurface: Color,
@@ -47,6 +51,8 @@ public data class ThroColors(
     public val colorTextBrand: Color,
     public val colorTextInverse: Color,
     public val colorTextInverseSecondary: Color,
+    public val colorTextOnBoard: Color,
+    public val colorTextOnBoardSecondary: Color,
     public val colorTextPrimary: Color,
     public val colorTextSecondary: Color,
     public val colorTextTertiary: Color,
@@ -87,6 +93,9 @@ public fun throLightColors(): ThroColors = ThroColors(
     colorBackgroundPrimary = Color(0xFFF7F6F2),
     colorBackgroundRaised = Color(0xFFFFFFFF),
     colorBackgroundSecondary = Color(0xFFEFEDE7),
+    colorBoardField = Color(0xFF0F3D2E),
+    colorBoardLit = Color(0xFF174F3C),
+    colorBoardSunken = Color(0xFF0A2A20),
     colorBorderBrand = Color(0xFF0F3D2E),
     colorBorderDefault = Color(0xFFDFDCD3),
     colorBorderFocus = Color(0xFF101211),
@@ -98,6 +107,7 @@ public fun throLightColors(): ThroColors = ThroColors(
     colorChartReference = Color(0xFFDFDCD3),
     colorChartSecondary = Color(0xFF717875),
     colorFocusRing = Color(0xFF174F3C),
+    colorMarkOnBoard = Color(0xFF8FB3A4),
     colorStatusDisputed = Color(0xFF8A4B17),
     colorStatusError = Color(0xFF8C1D18),
     colorStatusErrorSurface = Color(0xFFF5E5E3),
@@ -121,6 +131,8 @@ public fun throLightColors(): ThroColors = ThroColors(
     colorTextBrand = Color(0xFF0F3D2E),
     colorTextInverse = Color(0xFFF7F6F2),
     colorTextInverseSecondary = Color(0xFFA7ADAA),
+    colorTextOnBoard = Color(0xFFF7F6F2),
+    colorTextOnBoardSecondary = Color(0xFFADB9B3),
     colorTextPrimary = Color(0xFF101211),
     colorTextSecondary = Color(0xFF5C6360),
     colorTextTertiary = Color(0xFF6B726F),
@@ -161,6 +173,9 @@ public fun throDarkColors(): ThroColors = ThroColors(
     colorBackgroundPrimary = Color(0xFF101211),
     colorBackgroundRaised = Color(0xFF1B1F1D),
     colorBackgroundSecondary = Color(0xFF1B1F1D),
+    colorBoardField = Color(0xFF0A2C21),
+    colorBoardLit = Color(0xFF123A2C),
+    colorBoardSunken = Color(0xFF071F18),
     colorBorderBrand = Color(0xFF57A385),
     colorBorderDefault = Color(0xFF2C312E),
     colorBorderFocus = Color(0xFFF7F6F2),
@@ -172,6 +187,7 @@ public fun throDarkColors(): ThroColors = ThroColors(
     colorChartReference = Color(0xFF2C312E),
     colorChartSecondary = Color(0xFF7C8380),
     colorFocusRing = Color(0xFF57A385),
+    colorMarkOnBoard = Color(0xFF7FA695),
     colorStatusDisputed = Color(0xFFDE9557),
     colorStatusError = Color(0xFFE8756A),
     colorStatusErrorSurface = Color(0xFF2E1815),
@@ -195,6 +211,8 @@ public fun throDarkColors(): ThroColors = ThroColors(
     colorTextBrand = Color(0xFF57A385),
     colorTextInverse = Color(0xFF101211),
     colorTextInverseSecondary = Color(0xFF717875),
+    colorTextOnBoard = Color(0xFFEFEDE7),
+    colorTextOnBoardSecondary = Color(0xFFA8BDB2),
     colorTextPrimary = Color(0xFFF7F6F2),
     colorTextSecondary = Color(0xFFA7ADAA),
     colorTextTertiary = Color(0xFF7C8380),
@@ -249,6 +267,7 @@ public object ThroSpacing {
     public val radiusSmall = 2.dp
     public val radiusStatus = 999.dp
     public val radiusXlarge = 14.dp
+    public val spaceChalkRuleWeight = 3.dp
     public val spaceControlPadX = 20.dp
     public val spaceControlPadY = 14.dp
     public val spaceGroupGap = 16.dp
