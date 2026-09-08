@@ -303,11 +303,16 @@ final class ExportTests: XCTestCase {
             let later = BackupPolicy.read(URL(fileURLWithPath: dir.path))
             guard fixture == .excluded, attempt.wrote == nil,
                   attempt.state == .included, later == .included else {
+                // Both halves worked out before the message. An interpolation is not the place for
+                // a concatenation broken across lines — Swift's lexer cannot read one, and there is
+                // no compiler on the machine this is written on to say so.
+                let paths = accumulating.path == dir.path
+                    ? "paths match"
+                    : "paths DIFFER: \(accumulating.path) vs \(dir.path)"
+                let threw = attempt.wrote.map { "\($0)" } ?? "no"
                 disagreements.append(
                     "round \(round): set→\(fixture), include→\(attempt.state), "
-                  + "after→\(later), threw→\(attempt.wrote.map { "\($0)" } ?? "no"), "
-                  + "paths \(accumulating.path == dir.path ? "match" : "DIFFER: "
-                  + "\(accumulating.path) vs \(dir.path)"), "
+                  + "after→\(later), threw→\(threw), \(paths), "
                   + "on disk: \(exclusionOnDisk(dir.path))")
                 continue
             }
