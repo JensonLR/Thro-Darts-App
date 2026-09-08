@@ -189,7 +189,7 @@ Then, in this order, because each one needs the one before it:
 | 5 | **Share card** | Finish the match → on the result screen, **Share the result**. Opening a finished match from Home lands on the same screen | A finished match — won, retired **or** abandoned. An abandoned one gets a card too: no scoreline, and a line saying nothing is claimed about who won |
 | 6 | **Home Screen widget** | Long-press the Home Screen → **+** → THRØ → the small or the medium | The App Group (below). Add it once; it redraws itself |
 | 7 | **Lock Screen widget** | Lock the phone → long-press → **Customise** → the Lock Screen → tap under the clock → THRØ | The same App Group |
-| 8 | **Fixture reminder** | Discover → a club → **Fixtures** → **+** → give it a date more than two hours away → under it, **Remind me** | A club with a dated fixture. The phone asks for notifications the first time |
+| 8 | **Fixture reminder** | Discover → a club → **Fixtures** → **+** → give it a date more than two hours away → under it, **Remind me**. Quicker once one exists: Live → the fixture under *Still to play* | A club with a dated fixture. The phone asks for notifications the first time |
 | 9 | **Add to calendar** | Beside **Remind me** on the same fixture | The same fixture. THRØ asks only to *add* — it cannot read your calendar |
 | 10 | **Find the venue** | Beside those two, on a fixture with a venue typed into it | Maps. THRØ never asks where you are |
 | 11 | **Find a match in iPhone search** | Swipe down on the Home Screen, type a player's or club's name | Settings → Search left on |

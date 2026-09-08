@@ -523,7 +523,14 @@ public struct ThroRootView: View {
                        // control that discharges it rather than to the list of clubs.
                        onRecord: { club, fixture in
                            store.tab = .discover
-                           openClub = ClubLanding(club: club.id, fixture: fixture.id)
+                           openClub = ClubLanding(club: club.id, wanted: .result(fixture: fixture.id))
+                       },
+                       // A fixture still to play has nothing to record. Its list is where a
+                       // player's own controls are — the reminder, the calendar entry, the search
+                       // for the venue — so that is where it goes.
+                       onFixtures: { club in
+                           store.tab = .discover
+                           openClub = ClubLanding(club: club.id, wanted: .fixtures)
                        })
         case .discover: ClubsFlow(store: clubs, open: $openClub)
         case .you: YouScreen(clubs: clubs.clubs, people: clubs.people,
@@ -1656,13 +1663,18 @@ public struct LiveScreen: View {
     /// Where a fixture that has been played and not entered sends somebody: the screen that records
     /// it. Optional so the screen still stands up on its own with nowhere to send them.
     private let onRecord: ((Club, Fixture) -> Void)?
+    /// Where a fixture still to play sends somebody: its club's list of fixtures, which is where
+    /// the reminder, the calendar entry and the venue search live.
+    private let onFixtures: ((Club) -> Void)?
 
     public init(store: AppStore, clubs: [Club] = [], onClubs: @escaping () -> Void = {},
-                onRecord: ((Club, Fixture) -> Void)? = nil) {
+                onRecord: ((Club, Fixture) -> Void)? = nil,
+                onFixtures: ((Club) -> Void)? = nil) {
         self.store = store
         self.clubs = clubs
         self.onClubs = onClubs
         self.onRecord = onRecord
+        self.onFixtures = onFixtures
     }
 
     private var inProgress: [AppStore.HomeMatch] {
@@ -1726,7 +1738,10 @@ public struct LiveScreen: View {
                         block {
                             SectionHeader("Still to play", meta: "\(upcoming.count)")
                             ForEach(upcoming, id: \.fixture.id) { row in
-                                LiveFixtureRow(club: row.club, fixture: row.fixture, action: onClubs)
+                                LiveFixtureRow(club: row.club, fixture: row.fixture) {
+                                    guard let onFixtures else { return onClubs() }
+                                    onFixtures(row.club)
+                                }
                                 ThroDivider()
                             }
                             Note("**In the order they were entered.** A fixture's date is a line an "

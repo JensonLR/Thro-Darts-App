@@ -471,13 +471,27 @@ public final class ClubStore: ObservableObject {
 /// thing a league keeper owes — and tapping one used to land on the list of clubs, four screens from
 /// the control. It names the fixture now, and the tab lands on the screen that records it.
 public struct ClubLanding: Equatable, Sendable {
-    public let club: String
-    /// A fixture on that club to open the result screen for, when the request is that specific.
-    public let fixture: String?
 
-    public init(club: String, fixture: String? = nil) {
+    /// **What was actually wanted, said rather than inferred.** The first version of this carried an
+    /// optional fixture id and read *a fixture means the result screen, no fixture means the club* —
+    /// which is a rule you have to already know to read the call site, and left nowhere to say
+    /// *this fixture's list* when the Live tab's other section needed exactly that.
+    public enum Wanted: Equatable, Sendable {
+        /// The club's own page. What a link naming a club has always meant.
+        case club
+        /// Its list of fixtures — where a player's own controls live: the reminder, the calendar
+        /// entry and the search for the venue.
+        case fixtures
+        /// The screen that records one fixture's result.
+        case result(fixture: String)
+    }
+
+    public let club: String
+    public let wanted: Wanted
+
+    public init(club: String, wanted: Wanted = .club) {
         self.club = club
-        self.fixture = fixture
+        self.wanted = wanted
     }
 }
 
@@ -543,11 +557,17 @@ public struct ClubsFlow: View {
     /// made is not a reason to move somebody somewhere.
     static func route(for landing: ClubLanding, in clubs: [Club]) -> ClubRoute? {
         guard let club = clubs.first(where: { $0.id == landing.club }) else { return nil }
-        let fixture = landing.fixture.flatMap { id in club.fixtures.first { $0.id == id } }
-        if let fixture, club.mayRecordResults, fixture.isBetweenTeams {
-            return .result(club: club.id, fixture: fixture.id)
+        switch landing.wanted {
+        case .club:
+            return .club(club.id)
+        case .fixtures:
+            // Always available: an empty list is a screen that says so, which is a true answer.
+            return .fixtures(club.id)
+        case let .result(fixture):
+            let there = club.fixtures.first { $0.id == fixture }
+            guard let there, club.mayRecordResults, there.isBetweenTeams else { return .club(club.id) }
+            return .result(club: club.id, fixture: there.id)
         }
-        return .club(club.id)
     }
 
     public var body: some View {

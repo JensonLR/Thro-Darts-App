@@ -300,20 +300,25 @@ final class ClubStoreTests: XCTestCase {
                           fixtures: [played], teams: teams)
 
         // Everything in order: straight to the control.
-        XCTAssertEqual(ClubsFlow.route(for: ClubLanding(club: "l1", fixture: "f1"), in: [league]),
+        XCTAssertEqual(ClubsFlow.route(for: .init(club: "l1", wanted: .result(fixture: "f1")), in: [league]),
                        .result(club: "l1", fixture: "f1"))
 
         // No fixture named — the plain request the club links have always made.
-        XCTAssertEqual(ClubsFlow.route(for: ClubLanding(club: "l1"), in: [league]), .club("l1"))
+        XCTAssertEqual(ClubsFlow.route(for: .init(club: "l1"), in: [league]), .club("l1"))
+
+        // A fixture still to play has nothing to record; its list is where the reminder, the
+        // calendar entry and the venue search are, so that is what "fixtures" means.
+        XCTAssertEqual(ClubsFlow.route(for: .init(club: "l1", wanted: .fixtures), in: [league]),
+                       .fixtures("l1"))
 
         // A fixture that is not on this phone any more falls back rather than opening nothing.
-        XCTAssertEqual(ClubsFlow.route(for: ClubLanding(club: "l1", fixture: "gone"), in: [league]),
+        XCTAssertEqual(ClubsFlow.route(for: .init(club: "l1", wanted: .result(fixture: "gone")), in: [league]),
                        .club("l1"))
 
         // A member may not record results, so the route that would refuse them is not taken.
         let watching = Club(id: "l1", name: "Tuesday League", kind: .league, meta: "",
                             yourRole: .member, fixtures: [played], teams: teams)
-        XCTAssertEqual(ClubsFlow.route(for: ClubLanding(club: "l1", fixture: "f1"), in: [watching]),
+        XCTAssertEqual(ClubsFlow.route(for: .init(club: "l1", wanted: .result(fixture: "f1")), in: [watching]),
                        .club("l1"))
 
         // A club's own fixture is a title somebody typed, not a match between two teams: the result
@@ -322,11 +327,13 @@ final class ClubStoreTests: XCTestCase {
                             state: .played)
         let club = Club(id: "c1", name: "The Feathers", kind: .club, meta: "", yourRole: .admin,
                         fixtures: [typed])
-        XCTAssertEqual(ClubsFlow.route(for: ClubLanding(club: "c1", fixture: "f2"), in: [club]),
+        XCTAssertEqual(ClubsFlow.route(for: .init(club: "c1", wanted: .result(fixture: "f2")), in: [club]),
                        .club("c1"))
 
         // And a club that has gone leaves the screen where it is, rather than moving somebody
         // somewhere for a request that no longer means anything.
-        XCTAssertNil(ClubsFlow.route(for: ClubLanding(club: "missing"), in: [league]))
+        XCTAssertNil(ClubsFlow.route(for: .init(club: "missing"), in: [league]))
+        XCTAssertNil(ClubsFlow.route(for: .init(club: "missing", wanted: .fixtures), in: [league]),
+                     "a club that has gone has no fixture list either")
     }
 }
