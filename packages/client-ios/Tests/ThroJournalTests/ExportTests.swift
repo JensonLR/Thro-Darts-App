@@ -27,6 +27,27 @@ final class ExportTests: XCTestCase {
         super.tearDown()
     }
 
+    /// What is on disk underneath Foundation, in words.
+    ///
+    /// **Every other statement in these backup tests goes through `URL`, and `URL` is the thing
+    /// under suspicion.** `isExcludedFromBackup` is backed by an extended attribute; `getxattr`
+    /// reads that attribute and consults no cache on a URL, in Foundation, or in any daemon. It is
+    /// here only to be quoted in failure messages: three rounds were spent on this defect arguing
+    /// about what the file system said, and none of them asked the file system.
+    private func exclusionOnDisk(_ path: String) -> String {
+        let key = "com.apple.metadata:com_apple_backup_excludeItem"
+        let size = getxattr(path, key, nil, 0, 0, 0)
+        guard size >= 0 else { return "no such attribute (errno \(errno))" }
+        var bytes = [UInt8](repeating: 0, count: size)
+        guard getxattr(path, key, &bytes, bytes.count, 0, 0) >= 0 else {
+            return "attribute present, unreadable (errno \(errno))"
+        }
+        let text = String(decoding: bytes, as: UTF8.self)
+            .replacingOccurrences(of: "\n", with: " ")
+            .trimmingCharacters(in: .whitespaces)
+        return "attribute present, \(size) bytes: \(text.prefix(120))"
+    }
+
     @discardableResult
     private func aMatch(person: String? = nil) throws -> MatchRecord {
         let m = try journal.createMatch(NewMatch(homeName: "Jenson", awayName: "Alex",
@@ -182,9 +203,11 @@ final class ExportTests: XCTestCase {
         // two stories behind that read identically from `include`: either `setResourceValues` threw
         // — swallowed, until now — or it returned success and the flag was still on disk.
         let repair = BackupPolicy.including(excluded)
-        XCTAssertNil(repair.wrote, "setting the flag threw: \(String(describing: repair.wrote))")
+        let disk = exclusionOnDisk(dir.path)
+        XCTAssertNil(repair.wrote, "setting the flag threw: \(String(describing: repair.wrote)); "
+                                 + "on disk: \(disk)")
         XCTAssertEqual(repair.state, .included,
-                       "the write reported success and the folder is still excluded — \(dir.path)")
+                       "the write reported success and the flag is still set — on disk: \(disk)")
     }
 
     /// **A `URL` remembers what it last read, and this must not.**
@@ -233,9 +256,14 @@ final class ExportTests: XCTestCase {
         let reported = attempt.state
         let independent = BackupPolicy.read(URL(fileURLWithPath: dir.path))
         let throughTheCaller = BackupPolicy.read(dir)
-        let paths = "wrote through \(url.path); read \(dir.path)"
+        // Asked of the file system directly, once, and quoted by all four assertions below. If the
+        // attribute is gone and Foundation still says `excluded`, the defect is a read; if it is
+        // there, the write is what failed. Three rounds went by without either being established.
+        let disk = exclusionOnDisk(dir.path)
+        let paths = "wrote through \(url.path); read \(dir.path); on disk: \(disk)"
 
-        XCTAssertNil(attempt.wrote, "setting the flag threw: \(String(describing: attempt.wrote))")
+        XCTAssertNil(attempt.wrote, "setting the flag threw: \(String(describing: attempt.wrote)) "
+                                  + "— \(paths)")
         XCTAssertEqual(independent, .included,
                        "the write did not land on disk at all — \(paths)")
         XCTAssertEqual(reported, .included,
