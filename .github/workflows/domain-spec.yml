@@ -119,6 +119,13 @@ jobs:
       - name: The bundle carries the faces the design system asks for
         run: python3 tools/check_bundle_faces.py
 
+      # And the colour iOS paints before the app has run. It is a hand-copied duplicate of a brand
+      # token in a property list, and if the two ever part the app opens with a flash of the wrong
+      # green — a third of a second, at the moment the opening exists to get right, and over before
+      # a screenshot could catch it.
+      - name: The launch screen and the opening are the same green
+        run: python3 tools/check_launch_colour.py
+
   journal:
     name: The on-device journal, on Android's half
     runs-on: ubuntu-latest

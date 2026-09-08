@@ -219,7 +219,9 @@ Two more guards cover the property-list keys these surfaces are made of:
 `tools/check_scene_manifest.py` for the external-display scene, and `tools/check_bundle_faces.py`
 for `NSSupportsLiveActivities`, the calendar usage description, and the ten type faces — which it
 reads out of the `.ttf` files themselves, because it is the PostScript name inside the file and not
-the filename that `UIFont` matches.
+the filename that `UIFont` matches. And `tools/check_launch_colour.py` holds the colour iOS paints
+before the app has run to the brand token the opening paints after it — two copies of one hex in two
+files, and a flash of the wrong green if they part.
 
 #### If the widgets show nothing
 
