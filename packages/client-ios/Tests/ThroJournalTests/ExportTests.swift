@@ -210,22 +210,23 @@ final class ExportTests: XCTestCase {
                        "the write reported success and the flag is still set — on disk: \(disk)")
     }
 
-    /// **A `URL` remembers what it last read, and this must not.**
+    /// **The answer comes from the file, and five rounds went into making that true.**
     ///
-    /// `URL` memoises resource values on the value itself: once `isExcludedFromBackup` has been read
-    /// or written through a particular `URL`, asking that same `URL` again returns what it
-    /// remembers. `BackupPolicy.include` used to set the flag through one copy and read it back
-    /// through another, so a folder that had just been included went on reporting itself excluded —
-    /// and Settings told the player their matches were **not** in this phone's backup about a folder
-    /// that was.
+    /// `URL` memoises resource values on the value itself, so the obvious implementation answered
+    /// with what a URL had last been told rather than with what is on disk — and Settings told a
+    /// player their matches were **not** in this phone's backup about a folder that was. Three
+    /// attempts to clear that cache each removed one participant and each left this test
+    /// intermittent: the same commit went green on one CI run and red on the next, and in one red
+    /// run three reads of a single path within a millisecond disagreed with each other.
     ///
-    /// That is precisely what this type exists to prevent. The flag is read rather than assumed
-    /// because a wrong answer is invisible until somebody sets up a new phone; reading a stale cache
-    /// is assuming with extra steps.
+    /// `BackupPolicy` now reads the extended attribute the flag actually is, so there is no cache
+    /// on a URL to go stale and nothing between the question and the file. The test is unchanged in
+    /// what it demands: the flag is written through a `URL` here, deliberately, because Foundation's
+    /// own writer is what the app used to rely on and cross-checking it against the raw attribute is
+    /// stronger than trusting either alone.
     ///
-    /// The `url` here is deliberately the one that has already been written through twice, because a
-    /// fresh `URL` has nothing cached and would pass either way — which is why CI found this only
-    /// intermittently.
+    /// The `url` is the one written through repeatedly, because a fresh `URL` has nothing cached and
+    /// would have passed either way — which is why CI found the original defect only intermittently.
     func testTheAnswerComesFromTheFileSystemAndNotFromWhatTheURLRemembers() throws {
         var url = dir!
 

@@ -30,6 +30,19 @@ public enum BackupPolicy {
         public var isIncluded: Bool { self == .included }
     }
 
+    /// The extended attribute the flag actually **is**.
+    ///
+    /// `isExcludedFromBackup` is not a property of a `URL`; it is the presence or absence of this
+    /// attribute on the file. iOS's backup reads the attribute and nothing else about its contents,
+    /// which is why presence alone decides here.
+    static let attribute = "com.apple.metadata:com_apple_backup_excludeItem"
+
+    /// What the write said, when it had something to say.
+    public struct WriteFailed: Error, Equatable, CustomStringConvertible {
+        public let code: Int32
+        public var description: String { "errno \(code)" }
+    }
+
     /// Marks `url` as data that belongs in a backup, then reads the flag back and returns what is
     /// actually in force.
     ///
@@ -41,73 +54,52 @@ public enum BackupPolicy {
 
     /// The same, and what the write itself said.
     ///
-    /// **The two failures look identical from the outside, and that cost a round.** When `include`
-    /// comes back `.excluded`, either the write threw or the write landed nowhere — and the player
-    /// -facing answer is the same for both, so the error was swallowed and CI could only report
-    /// `("excluded") is not equal to ("included")`. Settings still wants the state and nothing else;
-    /// a test wants to tell the two apart. So the state is what `include` returns and the error is
-    /// what this one adds, rather than a third `State` case that would make Settings say *could not*
-    /// about a folder whose exclusion it can read perfectly well.
+    /// **The two failures look identical from the outside, and that cost a round.** When this comes
+    /// back `.excluded`, either the write failed or the write succeeded and changed nothing. Settings
+    /// wants the state and nothing else; a test wants to tell those apart.
+    @discardableResult
     static func including(_ url: URL) -> (state: State, wrote: Error?) {
-        // **A URL built from the path, exactly as `read` does.** This is the fourth round on one
-        // defect, and each round removed one participant that carried a memoised value; this
-        // removes the last one. The write used to go through `var target = url` — a copy of
-        // whatever the caller had already read or written through — and CI caught the write
-        // through that copy not being visible to a read a line later, on the same directory, while
-        // the same write through an uncached URL always was. Two functions that answer the same
-        // question about the same file must reach it the same way, so both build their own value
-        // from the path and neither inherits a cache from anybody.
-        var target = URL(fileURLWithPath: url.path)
-        target.removeAllCachedResourceValues()
-        do {
-            var values = URLResourceValues()
-            values.isExcludedFromBackup = false
-            try target.setResourceValues(values)
-        } catch {
-            // Setting it failed; the read below still says what is true, which is the part that
-            // matters. A failure to WRITE the flag while the value is already right is not a problem
-            // worth telling a player about — but it is carried out of here, because a caller that
-            // asked for an inclusion and did not get one deserves to know which of the two things
-            // went wrong.
-            return (read(url), error)
+        // **Removing the attribute is the inclusion.** There is no value to write and therefore no
+        // format to get wrong: absence is the state every folder starts in, and it is what "in the
+        // backup" means.
+        if removexattr(url.path, attribute, 0) != 0, errno != ENOATTR {
+            return (read(url), WriteFailed(code: errno))
         }
-        // `url`, not `target`: what this returns has to be the answer a caller gets from `read(url)`
-        // a moment later, and Settings does exactly that through a URL it built itself.
         return (read(url), nil)
     }
 
     /// What the file system says right now.
     ///
-    /// **The cache is dropped first, and that is the whole correctness of this function.** `URL`
-    /// memoises resource values on the value itself: once `isExcludedFromBackup` has been read or
-    /// written through a particular `URL`, asking again returns what it remembers rather than what
-    /// the file system now says. So a URL that was excluded a moment ago goes on reporting itself
-    /// excluded after being included — which reached Settings as *"your matches are NOT included in
-    /// this phone's backup"* about a folder that was.
+    /// **Asked of the file, not of a `URL`, and this took five rounds to arrive at.** `URL`
+    /// memoises resource values on the value itself, so the obvious implementation answered with
+    /// what a URL had last been told rather than with what is on disk — and Settings told a player
+    /// their matches were *not* in this phone's backup about a folder that was. Three attempts to
+    /// clear that cache each removed one participant and each left the answer intermittent: on the
+    /// same commit, one CI run green and the next red, and in one red run three reads of a single
+    /// path within a millisecond disagreeing with each other.
     ///
-    /// That is the exact shape of failure this whole type exists to prevent: the flag is read rather
-    /// than assumed **because** a wrong answer here is invisible until somebody sets up a new phone.
-    /// Reading a stale cache is assuming with extra steps. CI found it, intermittently, which is
-    /// what a memoised value looks like from outside.
+    /// Whatever the last of those was — a cache below Foundation, or Time Machine's own path-based
+    /// exclusions being consulted for a folder under `/var/folders` on the macOS test host — it is
+    /// not a question worth another round, because none of it exists underneath the attribute
+    /// itself. `getxattr` reads the file. There is no cache on a `URL`, none in Foundation and no
+    /// daemon between this and the answer, and on iOS this is the same mechanism the backup uses.
+    ///
+    /// The cost is stated rather than hidden: on **macOS** this no longer reflects Time Machine's
+    /// path-based exclusions. That is the right trade for a type that exists to describe the iOS
+    /// device backup of an iOS-only app, and it is why the macOS answer is now deterministic.
     public static func read(_ url: URL) -> State {
-        // **A URL built from the path, not the one handed in.** Clearing the cache on a *copy* was
-        // not enough: a copied `URL` shares the backing the values were memoised on, so the copy
-        // answered with what the original had been told rather than with what is on disk. A value
-        // constructed from the path has no cache to answer from at all, which is the only version of
-        // this that does not depend on how copy-on-write happens to behave.
-        var target = URL(fileURLWithPath: url.path)
-        target.removeAllCachedResourceValues()
-        do {
-            let values = try target.resourceValues(forKeys: [.isExcludedFromBackupKey])
-            guard let excluded = values.isExcludedFromBackup else {
-                // Absent means the flag was never set, which on iOS means *not excluded*. Said as a
-                // fact rather than guessed: the absence of an exclusion is an inclusion.
-                return .included
-            }
-            return excluded ? .excluded : .included
-        } catch {
-            return .unknown("\(error)")
+        guard FileManager.default.fileExists(atPath: url.path) else {
+            return .unknown("there is nothing at \(url.path) to have a flag")
         }
+        // Present at all → excluded. The contents are not read, because iOS does not read them.
+        if getxattr(url.path, attribute, nil, 0, 0, 0) >= 0 { return .excluded }
+        // Not there is what *included* is: the absence of an exclusion is an inclusion. Any other
+        // failure is reported rather than guessed — reading a flag and assuming a flag are the two
+        // things this type exists to keep apart.
+        guard errno == ENOATTR else {
+            return .unknown("the backup flag could not be read: errno \(errno)")
+        }
+        return .included
     }
 
     /// What Settings says about it, in words rather than a flag.
