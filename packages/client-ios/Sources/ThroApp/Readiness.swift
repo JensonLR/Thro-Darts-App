@@ -137,6 +137,9 @@ public enum ThroReadiness {
         public var matchInProgress: Bool
         public var appGroupReachable: Bool
         public var projectionWrittenAt: Date?
+        /// Whether this build's scene manifest can be *given* a screen at all — a different
+        /// question from whether one is plugged in, and the one that fails silently.
+        public var externalDisplayConfigured: Bool
         public var externalDisplayAttached: Bool
         public var finishedMatches: Int
         public var notifications: Permission
@@ -151,6 +154,7 @@ public enum ThroReadiness {
 
         public init(liveActivitiesAllowed: Bool = false, matchInProgress: Bool = false,
                     appGroupReachable: Bool = false, projectionWrittenAt: Date? = nil,
+                    externalDisplayConfigured: Bool = false,
                     externalDisplayAttached: Bool = false, finishedMatches: Int = 0,
                     notifications: Permission = .unasked, remindersSet: Int = 0,
                     calendar: Permission = .unasked, datedFixtures: Int = 0,
@@ -161,6 +165,7 @@ public enum ThroReadiness {
             self.matchInProgress = matchInProgress
             self.appGroupReachable = appGroupReachable
             self.projectionWrittenAt = projectionWrittenAt
+            self.externalDisplayConfigured = externalDisplayConfigured
             self.externalDisplayAttached = externalDisplayAttached
             self.finishedMatches = finishedMatches
             self.notifications = notifications
@@ -227,6 +232,17 @@ public enum ThroReadiness {
     }
 
     static func wall(_ f: Facts) -> Surface {
+        // Asked before the cable, because it is the failure nothing else would report. A build
+        // whose manifest cannot take an external display scene mirrors the phone instead, and
+        // `configurationForConnecting` is never called: no error, no log, nothing on the wall but
+        // a large copy of the keypad.
+        guard f.externalDisplayConfigured else {
+            return Surface(id: "wall", name: "Club TV mode", state: .blocked,
+                           detail: "This build cannot be given a screen. Its scene manifest does "
+                                 + "not offer to take one, so a cable or Screen Mirroring would "
+                                 + "only mirror the phone. That is in the app's `Info.plist` and "
+                                 + "not a switch anywhere on this phone.")
+        }
         if f.externalDisplayAttached {
             return Surface(id: "wall", name: "Club TV mode", state: .on,
                            detail: "A screen is attached now, and the board is on it — two names, "
@@ -454,6 +470,7 @@ public extension ThroReadiness {
         // The scene the system creates when a screen is plugged in or mirrored. Asking the scenes
         // rather than `UIScreen.screens`, which has been deprecated since iOS 16 and answers a
         // question about hardware rather than about what this app was actually given.
+        f.externalDisplayConfigured = sceneManifestTakesADisplay
         f.externalDisplayAttached = UIApplication.shared.connectedScenes.contains {
             $0.session.role == .windowExternalDisplayNonInteractive
         }
@@ -486,6 +503,27 @@ public extension ThroReadiness {
 
 #if os(iOS)
 public extension ThroReadiness {
+
+    /// Whether this build is arranged to be handed an external display at all.
+    ///
+    /// **Read from the running bundle rather than assumed**, because the two keys involved are
+    /// exactly the kind that are wrong for months without anything saying so. iOS creates the
+    /// external-display scene only if the manifest declares that role, *and* only if the app says
+    /// it can hold two scenes at once — which a board on a wall beside a keypad in somebody's hand
+    /// plainly is. Get either wrong and the cable mirrors the phone, the delegate is never asked
+    /// for a configuration, and nothing anywhere reports a problem. This build had the second one
+    /// wrong until it was read here.
+    static var sceneManifestTakesADisplay: Bool {
+        guard let manifest = Bundle.main
+                .object(forInfoDictionaryKey: "UIApplicationSceneManifest") as? [String: Any],
+              manifest["UIApplicationSupportsMultipleScenes"] as? Bool == true,
+              let roles = manifest["UISceneConfigurations"] as? [String: Any],
+              let external = roles[UISceneSession.Role.windowExternalDisplayNonInteractive.rawValue]
+                as? [[String: Any]]
+        else { return false }
+        return !external.isEmpty
+    }
+
     /// This app's own page in iPhone Settings, which is the only page any app may open.
     ///
     /// Every *turn it on in Settings* sentence on this screen means this page, and nothing else can

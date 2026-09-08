@@ -104,6 +104,13 @@ jobs:
       - name: The readiness screen's directions match the app
         run: python3 tools/check_readiness_directions.py
 
+      # And the two property-list keys club TV mode is made of. This build declared the
+      # external-display scene role and said it could not hold two scenes at once, which makes the
+      # role decoration: iOS never asks for a configuration, the cable mirrors the phone, and no
+      # error is raised anywhere. Correct Swift, unreachable.
+      - name: The wall can be given a screen
+        run: python3 tools/check_scene_manifest.py
+
   journal:
     name: The on-device journal, on Android's half
     runs-on: ubuntu-latest

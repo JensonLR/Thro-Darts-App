@@ -21,12 +21,24 @@
 	<!-- Club TV mode. The system creates this scene when a display is attached or when the
 	     player turns on AirPlay screen mirroring; `UIScreen.screens` and the older
 	     `windowExternalDisplay` role were both deprecated in iOS 16.0.
-	     `UIApplicationSupportsMultipleScenes` stays NO: the phone still has one window, and only
-	     the external role is added. -->
+
+	     `UIApplicationSupportsMultipleScenes` is YES, corrected from NO. The original reasoning —
+	     "the phone still has one window, and only the external role is added" — described what the
+	     player sees and not what the key means: it declares whether the app can have two scenes
+	     CONNECTED AT ONCE, and a board on a wall while the keypad is in somebody's hand is exactly
+	     two. With NO, UIKit is entitled never to connect the second one, and the failure is silent:
+	     the cable mirrors the phone, `configurationForConnecting` is never called, and nothing
+	     anywhere reports a problem. On an iPhone-only, portrait-only app YES adds no window the
+	     player can reach — iOS offers no way to open a second one — so the two possible mistakes
+	     are not the same size, and this is the one that fails safely.
+
+	     The claim is checked twice rather than assumed: `tools/check_scene_manifest.py` holds this
+	     file to declaring the role and the delegate on every push, and the readiness screen reads
+	     the manifest on the running phone and says **Blocked** if it cannot be given a screen. -->
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>
-		<false/>
+		<true/>
 		<key>UISceneConfigurations</key>
 		<dict>
 			<key>UIWindowSceneSessionRoleApplication</key>

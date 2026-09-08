@@ -26,7 +26,8 @@ final class ReadinessTests: XCTestCase {
         let all: [ThroReadiness.Facts] = [
             .init(),
             .init(liveActivitiesAllowed: true, matchInProgress: true, appGroupReachable: true,
-                  projectionWrittenAt: Date(), externalDisplayAttached: true, finishedMatches: 3,
+                  projectionWrittenAt: Date(), externalDisplayConfigured: true,
+                  externalDisplayAttached: true, finishedMatches: 3,
                   notifications: .allowed, remindersSet: 2, calendar: .allowed, datedFixtures: 1,
                   spotlightAvailable: true, spotlightOn: true, diagnosticsOn: true,
                   diagnosticsHeld: 4, brandFacesRegistered: true),
@@ -62,8 +63,9 @@ final class ReadinessTests: XCTestCase {
         // A build with its App Group, its fonts and its Live Activities in order, on a phone where
         // the player has done nothing yet.
         let fresh = ThroReadiness.Facts(liveActivitiesAllowed: true, appGroupReachable: true,
-                                        projectionWrittenAt: Date(), spotlightAvailable: true,
-                                        spotlightOn: true, brandFacesRegistered: true)
+                                        projectionWrittenAt: Date(), externalDisplayConfigured: true,
+                                        spotlightAvailable: true, spotlightOn: true,
+                                        brandFacesRegistered: true)
         let blocked = ThroReadiness.surfaces(fresh).filter { $0.state == .blocked }
         XCTAssertEqual(blocked.map(\.id), [], "a fresh phone should have nothing blocked")
         XCTAssertEqual(ThroReadiness.surfaces(fresh).filter { $0.state == .absent }.map(\.id),
@@ -209,7 +211,8 @@ final class ReadinessTests: XCTestCase {
             .init(),
             .init(notifications: .refused, calendar: .refused, spotlightAvailable: true),
             .init(liveActivitiesAllowed: true, matchInProgress: true, appGroupReachable: true,
-                  projectionWrittenAt: Date(), externalDisplayAttached: true, finishedMatches: 3,
+                  projectionWrittenAt: Date(), externalDisplayConfigured: true,
+                  externalDisplayAttached: true, finishedMatches: 3,
                   notifications: .allowed, remindersSet: 2, calendar: .allowed, datedFixtures: 1,
                   spotlightAvailable: true, spotlightOn: true, diagnosticsOn: true,
                   diagnosticsHeld: 4, brandFacesRegistered: true),
@@ -253,7 +256,8 @@ final class ReadinessTests: XCTestCase {
     func testTheRowsWithNowhereToSendAnybodyOfferNothing() {
         let everything = ThroReadiness.Facts(
             liveActivitiesAllowed: true, matchInProgress: true, appGroupReachable: true,
-            projectionWrittenAt: Date(), externalDisplayAttached: true, finishedMatches: 3,
+            projectionWrittenAt: Date(), externalDisplayConfigured: true,
+            externalDisplayAttached: true, finishedMatches: 3,
             notifications: .allowed, remindersSet: 2, calendar: .allowed, datedFixtures: 1,
             spotlightAvailable: true, spotlightOn: true, diagnosticsOn: true, diagnosticsHeld: 4,
             brandFacesRegistered: true)
@@ -324,9 +328,25 @@ final class ReadinessTests: XCTestCase {
     /// The wall screen is the one row with no button, because no app may attach a display. The row
     /// must not grow one, and must keep saying so.
     func testTheWallRowSaysTheAppCannotStartItself() {
-        let row = find("wall", .init(externalDisplayAttached: false))
+        let row = find("wall", .init(externalDisplayConfigured: true, externalDisplayAttached: false))
         XCTAssertEqual(row.state, .waiting)
         XCTAssertTrue(row.detail.contains("Screen Mirroring"), row.detail)
-        XCTAssertEqual(find("wall", .init(externalDisplayAttached: true)).state, .on)
+        XCTAssertEqual(find("wall", .init(externalDisplayConfigured: true,
+                                          externalDisplayAttached: true)).state, .on)
+    }
+
+    /// **The failure that reports itself nowhere else.** iOS hands an app an external display only
+    /// if its scene manifest declares that role AND says the app can hold two scenes at once. Get
+    /// either wrong and the cable mirrors the phone: no error, no log, and a row reading *Ready —
+    /// plug something in* would send somebody looking for a board that cannot arrive. This build
+    /// had the second key wrong until the screen was made to read it.
+    func testAWallThatCannotBeGivenAScreenSaysSoRatherThanWaitingForACable() {
+        let row = find("wall", .init(externalDisplayConfigured: false, externalDisplayAttached: true))
+        XCTAssertEqual(row.state, .blocked, "an unconfigured build must not read as ready")
+        XCTAssertTrue(row.detail.contains("Info.plist"), row.detail)
+        XCTAssertFalse(row.detail.contains("iPhone Settings"),
+                       "there is no switch on the phone for this, and saying so sends somebody "
+                     + "hunting through Settings: \(row.detail)")
+        XCTAssertNil(row.go, "there is nowhere to send anybody for a key in a build")
     }
 }
