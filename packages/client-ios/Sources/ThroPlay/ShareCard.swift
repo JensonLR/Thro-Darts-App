@@ -6,11 +6,13 @@ import ThroTokens
 
 // The picture of a result that goes into a group chat.
 //
-// **This is the one surface that leaves the phone.** Everywhere else, a figure THRØ shows is one a
-// player can tap for its basis and its sample. An image cannot be tapped, cannot be corrected, and
-// outlives the app that made it — so everything the honesty layer normally puts one tap away has to
-// be *on the card itself*, or the card is a claim with no basis, which is the one thing this product
-// has said from the start it will not ship.
+// **This is the one surface that leaves the phone.** Everywhere else, a figure THRØ shows stands
+// beside the words that qualify it: a bounded one is marked as a range, an unavailable one is a dash
+// with the reason printed under it, and the screen is still there to look at again. An image carries
+// nothing but what was drawn into it — it cannot be corrected once it is in somebody's group chat,
+// and it outlives the app that made it. So everything the honesty layer normally puts beside a
+// figure has to be *on the card itself*, or the card is a claim with no basis, which is the one
+// thing this product has said from the start it will not ship.
 //
 // Four rules follow, and `ShareCardTests` holds each of them:
 //
