@@ -385,6 +385,28 @@ public struct ThroRootView: View {
         #endif
     }
 
+    /// The half of the readiness facts that comes from this phone's own data rather than from a
+    /// system framework.
+    ///
+    /// Read here, in the one place that already holds all of it, and passed down — so the screen
+    /// cannot disagree with Home about how many matches are finished.
+    @MainActor
+    private func readiness() -> ThroReadiness.Facts {
+        let everything = store.matches + store.archived
+        return ThroReadiness.Facts(
+            // The Live Activity follows the leg being scored, so this is the same question it asks:
+            // a match that is open and readable. An unreadable one has no remainders to show.
+            matchInProgress: everything.contains { !$0.complete && $0.unreadable == nil },
+            // What the share card could be made from. An abandoned match is deliberately not
+            // counted: it finished without a result, and the card refuses to draw a scoreline for
+            // one — so counting it here would send somebody looking for a button that is not there.
+            finishedMatches: everything.filter { $0.complete && $0.unreadable == nil && $0.ending != .abandoned }.count,
+            datedFixtures: clubs.clubs.flatMap(\.fixtures).filter { $0.at != nil }.count,
+            spotlightOn: spotlight,
+            diagnosticsOn: diagnostics,
+            diagnosticsHeld: store.diagnosticsHeld.count)
+    }
+
     /// Rewrites the small file the widgets read. A no-op on a build with no App Group.
     private func project() {
         ThroProjectionWriter.write(matches: store.matches, week: store.week, clubs: clubs.clubs,
@@ -455,7 +477,8 @@ public struct ThroRootView: View {
                            backupState: { store.backupState },
                            makeExport: { try store.exportEverything(clubs: clubs.book) },
                            diagnosticsHeld: { store.diagnosticsHeld },
-                           onForgetDiagnostics: store.forgetDiagnostics)
+                           onForgetDiagnostics: store.forgetDiagnostics,
+                           readinessFacts: { await ThroReadiness.probe(app: readiness()) })
                 .throAppearance(Appearance(stored: appearanceRaw))
         } else {
             VStack(spacing: 0) {
@@ -1247,6 +1270,10 @@ public struct SettingsScreen: View {
     /// two above are: Settings is a screen, not a second owner of the device's data.
     private let diagnosticsHeld: () -> ThroDiagnostics.Held
     private let onForgetDiagnostics: () -> Void
+    /// What this phone can currently show of everything the build added. Async because two of the
+    /// answers — whether notifications are allowed, and what is pending — only come back that way.
+    private let readinessFacts: @MainActor () async -> ThroReadiness.Facts
+    @State private var showingReadiness = false
     @State private var exported: URL?
     @State private var exportProblem: String?
     @State private var picking = false
@@ -1256,13 +1283,15 @@ public struct SettingsScreen: View {
                 backupState: @escaping () -> BackupPolicy.State = { .unknown("no data folder in this build") },
                 makeExport: (() throws -> URL)? = nil,
                 diagnosticsHeld: @escaping () -> ThroDiagnostics.Held = { .init(count: 0, bytes: 0, newest: nil) },
-                onForgetDiagnostics: @escaping () -> Void = {}) {
+                onForgetDiagnostics: @escaping () -> Void = {},
+                readinessFacts: @escaping @MainActor () async -> ThroReadiness.Facts = { await ThroReadiness.probe(app: .init()) }) {
         self.onBack = onBack
         self.onReplayOpening = onReplayOpening
         self.backupState = backupState
         self.makeExport = makeExport
         self.diagnosticsHeld = diagnosticsHeld
         self.onForgetDiagnostics = onForgetDiagnostics
+        self.readinessFacts = readinessFacts
     }
 
     private var appearance: Binding<Appearance> {
@@ -1274,6 +1303,19 @@ public struct SettingsScreen: View {
             TopBar("Settings", onBack: onBack, large: true)
             ScrollView {
                 VStack(alignment: .leading, spacing: 0) {
+                    // First, and deliberately: the founder's own words on the build that carried
+                    // nine of these — *"not sure I can see or test majority of this."* A feature
+                    // nobody can find has not been delivered, and the answer is not a longer
+                    // release note but a screen that reads this phone and says where to look.
+                    group("What this build can do") {
+                        Text("Some of what this build added only appears when something else is true — a match in progress, a screen plugged in, a fixture with a date on it. This reads what this phone will allow and says where to look for each one.")
+                            .thro(ThroTypography.metadata)
+                            .foregroundStyle(ThroColor.colorTextSecondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                        ThroButton("What you can see on this phone", variant: .secondary, size: .medium) {
+                            showingReadiness = true
+                        }
+                    }
                     group("Appearance") {
                         SegmentedControl(Appearance.allCases.map { ($0, $0.label) }, selection: appearance)
                         Text("Every screen follows this, scoring included. System follows the phone.")
@@ -1438,6 +1480,9 @@ public struct SettingsScreen: View {
         .background(ThroColor.colorBackgroundPrimary.ignoresSafeArea())
         .fileImporter(isPresented: $picking, allowedContentTypes: [.json]) { result in
             inspection = SettingsScreen.inspect(result)
+        }
+        .sheet(isPresented: $showingReadiness) {
+            ReadinessScreen(onBack: { showingReadiness = false }, gather: readinessFacts)
         }
     }
 
