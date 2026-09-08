@@ -284,19 +284,30 @@ final class ExportTests: XCTestCase {
         // One assertion at the end rather than sixty inside the loop: the count says how often, the
         // first three say what, and each carries the extended attribute as the file system has it,
         // which is the one statement here that no cache can colour.
+        // **One URL, written through every round, exactly as the single pass does.** The first
+        // version of this loop took a fresh copy of `dir` each time and passed twenty for twenty —
+        // which said less than it looked like it said, because a URL with nothing cached on it is
+        // not the shape that fails. The failing shape is a URL that has been written through
+        // repeatedly, so that is the shape this walks.
+        //
+        // The paths are carried too. `include` and `read` both rebuild from `.path`, so if those
+        // two strings ever differ the two functions are looking at different files and everything
+        // above is explained; if they are identical, that explanation is dead.
+        var accumulating = dir!
         var disagreements: [String] = []
         for round in 1...20 {
-            var again = dir!
-            try again.setResourceValues(exclude)
+            try accumulating.setResourceValues(exclude)
             let fixture = BackupPolicy.read(URL(fileURLWithPath: dir.path))
 
-            let attempt = BackupPolicy.including(dir)
+            let attempt = BackupPolicy.including(accumulating)
             let later = BackupPolicy.read(URL(fileURLWithPath: dir.path))
             guard fixture == .excluded, attempt.wrote == nil,
                   attempt.state == .included, later == .included else {
                 disagreements.append(
                     "round \(round): set→\(fixture), include→\(attempt.state), "
                   + "after→\(later), threw→\(attempt.wrote.map { "\($0)" } ?? "no"), "
+                  + "paths \(accumulating.path == dir.path ? "match" : "DIFFER: "
+                  + "\(accumulating.path) vs \(dir.path)"), "
                   + "on disk: \(exclusionOnDisk(dir.path))")
                 continue
             }
