@@ -49,7 +49,14 @@ class Claim:
 
     def hits(self):
         base = ROOT / self.where
-        paths = sorted(base.rglob(self.glob.split("/")[-1])) if base.is_dir() else [base]
+        if base.is_dir():
+            # A tuple when one claim spans two kinds of file — a capability can be declared in an
+            # entitlements plist or in the project's own build settings, and a claim that it is
+            # absent has to look in both or it is a claim about one of them.
+            patterns = self.glob if isinstance(self.glob, tuple) else (self.glob,)
+            paths = sorted({p for g in patterns for p in base.rglob(g.split("/")[-1])})
+        else:
+            paths = [base]
         found = []
         for path in paths:
             for i, line in enumerate(path.read_text(encoding="utf-8").splitlines()):
@@ -126,6 +133,29 @@ CLAIMS = [
         where=CLIENT,
         forbidden=r"\b(AuthenticationServices|LocalAuthentication|ASAuthorization\w*|LAContext"
                   r"|kSecClass|SecItemAdd|SecItemCopyMatching)\b",
+    ),
+    Claim(
+        what="the app claims no associated domain",
+        why=("The link grammar is fixed, the association file is written and checked on every push, "
+             "and the entitlement is deliberately the one piece left out — because "
+             "`applinks:thro.app` for a domain nobody owns makes iOS fetch a file that is not there "
+             "and the app then **silently never handles a link at all**, including the `thro://` "
+             "ones that work today. So the absence is load-bearing: adding it early is worse than "
+             "not adding it, and it is the sort of line somebody pastes in while wiring something "
+             "else. Three documents and one screen say it is not there."),
+        sentences=[
+            ("services/links/README.md", r"\*\*No `associated-domains` entitlement\*\*"),
+            ("docs/runbooks/CLIENT_IOS.md", r"is the `associated-domains` entitlement"),
+            # The screen's sentence is split by the line limit, so the pattern is the half that
+            # lives on one line. A regex written across a break matches nothing, and a pattern that
+            # matches nothing is a claim that has quietly stopped being checked — which this guard
+            # treats as a failure, and which is how this line was found.
+            ("packages/client-ios/Sources/ThroApp/Readiness.swift",
+             r"the entitlement is deliberately left"),
+        ],
+        where="apps/ios",
+        glob=("*.entitlements", "*.pbxproj"),
+        forbidden=r"associated-domains|applinks:",
     ),
 ]
 
