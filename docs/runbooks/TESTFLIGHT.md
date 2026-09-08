@@ -90,7 +90,14 @@ to report a problem. **The app says so instead**: Settings → *What you can see
 *Home Screen and Lock Screen widgets* row reads **Blocked** with the reason, rather than **Working**
 or **Ready**.
 
-If it does: the entitlement is in the source (`apps/ios/Support/ThroDarts.entitlements` and
+**The run says so too, when it can.** After the upload, the workflow looks inside the signed app
+and its widget extension for `group.app.thro.darts` and writes what it found into the run's summary
+— *App Group: present in ThroDarts.app*, or a line naming what it is missing from. It reports and
+never blocks: everything except the widgets works without it, so refusing to upload an otherwise
+good build would be the wrong trade. When the export uploads directly and leaves no file to look
+inside, the summary says that rather than implying a pass.
+
+If the widgets are empty: the entitlement is in the source (`apps/ios/Support/ThroDarts.entitlements` and
 `apps/ios/SupportLive/ThroLive.entitlements`, held on every push by `tools/check_app_group.py`), so
 the loss is in signing, not in the code. Check that the `app.thro.darts` App ID has **App Groups**
 ticked (step 2), then run the workflow again — the archive is built unsigned and signed at export,

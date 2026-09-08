@@ -152,6 +152,43 @@ jobs:
             -authenticationKeyPath "$HOME/private_keys/AuthKey_${ASC_KEY_ID}.p8" \
             -authenticationKeyID "$ASC_KEY_ID" -authenticationKeyIssuerID "$ASC_ISSUER_ID"
 
+      # A build whose App Group did not survive signing installs, launches and behaves perfectly —
+      # and its widgets read an empty container and draw nothing, with no error anywhere. The app
+      # itself says so (Settings → What you can see on this phone), but only after the founder has
+      # installed it and gone looking. This says it here.
+      #
+      # It reports and never gates. The entitlement is held in the source by
+      # tools/check_app_group.py on every push, so a miss here is a signing question rather than a
+      # code one, and refusing to upload a build that is otherwise good would be the wrong trade —
+      # everything except the widgets works without it.
+      - name: Say whether the App Group survived signing
+        if: always()
+        run: |
+          set +e
+          ipa=$(find "$RUNNER_TEMP/export" -maxdepth 2 -name '*.ipa' -print -quit 2>/dev/null)
+          if [ -z "$ipa" ]; then
+            echo "- App Group: not checked — the export left no .ipa to look inside (it uploads directly)." >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          work="$RUNNER_TEMP/appgroup"
+          rm -rf "$work" && mkdir -p "$work"
+          unzip -qq "$ipa" -d "$work" 2>/dev/null
+          missing=""
+          for binary in "$work"/Payload/*.app "$work"/Payload/*.app/PlugIns/*.appex; do
+            [ -e "$binary" ] || continue
+            name=$(basename "$binary")
+            if codesign -d --entitlements :- "$binary" 2>/dev/null | grep -q 'group.app.thro.darts'; then
+              echo "- App Group: present in $name" >> "$GITHUB_STEP_SUMMARY"
+            else
+              missing="$missing $name"
+            fi
+          done
+          if [ -n "$missing" ]; then
+            echo "- **App Group MISSING from:$missing.** The widgets will read an empty container and draw nothing. Tick App Groups on the \`app.thro.darts\` App ID (docs/runbooks/TESTFLIGHT.md) and run again; nothing else in the app is affected." >> "$GITHUB_STEP_SUMMARY"
+          fi
+          rm -rf "$work"
+          exit 0
+
       - name: Say what was uploaded
         run: |
           {
