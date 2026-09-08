@@ -233,4 +233,36 @@ final class GroupsTests: XCTestCase {
                           teams: field, shape: .groups, groupCount: 2, qualifiersPerGroup: 2)
         XCTAssertFalse(played.setupIsStillOpen)
     }
+
+    /// **A note that names a place has to carry the way there, and know when there is no way.**
+    ///
+    /// The tournament page used to say *"Set them on Edit"* and stop, which is a page telling
+    /// somebody to go and look for something — the founder's whole complaint about this build, in
+    /// one sentence. It now offers the control to an admin. That makes the wording load-bearing in
+    /// three directions, and the wrong one in each is worse than saying nothing: sending a
+    /// non-admin to a screen that will refuse them, telling an admin that *an admin* does this, or
+    /// offering either of them a change the store will not accept because a result already exists.
+    ///
+    /// Held here because no test in this repository constructs a screen, which is exactly how a
+    /// sentence like this rots unnoticed.
+    func testTheGroupsSetupNoteSaysSomethingDifferentToEachOfItsThreeReaders() {
+        let admin = TournamentScreen.groupsSetupNote(mayEdit: true, setupIsStillOpen: true)
+        let watcher = TournamentScreen.groupsSetupNote(mayEdit: false, setupIsStillOpen: true)
+        let tooLate = TournamentScreen.groupsSetupNote(mayEdit: true, setupIsStillOpen: false)
+
+        XCTAssertEqual(Set([admin, watcher, tooLate]).count, 3, "two readers are told the same thing")
+        XCTAssertTrue(admin.contains("Set them below"), admin)
+        XCTAssertTrue(watcher.contains("An admin"), watcher)
+        XCTAssertFalse(watcher.contains("Set them below"),
+                       "this sends somebody without the right to a screen that refuses them: \(watcher)")
+
+        // Once a result exists the store refuses the change, so neither reader may be told to make
+        // it — a button there would look like it worked and do nothing.
+        XCTAssertTrue(tooLate.contains("too late"), tooLate)
+        XCTAssertEqual(TournamentScreen.groupsSetupNote(mayEdit: false, setupIsStillOpen: false),
+                       tooLate, "who is reading does not change whether it is too late")
+        for note in [admin, watcher, tooLate] {
+            XCTAssertTrue(note.contains("THRØ asks"), "every reader is told why it is being asked")
+        }
+    }
 }

@@ -604,11 +604,22 @@ public struct TournamentScreen: View {
     @ViewBuilder private var groupStage: some View {
         if tournament.groupsNeedSetup {
             Eyebrow("The groups").padding(.top, ThroSpacing.spaceSectionGap)
-            Note("**This tournament has not been told how it is shaped.** How many groups, and how "
-                 + "many go through from each, decide what every match in it is for — so THRØ asks "
-                 + "rather than guessing. Set them on Edit, before the first result goes in.",
-                 icon: .triangleAlert)
+            Note(groupsSetupNote, icon: .triangleAlert)
                 .padding(.top, ThroSpacing.spacing3)
+            // **The note used to end "Set them on Edit" and stop there.** A sentence that names a
+            // place has to carry the way there or it is a page telling somebody to go and look,
+            // which is the whole of the founder's *"not sure I can see or test"* in miniature. An
+            // admin gets the button; anybody else gets a sentence naming who can, rather than
+            // directions to a screen they will be refused at.
+            //
+            // And only while the setup can still be accepted. A groups tournament with no shape and
+            // a result already recorded is reachable — somebody enters a result before setting it
+            // up — and there the button would open a screen that refuses the change, which is a
+            // control that does nothing while looking like it worked.
+            if let onEdit, tournament.setupIsStillOpen {
+                ThroButton("Set the groups", variant: .primary, size: .medium, action: onEdit)
+                    .padding(.top, ThroSpacing.spacing3)
+            }
         } else if let groups = tournament.groups {
             Eyebrow("The groups").padding(.top, ThroSpacing.spaceSectionGap)
             Text("\(groups.groups.count) group\(groups.groups.count == 1 ? "" : "s"), top "
@@ -626,6 +637,37 @@ public struct TournamentScreen: View {
                  + "the order they went in.")
                 .padding(.top, ThroSpacing.spacing4)
         }
+    }
+
+    private var groupsSetupNote: String {
+        TournamentScreen.groupsSetupNote(mayEdit: onEdit != nil,
+                                         setupIsStillOpen: tournament.setupIsStillOpen)
+    }
+
+    /// What the page says to a tournament that has not been told its shape.
+    ///
+    /// **Three endings, because three readers can do three different things about it**, and the
+    /// wrong one is worse than no note at all. Telling somebody with no admin rights to go and set
+    /// it sends them to be refused. Telling an admin *an admin sets this* tells them nothing they
+    /// can act on. And telling either to set it once a result exists is describing a change the
+    /// store will not accept — `setupIsStillOpen` closes at the first result, deliberately, because
+    /// changing what every match was for after somebody has played one moves the target under a
+    /// field that is half way through.
+    ///
+    /// Static, so the three can be told apart in a test: no test in this repository constructs a
+    /// screen, which is exactly how a sentence like this goes wrong unnoticed.
+    static func groupsSetupNote(mayEdit: Bool, setupIsStillOpen: Bool) -> String {
+        let why = "**This tournament has not been told how it is shaped.** How many groups, and how "
+                + "many go through from each, decide what every match in it is for — so THRØ asks "
+                + "rather than guessing. "
+        guard setupIsStillOpen else {
+            return why + "It is too late to set them: a result has already been recorded, and "
+                       + "deciding now what every match was for would move the target under a field "
+                       + "that is part way through."
+        }
+        return mayEdit
+            ? why + "Set them below, before the first result goes in — after that they are fixed."
+            : why + "An admin of this tournament sets them, before the first result goes in."
     }
 
     @ViewBuilder private func groupBlock(_ group: Groups.Group, of groups: Groups) -> some View {
