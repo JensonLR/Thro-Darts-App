@@ -212,6 +212,32 @@ public enum ThroReadiness {
              + "this phone, so a row that says it has nothing means it has nothing."
     }
 
+    /// The whole screen as plain text, for sending to somebody who can act on it.
+    ///
+    /// **This closes the loop the screen opened.** The screen answers *what can this phone show me*;
+    /// this answers *and here is that answer, in a message*. Without it the founder's move is
+    /// thirteen screenshots, which is why a build's real state so rarely reaches the person who can
+    /// change it.
+    ///
+    /// **Nothing in it is a match, a name or a figure.** The rows carry counts — how many finished
+    /// matches, how many reminders — because a count is what decides a row's state, and no visit,
+    /// no player and no score can reach this text. The last line says so, because a diagnostic that
+    /// does not say what it contains is one nobody should send.
+    public static func report(_ surfaces: [Surface], build: String, phone: String) -> String {
+        let rows = surfaces.map { surface in
+            // The sentence keeps its emphasis marks off: this is a message in somebody's chat app,
+            // not a rendered screen, and `**` in plain text is noise.
+            let detail = surface.detail.replacingOccurrences(of: "**", with: "")
+            return "\(surface.name) — \(surface.state.label)\n    \(detail)"
+        }
+        return ("THRØ — what this build can do\n"
+              + "Build \(build)\n"
+              + "\(phone)\n\n"
+              + rows.joined(separator: "\n\n")
+              + "\n\nNothing above is a match, a name or a score — only which surfaces this phone "
+              + "can show and why.")
+    }
+
     static func lockScreen(_ f: Facts) -> Surface {
         let state: State
         let detail: String
@@ -562,6 +588,23 @@ public extension ThroReadiness {
         return !external.isEmpty
     }
 
+    /// The model identifier and the iOS version — *"iPhone17,3, iOS 26.1"*.
+    ///
+    /// The raw identifier rather than a marketing name: a table of marketing names is a table that
+    /// goes stale every September, and the identifier is what a bug report can be looked up from.
+    static var phone: String {
+        var system = utsname()
+        uname(&system)
+        // `machine` is a C character tuple. Mirror walks it without any unsafe pointer work, which
+        // matters here: this runs on a phone in somebody's hand to produce a diagnostic, and a
+        // diagnostic is the last thing that should be able to crash.
+        let model = Mirror(reflecting: system.machine).children.reduce(into: "") { name, part in
+            guard let byte = part.value as? Int8, byte != 0 else { return }
+            name.append(Character(UnicodeScalar(UInt8(byte))))
+        }
+        return "\(model.isEmpty ? "unknown model" : model), iOS \(UIDevice.current.systemVersion)"
+    }
+
     /// This app's own page in iPhone Settings, which is the only page any app may open.
     ///
     /// Every *turn it on in Settings* sentence on this screen means this page, and nothing else can
@@ -630,6 +673,7 @@ public struct ReadinessScreen: View {
                             .foregroundStyle(ThroColor.colorTextSecondary)
                             .fixedSize(horizontal: false, vertical: true)
                         ForEach(surfaces) { row(for: $0) }
+                        send(surfaces)
                     } else {
                         // Before the first answer comes back. It says what it is waiting for rather
                         // than showing twelve rows that would all have to be wrong for a moment.
@@ -648,6 +692,40 @@ public struct ReadinessScreen: View {
         // Every time it opens, not once: a player who goes to iPhone Settings, turns something on
         // and comes back must see the new answer rather than the one from before they left.
         .task { facts = await gather() }
+    }
+
+    /// The whole screen as a message.
+    ///
+    /// **Without this the answer stops on the phone.** Thirteen rows of state are exactly what
+    /// somebody who can fix a build needs and exactly what nobody transcribes; a share sheet turns
+    /// *I am not sure I can see this* into a message that says which nine of them are working and
+    /// why the other four are not. A `ShareLink` rather than a copy button, because the phone
+    /// already has every way of sending it and the app should not pick one.
+    @ViewBuilder
+    private func send(_ surfaces: [ThroReadiness.Surface]) -> some View {
+        VStack(alignment: .leading, spacing: ThroSpacing.spacing2) {
+            ShareLink(item: ThroReadiness.report(surfaces, build: BuildInfo.label,
+                                                 phone: phoneDescription)) {
+                ThroButtonFace("Send this", variant: .secondary, size: .medium, fullWidth: true)
+            }
+            .buttonStyle(ThroPressStyle(radius: ThroSpacing.radiusControl))
+            .accessibilityHint("Makes a plain-text copy of this screen to send to somebody.")
+            Text("Every line above, plus the build and the phone's model. No match, no name and no "
+                 + "score goes with it.")
+                .thro(ThroTypography.metadata)
+                .foregroundStyle(ThroColor.colorTextSecondary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .padding(.top, ThroSpacing.spacing3)
+    }
+
+    /// What phone this is, or an honest shrug off iOS.
+    private var phoneDescription: String {
+        #if os(iOS)
+        return ThroReadiness.phone
+        #else
+        return "not an iPhone"
+        #endif
     }
 
     @ViewBuilder

@@ -226,6 +226,37 @@ final class ReadinessTests: XCTestCase {
                         .contains("\(working) of these are working"))
     }
 
+    // MARK: sending it to somebody who can act on it
+
+    /// **A screen that answers a question on a phone has answered it to one person.** Thirteen rows
+    /// of state are exactly what somebody who can fix a build needs and exactly what nobody
+    /// transcribes, so the screen goes out as text. What it must never carry is what the app is
+    /// otherwise full of: a match, a name, a score.
+    func testTheReportCarriesEveryRowAndNothingAboutAnybodysDarts() {
+        let facts = ThroReadiness.Facts(liveActivitiesAllowed: true, matchInProgress: true,
+                                        appGroupReachable: true, projectionWrittenAt: Date(),
+                                        externalDisplayConfigured: true, finishedMatches: 3,
+                                        notifications: .allowed, remindersSet: 2, calendar: .allowed,
+                                        datedFixtures: 1, spotlightAvailable: true, spotlightOn: true,
+                                        diagnosticsOn: true, diagnosticsHeld: 4,
+                                        brandFacesRegistered: true)
+        let surfaces = ThroReadiness.surfaces(facts)
+        let report = ThroReadiness.report(surfaces, build: "1.0 · abc1234", phone: "iPhone17,3, iOS 26.1")
+
+        for surface in surfaces {
+            XCTAssertTrue(report.contains(surface.name), "\(surface.id) is not in the report")
+            XCTAssertTrue(report.contains(surface.state.label), "\(surface.id) has no state")
+        }
+        XCTAssertTrue(report.contains("1.0 · abc1234"), "a report with no build cannot be acted on")
+        XCTAssertTrue(report.contains("iPhone17,3"), report)
+
+        // The emphasis marks belong to a rendered screen, not to somebody's chat app.
+        XCTAssertFalse(report.contains("**"), "the message is plain text, not markdown")
+        // And it says what it contains, because a diagnostic that does not is one nobody should send.
+        XCTAssertTrue(report.contains("Nothing above is a match, a name or a score"),
+                      "the report does not say what it carries")
+    }
+
     // MARK: where a row can take you
 
     /// The button and the sentence must agree in both directions — about **THRØ's own page**,
