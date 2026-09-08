@@ -49,6 +49,23 @@ public enum ThroWidgetCopy {
         return (next.title, venue.isEmpty ? when : "\(when) · \(venue)")
     }
 
+    /// **Where the widget goes when it is tapped: whatever it is currently showing.**
+    ///
+    /// It went to *continue the match* in every state, including the two that are not a match. A
+    /// widget reading *Tuesday · Feathers v Bell · 8pm* opened the Play tab with nothing on it —
+    /// which is not a crash, not an error, and not what anybody tapping that widget meant. A
+    /// destination that ignores what is drawn above it is a link to somewhere else's content.
+    ///
+    /// Three states, three places, and each one is the screen that holds what the widget is showing:
+    /// the match being scored, the list of every fixture this phone's clubs have not finished with,
+    /// or — on a phone with neither — the one action that is real.
+    public static func destination(_ projection: ThroProjection?, now: Date = Date()) -> URL {
+        guard let projection else { return ThroLink.url(path: "new") }
+        if projection.live != nil { return ThroLink.url(path: "continue") }
+        if fixture(projection, now: now) != nil { return ThroLink.url(path: "tab/live") }
+        return ThroLink.url(path: "new")
+    }
+
     static let when: DateFormatter = {
         let f = DateFormatter()
         f.setLocalizedDateFormatFromTemplate("EEE d MMM HH:mm")

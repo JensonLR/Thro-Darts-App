@@ -48,7 +48,8 @@ struct ThroBoardWidget: Widget {
         StaticConfiguration(kind: "app.thro.darts.board", provider: ThroProjectionProvider()) { entry in
             ThroWidgetBoard(projection: entry.projection, now: entry.date, wide: false)
                 .containerBackground(ThroLivePalette.field, for: .widget)
-                .widgetURL(URL(string: ThroLink.url(path: "continue").absoluteString))
+                // Wherever the widget is actually showing — see ThroWidgetCopy.destination.
+                .widgetURL(ThroWidgetCopy.destination(entry.projection))
         }
         .configurationDisplayName("Match")
         .description("The leg being scored on this phone, or what is next.")
@@ -62,7 +63,8 @@ struct ThroLockWidget: Widget {
         StaticConfiguration(kind: "app.thro.darts.lock", provider: ThroProjectionProvider()) { entry in
             ThroLockLine(entry: entry)
                 .containerBackground(.clear, for: .widget)
-                .widgetURL(URL(string: ThroLink.url(path: "continue").absoluteString))
+                // Wherever the widget is actually showing — see ThroWidgetCopy.destination.
+                .widgetURL(ThroWidgetCopy.destination(entry.projection))
         }
         .configurationDisplayName("THRØ")
         .description("The two remainders, on the Lock Screen.")

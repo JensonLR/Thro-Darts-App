@@ -1,6 +1,7 @@
 import XCTest
 import ThroDesign
 import ThroJournal
+import ThroLiveKit
 @testable import ThroApp
 
 /// An address has to survive being written down and read back, and it has to refuse a link it does
@@ -135,5 +136,51 @@ final class RoutingTests: XCTestCase {
         router.go(.settings)
         router.open(URL(string: "thro://elsewhere")!)
         XCTAssertEqual(router.pending, .settings)
+    }
+
+    // MARK: the widgets' own links
+
+    /// **A widget's tap has to go where the widget is pointing.**
+    ///
+    /// Both widgets sent every tap to *continue the match*, in all three of the states they draw. On
+    /// the one showing a live scoreboard that is right. On the one reading *Tuesday · Feathers v
+    /// Bell · 8pm* it opened the Play tab with nothing on it — no crash, no error, and nothing to do
+    /// with the fixture somebody had just tapped. A destination that ignores what is drawn above it
+    /// is a link to somebody else's content.
+    ///
+    /// This test is the whole loop: the URL the widget would carry, parsed by the app that receives
+    /// it. Either half alone would pass while the two disagreed — which is exactly how a widget
+    /// comes to open the wrong screen with every test green.
+    func testEachWidgetStateLinksToTheScreenThatHoldsWhatItIsShowing() {
+        let now = Date(timeIntervalSince1970: 1_700_000_000)
+        func route(_ projection: ThroProjection?) -> ThroRoute? {
+            ThroRoute(url: ThroWidgetCopy.destination(projection, now: now))
+        }
+
+        let leg = ThroLiveState(homeName: "Ann", awayName: "Bea", homeRemaining: 141,
+                                awayRemaining: 220, homeLegs: 1, awayLegs: 2, thrower: .home)
+        let scoring = ThroProjection(writtenAt: now, live: leg, liveFormat: "501",
+                                     nextFixture: nil, matches: 3, legsThisWeek: 9)
+        XCTAssertEqual(route(scoring), .continueLatest, "the match being scored")
+
+        let ahead = ThroProjectedFixture(title: "Feathers v Bell",
+                                         at: now.addingTimeInterval(3 * 60 * 60), venue: "The Bell")
+        let waiting = ThroProjection(writtenAt: now, live: nil, liveFormat: "",
+                                     nextFixture: ahead, matches: 3, legsThisWeek: 9)
+        XCTAssertEqual(route(waiting), .tab(.live),
+                       "the fixture it is showing lives on the Live tab, not on Play")
+
+        // A fixture that has gone past is not shown, so it must not be linked to either.
+        let over = ThroProjection(writtenAt: now, live: nil, liveFormat: "",
+                                  nextFixture: ThroProjectedFixture(title: "Last week",
+                                                                    at: now.addingTimeInterval(-60),
+                                                                    venue: ""),
+                                  matches: 3, legsThisWeek: 9)
+        XCTAssertEqual(route(over), .newMatch)
+
+        let empty = ThroProjection(writtenAt: now, live: nil, liveFormat: "", nextFixture: nil,
+                                   matches: 0, legsThisWeek: 0)
+        XCTAssertEqual(route(empty), .newMatch, "nothing to continue and nothing coming")
+        XCTAssertEqual(route(nil), .newMatch, "and a phone whose file has never been written")
     }
 }
