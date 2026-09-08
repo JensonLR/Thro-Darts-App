@@ -1073,3 +1073,62 @@ qualification look like another category to skim past. Every existing `Tag("…"
 untouched, so every test written against them stays green.
 
 22 tests. All 17 `tools/check_*.py` green.
+
+## The screen decides its own shape, so it can be turned on its side
+
+The founder, relaying a player in a local league: *"Just make what's needed big — that's the main
+hiccup u see"*, and *"People try use different or they're own tablets most of the time."* Then:
+*"I feel we should also have a landscape view for mobile too. As well as taking tablets into
+consideration."*
+
+What the build actually does today:
+
+```
+TARGETED_DEVICE_FAMILY = 1
+INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = UIInterfaceOrientationPortrait
+```
+
+iPhone only, portrait only, and **no iPad orientation key at all** — so on an iPad THRØ runs in the
+scaled-phone compatibility window. PD-005 made the scoring screen fit without scrolling by choosing
+one screen and locking the app to it, which is a decision the app cannot re-examine at runtime.
+
+**Flipping those two switches first would ship a worse app**, not a better one: a portrait layout
+squeezed into 390 points of height has a keypad that does not fit and a hero the size of a caption.
+So the shape comes first and the switches follow it.
+
+### The shape is arithmetic
+
+`ThroStage.choose(width:height:onAFinish:textScale:)` is a pure function returning the arrangement,
+the hero's rung, the opponent's rung, the ledger's state and the key height. Because it is a
+function and not a view, it can be held to the claim that matters:
+
+> On every device THRØ runs on, in every orientation, at every text size, on a finish and not, the
+> scoring screen fits without scrolling and every key is still big enough to hit.
+
+The test walks eleven iOS 18 devices — an iPhone SE up to a 13-inch iPad Pro — both ways up, at four
+text scales, with and without a checkout row. **352 screens**, each checked for four things: the
+rail plus head plus ledger plus tray fits the safe area; the two three-digit registers do not
+overlap; every key clears 44 points and the tray fits its height; and the hero is a rung of the
+approved ladder.
+
+A screen wider than 1.2× its height puts the keys **beside** the board — which is the shape a
+scoreboard has always had, and the shape you get when a phone is propped up at the oche. A tablet
+held upright stays stacked, because a tall screen has room for the board above the keys.
+
+### One hole the first version had
+
+`keyHeight` is clamped at 44 so it can never report a key nobody could hit. That clamp means a
+screen too short for six 44 pt rows **overflows silently** — and `keysAreHittable`, which only read
+the height, called that fine. A 4-inch phone on its side gives 299 points for a tray that needs 314.
+
+`keysFit(in:)` asks both questions. The test that proves it uses that same 568 × 299 screen, which
+does not run iOS 18 and is not in the device list — it is there because it is the shape where the
+two questions give different answers.
+
+### And a nicety with teeth
+
+`ThroStage.Ledger.none` became `.hidden`. `.none` on an enum collides with `Optional.none` wherever
+the context is optional, and the compiler resolves it without saying which one it picked.
+
+13 tests. The device-family and orientation switches stay as they are until the board and the
+scoring screen are built on this; flipping them is the last commit of that work, not the first.
