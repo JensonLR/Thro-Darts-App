@@ -1,4 +1,5 @@
 import SwiftUI
+import ThroTokens
 
 // SLATE, B.0 — the move. `Easing` and `MarkGeometry` were written for the opening (PD-007) and have
 // lived in `ThroApp/LaunchSequence.swift` since. Nothing about them is the opening's: one evaluates
@@ -7,10 +8,17 @@ import SwiftUI
 // `MarkGeometry.chalkEdge`, and the one diagonal in the product is `MarkGeometry.bar` — so the
 // design layer cannot go on reaching up into the app layer to draw its own furniture.
 //
-// **This is a move and not a rewrite.** Both types were already `public`, both depend on nothing but
-// SwiftUI, and both arrive here byte for byte. `LaunchSequence.swift` already imports `ThroDesign`,
-// so the opening's thirteen tests hold with no change to a single assertion — only an import added
-// to the test file, because `ThroAppTests` had no reason to import `ThroDesign` before today.
+// **This is a move and not a rewrite.** Both types were already `public` and both arrive here byte
+// for byte. `LaunchSequence.swift` already imports `ThroDesign`, so the opening's thirteen tests
+// hold with no change to a single assertion — only an import added to the test file, because
+// `ThroAppTests` had no reason to import `ThroDesign` before today.
+//
+// The first version of this file said the two types "depend on nothing but SwiftUI". They do not:
+// `Easing` evaluates `ThroMotion`'s cubic-beziers, which is the whole reason it is called the token
+// layer's easings. It compiled where it used to live because that file imports `ThroTokens`, and
+// the claim went in unchecked. CI found it in four minutes on a macOS runner;
+// `check_tokens_exist.py` now finds it in under a second on any machine, because it already reads
+// every token reference in every file and had never asked whether the file could see them.
 //
 // Two things B.0 named do NOT move yet, because the spec was wrong about them and moving them would
 // have been an access change dressed as a move. `Grain` is `internal`, and `Speck` is nested inside

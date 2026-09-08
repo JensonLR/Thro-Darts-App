@@ -92,6 +92,20 @@ def declared() -> dict[str, set[str]]:
     return out
 
 
+def imports_reach(path: pathlib.Path, text: str) -> bool:
+    """Whether this file can actually see the token namespaces it names.
+
+    Swift resolves `ThroMotion` only if the file imports `ThroTokens` — a transitive dependency of
+    the *target* is linkable but not nameable without the import. This file already reads every
+    token reference in every file and had never asked that question, so a file naming a real token
+    it could not see was a macOS compile error four minutes into CI rather than a line of output
+    here. `ThroDesign/Geometry.swift` was exactly that on 2026-09-08: `Easing` moved in carrying
+    five `ThroMotion` references and no import, under a header comment asserting it depended on
+    nothing but SwiftUI.
+    """
+    return bool(re.search(r"^\s*(?:@testable\s+)?import\s+ThroTokens\s*$", text, re.M))
+
+
 def main() -> int:
     tokens = declared()
     missing = [n for n in NAMESPACES if n not in tokens]
@@ -101,10 +115,13 @@ def main() -> int:
 
     problems: list[str] = []
     used = 0
+    unreachable = 0
     for root in SOURCES:
         for path in sorted(root.rglob("*.swift")):
             rel = path.relative_to(ROOT)
-            for number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
+            text = path.read_text(encoding="utf-8")
+            reachable = imports_reach(path, text)
+            for number, line in enumerate(text.splitlines(), 1):
                 code = line.split("//")[0]
                 painted = PAINTED.search(code)
                 pigment_name = painted and (painted.group(1) or painted.group(2))
@@ -118,6 +135,14 @@ def main() -> int:
                     )
                 for namespace, name in re.findall(r"\b(%s)\.(\w+)" % "|".join(NAMESPACES), code):
                     used += 1
+                    if not reachable:
+                        unreachable += 1
+                        problems.append(
+                            f"{rel}:{number}: {namespace}.{name} is named in a file that does not "
+                            f"`import ThroTokens`. Swift will not resolve it however real the token "
+                            f"is — a transitive dependency is linkable, not nameable."
+                        )
+                        continue
                     if name in tokens[namespace]:
                         continue
                     elsewhere = [n for n in NAMESPACES if name in tokens[n]]
@@ -130,7 +155,8 @@ def main() -> int:
         for problem in sorted(set(problems)):
             print(f"  {problem}", file=sys.stderr)
         return 1
-    print(f"ok: {used} token references, every one declared; no raw pigment painted as a surface "
+    print(f"ok: {used} token references, every one declared and every one in a file that imports "
+          f"ThroTokens; no raw pigment painted as a surface "
           f"outside {'/'.join(p.rsplit('/', 1)[-1] for p in PIGMENT_EXEMPT)}")
     return 0
 
