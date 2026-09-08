@@ -152,6 +152,12 @@
 --color-text-on-board:#F7F6F2;
 --color-text-on-board-secondary:#ADB9B3;
 --color-mark-on-board:#8FB3A4; /* the boundary ink: every rule, box and key edge on a board */
+/* Status ink ON A BOARD. `--color-status-error` #8C1D18 measures 1.52:1 against the board and is
+   unusable there — a bust drawn in it is a number nobody can read. Each of these is computed to
+   clear 4.5:1 against its own trait's `board-lit`, which is the worst ground the board has. Only
+   the two with a call site are here; the rest arrive with theirs. */
+--color-status-error-on-board:#F2A096;
+--color-status-warning-on-board:#E7B65C;
 --space-chalk-rule-weight:3px;
 }
 
@@ -207,6 +213,8 @@
 --color-text-on-board:#EFEDE7;
 --color-text-on-board-secondary:#A8BDB2;
 --color-mark-on-board:#7FA695;
+--color-status-error-on-board:#EC9084;
+--color-status-warning-on-board:#DFAC50;
 }
 
 :root{

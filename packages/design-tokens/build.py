@@ -363,7 +363,11 @@ PAIRS_TEXT = [("--color-text-primary", "--color-background-primary"),
               ("--color-text-on-board", "--color-board-sunken"),
               ("--color-text-on-board-secondary", "--color-board-lit"),
               ("--color-text-on-board-secondary", "--color-board-field"),
-              ("--color-text-on-board-secondary", "--color-board-sunken")]
+              ("--color-text-on-board-secondary", "--color-board-sunken"),
+              # Status ink on a board, against the worst ground the board has. `status-error` itself
+              # measures 1.52:1 there, which is why these exist at all.
+              ("--color-status-error-on-board", "--color-board-lit"),
+              ("--color-status-warning-on-board", "--color-board-lit")]
 # Which surface each status colour is actually shown on, read off the export rather than assumed from
 # the token's name. Only five of the nine statuses have a surface of their own; the gate used to look for
 # `--color-status-<name>-surface` for all nine, so four of them silently resolved to nothing and were

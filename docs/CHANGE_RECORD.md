@@ -1167,3 +1167,77 @@ Everything else compiled and passed on the first attempt: 465 tests, one failure
 was a claim rather than a defect.
 
 11 tests.
+
+## The scoring screen becomes a board, and turns on its side
+
+The founder, relaying a player in a local league: *"Just make what's needed big — that's the main
+hiccup u see"*, *"People try use different or they're own tablets most of the time"*, and *"We need
+cool pop up notifications/banners on screen when scores are entered to confirm them."*
+
+### What the screen was doing
+
+- The thrower's remaining at 96 pt; **the opponent's remaining at 13 pt**, inside a row of chrome,
+  truncated with an ellipsis. It is the second-most-asked question in darts and it was the smallest
+  text on the screen.
+- **No running column of visit totals at all.** Every paper scoresheet has had one for a century,
+  and it is the only way a player catches a mis-key without replaying the leg in their head.
+- A committed visit produced a haptic and a changed number and **nothing else**, so a player who
+  half-saw the screen had to work backwards from the remainder to check their own entry.
+- `TurnIndicator` drew three dart pips from a **hardcoded `dartsThrown: 0`**, so they were
+  permanently empty and VoiceOver permanently said *"0 of 3 darts thrown"*.
+
+### What it does now
+
+`ThroBoard` fills the phone — one radial gradient between three named tokens, with chalk dust on it.
+`ThroBoardHead` puts both players' three-digit registers side by side on one baseline, at the rung
+`ThroStage` chose from the room actually available. The opponent goes from 13 pt to one rung below
+the thrower. `ThroLedger` draws the leg beneath them in the three declared states the stage picks
+from measured height — rows, a tally strip, or nothing, never a clipped list.
+
+Whose throw it is is carried **three ways and none of them colour**: the `calledOut` double rule
+under that column, the 45° `ChalkStrike` marker beside the name, and the name's own ink.
+
+`ThroChalkMark` is the confirmation. On a board a score is chalked, not toasted: the total lands
+under the head where a scorer's hand would be, holds for 1.1 seconds, and goes. Three kinds, because
+the three things that can happen to an entry — it scores, it busts, it is refused — already have
+three distinct haptics and now have three distinct sights. The haptic comes off the mark itself, so
+what is felt and what is seen cannot drift apart.
+
+### `TurnIndicator` is deleted rather than fixed
+
+SLATE called the hardcoded `0` a wiring defect. It is not: **the engine scores a visit, not a dart**
+(`ThroEngine/Types.swift:26`), so there is no count to wire. Three pips that can never fill are
+furniture that states something untrue. They come back the day per-dart entry gives them something
+true to show.
+
+### PD-005 and PD-024 are superseded, and the switches are flipped
+
+Both existed because the screen had **one layout** and had to survive every text size inside it:
+PD-005 locked the app to an upright phone, PD-024 capped the text at `.accessibility1` and scrolled
+above it. `ThroStage` reads the room and the text scale together and returns a shape that fits, so
+there is nothing to cap and nothing to scroll — a player at the largest accessibility size gets a
+smaller rung and a shorter ledger, not a scroll bar under their scoring thumb. The keypad keeps its
+own pin, which was always a separate promise.
+
+```
+TARGETED_DEVICE_FAMILY                        1  →  "1,2"
+UISupportedInterfaceOrientations_iPhone   portrait  →  portrait + both landscapes
+UISupportedInterfaceOrientations_iPad     (absent)  →  all four
+```
+
+`StageTests` now walks **every** Dynamic Type size rather than a sample of four, because the screen
+no longer caps its text and that promise is only worth something if the top of the range is walked.
+
+### The guard, and the hole my first version of it had
+
+`tools/check_orientation_is_earned.py` holds the project file and the layout together. Perturbed
+four ways.
+
+The third perturbation is why it exists twice. I deleted landscape from the iPhone key — the exact
+silent regression the founder's request is about — and **the check passed**, because it only asked
+whether each orientation *named* had a layout behind it, and the iPad key still named landscape. So
+it now declares what THRØ has decided to offer, per key, and a missing orientation fails with the
+sentence *"That is a whole orientation a player loses, and no test would notice."*
+
+Also perturbed: iPad offered with no iPad in `StageTests`; the screen no longer calling
+`ThroStage.choose`; and iPad dropped from `TARGETED_DEVICE_FAMILY`. All four fail.

@@ -63,8 +63,16 @@ final class StageTests: XCTestCase {
         }
     }
 
-    /// The text sizes this app supports: the default, and up to the accessibility range.
-    static let textScales: [CGFloat] = [1.0, 1.12, 1.24, 1.35]
+    /// **Every** text size iOS offers, as the ratio it applies to large type — `largeTitle`'s own
+    /// scale, which is what the board's figures use.
+    ///
+    /// The whole range and not a sample of it, because the scoring screen no longer caps its text.
+    /// PD-024 capped it at `.accessibility1` and scrolled above that, which was the right answer for
+    /// a screen with one layout; `ThroStage` reads the room and the text scale together and picks a
+    /// shape that fits, so a player at the largest accessibility size gets a smaller rung and a
+    /// shorter ledger rather than a scroll bar under their scoring thumb. That promise is only worth
+    /// anything if the top of the range is actually walked.
+    static let textScales: [CGFloat] = ThroDynamicType.allScales
 
     // MARK: - The claim
 

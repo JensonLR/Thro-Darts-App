@@ -63,6 +63,14 @@ jobs:
       - name: Unavailable is never a fade
         run: python3 tools/check_no_dimming.py
 
+      # Turning on landscape and iPad is two lines in a project file and free; what they promise is
+      # not. This holds both directions — every orientation the project offers is one ThroStage
+      # decides and StageTests walks, AND every orientation THRØ decided to offer is still offered.
+      # The first version only checked the first half and passed cleanly when landscape was deleted
+      # from the iPhone key, because the iPad key still carried it.
+      - name: Every orientation offered has a layout behind it
+        run: python3 tools/check_orientation_is_earned.py
+
       # And a token that does not exist fails a macOS build several minutes in, having already spent
       # a runner. `motionScaleImpact` is ThroMotion's and `motionTravelMedium` is ThroSpacing's; this
       # says so in under a second, on Linux, before any of that starts.

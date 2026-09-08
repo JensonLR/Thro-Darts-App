@@ -421,6 +421,39 @@ public enum ThroDynamicType {
     public static func ceiling(reflowing: Bool) -> DynamicTypeSize {
         reflowing ? readingCeiling : scoringCeiling
     }
+
+    /// The ratio this size applies to large type, relative to the default.
+    ///
+    /// Read off `largeTitle`'s own scale — 31, 32, 33, **34**, 36, 38, 40, 44, 48, 52, 56, 60 — and
+    /// not off `body`'s, because the figure this feeds is `boardHero` and iOS scales the two
+    /// differently: body goes 17 → 53 across the range and largeTitle goes 34 → 60. Using body's
+    /// ratios here would have the board thinking a figure was half again as big as it is.
+    ///
+    /// It is a table rather than a `UIFontMetrics` call so that `ThroStage` stays a pure function
+    /// and can be walked on any machine, including a Linux one. It is a slight overestimate at the
+    /// top — `UIFontMetrics` compresses large point sizes — which is the safe direction: the stage
+    /// chooses a rung that fits, so overestimating means the figure is never too big.
+    public static func scale(at size: DynamicTypeSize) -> CGFloat {
+        switch size {
+        case .xSmall: return 31.0 / 34
+        case .small: return 32.0 / 34
+        case .medium: return 33.0 / 34
+        case .large: return 1
+        case .xLarge: return 36.0 / 34
+        case .xxLarge: return 38.0 / 34
+        case .xxxLarge: return 40.0 / 34
+        case .accessibility1: return 44.0 / 34
+        case .accessibility2: return 48.0 / 34
+        case .accessibility3: return 52.0 / 34
+        case .accessibility4: return 56.0 / 34
+        case .accessibility5: return 60.0 / 34
+        @unknown default: return 1
+        }
+    }
+
+    /// Every scale iOS can apply, largest last. Held here rather than in a test so that a size added
+    /// to `DynamicTypeSize` reaches the layout tests through the same table the layout reads.
+    public static let allScales: [CGFloat] = DynamicTypeSize.allCases.map(scale(at:))
 }
 
 public extension View {

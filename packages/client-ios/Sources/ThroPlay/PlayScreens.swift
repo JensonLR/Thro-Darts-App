@@ -313,6 +313,11 @@ public struct ScoringScreen: View {
     @AppStorage(ScoringPreferences.keepScreenAwakeKey) private var keepScreenAwake: Bool = true
     @AppStorage(ThroHaptics.enabledKey) private var haptics: Bool = true
     private let board = LiveBoard()
+    /// What the board is currently saying back about the last entry. Set when a visit lands, a bust
+    /// happens or an entry is refused; cleared after `ThroChalkMark.dwell`.
+    @State private var mark: ThroChalkMark?
+    /// The visit count the last mark was drawn for, so a re-render never re-marks the same visit.
+    @State private var markedAt: Int = -1
     /// The player's own text size, read **before** this screen caps it — the cap is applied to the
     /// body below, so what arrives here is what they actually asked for.
     @Environment(\.dynamicTypeSize) private var typeSize
@@ -326,30 +331,34 @@ public struct ScoringScreen: View {
     }
 
     public var body: some View {
-        ZStack {
-            VStack(spacing: 0) {
-                MatchHeader(competition: "\(session.name(.home)) v \(session.name(.away))", format: session.formatLabel,
-                            onBack: onLeave,
-                            onEnd: session.mayEndShort ? session.offerToEnd : nil)
-                // Everything above the keypad shares the height the keypad leaves. At ordinary text
-                // sizes nothing scrolls and nothing is cut off: when a phone is short, the hero
-                // numeral yields first.
-                //
-                // **Past the scoring ceiling it scrolls instead (PD-024)**, so a player who needs the
-                // largest text gets it on the numbers they read rather than being capped at
-                // `.accessibility1`. The keypad below is unaffected on purpose — see `lower`.
-                if reflows {
-                    ScrollView { upper }
-                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-                } else {
-                    upper
-                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+        // SLATE D. The screen's shape is arithmetic, not a preview: `ThroStage` reads the room it
+        // actually has and returns the arrangement, the rung each numeral stands on, what the
+        // ledger can honestly show, and how tall a key is. That is what makes this screen work on a
+        // phone turned on its side and on a tablet — see `StageTests`, which walks eleven devices
+        // both ways up at four text sizes and holds that the whole thing still fits.
+        GeometryReader { proxy in
+            let stage = ThroStage.choose(width: proxy.size.width, height: proxy.size.height,
+                                         onAFinish: session.throwerOnAFinish,
+                                         textScale: ThroDynamicType.scale(at: typeSize))
+            ThroBoard(grainSeed: ThroBoardSeed.match(session.record.id.value)) {
+                ZStack {
+                    if stage.arrangement == .beside {
+                        HStack(spacing: 0) {
+                            boardSide(stage)
+                            lower.frame(width: proxy.size.width * stage.trayFraction)
+                        }
+                    } else {
+                        VStack(spacing: 0) {
+                            boardSide(stage)
+                            lower
+                        }
+                    }
+                    if let announcement = session.announcement {
+                        AnnouncementOverlay(announcement: announcement, session: session,
+                                            onContinue: session.acknowledge)
+                            .transition(.opacity)
+                    }
                 }
-                lower
-            }
-            if let announcement = session.announcement {
-                AnnouncementOverlay(announcement: announcement, session: session, onContinue: session.acknowledge)
-                    .transition(.opacity)
             }
         }
         // PD-027. A bust and a won leg are the two reveals inside a match, and both used to be a
@@ -357,12 +366,17 @@ public struct ScoringScreen: View {
         // card lands on the design's impact curve (`throLanding`, inside the overlay), which is the
         // same physics as the strike that caused it.
         .animation(.throEnter(), value: session.announcement != nil)
-        .background(ThroColor.colorBackgroundPrimary.ignoresSafeArea())
         .throAppearance(Appearance(stored: appearanceRaw))
-        // PD-015, amended by PD-024. Below the reflow threshold this is the one screen that must fit
-        // without scrolling, so it is the one screen with a ceiling. Above it, the upper region
-        // scrolls and the text grows the rest of the way.
-        .throScoringTypeCeiling(reflowing: reflows)
+        // PD-015, amended by PD-024, superseded here. The ceiling and the reflow both existed
+        // because the screen had ONE layout and had to survive every text size inside it: below the
+        // threshold it capped the text, above it the top half scrolled. `ThroStage` reads the room
+        // and the text scale together and picks a shape that fits, so there is nothing to cap and
+        // nothing to scroll — a player at the largest accessibility size gets a smaller rung of the
+        // ladder and a shorter ledger, not a scroll bar under their scoring thumb. The keypad keeps
+        // its own pin, which was always a separate promise: the key under a thumb does not move.
+        //
+        // 440 screens hold this: eleven devices, both ways up, every Dynamic Type size, on a finish
+        // and not. See `StageTests`.
         .onReceive(session.$state) { state in
             if state.isComplete { onComplete() }
         }
@@ -394,6 +408,24 @@ public struct ScoringScreen: View {
         .onChange(of: session.visits.count) { was, now in
             if now < was { ThroHaptics.play(.retracted, enabled: haptics) }
         }
+        // **What the board says back.** A committed visit used to produce a haptic and a changed
+        // number and nothing else, so a player who half-saw the screen had to work backwards from
+        // the remainder to check their own entry. The three things that can happen to an entry
+        // already have three distinct haptics; they get three distinct sights.
+        .onChange(of: session.visits.count) { was, now in
+            guard now > was, let visit = session.visits.last, now != markedAt else { return }
+            markedAt = now
+            show(ThroChalkMark(kind: visit.bust ? .bust : .scored,
+                               figure: "\(visit.visitTotal)",
+                               detail: visit.bust ? "score restored"
+                                                  : "\(session.name(visit.seat)) · \(visit.remainingAfter) left"))
+        }
+        .onChange(of: session.notice?.text) { _, text in
+            // A refusal never reached the board at all, so it is `absent` rather than struck.
+            guard let text, session.notice?.tone == .error else { return }
+            show(ThroChalkMark(kind: .refused, figure: session.entry.isEmpty ? "—" : session.entry,
+                               detail: text))
+        }
         .onAppear {
             setIdleTimer(disabled: keepScreenAwake)
             board.start(session)
@@ -407,9 +439,6 @@ public struct ScoringScreen: View {
             board.finish(session)
         }
     }
-
-    /// Whether the screen has changed shape for a player who needs large text (PD-024).
-    private var reflows: Bool { ThroDynamicType.reflows(at: typeSize) }
 
     /// The keypad, or whatever is standing in its place.
     ///
@@ -449,72 +478,126 @@ public struct ScoringScreen: View {
         }
     }
 
-    private var upper: some View {
+    /// Everything that is not the keys: the rail, the head, and the leg so far.
+    @ViewBuilder private func boardSide(_ stage: ThroStage) -> some View {
         VStack(spacing: 0) {
-            legRow.padding(.top, ThroSpacing.spacing5).padding(.bottom, ThroSpacing.spacing2)
-            remaining
-                .padding(.top, ThroSpacing.spacing2)
-                .padding(.bottom, ThroSpacing.spacing1)
-                .layoutPriority(-1)
+            MatchHeader(competition: "\(session.name(.home)) v \(session.name(.away))",
+                        format: session.formatLabel,
+                        onBack: onLeave,
+                        onEnd: session.mayEndShort ? session.offerToEnd : nil,
+                        onBoard: true)
+            ThroBoardHead(home: ScoringScreen.column(session, .home),
+                          away: ScoringScreen.column(session, .away),
+                          legs: "\(session.legsWon(.home))–\(session.legsWon(.away))",
+                          format: session.lengthLabel,
+                          stage: stage)
+                .padding(.top, ThroSpacing.spacing3)
+            // Not in, or on a finish. Said under the head, where the eye already is.
             if session.bust == nil, session.throwerMustOpen, let seat = session.thrower {
-                // Not in. This is said before anything else, because a player whose 60 does not go on
-                // the board must be told why on the same frame. Type and colour from the token layer;
-                // no component is invented for it, since the export draws no double-in screen.
                 Text("\(session.name(seat)) is not in. Enter what counts from the double — 0 if it did not come.")
                     .thro(ThroTypography.metadata)
-                    .foregroundStyle(ThroColor.colorTextSecondary)
+                    .foregroundStyle(ThroColor.colorTextOnBoardSecondary)
                     .multilineTextAlignment(.center)
                     .fixedSize(horizontal: false, vertical: true)
+                    .padding(.horizontal, ThroStage.gutter)
                     .padding(.top, ThroSpacing.spacing2)
                     .accessibilityAddTraits(.isStaticText)
             } else if session.bust == nil, session.throwerOnAFinish, let seat = session.thrower {
-                // The hero already shows the number in brand green; the card names the fact, as the
-                // export's checkout screen does with its value hidden — and now carries the route
-                // (PD-013), which is the slot the export drew and nothing had ever filled.
                 CheckoutCard(required: session.remaining(seat), route: session.throwerRoute,
                              compact: true, hideValue: true)
                     .padding(.top, ThroSpacing.spacing2)
             }
-            if let seat = session.thrower {
-                TurnIndicator(player: session.name(seat), dartsThrown: 0, active: true)
-                    .padding(.top, ThroSpacing.spacing4)
-            }
             Spacer(minLength: 0)
+            // The leg so far: the running column every paper scoresheet has had for a century, and
+            // the only way a player catches a mis-key without replaying the leg in their head.
+            ThroLedger(rows: ScoringScreen.ledger(session), stage: stage) { seat in
+                session.name(seat == 0 ? .home : .away)
+            }
+            .padding(.bottom, ThroSpacing.spacing3)
         }
-        .padding(.horizontal, ThroSpacing.spaceScreenGutter)
-        // A refusal floats over the top of this region and clears on the next key; it takes no height.
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+        // A refusal floats over the board and clears on the next key; it takes no height.
         .overlay(alignment: .top) {
             if let notice = session.notice {
                 Snackbar(notice.text, tone: tone(notice.tone))
-                    .padding(.horizontal, ThroSpacing.spaceScreenGutter)
+                    .padding(.horizontal, ThroStage.gutter)
                     .padding(.top, ThroSpacing.spacing2)
                     .transition(.opacity)
             }
         }
+        // **What the board says back.** The founder asked for a confirmation when a score is
+        // entered; on a board that is chalk landing, not an iOS toast. It sits under the head so it
+        // never covers the numerals it is confirming, and it goes on its own after `dwell`.
+        .overlay(alignment: .center) {
+            if let mark {
+                ThroChalkMarkView(mark)
+            }
+        }
         .animation(.throEnter(), value: session.notice != nil)
+        .animation(.throEnter(), value: mark)
     }
 
-    private var legRow: some View {
-        HStack {
-            LegState(home: session.legsWon(.home), away: session.legsWon(.away),
-                     bestOf: session.record.legsMode == .bestOf ? session.record.legsTarget : nil)
-            Spacer()
-            if let seat = session.thrower {
-                Text("\(session.name(seat.opponent)) \(session.remaining(seat.opponent))")
-                    .thro(ThroTypography.metadata.family(.sport).weight(.semibold))
-                    .foregroundStyle(ThroColor.colorTextSecondary)
-                    .lineLimit(1)
-                    .truncationMode(.tail)
-            }
+    /// One column of the head. `.calledOut` when that player is on a finish and it is their throw —
+    /// a finish is only news for the person about to take it.
+    static func column(_ session: MatchSession, _ seat: Seat) -> ThroBoardColumn {
+        let throwing = session.thrower == seat
+        let onAFinish = session.checkable.contains(session.remaining(seat))
+        let basis: ThroBasis
+        if session.bust != nil, throwing {
+            basis = .struck
+        } else if throwing, onAFinish {
+            basis = .calledOut
+        } else if throwing, session.throwerMustOpen {
+            basis = .reference
+        } else {
+            basis = .exact
+        }
+        return ThroBoardColumn(name: session.name(seat), remaining: session.remaining(seat),
+                               basis: basis, throwing: throwing)
+    }
+
+    /// The leg's visits, most recent last.
+    ///
+    /// Built from the replayed visits, which are what the journal actually stands behind. **A
+    /// retracted visit is not among them** — replay excludes it — so no row here is `struck` yet.
+    /// The struck row arrives with a journal read that returns superseded entries as well; the
+    /// shape is here so that when it does, only the source changes.
+    static func ledger(_ session: MatchSession) -> [ThroLedgerRow] {
+        let leg = session.visits.last?.legOrdinal
+        return session.visits.filter { $0.legOrdinal == leg }.map { visit in
+            ThroLedgerRow(id: "\(visit.legOrdinal)-\(visit.seat)-\(visit.visitOrdinal)",
+                          seat: visit.seat == .home ? 0 : 1,
+                          legOrdinal: visit.legOrdinal,
+                          visitTotal: visit.visitTotal,
+                          remainingAfter: visit.remainingAfter,
+                          struck: false)
         }
     }
 
-    @ViewBuilder private var remaining: some View {
-        if let bust = session.bust {
-            RemainingScore(value: bust.restored, label: "\(session.name(bust.seat)) requires", state: .bust)
-        } else if let seat = session.thrower {
-            RemainingScore(value: session.remaining(seat), label: "\(session.name(seat)) requires",
-                           state: session.throwerOnAFinish ? .checkout : .normal)
+    // `upper`, `legRow` and `remaining` are gone with the one-layout screen. What they carried now
+    // lives on the board:
+    //
+    //  - `RemainingScore` at 96 pt for the thrower and `legRow`'s 13 pt line for the opponent became
+    //    `ThroBoardHead`'s two registers, on one baseline, at the rung the stage chose. **The
+    //    opponent's remaining is the second-most-asked question in darts and it was the smallest
+    //    text on the screen.**
+    //  - `LegState` moved to the middle of the head, between the two players it is about.
+    //  - `TurnIndicator` is **deleted**, not moved. Its three dart pips were drawn from a hardcoded
+    //    `dartsThrown: 0`, so they were permanently empty and VoiceOver permanently said "0 of 3
+    //    darts thrown". That was not a wiring defect to fix — the engine scores a visit, not a
+    //    dart, so there is no count to wire. Three pips that can never fill are furniture that
+    //    states something untrue, and the head already says whose throw it is three ways: the
+    //    double rule under their column, the 45° marker beside their name, and the name's own ink.
+    //    They come back the day per-dart entry gives them something true to show.
+
+    /// Put a mark on the board and take it off again after its dwell. The haptic comes from the
+    /// mark itself, so what is felt and what is seen cannot drift apart.
+    private func show(_ new: ThroChalkMark) {
+        ThroHaptics.play(new.haptic, enabled: haptics)
+        mark = new
+        Task { @MainActor in
+            try? await Task.sleep(for: .seconds(ThroChalkMark.dwell))
+            if mark == new { mark = nil }
         }
     }
 

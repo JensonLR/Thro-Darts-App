@@ -52,6 +52,8 @@ public enum ThroColor {
     public static let colorStatusDisputed = Color("colorStatusDisputed", bundle: .module)
     /// light #8C1D18   dark #E8756A
     public static let colorStatusError = Color("colorStatusError", bundle: .module)
+    /// light #F2A096   dark #EC9084
+    public static let colorStatusErrorOnBoard = Color("colorStatusErrorOnBoard", bundle: .module)
     /// light #F5E5E3   dark #2E1815
     public static let colorStatusErrorSurface = Color("colorStatusErrorSurface", bundle: .module)
     /// light #1F5470   dark #6FB2D6
@@ -76,6 +78,8 @@ public enum ThroColor {
     public static let colorStatusVerified = Color("colorStatusVerified", bundle: .module)
     /// light #8A5A0B   dark #DFA53A
     public static let colorStatusWarning = Color("colorStatusWarning", bundle: .module)
+    /// light #E7B65C   dark #DFAC50
+    public static let colorStatusWarningOnBoard = Color("colorStatusWarningOnBoard", bundle: .module)
     /// light #F6EEDC   dark #2C2314
     public static let colorStatusWarningSurface = Color("colorStatusWarningSurface", bundle: .module)
     /// light #0F3D2E   dark #174F3C

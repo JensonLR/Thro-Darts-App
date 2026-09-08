@@ -210,23 +210,32 @@ public struct MatchHeader: View {
     private let format: String?
     private let onBack: (() -> Void)?
     private let onEnd: (() -> Void)?
+    /// Whether this rail sits on a board (SLATE D.1). On paper it keeps the surface and hairline it
+    /// has always had; on a board it takes the board's own inks, no fill of its own, and a
+    /// `ChalkRule` instead of a 1.26:1 hairline nobody can see.
+    private let onBoard: Bool
 
     public init(competition: String, round: String? = nil, board: String? = nil, format: String? = nil,
-                onBack: (() -> Void)? = nil, onEnd: (() -> Void)? = nil) {
+                onBack: (() -> Void)? = nil, onEnd: (() -> Void)? = nil, onBoard: Bool = false) {
         self.competition = competition
         self.round = round
         self.board = board
         self.format = format
         self.onBack = onBack
         self.onEnd = onEnd
+        self.onBoard = onBoard
     }
+
+    /// The ink for a rail's title, and for its two controls.
+    var primaryInk: Color { onBoard ? ThroColor.colorTextOnBoard : ThroColor.colorTextPrimary }
+    var secondaryInk: Color { onBoard ? ThroColor.colorTextOnBoardSecondary : ThroColor.colorTextSecondary }
 
     public var body: some View {
         HStack(alignment: .center, spacing: ThroSpacing.spacing2) {
             if let onBack {
                 Button(action: onBack) {
                     Icon(.chevronLeft, size: 24)
-                        .foregroundStyle(ThroColor.colorTextPrimary)
+                        .foregroundStyle(primaryInk)
                         .frame(width: ThroSpacing.touchTargetMinimum, height: ThroSpacing.touchTargetMinimum)
                         .contentShape(Rectangle())
                 }
@@ -244,7 +253,7 @@ public struct MatchHeader: View {
             if let onEnd {
                 Button(action: onEnd) {
                     Icon(.x, size: 20)
-                        .foregroundStyle(ThroColor.colorTextSecondary)
+                        .foregroundStyle(secondaryInk)
                         .frame(width: ThroSpacing.touchTargetMinimum, height: ThroSpacing.touchTargetMinimum)
                         .contentShape(Rectangle())
                 }
@@ -258,16 +267,25 @@ public struct MatchHeader: View {
         }
         .padding(.vertical, ThroSpacing.spacing3)
         .padding(.horizontal, ThroSpacing.spaceScreenGutter)
-        .background(ThroColor.colorBackgroundPrimary)
-        .overlay(alignment: .bottom) { Rectangle().fill(ThroColor.colorBorderDefault).frame(height: 1) }
+        .background(onBoard ? Color.clear : ThroColor.colorBackgroundPrimary)
+        .overlay(alignment: .bottom) {
+            if onBoard {
+                // 5.30:1 against the key faces below it, where the hairline it replaces is 1.26.
+                ChalkRule()
+                    .fill(ThroColor.colorMarkOnBoard)
+                    .frame(height: ThroSpacing.spaceChalkRuleWeight)
+            } else {
+                Rectangle().fill(ThroColor.colorBorderDefault).frame(height: 1)
+            }
+        }
     }
 
     private func cell(_ label: String, _ value: String, sport: Bool) -> some View {
         VStack(alignment: .leading, spacing: 2) {
-            Eyebrow(label)
+            Eyebrow(label, color: secondaryInk)
             Text(value)
                 .thro(sport ? ThroTypography.label.family(.sport).weight(.bold) : ThroTypography.label.weight(.bold))
-                .foregroundStyle(ThroColor.colorTextPrimary)
+                .foregroundStyle(primaryInk)
                 .lineLimit(1)
                 .truncationMode(.tail)
         }
@@ -402,7 +420,10 @@ public struct ScoreKeypad: View {
         }
         .padding(.vertical, ThroSpacing.spacing4)
         .padding(.horizontal, ThroSpacing.spaceScreenGutter)
-        .background(ThroColor.colorBoardField)
+        // No ground of its own. The keypad sits inside `ThroBoard`, and a flat panel over a
+        // gradient draws a rectangle edge where the board has none. The keys are `colorBoardField`
+        // against a board that darkens towards its bottom, so they read as slightly lighter boxes
+        // on a darkening slate — which is what a keypad chalked on a board actually looks like.
         .disabled(disabled)
         // **What has been typed, said out loud.** The Enter key is the readout — it reads
         // "Enter 141" — and a sighted player sees it change under their thumb. A VoiceOver player's
