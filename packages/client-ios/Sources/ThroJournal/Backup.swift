@@ -78,15 +78,20 @@ public enum BackupPolicy {
     /// same commit, one CI run green and the next red, and in one red run three reads of a single
     /// path within a millisecond disagreeing with each other.
     ///
-    /// Whatever the last of those was — a cache below Foundation, or Time Machine's own path-based
-    /// exclusions being consulted for a folder under `/var/folders` on the macOS test host — it is
-    /// not a question worth another round, because none of it exists underneath the attribute
-    /// itself. `getxattr` reads the file. There is no cache on a `URL`, none in Foundation and no
-    /// daemon between this and the answer, and on iOS this is the same mechanism the backup uses.
+    /// **The cause, once it was finally measured, is a skipped write.** A `URL` caches the resource
+    /// values it has seen, and that cache does not notice the file changing underneath it. Ask such
+    /// a URL to set the value it already believes is in force and Foundation skips the write and
+    /// reports success — so a folder whose attribute was removed by something else stays removed
+    /// while the caller is told it was set. Every version of this defect was one write silently not
+    /// happening, and the intermittency was simply whether the cache happened to match.
+    ///
+    /// `getxattr` reads the file and `removexattr` writes it. There is no cache on a `URL`, none in
+    /// Foundation and no daemon between this and the answer, and on iOS this is the same mechanism
+    /// the backup itself uses.
     ///
     /// The cost is stated rather than hidden: on **macOS** this no longer reflects Time Machine's
     /// path-based exclusions. That is the right trade for a type that exists to describe the iOS
-    /// device backup of an iOS-only app, and it is why the macOS answer is now deterministic.
+    /// device backup of an iOS-only app.
     public static func read(_ url: URL) -> State {
         guard FileManager.default.fileExists(atPath: url.path) else {
             return .unknown("there is nothing at \(url.path) to have a flag")

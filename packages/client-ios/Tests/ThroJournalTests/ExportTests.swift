@@ -34,6 +34,24 @@ final class ExportTests: XCTestCase {
     /// reads that attribute and consults no cache on a URL, in Foundation, or in any daemon. It is
     /// here only to be quoted in failure messages: three rounds were spent on this defect arguing
     /// about what the file system said, and none of them asked the file system.
+    /// Sets or clears the exclusion **on the file**, for use as a fixture.
+    ///
+    /// **Not `URL.setResourceValues`, and that is the whole finding of this file.** A `URL` caches
+    /// the resource values it has seen and the cache does not notice the file changing underneath
+    /// it, so asking such a URL to set the value it already believes is there skips the write and
+    /// reports success. Round 19 of the loop below caught it: `excluded` set through a URL written
+    /// through eighteen times, the attribute absent afterwards, nothing raised. A test whose
+    /// fixture is unreliable cannot say anything about the code under it.
+    @discardableResult
+    private func setExclusion(_ on: Bool, at path: String) -> Bool {
+        let key = "com.apple.metadata:com_apple_backup_excludeItem"
+        if on {
+            var one: UInt8 = 1
+            return setxattr(path, key, &one, 1, 0, 0) == 0
+        }
+        return removexattr(path, key, 0) == 0 || errno == ENOATTR
+    }
+
     private func exclusionOnDisk(_ path: String) -> String {
         let key = "com.apple.metadata:com_apple_backup_excludeItem"
         let size = getxattr(path, key, nil, 0, 0, 0)
@@ -241,17 +259,21 @@ final class ExportTests: XCTestCase {
         XCTAssertEqual(BackupPolicy.read(url), .included,
                        "the URL remembers being excluded; the file system does not")
 
-        // And the same through the policy's own writer, which is where it actually went wrong —
-        // three times.
+        // And the same through the policy's own writer.
         //
-        // **Three assertions rather than one, each naming a different layer.** There is no Swift on
-        // the machine this is written on, so CI is the only way to run it and a failure that says
+        // **The fixture changes mechanism here, deliberately.** `include` clears the flag with
+        // `removexattr`, which does not — and cannot — update the cache on `url`; asking `url` to
+        // set a value its cache already holds is precisely the skipped write this whole file is
+        // about. The two Foundation writes above are kept because they *are* reliable and they
+        // cross-check Foundation's writer against this type's reader; from here the fixture goes on
+        // the file, so what is being tested is `BackupPolicy` and not `URL`'s memory.
+        //
+        // **Four assertions rather than one, each naming a different layer.** There is no Swift on
+        // the machine this is written on, so CI is the only way to run it, and a failure that says
         // only `("excluded") is not equal to ("included")` costs a whole round to learn nothing
-        // from. This failed exactly that way once already. Now the three possible stories are told
-        // apart in one run: the write never landed, the write landed and `include`'s own read
-        // missed it, or two reads of the same path disagree with each other.
-        try url.setResourceValues(exclude)
-        XCTAssertEqual(BackupPolicy.read(url), .excluded, "the fixture for this half did not take")
+        // from — this failed exactly that way twice before the messages were worth reading.
+        XCTAssertTrue(setExclusion(true, at: dir.path), "the fixture for this half did not take")
+        XCTAssertEqual(BackupPolicy.read(url), .excluded)
 
         let attempt = BackupPolicy.including(url)
         let reported = attempt.state
@@ -274,46 +296,34 @@ final class ExportTests: XCTestCase {
                        "two reads of the same path disagree: \(throughTheCaller) here, "
                      + "\(independent) a line earlier — \(paths)")
 
-        // **And twenty more times, because once was a coin toss.**
+        // **Twenty rounds, because one pass was a coin toss** — the same commit went green on one
+        // CI run and red on the next, and a test that fails half the time can neither confirm a fix
+        // nor be trusted to catch a regression.
         //
-        // The single pass above fails on roughly half of CI's runs — the same commit has produced a
-        // red run and a green one — which makes it a bad test whatever the defect turns out to be:
-        // it cannot confirm a fix, and it cannot be trusted to catch a regression. Twenty rounds of
-        // the same write-and-read turn "sometimes" into "almost always", so a red build is evidence
-        // and a green one is worth something.
-        //
-        // One assertion at the end rather than sixty inside the loop: the count says how often, the
-        // first three say what, and each carries the extended attribute as the file system has it,
-        // which is the one statement here that no cache can colour.
-        // **One URL, written through every round, exactly as the single pass does.** The first
-        // version of this loop took a fresh copy of `dir` each time and passed twenty for twenty —
-        // which said less than it looked like it said, because a URL with nothing cached on it is
-        // not the shape that fails. The failing shape is a URL that has been written through
-        // repeatedly, so that is the shape this walks.
-        //
-        // The paths are carried too. `include` and `read` both rebuild from `.path`, so if those
-        // two strings ever differ the two functions are looking at different files and everything
-        // above is explained; if they are identical, that explanation is dead.
-        var accumulating = dir!
+        // Round 19 of an earlier version is what finally named the cause, and it was not in
+        // `BackupPolicy`: `set→included, on disk: no such attribute`. The **fixture** had failed,
+        // because it set the flag through a URL that had been written through eighteen times. See
+        // `setExclusion`. Every message below still carries what the file system says, which is the
+        // only reason that round said anything useful.
         var disagreements: [String] = []
         for round in 1...20 {
-            try accumulating.setResourceValues(exclude)
+            // The fixture goes on the file, not through a URL. See `setExclusion`: writing it
+            // through a URL is the thing that turned out to be unreliable, and a fixture that
+            // sometimes does not take is a test that sometimes tests nothing.
+            XCTAssertTrue(setExclusion(true, at: dir.path), "round \(round): the fixture failed")
             let fixture = BackupPolicy.read(URL(fileURLWithPath: dir.path))
 
-            let attempt = BackupPolicy.including(accumulating)
+            let attempt = BackupPolicy.including(dir)
             let later = BackupPolicy.read(URL(fileURLWithPath: dir.path))
             guard fixture == .excluded, attempt.wrote == nil,
                   attempt.state == .included, later == .included else {
                 // Both halves worked out before the message. An interpolation is not the place for
                 // a concatenation broken across lines — Swift's lexer cannot read one, and there is
                 // no compiler on the machine this is written on to say so.
-                let paths = accumulating.path == dir.path
-                    ? "paths match"
-                    : "paths DIFFER: \(accumulating.path) vs \(dir.path)"
                 let threw = attempt.wrote.map { "\($0)" } ?? "no"
                 disagreements.append(
                     "round \(round): set→\(fixture), include→\(attempt.state), "
-                  + "after→\(later), threw→\(threw), \(paths), "
+                  + "after→\(later), threw→\(threw), "
                   + "on disk: \(exclusionOnDisk(dir.path))")
                 continue
             }
