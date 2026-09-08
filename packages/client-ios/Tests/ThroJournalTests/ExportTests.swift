@@ -272,6 +272,38 @@ final class ExportTests: XCTestCase {
         XCTAssertEqual(throughTheCaller, .included,
                        "two reads of the same path disagree: \(throughTheCaller) here, "
                      + "\(independent) a line earlier — \(paths)")
+
+        // **And twenty more times, because once was a coin toss.**
+        //
+        // The single pass above fails on roughly half of CI's runs — the same commit has produced a
+        // red run and a green one — which makes it a bad test whatever the defect turns out to be:
+        // it cannot confirm a fix, and it cannot be trusted to catch a regression. Twenty rounds of
+        // the same write-and-read turn "sometimes" into "almost always", so a red build is evidence
+        // and a green one is worth something.
+        //
+        // One assertion at the end rather than sixty inside the loop: the count says how often, the
+        // first three say what, and each carries the extended attribute as the file system has it,
+        // which is the one statement here that no cache can colour.
+        var disagreements: [String] = []
+        for round in 1...20 {
+            var again = dir!
+            try again.setResourceValues(exclude)
+            let fixture = BackupPolicy.read(URL(fileURLWithPath: dir.path))
+
+            let attempt = BackupPolicy.including(dir)
+            let later = BackupPolicy.read(URL(fileURLWithPath: dir.path))
+            guard fixture == .excluded, attempt.wrote == nil,
+                  attempt.state == .included, later == .included else {
+                disagreements.append(
+                    "round \(round): set→\(fixture), include→\(attempt.state), "
+                  + "after→\(later), threw→\(attempt.wrote.map { "\($0)" } ?? "no"), "
+                  + "on disk: \(exclusionOnDisk(dir.path))")
+                continue
+            }
+        }
+        XCTAssertEqual(disagreements, [],
+                       "the flag does not settle — \(disagreements.count) of 20 rounds disagreed. "
+                     + "First: \(disagreements.prefix(3).joined(separator: " ⁄ "))")
     }
 
     // MARK: reading one back
