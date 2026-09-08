@@ -19,7 +19,10 @@ public enum ThroFont {
     public static let uiFamily = "Archivo"
     public static let sportFamily = "IBM Plex Sans Condensed"
 
-    public enum Family: Equatable, Sendable { case ui, sport }
+    /// `CaseIterable` so a test can walk every family and hold that each has a measured cap ratio;
+    /// `Hashable` because a family is a legitimate key. Adding a family is then a compile error at
+    /// every exhaustive switch that has to know about it, which is the point.
+    public enum Family: Hashable, Sendable, CaseIterable { case ui, sport }
 
     /// The embedded faces by PostScript name, one per weight the type roles use, so a weight resolves
     /// to the face that carries it rather than to whatever the system matches by family. The names are
@@ -171,6 +174,20 @@ public struct ThroTypeRole: Equatable, Sendable {
         ThroTypeRole(family: family, size: size, lineHeight: lineHeight, weight: w, trackingEm: trackingEm,
                      relativeTo: relativeTo, uppercase: uppercase, tabularNumerals: tabularNumerals)
     }
+
+    /// The same role at another size, with the line height carried across in proportion.
+    ///
+    /// This exists for the density ladder: a screen with less room steps the board's hero DOWN the
+    /// approved scale rather than shrinking it with `minimumScaleFactor`, which is what a figure
+    /// does when nobody chose a size for it. Every size passed here is expected to be on the
+    /// approved scale, and `ThroTypography.ladder` is the list of the ones that are.
+    public func sized(_ points: CGFloat) -> ThroTypeRole {
+        guard size > 0 else { return self }
+        return ThroTypeRole(family: family, size: points,
+                            lineHeight: (lineHeight / size * points).rounded(),
+                            weight: weight, trackingEm: trackingEm, relativeTo: relativeTo,
+                            uppercase: uppercase, tabularNumerals: tabularNumerals)
+    }
 }
 
 /// The roles, sized from the token layer. Named ThroTypography because `ThroType` is the generated
@@ -217,10 +234,60 @@ public enum ThroTypography {
         family: .ui, size: ThroType.typographyEyebrowSize, lineHeight: ThroSpacing.typographyEyebrowLine,
         weight: .semibold, trackingEm: 0.09, relativeTo: .caption, uppercase: true)
 
+    /// The figure on a board (SLATE B.5). `scoreHero`'s size and weight with **tracking forced to
+    /// zero**, because a fixed-cell register and negative tracking are incompatible: `scoreHero`
+    /// carries −0.03 em, which at 96 pt is −2.88 pt per glyph and tears the grid apart.
+    ///
+    /// SLATE specified 88 pt for this. **88 is not on the approved type scale**, so it would have
+    /// been an off-scale bypass of the kind the design's own gate rejects in every platform source
+    /// — and at 0.540 em per cell, two three-digit registers at 88 pt come to 285 pt, which does not
+    /// fit the 320 pt iPhone SE either. The size lives on the scale and the density ladder chooses
+    /// which rung, which is the honest version of the same intent.
+    public static let boardHero = ThroTypeRole(
+        family: .sport, size: ThroType.typographyScoreHeroSize,
+        lineHeight: ThroSpacing.typographyScoreHeroLine,
+        weight: .bold, trackingEm: 0, relativeTo: .largeTitle, tabularNumerals: true)
+
+    /// The rungs the board's hero may stand on, largest first. Every one is on the approved scale,
+    /// which is what stops a density ladder from becoming a licence to invent a size.
+    public static let ladder: [CGFloat] = [96, 72, 56, 40]
+
+    /// Cap height as a fraction of point size, measured per family off the embedded faces rather
+    /// than assumed: IBM Plex Sans Condensed's cap is 0.698 em and Archivo's is 0.686 em.
+    ///
+    /// A `switch` and not a dictionary, so there is **no fallback**. A dictionary lookup with a
+    /// default is how a new family silently gets somebody else's cap height and every figure drawn
+    /// in it sits a point or two off its own baseline, on a screen nobody re-measured.
+    public static func capRatio(_ family: ThroFont.Family) -> CGFloat {
+        switch family {
+        case .ui: return 0.686
+        case .sport: return 0.698
+        }
+    }
+
+    /// The height a figure actually needs: its capitals, and two points so the chalk edge is not
+    /// shaved. **A line box is not a cap box.** A 96 pt line box reserves room for descenders and
+    /// leading that a row of digits never uses — at `boardHero` this returns about 55.8 points of
+    /// screen to whatever sits under the figure, which is what funds the ledger.
+    public static func capBox(_ role: ThroTypeRole) -> CGFloat {
+        let scaled = ThroFont.scaled(role.size, relativeTo: role.relativeTo)
+        return (capRatio(role.family) * scaled).rounded() + 2
+    }
+
+    /// How far to lift a cell so its capitals sit on the box's baseline: half the leftover line box,
+    /// less the descender the digits do not use.
+    public static func capTrim(_ role: ThroTypeRole) -> CGFloat {
+        let scaled = ThroFont.scaled(role.size, relativeTo: role.relativeTo)
+        let natural = max(scaled, ThroFont.scaled(role.lineHeight, relativeTo: role.relativeTo))
+        let cap = capRatio(role.family) * scaled
+        let descender = 0.22 * scaled
+        return ((natural - cap) / 2 - descender).rounded()
+    }
+
     /// Every role, for the test that holds each size to the approved scale.
     public static let all: [ThroTypeRole] = [
         scoreHero, sportHero, ratingHero, display, heading1, heading2, heading3,
-        bodyLarge, body, label, labelStrong, metadata, eyebrow,
+        bodyLarge, body, label, labelStrong, metadata, eyebrow, boardHero,
     ]
 }
 

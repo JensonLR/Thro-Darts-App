@@ -1004,3 +1004,72 @@ the component. It now holds a table, so `ChalkKeyStyle` is accepted on the same 
 proof. Perturbed three ways: strip its `contentShape` and it fails, rename the struct and it fails,
 and take the name out of `TARGET` while keeping the proof and it fails *that* way too — a proof that
 guards nothing is worth reporting.
+
+## SLATE, step two: the number the product exists to move
+
+`RemainingScore` drew a player's remaining score as one `Text` with `.minimumScaleFactor(0.5)` on
+it. Three consequences, every one visible on a phone and none caught by anything:
+
+- **It migrated sideways as it came down.** `501` and `41` are different widths in any face, so a
+  centred figure walked left and right across the screen through a leg. The number a player glances
+  at between darts was never twice in the same place.
+- **It changed size as it came down.** `minimumScaleFactor` is what a figure does when nobody chose
+  a size for it. Three digits shrank to fit and two did not, so the hero was *smaller* at 501 than
+  at 41 — backwards from what a player needs.
+- **Every digit re-rendered on every change.** With one `Text` there is no such thing as "the digit
+  that changed", so nothing could land, and the app's most important moment was a swap.
+
+`ThroFigure` is a fixed-cell register: `cells` cells of `0.540 × resolvedSize`, right-aligned, one
+`Text` per cell, and the empty leading cells **empty** — never a leading zero, because `041` states
+a digit the player does not have, and never a ghost, because a ghost is an opacity.
+
+### The bust state was attributing the restored score to nobody
+
+`RemainingScore` in `.bust` discarded the caller's label and drew `"Bust — score restored"` with no
+player in it, while the pill below it named the other player. `spokenLabel` kept the name the whole
+time — `"Ann requires. Bust — score restored"` — so **what a sighted player saw and what a VoiceOver
+player heard did not agree**, on the one event in a leg where a player needs to know whose darts did
+not count. Both come from the state now, and a test walks every state holding that the drawn eyebrow
+contains the caller's label.
+
+### Colour stopped carrying state
+
+`RemainingScore` put the bust on `colorStatusError` and the finish on `colorTextBrand`: the two most
+important moments in a leg on the two colours a red-green deficiency cannot separate. And
+`colorStatusError` is `#8C1D18`, which measures **1.52:1** on a board and is unusable there. The
+state is a shape under the figure now — `ThroBasis`, six forms, each with its own spoken string —
+and the ink does not move. *No text changes contrast because of a state.*
+
+The bust maps to `.struck`, which is the honest name: the journal did not colour that score red, it
+superseded it.
+
+### Three corrections to the specification
+
+- **`boardHero` is not 88 pt.** 88 is not on the approved type scale, so it would have been exactly
+  the off-scale bypass the design's own gate rejects in every platform source. And the arithmetic
+  does not work either: at 0.540 em per cell, two three-digit registers at 88 pt need 285 pt, and an
+  iPhone SE has 264 pt between its gutters. `boardHero` sits on the scale and a **density ladder**
+  `[96, 72, 56, 40]` chooses the rung — every rung on the approved scale, held by a test, so a
+  ladder cannot become a licence to invent a size.
+- **`capRatio` is a function, not a dictionary.** SLATE gave it as `[Family: CGFloat]`, which needs a
+  fallback at every lookup, and a fallback is how a new family silently takes somebody else's cap
+  height and every figure drawn in it sits a point off its own baseline on a screen nobody
+  re-measured. It is an exhaustive `switch`; `ThroFont.Family` gained `CaseIterable` so a test walks
+  every one.
+- **`ThroTypeRole.sized(_:)`, not `.size(_:)`.** A stored property and a method with one name is
+  legal Swift and a trap for the next reader.
+
+### And the inversion
+
+When a figure cannot be computed, `StatGrid` drew the em dash at full strength and the reason in the
+quiet grey — saying that the missing figure was the point and the explanation was a footnote. It is
+the other way round: **when there is no number, the reason is the content.** The two colours swap,
+both are on the contrast matrix, and a test holds that no confidence draws its figure and its reason
+in the same ink, because then neither leads.
+
+`Tag` gains `shape: .basis` — the word between two end-stop ticks, no fill, no capsule. `Range`,
+`Not rated`, `Cannot be read` and `No result` are qualifications, and a filled pill makes a
+qualification look like another category to skim past. Every existing `Tag("…")` literal is
+untouched, so every test written against them stays green.
+
+22 tests. All 17 `tools/check_*.py` green.

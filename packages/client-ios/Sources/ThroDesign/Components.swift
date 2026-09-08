@@ -187,18 +187,33 @@ public struct ThroButtonFace: View {
 public struct Tag: View {
     public enum Tone: Sendable { case neutral, brand, success, warning, error, info, live, achievement }
 
+    /// What the tag is drawn as (SLATE B.6).
+    ///
+    /// A capsule says *this is a category*: `Bo5`, `501`, `Double out`, `In progress`, `Retired`.
+    /// Those are facts about a match and a filled pill is the right shape for one.
+    ///
+    /// `.basis` says *this figure is qualified* — `Range`, `Not rated`, `Cannot be read`,
+    /// `No result` — and a filled pill is exactly the wrong shape for that, because it makes the
+    /// qualification look like another category the reader can skim past. It is the word between
+    /// two end-stop ticks: the same mark `BasisRule.bounded` draws under a figure big enough to
+    /// carry one, so a reader learns the vocabulary once and reads it at every size.
+    public enum Shape: Sendable, CaseIterable { case capsule, basis }
+
     private let text: String
     private let tone: Tone
     private let icon: ThroIcon?
     private let outlined: Bool
     private let uppercase: Bool
+    private let shape: Shape
 
-    public init(_ text: String, tone: Tone = .neutral, icon: ThroIcon? = nil, outlined: Bool = false, uppercase: Bool = true) {
+    public init(_ text: String, tone: Tone = .neutral, icon: ThroIcon? = nil, outlined: Bool = false,
+                uppercase: Bool = true, shape: Shape = .capsule) {
         self.text = text
         self.tone = tone
         self.icon = icon
         self.outlined = outlined
         self.uppercase = uppercase
+        self.shape = shape
     }
 
     private var colors: (background: Color, foreground: Color) {
@@ -216,18 +231,39 @@ public struct Tag: View {
 
     public var body: some View {
         let c = colors
-        HStack(spacing: ThroSpacing.spacing1) {
+        let label = HStack(spacing: ThroSpacing.spacing1) {
             if let icon { Icon(icon, size: 13) }
             Text(text)
                 .thro(ThroTypography.labelStrong.weight(.semibold).tracking(em: uppercase ? 0.06 : 0).uppercase(uppercase))
                 .lineLimit(1)
         }
-        .padding(.vertical, 3)
-        .padding(.horizontal, 10)
-        .foregroundStyle(c.foreground)
-        .background(outlined ? Color.clear : c.background)
-        .overlay(Capsule().strokeBorder(outlined ? c.foreground : Color.clear, lineWidth: ThroSpacing.borderWidthHairline))
-        .clipShape(Capsule())
+        return Group {
+            switch shape {
+            case .capsule:
+                label
+                    .padding(.vertical, 3)
+                    .padding(.horizontal, 10)
+                    .foregroundStyle(c.foreground)
+                    .background(outlined ? Color.clear : c.background)
+                    .overlay(Capsule().strokeBorder(outlined ? c.foreground : Color.clear,
+                                                    lineWidth: ThroSpacing.borderWidthHairline))
+                    .clipShape(Capsule())
+            case .basis:
+                // No fill and no capsule. Two 2 pt end-stops and the word between them: the
+                // qualification reads as a mark on the figure rather than as a badge beside it.
+                HStack(spacing: ThroSpacing.spacing1) {
+                    Tag.endStop(c.foreground)
+                    label
+                    Tag.endStop(c.foreground)
+                }
+                .foregroundStyle(c.foreground)
+            }
+        }
+    }
+
+    /// One inward-turned tick, 2 pt wide. The same end-stop `BasisRule.bounded` draws.
+    static func endStop(_ ink: Color) -> some View {
+        Rectangle().fill(ink).frame(width: 2, height: 10)
     }
 }
 

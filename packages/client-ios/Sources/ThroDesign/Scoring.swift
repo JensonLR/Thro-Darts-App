@@ -25,29 +25,51 @@ public struct RemainingScore: View {
         self.darts = darts
     }
 
-    private var color: Color {
+    /// **No text changes contrast because of a state** (SLATE B.5). The board's light may change;
+    /// ink does not. Colour used to carry all three states — error red for a bust, brand green for a
+    /// finish — which put the two most important moments in a leg on the two colours a player with
+    /// a red-green deficiency cannot separate, and put the bust at
+    /// `colorStatusError` #8C1D18, which measures **1.52:1** on a board and is unusable there.
+    /// The state is the shape under the figure now, and the shape is `basis`.
+    private var color: Color { ThroColor.colorTextOnBoard }
+
+    /// The state as a basis. This is the mapping SLATE fixes: a bust is not a red number, it is a
+    /// number **struck from the record** — which is exactly what the journal did to it.
+    static func basis(for state: State) -> ThroBasis {
         switch state {
-        case .bust: return ThroColor.colorStatusError
-        case .checkout: return ThroColor.colorTextBrand
-        case .normal: return ThroColor.colorTextPrimary
+        case .normal: return .exact
+        case .checkout: return .calledOut
+        case .bust: return .struck
+        }
+    }
+
+    /// The eyebrow above the figure.
+    ///
+    /// **The bust state used to throw the caller's label away.** It drew "Bust — score restored"
+    /// with no player in it, so the screen attributed the restored score to nobody while the pill
+    /// below it named the other player — and `spokenLabel` kept the name all along, so what a
+    /// sighted player saw and what a VoiceOver player heard did not agree. They agree now, and the
+    /// same function produces both.
+    static func eyebrow(label: String, state: State) -> String {
+        switch state {
+        case .bust: return "\(label) — bust, score restored"
+        case .checkout, .normal: return label
         }
     }
 
     public var body: some View {
         VStack(spacing: ThroSpacing.spacing1) {
-            Eyebrow(state == .bust ? "Bust — score restored" : label,
-                    color: state == .bust ? ThroColor.colorStatusError : ThroColor.colorTextSecondary)
-            Text("\(value)")
-                .thro(ThroTypography.scoreHero)
-                .foregroundStyle(color)
-                // On a phone too short for the 96-point face the numeral shrinks rather than clips
-                // or scrolls (DESIGN_UNSPECIFIED #1 gives no clamp; this is the floor, not a design).
-                .lineLimit(1)
-                .minimumScaleFactor(0.5)
+            Eyebrow(RemainingScore.eyebrow(label: label, state: state),
+                    color: ThroColor.colorTextOnBoardSecondary)
+            // A fixed three-cell register. 501 and 41 now occupy the same width and the same
+            // place, and the digit that changed is the only one that moves.
+            ThroFigure("\(value)", role: ThroTypography.boardHero, cells: 3,
+                       basis: RemainingScore.basis(for: state), ink: color)
+                .accessibilityHidden(true)
             if let darts {
                 Text(darts)
                     .thro(ThroTypography.label.family(.sport))
-                    .foregroundStyle(ThroColor.colorTextSecondary)
+                    .foregroundStyle(ThroColor.colorTextOnBoardSecondary)
             }
         }
         .frame(maxWidth: .infinity)
@@ -515,12 +537,19 @@ public struct StatGrid: View {
                             .minimumScaleFactor(0.6)   // a range is twice as long as a point value
                         // Only a range is marked. The confident case is the common one and labelling
                         // it would make every figure look qualified; the dash marks itself.
-                        if s.confidence == .range { Tag("Range", tone: .neutral) }
+                        // `.basis` rather than a capsule: a pill makes the qualification look like
+                        // another category to skim past, and this is the opposite of a category.
+                        if s.confidence == .range { Tag("Range", tone: .neutral, shape: .basis) }
                     }
                     if let note = s.note {
+                        // **The inversion.** When there is no number, the reason IS the content.
+                        // An em dash at full strength over a reason in the quiet grey said the
+                        // opposite: that the missing figure was the point and the explanation was
+                        // a footnote. Never a `lineLimit` here — a truncated reason is a figure
+                        // whose qualification was cut off mid-sentence.
                         Text(note)
-                            .thro(ThroTypography.metadata)
-                            .foregroundStyle(ThroColor.colorTextSecondary)
+                            .thro(s.confidence == .unavailable ? ThroTypography.body : ThroTypography.metadata)
+                            .foregroundStyle(StatGrid.noteColour(s.confidence))
                             .fixedSize(horizontal: false, vertical: true)
                     }
                 }
@@ -540,6 +569,23 @@ public struct StatGrid: View {
     /// on the contrast matrix, so neither can fall below the floor.
     static func valueColour(_ c: StatItem.Confidence) -> Color {
         c == .unavailable ? ThroColor.colorTextSecondary : ThroColor.colorTextPrimary
+    }
+
+    /// The reason under the figure. Quiet beside a number, **loud when there is no number** — the
+    /// two swap, so the cell's most prominent thing is always the thing that carries the meaning.
+    /// Both are on the contrast matrix, so neither can fall below its floor.
+    static func noteColour(_ c: StatItem.Confidence) -> Color {
+        c == .unavailable ? ThroColor.colorTextPrimary : ThroColor.colorTextSecondary
+    }
+
+    /// The basis a confidence maps to, so a caller drawing the same figure on a board draws the
+    /// same shape a caller drawing it on paper does.
+    static func basis(for c: StatItem.Confidence) -> ThroBasis {
+        switch c {
+        case .exact: return .exact
+        case .range: return .bounded
+        case .unavailable: return .reference
+        }
     }
 
     /// What a screen reader says the figure **is**. The basis is spoken because it is the part a
