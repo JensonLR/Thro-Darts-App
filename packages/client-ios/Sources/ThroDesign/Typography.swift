@@ -266,9 +266,11 @@ public enum ThroTypography {
     }
 
     /// The height a figure actually needs: its capitals, and two points so the chalk edge is not
-    /// shaved. **A line box is not a cap box.** A 96 pt line box reserves room for descenders and
-    /// leading that a row of digits never uses — at `boardHero` this returns about 55.8 points of
-    /// screen to whatever sits under the figure, which is what funds the ledger.
+    /// shaved. **A line box is not a cap box.** The box a `Text` occupies reserves ascent, descent
+    /// and leading that a row of digits never reaches into — at `boardHero` the cap box is 69
+    /// points against a 96 point em box, so **27 points per figure** come back to whatever sits
+    /// under it, which is what funds the ledger. (SLATE put that saving at 55.8; it is not a number
+    /// these ratios produce, and 27 is what they do produce.)
     public static func capBox(_ role: ThroTypeRole) -> CGFloat {
         let scaled = ThroFont.scaled(role.size, relativeTo: role.relativeTo)
         return (capRatio(role.family) * scaled).rounded() + 2

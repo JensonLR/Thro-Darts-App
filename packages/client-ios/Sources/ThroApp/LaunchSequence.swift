@@ -1017,13 +1017,11 @@ struct LaunchFrame: View {
     }
 }
 
-/// A small deterministic generator, so every speck is where it was on the last frame.
-struct Grain {
-    private var state: UInt32
-    init(seed: UInt32) { state = seed }
-    /// Uniform in 0..<1.
-    mutating func next() -> CGFloat {
-        state = state &* 1_664_525 &+ 1_013_904_223
-        return CGFloat(state >> 8) / CGFloat(1 << 24)
-    }
-}
+// `Grain` moved to `ThroDesign/Board.swift` (SLATE B.0/B.2), made `public` on the way — an access
+// change, which is why it did not travel with `Easing` and `MarkGeometry` in the move that claimed
+// to be one. The board's chalk field needs the same generator so that the dust in the opening and
+// the dust on the board are the same grain rather than two noises that look alike.
+//
+// `Speck` did NOT move. It is `LaunchFrame`'s own scatter, distributed through the wall's
+// perspective and tier-batched for the opening's foreground; `ChalkField` distributes over a flat
+// rectangle for a background. Moving it would have shared a name, not a thing.

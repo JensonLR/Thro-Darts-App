@@ -1132,3 +1132,38 @@ the context is optional, and the compiler resolves it without saying which one i
 
 13 tests. The device-family and orientation switches stay as they are until the board and the
 scoring screen are built on this; flipping them is the last commit of that work, not the first.
+
+## The board, and a claim of mine that CI knocked down
+
+`ThroBoard` is one `RadialGradient` between three named tokens — `colorBoardLit` at the centre,
+`colorBoardField` at 0.55, `colorBoardSunken` at the edge — and `ChalkField` is 180 specks quantised
+into at most five `Path` fills in one static `Canvas`. There is no veil layer and no alpha over a
+solid, because **the alpha is what the board law exists to keep out**: nothing drawn on a board may
+be lighter than `colorBoardLit` or darker than `colorBoardSunken`, and that is what makes the
+contrast matrix a description of what renders rather than of an assumed midpoint.
+
+The specks are drawn in `colorBoardLit` and never white. A speck brighter than the lamp's own centre
+would be a pixel the matrix does not cover, sitting under text the matrix says is legible.
+
+`Grain` moved out of the opening and became `public` — an access change, which is exactly why it did
+not travel with `Easing` and `MarkGeometry` in the move that claimed all four were already public.
+`Speck` did **not** move: it is `LaunchFrame`'s own scatter, distributed through the wall's
+perspective and tier-batched for the opening's foreground, while `ChalkField` distributes over a flat
+rectangle for a background. Moving it would have shared a name, not a thing.
+
+### CI found one test failure, and it was my arithmetic
+
+`testACapBoxIsShorterThanTheLineBoxItReplaces` demanded that the cap box return more than 20 points
+against the role's line height, and it returns **19**. The comparison was the wrong one:
+`boardHero`'s token line height is 88, which is a line-spacing instruction, not the height a figure
+takes up. Against the em box a `Text` actually occupies — 96 — the cap box of 69 returns **27 points
+per figure**, and that is what funds the ledger.
+
+Which also settles SLATE's figure: it put the saving at **55.8 points**. That is not a number these
+ratios produce. It is 27. The code comment and the test both say 27 now, and the test says why the
+first version asked the wrong question.
+
+Everything else compiled and passed on the first attempt: 465 tests, one failure, and the failure
+was a claim rather than a defect.
+
+11 tests.

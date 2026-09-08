@@ -81,16 +81,22 @@ final class FigureTests: XCTestCase {
 
     // MARK: - The cap box
 
-    func testACapBoxIsShorterThanTheLineBoxItReplaces() {
-        // What funds the ledger. A line box reserves descender and leading a row of digits never
-        // uses; the cap box is the capitals plus two points so the chalk edge is not shaved.
+    func testACapBoxIsShorterThanTheBoxAFigureWouldOtherwiseTakeUp() {
+        // What funds the ledger. A row of digits uses its capitals and nothing else; the box a
+        // `Text` occupies is at least its em box, and reserves ascent, descent and leading that no
+        // digit reaches into.
+        //
+        // The first version of this test compared the cap box against the role's TOKEN line height
+        // (88 for `boardHero`) and demanded more than 20 points back. It gets 19, and CI said so.
+        // The comparison was the wrong one: 88 is a line-spacing instruction, not the height a
+        // figure takes. Against the em box the saving is 27 points per figure — which is also the
+        // correction to SLATE's claim of 55.8, a number that does not come out of these ratios.
         let role = ThroTypography.boardHero
         let box = ThroTypography.capBox(role)
-        let line = ThroFont.scaled(role.lineHeight, relativeTo: role.relativeTo)
-        XCTAssertLessThan(box, line, "the cap box saves nothing")
-        XCTAssertGreaterThan(line - box, 20, "at boardHero this should return real screen, not a point or two")
-        XCTAssertGreaterThan(box, 0.6 * ThroFont.scaled(role.size, relativeTo: role.relativeTo),
-                             "and it must still contain the capitals")
+        let em = ThroFont.scaled(role.size, relativeTo: role.relativeTo)
+        XCTAssertLessThan(box, em, "the cap box saves nothing")
+        XCTAssertGreaterThan(em - box, 20, "at boardHero this should return real screen, not a point or two")
+        XCTAssertGreaterThan(box, 0.6 * em, "and it must still contain the capitals")
     }
 
     func testEveryFamilyHasItsOwnMeasuredCapRatioAndNoneOfThemFallsBack() {
