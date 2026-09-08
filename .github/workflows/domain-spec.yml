@@ -314,3 +314,12 @@ jobs:
       # them, and anything NEW fails — so a re-export of the design system cannot regress silently.
       - name: Design components have no new findings
         run: python3 docs/design/audit_components.py --check
+
+      # Two mechanisms rest on "color* flips and thro* does not" and neither of them checked it.
+      # The pigment rule in check_tokens_exist.py only means something if the semantic token an
+      # author is sent to instead actually differs between appearances; and the contrast gate would
+      # go on printing two rows for a token that had stopped flipping, checking one fact twice with
+      # no change in its count. 50 of 50 flip today, with no exemption — which is why this is
+      # written now rather than after something breaks it.
+      - name: Semantic tokens flip
+        run: python3 tools/check_semantic_tokens_flip.py
