@@ -134,6 +134,10 @@ public enum ThroReadiness {
     /// already holds it.
     public struct Facts: Equatable, Sendable {
         public var liveActivitiesAllowed: Bool
+        /// Whether a Lock Screen scoreboard is up **right now**, asked of ActivityKit rather than
+        /// inferred from a match being open. The two differ constantly: the activity lives as long
+        /// as the scoring screen does, so a match somebody walked away from has no scoreboard.
+        public var liveActivityUp: Bool
         public var matchInProgress: Bool
         public var appGroupReachable: Bool
         public var projectionWrittenAt: Date?
@@ -152,7 +156,8 @@ public enum ThroReadiness {
         public var diagnosticsHeld: Int
         public var brandFacesRegistered: Bool
 
-        public init(liveActivitiesAllowed: Bool = false, matchInProgress: Bool = false,
+        public init(liveActivitiesAllowed: Bool = false, liveActivityUp: Bool = false,
+                    matchInProgress: Bool = false,
                     appGroupReachable: Bool = false, projectionWrittenAt: Date? = nil,
                     externalDisplayConfigured: Bool = false,
                     externalDisplayAttached: Bool = false, finishedMatches: Int = 0,
@@ -162,6 +167,7 @@ public enum ThroReadiness {
                     diagnosticsOn: Bool = false, diagnosticsHeld: Int = 0,
                     brandFacesRegistered: Bool = false) {
             self.liveActivitiesAllowed = liveActivitiesAllowed
+            self.liveActivityUp = liveActivityUp
             self.matchInProgress = matchInProgress
             self.appGroupReachable = appGroupReachable
             self.projectionWrittenAt = projectionWrittenAt
@@ -215,12 +221,23 @@ public enum ThroReadiness {
             go = .phoneSettings("Open iPhone Settings")
             detail = "Live Activities are switched off for THRØ, so nothing will appear. "
                    + "iPhone Settings → THRØ → Live Activities."
-        } else if f.matchInProgress {
+        } else if f.liveActivityUp {
             state = .on
             // Nothing to tap: the next move is to lock the phone, which is not something an app
             // may do for you.
-            detail = "A match is being scored now. Lock the phone: both remainders are on the Lock "
+            detail = "The scoreboard is up now. Lock the phone: both remainders are on the Lock "
                    + "Screen, and on the Dynamic Island when the app is not in front."
+        } else if f.matchInProgress {
+            // **A match being open is not the same as the scoreboard being up**, and the row said
+            // it was until ActivityKit was asked directly. The activity lives exactly as long as
+            // the scoring screen: leaving that screen takes it down, deliberately, because a
+            // scoreboard for a match nobody is throwing in is a scoreboard that lies. So a match
+            // walked away from reads as ready rather than working, and the route is back into it.
+            state = .waiting
+            go = .place("Back to the match", .continueLatest)
+            detail = "A match is open and the scoreboard is not up: it lasts exactly as long as the "
+                   + "scoring screen does, so leaving that screen takes it down. Go back in, throw "
+                   + "a visit, then lock the phone."
         } else {
             state = .waiting
             go = .place("Start a match", .newMatch)
@@ -467,6 +484,9 @@ public extension ThroReadiness {
 
         #if os(iOS)
         f.liveActivitiesAllowed = ActivityAuthorizationInfo().areActivitiesEnabled
+        // The system's own list rather than this process's handle on one: an activity started
+        // before the app was last killed is still on the Lock Screen, and a handle to it is not.
+        f.liveActivityUp = !Activity<ThroMatchActivityAttributes>.activities.isEmpty
         // The scene the system creates when a screen is plugged in or mirrored. Asking the scenes
         // rather than `UIScreen.screens`, which has been deprecated since iOS 16 and answers a
         // question about hardware rather than about what this app was actually given.

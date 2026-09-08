@@ -25,7 +25,8 @@ final class ReadinessTests: XCTestCase {
         // Two extremes and the default, so no row is exercised only in its happy state.
         let all: [ThroReadiness.Facts] = [
             .init(),
-            .init(liveActivitiesAllowed: true, matchInProgress: true, appGroupReachable: true,
+            .init(liveActivitiesAllowed: true, liveActivityUp: true, matchInProgress: true,
+                  appGroupReachable: true,
                   projectionWrittenAt: Date(), externalDisplayConfigured: true,
                   externalDisplayAttached: true, finishedMatches: 3,
                   notifications: .allowed, remindersSet: 2, calendar: .allowed, datedFixtures: 1,
@@ -80,9 +81,19 @@ final class ReadinessTests: XCTestCase {
         XCTAssertTrue(row.detail.contains("iPhone Settings"), row.detail)
     }
 
-    func testTheLockScreenIsWorkingOnlyWhileAMatchIs() {
-        XCTAssertEqual(find("lock", .init(liveActivitiesAllowed: true, matchInProgress: true)).state, .on)
-        XCTAssertEqual(find("lock", .init(liveActivitiesAllowed: true, matchInProgress: false)).state, .waiting)
+    /// **A match being open is not the scoreboard being up**, and the row said it was until
+    /// ActivityKit was asked directly. The activity lives exactly as long as the scoring screen —
+    /// leaving that screen takes it down, on purpose, because a scoreboard for a match nobody is
+    /// throwing in is a scoreboard that lies. A row reading *Working* for a match somebody walked
+    /// away from would send them to lock a phone with nothing on it.
+    func testTheLockScreenIsWorkingOnlyWhileTheScoreboardIsActuallyUp() {
+        XCTAssertEqual(find("lock", .init(liveActivitiesAllowed: true, liveActivityUp: true,
+                                          matchInProgress: true)).state, .on)
+        let walkedAway = find("lock", .init(liveActivitiesAllowed: true, liveActivityUp: false,
+                                            matchInProgress: true))
+        XCTAssertEqual(walkedAway.state, .waiting)
+        XCTAssertEqual(walkedAway.go, .place("Back to the match", .continueLatest))
+        XCTAssertEqual(find("lock", .init(liveActivitiesAllowed: true)).state, .waiting)
     }
 
     // MARK: the widgets
@@ -188,8 +199,10 @@ final class ReadinessTests: XCTestCase {
         XCTAssertTrue(quiet.contains("0 of these are working"), quiet)
         XCTAssertTrue(quiet.contains("demonstration"), quiet)
 
-        let busy = ThroReadiness.Facts(liveActivitiesAllowed: true, matchInProgress: true,
+        let busy = ThroReadiness.Facts(liveActivitiesAllowed: true, liveActivityUp: true,
+                                       matchInProgress: true,
                                        appGroupReachable: true, projectionWrittenAt: Date(),
+                                       externalDisplayConfigured: true,
                                        externalDisplayAttached: true, finishedMatches: 1,
                                        notifications: .allowed, remindersSet: 1, calendar: .allowed,
                                        datedFixtures: 1, spotlightAvailable: true, spotlightOn: true,
@@ -210,7 +223,8 @@ final class ReadinessTests: XCTestCase {
         let all: [ThroReadiness.Facts] = [
             .init(),
             .init(notifications: .refused, calendar: .refused, spotlightAvailable: true),
-            .init(liveActivitiesAllowed: true, matchInProgress: true, appGroupReachable: true,
+            .init(liveActivitiesAllowed: true, liveActivityUp: true, matchInProgress: true,
+                  appGroupReachable: true,
                   projectionWrittenAt: Date(), externalDisplayConfigured: true,
                   externalDisplayAttached: true, finishedMatches: 3,
                   notifications: .allowed, remindersSet: 2, calendar: .allowed, datedFixtures: 1,
@@ -255,7 +269,8 @@ final class ReadinessTests: XCTestCase {
     /// promise the app cannot keep.
     func testTheRowsWithNowhereToSendAnybodyOfferNothing() {
         let everything = ThroReadiness.Facts(
-            liveActivitiesAllowed: true, matchInProgress: true, appGroupReachable: true,
+            liveActivitiesAllowed: true, liveActivityUp: true, matchInProgress: true,
+            appGroupReachable: true,
             projectionWrittenAt: Date(), externalDisplayConfigured: true,
             externalDisplayAttached: true, finishedMatches: 3,
             notifications: .allowed, remindersSet: 2, calendar: .allowed, datedFixtures: 1,
@@ -278,9 +293,10 @@ final class ReadinessTests: XCTestCase {
         XCTAssertEqual(find("share", .init()).go, .place("Start a match", .newMatch))
         XCTAssertEqual(find("share", .init(finishedMatches: 1)).go, .place("Open Home", .tab(.home)))
         XCTAssertEqual(find("venue", .init()).go, .place("Open a club", .tab(.discover)))
-        // A match in progress has nothing to tap: the next move is to lock the phone, and no app
-        // may do that for anybody.
-        XCTAssertNil(find("lock", .init(liveActivitiesAllowed: true, matchInProgress: true)).go)
+        // A scoreboard that is up has nothing to tap: the next move is to lock the phone, and no
+        // app may do that for anybody.
+        XCTAssertNil(find("lock", .init(liveActivitiesAllowed: true, liveActivityUp: true,
+                                        matchInProgress: true)).go)
     }
 
     // MARK: the two counts that come from this phone's own matches

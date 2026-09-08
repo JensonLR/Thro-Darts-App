@@ -178,7 +178,7 @@ Then, in this order, because each one needs the one before it:
 | # | What | How to see it | What has to be true first |
 |---|---|---|---|
 | 1 | **Score a match** | Start match → two names → **Start scoring** → throw one visit | Nothing |
-| 2 | **Lock Screen and Dynamic Island** | With that match open, lock the phone. Both remainders are on the Lock Screen; swipe up to the Home Screen and they are in the Dynamic Island | A match in progress, and Live Activities on for THRØ |
+| 2 | **Lock Screen and Dynamic Island** | **Stay on the scoring screen** and lock the phone. Both remainders are on the Lock Screen; swipe up to the Home Screen and they are in the Dynamic Island | Live Activities on for THRØ, and the scoring screen still open — the scoreboard lasts exactly as long as that screen, so backing out of a match takes it down on purpose |
 | 3 | **Apple Watch** | With the same match running, raise your wrist and swipe to the Smart Stack | An Apple Watch paired. There is no watch app — this is the Live Activity reaching the watch by itself |
 | 4 | **Club TV mode** | Plug in an HDMI adapter, or Control Centre → **Screen Mirroring** → an Apple TV. The board fills the screen at room size while the phone keeps the keypad | A cable or an AirPlay receiver. **No app can turn this on for you.** If the readiness screen says *Blocked* here, the build cannot be given a screen at all and mirroring is all you will get |
 | 5 | **Share card** | Finish the match → on the result screen, **Share the result**. Opening a finished match from Home lands on the same screen | A finished match — won, retired **or** abandoned. An abandoned one gets a card too: no scoreline, and a line saying nothing is claimed about who won |
