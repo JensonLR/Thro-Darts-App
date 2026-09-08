@@ -198,6 +198,87 @@ final class ReadinessTests: XCTestCase {
                         .contains("\(working) of these are working"))
     }
 
+    // MARK: where a row can take you
+
+    /// The button and the sentence must agree in both directions. A row offering **Open iPhone
+    /// Settings** whose words do not mention iPhone Settings is a button with no explanation; a row
+    /// whose words send somebody to iPhone Settings without offering to open it is two taps of
+    /// friction for nothing.
+    func testTheButtonAndTheSentenceAgreeAboutIPhoneSettings() {
+        let all: [ThroReadiness.Facts] = [
+            .init(),
+            .init(notifications: .refused, calendar: .refused, spotlightAvailable: true),
+            .init(liveActivitiesAllowed: true, matchInProgress: true, appGroupReachable: true,
+                  projectionWrittenAt: Date(), externalDisplayAttached: true, finishedMatches: 3,
+                  notifications: .allowed, remindersSet: 2, calendar: .allowed, datedFixtures: 1,
+                  spotlightAvailable: true, spotlightOn: true, diagnosticsOn: true,
+                  diagnosticsHeld: 4, brandFacesRegistered: true),
+        ]
+        for facts in all {
+            for surface in ThroReadiness.surfaces(facts) {
+                let offers: Bool
+                if case .phoneSettings = surface.go { offers = true } else { offers = false }
+                XCTAssertEqual(offers, surface.detail.contains("iPhone Settings"),
+                               "\(surface.id) offers iPhone Settings: \(offers), and says it: "
+                             + "\(surface.detail.contains("iPhone Settings"))")
+            }
+        }
+    }
+
+    /// **Not yet asked is not a refusal**, and it must not be answered with a trip to iPhone
+    /// Settings either: nothing has requested the permission, so there is no switch there to find.
+    /// The thing that asks is the control under the fixture, which is where the row sends them.
+    func testAnUnaskedPermissionIsSentToTheControlThatAsksAndNotToIPhoneSettings() {
+        for row in [find("reminders", .init(notifications: .unasked)),
+                    find("calendar", .init(calendar: .unasked))] {
+            switch row.go {
+            case .place(let label, .tab(.discover)):
+                XCTAssertFalse(label.isEmpty)
+            default:
+                XCTFail("\(row.id) sends an unasked permission to \(String(describing: row.go))")
+            }
+        }
+        for row in [find("reminders", .init(notifications: .refused)),
+                    find("calendar", .init(calendar: .refused))] {
+            guard case .phoneSettings = row.go else {
+                return XCTFail("\(row.id) refuses to offer the one page that can fix it")
+            }
+        }
+    }
+
+    /// Four rows have nowhere to send anybody, and a button on them would have to apologise: no app
+    /// may attach a display or start Screen Mirroring, the App Group is fixed in Xcode or in
+    /// signing, and a domain is bought rather than tapped. A button appearing on one of these is a
+    /// promise the app cannot keep.
+    func testTheRowsWithNowhereToSendAnybodyOfferNothing() {
+        let everything = ThroReadiness.Facts(
+            liveActivitiesAllowed: true, matchInProgress: true, appGroupReachable: true,
+            projectionWrittenAt: Date(), externalDisplayAttached: true, finishedMatches: 3,
+            notifications: .allowed, remindersSet: 2, calendar: .allowed, datedFixtures: 1,
+            spotlightAvailable: true, spotlightOn: true, diagnosticsOn: true, diagnosticsHeld: 4,
+            brandFacesRegistered: true)
+        for facts in [ThroReadiness.Facts(), everything] {
+            for id in ["wall", "widgets", "links", "fonts"] {
+                XCTAssertNil(find(id, facts).go,
+                             "\(id) grew a button, and there is nowhere for it to go")
+            }
+        }
+    }
+
+    /// A row that says *start a match* must send somebody to a new match, and one that says *under
+    /// a fixture* to the tab clubs live on. A label naming one place while the route names another
+    /// is worse than no button.
+    func testEachRouteMatchesWhatItsRowIsAsking() {
+        XCTAssertEqual(find("lock", .init(liveActivitiesAllowed: true)).go,
+                       .place("Start a match", .newMatch))
+        XCTAssertEqual(find("share", .init()).go, .place("Start a match", .newMatch))
+        XCTAssertEqual(find("share", .init(finishedMatches: 1)).go, .place("Open Home", .tab(.home)))
+        XCTAssertEqual(find("venue", .init()).go, .place("Open a club", .tab(.discover)))
+        // A match in progress has nothing to tap: the next move is to lock the phone, and no app
+        // may do that for anybody.
+        XCTAssertNil(find("lock", .init(liveActivitiesAllowed: true, matchInProgress: true)).go)
+    }
+
     // MARK: the two counts that come from this phone's own matches
 
     /// **The defect this pair was written to fix.** The first version excluded an abandoned match

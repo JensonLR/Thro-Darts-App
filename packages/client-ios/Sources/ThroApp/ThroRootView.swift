@@ -291,6 +291,8 @@ public struct ThroRootView: View {
     /// Where an incoming link asked to go, until a screen can take it there. The shared one, because
     /// an App Intent and a Spotlight result both arrive from outside any view.
     @ObservedObject private var router = ThroRouter.shared
+    /// For the one URL this app opens that is not its own: its page in iPhone Settings.
+    @Environment(\.openURL) private var openURL
     /// The leg in play, as the app's one holder of it. The scoring session pushes here for the wall
     /// screen (club TV mode); reading it for the widgets' file means there is one live state rather
     /// than two that can disagree about what is on the board.
@@ -402,6 +404,23 @@ public struct ThroRootView: View {
             diagnosticsHeld: store.diagnosticsHeld.count)
     }
 
+    /// Takes somebody where a readiness row says to go.
+    ///
+    /// Two kinds of destination and no third: somewhere in THRØ, through the same router a link
+    /// goes through — so a row cannot reach a screen a universal link could not — or this app's own
+    /// page in iPhone Settings, which is the only page iOS lets any app open. `follow()` already
+    /// closes Settings for a tab or a new match, so there is nothing to close here.
+    private func goReadiness(_ go: ThroReadiness.Go) {
+        switch go {
+        case let .place(_, route):
+            router.go(route)
+        case .phoneSettings:
+            #if os(iOS)
+            if let url = ThroReadiness.phoneSettings { openURL(url) }
+            #endif
+        }
+    }
+
     /// Rewrites the small file the widgets read. A no-op on a build with no App Group.
     private func project() {
         ThroProjectionWriter.write(matches: store.matches, week: store.week, clubs: clubs.clubs,
@@ -473,7 +492,8 @@ public struct ThroRootView: View {
                            makeExport: { try store.exportEverything(clubs: clubs.book) },
                            diagnosticsHeld: { store.diagnosticsHeld },
                            onForgetDiagnostics: store.forgetDiagnostics,
-                           readinessFacts: { await ThroReadiness.probe(app: readiness()) })
+                           readinessFacts: { await ThroReadiness.probe(app: readiness()) },
+                           onGoReadiness: goReadiness)
                 .throAppearance(Appearance(stored: appearanceRaw))
         } else {
             VStack(spacing: 0) {
@@ -1268,6 +1288,8 @@ public struct SettingsScreen: View {
     /// What this phone can currently show of everything the build added. Async because two of the
     /// answers — whether notifications are allowed, and what is pending — only come back that way.
     private let readinessFacts: @MainActor () async -> ThroReadiness.Facts
+    /// Where the readiness screen sends somebody when a row has somewhere to send them.
+    private let onGoReadiness: (ThroReadiness.Go) -> Void
     @State private var showingReadiness = false
     @State private var exported: URL?
     @State private var exportProblem: String?
@@ -1279,7 +1301,8 @@ public struct SettingsScreen: View {
                 makeExport: (() throws -> URL)? = nil,
                 diagnosticsHeld: @escaping () -> ThroDiagnostics.Held = { .init(count: 0, bytes: 0, newest: nil) },
                 onForgetDiagnostics: @escaping () -> Void = {},
-                readinessFacts: @escaping @MainActor () async -> ThroReadiness.Facts = { await ThroReadiness.probe(app: .init()) }) {
+                readinessFacts: @escaping @MainActor () async -> ThroReadiness.Facts = { await ThroReadiness.probe(app: .init()) },
+                onGoReadiness: @escaping (ThroReadiness.Go) -> Void = { _ in }) {
         self.onBack = onBack
         self.onReplayOpening = onReplayOpening
         self.backupState = backupState
@@ -1287,6 +1310,7 @@ public struct SettingsScreen: View {
         self.diagnosticsHeld = diagnosticsHeld
         self.onForgetDiagnostics = onForgetDiagnostics
         self.readinessFacts = readinessFacts
+        self.onGoReadiness = onGoReadiness
     }
 
     private var appearance: Binding<Appearance> {
@@ -1477,7 +1501,13 @@ public struct SettingsScreen: View {
             inspection = SettingsScreen.inspect(result)
         }
         .sheet(isPresented: $showingReadiness) {
-            ReadinessScreen(onBack: { showingReadiness = false }, gather: readinessFacts)
+            // The sheet closes itself before the route is taken. It sits over Settings, which sits
+            // over the tabs, so leaving it open would put the destination behind two screens the
+            // player never asked to still be there.
+            ReadinessScreen(onBack: { showingReadiness = false }, gather: readinessFacts) { go in
+                showingReadiness = false
+                onGoReadiness(go)
+            }
         }
     }
 

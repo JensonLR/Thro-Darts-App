@@ -83,6 +83,27 @@ public enum ThroReadiness {
         case unasked, allowed, refused
     }
 
+    /// Where the app can take somebody, when it can take them anywhere.
+    ///
+    /// **Optional on purpose.** Four of the twelve rows have nowhere to send anyone: no app may
+    /// attach a display or turn on Screen Mirroring, the App Group is fixed in Xcode or in signing,
+    /// and a domain is bought rather than tapped. A button on those rows would be a button that
+    /// apologises, which is worse than a sentence that explains.
+    public enum Go: Equatable, Sendable {
+        /// Somewhere inside THRØ. The label is what the button says, so it names the destination
+        /// rather than the mechanism — "Start a match", not "Go".
+        case place(String, ThroRoute)
+        /// This app's own page in iPhone Settings: the only page any app may open, and the one
+        /// every *turn it on in Settings* sentence on this screen actually means.
+        case phoneSettings(String)
+
+        public var label: String {
+            switch self {
+            case let .place(label, _), let .phoneSettings(label): return label
+            }
+        }
+    }
+
     /// One thing this build added, and whether it can be seen.
     public struct Surface: Identifiable, Equatable, Sendable {
         public let id: String
@@ -92,12 +113,16 @@ public enum ThroReadiness {
         /// **Where to look, or what is stopping it.** Never neither: a row carrying a state and no
         /// sentence tells somebody their phone is wrong and nothing else.
         public let detail: String
+        /// What the row can do about it, when anything can. `nil` is the honest answer for the
+        /// four rows whose obstacle is outside the app.
+        public let go: Go?
 
-        public init(id: String, name: String, state: State, detail: String) {
+        public init(id: String, name: String, state: State, detail: String, go: Go? = nil) {
             self.id = id
             self.name = name
             self.state = state
             self.detail = detail
+            self.go = go
         }
     }
 
@@ -179,20 +204,26 @@ public enum ThroReadiness {
     static func lockScreen(_ f: Facts) -> Surface {
         let state: State
         let detail: String
+        var go: Go?
         if !f.liveActivitiesAllowed {
             state = .blocked
+            go = .phoneSettings("Open iPhone Settings")
             detail = "Live Activities are switched off for THRØ, so nothing will appear. "
                    + "iPhone Settings → THRØ → Live Activities."
         } else if f.matchInProgress {
             state = .on
+            // Nothing to tap: the next move is to lock the phone, which is not something an app
+            // may do for you.
             detail = "A match is being scored now. Lock the phone: both remainders are on the Lock "
                    + "Screen, and on the Dynamic Island when the app is not in front."
         } else {
             state = .waiting
+            go = .place("Start a match", .newMatch)
             detail = "Start a match and throw one visit, then lock the phone. It clears itself when "
                    + "the match ends."
         }
-        return Surface(id: "lock", name: "Lock Screen and Dynamic Island", state: state, detail: detail)
+        return Surface(id: "lock", name: "Lock Screen and Dynamic Island", state: state,
+                       detail: detail, go: go)
     }
 
     static func wall(_ f: Facts) -> Surface {
@@ -211,12 +242,14 @@ public enum ThroReadiness {
         guard f.finishedMatches > 0 else {
             return Surface(id: "share", name: "Share card", state: .waiting,
                            detail: "Finish a match. **Share the result** is under the score on the "
-                                 + "result screen.")
+                                 + "result screen.",
+                           go: .place("Start a match", .newMatch))
         }
         let held = f.finishedMatches == 1 ? "1 finished match" : "\(f.finishedMatches) finished matches"
         return Surface(id: "share", name: "Share card", state: .on,
                        detail: "\(held) on this phone. Open one from Home and tap **Share the "
-                             + "result** under the score.")
+                             + "result** under the score.",
+                       go: .place("Open Home", .tab(.home)))
     }
 
     static func widgets(_ f: Facts) -> Surface {
@@ -253,15 +286,21 @@ public enum ThroReadiness {
         case .refused:
             return Surface(id: "reminders", name: name, state: .blocked,
                            detail: "Notifications are off for THRØ, so a reminder would never "
-                                 + "arrive. iPhone Settings → THRØ → Notifications.")
+                                 + "arrive. iPhone Settings → THRØ → Notifications.",
+                           go: .phoneSettings("Open iPhone Settings"))
         case .unasked:
+            // Deliberately NOT iPhone Settings: nothing has asked yet, and the thing that asks is
+            // the control under the fixture. Sending somebody to Settings here would be sending
+            // them to switch on a permission the app has never requested, which is not where it is.
             return Surface(id: "reminders", name: name, state: .waiting,
                            detail: "THRØ has not asked yet — it asks the first time you tap "
-                                 + "**Remind me** on a fixture. \(fixtureRoute(f))")
+                                 + "**Remind me** on a fixture. \(fixtureRoute(f))",
+                           go: .place("Open a club", .tab(.discover)))
         case .allowed:
             guard f.remindersSet > 0 else {
                 return Surface(id: "reminders", name: name, state: .waiting,
-                               detail: "Allowed, and none set. \(fixtureRoute(f))")
+                               detail: "Allowed, and none set. \(fixtureRoute(f))",
+                               go: .place("Open a club", .tab(.discover)))
             }
             let set = f.remindersSet == 1 ? "1 reminder is" : "\(f.remindersSet) reminders are"
             return Surface(id: "reminders", name: name, state: .on,
@@ -278,15 +317,18 @@ public enum ThroReadiness {
             return Surface(id: "calendar", name: name, state: .blocked,
                            detail: "THRØ may not add to your calendar. iPhone Settings → THRØ → "
                                  + "Calendars. It only ever asks to **add** — it cannot read what "
-                                 + "is already in there.")
+                                 + "is already in there.",
+                           go: .phoneSettings("Open iPhone Settings"))
         case .allowed:
             return Surface(id: "calendar", name: name, state: .on,
                            detail: "Allowed. \(fixtureRoute(f)) **Add to calendar** sits beside the "
-                                 + "reminder, and puts two hours in your calendar.")
+                                 + "reminder, and puts two hours in your calendar.",
+                           go: .place("Open a club", .tab(.discover)))
         case .unasked:
             return Surface(id: "calendar", name: name, state: .waiting,
                            detail: "\(fixtureRoute(f)) **Add to calendar** is beside the reminder, "
-                                 + "and asks the first time you tap it.")
+                                 + "and asks the first time you tap it.",
+                           go: .place("Open a club", .tab(.discover)))
         }
     }
 
@@ -294,7 +336,8 @@ public enum ThroReadiness {
         Surface(id: "venue", name: "Find the venue in Maps", state: .waiting,
                 detail: "\(fixtureRoute(f)) **Find the venue** is there only on a fixture with a "
                       + "venue typed into it, and searches Maps for exactly what was typed — THRØ "
-                      + "has never known where it is, and does not ask this phone where you are.")
+                      + "has never known where it is, and does not ask this phone where you are.",
+                go: .place("Open a club", .tab(.discover)))
     }
 
     static func spotlight(_ f: Facts) -> Surface {
@@ -346,7 +389,8 @@ public enum ThroReadiness {
                 detail: "There is no watch app, by decision. A Live Activity reaches the watch's "
                       + "Smart Stack on its own and reminders mirror to it — so start a match and "
                       + "look at your wrist. A watch-face complication needs a watch app, which "
-                      + "needs the phone-to-watch transport that was deferred.")
+                      + "needs the phone-to-watch transport that was deferred.",
+                go: .place("Start a match", .newMatch))
     }
 
     static func typeFaces(_ f: Facts) -> Surface {
@@ -440,6 +484,17 @@ public extension ThroReadiness {
     }
 }
 
+#if os(iOS)
+public extension ThroReadiness {
+    /// This app's own page in iPhone Settings, which is the only page any app may open.
+    ///
+    /// Every *turn it on in Settings* sentence on this screen means this page, and nothing else can
+    /// be linked: iOS has no address for the Notifications pane, or Search, or a specific switch.
+    /// So the sentence still names the path and the button only saves the first two taps.
+    static var phoneSettings: URL? { URL(string: UIApplication.openSettingsURLString) }
+}
+#endif
+
 /// The two counts that come from this phone's own matches.
 ///
 /// **They live here, next to the sentences they feed, because the first version of them got the
@@ -476,12 +531,15 @@ public extension ThroReadiness {
 public struct ReadinessScreen: View {
     private let onBack: () -> Void
     private let gather: @MainActor () async -> ThroReadiness.Facts
+    private let onGo: (ThroReadiness.Go) -> Void
     @State private var facts: ThroReadiness.Facts?
 
     public init(onBack: @escaping () -> Void,
-                gather: @escaping @MainActor () async -> ThroReadiness.Facts) {
+                gather: @escaping @MainActor () async -> ThroReadiness.Facts,
+                onGo: @escaping (ThroReadiness.Go) -> Void = { _ in }) {
         self.onBack = onBack
         self.gather = gather
+        self.onGo = onGo
     }
 
     public var body: some View {
@@ -530,6 +588,14 @@ public struct ReadinessScreen: View {
                 .thro(ThroTypography.metadata)
                 .foregroundStyle(ThroColor.colorTextSecondary)
                 .fixedSize(horizontal: false, vertical: true)
+            // On the rows that have somewhere to send you. Four do not, and they draw nothing
+            // rather than a control that would have to apologise: no app may attach a display or
+            // start Screen Mirroring, the App Group is fixed in Xcode or in signing, and a domain
+            // is bought rather than tapped.
+            if let go = surface.go {
+                ThroButton(go.label, variant: .ghost, size: .small) { onGo(go) }
+                    .padding(.top, ThroSpacing.spacing1)
+            }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(ThroSpacing.spacing4)
@@ -541,10 +607,10 @@ public struct ReadinessScreen: View {
             RoundedRectangle(cornerRadius: ThroSpacing.radiusCard, style: .continuous)
                 .stroke(ThroColor.colorBorderDefault, lineWidth: 1)
         )
-        // One element rather than three, and the state said in words: VoiceOver reads
-        // "Club TV mode, Ready" and then the sentence, in that order, instead of stopping on a
-        // coloured chip whose colour it cannot see.
-        .accessibilityElement(children: .combine)
+        // `.contain` rather than `.combine`: the state and the sentence are read as one thing by
+        // the label and hint below, and the button stays a button. `.combine` would fold a control
+        // into the text and leave a VoiceOver user with a row they can hear and cannot operate.
+        .accessibilityElement(children: .contain)
         .accessibilityLabel("\(surface.name), \(surface.state.label)")
         .accessibilityHint(surface.detail)
     }
