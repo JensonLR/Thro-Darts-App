@@ -195,7 +195,7 @@ public enum ThroReadiness {
         [
             lockScreen(f), wall(f), shareCard(f), widgets(f),
             reminders(f), calendarRow(f), venue(f),
-            spotlight(f), diagnostics(f), links(f), watch(f), typeFaces(f),
+            spotlight(f), siri(f), diagnostics(f), links(f), watch(f), typeFaces(f),
         ]
     }
 
@@ -388,6 +388,24 @@ public enum ThroReadiness {
         return Surface(id: "spotlight", name: name, state: .on,
                        detail: "Swipe down on the Home Screen and type a player's name, or a "
                              + "club's. The index is on this phone and goes nowhere.")
+    }
+
+    /// **Two intents that nothing in the app mentions.** They are built, they are in the app
+    /// target where Xcode's metadata extractor will find them, and until this row existed the only
+    /// way to discover them was to read the source. That is the founder's complaint exactly, on a
+    /// surface nobody had thought to count.
+    ///
+    /// Always *Ready*, and honestly so: `AppShortcutsProvider` offers nothing to ask at runtime, so
+    /// claiming **Working** would be claiming something unverified on a screen whose whole point is
+    /// that it does not. And no button — the Action Button lives in a Settings pane no app may open.
+    static func siri(_ f: Facts) -> Surface {
+        Surface(id: "siri", name: "Siri, Shortcuts and the Action Button", state: .waiting,
+                detail: "Say \"Start a match in THRØ\" to Siri, or \"Continue my match in THRØ\". "
+                      + "Both are in the Shortcuts app as **Start a match** and **Continue**, and "
+                      + "either can go on the Action Button: iPhone Settings → Action Button → "
+                      + "Shortcut → THRØ. There are two rather than ten because Siri matches these "
+                      + "phrases literally and nothing else, so a longer list would mostly be "
+                      + "phrases that do not work.")
     }
 
     static func diagnostics(_ f: Facts) -> Surface {

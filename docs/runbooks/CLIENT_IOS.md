@@ -1,7 +1,7 @@
 # Running the iOS client
 
 > **Verification status, 2026-09-07.** Every package compiles and every test passes on macOS CI —
-> 405 tests in all: 55 design, 90 journal, 61 scoring session and share card, 174 opening, app and clubs, 25 Lock Screen, wall and widgets — and the
+> 406 tests in all: 55 design, 90 journal, 61 scoring session and share card, 175 opening, app and clubs, 25 Lock Screen, wall and widgets — and the
 > Xcode app builds for the iOS simulator on
 > CI with Xcode 26.6, on every push that touches them. **The app has run on a phone**: the founder's,
 > the evening of 2026-09-05, a full best-of-3 from setup to result, in dark mode, on an iPhone 14 Pro Max
@@ -18,7 +18,7 @@
 | `packages/client-ios` → `ThroDesign` | the approved components as SwiftUI | 55 design tests on macOS, every push |
 | `packages/client-ios` → `ThroJournal` | the on-device journal (ADR-006), with retractions (PD-004), and its own device identity; and the **club book**, the separate database a captain's roster and fixture list live in | 90 journal tests on macOS, every push — 43 on the journal itself, 14 on the device's book of clubs and people, 14 on the export and what it refuses to read back, 8 on images, and 11 on the league book — teams, results, units and what the database refuses to write |
 | `packages/client-ios` → `ThroPlay` | setup, ready, scoring, result, undo, the bust and leg announcements, double-in (PD-008), the checkout route (PD-013), confirming the result (PD-011) and the share card | 61 session tests on macOS, every push |
-| `packages/client-ios` → `ThroApp` | Home, tabs, Settings, the root view, the opening (PD-007), and the club, league, tournament and profile screens under Discover (PD-009, PD-010) | 174 app tests on macOS, every push: 13 on the opening (timeline, the tagline's read time, cues, easings, geometry, the throw, the chalk stroke, the wall's dust, the dart), 15 on Home's reading of the journal, the device identity, the shelf and what a delete refuses to do (PD-026), 5 on the club rules the screens obey, 13 on the mapping between the club book and those screens, 7 on who may have a picture, who is told why not, and what a page's top bar offers, 15 on a club, a league and a tournament being three different things, 10 on the knockout draw — the seeding identities for every bracket to 256, the byes, a whole tournament played through, and a knockout match that cannot end level — 10 on double elimination, including a whole one played out and every entrant but the champion checked to have lost exactly twice, and 10 on groups then knockout, including that nobody is drawn against their own group in the first round across all fifteen setups — the table's arithmetic and its total ordering, where each result came from, and what each tournament shape counts. 24 on **what this build can show you on the phone it is running on** — five states told apart, an unasked permission never reported as a refusal nor answered with a trip to iPhone Settings, every row carrying a sentence you could find something by, the four rows with nowhere to send anybody never growing a button, and every complete match counted as shareable including an abandoned one, which the first version of that count got wrong. The layouts themselves are drawn, not tested — and until 2026-09-07 nothing checked that a screen could be reached at all, which is how the club editor sat unroutable |
+| `packages/client-ios` → `ThroApp` | Home, tabs, Settings, the root view, the opening (PD-007), and the club, league, tournament and profile screens under Discover (PD-009, PD-010) | 175 app tests on macOS, every push: 13 on the opening (timeline, the tagline's read time, cues, easings, geometry, the throw, the chalk stroke, the wall's dust, the dart), 15 on Home's reading of the journal, the device identity, the shelf and what a delete refuses to do (PD-026), 5 on the club rules the screens obey, 13 on the mapping between the club book and those screens, 7 on who may have a picture, who is told why not, and what a page's top bar offers, 15 on a club, a league and a tournament being three different things, 10 on the knockout draw — the seeding identities for every bracket to 256, the byes, a whole tournament played through, and a knockout match that cannot end level — 10 on double elimination, including a whole one played out and every entrant but the champion checked to have lost exactly twice, and 10 on groups then knockout, including that nobody is drawn against their own group in the first round across all fifteen setups — the table's arithmetic and its total ordering, where each result came from, and what each tournament shape counts. 25 on **what this build can show you on the phone it is running on** — five states told apart, an unasked permission never reported as a refusal nor answered with a trip to iPhone Settings, every row carrying a sentence you could find something by, the four rows with nowhere to send anybody never growing a button, and every complete match counted as shareable including an abandoned one, which the first version of that count got wrong. The layouts themselves are drawn, not tested — and until 2026-09-07 nothing checked that a screen could be reached at all, which is how the club editor sat unroutable |
 | `apps/ios/ThroDarts.xcodeproj` | the app target: thirteen lines that mount `ThroApp`, the ten embedded faces with their licences, the icon and the launch screen (PD-006) | `xcodebuild` for the iOS simulator, every push; `check_fonts.py` on Linux, every push |
 
 ## Running it on the phone, step by step
@@ -160,7 +160,7 @@ Everything below is what the tests assert; the phone is the first place anyone w
 
 ### 5. Everything else this build added, in the order to try it
 
-Nine surfaces went in over the last few days, and **most of them are invisible until something else
+Ten surfaces went in over the last few days, and **most of them are invisible until something else
 is true**: a match in progress, a screen plugged in, a fixture with a date on it. That is why a
 build can carry all nine and feel like it carries none.
 
@@ -189,7 +189,8 @@ Then, in this order, because each one needs the one before it:
 | 10 | **Find the venue** | Beside those two, on a fixture with a venue typed into it | Maps. THRØ never asks where you are |
 | 11 | **Find a match in iPhone search** | Swipe down on the Home Screen, type a player's or club's name | Settings → Search left on |
 | 12 | **Performance reports** | Settings → **How the app performs** → turn it on, then come back tomorrow | Nothing, but iOS delivers these **at most once a day** — there will be nothing to see today |
-| 13 | **VoiceOver on the scoring screen** | Settings → Accessibility → VoiceOver on, then score a visit | Nothing. The remaining says *"on a finish"*, a bust says *"Bust — score restored"*, and a figure says its range rather than a bare number |
+| 13 | **Siri, Shortcuts and the Action Button** | Say *"Start a match in THRØ"* to Siri, or *"Continue my match in THRØ"*. Both are in the Shortcuts app under THRØ, and either can go on the Action Button: iPhone Settings → Action Button → Shortcut → THRØ | Nothing. Two phrases rather than ten, because Siri matches them literally |
+| 14 | **VoiceOver on the scoring screen** | Settings → Accessibility → VoiceOver on, then score a visit | Nothing. The remaining says *"on a finish"*, a bust says *"Bust — score restored"*, and a figure says its range rather than a bare number |
 
 Two things are honestly not there, and the readiness screen says so rather than failing quietly:
 
@@ -199,11 +200,11 @@ Two things are honestly not there, and the readiness screen says so rather than 
 - **A watch-face complication.** That needs a watch app, which needs the phone-to-watch transport
   that was deliberately deferred. The Smart Stack (row 3) arrives without either.
 
-Eight of the twelve rows also carry a button to the place they name — *Start a match*, *Open a
+Eight of the thirteen rows also carry a button to the place they name — *Start a match*, *Open a
 club*, *Open Home*, or THRØ's own page in iPhone Settings, which is the only page iOS lets any app
-open. The other four carry none on purpose: no app may attach a display or start Screen Mirroring,
-the App Group is fixed in Xcode or in signing, and a domain is bought rather than tapped, so a
-button there would only apologise.
+open. The other five carry none on purpose: no app may attach a display or start Screen Mirroring, the
+App Group is fixed in Xcode or in signing, a domain is bought rather than tapped, and the Action
+Button lives in a Settings pane no app may open — so a button there would only apologise.
 
 The directions on that screen are held mechanically, because they are the one kind of copy a change
 somewhere else can falsify silently: `tools/check_readiness_directions.py` fails a build if a

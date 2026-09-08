@@ -37,6 +37,10 @@ CONTROLS = {
     "Add to calendar": "packages/client-ios/Sources/ThroApp/FixtureActions.swift",
     "Find the venue": "packages/client-ios/Sources/ThroApp/FixtureActions.swift",
     "Fixtures": "packages/client-ios/Sources/ThroApp/ClubScreens.swift",
+    # The two Siri shortcuts, named where Xcode's metadata extractor finds them. Renaming one there
+    # renames it in the Shortcuts app, and the readiness row would go on quoting the old name.
+    "Start a match": "apps/ios/ThroDarts/ThroIntents.swift",
+    "Continue": "apps/ios/ThroDarts/ThroIntents.swift",
     # Two Settings groups. A group heading is a place rather than a button, and it is exactly as
     # able to be renamed out from under a direction, so it is held the same way.
     "Search": "packages/client-ios/Sources/ThroApp/ThroRootView.swift",

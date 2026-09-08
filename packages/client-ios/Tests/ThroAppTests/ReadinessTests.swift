@@ -44,6 +44,19 @@ final class ReadinessTests: XCTestCase {
         }
     }
 
+    /// **A surface nobody had counted.** Two App Intents — Siri phrases, Shortcuts entries and an
+    /// Action Button target — were built into the app target and mentioned nowhere in the app, so
+    /// the only way to find them was to read the source. That is the founder's complaint exactly,
+    /// on a surface the first version of this screen did not know existed.
+    func testSiriAndTheActionButtonAreOnTheScreenAtAll() {
+        let row = find("siri", .init())
+        XCTAssertEqual(row.state, .waiting, "nothing can be asked at runtime, so it cannot claim "
+                                          + "to be working")
+        XCTAssertTrue(row.detail.contains("Shortcuts app"), row.detail)
+        XCTAssertTrue(row.detail.contains("Action Button"), row.detail)
+        XCTAssertNil(row.go, "the Action Button pane is not a page any app may open")
+    }
+
     func testNoTwoRowsShareAnIdentity() {
         let surfaces = ThroReadiness.surfaces(.init())
         XCTAssertEqual(Set(surfaces.map(\.id)).count, surfaces.count, "two rows share an id")
@@ -215,10 +228,14 @@ final class ReadinessTests: XCTestCase {
 
     // MARK: where a row can take you
 
-    /// The button and the sentence must agree in both directions. A row offering **Open iPhone
-    /// Settings** whose words do not mention iPhone Settings is a button with no explanation; a row
-    /// whose words send somebody to iPhone Settings without offering to open it is two taps of
-    /// friction for nothing.
+    /// The button and the sentence must agree in both directions — about **THRØ's own page**,
+    /// which is the only page in iPhone Settings any app may open.
+    ///
+    /// The distinction is the whole rule. A row saying *iPhone Settings → THRØ → Notifications* is
+    /// naming a page the app can put in front of somebody, so not offering to is friction for
+    /// nothing. A row saying *iPhone Settings → Action Button* is naming a pane no app may open,
+    /// and a button there would either do nothing or land somewhere else — which is worse than the
+    /// two taps it saves.
     func testTheButtonAndTheSentenceAgreeAboutIPhoneSettings() {
         let all: [ThroReadiness.Facts] = [
             .init(),
@@ -235,9 +252,15 @@ final class ReadinessTests: XCTestCase {
             for surface in ThroReadiness.surfaces(facts) {
                 let offers: Bool
                 if case .phoneSettings = surface.go { offers = true } else { offers = false }
-                XCTAssertEqual(offers, surface.detail.contains("iPhone Settings"),
-                               "\(surface.id) offers iPhone Settings: \(offers), and says it: "
-                             + "\(surface.detail.contains("iPhone Settings"))")
+                let ourOwnPage = surface.detail.contains("iPhone Settings → THRØ")
+                XCTAssertEqual(offers, ourOwnPage,
+                               "\(surface.id) offers to open THRØ's page: \(offers), and names "
+                             + "it: \(ourOwnPage) — in \(surface.detail)")
+                // And nothing may quietly offer the button for a pane it cannot reach.
+                if !ourOwnPage && surface.detail.contains("iPhone Settings") {
+                    XCTAssertFalse(offers, "\(surface.id) offers to open a Settings pane no app "
+                                         + "may open: \(surface.detail)")
+                }
             }
         }
     }
