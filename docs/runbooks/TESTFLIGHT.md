@@ -21,7 +21,15 @@ If it fails, the log says why, and the section at the end covers the likely reas
    taken, `THRØ Darts` — this is only the store's name, not the product's); primary language English
    (UK); bundle ID `app.thro.darts` — if it is not offered in the list, register it first at
    *Certificates, Identifiers & Profiles* → *Identifiers* → *+* → *App IDs* → *App*, explicit,
-   `app.thro.darts`, no capabilities; SKU `thro-darts`; full access.
+   `app.thro.darts`, and tick **App Groups**; SKU `thro-darts`; full access.
+
+   **The App Groups tick is new**, and it is what lets the Home Screen and Lock Screen widgets read
+   anything at all: the app writes a small file into a shared container and the widget extension
+   reads it. If you registered the identifier before this was added, go back to it and tick App
+   Groups now — an App ID's capabilities can be edited after the fact. The workflow runs
+   `xcodebuild -allowProvisioningUpdates`, which creates the group itself
+   (`group.app.thro.darts`) and the extension's own identifier (`app.thro.darts.live`) without
+   being asked, so this is the only one to do by hand.
 3. **An App Store Connect API key.** *Users and Access* → *Integrations* → *App Store Connect API* →
    *Team Keys* → *+*: name `GitHub Actions`, access **Admin** (automatic signing in CI needs to create a
    distribution certificate; a lesser role cannot). Download the `.p8` file — it can be downloaded once
@@ -73,6 +81,22 @@ Settings inside the app still shows the commit it was built from.
   network connections and encrypts nothing), so this should not appear. If it does, answer *No*.
 - **The build is uploaded but TestFlight shows nothing** — App Store Connect can take ten minutes to
   process a first build, and the tester group must contain you (step 5).
+
+## If the widgets are empty on a TestFlight build
+
+The app and the widget extension talk through an App Group, and if the entitlement does not survive
+signing the widgets read an empty container and draw nothing — silently, because a widget has no way
+to report a problem. **The app says so instead**: Settings → *What you can see on this phone* → the
+*Home Screen and Lock Screen widgets* row reads **Blocked** with the reason, rather than **Working**
+or **Ready**.
+
+If it does: the entitlement is in the source (`apps/ios/Support/ThroDarts.entitlements` and
+`apps/ios/SupportLive/ThroLive.entitlements`, held on every push by `tools/check_app_group.py`), so
+the loss is in signing, not in the code. Check that the `app.thro.darts` App ID has **App Groups**
+ticked (step 2), then run the workflow again — the archive is built unsigned and signed at export,
+so a capability added on Apple's side takes effect on the next run with no code change. Nothing else
+in the app depends on it: scoring, the Lock Screen, the wall, the share card and the fixtures all
+work without it.
 
 ## What this does not do
 

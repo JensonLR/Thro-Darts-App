@@ -96,6 +96,14 @@ jobs:
       - name: The link file matches the parser
         run: python3 tools/check_aasa.py
 
+      # And the one screen whose whole job is telling somebody where to go and find something. Every
+      # other screen shows you what it has; that one says "tap **Share the result** under the score",
+      # which a rename in a different file falsifies with nothing failing anywhere. It is the failure
+      # the screen exists to prevent, arriving through the screen itself — and it already happened
+      # once, in that screen's first version.
+      - name: The readiness screen's directions match the app
+        run: python3 tools/check_readiness_directions.py
+
   journal:
     name: The on-device journal, on Android's half
     runs-on: ubuntu-latest

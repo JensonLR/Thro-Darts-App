@@ -199,6 +199,11 @@ Two things are honestly not there, and the readiness screen says so rather than 
 - **A watch-face complication.** That needs a watch app, which needs the phone-to-watch transport
   that was deliberately deferred. The Smart Stack (row 3) arrives without either.
 
+The directions on that screen are held mechanically, because they are the one kind of copy a change
+somewhere else can falsify silently: `tools/check_readiness_directions.py` fails a build if a
+control the screen names — **Share the result**, **Remind me**, **Add to calendar**, **Find the
+venue**, and the two Settings groups — is not drawn under that name in the file that draws it.
+
 #### If the widgets show nothing
 
 That is the one row that can be blocked by the build rather than by a setting, and the readiness

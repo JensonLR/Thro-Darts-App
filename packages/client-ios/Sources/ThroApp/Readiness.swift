@@ -222,13 +222,19 @@ public enum ThroReadiness {
     static func widgets(_ f: Facts) -> Surface {
         let name = "Home Screen and Lock Screen widgets"
         guard f.appGroupReachable else {
+            // Two different causes, and the fix is different for each, so both are named. A build
+            // run from Xcode is missing the capability on the two targets; a TestFlight build has
+            // it in the source and lost it in signing. Naming only the first would send somebody
+            // to a Mac they are not sitting at.
             return Surface(id: "widgets", name: name, state: .blocked,
                            detail: "This build cannot reach its App Group, so the widgets have "
-                                 + "nothing to read and would show an empty board. In Xcode: the "
-                                 + "**ThroDarts** target → Signing & Capabilities → **+ "
+                                 + "nothing to read and would show an empty board. **From Xcode**: "
+                                 + "the **ThroDarts** target → Signing & Capabilities → **+ "
                                  + "Capability** → App Groups → tick `group.app.thro.darts`, then "
-                                 + "the same on **ThroLive**. Nothing else in the app is affected "
-                                 + "by this.")
+                                 + "the same on **ThroLive**. **From TestFlight**: nothing you can "
+                                 + "do on the phone — the entitlement is in the source and did not "
+                                 + "survive signing, which is a pipeline fix. Either way nothing "
+                                 + "else in the app is affected by this.")
         }
         guard let written = f.projectionWrittenAt else {
             return Surface(id: "widgets", name: name, state: .waiting,
@@ -286,9 +292,9 @@ public enum ThroReadiness {
 
     static func venue(_ f: Facts) -> Surface {
         Surface(id: "venue", name: "Find the venue in Maps", state: .waiting,
-                detail: "\(fixtureRoute(f)) **Find the venue** searches Maps for the venue exactly "
-                      + "as it is typed. THRØ has never known where it is, and does not ask this "
-                      + "phone where you are.")
+                detail: "\(fixtureRoute(f)) **Find the venue** is there only on a fixture with a "
+                      + "venue typed into it, and searches Maps for exactly what was typed — THRØ "
+                      + "has never known where it is, and does not ask this phone where you are.")
     }
 
     static func spotlight(_ f: Facts) -> Surface {
@@ -300,7 +306,7 @@ public enum ThroReadiness {
         }
         guard f.spotlightOn else {
             return Surface(id: "spotlight", name: name, state: .off,
-                           detail: "Turned off in Settings → Search. Turning it off also removed "
+                           detail: "Turned off in Settings → **Search**. Turning it off also removed "
                                  + "what had already been indexed.")
         }
         return Surface(id: "spotlight", name: name, state: .on,
@@ -313,7 +319,7 @@ public enum ThroReadiness {
         guard f.diagnosticsOn else {
             return Surface(id: "metrics", name: name, state: .off,
                            detail: "Off until you turn it on — it is the one thing here you gain "
-                                 + "nothing from. Settings → How the app performs.")
+                                 + "nothing from. Settings → **How the app performs**.")
         }
         guard f.diagnosticsHeld > 0 else {
             return Surface(id: "metrics", name: name, state: .waiting,
@@ -323,7 +329,7 @@ public enum ThroReadiness {
         let held = f.diagnosticsHeld == 1 ? "1 report" : "\(f.diagnosticsHeld) reports"
         return Surface(id: "metrics", name: name, state: .on,
                        detail: "\(held) on this phone, and nothing has been sent anywhere. Settings "
-                             + "→ How the app performs.")
+                             + "→ **How the app performs**.")
     }
 
     static func links(_ f: Facts) -> Surface {
