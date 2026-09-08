@@ -464,6 +464,23 @@ public final class ClubStore: ObservableObject {
 /// Where the Clubs tab is. A small enum rather than a NavigationStack, for the reason the Play flow
 /// gives: the screens are few, the transitions are known, and a route that cannot be constructed
 /// cannot be reached.
+/// What the rest of the app asks the Clubs tab to open.
+///
+/// **A club id was enough until the Live tab had somewhere better to send people.** That tab lists
+/// every fixture across every club that has been played and not yet had a result entered — the one
+/// thing a league keeper owes — and tapping one used to land on the list of clubs, four screens from
+/// the control. It names the fixture now, and the tab lands on the screen that records it.
+public struct ClubLanding: Equatable, Sendable {
+    public let club: String
+    /// A fixture on that club to open the result screen for, when the request is that specific.
+    public let fixture: String?
+
+    public init(club: String, fixture: String? = nil) {
+        self.club = club
+        self.fixture = fixture
+    }
+}
+
 public enum ClubRoute: Equatable {
     case list
     case newClub
@@ -491,20 +508,46 @@ public enum ClubRoute: Equatable {
 public struct ClubsFlow: View {
     @ObservedObject private var store: ClubStore
     @State private var route: ClubRoute = .list
-    /// A club a link asked for. Written by the root view, cleared here the moment it lands, so a
-    /// player who then taps Back is not sent to the same club again by the next re-evaluation.
-    @Binding private var open: String?
+    /// Where something outside this tab asked it to land. Written by the root view, cleared here the
+    /// moment it lands, so a player who then taps Back is not sent to the same place again by the
+    /// next re-evaluation.
+    @Binding private var open: ClubLanding?
 
-    public init(store: ClubStore, open: Binding<String?> = .constant(nil)) {
+    public init(store: ClubStore, open: Binding<ClubLanding?> = .constant(nil)) {
         self.store = store
         self._open = open
     }
 
-    /// Opens the club a link named, and forgets the request.
-    private func land(_ id: String?) {
-        guard let id, store.clubs.contains(where: { $0.id == id }) else { return }
-        route = .club(id)
+    /// Opens what was asked for, and forgets the request.
+    ///
+    /// **A request names a place; it does not assert that the place is there, or that this viewer
+    /// may go to it.** The club may have been deleted since the request was made, the fixture may
+    /// have been removed, and a request to record a result may arrive from somebody who is not an
+    /// official — `ClubRoute.result` shows *gone* for any of those, which is a worse answer than
+    /// the club's own page. So each condition is checked here, against the same rules the route
+    /// itself applies, and anything short of all of them lands on the club instead.
+    private func land(_ landing: ClubLanding?) {
+        guard let landing, let there = ClubsFlow.route(for: landing, in: store.clubs) else { return }
+        route = there
         open = nil
+    }
+
+    /// Where a landing request actually goes, given what this phone holds.
+    ///
+    /// Static so it can be held to never producing a route that shows *gone*: every condition
+    /// `ClubRoute.result` applies is applied here first, and anything short of all of them lands on
+    /// the club's own page — which is a worse answer than the result screen and a far better one
+    /// than an empty state.
+    ///
+    /// `nil` means leave the screen where it is. A club that has been deleted since the request was
+    /// made is not a reason to move somebody somewhere.
+    static func route(for landing: ClubLanding, in clubs: [Club]) -> ClubRoute? {
+        guard let club = clubs.first(where: { $0.id == landing.club }) else { return nil }
+        let fixture = landing.fixture.flatMap { id in club.fixtures.first { $0.id == id } }
+        if let fixture, club.mayRecordResults, fixture.isBetweenTeams {
+            return .result(club: club.id, fixture: fixture.id)
+        }
+        return .club(club.id)
     }
 
     public var body: some View {

@@ -277,4 +277,56 @@ final class ClubStoreTests: XCTestCase {
         guard CGImageDestinationFinalize(destination) else { throw XCTSkip("could not finalise") }
         return out as Data
     }
+
+    // MARK: where a landing request actually lands
+
+    /// **A request names a place; it does not assert that the place is there, or that this viewer
+    /// may go to it.**
+    ///
+    /// The Live tab lists every fixture across every club that has been played and had no result
+    /// entered — the one thing a league keeper owes — and tapping one used to open the list of
+    /// clubs, four screens from the control. It names the fixture now. Which makes the landing
+    /// rule load-bearing: `ClubRoute.result` shows a *gone* state unless the club is there, the
+    /// viewer may record results, and the fixture is between two teams, and dropping somebody on
+    /// that empty state is a worse answer than the club's own page.
+    ///
+    /// Held here because no test in this repository constructs a screen, so a route that quietly
+    /// starts landing on *gone* would look exactly like one that works.
+    func testALandingRequestNeverProducesARouteThatShowsGone() {
+        let teams = [Team(id: "a", name: "The Feathers A"), Team(id: "b", name: "The Feathers B")]
+        let played = Fixture(id: "f1", title: "A v B", when: "Tonight", venue: "The Feathers",
+                             state: .played, homeTeamId: "a", awayTeamId: "b")
+        let league = Club(id: "l1", name: "Tuesday League", kind: .league, meta: "", yourRole: .official,
+                          fixtures: [played], teams: teams)
+
+        // Everything in order: straight to the control.
+        XCTAssertEqual(ClubsFlow.route(for: ClubLanding(club: "l1", fixture: "f1"), in: [league]),
+                       .result(club: "l1", fixture: "f1"))
+
+        // No fixture named — the plain request the club links have always made.
+        XCTAssertEqual(ClubsFlow.route(for: ClubLanding(club: "l1"), in: [league]), .club("l1"))
+
+        // A fixture that is not on this phone any more falls back rather than opening nothing.
+        XCTAssertEqual(ClubsFlow.route(for: ClubLanding(club: "l1", fixture: "gone"), in: [league]),
+                       .club("l1"))
+
+        // A member may not record results, so the route that would refuse them is not taken.
+        let watching = Club(id: "l1", name: "Tuesday League", kind: .league, meta: "",
+                            yourRole: .member, fixtures: [played], teams: teams)
+        XCTAssertEqual(ClubsFlow.route(for: ClubLanding(club: "l1", fixture: "f1"), in: [watching]),
+                       .club("l1"))
+
+        // A club's own fixture is a title somebody typed, not a match between two teams: the result
+        // screen has nothing to record and says so, so the request lands on the club.
+        let typed = Fixture(id: "f2", title: "Home to The Bell", when: "Friday", venue: "",
+                            state: .played)
+        let club = Club(id: "c1", name: "The Feathers", kind: .club, meta: "", yourRole: .admin,
+                        fixtures: [typed])
+        XCTAssertEqual(ClubsFlow.route(for: ClubLanding(club: "c1", fixture: "f2"), in: [club]),
+                       .club("c1"))
+
+        // And a club that has gone leaves the screen where it is, rather than moving somebody
+        // somewhere for a request that no longer means anything.
+        XCTAssertNil(ClubsFlow.route(for: ClubLanding(club: "missing"), in: [league]))
+    }
 }

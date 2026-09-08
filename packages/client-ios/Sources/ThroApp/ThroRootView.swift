@@ -298,7 +298,8 @@ public struct ThroRootView: View {
     /// than two that can disagree about what is on the board.
     @ObservedObject private var venue = ThroVenue.shared
     /// The club a link named, handed to the Discover tab and cleared as it lands.
-    @State private var openClub: String?
+    /// Where the Clubs tab has been asked to land — a club, or a club and one of its fixtures.
+    @State private var openClub: ClubLanding?
     /// Whether this phone's own search field finds matches, people and clubs (on by default).
     @AppStorage(ThroSpotlight.enabledKey) private var spotlight: Bool = true
     /// Whether iOS may tell this app how it performed. Off by default; Settings explains it.
@@ -456,7 +457,7 @@ public struct ThroRootView: View {
             guard clubs.clubs.contains(where: { $0.id == id }) else { return }
             viewing = nil; showingSettings = false; store.flow = nil
             store.tab = .discover
-            openClub = id
+            openClub = ClubLanding(club: id)
         case .newMatch:
             viewing = nil; showingSettings = false
             store.flow = .new
@@ -515,7 +516,15 @@ public struct ThroRootView: View {
         switch store.tab {
         case .home: HomeScreen(store: store)
         case .play: PlayLandingScreen(store: store)
-        case .live: LiveScreen(store: store, clubs: clubs.clubs, onClubs: { store.tab = .discover })
+        case .live:
+            LiveScreen(store: store, clubs: clubs.clubs,
+                       onClubs: { store.tab = .discover },
+                       // The one row on that screen a league keeper owes something on, sent to the
+                       // control that discharges it rather than to the list of clubs.
+                       onRecord: { club, fixture in
+                           store.tab = .discover
+                           openClub = ClubLanding(club: club.id, fixture: fixture.id)
+                       })
         case .discover: ClubsFlow(store: clubs, open: $openClub)
         case .you: YouScreen(clubs: clubs.clubs, people: clubs.people,
                              badge: { clubs.image($0.badgeAssetId) },
@@ -1644,11 +1653,16 @@ public struct LiveScreen: View {
     @ObservedObject var store: AppStore
     private let clubs: [Club]
     private let onClubs: () -> Void
+    /// Where a fixture that has been played and not entered sends somebody: the screen that records
+    /// it. Optional so the screen still stands up on its own with nowhere to send them.
+    private let onRecord: ((Club, Fixture) -> Void)?
 
-    public init(store: AppStore, clubs: [Club] = [], onClubs: @escaping () -> Void = {}) {
+    public init(store: AppStore, clubs: [Club] = [], onClubs: @escaping () -> Void = {},
+                onRecord: ((Club, Fixture) -> Void)? = nil) {
         self.store = store
         self.clubs = clubs
         self.onClubs = onClubs
+        self.onRecord = onRecord
     }
 
     private var inProgress: [AppStore.HomeMatch] {
@@ -1695,7 +1709,14 @@ public struct LiveScreen: View {
                                  + "does, these count for nothing in a table — not as a nil-nil, "
                                  + "and not as a win for anybody.")
                             ForEach(awaiting, id: \.fixture.id) { row in
-                                LiveFixtureRow(club: row.club, fixture: row.fixture, action: onClubs)
+                                // **Four screens became one tap.** This row used to open the list
+                                // of clubs, from which the way to the control is the club, its
+                                // fixtures, the fixture, and then Record — for the one row on this
+                                // screen that exists because somebody has to act on it.
+                                LiveFixtureRow(club: row.club, fixture: row.fixture) {
+                                    guard let onRecord else { return onClubs() }
+                                    onRecord(row.club, row.fixture)
+                                }
                                 ThroDivider()
                             }
                         }
