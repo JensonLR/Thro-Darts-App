@@ -131,6 +131,15 @@ looks stale, Product → Clean Build Folder (⇧⌘K), then Run again.
 
 ### 4. The first-run test plan
 
+**A drawing of what this round rebuilt, before you can build it:**
+<https://claude.ai/code/artifact/ae7ed5f9-c675-4f33-be0c-3fdd01ff0174> — the scoring board in both
+notations and a player's own page, at true point size, with the three board greens and the two
+embedded faces read out of `docs/design/extracted/tokens.css` and every measurement read out of
+`ThroStage`. It says at the top what it is: HTML standing in for SwiftUI, which cannot prove the
+real thing lays out the same way on a phone. Its predecessor is what caught a wordmark at 1.08:1 on
+the first screen of the app, which is exactly the difference it is for.
+
+
 Everything below is what the tests assert; the phone is the first place anyone watches it happen.
 
 - **Start match** → *Match setup* (dark). Type two names, keep **501**, choose **Bo3**, pick who

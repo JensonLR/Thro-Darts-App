@@ -2070,3 +2070,25 @@ They are **not** all defects, and that is why this is a report and not a sweep:
 Deciding each would be making calls that are the founder's, so the list is written down where the
 next session and the founder can both see it.
 
+
+## A drawing of what this round rebuilt
+
+<https://claude.ai/code/artifact/ae7ed5f9-c675-4f33-be0c-3fdd01ff0174>
+
+The founder's standing complaint is that they cannot see or test most of what is built, and this
+round rebuilt the screen they use most. The drawing shows the scoring board in both notations and a
+player's own page **at true point size**: the three board greens and the two embedded faces read out
+of `docs/design/extracted/tokens.css`, and every measurement — 96 / 72 / 56 / 40, the 64-point key,
+the 434-point tray, the 161-point board on an SE — read out of `ThroStage` rather than chosen to
+look right.
+
+It says what it is at the top: **HTML standing in for SwiftUI, which cannot prove the real thing lays
+out the same way on a phone.** The board's chalk grain and the hand-drawn wobble in every rule are
+deliberately omitted rather than faked, because faking them would flatter the real screen.
+
+Two states in the first draft were ones the code cannot produce, and both were corrected before it
+went out: the chalk mark showed a visit that was not the one that had just landed, and the dart
+keypad showed TREBLE held with two darts already entered — which cannot happen, because **the ring
+falls back to single after every dart**. A drawing that shows an impossible state is worse than no
+drawing, and asking of it the same question the code gets — *can this actually happen?* — is what
+caught both.
