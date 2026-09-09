@@ -68,7 +68,7 @@ public object Contract {
             summary = "The one command endpoint (ADR-007)",
             description = "Every client-to-server state change, online or from a queue. Identity comes from the principal, the device from X-Thro-Device. Applied is 200; a replay returns what it returned; stale is 409 with the current row; a refusal is 422 in the store's words; a sequence gap is 409; a match the caller is not in is 404.",
             request = commandEnvelope,
-            responses = mapOf(200 to "applied, or a replay of an earlier answer", 400 to "malformed", 401 to "no principal", 404 to "not this match", 409 to "stale version, or sequence gap", 422 to "refused"),
+            responses = mapOf(200 to "applied, or a replay of an earlier answer", 400 to "malformed", 401 to "no principal", 404 to "not this match, or not in it", 409 to "stale version, or sequence gap", 413 to "body over 64 KiB", 422 to "refused"),
         ),
         Endpoint(
             id = "me.inbox", method = "GET", path = "/v1/me/inbox", authenticated = true,
@@ -118,5 +118,17 @@ $paths
 """
     }
 
-    internal fun q(s: String): String = "\"" + s.replace("\\", "\\\\").replace("\"", "\\\"").replace("\n", "\\n") + "\""
+    internal fun q(s: String): String {
+        val b = StringBuilder(s.length + 2).append('"')
+        for (ch in s) when {
+            ch == '\\' -> b.append("\\\\")
+            ch == '"' -> b.append("\\\"")
+            ch == '\n' -> b.append("\\n")
+            ch == '\r' -> b.append("\\r")
+            ch == '\t' -> b.append("\\t")
+            ch < ' ' -> b.append("\\u%04x".format(ch.code))
+            else -> b.append(ch)
+        }
+        return b.append('"').toString()
+    }
 }

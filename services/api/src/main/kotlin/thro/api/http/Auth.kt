@@ -24,7 +24,7 @@ public fun interface Authenticator {
      * that variable. It exists so the HTTP layer can be built and tested before FB-1 is decided,
      * not so that a server can be run without deciding it.
      */
-    public class Dev private constructor() : Authenticator {
+    public class Dev internal constructor() : Authenticator {
         override fun authenticate(header: (String) -> String?): Principal? =
             header(HEADER)?.let { runCatching { UUID.fromString(it.trim()) }.getOrNull() }?.let { Principal(it) }
 
@@ -32,11 +32,19 @@ public fun interface Authenticator {
             public const val HEADER: String = "X-Thro-Dev-Subject"
             public const val VARIABLE: String = "THRO_DEV_AUTH"
 
-            /** The dev authenticator, only when [env] says so; null otherwise. */
-            public fun ifEnabled(env: (String) -> String?): Dev? = if (env(VARIABLE) == "1") Dev() else null
-
-            /** For tests, which are the development case by definition. */
-            public fun forTests(): Dev = Dev()
+            /**
+             * The dev authenticator, only when [env] says so and the database is on this machine;
+             * null otherwise. A development authenticator pointed at a remote database is a
+             * deployment with the door open, whatever the variable says.
+             */
+            public fun ifEnabled(env: (String) -> String?): Dev? {
+                if (env(VARIABLE) != "1") return null
+                val host = env("PGHOST") ?: "localhost"
+                check(host == "localhost" || host == "127.0.0.1" || host == "::1") {
+                    "$VARIABLE=1 with PGHOST=$host: the development authenticator is refused against a database that is not on this machine"
+                }
+                return Dev()
+            }
         }
     }
 }

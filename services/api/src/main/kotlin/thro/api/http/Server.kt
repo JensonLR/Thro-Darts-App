@@ -17,6 +17,8 @@ import java.util.UUID
 import thro.api.CommandHandler
 import thro.api.CommandResult
 import thro.api.Discovery
+import thro.api.Grants
+import thro.api.Matches
 import thro.api.Json
 import thro.api.Migrations
 import thro.api.OrganisationCommands
@@ -51,7 +53,16 @@ public fun Application.thro(deps: Deps) {
     val handlers: Map<String, suspend (ApplicationCall, Principal?) -> Http> = mapOf(
         "health" to { _, _ -> health(deps) },
         "openapi" to { _, _ -> Http(200, Contract.openApi()) },
-        "commands" to { call, p -> withConnection(deps) { c -> command(c, p!!, call.request.headers["X-Thro-Device"], call.receiveText()) } },
+        "commands" to { call, p ->
+            // The body is bounded and read before a connection is held for it.
+            val declared = call.request.headers["Content-Length"]?.toLongOrNull()
+            if (declared != null && declared > MAX_BODY) Http(413, """{"error":"body over 64 KiB"}""")
+            else {
+                val body = call.receiveText()
+                if (body.length > MAX_BODY) Http(413, """{"error":"body over 64 KiB"}""")
+                else withConnection(deps) { c -> command(c, p!!, call.request.headers["X-Thro-Device"], body) }
+            }
+        },
         "me.inbox" to { _, p -> withConnection(deps) { c -> Http(200, inboxJson(Secretary(c).inboxForPlayer(p!!.subject, deps.now()))) } },
         "team.inbox" to { call, p -> withConnection(deps) { c -> teamInbox(c, p!!, call.parameters["teamId"], deps.now()) } },
         "me.discovery" to { call, p -> withConnection(deps) { c -> discovery(c, p!!, call.request.queryParameters["from"], call.request.queryParameters["to"], call.request.queryParameters["locality"], deps.now()) } },
@@ -72,6 +83,8 @@ public fun Application.thro(deps: Deps) {
                         handlers.getValue(e.id)(call, principal)
                     } catch (x: IllegalArgumentException) {
                         Http(400, """{"error":${Contract.q(x.message ?: "malformed")}}""")
+                    } catch (x: ClassCastException) {
+                        Http(400, """{"error":"a field has the wrong type"}""")
                     } catch (x: java.time.DateTimeException) {
                         // A date the caller could not write is the caller's error, not the server's.
                         Http(400, """{"error":${Contract.q("a date-time must be ISO-8601: " + (x.message ?: "unparseable"))}}""")
@@ -88,6 +101,9 @@ public fun Application.thro(deps: Deps) {
     }
 }
 
+private const val MAX_BODY: Long = 64 * 1024
+private const val MAX_LINEUP: Int = 32
+
 private inline fun withConnection(deps: Deps, block: (Connection) -> Http): Http = deps.connect().use(block)
 
 private fun health(deps: Deps): Http = try {
@@ -98,7 +114,9 @@ private fun health(deps: Deps): Http = try {
         else Http(200, """{"database":"ok","schemaVersion":"V${"%03d".format(v)}"}""")
     }
 } catch (e: Exception) {
-    Http(503, """{"database":"unreachable","error":${Contract.q(e.message ?: e::class.simpleName ?: "error")}}""")
+    // The detail — host, user, the driver's words — is for the log, not for an unauthenticated caller.
+    System.err.println("healthz: database unreachable: ${e.message}")
+    Http(503, """{"database":"unreachable"}""")
 }
 
 // --- the one command endpoint -------------------------------------------------------------------
@@ -107,23 +125,37 @@ private fun command(c: Connection, principal: Principal, deviceHeader: String?, 
     val device = deviceHeader?.let { runCatching { UUID.fromString(it.trim()) }.getOrNull() }
         ?: return Http(400, """{"error":"X-Thro-Device header must be a UUID"}""")
     val m = try { Json.parseObject(body) } catch (e: Exception) { return Http(400, """{"error":"body is not a JSON object"}""") }
-    fun uuid(k: String): UUID = UUID.fromString(str(m, k))
-    fun int(k: String): Int = (m[k] as? Number)?.toInt() ?: throw IllegalArgumentException("$k must be an integer")
+    fun uuid(k: String): UUID = try { UUID.fromString(str(m, k)) } catch (e: IllegalArgumentException) { throw IllegalArgumentException("$k must be a UUID") }
+    fun long(k: String): Long = (m[k] as? Long) ?: throw IllegalArgumentException("$k must be an integer")
+    fun int(k: String): Int {
+        val v = long(k)
+        require(v in Int.MIN_VALUE..Int.MAX_VALUE) { "$k is out of range" }
+        return v.toInt()
+    }
+    fun intOrNull(k: String): Int? = m[k]?.let { int(k) }
     val commandId = uuid("commandId")
     return when (val type = m["type"]) {
-        "RecordVisit" -> visit(
+        "RecordVisit" -> {
+            val matchId = uuid("matchId")
+            // The role the evidence is annotated with is what the store knows about the caller:
+            // a participant of the match, else the role their grant names, else a stranger's
+            // "participant" that the handler will refuse before it is written.
+            val role = if (Matches(c).load(matchId)?.participants?.contains(principal.subject) == true) "participant"
+            else Grants(c).roleFor(principal.subject, device, matchId) ?: "participant"
+            visit(
             CommandHandler(c).handle(
                 VisitCommand(
-                    commandId = commandId, matchId = uuid("matchId"), deviceId = device,
-                    deviceSeq = (m["deviceSeq"] as? Number)?.toLong() ?: throw IllegalArgumentException("deviceSeq must be an integer"),
-                    actorId = principal.subject, actorRole = "participant", correlationId = UUID.randomUUID(),
+                    commandId = commandId, matchId = matchId, deviceId = device,
+                    deviceSeq = long("deviceSeq"),
+                    actorId = principal.subject, actorRole = role, correlationId = UUID.randomUUID(),
                     player = str(m, "player"), visitTotal = int("visitTotal"),
-                    dartsUsed = (m["dartsUsed"] as? Number)?.toInt(), dartsAtDouble = (m["dartsAtDouble"] as? Number)?.toInt(),
+                    dartsUsed = intOrNull("dartsUsed"), dartsAtDouble = intOrNull("dartsAtDouble"),
                     occurredAt = str(m, "occurredAt"), occurredTz = (m["occurredTz"] as? String) ?: "Europe/London",
                     clientEffect = m["clientEffect"] as? String, engineVersion = (m["engineVersion"] as? String) ?: "unknown",
                 ),
             ),
-        )
+            )
+        }
         "RenameTeam" -> organisational(OrganisationCommands(c).handle(
             OrganisationCommands.Command.RenameTeam(commandId, device, principal.subject, uuid("teamId"), str(m, "to"), int("expectedVersion")),
         ))
@@ -142,7 +174,9 @@ private fun command(c: Connection, principal: Principal, deviceHeader: String?, 
         "NameLineup" -> organisational(OrganisationCommands(c).handle(
             OrganisationCommands.Command.NameLineup(
                 commandId, device, principal.subject, uuid("fixtureId"), uuid("teamId"),
-                ((m["players"] as? List<*>) ?: throw IllegalArgumentException("players must be a list")).map { UUID.fromString(it as String) },
+                ((m["players"] as? List<*>) ?: throw IllegalArgumentException("players must be a list"))
+                    .also { require(it.size <= MAX_LINEUP) { "a lineup names at most $MAX_LINEUP players" } }
+                    .map { UUID.fromString((it as? String) ?: throw IllegalArgumentException("players must be UUID strings")) },
                 int("expectedVersion"),
             ),
         ))

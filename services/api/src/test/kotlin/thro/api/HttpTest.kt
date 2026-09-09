@@ -51,7 +51,7 @@ class HttpTest {
         Matches(c).open(match, home, away, playtestFormat())
 
         testApplication {
-            application { thro(Deps(connect = { TestDatabase.connect() }, authenticator = Authenticator.Dev.forTests(), now = { Instant.parse("2026-09-11T18:00:00Z") })) }
+            application { thro(Deps(connect = { TestDatabase.connect() }, authenticator = Authenticator.Dev(), now = { Instant.parse("2026-09-11T18:00:00Z") })) }
 
             suspend fun post(path: String, body: String, subject: UUID? = ade, device: UUID? = phone): HttpResponse = client.post(path) {
                 subject?.let { header(Authenticator.Dev.HEADER, it.toString()) }
@@ -66,6 +66,10 @@ class HttpTest {
             check("no device is 400", post("/v1/commands", """{"type":"RenameTeam","commandId":"${UUID.randomUUID()}"}""", device = null).status.value == 400)
             check("an unknown command type is 400", post("/v1/commands", """{"type":"Explode","commandId":"${UUID.randomUUID()}"}""").status.value == 400)
             check("a body that is not JSON is 400", post("/v1/commands", "not json").status.value == 400)
+            check("a body over 64 KiB is 413 before anything is read into a handler", post("/v1/commands", "{\"pad\":\"" + "x".repeat(70_000) + "\"}").status.value == 413)
+            check("a body nested a thousand deep is 400, not a stack overflow", post("/v1/commands", "[".repeat(1000) + "]".repeat(1000)).status.value == 400)
+            check("a lineup whose players are not UUID strings is 400", post("/v1/commands", """{"type":"NameLineup","commandId":"${UUID.randomUUID()}","fixtureId":"${UUID.randomUUID()}","teamId":"$team","players":[1],"expectedVersion":0}""").status.value == 400)
+            check("an integer out of range is 400, not silently truncated", post("/v1/commands", """{"type":"RenameTeam","commandId":"${UUID.randomUUID()}","teamId":"$team","to":"X","expectedVersion":4294967297}""").status.value == 400)
 
             // --- the one command endpoint ---------------------------------------------------------
             val rename = post("/v1/commands", """{"type":"RenameTeam","commandId":"${UUID.randomUUID()}","teamId":"$team","to":"Riverside Reds","expectedVersion":1}""")
@@ -79,6 +83,11 @@ class HttpTest {
             // The stored answer comes back through jsonb, which normalises whitespace and key order,
             // so "the same answer" is the parsed document, not the bytes.
             check("a replay returns what it returned — the same 409 and the same answer", replay.status.value == 409 && Json.parseObject(replay.bodyAsText()) == Json.parseObject(stale.bodyAsText()))
+            val appliedId = UUID.randomUUID()
+            val applied = post("/v1/commands", """{"type":"RenameTeam","commandId":"$appliedId","teamId":"$team","to":"Riverside Blues","expectedVersion":2}""")
+            val appliedAgain = post("/v1/commands", """{"type":"RenameTeam","commandId":"$appliedId","teamId":"$team","to":"Riverside Blues","expectedVersion":2}""")
+            check("a replayed applied command is 200 with the same answer, and applies nothing twice",
+                applied.status.value == 200 && appliedAgain.status.value == 200 && Json.parseObject(appliedAgain.bodyAsText()) == Json.parseObject(applied.bodyAsText()) && c.prepareStatement("SELECT name FROM competition.team WHERE team_id = ?").use { ps -> ps.setObject(1, team); ps.executeQuery().use { rs -> rs.next(); rs.getString(1) } } == "Riverside Blues")
 
             val v1 = post("/v1/commands", """{"type":"RecordVisit","commandId":"${UUID.randomUUID()}","matchId":"$match","deviceSeq":1,"player":"home","visitTotal":60,"occurredAt":"2026-09-11T19:00:00Z"}""", subject = home)
             check("a visit travels the same endpoint and is applied", v1.status.value == 200 && v1.bodyAsText().contains("\"outcome\":\"applied\""))
@@ -86,6 +95,13 @@ class HttpTest {
             check("a sequence gap is 409 naming the expected sequence", gap.status.value == 409 && gap.bodyAsText() == """{"outcome":"gap","expectedSeq":2}""")
             val stranger = post("/v1/commands", """{"type":"RecordVisit","commandId":"${UUID.randomUUID()}","matchId":"$match","deviceSeq":2,"player":"Sam","visitTotal":60,"occurredAt":"2026-09-11T19:00:10Z"}""", subject = home)
             check("a visit naming something that is not a seat is 404: not this match", stranger.status.value == 404 && stranger.bodyAsText().contains("not a seat"))
+            val injectId = UUID.randomUUID()
+            val inject = post("/v1/commands", """{"type":"RecordVisit","commandId":"$injectId","matchId":"$match","deviceSeq":1,"player":"home","visitTotal":180,"occurredAt":"2026-09-11T19:00:20Z"}""", subject = zed, device = UUID.randomUUID())
+            check("a stranger with a good seat is still a stranger: 404, and no evidence exists from them",
+                inject.status.value == 404 && inject.bodyAsText().contains("hold no grant") &&
+                    c.prepareStatement("SELECT count(*) FROM evidence.event WHERE match_id = ? AND actor_id = ?").use { ps -> ps.setObject(1, match); ps.setObject(2, zed); ps.executeQuery().use { rs -> rs.next(); rs.getInt(1) == 0 } })
+            val injectAgain = post("/v1/commands", """{"type":"RecordVisit","commandId":"$injectId","matchId":"$match","deviceSeq":1,"player":"home","visitTotal":180,"occurredAt":"2026-09-11T19:00:20Z"}""", subject = zed, device = UUID.randomUUID())
+            check("and a replayed visit refusal is a refusal the second time, status included", injectAgain.status.value == 404 && injectAgain.bodyAsText().contains("hold no grant"))
 
             // --- reads, filtered on the caller's relation ----------------------------------------
             val mine = get("/v1/me/inbox", subject = home)
@@ -108,6 +124,6 @@ class HttpTest {
                 committed.exists() && committed.readText() == served)
         }
         println("  $passed HTTP properties held")
-        assertEquals(20, passed)
+        assertEquals(27, passed)
     }
 }

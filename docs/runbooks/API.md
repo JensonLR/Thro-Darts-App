@@ -14,8 +14,10 @@ THRO_DEV_AUTH=1 gradle -p services/api serve
 
 It refuses to start without an authenticator. The only one that exists is the **development**
 authenticator, which trusts an `X-Thro-Dev-Subject: <uuid>` header — that is, it trusts anyone who
-can reach the port — and cannot be constructed unless `THRO_DEV_AUTH=1` is set. It says so on every
-start. The production scheme (passkeys, short-lived access tokens, rotating refresh tokens, ADR-008)
+can reach the port — and cannot be constructed unless `THRO_DEV_AUTH=1` is set **and** `PGHOST` is
+this machine (`localhost`, `127.0.0.1`, `::1`): a development door on a remote database is a
+deployment with the door open, whatever the variable says. It says so on every start. `PGPASSWORD`
+is honoured. The production scheme (passkeys, short-lived access tokens, rotating refresh tokens, ADR-008)
 is founder decision FB-1 and replaces it; nothing in a deployment manifest may set that variable.
 
 Migrations are a deploy step (ADR-013), not a boot step. `GET /healthz` reports the migration
@@ -28,7 +30,7 @@ routes are mounted from. In brief:
 
 | Route | Who | What |
 |---|---|---|
-| `POST /v1/commands` | principal + `X-Thro-Device` | The one command endpoint (ADR-007): `RecordVisit`, `RenameTeam`, `RearrangeFixture`, `SetAvailability`, `NameLineup`. Applied 200; replay returns what it returned; stale 409 with the current row; refused 422 in the store's words; sequence gap 409; not this match 404 |
+| `POST /v1/commands` | principal + `X-Thro-Device` | The one command endpoint (ADR-007): `RecordVisit`, `RenameTeam`, `RearrangeFixture`, `SetAvailability`, `NameLineup`. Applied 200; replay returns what it returned; stale 409 with the current row; refused 422 in the store's words; sequence gap 409; not this match — or not in it — 404; body over 64 KiB 413 |
 | `GET /v1/me/inbox` | principal | The caller's own Secretary tasks by section |
 | `GET /v1/teams/{teamId}/inbox` | principal with `team.manage` | The team's Secretary inbox; anyone else is 403 and the refusal is on the audit record |
 | `GET /v1/me/discovery?from&to&locality` | principal | Discovery cards with their reasons |

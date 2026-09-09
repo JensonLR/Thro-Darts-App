@@ -2360,3 +2360,32 @@ development one: it trusts an `X-Thro-Dev-Subject` header, cannot be constructed
 they claim. It exists so the layer could be built and tested before FB-1 is decided, not so a
 server can be run without deciding it. A malformed date is the caller's 400, not the server's 500,
 which the test found. Twenty HTTP properties; the runbook is `docs/runbooks/API.md`.
+
+## The third hostile review: a stranger with a good seat
+
+The review of the HTTP layer found the finding that mattered in the handler underneath it, where it
+had sat since V006: the command handler checked that a visit named a *seat* of the match and never
+that its *author* was in the match. Over the playtest harness that was academic; over an endpoint
+any principal can call it is the cross-match injection ADR-008 names as the highest-value attack —
+post a visit carrying a stranger's match id and the seat word `home`, and evidence lands in a match
+you are not in. The handler now refuses an author who is neither a participant nor was ever granted
+anything for the match, before any evidence exists and with a receipt, so a retry is answered the
+same way. The rule is deliberately narrower than "must hold a sound grant": ADR-006's promise that a
+revoked or expired scorer's visit still records, flagged, stands — that is a scorer whose authority
+lapsed, not a stranger. Three fixtures that had used a random author for a legitimate visit were
+wrong about the product and now name a participant; the grants test gained the stranger case, the
+injection test gained the outsider-with-a-good-seat case, and the HTTP test posts the attack itself
+and reads back that nothing was written.
+
+The second finding was that a replayed visit did not return what it returned: the handler's stored
+receipt carried no outcome, so the HTTP layer answered a replayed refusal with 200 and a different
+shape. Receipts now carry `outcome`, the HTTP bodies are the receipts, and the test replays an
+applied command and a refused visit. The rest was hardening a door should have had on the day it
+was hung: a body over 64 KiB is 413 before a connection is held for it; the hand-rolled JSON parser
+is bounded to thirty-two levels, so a thousand brackets are a 400 rather than a stack overflow; a
+lineup of non-strings, an integer out of range and a wrong-typed field are 400s; every control
+character is escaped on the way out; `/healthz` no longer repeats the driver's words to an
+unauthenticated caller; the evidence's actor role is what the store knows about the caller rather
+than a hard-coded `participant`; and the development authenticator's constructor is internal, it
+honours `PGPASSWORD`, and it refuses to exist against a database that is not on this machine.
+Twenty-seven HTTP properties.

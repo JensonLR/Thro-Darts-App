@@ -86,12 +86,19 @@ class GrantsTest {
         }
 
         // --- no grant at all ------------------------------------------------------------------
+        // Authority annotates and never destroys — for someone who is IN the match. A participant
+        // who was never granted anything still records, flagged. A stranger who was never granted
+        // anything is not a scorer whose authority lapsed; they are the cross-match injection
+        // ADR-008 names, and nothing of theirs is written.
         run {
             val match = UUID.randomUUID(); val device = UUID.randomUUID(); val actor = UUID.randomUUID()
-            Matches(c).open(match, UUID.randomUUID(), UUID.randomUUID(), playtestFormat())
-            check("an ungranted visit is still applied", visit(match, device, actor, 1, 60, Instant.now()) is CommandResult.Applied)
+            Matches(c).open(match, actor, UUID.randomUUID(), playtestFormat())
+            check("an ungranted visit by a participant is still applied", visit(match, device, actor, 1, 60, Instant.now()) is CommandResult.Applied)
             check("and is flagged ungranted", authorityOf(match, device) == "ungranted")
             check("the evidence exists", eventCount(match) == 1)
+            val strangerDevice = UUID.randomUUID()
+            val stranger = visit(match, strangerDevice, UUID.randomUUID(), 1, 60, Instant.now())
+            check("an ungranted visit by a stranger is refused before any evidence exists", stranger is CommandResult.NotThisMatch && eventCount(match) == 1)
         }
 
         // --- revoked before the visit ----------------------------------------------------------

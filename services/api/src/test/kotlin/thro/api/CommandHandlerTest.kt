@@ -23,12 +23,15 @@ class CommandHandlerTest {
 
     private fun migrated(): Connection = TestDatabase.migrated()
 
+    /** The home player: a command's author must be in the match or hold a grant for it. */
+    private val author: UUID = UUID.randomUUID()
+
     private fun cmd(
         match: UUID, device: UUID, seq: Long, player: String, total: Int,
         darts: Int? = 3, id: UUID = UUID.randomUUID(),
     ) = VisitCommand(
         commandId = id, matchId = match, deviceId = device, deviceSeq = seq,
-        actorId = UUID.randomUUID(), actorRole = "participant",
+        actorId = author, actorRole = "participant",
         correlationId = UUID.randomUUID(), player = player, visitTotal = total,
         dartsUsed = darts, occurredAt = "2026-09-03T19:00:00+01:00", occurredTz = "Europe/London",
     )
@@ -53,7 +56,7 @@ class CommandHandlerTest {
         val devB = UUID.randomUUID()
         // The store is now the authority on who is playing (ADR-008), so a match must be opened
         // before any evidence about it can exist.
-        Matches(c).open(match, UUID.randomUUID(), UUID.randomUUID(), playtestFormat())
+        Matches(c).open(match, author, UUID.randomUUID(), playtestFormat())
         var passed = 0
 
         fun check(name: String, cond: Boolean) {

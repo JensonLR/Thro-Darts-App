@@ -53,11 +53,12 @@ class InjectionTest {
             passed++
         }
 
-        fun visit(match: UUID, player: String, seq: Long, total: Int = 60): CommandResult =
+        val participant = UUID.randomUUID()
+        fun visit(match: UUID, player: String, seq: Long, total: Int = 60, actor: UUID = participant): CommandResult =
             h.handle(
                 VisitCommand(
                     commandId = UUID.randomUUID(), matchId = match, deviceId = UUID.randomUUID(),
-                    deviceSeq = seq, actorId = UUID.randomUUID(), actorRole = "participant",
+                    deviceSeq = seq, actorId = actor, actorRole = "participant",
                     correlationId = UUID.randomUUID(), player = player, visitTotal = total,
                     dartsUsed = null, occurredAt = "2026-09-04T19:00:00Z", occurredTz = "Europe/London",
                 ),
@@ -72,8 +73,11 @@ class InjectionTest {
 
         // A real match between two strangers.
         val theirMatch = UUID.randomUUID()
-        matches.open(theirMatch, UUID.randomUUID(), UUID.randomUUID(), format(Seat.HOME))
+        matches.open(theirMatch, participant, UUID.randomUUID(), format(Seat.HOME))
         check("a legitimate visit from a real participant is applied", visit(theirMatch, "home", 1) is CommandResult.Applied)
+        val outsider = visit(theirMatch, "home", 1, actor = UUID.randomUUID())
+        check("an author who is not in the match and holds no grant is refused even with a good seat, and writes nothing",
+            outsider is CommandResult.NotThisMatch && events(theirMatch) == 1)
 
         // The attack: an outsider writes into their match.
         val r = visit(theirMatch, "Mallory", 2)
@@ -144,6 +148,6 @@ class InjectionTest {
         }
 
         println("  $passed injection properties held")
-        assertEquals(12, passed)
+        assertEquals(13, passed)
     }
 }

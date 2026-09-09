@@ -33,8 +33,9 @@ class StatsProjectionTest {
         val h = CommandHandler(c)
         val match = UUID.randomUUID()
         val device = UUID.randomUUID()
+        val homePlayer = UUID.randomUUID()
         var seq = 0L
-        Matches(c).open(match, UUID.randomUUID(), UUID.randomUUID(), playtestFormat())
+        Matches(c).open(match, homePlayer, UUID.randomUUID(), playtestFormat())
 
         // Home: 501 -180-> 321 -180-> 141 -101-> 40 -20-> 20 -20-> 0
         //   141, 40 and 20 are all checkout numbers, so all three visits began on a finish.
@@ -45,7 +46,7 @@ class StatsProjectionTest {
             val r = h.handle(
                 VisitCommand(
                     commandId = UUID.randomUUID(), matchId = match, deviceId = device,
-                    deviceSeq = seq, actorId = UUID.randomUUID(), actorRole = "participant",
+                    deviceSeq = seq, actorId = homePlayer, actorRole = "participant",
                     correlationId = UUID.randomUUID(), player = player, visitTotal = total,
                     dartsUsed = darts, dartsAtDouble = atDouble,
                     occurredAt = "2026-09-04T19:00:00+01:00", occurredTz = "Europe/London",
@@ -133,7 +134,8 @@ class StatsProjectionTest {
             legs = thro.engine.Structure(thro.engine.StructureMode.FIRST_TO, 3),
             throwFirst = thro.engine.PlayerId("home"),
         )
-        Matches(c).open(match, UUID.randomUUID(), UUID.randomUUID(), format)
+        val homePlayer = UUID.randomUUID()
+        Matches(c).open(match, homePlayer, UUID.randomUUID(), format)
 
         var seq = 0L
         fun visit(player: String, total: Int) {
@@ -141,7 +143,7 @@ class StatsProjectionTest {
             val r = h.handle(
                 VisitCommand(
                     commandId = UUID.randomUUID(), matchId = match, deviceId = device,
-                    deviceSeq = seq, actorId = UUID.randomUUID(), actorRole = "participant",
+                    deviceSeq = seq, actorId = homePlayer, actorRole = "participant",
                     correlationId = UUID.randomUUID(), player = player, visitTotal = total,
                     dartsUsed = null, dartsAtDouble = null,
                     occurredAt = "2026-09-07T19:00:00+01:00", occurredTz = "Europe/London",

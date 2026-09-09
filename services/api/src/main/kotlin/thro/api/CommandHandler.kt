@@ -119,6 +119,18 @@ public class CommandHandler(private val connection: Connection) {
                 cmd.matchId, cmd.actorId, cmd.deviceId, Instant.parse(cmd.occurredAt),
             )
 
+            // 2b. But an author who is neither in the match nor was ever granted anything for it
+            //     is not a scorer whose authority lapsed — they are a stranger, and this is the
+            //     cross-match injection ADR-008 names as the highest-value attack. Refused before
+            //     any evidence exists, and receipted so a retry is answered the same way. (Hostile
+            //     review of the HTTP layer found the seat check alone let a stranger through.)
+            if (cmd.actorId !in match.participants && authority == Authority.UNGRANTED) {
+                val r = CommandResult.NotThisMatch("you are not in this match and hold no grant for it")
+                writeReceipt(cmd, r)
+                connection.commit()
+                return r
+            }
+
             // 3. Gapless per-device sequence. A gap means the device is missing events, so the
             //    server refuses rather than applying past it and silently reordering evidence.
             val expected = nextSeqFor(cmd.matchId, cmd.deviceId)
@@ -269,14 +281,17 @@ public class CommandHandler(private val connection: Connection) {
     }
 
     private fun writeReceipt(cmd: VisitCommand, result: CommandResult) {
+        // The stored body names its outcome, so a replay can be answered — over HTTP, with its
+        // status — exactly as the first answer was.
+        fun j(s: String?): String = if (s == null) "null" else "\"" + s.replace("\\", "\\\\").replace("\"", "\\\"") + "\""
         val (outcome, reason, body) = when (result) {
             is CommandResult.Applied ->
                 Triple("accepted", result.reason,
-                    "{\"effect\":\"${result.effect}\",\"deviceSeq\":${result.deviceSeq}}")
-            is CommandResult.Refused -> Triple("rejected", result.reason, "{\"reason\":\"${result.reason}\"}")
+                    "{\"outcome\":\"applied\",\"effect\":${j(result.effect)},\"reason\":${j(result.reason)},\"deviceSeq\":${result.deviceSeq}}")
+            is CommandResult.Refused -> Triple("rejected", result.reason, "{\"outcome\":\"refused\",\"why\":${j(result.reason)}}")
             is CommandResult.NotThisMatch ->
-                Triple("rejected", "NOT_THIS_MATCH", "{\"reason\":\"${result.reason}\"}")
-            else -> Triple("rejected", "UNEXPECTED", "{}")
+                Triple("rejected", "NOT_THIS_MATCH", "{\"outcome\":\"not_this_match\",\"why\":${j(result.reason)}}")
+            else -> Triple("rejected", "UNEXPECTED", "{\"outcome\":\"refused\",\"why\":\"unexpected\"}")
         }
         connection.prepareStatement(
             """

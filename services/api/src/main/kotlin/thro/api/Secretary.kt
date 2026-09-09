@@ -810,18 +810,24 @@ internal object Json {
 
     private class Parser(val s: String) {
         var i = 0
+        var depth = 0
         fun ws() { while (i < s.length && s[i].isWhitespace()) i++ }
         fun value(): Any? {
             ws()
             return when {
-                s.startsWith("{", i) -> obj()
-                s.startsWith("[", i) -> arr()
+                s.startsWith("{", i) -> nested { obj() }
+                s.startsWith("[", i) -> nested { arr() }
                 s.startsWith("\"", i) -> str()
                 s.startsWith("true", i) -> { i += 4; true }
                 s.startsWith("false", i) -> { i += 5; false }
                 s.startsWith("null", i) -> { i += 4; null }
                 else -> num()
             }
+        }
+        /** Nesting is bounded, so a body of a hundred thousand brackets is refused rather than overflowing the stack. */
+        fun <T> nested(block: () -> T): T {
+            require(++depth <= 32) { "JSON nested deeper than 32 levels" }
+            try { return block() } finally { depth-- }
         }
         fun obj(): Map<String, Any?> {
             val m = linkedMapOf<String, Any?>(); i++; ws()

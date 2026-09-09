@@ -21,7 +21,7 @@ public fun main() {
     val connect: () -> Connection = {
         DriverManager.getConnection(
             "jdbc:postgresql://${env("PGHOST") ?: "localhost"}:${env("PGPORT") ?: "5432"}/${env("PGDATABASE") ?: "postgres"}",
-            env("PGUSER") ?: "postgres", "",
+            env("PGUSER") ?: "postgres", env("PGPASSWORD") ?: "",
         )
     }
     val port = env("PORT")?.toIntOrNull() ?: 8080

@@ -100,6 +100,19 @@ public class Grants(private val connection: Connection) {
     }
 
     /** Withdraws a grant. The row is kept: what authority existed and when is itself evidence. */
+    /** The actor role of the most recent grant issued to this actor and device for the match (or its event), or null. */
+    public fun roleFor(actorId: UUID, deviceId: UUID, matchId: UUID): String? =
+        connection.prepareStatement(
+            """
+            SELECT actor_role FROM trust.scoring_grant
+             WHERE actor_id = ? AND device_id = ? AND (match_id = ? OR match_id IS NULL)
+             ORDER BY (match_id IS NOT NULL) DESC, issued_at DESC LIMIT 1
+            """.trimIndent(),
+        ).use { ps ->
+            ps.setObject(1, actorId); ps.setObject(2, deviceId); ps.setObject(3, matchId)
+            ps.executeQuery().use { rs -> if (rs.next()) rs.getString(1) else null }
+        }
+
     public fun revoke(grantId: UUID, revokedBy: UUID, reason: String) {
         connection.prepareStatement(
             """
