@@ -16,7 +16,7 @@ final class ClubStateTests: XCTestCase {
     }
 
     private func club(role: OrgRole?, members: [ClubMember] = []) -> Club {
-        Club(id: "c", name: "The Feathers A", kind: .club, meta: "Crediton · 24 members",
+        Club(id: "c", name: "The Feathers A", kind: .team, meta: "Crediton · 24 members",
              yourRole: role, members: members,
              fixtures: [Fixture(id: "f1", title: "Feathers A v Ship Inn", when: "Tue 15 Sep", venue: "The Feathers"),
                         Fixture(id: "f2", title: "Ship Inn v Feathers A", when: "Tue 8 Sep", venue: "The Ship Inn", state: .played)])
@@ -120,9 +120,9 @@ final class ClubStateTests: XCTestCase {
                        "a hyphen is a word break")
         XCTAssertEqual(Club(id: "x", name: "Summer Cup 2026", kind: .tournament, meta: "").initials, "SC2")
         // "A" is not dropped: Feathers A and Feathers B are different clubs and must not share a badge.
-        XCTAssertEqual(Club(id: "x", name: "The Feathers B", kind: .club, meta: "").initials, "FB")
-        XCTAssertNotEqual(Club(id: "x", name: "The Feathers A", kind: .club, meta: "").initials,
-                          Club(id: "y", name: "The Feathers B", kind: .club, meta: "").initials)
+        XCTAssertEqual(Club(id: "x", name: "The Feathers B", kind: .team, meta: "").initials, "FB")
+        XCTAssertNotEqual(Club(id: "x", name: "The Feathers A", kind: .team, meta: "").initials,
+                          Club(id: "y", name: "The Feathers B", kind: .team, meta: "").initials)
         XCTAssertEqual(member("jl").initials, "JP", "a person's initials come from their name")
 
         XCTAssertTrue(FixtureState.played.isTerminal)

@@ -185,7 +185,7 @@ final class ImageTests: XCTestCase {
     /// file to leak, whatever any screen later decides to render.
     func testAPictureForAMinorIsRefusedAtTheWrite() throws {
         let book = try ClubBook(path: directory.appendingPathComponent("book.sqlite").path)
-        let club = try book.createClub(name: "The Feathers", kind: "club")
+        let club = try book.createClub(name: "The Feathers", kind: "team")
         let adult = try book.addMember(to: club.id, name: "Alex", role: "member", ageBand: "adult")
         let minor = try book.addMember(to: club.id, name: "Jamie", role: "member", ageBand: "minor")
         let unknown = try book.addMember(to: club.id, name: "Sam", role: "member", ageBand: "unknown")
@@ -210,7 +210,7 @@ final class ImageTests: XCTestCase {
     /// build, an edited file, or a bug of ours, and none of those is a reason to render it.
     func testAPictureIsNotShownIfTheAgeStopsSayingAdult() throws {
         let book = try ClubBook(path: directory.appendingPathComponent("book.sqlite").path)
-        let club = try book.createClub(name: "The Feathers", kind: "club")
+        let club = try book.createClub(name: "The Feathers", kind: "team")
         let person = try book.addMember(to: club.id, name: "Alex", role: "member", ageBand: "adult")
         try book.setAvatar("asset-1", forMember: person.id, in: club.id)
         XCTAssertEqual(try book.members(of: club.id).first?.avatarAssetId, "asset-1")
@@ -224,7 +224,7 @@ final class ImageTests: XCTestCase {
 
     func testABadgeIsSetAndClearedAndAClubThatIsNotHereIsRefused() throws {
         let book = try ClubBook(path: directory.appendingPathComponent("book.sqlite").path)
-        let club = try book.createClub(name: "The Feathers", kind: "club")
+        let club = try book.createClub(name: "The Feathers", kind: "team")
         XCTAssertNil(try book.clubs().first?.badgeAssetId)
 
         try book.setBadge("badge-1", on: club.id)

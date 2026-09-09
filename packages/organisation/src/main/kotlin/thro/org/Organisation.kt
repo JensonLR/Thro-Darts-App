@@ -1,7 +1,7 @@
 package thro.org
 
 /**
- * Clubs, leagues and tournaments — the bodies a player belongs to.
+ * Teams, leagues and tournaments — the bodies a player belongs to.
  *
  * The founder asked for these to hold their own data, carry their own branding, and be a place where
  * a club can reach its members and arrange things. This package is the part of that engineering can
@@ -29,11 +29,16 @@ public value class PersonId(public val value: String) {
  *
  * All three hold members, carry branding and arrange fixtures, so they are one type with a kind
  * rather than three near-identical types. The kind is what the thing is CALLED to its members and
- * what its lifetime is: a club is standing, a league runs a season, a tournament runs once. Nothing
+ * what its lifetime is: a team is standing, a league runs a season, a tournament runs once. Nothing
  * in this package branches on it — anything that needs to is a product rule, not a structural one,
  * and would be wrong to invent here.
+ *
+ * `TEAM` was `CLUB` until the founder's instruction of 2026-09-09 (ADR-017, PD-028): the standing
+ * competitive organisation is the Team whatever it calls itself — darts team, darts club, pub team,
+ * side — and THRØ carries no separate club concept. The kind is renamed; nothing else about it
+ * changed, and this package has no persistence for a rename to disturb.
  */
-public enum class OrganisationKind { CLUB, LEAGUE, TOURNAMENT }
+public enum class OrganisationKind { TEAM, LEAGUE, TOURNAMENT }
 
 /**
  * What a person may do inside an organisation.

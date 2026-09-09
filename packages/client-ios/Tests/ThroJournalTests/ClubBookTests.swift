@@ -29,11 +29,11 @@ final class ClubBookTests: XCTestCase {
         XCTAssertEqual(book.configuration, DurabilityConfiguration.measured)
         // Proved by the open succeeding: `Journal.configure` reads every pragma back and throws
         // when the database reports something else.
-        XCTAssertNoThrow(try book.createClub(name: "The Feathers", kind: "club"))
+        XCTAssertNoThrow(try book.createClub(name: "The Feathers", kind: "team"))
     }
 
     func testAClubIsWrittenAndReadBackAcrossAReopen() throws {
-        let made = try open().createClub(name: "  The Feathers  ", kind: "club", accentHex: "#0f3d2e")
+        let made = try open().createClub(name: "  The Feathers  ", kind: "team", accentHex: "#0f3d2e")
         XCTAssertEqual(made.name, "The Feathers", "a typed name is trimmed, because people type spaces")
         XCTAssertEqual(made.accentHex, "0F3D2E", "a hash is accepted and dropped; the digits are stored")
 
@@ -42,14 +42,14 @@ final class ClubBookTests: XCTestCase {
         XCTAssertEqual(clubs.count, 1)
         XCTAssertEqual(clubs[0].id, made.id)
         XCTAssertEqual(clubs[0].name, "The Feathers")
-        XCTAssertEqual(clubs[0].kind, "club")
+        XCTAssertEqual(clubs[0].kind, "team")
         XCTAssertEqual(clubs[0].accentHex, "0F3D2E")
     }
 
     /// `an organisation needs a name it can be called by`, the same refusal the Kotlin domain makes.
     func testAClubWithoutANameIsRefused() throws {
         let book = try open()
-        XCTAssertThrowsError(try book.createClub(name: "   ", kind: "club")) { error in
+        XCTAssertThrowsError(try book.createClub(name: "   ", kind: "team")) { error in
             XCTAssertEqual(error as? ClubBookError, .blankName)
         }
         XCTAssertEqual(try book.clubs().count, 0, "nothing was written")
@@ -64,8 +64,8 @@ final class ClubBookTests: XCTestCase {
                 XCTAssertEqual(error as? ClubBookError, .badAccent(bad))
             }
         }
-        XCTAssertNoThrow(try book.createClub(name: "No accent", kind: "club", accentHex: nil))
-        XCTAssertNoThrow(try book.createClub(name: "Blank accent", kind: "club", accentHex: "  "))
+        XCTAssertNoThrow(try book.createClub(name: "No accent", kind: "team", accentHex: nil))
+        XCTAssertNoThrow(try book.createClub(name: "Blank accent", kind: "team", accentHex: "  "))
         XCTAssertEqual(try book.clubs().compactMap(\.accentHex), [], "both wear the brand's own")
     }
 
@@ -74,7 +74,7 @@ final class ClubBookTests: XCTestCase {
         XCTAssertThrowsError(try book.createClub(name: "Society", kind: "society")) { error in
             XCTAssertEqual(error as? ClubBookError, .unknownValue(field: "kind", value: "society"))
         }
-        let club = try book.createClub(name: "The Feathers", kind: "club")
+        let club = try book.createClub(name: "The Feathers", kind: "team")
         XCTAssertThrowsError(try book.addMember(to: club.id, name: "Sam", role: "captain", ageBand: "adult")) { error in
             XCTAssertEqual(error as? ClubBookError, .unknownValue(field: "role", value: "captain"))
         }
@@ -87,7 +87,7 @@ final class ClubBookTests: XCTestCase {
     /// `unknown`, which is withheld, and never as `adult`, which is listed and messaged.
     func testAnUnreadableAgeBandReadsBackAsUnknownAndNeverAsAdult() throws {
         let book = try open()
-        let club = try book.createClub(name: "The Feathers", kind: "club")
+        let club = try book.createClub(name: "The Feathers", kind: "team")
         try book.addMember(to: club.id, name: "Alex", role: "member", ageBand: "adult")
         // A row written by some future version, or corrupted: the store's own guard refuses this on
         // the way in, so it is put there behind the guard's back on purpose.
@@ -120,7 +120,7 @@ final class ClubBookTests: XCTestCase {
     /// rule, so it cannot offer a move the domain would refuse.
     func testAFixtureMovesUntilItIsCancelledOrPlayedAndThenNeverAgain() throws {
         let book = try open()
-        let club = try book.createClub(name: "The Feathers", kind: "club")
+        let club = try book.createClub(name: "The Feathers", kind: "team")
         let f = try book.addFixture(to: club.id, title: "Home to The Bell", when: Date(), venue: "The Feathers")
 
         try book.moveFixture(f.id, in: club.id, to: "postponed")
@@ -137,8 +137,8 @@ final class ClubBookTests: XCTestCase {
     /// because `PRAGMA foreign_keys = ON` is in force, and that is what this asserts.
     func testDeletingAClubTakesItsRosterAndItsFixturesWithIt() throws {
         let book = try open()
-        let club = try book.createClub(name: "The Feathers", kind: "club")
-        let other = try book.createClub(name: "The Bell", kind: "club")
+        let club = try book.createClub(name: "The Feathers", kind: "team")
+        let other = try book.createClub(name: "The Bell", kind: "team")
         try book.addMember(to: club.id, name: "Alex", role: "member", ageBand: "adult")
         try book.addFixture(to: club.id, title: "Home to The Bell", when: Date(), venue: "The Feathers")
         try book.addMember(to: other.id, name: "Sam", role: "member", ageBand: "adult")
@@ -163,7 +163,7 @@ final class ClubBookTests: XCTestCase {
 
     func testARenameKeepsTheClubAndItsRoster() throws {
         let book = try open()
-        let club = try book.createClub(name: "Feathrs", kind: "club")
+        let club = try book.createClub(name: "Feathrs", kind: "team")
         try book.addMember(to: club.id, name: "Alex", role: "member", ageBand: "adult")
 
         try book.updateClub(id: club.id, name: "The Feathers", accentHex: "8B1E3F")
@@ -220,6 +220,78 @@ extension ClubBookTests {
 private extension ClubBook {
     /// A club whose only interesting property is its accent, for the accent refusals.
     func createThrowaway(_ accent: String) throws {
-        try createClub(name: "Accent test", kind: "club", accentHex: accent)
+        try createClub(name: "Accent test", kind: "team", accentHex: accent)
+    }
+
+}
+
+extension ClubBookTests {
+    // MARK: - ADR-017 / PD-028: the standing organisation is the team, whatever the row called it
+
+    /// A row written before 2026-09-09 says `club`. It was always a team, and it reads as one the
+    /// next time the book opens — a vocabulary token normalised in place, no row touched otherwise.
+    func testARowWrittenAsAClubReadsBackAsATeamAfterMigration() throws {
+        _ = try open()   // creates the schema
+        var raw: OpaquePointer?
+        XCTAssertEqual(sqlite3_open(path, &raw), SQLITE_OK)
+        defer { sqlite3_close(raw) }
+        XCTAssertEqual(sqlite3_exec(raw, """
+            INSERT INTO club (club_id, name, kind, accent_hex, created_at)
+            VALUES ('legacy-1', 'The Feathers', 'club', NULL, '2026-09-01T18:00:00Z');
+            """, nil, nil, nil), SQLITE_OK)
+        let reopened = try open()
+        let feathers = try XCTUnwrap(reopened.clubs().first { $0.id == "legacy-1" })
+        XCTAssertEqual(feathers.kind, "team")
+        XCTAssertEqual(feathers.name, "The Feathers", "nothing but the token changed")
+    }
+
+    /// The legacy word is still accepted on write, and normalised, so a caller that has not caught
+    /// up cannot write the old vocabulary back into the book.
+    func testTheLegacyWordIsAcceptedOnWriteAndStoredAsTeam() throws {
+        let made = try open().createClub(name: "The Bell", kind: "club")
+        XCTAssertEqual(made.kind, "team")
+        XCTAssertEqual(try open().clubs().first?.kind, "team")
+    }
+
+    /// A team a league fields is a Team in its own right: adding one to a league creates an
+    /// organisation with the SAME identifier, so the league's fixtures keep their meaning and the
+    /// team appears among the teams this phone keeps.
+    func testALeaguesTeamIsATeamInItsOwnRight() throws {
+        let book = try open()
+        let league = try book.createClub(name: "Tuesday League", kind: "league", unit: "legs")
+        let side = try book.addTeam(to: league.id, name: "The Feathers A", id: "side-a")
+        let orgs = try book.clubs()
+        let asOrganisation = try XCTUnwrap(orgs.first { $0.id == "side-a" })
+        XCTAssertEqual(asOrganisation.kind, "team")
+        XCTAssertEqual(asOrganisation.name, "The Feathers A")
+        XCTAssertEqual(side.id, "side-a")
+        // Renaming the team renames it everywhere the league lists it.
+        try book.updateClub(id: "side-a", name: "The Feathers Arrows", accentHex: nil)
+        XCTAssertEqual(try book.teams(of: league.id).map(\.name), ["The Feathers Arrows"])
+        // Removing it from the league removes the affiliation, not the team.
+        try book.removeTeam("side-a", from: league.id)
+        XCTAssertTrue(try book.teams(of: league.id).isEmpty)
+        XCTAssertNotNil(try book.clubs().first { $0.id == "side-a" }, "a team's identity outlives any one league")
+    }
+
+    /// A league team written before teams were organisations gains its organisation on open — with
+    /// its identifier, never by matching a name against an existing team.
+    func testAPreExistingLeagueTeamGainsItsOrganisationOnMigration() throws {
+        let league = try open().createClub(name: "Old League", kind: "league", unit: "legs")
+        var raw: OpaquePointer?
+        XCTAssertEqual(sqlite3_open(path, &raw), SQLITE_OK)
+        defer { sqlite3_close(raw) }
+        // A standing team called The Feathers already exists; the league's "The Feathers" must NOT be merged into it.
+        XCTAssertEqual(sqlite3_exec(raw, """
+            INSERT INTO club (club_id, name, kind, accent_hex, created_at)
+            VALUES ('standing', 'The Feathers', 'club', NULL, '2026-09-01T18:00:00Z');
+            INSERT INTO club_team (club_id, team_id, name, added_at)
+            VALUES ('\(league.id)', 'old-side', 'The Feathers', '2026-09-02T18:00:00Z');
+            """, nil, nil, nil), SQLITE_OK)
+        let reopened = try open()
+        let ids = Set(try reopened.clubs().map(\.id))
+        XCTAssertTrue(ids.contains("old-side"), "the league's team became a team with its own id")
+        XCTAssertTrue(ids.contains("standing"), "and the standing team is untouched")
+        XCTAssertEqual(try reopened.clubs().filter { $0.name == "The Feathers" }.count, 2, "two teams, never merged on a name")
     }
 }

@@ -1,7 +1,7 @@
 # Running the iOS client
 
 > **Verification status, 2026-09-07.** Every package compiles and every test passes on macOS CI —
-> 577 tests in all: 157 design, 100 journal, 97 scoring session and share card, 198 opening, app and clubs, 25 Lock Screen, wall and widgets — and the
+> 581 tests in all: 157 design, 104 journal, 97 scoring session and share card, 198 opening, app and teams, 25 Lock Screen, wall and widgets — and the
 > Xcode app builds for the iOS simulator on
 > CI with Xcode 26.6, on every push that touches them. **The app has run on a phone**: the founder's,
 > the evening of 2026-09-05, a full best-of-3 from setup to result, in dark mode, on an iPhone 14 Pro Max
@@ -16,7 +16,7 @@
 | `packages/engine-swift` | the scoring engine | conformance corpus on Linux, every push |
 | `packages/statistics-swift` | the statistics layer, honest about its basis | 25 statistics tests on Linux, every push |
 | `packages/client-ios` → `ThroDesign` | the approved components as SwiftUI | 157 design tests on macOS, every push |
-| `packages/client-ios` → `ThroJournal` | the on-device journal (ADR-006), with retractions (PD-004), and its own device identity; and the **club book**, the separate database a captain's roster and fixture list live in | 100 journal tests on macOS, every push — 43 on the journal itself, 14 on the device's book of clubs and people, 15 on the export and what it refuses to read back, 8 on images, and 11 on the league book — teams, results, units and what the database refuses to write |
+| `packages/client-ios` → `ThroJournal` | the on-device journal (ADR-006), with retractions (PD-004), and its own device identity; and the **club book**, the separate database a captain's roster and fixture list live in | 104 journal tests on macOS, every push — 43 on the journal itself, 18 on the device's book of teams and people, 15 on the export and what it refuses to read back, 8 on images, and 11 on the league book — teams, results, units and what the database refuses to write |
 | `packages/client-ios` → `ThroPlay` | setup, ready, scoring, result, undo, the bust and leg announcements, double-in (PD-008), the checkout route (PD-013), confirming the result (PD-011) and the share card | 97 session tests on macOS, every push |
 | `packages/client-ios` → `ThroApp` | Home, tabs, Settings, the root view, the opening (PD-007), and the club, league, tournament and profile screens under Discover (PD-009, PD-010) | 198 app tests on macOS, every push: 13 on the opening (timeline, the tagline's read time, cues, easings, geometry, the throw, the chalk stroke, the wall's dust, the dart), 15 on Home's reading of the journal, the device identity, the shelf and what a delete refuses to do (PD-026), 5 on the club rules the screens obey, 14 on the mapping between the club book and those screens, 7 on who may have a picture, who is told why not, and what a page's top bar offers, 16 on a club, a league and a tournament being three different things, 10 on the knockout draw — the seeding identities for every bracket to 256, the byes, a whole tournament played through, and a knockout match that cannot end level — 10 on double elimination, including a whole one played out and every entrant but the champion checked to have lost exactly twice, and 11 on groups then knockout, including that nobody is drawn against their own group in the first round across all fifteen setups, and that the note shown to a tournament with no shape yet says something different to each of its three readers — the table's arithmetic and its total ordering, where each result came from, and what each tournament shape counts. 26 on **what this build can show you on the phone it is running on** — five states told apart, an unasked permission never reported as a refusal nor answered with a trip to iPhone Settings, every row carrying a sentence you could find something by, the four rows with nowhere to send anybody never growing a button, and every complete match counted as shareable including an abandoned one, which the first version of that count got wrong. 7 on **how a visit is entered and where a player finds the choice** — an unknown stored notation falls back to the default rather than guessing, switching twice comes back, and no two notations describe themselves the same way in a label, in speech or in the sentence under the Settings row. 11 on **a player's own page** — that a bounded figure reaches it still marked as a range, which the old mapping quietly dropped; that the headline figure is found by the label the figures actually carry rather than a literal typed at the call site; that a profile's mark is bigger than a roster row's; and that a club member with no average gets a dash with a reason beside it rather than a zero. The layouts themselves are drawn, not tested — and until 2026-09-07 nothing checked that a screen could be reached at all, which is how the club editor sat unroutable |
 | `apps/ios/ThroDarts.xcodeproj` | the app target: thirteen lines that mount `ThroApp`, the ten embedded faces with their licences, the icon and the launch screen (PD-006) | `xcodebuild` for the iOS simulator, every push; `check_fonts.py` on Linux, every push |
@@ -205,7 +205,7 @@ darts have a total, but a total does not have three darts.)
 
 #### A player's own page
 
-Open **Discover → a club → a member**, or a person from Home. The picture (a club member's, when
+Open **Discover → a team → a member**, or a person from Home. The picture (a club member's, when
 they have one and are recorded as an adult) is 96 pt at the top, the name under it, and then the
 one figure a player opens their own page for — **Recent form** at 56 pt, with the window it covers
 and *Not a rating* under it. The rest of the figures are below it in the same grid every other
@@ -240,14 +240,14 @@ Then, in this order, because each one needs the one before it:
 | 1 | **Score a match** | Start match → two names → **Start scoring** → throw one visit | Nothing |
 | 2 | **Lock Screen and Dynamic Island** | **Stay on the scoring screen** and lock the phone. Both remainders are on the Lock Screen; swipe up to the Home Screen and they are in the Dynamic Island | Live Activities on for THRØ, and the scoring screen still open — the scoreboard lasts exactly as long as that screen, so backing out of a match takes it down on purpose |
 | 3 | **Apple Watch** | With the same match running, raise your wrist and swipe to the Smart Stack | An Apple Watch paired. There is no watch app — this is the Live Activity reaching the watch by itself |
-| 4 | **Club TV mode** | Plug in an HDMI adapter, or Control Centre → **Screen Mirroring** → an Apple TV. The board fills the screen at room size while the phone keeps the keypad | A cable or an AirPlay receiver. **No app can turn this on for you.** If the readiness screen says *Blocked* here, the build cannot be given a screen at all and mirroring is all you will get |
+| 4 | **Venue TV mode** | Plug in an HDMI adapter, or Control Centre → **Screen Mirroring** → an Apple TV. The board fills the screen at room size while the phone keeps the keypad | A cable or an AirPlay receiver. **No app can turn this on for you.** If the readiness screen says *Blocked* here, the build cannot be given a screen at all and mirroring is all you will get |
 | 5 | **Share card** | Finish the match → on the result screen, **Share the result**. Opening a finished match from Home lands on the same screen | A finished match — won, retired **or** abandoned. An abandoned one gets a card too: no scoreline, and a line saying nothing is claimed about who won |
 | 6 | **Home Screen widget** | Long-press the Home Screen → **+** → THRØ → the small or the medium | The App Group (below). Add it once; it redraws itself |
 | 7 | **Lock Screen widget** | Lock the phone → long-press → **Customise** → the Lock Screen → tap under the clock → THRØ | The same App Group |
-| 8 | **Fixture reminder** | Discover → a club → **Fixtures** → **+** → give it a date more than two hours away → under it, **Remind me**. Quicker once one exists: Live → the fixture under *Still to play* | A club with a dated fixture. The phone asks for notifications the first time |
+| 8 | **Fixture reminder** | Discover → a team → **Fixtures** → **+** → give it a date more than two hours away → under it, **Remind me**. Quicker once one exists: Live → the fixture under *Still to play* | A club with a dated fixture. The phone asks for notifications the first time |
 | 9 | **Add to calendar** | Beside **Remind me** on the same fixture | The same fixture. THRØ asks only to *add* — it cannot read your calendar |
 | 10 | **Find the venue** | Beside those two, on a fixture with a venue typed into it | Maps. THRØ never asks where you are |
-| 11 | **Find a match in iPhone search** | Swipe down on the Home Screen, type a player's or club's name | Settings → Search left on |
+| 11 | **Find a match in iPhone search** | Swipe down on the Home Screen, type a player's or team's name | Settings → Search left on |
 | 12 | **Performance reports** | Settings → **How the app performs** → turn it on, then come back tomorrow | Nothing, but iOS delivers these **at most once a day** — there will be nothing to see today |
 | 13 | **Siri, Shortcuts and the Action Button** | Say *"Start a match in THRØ"* to Siri, or *"Continue my match in THRØ"*. Both are in the Shortcuts app under THRØ, and either can go on the Action Button: iPhone Settings → Action Button → Shortcut → THRØ | Nothing. Two phrases rather than ten, because Siri matches them literally |
 | 14 | **VoiceOver on the scoring screen** | Settings → Accessibility → VoiceOver on, then score a visit | Nothing. The remaining says *"on a finish"*, a bust says *"Bust — score restored"*, and a figure says its range rather than a bare number |
@@ -314,12 +314,12 @@ exactly what CI does (`xcodebuild -scheme ThroDarts -destination 'generic/platfo
   phone shows three dashes and says why, because a number without its sample is a claim); then the
   record under *On this device*, with **Edit** revealing an archive and a delete on every row; then
   the shelf, if anything is on it. Tapping a match resumes it or opens its result.
-- **Live.** What is actually happening: matches in progress on this phone, fixtures your clubs have
+- **Live.** What is actually happening: matches in progress on this phone, fixtures your teams have
   played and nobody has entered a result for, and fixtures still to play. It says at the bottom that
   watching somebody else's match needs THRØ's servers, which are not in this build.
 - **Play.** The match still going, **Start match**, what was played last time — read back from the
   journal rather than remembered separately — and the last three matches.
-- **You.** Who plays on this phone and the clubs you keep, with the note that a profile, a passport
+- **You.** Who plays on this phone and the teams you keep, with the note that a profile, a passport
   and a rating need THRØ's servers **at the bottom**, where an absence belongs. The export's
   settings action is in the header.
 - **Scoring.** When the thrower is on a finish, the route appears under the remaining score —
@@ -360,9 +360,8 @@ exactly what CI does (`xcodebuild -scheme ThroDarts -destination 'generic/platfo
   called from nowhere. This runbook described the Edit screen as though you could open it. Every test
   was green, because no test here builds a screen — `tools/check_screens_reachable.py` now fails a
   build on a screen nothing constructs or a route case nothing assigns.
-- **Discover — clubs, leagues and tournaments.** *No clubs yet* with one action: **Start a club**.
-  What you start is kept on this phone and nowhere else. A club has a name, a kind (club, league or
-  tournament) and — for a **league**, what its results are counted in (legs, matches or points),
+- **Discover — teams, leagues and tournaments.** *No teams yet* with one action: **Start a team**.
+  What you start is kept on this phone and nowhere else. A club has a name, a kind (team, league or tournament) and — for a **league**, what its results are counted in (legs, matches or points),
   which is asked once because a stored 3–1 with no unit on it cannot be reinterpreted later; for a
   **tournament**, its shape, chosen once from four. And — if you want one — its own colour, picked
   from thirteen swatches or from the
@@ -661,7 +660,7 @@ None of these have been on a phone at all. In the order you are most likely to m
    figure is a dash in the quieter neutral with its reason under it. Turn VoiceOver on for one screen
    and check it says "not available" rather than reading out a dash.
 9. **Settings → Your darts** says whether your matches are in the phone's backup, and exports them.
-10. **Clubs.** Start one, add a member, add a fixture, give it a badge from your photo library.
+10. **Teams.** Start one, add a member, add a fixture, give it a badge from your photo library.
 11. **Settings → What you can see on this phone**, first in Settings. Nine surfaces went in over the
     last few days and most of them only appear once something else is true — a match in progress, a
     screen plugged in, a fixture with a date. This reads what *this* phone will allow and says where

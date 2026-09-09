@@ -346,7 +346,7 @@ final class ReadinessTests: XCTestCase {
                        .place("Start a match", .newMatch))
         XCTAssertEqual(find("share", .init()).go, .place("Start a match", .newMatch))
         XCTAssertEqual(find("share", .init(finishedMatches: 1)).go, .place("Open Home", .tab(.home)))
-        XCTAssertEqual(find("venue", .init()).go, .place("Open a club", .tab(.discover)))
+        XCTAssertEqual(find("venue", .init()).go, .place("Open a team", .tab(.discover)))
         // A scoreboard that is up has nothing to tap: the next move is to lock the phone, and no
         // app may do that for anybody.
         XCTAssertNil(find("lock", .init(liveActivitiesAllowed: true, liveActivityUp: true,

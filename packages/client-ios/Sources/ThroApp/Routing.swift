@@ -38,7 +38,8 @@ public enum ThroRoute: Equatable, Hashable, Sendable {
     case match(MatchId)
     /// Somebody this device knows, by their local person id.
     case person(String)
-    /// A club, league or tournament this device keeps.
+    /// An organisation this device keeps — a team, a league or a tournament (ADR-017). The case
+    /// name is historical; the link is `thro://e/<id>`, and `club` and `team` are accepted as aliases.
     case club(String)
     /// Start a new match. An action rather than a place, and an address all the same: it is what a
     /// Shortcut, the Action Button and a widget all want to name, and there is nowhere else to send
@@ -103,7 +104,7 @@ extension ThroRoute {
         case ("p", let id?), ("person", let id?):
             guard !id.isEmpty else { return nil }
             self = .person(id)
-        case ("e", let id?), ("club", let id?):
+        case ("e", let id?), ("club", let id?), ("team", let id?):
             guard !id.isEmpty else { return nil }
             self = .club(id)
         default:

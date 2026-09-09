@@ -68,7 +68,7 @@ public enum ClubBookError: Error, Equatable, CustomStringConvertible {
 public struct StoredClub: Equatable, Sendable {
     public let id: String
     public let name: String
-    /// `club`, `league` or `tournament`. Held as text because the words belong to the screens, and
+    /// `team`, `league` or `tournament` (`club` in rows written before ADR-017, read as `team`). Held as text because the words belong to the screens, and
     /// refused on write so a read never has to guess.
     public let kind: String
     /// Six hex digits, or nil when the club wears the brand's own accent.
@@ -176,7 +176,11 @@ public struct StoredResult: Equatable, Sendable {
 }
 
 public final class ClubBook {
-    public static let kinds: Set<String> = ["club", "league", "tournament"]
+    /// `team` was `club` until ADR-017 / PD-028. The legacy word is still accepted on write and
+    /// normalised, and rows already holding it are normalised once by `migrate`, because the standing
+    /// organisation was always the team whatever the row called it.
+    public static let kinds: Set<String> = ["team", "league", "tournament"]
+    static func canonicalKind(_ kind: String) -> String { kind == "club" ? "team" : kind }
     public static let roles: Set<String> = ["member", "official", "admin"]
     public static let ageBands: Set<String> = ["adult", "minor", "unknown"]
     public static let fixtureStates: Set<String> = ["scheduled", "postponed", "cancelled", "played"]
@@ -303,6 +307,24 @@ public final class ClubBook {
             );
             """)
 
+        // ADR-017 / PD-028 (2026-09-09): the standing organisation is the TEAM whatever it calls
+        // itself, and THRØ carries no separate club. Two deterministic, idempotent steps, neither of
+        // which loses a row:
+        //
+        //   * a row that says `club` is normalised to `team` — a vocabulary token, not data; and
+        //   * every team a league fielded (`club_team`, PD-019) becomes a team in its own right — an
+        //     organisation row with the SAME identifier, so every fixture's home_team_id and
+        //     away_team_id keep their meaning and `club_team` becomes the league's affiliation list.
+        //
+        // "The Feathers A" fielded by a league and "The Feathers" started as a club are two teams
+        // until a person links them. Nothing here matches on a name.
+        try Journal.exec(h, "UPDATE club SET kind = 'team' WHERE kind = 'club';")
+        try Journal.exec(h, """
+            INSERT INTO club (club_id, name, kind, created_at)
+            SELECT t.team_id, t.name, 'team', t.added_at FROM club_team t
+            WHERE NOT EXISTS (SELECT 1 FROM club c WHERE c.club_id = t.team_id);
+            """)
+
         // A result and where it came from (PD-020).
         //
         // **The CHECK is the point.** A scored result without a match to point at, or an official's
@@ -340,6 +362,7 @@ public final class ClubBook {
                            createdAt: Date = Date()) throws -> StoredClub {
         let clean = try ClubBook.checkedName(name)
         let accent = try ClubBook.checkedAccent(accentHex)
+        let kind = ClubBook.canonicalKind(kind)
         try ClubBook.check(kind, in: ClubBook.kinds, field: "kind")
         if let shape {
             guard kind == "tournament" else {
@@ -348,8 +371,8 @@ public final class ClubBook {
             try ClubBook.check(shape, in: ClubBook.tournamentShapes, field: "tournament shape")
         }
         if let unit {
-            guard kind != "club" else {
-                throw ClubBookError.unknownValue(field: "result unit for a club", value: unit)
+            guard kind != "team" else {
+                throw ClubBookError.unknownValue(field: "result unit for a team", value: unit)
             }
             try ClubBook.check(unit, in: ClubBook.resultUnits, field: "result unit")
         }
@@ -646,23 +669,32 @@ public final class ClubBook {
 
     // MARK: - teams (PD-019)
 
-    /// Adds a team to a league. A team is a name — who plays for it is `club_member`'s business, and
-    /// a league that has teams before it has players is the ordinary way a season is set up.
+    /// Adds a team to a league: a Team in its own right (ADR-017) — an organisation row of kind
+    /// `team`, created here if the identifier is new — and the league's affiliation to it in
+    /// `club_team`. Who plays for the team is `club_member`'s business, and a league that has teams
+    /// before it has players is the ordinary way a season is set up.
     @discardableResult
     public func addTeam(to clubId: String, name: String, id: String = UUID().uuidString,
                         addedAt: Date = Date()) throws -> StoredTeam {
         let clean = try ClubBook.checkedName(name)
         try requireClub(clubId)
+        try run("""
+            INSERT INTO club (club_id, name, kind, created_at)
+            SELECT ?, ?, 'team', ? WHERE NOT EXISTS (SELECT 1 FROM club WHERE club_id = ?);
+            """, [.text(id), .text(clean), .text(Journal.iso.string(from: addedAt)), .text(id)])
         try run("INSERT INTO club_team (club_id, team_id, name, added_at) VALUES (?, ?, ?, ?);",
                 [.text(clubId), .text(id), .text(clean), .text(Journal.iso.string(from: addedAt))])
         return StoredTeam(clubId: clubId, id: id, name: clean, addedAt: addedAt)
     }
 
-    /// Removes a team, **and every fixture it was in**.
+    /// Removes a team from a league — its affiliation, **and every fixture it was in**. The team
+    /// itself stays among the teams this phone keeps (ADR-017: a team's identity outlives any one
+    /// league) and can be deleted from its own page.
     ///
-    /// Deliberate, and the alternative is worse: a fixture whose home side no longer exists is a row
-    /// the table would have to guess about. A season that has started is a reason not to remove a
-    /// team, which is a decision for whoever is holding the phone, and the screen says what will go.
+    /// Taking the fixtures is deliberate, and the alternative is worse: a fixture whose home side no
+    /// longer exists is a row the table would have to guess about. A season that has started is a
+    /// reason not to remove a team, which is a decision for whoever is holding the phone, and the
+    /// screen says what will go.
     public func removeTeam(_ teamId: String, from clubId: String) throws {
         try run("""
             DELETE FROM fixture_result WHERE club_id = ? AND fixture_id IN
@@ -692,9 +724,12 @@ public final class ClubBook {
 
     public func teams(of clubId: String) throws -> [StoredTeam] {
         var out: [StoredTeam] = []
+        // The name is the team's own where the team exists as an organisation (it always does after
+        // migration); the affiliation's copy is the fallback for a row that predates that.
         try run("""
-            SELECT club_id, team_id, name, added_at FROM club_team
-            WHERE club_id = ? ORDER BY name COLLATE NOCASE;
+            SELECT t.club_id, t.team_id, COALESCE(c.name, t.name), t.added_at
+            FROM club_team t LEFT JOIN club c ON c.club_id = t.team_id
+            WHERE t.club_id = ? ORDER BY COALESCE(c.name, t.name) COLLATE NOCASE;
             """, [.text(clubId)]) { s in
             out.append(StoredTeam(
                 clubId: Journal.text(s, 0),

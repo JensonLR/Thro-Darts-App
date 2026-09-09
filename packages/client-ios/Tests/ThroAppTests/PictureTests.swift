@@ -19,7 +19,7 @@ final class PictureTests: XCTestCase {
     }
 
     private func club(role: OrgRole?) -> Club {
-        Club(id: "c", name: "The Feathers A", kind: .club, meta: "Crediton", yourRole: role,
+        Club(id: "c", name: "The Feathers A", kind: .team, meta: "Crediton", yourRole: role,
              members: [member(.adult)])
     }
 

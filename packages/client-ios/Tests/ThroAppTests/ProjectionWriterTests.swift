@@ -21,7 +21,7 @@ final class ProjectionWriterTests: XCTestCase {
     }
 
     private func club(_ fixtures: [Fixture]) -> Club {
-        Club(id: "c1", name: "The Feathers", kind: .club, meta: "", yourRole: .admin,
+        Club(id: "c1", name: "The Feathers", kind: .team, meta: "", yourRole: .admin,
              fixtures: fixtures)
     }
 

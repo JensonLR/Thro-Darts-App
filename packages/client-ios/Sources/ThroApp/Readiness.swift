@@ -280,18 +280,18 @@ public enum ThroReadiness {
         // `configurationForConnecting` is never called: no error, no log, nothing on the wall but
         // a large copy of the keypad.
         guard f.externalDisplayConfigured else {
-            return Surface(id: "wall", name: "Club TV mode", state: .blocked,
+            return Surface(id: "wall", name: "Venue TV mode", state: .blocked,
                            detail: "This build cannot be given a screen. Its scene manifest does "
                                  + "not offer to take one, so a cable or Screen Mirroring would "
                                  + "only mirror the phone. That is in the app's `Info.plist` and "
                                  + "not a switch anywhere on this phone.")
         }
         if f.externalDisplayAttached {
-            return Surface(id: "wall", name: "Club TV mode", state: .on,
+            return Surface(id: "wall", name: "Venue TV mode", state: .on,
                            detail: "A screen is attached now, and the board is on it — two names, "
                                  + "two remainders, at the size a room reads.")
         }
-        return Surface(id: "wall", name: "Club TV mode", state: .waiting,
+        return Surface(id: "wall", name: "Venue TV mode", state: .waiting,
                        detail: "Plug in an HDMI adapter, or open Control Centre and turn on Screen "
                              + "Mirroring. No app can start either of those, so there is "
                              + "deliberately no button for it here.")
@@ -354,12 +354,12 @@ public enum ThroReadiness {
             return Surface(id: "reminders", name: name, state: .waiting,
                            detail: "THRØ has not asked yet — it asks the first time you tap "
                                  + "**Remind me** on a fixture. \(fixtureRoute(f))",
-                           go: .place("Open a club", .tab(.discover)))
+                           go: .place("Open a team", .tab(.discover)))
         case .allowed:
             guard f.remindersSet > 0 else {
                 return Surface(id: "reminders", name: name, state: .waiting,
                                detail: "Allowed, and none set. \(fixtureRoute(f))",
-                               go: .place("Open a club", .tab(.discover)))
+                               go: .place("Open a team", .tab(.discover)))
             }
             let set = f.remindersSet == 1 ? "1 reminder is" : "\(f.remindersSet) reminders are"
             return Surface(id: "reminders", name: name, state: .on,
@@ -382,12 +382,12 @@ public enum ThroReadiness {
             return Surface(id: "calendar", name: name, state: .on,
                            detail: "Allowed. \(fixtureRoute(f)) **Add to calendar** sits beside the "
                                  + "reminder, and puts two hours in your calendar.",
-                           go: .place("Open a club", .tab(.discover)))
+                           go: .place("Open a team", .tab(.discover)))
         case .unasked:
             return Surface(id: "calendar", name: name, state: .waiting,
                            detail: "\(fixtureRoute(f)) **Add to calendar** is beside the reminder, "
                                  + "and asks the first time you tap it.",
-                           go: .place("Open a club", .tab(.discover)))
+                           go: .place("Open a team", .tab(.discover)))
         }
     }
 
@@ -396,7 +396,7 @@ public enum ThroReadiness {
                 detail: "\(fixtureRoute(f)) **Find the venue** is there only on a fixture with a "
                       + "venue typed into it, and searches Maps for exactly what was typed — THRØ "
                       + "has never known where it is, and does not ask this phone where you are.",
-                go: .place("Open a club", .tab(.discover)))
+                go: .place("Open a team", .tab(.discover)))
     }
 
     static func spotlight(_ f: Facts) -> Surface {
@@ -413,7 +413,7 @@ public enum ThroReadiness {
         }
         return Surface(id: "spotlight", name: name, state: .on,
                        detail: "Swipe down on the Home Screen and type a player's name, or a "
-                             + "club's. The index is on this phone and goes nowhere.")
+                             + "team's. The index is on this phone and goes nowhere.")
     }
 
     /// **Two intents that nothing in the app mentions.** They are built, they are in the app
@@ -486,8 +486,8 @@ public enum ThroReadiness {
     /// upcoming fixture, so a player who cannot find that list cannot find any of them.
     static func fixtureRoute(_ f: Facts) -> String {
         f.datedFixtures > 0
-            ? "Discover → a club → **Fixtures**, under one that has not been played yet."
-            : "No fixture on this phone has a date on it yet. Discover → a club → Fixtures → "
+            ? "Discover → a team → **Fixtures**, under one that has not been played yet."
+            : "No fixture on this phone has a date on it yet. Discover → a team → Fixtures → "
             + "**+**, give it a date, and the three controls appear under it."
     }
 

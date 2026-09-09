@@ -389,7 +389,7 @@ public final class ClubStore: ObservableObject {
                     result: ClubStore.result(results[f.id]),
                     round: f.round, slot: f.slot, bracket: f.bracket)
         }
-        let kind = OrgKind(rawValue: stored.kind) ?? .club
+        let kind = OrgKind(rawValue: stored.kind) ?? .team
         return Club(id: stored.id, name: stored.name,
                     kind: kind,
                     meta: ClubStore.meta(kind, members: members.count, teams: teams.count),
@@ -441,7 +441,7 @@ public final class ClubStore: ObservableObject {
             return teams == 0 ? "No teams yet" : "\(teams) team\(teams == 1 ? "" : "s")"
         case .tournament:
             return teams == 0 ? "No entrants yet" : "\(teams) entrant\(teams == 1 ? "" : "s")"
-        case .club:
+        case .team:
             return members == 0 ? "No members yet" : "\(members) member\(members == 1 ? "" : "s")"
         }
     }
@@ -592,7 +592,7 @@ public struct ClubsFlow: View {
         switch route {
         case .list:
             if let problem = store.openProblem {
-                ErrorState(title: "Clubs cannot be opened",
+                ErrorState(title: "Teams cannot be opened",
                            what: problem,
                            safe: "Your matches are in a different file and are not affected.",
                            todo: "Nothing is shown here rather than something wrong. Reopening the app tries again.",
@@ -622,7 +622,7 @@ public struct ClubsFlow: View {
         case .club(let id):
             if let c = club(id) {
                 switch c.kind {
-                case .club:
+                case .team:
                     ClubScreen(club: c,
                                badge: store.image(c.badgeAssetId),
                                picture: { store.image($0.avatarAssetId) },
@@ -752,9 +752,9 @@ public struct ClubsFlow: View {
 
         case .newFixture(let id):
             if let c = club(id) {
-                // A club's fixture is a title somebody typed; a league's or a tournament's is
+                // A team's fixture is a title somebody typed; a league's or a tournament's is
                 // between two of its own teams, so it is chosen and the title follows.
-                if c.kind == .club {
+                if c.kind == .team {
                     NewFixtureScreen(club: c, onBack: { route = .fixtures(id) }) { title, when, venue in
                         if store.addFixture(to: id, title: title, when: when, venue: venue) {
                             route = .fixtures(id)
@@ -907,9 +907,9 @@ public struct ClubsFlow: View {
 
     /// A club that was there and is not. Only reachable by deleting one, and it says which.
     @ViewBuilder private var gone: some View {
-        EmptyState(title: "That club is gone",
+        EmptyState(title: "That team is gone",
                    message: "It is no longer on this device.",
-                   actionLabel: "Back to clubs", onAction: { route = .list })
+                   actionLabel: "Back to teams", onAction: { route = .list })
             .padding(ThroSpacing.spaceScreenGutter)
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
             .background(ThroColor.colorBackgroundPrimary.ignoresSafeArea())
@@ -927,7 +927,7 @@ public struct ClubsFlow: View {
 /// anything that is not one.
 public struct NewClubScreen: View {
     @State private var name: String = ""
-    @State private var kind: OrgKind = .club
+    @State private var kind: OrgKind = .team
     @State private var accent: String = ""
     /// A tournament's shape (PD-021). Asked here because it is asked **once**: a shape decides what
     /// every round means, so there is no write that changes it afterwards, and a screen that let one
@@ -958,18 +958,18 @@ public struct NewClubScreen: View {
         return "Six hex digits, like 0F3D2E. \"\(typed)\" is not a colour."
     }
     private var initials: String {
-        Club(id: "", name: trimmedName.isEmpty ? "Your club" : trimmedName, kind: kind, meta: "").initials
+        Club(id: "", name: trimmedName.isEmpty ? "Your team" : trimmedName, kind: kind, meta: "").initials
     }
 
     public var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            TopBar("Start a club", onBack: onBack)
+            TopBar("Start a team", onBack: onBack)
             ScrollView {
                 VStack(alignment: .leading, spacing: ThroSpacing.spacing5) {
                     HStack(spacing: ThroSpacing.spacing4) {
                         Badge(initials, size: 64, accent: accentColour)
                         VStack(alignment: .leading, spacing: 2) {
-                            Text(trimmedName.isEmpty ? "Your club" : trimmedName)
+                            Text(trimmedName.isEmpty ? "Your team" : trimmedName)
                                 .thro(ThroTypography.heading3)
                                 .foregroundStyle(ThroColor.colorTextPrimary)
                                 .fixedSize(horizontal: false, vertical: true)
@@ -1087,8 +1087,9 @@ public struct NewClubScreen: View {
     /// app got wrong: they were three words for one screen.
     static func whatItIs(_ kind: OrgKind) -> String {
         switch kind {
-        case .club:
-            return "People who play together, with a roster and a fixture list."
+        case .team:
+            return "The people who play together — a darts team, a club side, a pub team — with a "
+                 + "roster and a fixture list. It competes as itself (ADR-017)."
         case .league:
             return "Teams that play each other over a season, with a table. Its members are the "
                  + "people who run it; the people who play are in the teams (PD-019)."
@@ -1123,7 +1124,7 @@ public struct NewMemberScreen: View {
     private var consequence: String {
         switch band {
         case .adult:
-            return "Listed to everyone inside the club, and reached by announcements."
+            return "Listed to everyone inside the team, and reached by announcements."
         case .minor:
             return "Listed only to an admin, and not reached by any announcement until THRØ has taken safeguarding advice."
         case .unknown:

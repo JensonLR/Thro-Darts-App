@@ -6,7 +6,7 @@ import ThroJournal
 
 // Choosing a picture, for anything that can have one (PD-014).
 //
-// The founder: *"no option for profile pictures for players, clubs, leagues or tournaments yet."*
+// The founder: *"no option for profile pictures for players, teams, leagues or tournaments yet."*
 // Correct on every one of the four, and the cause was the same in each case: the code existed and
 // nothing could reach it.
 //
@@ -159,7 +159,7 @@ enum PicturePolicy {
         case .adult:
             // Unreachable while the two agree, and deliberately not a crash: if the policy ever
             // stops allowing adults, the screen refuses rather than offering what the store rejects.
-            return "No picture. THRØ is not storing pictures for this club's members."
+            return "No picture. THRØ is not storing pictures for this team's members."
         case .minor:
             return "No picture. Nobody recorded as under 18 has one — that is not a setting, and "
                  + "there is nothing here that turns it on."

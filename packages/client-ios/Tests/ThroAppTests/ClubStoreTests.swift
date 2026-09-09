@@ -28,12 +28,12 @@ final class ClubStoreTests: XCTestCase {
 
     func testAClubStartedOnThisPhoneIsOneYouKeep() throws {
         let s = try store()
-        XCTAssertTrue(s.createClub(name: "The Feathers", kind: .club, accentHex: "#0F3D2E"))
+        XCTAssertTrue(s.createClub(name: "The Feathers", kind: .team, accentHex: "#0F3D2E"))
 
         XCTAssertEqual(s.clubs.count, 1)
         let club = s.clubs[0]
         XCTAssertEqual(club.name, "The Feathers")
-        XCTAssertEqual(club.kind, .club)
+        XCTAssertEqual(club.kind, .team)
         XCTAssertEqual(club.accentHex, "0F3D2E")
         XCTAssertEqual(club.yourRole, .admin,
                        "a club nobody else can see is one its keeper keeps; the server decides this when there is one")
@@ -52,7 +52,7 @@ final class ClubStoreTests: XCTestCase {
     /// whole file exists for: a guarantee stops being kept in the mapping.
     func testTheMappingCarriesTheFixturesRealInstantAndNotOnlyItsWording() throws {
         let s = try store()
-        XCTAssertTrue(s.createClub(name: "The Feathers", kind: .club, accentHex: "#0F3D2E"))
+        XCTAssertTrue(s.createClub(name: "The Feathers", kind: .team, accentHex: "#0F3D2E"))
         let club = s.clubs[0]
         let when = Date(timeIntervalSince1970: 1_800_000_000)
         XCTAssertTrue(s.addFixture(to: club.id, title: "Home to The Bell", when: when,
@@ -73,7 +73,7 @@ final class ClubStoreTests: XCTestCase {
     /// teams run by two officials is not "2 members".
     func testTheMetaLineCountsWhatIsActuallyThere() throws {
         let s = try store()
-        _ = s.createClub(name: "The Feathers", kind: .club, accentHex: nil)
+        _ = s.createClub(name: "The Feathers", kind: .team, accentHex: nil)
         let club = s.clubs[0].id
         XCTAssertEqual(s.clubs[0].meta, "No members yet")
         _ = s.addMember(to: club, name: "Alex", role: .member, ageBand: .adult)
@@ -107,7 +107,7 @@ final class ClubStoreTests: XCTestCase {
     /// hidden and withheld — never `adult`, which is listed and messaged.
     func testAnAgeBandTheMappingCannotReadIsUnknownAndIsWithheld() throws {
         let book = try ClubBook(path: path)
-        let club = try book.createClub(name: "The Feathers", kind: "club")
+        let club = try book.createClub(name: "The Feathers", kind: "team")
         try book.addMember(to: club.id, name: "Alex", role: "member", ageBand: "adult")
         try book.forTests("UPDATE club_member SET age_band = 'grown-up' WHERE club_id = '\(club.id)';")
 
@@ -122,7 +122,7 @@ final class ClubStoreTests: XCTestCase {
     /// counted, and reached by nothing.
     func testAMinorIsHeldAndCountedAndReachedByNothing() throws {
         let s = try store()
-        _ = s.createClub(name: "The Feathers", kind: .club, accentHex: nil)
+        _ = s.createClub(name: "The Feathers", kind: .team, accentHex: nil)
         let id = s.clubs[0].id
         _ = s.addMember(to: id, name: "Alex", role: .member, ageBand: .adult)
         _ = s.addMember(to: id, name: "Jamie", role: .member, ageBand: .minor)
@@ -138,7 +138,7 @@ final class ClubStoreTests: XCTestCase {
 
     func testFixturesComeBackSoonestFirstWithTheirStateAndSurviveTheMapping() throws {
         let s = try store()
-        _ = s.createClub(name: "The Feathers", kind: .club, accentHex: nil)
+        _ = s.createClub(name: "The Feathers", kind: .team, accentHex: nil)
         let id = s.clubs[0].id
         let base = Date(timeIntervalSince1970: 1_700_000_000)
         _ = s.addFixture(to: id, title: "Away at The Crown", when: base + 172_800, venue: "The Crown")
@@ -160,18 +160,18 @@ final class ClubStoreTests: XCTestCase {
     /// dismissing over the top of it, which is what the boolean is for.
     func testARefusedWriteIsReportedAndChangesNothing() throws {
         let s = try store()
-        XCTAssertFalse(s.createClub(name: "   ", kind: .club, accentHex: nil))
+        XCTAssertFalse(s.createClub(name: "   ", kind: .team, accentHex: nil))
         XCTAssertEqual(s.clubs.count, 0)
         XCTAssertNotNil(s.writeProblem)
         XCTAssertTrue(s.writeProblem?.contains("name") == true, "and it says what was wrong: \(s.writeProblem ?? "")")
 
-        XCTAssertTrue(s.createClub(name: "The Feathers", kind: .club, accentHex: nil))
+        XCTAssertTrue(s.createClub(name: "The Feathers", kind: .team, accentHex: nil))
         XCTAssertNil(s.writeProblem, "a write that works clears the last refusal")
     }
 
     func testAnAccentThatIsNotAColourIsRefusedRatherThanShown() throws {
         let s = try store()
-        XCTAssertFalse(s.createClub(name: "The Feathers", kind: .club, accentHex: "greenish"))
+        XCTAssertFalse(s.createClub(name: "The Feathers", kind: .team, accentHex: "greenish"))
         XCTAssertEqual(s.clubs.count, 0)
         XCTAssertNotNil(s.writeProblem)
     }
@@ -194,7 +194,7 @@ final class ClubStoreTests: XCTestCase {
 
     func testRemovingAMemberAndDeletingAClubBothTakeEffect() throws {
         let s = try store()
-        _ = s.createClub(name: "The Feathers", kind: .club, accentHex: nil)
+        _ = s.createClub(name: "The Feathers", kind: .team, accentHex: nil)
         let id = s.clubs[0].id
         _ = s.addMember(to: id, name: "Alex", role: .member, ageBand: .adult)
         _ = s.addMember(to: id, name: "Sam", role: .member, ageBand: .adult)
@@ -220,7 +220,7 @@ final class ClubStoreTests: XCTestCase {
         defer { try? FileManager.default.removeItem(at: dir) }
         let images = try ImageStore(directory: dir)
         let s = ClubStore(book: try ClubBook(path: path), images: images)
-        XCTAssertTrue(s.createClub(name: "The Feathers", kind: .club, accentHex: nil))
+        XCTAssertTrue(s.createClub(name: "The Feathers", kind: .team, accentHex: nil))
         let id = s.clubs[0].id
         XCTAssertNil(s.clubs[0].badgeAssetId)
 
@@ -242,7 +242,7 @@ final class ClubStoreTests: XCTestCase {
             .appendingPathComponent("thro-store-images-\(UUID().uuidString)")
         defer { try? FileManager.default.removeItem(at: dir) }
         let s = ClubStore(book: try ClubBook(path: path), images: try ImageStore(directory: dir))
-        XCTAssertTrue(s.createClub(name: "The Feathers", kind: .club, accentHex: nil))
+        XCTAssertTrue(s.createClub(name: "The Feathers", kind: .team, accentHex: nil))
         let club = s.clubs[0].id
         XCTAssertTrue(s.addMember(to: club, name: "Jamie", role: .member, ageBand: .minor))
         XCTAssertTrue(s.addMember(to: club, name: "Alex", role: .member, ageBand: .adult))
@@ -329,7 +329,7 @@ final class ClubStoreTests: XCTestCase {
         // screen has nothing to record and says so, so the request lands on the club.
         let typed = Fixture(id: "f2", title: "Home to The Bell", when: "Friday", venue: "",
                             state: .played)
-        let club = Club(id: "c1", name: "The Feathers", kind: .club, meta: "", yourRole: .admin,
+        let club = Club(id: "c1", name: "The Feathers", kind: .team, meta: "", yourRole: .admin,
                         fixtures: [typed])
         XCTAssertEqual(ClubsFlow.route(for: .init(club: "c1", wanted: .result(fixture: "f2")), in: [club]),
                        .club("c1"))

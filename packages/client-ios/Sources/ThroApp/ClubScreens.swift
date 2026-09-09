@@ -165,14 +165,14 @@ public struct ClubsScreen: View {
 
     public var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            TopBar("Clubs", actions: clubs.isEmpty ? []
-                   : [TopBar.Action(icon: .plus, label: "Start a club", action: onCreate)])
+            TopBar("Teams", actions: clubs.isEmpty ? []
+                   : [TopBar.Action(icon: .plus, label: "Start a team", action: onCreate)])
             ScrollView {
                 VStack(alignment: .leading, spacing: 0) {
                     if clubs.isEmpty {
-                        EmptyState(title: "No clubs yet",
-                                   message: "Start one and keep its roster and fixtures here. A club or league's front page is public; what is inside it — members, results, announcements — is not.",
-                                   actionLabel: "Start a club", onAction: onCreate)
+                        EmptyState(title: "No teams yet",
+                                   message: "Start one and keep its roster and fixtures here. A team or league's front page is public; what is inside it — members, results, announcements — is not.",
+                                   actionLabel: "Start a team", onAction: onCreate)
                             .padding(.top, ThroSpacing.spacing6)
                     } else {
                         Eyebrow("Yours").padding(.top, ThroSpacing.spacing5)
@@ -194,7 +194,7 @@ public struct ClubsScreen: View {
                                                         scales: false))
                             ThroDivider()
                         }
-                        Text("A club or league's front page is public. What is inside it — members, results, announcements — is not.")
+                        Text("A team or league's front page is public. What is inside it — members, results, announcements — is not.")
                             .thro(ThroTypography.body)
                             .foregroundStyle(ThroColor.colorTextSecondary)
                             .fixedSize(horizontal: false, vertical: true)
@@ -203,7 +203,7 @@ public struct ClubsScreen: View {
                                    fullWidth: true, action: onCreate)
                             .padding(.top, ThroSpacing.spacing4)
                     }
-                    Note("Nothing here has left this phone. Joining somebody else's club needs an account and a connection, and this build has neither.")
+                    Note("Nothing here has left this phone. Joining somebody else's team needs an account and a connection, and this build has neither.")
                         .padding(.top, ThroSpacing.spaceSectionGap)
                 }
                 .padding(.horizontal, ThroSpacing.spaceScreenGutter)
@@ -303,7 +303,7 @@ public struct ClubScreen: View {
                 VStack(alignment: .leading, spacing: 2) {
                     Text("Members only").thro(ThroTypography.label.weight(.bold))
                         .foregroundStyle(ThroColor.colorTextPrimary)
-                    Text("Who plays here, results, and the club's announcements are for members. Ask an admin to add you.")
+                    Text("Who plays here, results, and the team's announcements are for members. Ask an admin to add you.")
                         .thro(ThroTypography.metadata)
                         .foregroundStyle(ThroColor.colorTextSecondary)
                         .fixedSize(horizontal: false, vertical: true)
@@ -316,14 +316,14 @@ public struct ClubScreen: View {
         .overlay(RoundedRectangle(cornerRadius: ThroSpacing.radiusCard)
             .strokeBorder(ThroColor.colorBorderDefault, lineWidth: 1))
         .padding(.top, ThroSpacing.spaceSectionGap)
-        Note("A club's front is public so a league can advertise a season. Everything past it is not.")
+        Note("A team's front is public so a league can advertise a season. Everything past it is not.")
             .padding(.top, ThroSpacing.spaceSectionGap)
     }
 
     /// What a member may see.
     @ViewBuilder private var inside: some View {
         if !club.announcements.isEmpty {
-            Eyebrow("From the club").padding(.top, ThroSpacing.spacing5)
+            Eyebrow("From the team").padding(.top, ThroSpacing.spacing5)
             VStack(alignment: .leading, spacing: ThroSpacing.spacing4) {
                 ForEach(Array(club.announcements.enumerated()), id: \.element.id) { index, a in
                     HStack(alignment: .top, spacing: ThroSpacing.spacing3) {
@@ -462,7 +462,7 @@ public struct ClubMembersScreen: View {
                     if club.visibleMembers.isEmpty && club.hiddenMembers == 0 {
                         if let onAdd {
                             EmptyState(title: "Nobody here yet",
-                                       message: "Add the people who play for this club. Each person's age is asked, because who is listed and who is reached follows from it.",
+                                       message: "Add the people who play for this team. Each person's age is asked, because who is listed and who is reached follows from it.",
                                        actionLabel: "Add a member", onAction: onAdd)
                                 .padding(.top, ThroSpacing.spacing6)
                         } else {
@@ -567,7 +567,7 @@ public struct FixturesScreen: View {
                         // it gets the button every other empty state in this app has.
                         EmptyState(title: "No fixtures yet",
                                    message: club.mayManageFixtures
-                                        ? "Add one and it appears on the club's public page."
+                                        ? "Add one and it appears on the team's public page."
                                         : "An official adds them.",
                                    actionLabel: club.mayManageFixtures ? "Add a fixture" : nil,
                                    onAction: onAdd)
@@ -576,7 +576,7 @@ public struct FixturesScreen: View {
                     // Two different true sentences, because PD-020 changed one of them for leagues
                     // and tournaments and not for clubs. Shipping the old one on a league page would
                     // be a screen contradicting the build.
-                    Note(club.kind == .club
+                    Note(club.kind == .team
                          ? "A fixture carries no result. A result comes from a scored match and the "
                            + "evidence behind it, so a fixture that could assert one would be a "
                            + "second place a score came from."
@@ -795,7 +795,7 @@ public struct ProfileScreen: View {
                         .padding(.top, ThroSpacing.spacing4)
 
                     if !clubs.isEmpty {
-                        Eyebrow("Clubs and leagues").padding(.top, ThroSpacing.spaceSectionGap)
+                        Eyebrow("Teams and leagues").padding(.top, ThroSpacing.spaceSectionGap)
                         ThroDivider().padding(.top, ThroSpacing.spacing2)
                         ForEach(clubs) { c in
                             OrganisationRow(initials: c.initials, name: c.name,

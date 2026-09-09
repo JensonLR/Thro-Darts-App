@@ -30,7 +30,9 @@ public enum ThroSpotlight {
     enum Domain: String, CaseIterable {
         case match = "app.thro.darts.match"
         case person = "app.thro.darts.person"
-        case club = "app.thro.darts.club"
+        // The string is what the iPhone's index already holds for every organisation on the phone,
+        // so it is kept while the case says what the thing is (ADR-017).
+        case organisation = "app.thro.darts.club"
     }
 
     /// What a searchable item for one route looks like.
@@ -82,7 +84,7 @@ public enum ThroSpotlight {
         }
         for club in clubs {
             out.append(Entry(id: ThroRoute.club(club.id).url.absoluteString,
-                             domain: Domain.club.rawValue,
+                             domain: Domain.organisation.rawValue,
                              title: club.name,
                              subtitle: club.kind.label,
                              keywords: [club.name, club.kind.label]))

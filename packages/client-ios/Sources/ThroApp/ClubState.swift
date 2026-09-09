@@ -11,12 +11,28 @@ import Foundation
 // `ClubStateTests` holds both copies to the same three assertions, which is the cheapest guard
 // available while the two cannot be run against one corpus.
 
+/// What kind of body an organisation on this phone is.
+///
+/// `team` was `club` until the founder's instruction of 2026-09-09 (ADR-017, PD-028): the standing
+/// competitive organisation is the **Team** whatever it calls itself — darts team, darts club, pub
+/// team, side — and THRØ carries no separate club concept. Rows written before that day say `club`
+/// in the book; they are read as a team, because that is what they always were.
 public enum OrgKind: String, Sendable, CaseIterable {
-    case club, league, tournament
+    case team, league, tournament
+
+    /// The stored token, accepting the legacy word. Written back as `team`.
+    public init?(rawValue: String) {
+        switch rawValue {
+        case "team", "club": self = .team
+        case "league": self = .league
+        case "tournament": self = .tournament
+        default: return nil
+        }
+    }
 
     public var label: String {
         switch self {
-        case .club: return "Club"
+        case .team: return "Team"
         case .league: return "League"
         case .tournament: return "Tournament"
         }
@@ -347,7 +363,7 @@ public struct Club: Identifiable, Equatable, Sendable {
     public let members: [ClubMember]
     public let fixtures: [Fixture]
     public let announcements: [Announcement]
-    /// A league's teams (PD-019). Empty for a club and a tournament.
+    /// A league's teams (PD-019), each a Team in its own right (ADR-017). Empty for a team and a tournament.
     public let teams: [Team]
     /// A tournament's shape (PD-021). Nil for anything else.
     public let shape: TournamentShape?
@@ -391,9 +407,10 @@ public struct Club: Identifiable, Equatable, Sendable {
     }
 
     /// A badge carries at most three letters, and "The Feathers A" is FA rather than TFA: the words
-    /// a club's name shares with every other club's carry no information at that size.
-    /// "A" is NOT here, and that is the point: Feathers A and Feathers B are different clubs, and a
-    /// badge that dropped the letter would give them the same one.
+    /// a team's name shares with every other team's carry no information at that size.
+    /// "A" is NOT here, and that is the point: Feathers A and Feathers B are two teams (sharing a
+    /// venue, usually their admins — never one organisation, ADR-017), and a badge that dropped the
+    /// letter would give them the same one.
     private static let skipped: Set<String> = ["the", "of", "and", "&"]
     public var initials: String {
         let words = name.split(whereSeparator: { $0 == " " || $0 == "-" })
@@ -439,10 +456,10 @@ public struct Club: Identifiable, Equatable, Sendable {
     /// Adding and removing teams (PD-019), and a tournament's entrants, which are the same stored
     /// thing under a different word — an entrant of one player is a team of one. An admin's, the
     /// same standing as a club's roster.
-    public var mayManageTeams: Bool { yourRole == .admin && kind != .club }
+    public var mayManageTeams: Bool { yourRole == .admin && kind != .team }
 
     /// What this organisation calls the things that compete in it. A league has teams; a tournament
-    /// has entrants; a club has neither, because a club is not a competition.
+    /// has entrants; a team has neither, because a team is not a competition — it competes as itself.
     public var competitorNoun: (one: String, many: String) {
         kind == .tournament ? ("entrant", "Entrants") : ("team", "Teams")
     }

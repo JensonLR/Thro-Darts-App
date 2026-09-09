@@ -182,7 +182,7 @@ final class LeagueBookTests: XCTestCase {
 
         // A row that got a shape some other way reads back without one: a read never guesses, and a
         // shape decides what every round means.
-        let plain = try book.createClub(name: "A club", kind: "club")
+        let plain = try book.createClub(name: "A club", kind: "team")
         try book.forTests("UPDATE club SET shape = 'knockout' WHERE club_id = '\(plain.id)';")
         XCTAssertNil(try book.clubs().first(where: { $0.id == plain.id })?.shape)
     }
@@ -239,7 +239,7 @@ final class LeagueBookTests: XCTestCase {
     /// build does not know is refused rather than stored — and one that reaches a row is not shown.
     func testAUnitBelongsToACompetitionAndIsNeverGuessedAt() throws {
         let book = try ClubBook(path: path)
-        XCTAssertThrowsError(try book.createClub(name: "The Feathers", kind: "club", unit: "legs"))
+        XCTAssertThrowsError(try book.createClub(name: "The Feathers", kind: "team", unit: "legs"))
         XCTAssertThrowsError(try book.createClub(name: "A league", kind: "league", unit: "frames"))
 
         // A league from before this was asked has no unit, and nothing invents one for it.

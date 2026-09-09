@@ -1,6 +1,6 @@
 # thro-organisation
 
-Clubs, leagues and tournaments: the bodies a player belongs to, their branding, and the boundary a
+Teams, leagues and tournaments: the bodies a player belongs to, their branding, and the boundary a
 communications feature cannot cross until the safeguarding question is answered.
 
 The founder asked for clubs and leagues to customise, hold their own data, and become a hub where a
@@ -11,7 +11,7 @@ inventing product.
 
 | | |
 |---|---|
-| `Organisation.kt` | A club, league or tournament as one type with a kind; membership with three roles; and the whole authority surface stated as data, so an action cannot acquire an authority nobody granted it |
+| `Organisation.kt` | A team, league or tournament as one type with a kind (`TEAM` was `CLUB` until ADR-017 / PD-028 — the standing organisation is the Team whatever it calls itself); membership with three roles; and the whole authority surface stated as data, so an action cannot acquire an authority nobody granted it |
 | `Branding.kt` | A club's accent, measured rather than trusted — the text on it is chosen, and a sweep of the colour cube proves no choice a club can make falls below the contrast floor |
 | `Communications.kt` | Announcements: broadcast, from a role, to a membership, with an author. A member whose age is minor **or unknown** receives nothing until OD-010 is answered |
 | `Fixtures.kt` | A date, two sides, a venue, a state. No result: that belongs to the match aggregate and its provenance |

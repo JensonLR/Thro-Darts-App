@@ -174,7 +174,7 @@ class OrganisationTest {
 
     @Test
     fun `an organisation needs a name it can be called by`() {
-        val org = Organisation(OrganisationId("o"), OrganisationKind.CLUB, "The Feathers")
+        val org = Organisation(OrganisationId("o"), OrganisationKind.TEAM, "The Feathers")
         assertEquals(Branding.default, org.branding)
         assertFailsWith<IllegalArgumentException> {
             Organisation(OrganisationId("o"), OrganisationKind.LEAGUE, "   ")

@@ -50,6 +50,37 @@ founder asked.
 | C9 | `docs/adr/ADR-005`, `README.md` | `competition` "owns venues, boards, teams, leagues, divisions, seasons" | Only events, entries, check-in, boards and bracket ties exist | README states what exists; ADR-005 stands as the target ownership |
 | C10 | `docs/design/.../screens-account.jsx` | "Team and venue · Your club affiliation" | Team affiliation | Copy is rank 3 design; noted in DESIGN_UNSPECIFIED as a term to correct at implementation, not a domain concept |
 
+### 2b. The client's `Club`, found on merge (2026-09-09)
+
+While this plan was being executed, a parallel session working from the founder's **7 September**
+brief built an iOS client (`packages/client-ios`, `apps/ios`) and a Kotlin `packages/organisation`
+around a standing **club** — one type with a kind (`club`, `league`, `tournament`) — plus a league's
+own **team** rows (PD-009, PD-010, PD-019). That is the two-concept model the **9 September**
+instruction forbids, and the newer instruction wins (source precedence, rank 1). The correction is
+recorded as PD-028, amending those decisions rather than erasing them.
+
+What each of theirs actually is, and what it becomes:
+
+| # | Theirs | What it actually is | Canonical |
+|---|---|---|---|
+| C11 | `club` row, `kind='club'` | the standing competitive organisation with a roster, badge, colour and fixtures | **Team** |
+| C12 | `club` row, `kind='league'` | a league with its table rules (unit, points, groups) — league and season not yet distinguished | League + LeagueSeason |
+| C13 | `club` row, `kind='tournament'` with a shape | one edition of a tournament | Event (of a Tournament) |
+| C14 | `club_team` row under a league | a side the league fields in its fixtures — an organisation in its own right, named by the league admin | **Team**, affiliated to the league season |
+| C15 | `club_member` | a person's dated place in the organisation | Team membership |
+| C16 | `club_fixture` with home/away team ids | a league fixture | League fixture |
+| C17 | `fixture_result` with `source` | an outcome with provenance (PD-020) | League fixture outcome |
+| C18 | `person` (ADR-016) | a player on this device, claimable later | Player + claim |
+| C19 | copy: "Club", "Clubs you keep", "Start a club", "Club TV mode" | the team; the venue's television | "Team", "Teams you keep", "Start a team", "Venue TV mode" |
+
+**Minimum safe client migration — delivered** (`ClubBook.migrate`, deterministic, additive, no row lost, four book tests):
+`kind='club'` rows are normalised to `kind='team'` in place — a vocabulary token, not data; every
+`club_team` row gains a `club` row of kind `team` with the **same identifier**, so every fixture's
+`home_team_id`/`away_team_id` keeps its meaning and the `club_team` table becomes the league's
+affiliation list; `OrgKind` reads the legacy token and writes the new one; the `thro://club/<id>`
+deep link and the Spotlight domain keep resolving. A league's "Feathers A" and a standing "The
+Feathers" are **two Teams until a person links them** — never merged on the name.
+
 ## 3. Target domain
 
 The canonical vocabulary (ADR-017), as V014 builds it. Every table is in the `competition` schema

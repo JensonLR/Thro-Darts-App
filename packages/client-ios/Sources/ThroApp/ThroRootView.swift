@@ -1233,14 +1233,14 @@ public struct YouScreen: View {
                             ThroDivider()
                         }
                     }
-                    Eyebrow("Clubs you keep").padding(.top, ThroSpacing.spaceSectionGap)
+                    Eyebrow("Teams you keep").padding(.top, ThroSpacing.spaceSectionGap)
                     if clubs.isEmpty {
                         Text("None on this phone. Start one under Discover and its roster and fixtures are kept here.")
                             .thro(ThroTypography.body)
                             .foregroundStyle(ThroColor.colorTextSecondary)
                             .fixedSize(horizontal: false, vertical: true)
                             .padding(.top, ThroSpacing.spacing2)
-                        ThroButton("Start a club", variant: .secondary, size: .large,
+                        ThroButton("Start a team", variant: .secondary, size: .large,
                                    fullWidth: true, action: onClubs)
                             .padding(.top, ThroSpacing.spacing4)
                     } else {
@@ -1443,7 +1443,7 @@ public struct SettingsScreen: View {
                         }
                         .frame(minHeight: 52)
                         .overlay(alignment: .bottom) { Rectangle().fill(ThroColor.colorBorderDefault).frame(height: 1) }
-                        Text("Your matches, the people who play here and your clubs appear in this iPhone's own search. The index is on the phone, is never sent to Apple, and is not shared with your other devices. Turning this off removes what is already there.")
+                        Text("Your matches, the people who play here and your teams appear in this iPhone's own search. The index is on the phone, is never sent to Apple, and is not shared with your other devices. Turning this off removes what is already there.")
                             .thro(ThroTypography.metadata)
                             .foregroundStyle(ThroColor.colorTextSecondary)
                     }
@@ -1510,7 +1510,7 @@ public struct SettingsScreen: View {
                             if let exportProblem {
                                 Snackbar(exportProblem, tone: .error)
                             }
-                            Text("One file with every match, every visit as written — corrections and all — and every club this phone keeps. Nothing is sent anywhere: you choose where it goes. Pictures are not in it; the file names the ones this phone holds.")
+                            Text("One file with every match, every visit as written — corrections and all — and every team this phone keeps. Nothing is sent anywhere: you choose where it goes. Pictures are not in it; the file names the ones this phone holds.")
                                 .thro(ThroTypography.metadata)
                                 .foregroundStyle(ThroColor.colorTextSecondary)
                                 .fixedSize(horizontal: false, vertical: true)
@@ -1750,7 +1750,7 @@ public struct LiveScreen: View {
                     if inProgress.isEmpty && awaiting.isEmpty && upcoming.isEmpty {
                         block {
                             EmptyState(title: "Nothing on right now",
-                                       message: "A match you are scoring shows here while it is going, and so do fixtures your clubs have not finished with.",
+                                       message: "A match you are scoring shows here while it is going, and so do fixtures your teams have not finished with.",
                                        actionLabel: "Start match") { store.flow = .new }
                         }
                         .throEntrance(0)

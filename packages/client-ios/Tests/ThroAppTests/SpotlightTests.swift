@@ -32,7 +32,7 @@ final class SpotlightTests: XCTestCase {
         try Journal(path: path, deviceId: DeviceId("test-device"))
     }
 
-    private let club = Club(id: "c1", name: "The Red Lion", kind: .club, meta: "",
+    private let club = Club(id: "c1", name: "The Red Lion", kind: .team, meta: "",
                             yourRole: .admin)
 
     /// Every indexed item is addressed by its own route's URL, so a tap is a parse rather than a

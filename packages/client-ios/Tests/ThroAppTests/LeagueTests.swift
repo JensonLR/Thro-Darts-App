@@ -217,7 +217,7 @@ final class LeagueTests: XCTestCase {
 
     /// The founder's complaint, as an assertion: the three do not describe themselves the same way.
     func testTheThreeKindsAreCountedInTheirOwnUnits() {
-        XCTAssertEqual(ClubStore.meta(.club, members: 12, teams: 0), "12 members")
+        XCTAssertEqual(ClubStore.meta(.team, members: 12, teams: 0), "12 members")
         XCTAssertEqual(ClubStore.meta(.league, members: 3, teams: 8), "8 teams",
                        "a league of eight teams is not 'three members'")
         XCTAssertEqual(ClubStore.meta(.tournament, members: 0, teams: 6), "6 entrants")
@@ -231,7 +231,7 @@ final class LeagueTests: XCTestCase {
         func org(_ kind: OrgKind, _ role: OrgRole?) -> Club {
             Club(id: "o", name: "X", kind: kind, meta: "", yourRole: role)
         }
-        XCTAssertFalse(org(.club, .admin).mayManageTeams, "a club competes as itself")
+        XCTAssertFalse(org(.team, .admin).mayManageTeams, "a club competes as itself")
         XCTAssertTrue(org(.league, .admin).mayManageTeams)
         XCTAssertTrue(org(.tournament, .admin).mayManageTeams)
         XCTAssertFalse(org(.league, .official).mayManageTeams, "the roster is an admin's")

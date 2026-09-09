@@ -2092,3 +2092,47 @@ keypad showed TREBLE held with two darts already entered — which cannot happen
 falls back to single after every dart**. A drawing that shows an impossible state is worse than no
 drawing, and asking of it the same question the code gets — *can this actually happen?* — is what
 caught both.
+
+
+## The vocabulary the founder set on 9 September, applied to the client built on 7 September
+
+Two sessions worked this branch in parallel and met at a merge. One had built the iOS client,
+the Android journal and a club/league/tournament model on the founder's 7 September brief (PD-009,
+PD-010, PD-019). The other had been given the 9 September instruction — the connected-platform
+brief — whose second section is a founder correction in capitals: **clubs are teams**. THRØ must
+not carry a standing *club* distinct from a league's *team* because grassroots vocabulary is
+inconsistent; the competitive organisation is the Team whatever it calls itself, a venue is a
+place, and a "club" with an A and a B side is two teams sharing a venue and, usually, their admins.
+
+The newer instruction wins, and PD-028 records it as an amendment to PD-009, PD-010 and PD-019
+rather than an erasure: everything those decided about a public front, announcements and the
+official's fixture list stands, applied to teams; what PD-019 decided about a league being made of
+teams stands and is now the whole story.
+
+**What changed on the phone, and what did not.** `OrgKind.club` is `OrgKind.team`, reading the
+legacy token and writing the new one; `ClubBook.migrate` normalises `kind='club'` rows once, in
+place, and gives every team a league fielded (`club_team`) an organisation row of kind `team` with
+the **same identifier**, so every fixture's home and away ids keep their meaning and `club_team`
+becomes the league's affiliation list. A team removed from a league loses its affiliation and the
+league's fixtures for it; the team itself stays. The `thro://club/<id>` link still resolves and
+`thro://team/<id>` now does too; the Spotlight domain string is kept because the iPhone's index
+already holds it. Copy says *team*; the wall-screen feature is *Venue TV mode*, because the
+television is the venue's. Four book tests hold the migration: a legacy row reads as a team; the
+legacy word is accepted on write and stored as team; a league's team is a team in its own right,
+renamed everywhere at once and surviving its removal from the league; and a pre-existing league
+team gains its organisation on open **without** being merged into a standing team of the same
+name — two "The Feathers" remain two teams until a person links them.
+
+**What was deliberately not renamed.** The Swift type `Club`, the `ClubBook`, the `ClubRoute` and
+`ThroRoute.club` cases and the file names are code identifiers, not concepts; renaming them is a
+thousand-line churn with no behaviour in it, and it is scheduled for the round that wires the client
+to the server's `competition.team`, when the type will change shape anyway. The record of earlier
+phone looks in `docs/runbooks/CLIENT_IOS.md` keeps the words the screens showed at the time.
+
+**The merge itself.** Nothing on the client side touched the migrations, so V014–V017 — the
+organisational graph, organisational commands, the Secretary and discovery — apply cleanly over
+V013. Five documents and the test harness conflicted and were rebuilt from the client side's
+version with the server side's sections added. Where both sides had used the same record numbers,
+the server side's now follow: ADR-017 (vocabulary), ADR-018 (organisational state), PD-028,
+PD-029, OD-024. Every Kotlin suite, the schema script and all 581 client tests are green on the
+result.
