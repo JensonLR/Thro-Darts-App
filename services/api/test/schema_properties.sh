@@ -43,9 +43,9 @@ DB=$($PSQL -c "SELECT gen_random_uuid();")
 # ADR-008: evidence may only exist for a match the store knows about, so every assertion below
 # needs a real aggregate. Opening one is now the precondition for any evidence at all.
 $PSQL -c "SET ROLE app_match; INSERT INTO evidence.match
-  (match_id,home_id,away_id,home_name,away_name,starting_score,in_rule,out_rule,
+  (match_id,home_id,away_id,starting_score,in_rule,out_rule,
    legs_mode,legs_target,throw_first)
-  VALUES ('$M', '$DA', '$DB', 'Home', 'Away', 501, 'straight', 'double', 'first_to', 5, '$DA');" >/dev/null 2>&1
+  VALUES ('$M', '$DA', '$DB', 501, 'straight', 'double', 'first_to', 5, '$DA');" >/dev/null 2>&1
 
 ins() { # match, device, seq
   $PSQL -c "INSERT INTO evidence.event
@@ -238,23 +238,23 @@ if echo "$r" | grep -qi 'event_belongs_to_a_real_match'; then
   ok "evidence for a match that does not exist is refused by the database"
 else bad "evidence for a match that does not exist is refused by the database" "an orphan was accepted"; fi
 
-r=$($PSQL -c "SET ROLE app_match; UPDATE evidence.match SET away_name='Mallory' WHERE match_id='$M';" 2>&1)
+r=$($PSQL -c "SET ROLE app_match; UPDATE evidence.match SET away_id=gen_random_uuid() WHERE match_id='$M';" 2>&1)
 if echo "$r" | grep -qi 'permission denied'; then
   ok "who is playing cannot be rewritten after the match opens"
 else bad "who is playing cannot be rewritten after the match opens" "the participant set was editable"; fi
 
 r=$($PSQL -c "SET ROLE app_match; INSERT INTO evidence.match
-  (match_id,home_id,away_id,home_name,away_name,starting_score,in_rule,out_rule,
+  (match_id,home_id,away_id,starting_score,in_rule,out_rule,
    legs_mode,legs_target,throw_first)
-  VALUES (gen_random_uuid(),'$DA','$DA','Solo','Solo',501,'straight','double','first_to',5,'$DA');" 2>&1)
+  VALUES (gen_random_uuid(),'$DA','$DA',501,'straight','double','first_to',5,'$DA');" 2>&1)
 if echo "$r" | grep -qi 'violates check constraint'; then
   ok "a competitor cannot play themselves"
 else bad "a competitor cannot play themselves" "a self-match was accepted"; fi
 
 r=$($PSQL -c "SET ROLE app_match; INSERT INTO evidence.match
-  (match_id,home_id,away_id,home_name,away_name,starting_score,in_rule,out_rule,
+  (match_id,home_id,away_id,starting_score,in_rule,out_rule,
    legs_mode,legs_target,throw_first)
-  VALUES (gen_random_uuid(),'$DA','$DB','Home','Away',501,'straight','double','first_to',5,gen_random_uuid());" 2>&1)
+  VALUES (gen_random_uuid(),'$DA','$DB',501,'straight','double','first_to',5,gen_random_uuid());" 2>&1)
 if echo "$r" | grep -qi 'violates check constraint'; then
   ok "the player throwing first must be one of the competitors"
 else bad "the player throwing first must be one of the competitors" "a stranger threw first"; fi

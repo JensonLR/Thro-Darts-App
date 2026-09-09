@@ -50,7 +50,7 @@ class DisputeTest {
         val bob = UUID.randomUUID()
         val dana = UUID.randomUUID()
         val match = UUID.randomUUID()
-        Matches(c).open(match, alice, bob, "Alice", "Bob", playtestFormat(PlayerId("Alice")), eventId)
+        Matches(c).open(match, alice, bob, playtestFormat(), eventId)   // Alice is the home seat, Bob the away
         rel.grant(dana, "official", eventObj)
         rel.link(ObjectRef(ObjectType.MATCH, match.toString()), eventObj)
         rel.grant(alice, "participant", ObjectRef(ObjectType.MATCH, match.toString()))
@@ -68,8 +68,8 @@ class DisputeTest {
                 ),
             )
         }
-        visit("Alice", 180); visit("Bob", 60); visit("Alice", 180); visit("Bob", 60)
-        visit("Alice", 141, 3, 1)
+        visit("home", 180); visit("away", 60); visit("home", 180); visit("away", 60)
+        visit("home", 141, 3, 1)
         att.attest(match, 1, bob, attested = true, deviceId = UUID.randomUUID(), deviceSeq = 1)
 
         check("the match starts rateable", eligibilityOf(att.provenanceOf(match)!!, true).eligible)
@@ -92,7 +92,7 @@ class DisputeTest {
 
         // --- adjudication carries the conflict-of-interest exclusion -------------------------------
         val herMatch = UUID.randomUUID()
-        Matches(c).open(herMatch, dana, alice, "Dana", "Alice", playtestFormat(PlayerId("Dana")), eventId)
+        Matches(c).open(herMatch, dana, alice, playtestFormat(), eventId)   // Dana home, Alice away
         rel.link(ObjectRef(ObjectType.MATCH, herMatch.toString()), eventObj)
         rel.grant(dana, "participant", ObjectRef(ObjectType.MATCH, herMatch.toString()))
         var hs = 0L
@@ -107,7 +107,7 @@ class DisputeTest {
                 ),
             )
         }
-        herVisit("Dana", 180)
+        herVisit("home", 180)
         val hers = d.raise(herMatch, alice, 1, "wrong", UUID.randomUUID(), 1)
         val hersId = (hers as Disputes.Result.Raised).disputeId
         val refused = d.adjudicate(hersId, dana, "rejected", UUID.randomUUID(), 2)

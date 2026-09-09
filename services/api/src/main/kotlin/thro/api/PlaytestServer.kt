@@ -121,13 +121,20 @@ public object PlaytestServer {
         matches[id] = Registered(home, away, UUID.randomUUID(), homeId, awayId)
         // The aggregate is the authority on who is playing; the in-memory registry is only a
         // convenience for this harness. Opening the match is what makes any evidence possible.
-        Matches(conn).open(id, homeId, awayId, home, away, playtestFormat(PlayerId(home)))
+        // The names stay in this harness's memory. The aggregate and every payload know only the
+        // two seats (OD-024): who sat in them is joined for display, here from the registry.
+        Matches(conn).open(id, homeId, awayId, playtestFormat(Seat.home))
         return """{"matchId":"$id","home":${quote(home)},"away":${quote(away)}}"""
     }
 
     private fun recordVisit(conn: Connection, matchId: UUID, body: String): String {
         val reg = matches[matchId] ?: return """{"error":"unknown match"}"""
-        val player = field(body, "player") ?: return """{"error":"player required"}"""
+        val named = field(body, "player") ?: return """{"error":"player required"}"""
+        val player = when (named) {
+            reg.home, Seat.HOME -> Seat.HOME
+            reg.away, Seat.AWAY -> Seat.AWAY
+            else -> named   // an unknown label is refused by the aggregate, and the refusal is the answer
+        }
         val total = field(body, "visitTotal")?.toIntOrNull()
             ?: return """{"error":"visitTotal required"}"""
         val darts = field(body, "dartsUsed")?.toIntOrNull()
@@ -195,8 +202,8 @@ public object PlaytestServer {
         // different format than the scoreboard used would disagree with the scoreboard.
         val format = requireNotNull(Matches(conn).load(matchId)) { "no such match" }.format
         val proj = StatsProjection(conn)
-        return """{"home":${proj.summaryFor(matchId, reg.device, reg.home, reg.away, reg.home, format)},""" +
-            """"away":${proj.summaryFor(matchId, reg.device, reg.home, reg.away, reg.away, format)}}"""
+        return """{"home":${proj.summaryFor(matchId, reg.device, Seat.HOME, Seat.AWAY, Seat.HOME, format)},""" +
+            """"away":${proj.summaryFor(matchId, reg.device, Seat.HOME, Seat.AWAY, Seat.AWAY, format)}}"""
     }
 
     private fun matchState(conn: Connection, matchId: UUID): String {
@@ -206,17 +213,18 @@ public object PlaytestServer {
 
     /** Rebuilt by folding the event log, so the browser holds no authoritative state. */
     private fun stateJson(conn: Connection, matchId: UUID, reg: Registered): String {
-        val state = CommandHandler(conn).replayFor(matchId, reg.device, reg.home, reg.away)
-        val h = thro.engine.PlayerId(reg.home)
-        val a = thro.engine.PlayerId(reg.away)
+        val state = CommandHandler(conn).replayFor(matchId, reg.device)
+        val h = Seat.home
+        val a = Seat.away
+        fun named(seat: thro.engine.PlayerId) = if (seat == h) reg.home else reg.away
         return """{"home":${quote(reg.home)},"away":${quote(reg.away)},""" +
             """"remainingHome":${state.remaining.getValue(h)},""" +
             """"remainingAway":${state.remaining.getValue(a)},""" +
             """"legsHome":${state.legsWonTotal.getValue(h)},""" +
             """"legsAway":${state.legsWonTotal.getValue(a)},""" +
             """"currentLeg":${state.currentLeg},""" +
-            """"thrower":${state.thrower?.let { quote(it.value) } ?: "null"},""" +
-            """"winner":${state.winner?.let { quote(it.value) } ?: "null"}}"""
+            """"thrower":${state.thrower?.let { quote(named(it)) } ?: "null"},""" +
+            """"winner":${state.winner?.let { quote(named(it)) } ?: "null"}}"""
     }
 
     private fun nextSeq(conn: Connection, matchId: UUID, device: UUID): Long {

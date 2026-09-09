@@ -140,6 +140,9 @@ concepts because the vocabulary at the board is inconsistent.
   identifiers with names joined at render, and a pseudonymous label for a non-adult account.
   That is Phase B work on the command path, tracked as OD-024, and this migration does not walk
   an unclaimed player into `evidence.match` because nothing yet opens a match from a fixture.
+  **Closed by V018 the same day:** the engine's labels are the seats `home` and `away`, the
+  aggregate binds each to a competitor id, the name columns are dropped and existing payloads
+  pseudonymised in place. No label for a non-adult is needed because no name is stored at all.
 - **A merge of two players** (`identity.player_alias`) is not created here. It depends on the
   claim flow that B4 gates. The rule is recorded now: a merge is an appended, reversible identity
   event with a stated basis, never a name match and never a repointed claim; every projection

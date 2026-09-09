@@ -116,10 +116,7 @@ class CompetitionTest {
         // exist for this to test anything — an earlier version used a subquery that returned NULL,
         // so the update set match_id to null and succeeded without exercising the constraint.
         val realMatch = UUID.randomUUID()
-        Matches(c).open(
-            realMatch, UUID.randomUUID(), UUID.randomUUID(), "Home", "Away",
-            playtestFormat(thro.engine.PlayerId("Home")),
-        )
+        Matches(c).open(realMatch, UUID.randomUUID(), UUID.randomUUID(), playtestFormat())
         val r = try {
             c.prepareStatement(
                 "UPDATE competition.bracket_tie SET match_id = ? WHERE event_id = ? AND is_bye",

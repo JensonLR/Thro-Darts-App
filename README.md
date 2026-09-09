@@ -65,7 +65,7 @@ database.
 | Rating projection | 14 tests — reproducible from a watermark pair; OD-001 stays open |
 | Competition structure | 24 tests — bracket identities exhaustive for every field size to 1024, and the organisational vocabulary as pure types |
 | Clubs, leagues and tournaments (`packages/organisation`, pre-ADR-017 vocabulary — see PD-028) | 11 tests — the whole authority table rather than examples of it; that a member recorded as a minor is listed to an admin and to nobody else; that no accent a club can pick makes the app unreadable, proved by sweeping the colour cube; that an announcement reaches nobody whose age is minor **or unknown** until OD-010 is answered; that a fixture may be moved but never asserts a result; and three on images (PD-014) — **nobody under 18, or of unestablished age, has a picture at all**, every gate an image must pass is named when it fails, and deletion stops it being served at once while the bytes go within thirty days |
-| Schema and privileges | 93 property assertions against a real PostgreSQL |
+| Schema and privileges | 78 property assertions against a real PostgreSQL |
 | Command path, organisations, Secretary, discovery | 14 integration suites against a real PostgreSQL, including V014 applied over a populated V013 database with nothing lost, two concurrent writers on one row, and 62 Secretary properties |
 | Design tokens | 82 contrast pairs, and `tools/check_tokens_exist.py` holding every token reference in the client to the generated file **and refusing a raw pigment painted as a surface** on a screen — the pigments do not flip with the appearance, which is how Home's masthead came to be 1.08:1. Absolute thresholds, 0 unrecorded breaches; every recorded exception carries the measured ratio it was raised at and fails if it worsens |
 | Design components | 61 components audited mechanically against a baseline ratchet |
@@ -233,6 +233,7 @@ is removed.
 | Evidence is never edited or deleted | Append-only grants, including on tables added by later migrations |
 | Evidence exists only for a real match | Foreign key to the match aggregate |
 | Who is playing cannot be rewritten | No application role holds `UPDATE` on `evidence.match` |
+| Evidence names a seat, never a person | `evidence.match` binds the seats `home` and `away` to competitor ids and holds no name column; a visit payload names the seat; a display name is joined at render (V018, OD-024) |
 | A module appends only to streams it owns | Trigger mapping each event type to its owning role |
 | Authority is recorded, never used to destroy evidence | `authority` column; a revoked scorer's visit still writes |
 | A revocation cannot be undone | Trigger on `trust.scoring_grant` and `identity.device` |

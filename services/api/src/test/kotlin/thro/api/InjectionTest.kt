@@ -72,10 +72,8 @@ class InjectionTest {
 
         // A real match between two strangers.
         val theirMatch = UUID.randomUUID()
-        matches.open(
-            theirMatch, UUID.randomUUID(), UUID.randomUUID(), "Alice", "Bob", format("Alice"),
-        )
-        check("a legitimate visit from a real participant is applied", visit(theirMatch, "Alice", 1) is CommandResult.Applied)
+        matches.open(theirMatch, UUID.randomUUID(), UUID.randomUUID(), format(Seat.HOME))
+        check("a legitimate visit from a real participant is applied", visit(theirMatch, "home", 1) is CommandResult.Applied)
 
         // The attack: an outsider writes into their match.
         val r = visit(theirMatch, "Mallory", 2)
@@ -132,7 +130,9 @@ class InjectionTest {
             val denied = try {
                 c.createStatement().use { st ->
                     st.execute("SET ROLE $role")
-                    st.execute("UPDATE evidence.match SET away_name = 'Mallory' WHERE match_id = '$theirMatch'")
+                    // The away seat is bound to a competitor id. Rebinding it would put a stranger
+                    // into a match after the fact; there is no name column to rewrite any more (V018).
+                    st.execute("UPDATE evidence.match SET away_id = '${UUID.randomUUID()}' WHERE match_id = '$theirMatch'")
                     st.execute("RESET ROLE")
                 }
                 false

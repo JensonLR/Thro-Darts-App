@@ -523,7 +523,20 @@ The decision is what should happen instead:
 leaves a player holding a phone that says they won a leg they busted.
 
 ## OD-024 — Display names inside the append-only match aggregate
-**Status:** OPEN · **Impact:** privacy, safeguarding, ADR-005
+**Status:** DECIDED — closed by V018 (2026-09-09) · **Impact:** privacy, safeguarding, ADR-005
+
+**Resolved by the seat.** The engine's two labels are seats, not names. `evidence.match` binds the
+home seat to `home_id` and the away seat to `away_id`; every visit payload names the seat with the
+two words both on-device journals already store, `home` and `away`; a display name is joined from
+`identity` at render and is never written beside evidence. V018 drops `home_name` and `away_name`
+and rewrites every existing payload's name to the seat it labelled — matched per match against that
+match's own two names, never by a global lookup — which is the one deliberate rewrite of evidence in
+this repository: a pseudonymisation performed once, by the owner role, and held by `MigrationTest`
+over a populated V013 database (three named visits read back as `home, away, home`, the rest of each
+payload untouched, no name left anywhere in `evidence`). The pseudonymous label for a non-adult
+account that the original text asked for is therefore unnecessary: nothing in `evidence` carries a
+name for anyone. A visit naming anything other than a seat is refused by the command handler as
+"that is not a seat in this match". The original text is kept below for the record.
 
 `evidence.match.home_name` and `away_name` (V006) are personal data in a table nothing may update or
 delete, because the engine works in display names and the aggregate joins identifiers to them.

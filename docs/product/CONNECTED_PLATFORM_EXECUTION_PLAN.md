@@ -387,15 +387,17 @@ against PostgreSQL 16 locally; CI runs the same suites.
 | 10 | V014 over a populated V013 database preserves every event, entry, check-in, grant, tie and tuple, the venue label, the seeds and the draw | `MigrationTest` (14 properties) |
 | 11 | Existing suites remain green, including the 74-entrant draw against `bracket_tie` and a pairs event refusing a singles entry | `CompetitionTest` (16) and every other suite |
 | 12 | An approved policy cannot change body, date or be un-approved; two approved versions cannot overlap; a superseded one may be followed; a policy cannot cite a season that does not exist | API test |
-| 13 | No DELETE or TRUNCATE on any competition table for any app role, including a table added later; `authz.relation` is revoked not deleted; `season` is gone | `schema_properties.sh` (85 properties) |
+| 13 | No DELETE or TRUNCATE on any competition table for any app role, including a table added later; `authz.relation` is revoked not deleted; `season` is gone | `schema_properties.sh` (78 properties) |
 | 14 | A fixture's venue is frozen at scheduling; a stale rearrangement is refused; the original date survives in the change log; teams cannot be switched; an award must go to one of the two teams; a second outcome must supersede; outcomes are not editable | API test |
 | 15 | A player row carries no free text; a claim is one live per player and per account, fixed when made, revocable; an organiser confirmation names the organiser | API test + `schema_properties.sh` |
 | 16 | A team rename keeps the old name with its period | API test |
 | 17 | GLOSSARY, README, ADR index, package READMEs and DESIGN_UNSPECIFIED describe the model above and teach no separate Club | review |
 
-Also required before Phase C opens a match from a fixture: **OD-024** (display names inside the
-append-only match aggregate) and the Phase D rule that no submission carrying an unclaimed or
-non-adult player leaves `READY` without a recorded consent artefact (PD-029).
+| 18 | No display name in `evidence.match` or in any payload: the aggregate binds the seats `home` and `away` to competitor ids, the same two words both on-device journals store; a V013 database's named matches are pseudonymised in place with every other payload field untouched; a visit naming anything but a seat is refused | `MigrationTest` (18 properties) + API tests, **delivered** (V018, closes OD-024) |
+
+Also required before Phase C opens a match from a fixture: the Phase D rule that no submission
+carrying an unclaimed or non-adult player leaves `READY` without a recorded consent artefact
+(PD-029). OD-024, the other precondition, is closed by V018 above.
 
 Phases B–F carry their own acceptance tables, written when each phase opens and before its code.
 

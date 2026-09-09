@@ -2136,3 +2136,41 @@ version with the server side's sections added. Where both sides had used the sam
 the server side's now follow: ADR-017 (vocabulary), ADR-018 (organisational state), PD-028,
 PD-029, OD-024. Every Kotlin suite, the schema script and all 581 client tests are green on the
 result.
+
+## Seats, not names
+
+Open decision OD-024 was the last item hostile review of ADR-017 left standing, and it was the one
+that blocked Phase C: `evidence.match` had carried `home_name` and `away_name` since V006, and every
+visit payload named its thrower by that name, because the scoring engine works in string labels and
+the labels were whatever was typed at the oche. That put a display name — possibly a child's —
+inside the one schema no application role may update or delete, which is exactly the place it can
+never be rectified or erased from.
+
+The engine's two labels are now **seats**. The server's `Seat` object names them `home` and `away`,
+which are not new words: the iOS journal and the Android journal had both already chosen them as
+the stored form so that a row written on one phone is readable on the other, and the server's
+first draft of this change had used `Home` and `Away` until the client's `Seat` was read. A label
+the client will actually send is the label the server must accept, so the server changed. The
+aggregate binds each seat to a competitor identifier when the match opens and stores no name; a
+visit's evidence says which seat threw; the aggregate says who sat there; a name is joined from the
+identity module at render. The command handler refuses a visit naming anything else with *"that is
+not a seat in this match"*, and the playtest scorer keeps its two typed names in memory, maps them
+to seats before recording and maps them back for display, so the browser page is unchanged and the
+store is.
+
+V018 drops the two columns and rewrites every existing payload's name to the seat it labelled,
+matched per match against that match's own two names rather than by any global lookup, so a name
+two people share across two matches cannot cross between them. It is the one deliberate rewrite of
+evidence in this repository and it is written as such: a pseudonymisation the data-protection
+promise requires, performed once by the owner role, with the row count unchanged and nothing else
+in any payload touched. `MigrationTest` populates a V013 database with a named match and three
+named visits and reads them back as `home, away, home` with every `remainingAfter` intact, the
+columns gone, no name left anywhere in `evidence`, and the aggregate still binding the same two
+competitors with the same thrower first — eighteen migration properties now.
+
+The schema script had asserted the participant set was frozen by trying to change a name column;
+it now tries to change `away_id`, and two of its inserts that had gone on supplying two name values
+to a table with no name columns were corrected. That brought the count back to a number that was
+run rather than remembered: **78**, not the 85 the plan had said or the 93 the README had, neither
+of which this script has ever printed. The plan, README, glossary (a *Seat* entry), ADR-017's
+deferred list and OD-024 itself now say what V018 does.

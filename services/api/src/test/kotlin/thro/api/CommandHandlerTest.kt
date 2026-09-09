@@ -53,10 +53,7 @@ class CommandHandlerTest {
         val devB = UUID.randomUUID()
         // The store is now the authority on who is playing (ADR-008), so a match must be opened
         // before any evidence about it can exist.
-        Matches(c).open(
-            match, UUID.randomUUID(), UUID.randomUUID(), "A", "B",
-            playtestFormat(thro.engine.PlayerId("A")),
-        )
+        Matches(c).open(match, UUID.randomUUID(), UUID.randomUUID(), playtestFormat())
         var passed = 0
 
         fun check(name: String, cond: Boolean) {
@@ -66,41 +63,41 @@ class CommandHandlerTest {
         }
 
         // a visit is validated by the server's own engine and appended
-        val first = h.handle(cmd(match, devA, 1, "A", 100), "A", "B")
+        val first = h.handle(cmd(match, devA, 1, "home", 100), "home", "away")
         check("a valid visit is applied", first is CommandResult.Applied &&
             (first as CommandResult.Applied).effect == "scored")
         check("one event was written", events(c, match) == 1)
 
         // a replay returns the stored response and creates nothing
         val replayId = UUID.randomUUID()
-        val once = h.handle(cmd(match, devA, 2, "B", 60, id = replayId), "A", "B")
-        val twice = h.handle(cmd(match, devA, 2, "B", 60, id = replayId), "A", "B")
+        val once = h.handle(cmd(match, devA, 2, "away", 60, id = replayId), "home", "away")
+        val twice = h.handle(cmd(match, devA, 2, "away", 60, id = replayId), "home", "away")
         check("a replayed command is not re-applied", twice is CommandResult.Replayed)
         check("a replay creates no second event", events(c, match) == 2)
         check("the stored response comes back verbatim",
             (twice as CommandResult.Replayed).stored.contains("scored"))
 
         // a gap is refused rather than applied out of order
-        val gap = h.handle(cmd(match, devA, 9, "A", 60), "A", "B")
+        val gap = h.handle(cmd(match, devA, 9, "home", 60), "home", "away")
         check("a sequence gap is refused with the expected value",
             gap is CommandResult.Gap && (gap as CommandResult.Gap).expectedSeq == 3L)
         check("a gap writes no event", events(c, match) == 2)
 
         // an impossible total is refused by the engine, and leaves no evidence
-        val impossible = h.handle(cmd(match, devA, 3, "A", 163), "A", "B")
+        val impossible = h.handle(cmd(match, devA, 3, "home", 163), "home", "away")
         check("an unreachable visit total is refused",
             impossible is CommandResult.Refused &&
                 (impossible as CommandResult.Refused).reason == "IMPOSSIBLE_VISIT_TOTAL")
         check("a refusal produces no evidence", events(c, match) == 2)
 
         // out of turn is refused
-        val outOfTurn = h.handle(cmd(match, devA, 3, "B", 60), "A", "B")
+        val outOfTurn = h.handle(cmd(match, devA, 3, "away", 60), "home", "away")
         check("a visit from the wrong player is refused",
             outOfTurn is CommandResult.Refused &&
                 (outOfTurn as CommandResult.Refused).reason == "NOT_YOUR_TURN")
 
         // the second device authors its own stream for the same match
-        val other = h.handle(cmd(match, devB, 1, "A", 100), "A", "B")
+        val other = h.handle(cmd(match, devB, 1, "home", 100), "home", "away")
         check("a second device can author the same match", other is CommandResult.Applied)
         check("both accounts are stored", events(c, match) == 3)
         c.prepareStatement(
@@ -114,8 +111,8 @@ class CommandHandlerTest {
         }
 
         // the server derives the outcome; a client's claim about it is not consulted
-        val lying = cmd(match, devA, 3, "A", 60).copy(clientEffect = "match_won")
-        val derived = h.handle(lying, "A", "B")
+        val lying = cmd(match, devA, 3, "home", 60).copy(clientEffect = "match_won")
+        val derived = h.handle(lying, "home", "away")
         check("the server derives the outcome rather than trusting the client",
             derived is CommandResult.Applied && (derived as CommandResult.Applied).effect == "scored")
 

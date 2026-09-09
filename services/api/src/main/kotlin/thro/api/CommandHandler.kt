@@ -63,7 +63,7 @@ public sealed interface CommandResult {
  * a different format would derive different remainings from the same events, and the figures would
  * disagree with the scoreboard that produced them.
  */
-internal fun playtestFormat(home: PlayerId): MatchFormat = MatchFormat(
+internal fun playtestFormat(home: PlayerId = Seat.home): MatchFormat = MatchFormat(
     startingScore = 501,
     inRule = InRule.STRAIGHT,
     outRule = OutRule.DOUBLE,
@@ -73,10 +73,7 @@ internal fun playtestFormat(home: PlayerId): MatchFormat = MatchFormat(
 
 public class CommandHandler(private val connection: Connection) {
 
-    /**
-     * @param home ignored except as a fallback for a match that predates the aggregate. The
-     *   participant set comes from the store; see [handle].
-     */
+    /** Kept for callers that still pass labels; the participant set comes from the store. */
     public fun handle(cmd: VisitCommand, home: String, away: String): CommandResult = handle(cmd)
 
     /**
@@ -108,7 +105,7 @@ public class CommandHandler(private val connection: Connection) {
                 return r
             }
             if (match.idFor(cmd.player) == null) {
-                val r = CommandResult.NotThisMatch("that player is not in this match")
+                val r = CommandResult.NotThisMatch("that is not a seat in this match")
                 writeReceipt(cmd, r)
                 connection.commit()
                 return r
@@ -166,8 +163,11 @@ public class CommandHandler(private val connection: Connection) {
     }
 
     /** Read-only replay, for surfaces that need current state without submitting a command. */
-    public fun replayFor(matchId: UUID, deviceId: UUID, home: String, away: String): MatchState =
+    public fun replayFor(matchId: UUID, deviceId: UUID): MatchState =
         rehydrate(matchId, deviceId, requireNotNull(Matches(connection).load(matchId)) { "no such match" })
+
+    /** Kept for callers that still pass labels; the seats come from the aggregate. */
+    public fun replayFor(matchId: UUID, deviceId: UUID, home: String, away: String): MatchState = replayFor(matchId, deviceId)
 
     /**
      * Rehydrates by folding this device's own stream. Each device's account is separate — the
@@ -175,9 +175,7 @@ public class CommandHandler(private val connection: Connection) {
      * never merged here.
      */
     private fun rehydrate(matchId: UUID, deviceId: UUID, match: MatchAggregate): MatchState {
-        var state = MatchState.start(
-            match.format, PlayerId(match.homeName), PlayerId(match.awayName),
-        )
+        var state = MatchState.start(match.format, Seat.home, Seat.away)
         connection.prepareStatement(
             """
             SELECT payload->>'player' AS player,

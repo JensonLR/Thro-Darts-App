@@ -69,6 +69,27 @@ class MigrationTest {
         c.prepareStatement(
             "INSERT INTO authz.relation (subject_id, relation, object_type, object_id) VALUES (?, 'organiser', 'event', ?)",
         ).use { ps -> ps.setObject(1, organiser); ps.setString(2, event.toString()); ps.executeUpdate() }
+        // A match as V006 stored it: two names on the aggregate, and every visit payload naming its
+        // thrower by that name. The one thing V018 rewrites.
+        val named = UUID.randomUUID()
+        c.prepareStatement(
+            """
+            INSERT INTO evidence.match (match_id, home_id, away_id, home_name, away_name, starting_score, in_rule, out_rule, legs_mode, legs_target, throw_first)
+            VALUES (?, ?, ?, 'Sam Wilson', 'Jo Bloggs', 501, 'straight', 'double', 'first_to', 5, ?)
+            """.trimIndent(),
+        ).use { ps -> ps.setObject(1, named); ps.setObject(2, players[0]); ps.setObject(3, players[1]); ps.setObject(4, players[0]); ps.executeUpdate() }
+        for ((seq, who) in listOf(1 to "Sam Wilson", 2 to "Jo Bloggs", 3 to "Sam Wilson")) {
+            c.prepareStatement(
+                """
+                INSERT INTO evidence.event (event_id, match_id, device_id, device_seq, event_type, schema_version, correlation_id, actor_id, actor_role, occurred_at, occurred_tz, payload)
+                VALUES (?, ?, ?, ?, 'VisitRecorded', 1, ?, ?, 'participant', now(), 'Europe/London', ?::jsonb)
+                """.trimIndent(),
+            ).use { ps ->
+                ps.setObject(1, UUID.randomUUID()); ps.setObject(2, named); ps.setObject(3, device); ps.setLong(4, seq.toLong())
+                ps.setObject(5, UUID.randomUUID()); ps.setObject(6, players[0])
+                ps.setString(7, """{"player":"$who","visitTotal":60,"remainingAfter":441}"""); ps.executeUpdate()
+            }
+        }
 
         // --- V014 ------------------------------------------------------------------------------------
         TestDatabase.apply(c, after = 13)
@@ -102,7 +123,7 @@ class MigrationTest {
         val byeGuard = try {
             c.prepareStatement("UPDATE competition.bracket_tie SET match_id = ? WHERE event_id = ? AND is_bye").use { ps ->
                 val m = UUID.randomUUID()
-                Matches(c).open(m, UUID.randomUUID(), UUID.randomUUID(), "H", "A", playtestFormat(thro.engine.PlayerId("H")))
+                Matches(c).open(m, UUID.randomUUID(), UUID.randomUUID(), playtestFormat())
                 ps.setObject(1, m); ps.setObject(2, event); ps.executeUpdate()
             }
             false
@@ -121,6 +142,21 @@ class MigrationTest {
         val gr = one("SELECT count(*) FROM trust.scoring_grant WHERE grant_id = ?", grant)
         check("the grant is untouched", (gr[0] as Number).toInt() == 1)
 
+        // V018: the names are gone from the aggregate and every payload names a seat instead — the
+        // same three visits, in the same order, nothing else in the payload touched.
+        val cols = one("SELECT count(*) FROM information_schema.columns WHERE table_schema = 'evidence' AND table_name = 'match' AND column_name IN ('home_name','away_name')")
+        check("the aggregate no longer has name columns", (cols[0] as Number).toInt() == 0)
+        val seats = one("SELECT array_agg(payload->>'player' ORDER BY device_seq), array_agg((payload->>'remainingAfter')::int ORDER BY device_seq), count(*) FROM evidence.event WHERE match_id = ?", named)
+        check("every visit payload now names its seat, in order, with the rest of the payload intact",
+            (seats[0] as java.sql.Array).array.let { (it as Array<*>).toList() } == listOf("home", "away", "home") &&
+                (seats[1] as java.sql.Array).array.let { (it as Array<*>).map { v -> (v as Number).toInt() } } == listOf(441, 441, 441) &&
+                (seats[2] as Number).toInt() == 3)
+        val noNames = one("SELECT count(*) FROM evidence.event WHERE payload::text LIKE '%Sam Wilson%' OR payload::text LIKE '%Jo Bloggs%'")
+        check("no display name survives anywhere in the evidence log", (noNames[0] as Number).toInt() == 0)
+        val aggregate = Matches(c).load(named)
+        check("the aggregate still binds the seats to the same two competitors and the same thrower",
+            aggregate != null && aggregate.homeId == players[0] && aggregate.awayId == players[1] && aggregate.format.throwFirst == Seat.home)
+
         // The migration is a deploy step run by the owner; the application roles gained nothing
         // they should not have.
         val del = one(
@@ -133,6 +169,6 @@ class MigrationTest {
         check("no application role holds DELETE or TRUNCATE on any competition table", (del[0] as Number).toInt() == 0)
 
         println("  $passed migration properties held")
-        assertEquals(14, passed)
+        assertEquals(18, passed)
     }
 }

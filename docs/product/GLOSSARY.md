@@ -28,6 +28,12 @@ average exact. **(open — B1)**
 **Throw** — a single dart. Used only when discussing dart-level evidence; never as a synonym for
 visit.
 
+**Seat** — which side of a match a visit belongs to: `home` or `away`, the engine's two player
+labels and the only two words a visit payload may carry in its `player` field. The match aggregate
+binds each seat to a competitor identifier when the match opens; a display name is joined from the
+identity module at render and is never stored beside evidence (OD-024, V018). Both on-device
+journals store the same two words, so a row written on a phone is readable by the server as written.
+
 **Leg** — one game from the starting score to zero under the format's in and out rules. **The leg is
 the unit of participant confirmation and of dispute** — established by the approved organiser design.
 

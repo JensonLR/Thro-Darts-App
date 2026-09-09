@@ -34,10 +34,7 @@ class StatsProjectionTest {
         val match = UUID.randomUUID()
         val device = UUID.randomUUID()
         var seq = 0L
-        Matches(c).open(
-            match, UUID.randomUUID(), UUID.randomUUID(), "Home", "Away",
-            playtestFormat(thro.engine.PlayerId("Home")),
-        )
+        Matches(c).open(match, UUID.randomUUID(), UUID.randomUUID(), playtestFormat())
 
         // Home: 501 -180-> 321 -180-> 141 -101-> 40 -20-> 20 -20-> 0
         //   141, 40 and 20 are all checkout numbers, so all three visits began on a finish.
@@ -53,20 +50,20 @@ class StatsProjectionTest {
                     dartsUsed = darts, dartsAtDouble = atDouble,
                     occurredAt = "2026-09-04T19:00:00+01:00", occurredTz = "Europe/London",
                 ),
-                "Home", "Away",
+                "home", "away",
             )
             assertTrue(r is CommandResult.Applied, "visit $seq ($player $total) was not applied: $r")
         }
 
-        visit("Home", 180, null, null); visit("Away", 60, null, null)
-        visit("Home", 180, null, null); visit("Away", 60, null, null)
-        visit("Home", 101, null, 1);    visit("Away", 60, null, null)
-        visit("Home", 20, null, 2);     visit("Away", 60, null, null)
-        visit("Home", 20, 1, 1)
+        visit("home", 180, null, null); visit("away", 60, null, null)
+        visit("home", 180, null, null); visit("away", 60, null, null)
+        visit("home", 101, null, 1);    visit("away", 60, null, null)
+        visit("home", 20, null, 2);     visit("away", 60, null, null)
+        visit("home", 20, 1, 1)
 
         val proj = StatsProjection(c)
-        val all = proj.visitsFor(match, device, "Home", "Away", playtestFormat(thro.engine.PlayerId("Home")))
-        val home = all.filter { it.player == "Home" }.map { it.record }
+        val all = proj.visitsFor(match, device, "home", "away", playtestFormat(thro.engine.PlayerId("home")))
+        val home = all.filter { it.player == "home" }.map { it.record }
 
         assertEquals(9, all.size, "every accepted visit should project a record")
         assertEquals(5, home.size)
@@ -102,7 +99,7 @@ class StatsProjectionTest {
 
         // Away threw four visits of 60 and never stood on a finish, so the figure that needs a
         // double attempt must report itself unavailable rather than defaulting to zero.
-        val away = all.filter { it.player == "Away" }.map { it.record }
+        val away = all.filter { it.player == "away" }.map { it.record }
         val awayCheckout = thro.stats.Statistics.checkoutPercentage(away, checkable)
         assertEquals(thro.stats.Basis.UNAVAILABLE, awayCheckout.basis)
         assertTrue(awayCheckout.note!!.isNotBlank(), "an unavailable figure must explain itself")
@@ -134,9 +131,9 @@ class StatsProjectionTest {
             inRule = thro.engine.InRule.STRAIGHT,
             outRule = thro.engine.OutRule.DOUBLE,
             legs = thro.engine.Structure(thro.engine.StructureMode.FIRST_TO, 3),
-            throwFirst = thro.engine.PlayerId("Home"),
+            throwFirst = thro.engine.PlayerId("home"),
         )
-        Matches(c).open(match, UUID.randomUUID(), UUID.randomUUID(), "Home", "Away", format)
+        Matches(c).open(match, UUID.randomUUID(), UUID.randomUUID(), format)
 
         var seq = 0L
         fun visit(player: String, total: Int) {
@@ -149,21 +146,21 @@ class StatsProjectionTest {
                     dartsUsed = null, dartsAtDouble = null,
                     occurredAt = "2026-09-07T19:00:00+01:00", occurredTz = "Europe/London",
                 ),
-                "Home", "Away",
+                "home", "away",
             )
             assertTrue(r is CommandResult.Applied, "visit $seq ($player $total) was not applied: $r")
         }
-        visit("Home", 100); visit("Away", 60); visit("Home", 100)
+        visit("home", 100); visit("away", 60); visit("home", 100)
 
         val proj = StatsProjection(c)
-        val home = proj.visitsFor(match, device, "Home", "Away", format)
-            .filter { it.player == "Home" }.map { it.record }
+        val home = proj.visitsFor(match, device, "home", "away", format)
+            .filter { it.player == "home" }.map { it.record }
         assertEquals(listOf(301, 201), home.map { it.remainingBefore },
                      "a 301 match starts at 301 — under the old fixed format this read 501 and 401")
         assertEquals(listOf(201, 101), home.map { it.remainingAfter })
 
         // And the summary's checkable set comes from the match's out-rule for the same reason.
-        val summary = proj.summaryFor(match, device, "Home", "Away", "Home", format)
+        val summary = proj.summaryFor(match, device, "home", "away", "home", format)
         assertTrue(summary.contains("threeDartAverage"), "summary: $summary")
     }
 }

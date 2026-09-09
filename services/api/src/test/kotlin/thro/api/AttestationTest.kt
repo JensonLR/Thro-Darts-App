@@ -44,7 +44,7 @@ class AttestationTest {
         val homeId = UUID.randomUUID()
         val awayId = UUID.randomUUID()
         val scorer = UUID.randomUUID()
-        Matches(c).open(match, homeId, awayId, "Home", "Away", playtestFormat(PlayerId("Home")))
+        Matches(c).open(match, homeId, awayId, playtestFormat())
 
         var seq = 0L
         fun visit(player: String, total: Int, darts: Int? = null, atDouble: Int? = null) {
@@ -52,7 +52,7 @@ class AttestationTest {
             val r = h.handle(
                 VisitCommand(
                     commandId = UUID.randomUUID(), matchId = match, deviceId = scorer,
-                    deviceSeq = seq, actorId = if (player == "Home") homeId else awayId,
+                    deviceSeq = seq, actorId = if (player == "home") homeId else awayId,
                     actorRole = "participant", correlationId = UUID.randomUUID(),
                     player = player, visitTotal = total, dartsUsed = darts, dartsAtDouble = atDouble,
                     occurredAt = "2026-09-04T19:00:00Z", occurredTz = "Europe/London",
@@ -62,9 +62,9 @@ class AttestationTest {
         }
 
         // Home wins a leg 501 = 180 + 180 + 141.
-        visit("Home", 180); visit("Away", 60)
-        visit("Home", 180); visit("Away", 60)
-        visit("Home", 141, 3, 1)
+        visit("home", 180); visit("away", 60)
+        visit("home", 180); visit("away", 60)
+        visit("home", 141, 3, 1)
 
         val before = att.provenanceOf(match)!!
         check("before confirmation the result is self-reported", before.attestation == Attestation.SELF_REPORTED)
@@ -86,22 +86,22 @@ class AttestationTest {
         val m2 = UUID.randomUUID()
         val h2 = UUID.randomUUID()
         val a2 = UUID.randomUUID()
-        Matches(c).open(m2, h2, a2, "Home", "Away", playtestFormat(PlayerId("Home")))
+        Matches(c).open(m2, h2, a2, playtestFormat())
         var s2 = 0L
         fun visit2(player: String, total: Int, darts: Int? = null, atDouble: Int? = null) {
             s2 += 1
             h.handle(
                 VisitCommand(
                     commandId = UUID.randomUUID(), matchId = m2, deviceId = scorer, deviceSeq = s2,
-                    actorId = if (player == "Home") h2 else a2, actorRole = "participant",
+                    actorId = if (player == "home") h2 else a2, actorRole = "participant",
                     correlationId = UUID.randomUUID(), player = player, visitTotal = total,
                     dartsUsed = darts, dartsAtDouble = atDouble,
                     occurredAt = "2026-09-04T19:00:00Z", occurredTz = "Europe/London",
                 ),
             )
         }
-        visit2("Home", 180); visit2("Away", 60); visit2("Home", 180); visit2("Away", 60)
-        visit2("Home", 141, 3, 1)
+        visit2("home", 180); visit2("away", 60); visit2("home", 180); visit2("away", 60)
+        visit2("home", 141, 3, 1)
         att.attest(m2, 1, a2, attested = false, deviceId = UUID.randomUUID(), deviceSeq = 1)
         val disagreed = att.provenanceOf(m2)!!
         check("a disagreement does not confirm", disagreed.attestation == Attestation.SELF_REPORTED)
@@ -126,19 +126,19 @@ class AttestationTest {
         val m3 = UUID.randomUUID()
         val h3 = UUID.randomUUID()
         val a3 = UUID.randomUUID()
-        Matches(c).open(m3, h3, a3, "Home", "Away", playtestFormat(PlayerId("Home")))
+        Matches(c).open(m3, h3, a3, playtestFormat())
         var s3 = 0L
         // Driven from the engine's own state rather than assuming who throws: the loser of a leg
-        // throws first in the next one, and hardcoding "Home" made the second leg silently never
+        // throws first in the next one, and hardcoding "home" made the second leg silently never
         // happen, which made this test pass for the wrong reason.
         fun visit3(total: Int, darts: Int? = null, atDouble: Int? = null) {
-            val state = h.replayFor(m3, scorer, "Home", "Away")
+            val state = h.replayFor(m3, scorer)
             val thrower = state.thrower ?: return
             s3 += 1
             val r = h.handle(
                 VisitCommand(
                     commandId = UUID.randomUUID(), matchId = m3, deviceId = scorer, deviceSeq = s3,
-                    actorId = if (thrower.value == "Home") h3 else a3, actorRole = "participant",
+                    actorId = if (thrower.value == "home") h3 else a3, actorRole = "participant",
                     correlationId = UUID.randomUUID(), player = thrower.value, visitTotal = total,
                     dartsUsed = darts, dartsAtDouble = atDouble,
                     occurredAt = "2026-09-04T19:00:00Z", occurredTz = "Europe/London",

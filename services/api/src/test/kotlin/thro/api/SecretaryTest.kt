@@ -307,7 +307,7 @@ class SecretaryTest {
 
         // --- 11. The same engine: results ------------------------------------------------------------------
         val match = UUID.randomUUID()
-        Matches(c).open(match, riverside, grange, "Riverside A", "Grange A", playtestFormat(thro.engine.PlayerId("Riverside A")))
+        Matches(c).open(match, riverside, grange, playtestFormat())
         c.prepareStatement("UPDATE competition.league_fixture SET match_id = ?, row_version = 3 WHERE fixture_id = ? AND row_version = 2")
             .use { ps -> ps.setObject(1, match); ps.setObject(2, fixture); check("the fixture is linked to its match once", ps.executeUpdate() == 1) }
         val played = UUID.randomUUID()

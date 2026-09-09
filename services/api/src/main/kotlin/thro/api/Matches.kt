@@ -9,28 +9,38 @@ import thro.engine.PlayerId
 import thro.engine.Structure
 import thro.engine.StructureMode
 
+/**
+ * The engine's two labels. Seats, not people: evidence names the seat that threw, and the aggregate
+ * — fixed when the match opened — says who sat there. A display name is joined from the identity
+ * module at render time and is never stored beside evidence (OD-024, V018).
+ */
+public object Seat {
+    public const val HOME: String = "home"
+    public const val AWAY: String = "away"
+    public val home: PlayerId = PlayerId(HOME)
+    public val away: PlayerId = PlayerId(AWAY)
+}
+
 /** Who is playing and under what rules, as the store holds it. */
 public data class MatchAggregate(
     val matchId: UUID,
     val eventId: UUID?,
     val homeId: UUID,
     val awayId: UUID,
-    val homeName: String,
-    val awayName: String,
     val format: MatchFormat,
 ) {
     public val participants: Set<UUID> get() = setOf(homeId, awayId)
 
-    /** The engine works in display names; the store works in identifiers. This is the join. */
+    /** The engine works in seats; the store works in identifiers. This is the join. */
     public fun playerFor(id: UUID): PlayerId? = when (id) {
-        homeId -> PlayerId(homeName)
-        awayId -> PlayerId(awayName)
+        homeId -> Seat.home
+        awayId -> Seat.away
         else -> null
     }
 
-    public fun idFor(name: String): UUID? = when (name) {
-        homeName -> homeId
-        awayName -> awayId
+    public fun idFor(seat: String): UUID? = when (seat) {
+        Seat.HOME -> homeId
+        Seat.AWAY -> awayId
         else -> null
     }
 }
@@ -45,35 +55,38 @@ public data class MatchAggregate(
  */
 public class Matches(private val connection: Connection) {
 
+    /**
+     * Opens a match between two competitors. No name is taken, because none may be stored: the
+     * format's `throwFirst` names a seat, and the seats are bound to [homeId] and [awayId] here.
+     */
     public fun open(
         matchId: UUID,
         homeId: UUID,
         awayId: UUID,
-        homeName: String,
-        awayName: String,
         format: MatchFormat,
         eventId: UUID? = null,
     ) {
+        require(format.throwFirst.value == Seat.HOME || format.throwFirst.value == Seat.AWAY) {
+            "throwFirst names a seat, ${Seat.HOME} or ${Seat.AWAY}, never a person"
+        }
         connection.prepareStatement(
             """
             INSERT INTO evidence.match
-              (match_id, event_id, home_id, away_id, home_name, away_name, starting_score,
+              (match_id, event_id, home_id, away_id, starting_score,
                in_rule, out_rule, legs_mode, legs_target, throw_first)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """.trimIndent(),
         ).use { ps ->
             ps.setObject(1, matchId)
             ps.setObject(2, eventId)
             ps.setObject(3, homeId)
             ps.setObject(4, awayId)
-            ps.setString(5, homeName)
-            ps.setString(6, awayName)
-            ps.setInt(7, format.startingScore)
-            ps.setString(8, format.inRule.name.lowercase())
-            ps.setString(9, format.outRule.name.lowercase())
-            ps.setString(10, format.legs.mode.name.lowercase())
-            ps.setInt(11, format.legs.target)
-            ps.setObject(12, if (format.throwFirst.value == homeName) homeId else awayId)
+            ps.setInt(5, format.startingScore)
+            ps.setString(6, format.inRule.name.lowercase())
+            ps.setString(7, format.outRule.name.lowercase())
+            ps.setString(8, format.legs.mode.name.lowercase())
+            ps.setInt(9, format.legs.target)
+            ps.setObject(10, if (format.throwFirst.value == Seat.HOME) homeId else awayId)
             ps.executeUpdate()
         }
     }
@@ -81,7 +94,7 @@ public class Matches(private val connection: Connection) {
     public fun load(matchId: UUID): MatchAggregate? {
         connection.prepareStatement(
             """
-            SELECT match_id, event_id, home_id, away_id, home_name, away_name, starting_score,
+            SELECT match_id, event_id, home_id, away_id, starting_score,
                    in_rule, out_rule, legs_mode, legs_target, throw_first
               FROM evidence.match WHERE match_id = ?
             """.trimIndent(),
@@ -90,16 +103,12 @@ public class Matches(private val connection: Connection) {
             ps.executeQuery().use { rs ->
                 if (!rs.next()) return null
                 val homeId = rs.getObject("home_id") as UUID
-                val homeName = rs.getString("home_name")
-                val awayName = rs.getString("away_name")
                 val first = rs.getObject("throw_first") as UUID
                 return MatchAggregate(
                     matchId = rs.getObject("match_id") as UUID,
                     eventId = rs.getObject("event_id") as UUID?,
                     homeId = homeId,
                     awayId = rs.getObject("away_id") as UUID,
-                    homeName = homeName,
-                    awayName = awayName,
                     format = MatchFormat(
                         startingScore = rs.getInt("starting_score"),
                         inRule = InRule.valueOf(rs.getString("in_rule").uppercase()),
@@ -108,7 +117,7 @@ public class Matches(private val connection: Connection) {
                             StructureMode.valueOf(rs.getString("legs_mode").uppercase()),
                             rs.getInt("legs_target"),
                         ),
-                        throwFirst = PlayerId(if (first == homeId) homeName else awayName),
+                        throwFirst = if (first == homeId) Seat.home else Seat.away,
                     ),
                 )
             }

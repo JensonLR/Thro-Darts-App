@@ -49,8 +49,8 @@ class CorrectionTest {
         // Two matches at the same event. Dana officiates both and plays in the second.
         val theirs = UUID.randomUUID()
         val hers = UUID.randomUUID()
-        Matches(c).open(theirs, alice, bob, "Alice", "Bob", playtestFormat(PlayerId("Alice")), eventId)
-        Matches(c).open(hers, dana, alice, "Dana", "Alice", playtestFormat(PlayerId("Dana")), eventId)
+        Matches(c).open(theirs, alice, bob, playtestFormat(), eventId)   // Alice home, Bob away
+        Matches(c).open(hers, dana, alice, playtestFormat(), eventId)   // Dana home, Alice away
 
         rel.grant(dana, "official", eventObj)
         rel.link(ObjectRef(ObjectType.MATCH, theirs.toString()), eventObj)
@@ -89,9 +89,9 @@ class CorrectionTest {
             }
         }
 
-        val theirVisit = visit(theirs, "Alice", 100)
+        val theirVisit = visit(theirs, "home", 100)
         seq = 0L
-        val herVisit = visit(hers, "Dana", 100)
+        val herVisit = visit(hers, "home", 100)
 
         // --- the job Dana is there to do -------------------------------------------------------
         val ok = corrections.correctVisit(theirs, theirVisit, dana, 140, UUID.randomUUID(), 900)
