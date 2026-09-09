@@ -171,8 +171,8 @@ darts have a total, but a total does not have three darts.)
 - **A normal visit.** The keypad is a row of **SINGLE · DOUBLE · TREBLE**, then the twenty sectors
   **in the board's own order** — 20 is top-left, between 1 and 5, where it is on a real board — then
   **25 · BULL · MISS · ENTER**. Tap **TREBLE**, then **20**: the key says *T20* before you commit to
-  it, the dart appears under the score on the board, and the ring drops back to SINGLE. Do it three
-  times for a 180.
+  it, the dart appears **under the two scores** — beside the number it is about to change — and the
+  ring drops back to SINGLE. Do it three times for a 180.
 - **Take one back.** Tap the middle dart on the board. It and the one after it go; the first stays.
   The undo key does the same one dart at a time.
 - **Enter says how many are left.** With two darts entered it reads *One more dart* and is out of

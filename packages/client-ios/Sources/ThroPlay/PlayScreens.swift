@@ -529,17 +529,22 @@ public struct ScoringScreen: View {
                              compact: true, hideValue: true)
                     .padding(.top, ThroSpacing.spacing2)
             }
-            Spacer(minLength: 0)
-            // **The three darts, on the board.** What is being written goes where the chalk is, and
-            // a player checks it against what they threw while they are still looking at the board.
-            // `ThroStage` counts this row (`dartLine`) before it picks a rung, so it is never a row
-            // that clips: on the smallest phone the hero steps down the ladder to make room for it,
-            // which is the cost of the notation and is the player's to choose.
+            // **The three darts, under the head.** Two comments in the keypad slice said this row
+            // sits under the head and the code drew it at the foot of the board, above the ledger.
+            // Under the head is both what was written down and the better answer: the darts land
+            // beside the number they are about to change, which is the check a player is actually
+            // making — *what does 141 become after T20 and T19* — and it keeps them clear of the
+            // chalk mark, which lands at the foot for its beat.
+            //
+            // `ThroStage` counts this row (`dartLine`) into the head before it picks a rung, so it
+            // is never a row that clips: on the smallest phone the score steps down the ladder to
+            // make room for it, which is the cost of the notation and is the player's to choose.
             if entryMode == .perDart {
                 ThroDartLine(entry: session.darts, onTakeBackTo: session.takeBackDarts)
                     .padding(.horizontal, ThroStage.gutter)
-                    .padding(.bottom, ThroSpacing.spacing2)
+                    .padding(.top, ThroSpacing.spacing2)
             }
+            Spacer(minLength: 0)
             // The leg so far: the running column every paper scoresheet has had for a century, and
             // the only way a player catches a mis-key without replaying the leg in their head.
             ThroLedger(rows: ScoringScreen.ledger(session), stage: stage) { seat in

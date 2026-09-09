@@ -1905,3 +1905,21 @@ recorded as verified. That is the honest place for it.
 
 Worth noting how it was found: not by a test and not by CI, but by reading a comment I had written
 and asking whether the line under it does what it says.
+
+## And the same question, asked of the row I had just added
+
+Two comments — one in `DartKeypad.swift`, one in `Stage.swift` — say the three entered darts are
+drawn **under the head**. `ScoringScreen` drew them after the spacer, at the foot of the board above
+the ledger.
+
+Under the head is both what I wrote down and the better answer, so the code moved rather than the
+comments:
+
+- The darts land **beside the number they are about to change**, which is the check a player is
+  actually making — *what does 141 become after `T20` and `T19`*.
+- It keeps them clear of the chalk mark, which now lands at the foot for its beat. Left at the foot
+  they would have been the thing the confirmation covered.
+
+That is two comment-versus-code mismatches in the same screen, both found in ten minutes by reading
+what I had written and asking whether the next line does it. Neither was reachable by any test here,
+and neither would have been found by CI.
