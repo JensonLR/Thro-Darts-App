@@ -60,3 +60,13 @@ identifiers and nothing a league has.
 
 The match-time `Competitor.Team` is the **lineup** a team fields in one match, not the organisation.
 Both exist on purpose (ADR-012, ADR-016).
+
+## The Secretary's pure rules (`Secretary.kt`)
+
+`RegistrationPolicy.parse` reads a league's approved `registration` policy into the facts THRØ can
+check — name, age band, a bound account, a recorded consent — and **refuses** any requirement it
+cannot check, so a "passport photo" rule never silently passes. `SubmissionTransitions.RULES` is
+the whole submission graph as data, each move naming who may make it and the evidence it needs.
+One test walks the table and proves there is no path by which THRØ alone reaches *acknowledged*,
+*accepted*, *rejected* or *action required*: those are the league's words, recorded with the name
+of the person who said them.
