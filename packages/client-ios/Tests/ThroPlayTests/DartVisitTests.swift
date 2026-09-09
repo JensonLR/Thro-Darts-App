@@ -206,12 +206,82 @@ final class DartVisitTests: XCTestCase {
                               ThroDartEntry([a, ThroDart.treble(20)!, ThroDart.double(16)!])] {
                     var state = base
                     state.remaining[home] = start
+                    // An entry that reaches zero on a dart that cannot end the leg never gets this
+                    // far: `MatchSession` refuses it and names the dart. Everything else must
+                    // produce evidence the engine accepts.
+                    if DartVisit.illegalFinish(entry, from: start, outRule: .double) != nil { continue }
                     let command = DartVisit.command(entry, player: home, from: start, outRule: .double)
                     if case let .rejected(reason) = Engine.apply(state, command) {
                         XCTAssertNotEqual(reason, .DARTS_USED_INVALID, "\(start) \(entry.written)")
                         XCTAssertNotEqual(reason, .DARTS_AT_DOUBLE_INVALID, "\(start) \(entry.written)")
                     }
                 }
+            }
+        }
+    }
+
+    func testADartThatCannotEndTheLegIsCaughtBeforeTheEngineSeesIt() {
+        // **What per-dart entry can see and a visit total cannot.** On 60 a `T20` reaches zero on a
+        // treble, which under double-out is a bust and not a checkout. The engine scores a visit,
+        // so all it can ask is whether 60 was finishable — it is — and left to itself it answers
+        // two ways for one situation: it rejects this one (dartsAtDouble comes out 0) and accepts
+        // `20` from 20 as a leg won, because 20 is D10 and the dart was thrown from a one-dart
+        // finish. Both are refused here, before either reaches it.
+        XCTAssertEqual(DartVisit.illegalFinish(ThroDartEntry([ThroDart.treble(20)!]),
+                                               from: 60, outRule: .double)?.written, "T20")
+        XCTAssertEqual(DartVisit.illegalFinish(ThroDartEntry([ThroDart.single(20)!]),
+                                               from: 20, outRule: .double)?.written, "20")
+        // A real finish is not touched.
+        XCTAssertNil(DartVisit.illegalFinish(ThroDartEntry([ThroDart.double(10)!]),
+                                             from: 20, outRule: .double))
+        // Nor is a visit that does not reach zero, however it ends.
+        XCTAssertNil(DartVisit.illegalFinish(ThroDartEntry([ThroDart.treble(20)!]),
+                                             from: 100, outRule: .double))
+        // Nor a bust below zero, which the engine can see for itself.
+        XCTAssertNil(DartVisit.illegalFinish(ThroDartEntry([ThroDart.treble(20)!]),
+                                             from: 40, outRule: .double))
+    }
+
+    func testAZeroReachedFromABogeyIsLeftToTheEngineToBust() {
+        // 159 is a double-out bogey, so reaching zero from it is `NOT_CHECKOUT_POSSIBLE` — a bust
+        // the app records correctly today. Refusing it here would take that away, so this only
+        // speaks where the engine would otherwise call it a leg won.
+        let entry = ThroDartEntry([ThroDart.treble(20)!, ThroDart.treble(13)!, ThroDart.treble(20)!])
+        XCTAssertEqual(entry.total, 159)
+        XCTAssertFalse(RuleTables.checkouts(.double).contains(159),
+                       "159 must still be a bogey or this test is measuring nothing")
+        XCTAssertNil(DartVisit.illegalFinish(entry, from: 159, outRule: .double))
+        // The same darts under master-out, where 159 IS a checkout and a treble MAY end it.
+        XCTAssertTrue(RuleTables.checkouts(.master).contains(159))
+        XCTAssertNil(DartVisit.illegalFinish(entry, from: 159, outRule: .master))
+        // And a master-out finish on a single, which is not allowed: 60 is `T20` under master.
+        let singles = ThroDartEntry([ThroDart.single(20)!, ThroDart.single(20)!, ThroDart.single(20)!])
+        XCTAssertTrue(RuleTables.checkouts(.master).contains(60))
+        XCTAssertEqual(DartVisit.illegalFinish(singles, from: 60, outRule: .master)?.written, "20")
+        XCTAssertNil(DartVisit.illegalFinish(singles, from: 60, outRule: .straight),
+                     "straight-out ends on anything that scores")
+    }
+
+    func testTheOutRuleDecidesWhichDartsMayEndALeg() {
+        XCTAssertTrue(DartVisit.mayFinish(.double(20)!, outRule: .double))
+        XCTAssertTrue(DartVisit.mayFinish(.bull, outRule: .double), "the bull is a double")
+        XCTAssertFalse(DartVisit.mayFinish(.outerBull, outRule: .double), "the 25 is not")
+        XCTAssertFalse(DartVisit.mayFinish(.treble(20)!, outRule: .double))
+        XCTAssertTrue(DartVisit.mayFinish(.treble(20)!, outRule: .master))
+        XCTAssertFalse(DartVisit.mayFinish(.single(20)!, outRule: .master))
+        XCTAssertTrue(DartVisit.mayFinish(.single(20)!, outRule: .straight))
+        XCTAssertFalse(DartVisit.mayFinish(.miss, outRule: .straight), "a miss reaches nothing")
+    }
+
+    func testEveryEntryThatReachesZeroIsEitherALegalFinishOrNamedAsNotOne() {
+        // No third case: an entry that finishes is one the engine may have, or one the player is
+        // told about. Walked over every dart from every one-dart finish under double-out.
+        for start in RuleTables.oneDartFinishesDouble {
+            for dart in ThroDart.all where dart.value == start {
+                let entry = ThroDartEntry([dart])
+                let illegal = DartVisit.illegalFinish(entry, from: start, outRule: .double)
+                XCTAssertEqual(illegal == nil, dart.isDouble,
+                               "\(dart.written) from \(start)")
             }
         }
     }

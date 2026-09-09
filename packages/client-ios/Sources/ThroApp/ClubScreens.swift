@@ -726,24 +726,20 @@ public struct AnnounceScreen: View {
 
 /// A player's own page: who they are, what their figures are, and where they play.
 public struct ProfileScreen: View {
-    public struct Figure: Identifiable, Sendable {
-        public let id = UUID()
-        public let value: String
-        public let label: String
-        /// Why a figure is a dash. Present exactly when the value is one.
-        public let unavailable: String?
-
-        public init(value: String, label: String, unavailable: String? = nil) {
-            self.value = value
-            self.label = label
-            self.unavailable = unavailable
-        }
-    }
+    /// The one figure the page leads with, drawn big.
+    ///
+    /// A profile is read for one thing before anything else — *how have I been playing* — and the
+    /// old page buried that answer in the fourth cell of a three-across grid at the same size as
+    /// the count of legs won. The founder's player put it plainly: **"just make what's needed big,
+    /// that's the main hiccup u see."** It is a `StatItem` like every other figure here, so a
+    /// headline that cannot be computed says why in the same words a small one would.
+    public typealias Headline = StatItem
 
     private let name: String
     private let meta: String
     private let heading: String
-    private let figures: [Figure]
+    private let headline: Headline?
+    private let figures: [StatItem]
     private let clubs: [Club]
     /// Their picture, when they have one (PD-014).
     private let picture: Image?
@@ -756,12 +752,14 @@ public struct ProfileScreen: View {
     private let onBack: () -> Void
 
     public init(name: String, meta: String, heading: String = "Last 20 legs",
-                figures: [Figure], clubs: [Club], picture: Image? = nil,
+                headline: Headline? = nil,
+                figures: [StatItem], clubs: [Club], picture: Image? = nil,
                 pictureNote: String? = nil, onEditPicture: (() -> Void)? = nil,
                 onBack: @escaping () -> Void = {}) {
         self.name = name
         self.meta = meta
         self.heading = heading
+        self.headline = headline
         self.figures = figures
         self.clubs = clubs
         self.picture = picture
@@ -770,59 +768,31 @@ public struct ProfileScreen: View {
         self.onBack = onBack
     }
 
+    /// How big the mark is on a profile.
+    ///
+    /// **96 and not 52.** `PlayerIdentity(.large)` draws a 52 pt mark, which is right in a roster
+    /// row and wrong as the subject of a page: a profile picture at list size reads as a list that
+    /// happens to have one row. `PersonMark` already takes any size — it was extracted for exactly
+    /// this — so nothing is drawn twice to get it.
+    public static let markSize: CGFloat = 96
+
     public var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             PageBar(onBack: onBack)
             ScrollView {
                 VStack(alignment: .leading, spacing: 0) {
-                    HStack(spacing: ThroSpacing.spacing4) {
-                        PlayerIdentity(PlayerRef(name: name), size: .large, picture: picture)
-                        Spacer(minLength: 0)
-                    }
-                    Text(meta)
-                        .thro(ThroTypography.metadata)
-                        .foregroundStyle(ThroColor.colorTextSecondary)
-                        .padding(.top, ThroSpacing.spacing2)
-                    HStack(spacing: 6) { Tag("Not rated"); Tag("Self-reported") }
-                        .padding(.top, ThroSpacing.spacing2)
-                    if let onEditPicture {
-                        ThroTextButton(picture == nil ? "Add a picture" : "Change picture",
-                                       action: onEditPicture)
-                    } else if let pictureNote {
-                        Text(pictureNote)
-                            .thro(ThroTypography.metadata)
-                            .foregroundStyle(ThroColor.colorTextTertiary)
-                            .fixedSize(horizontal: false, vertical: true)
-                            .padding(.top, ThroSpacing.spacing2)
-                    }
-
+                    header
+                    if let headline { headlineFigure(headline) }
                     Eyebrow(heading).padding(.top, ThroSpacing.spaceSectionGap)
-                    VStack(alignment: .leading, spacing: ThroSpacing.spacing4) {
-                        ForEach(Array(stride(from: 0, to: figures.count, by: 3)), id: \.self) { start in
-                            HStack(alignment: .top, spacing: ThroSpacing.spacing4) {
-                                ForEach(figures[start..<min(start + 3, figures.count)]) { f in
-                                    VStack(alignment: .leading, spacing: 0) {
-                                        Text(f.value)
-                                            .thro(ThroTypography.heading2.family(.sport).weight(.semibold))
-                                            .foregroundStyle(ThroColor.colorTextPrimary)
-                                        Text(f.label)
-                                            .thro(ThroTypography.metadata)
-                                            .foregroundStyle(ThroColor.colorTextSecondary)
-                                        if let why = f.unavailable {
-                                            Text(why)
-                                                .thro(ThroTypography.metadata)
-                                                .foregroundStyle(ThroColor.colorTextTertiary)
-                                                .fixedSize(horizontal: false, vertical: true)
-                                        }
-                                    }
-                                    .frame(maxWidth: .infinity, alignment: .leading)
-                                }
-                            }
-                        }
-                    }
-                    .padding(.top, ThroSpacing.spacing3)
+                    // **`StatGrid`, not a grid of its own.** The old page took each figure apart
+                    // into a value, a label and an optional reason and drew all three the same
+                    // whatever the basis was — so a **bounded** figure on a profile, which the
+                    // honesty layer marks as a range everywhere else, was drawn as though it were
+                    // exact. That is not a layout preference; it is the one thing this app's
+                    // statistics exist to communicate, lost in the mapping between two types.
+                    StatGrid(figures).padding(.top, ThroSpacing.spacing3)
                     Note("Every figure here comes from matches scored on this phone and confirmed by nobody. A dash means the figure cannot be computed honestly yet, and says why.")
-                        .padding(.top, ThroSpacing.spacing3)
+                        .padding(.top, ThroSpacing.spacing4)
 
                     if !clubs.isEmpty {
                         Eyebrow("Clubs and leagues").padding(.top, ThroSpacing.spaceSectionGap)
@@ -843,5 +813,80 @@ public struct ProfileScreen: View {
         // withdrawn entirely under Reduce Motion.
         .throEntrance(0)
         .background(ThroColor.colorBackgroundPrimary.ignoresSafeArea())
+    }
+
+    /// The picture, the name and what kind of page this is — the three things a profile is.
+    ///
+    /// Laid out as a column and not a row: a 96 pt mark beside a name leaves the name about 200
+    /// points on a 4.7-inch phone, which truncates anybody with two names. The mark leads, the name
+    /// follows at `heading1`, and the meta and the two tags sit under it.
+    @ViewBuilder private var header: some View {
+        VStack(alignment: .leading, spacing: ThroSpacing.spacing3) {
+            PersonMark(initials: ProfileScreen.initials(of: name),
+                       size: ProfileScreen.markSize, picture: picture)
+                .accessibilityHidden(true)
+            VStack(alignment: .leading, spacing: ThroSpacing.spacing2) {
+                Text(name)
+                    .thro(ThroTypography.heading1.weight(.bold).tracking(em: -0.01))
+                    .foregroundStyle(ThroColor.colorTextPrimary)
+                    .fixedSize(horizontal: false, vertical: true)
+                Text(meta)
+                    .thro(ThroTypography.metadata)
+                    .foregroundStyle(ThroColor.colorTextSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                HStack(spacing: 6) { Tag("Not rated"); Tag("Self-reported") }
+                if let onEditPicture {
+                    ThroTextButton(picture == nil ? "Add a picture" : "Change picture",
+                                   action: onEditPicture)
+                } else if let pictureNote {
+                    Text(pictureNote)
+                        .thro(ThroTypography.metadata)
+                        .foregroundStyle(ThroColor.colorTextTertiary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+        }
+        .accessibilityElement(children: .contain)
+    }
+
+    /// The headline figure. Big, in the sport family, with its window under it.
+    @ViewBuilder private func headlineFigure(_ item: Headline) -> some View {
+        VStack(alignment: .leading, spacing: ThroSpacing.spacing2) {
+            Eyebrow(item.label)
+            HStack(alignment: .firstTextBaseline, spacing: ThroSpacing.spacing3) {
+                // `ratingHero` is a **size**, and this is the first thing in the app to use it.
+                // The role exists because a hero figure about a player was always intended; PD-018
+                // decided what that figure honestly is, and it is not a rating. What PD-018 forbids
+                // is the word, and the word here is "Recent form" over a note ending "Not a rating."
+                // OD-001 stays open and nothing about it moves: no rating VALUE exists anywhere in
+                // this build, which is registered absence claim #2 and is the claim that matters.
+                Text(item.value)
+                    .thro(ThroTypography.ratingHero.family(.sport).weight(.bold))
+                    .foregroundStyle(StatGrid.valueColour(item.confidence))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.5)
+                if item.confidence == .range { Tag("Range", tone: .neutral, shape: .basis) }
+            }
+            if let note = item.note {
+                Text(note)
+                    .thro(item.confidence == .unavailable ? ThroTypography.body
+                                                          : ThroTypography.metadata)
+                    .foregroundStyle(StatGrid.noteColour(item.confidence))
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+        .padding(.top, ThroSpacing.spaceSectionGap)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(item.label)
+        .accessibilityValue(StatGrid.spokenValue(item))
+        .accessibilityHint(item.note ?? "")
+    }
+
+    /// The initials a name is drawn as when there is no picture. The same rule `LocalPerson` and
+    /// `ClubMember` use, restated here because this screen is handed a name and not a record — and
+    /// stated once rather than in each of the two call sites.
+    static func initials(of name: String) -> String {
+        let letters = name.split(separator: " ").prefix(2).compactMap { $0.first }
+        return letters.isEmpty ? "?" : letters.map(String.init).joined().uppercased()
     }
 }

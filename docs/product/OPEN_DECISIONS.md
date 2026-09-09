@@ -480,3 +480,45 @@ then they will not remember.
 
 **Must not be decided by:** whichever numbers happen to be the defaults today. They are defaults
 because a screen needed one, not because they were chosen.
+
+## OD-023 — What THRØ does about a bust only the darts can show
+**Status: OPEN.** Raised 2026-09-09, by per-dart entry making it visible for the first time.
+
+**Impact:** every leg scored dart by dart, under double-out and master-out
+
+The engine scores a visit, not a dart (`ThroEngine/Types.swift:26`). PD-008 settled double-in on that
+basis and ADR-002 keeps the Swift and Kotlin engines structurally parallel behind one conformance
+corpus. So when a visit reaches zero, all the engine can ask is whether the score it **started** from
+was finishable.
+
+That is enough while a visit is a total. It stops being enough the moment three darts are entered:
+
+- A player on 60 throws `T20`. They reach zero on a treble, which under double-out is a **bust**. The
+  engine sees a visit of 60 from 60, and 60 is a checkout, so it would call it a leg won.
+- A player on 20 throws a single 20. Same thing.
+
+Per-dart entry can see the difference and the engine cannot, and the two currently disagree in a way
+that is worse than either alone: the first case produces `dartsAtDouble: 0`, which the engine rejects
+as `DARTS_AT_DOUBLE_INVALID` — a true refusal carrying a reason no player can act on — while the
+second produces `dartsAtDouble: 1`, because 20 is `D10` and the dart was thrown from a one-dart
+finish, so it is **accepted as a leg won that never happened**.
+
+**What engineering did, and why it is not the decision:** `DartVisit.illegalFinish` catches both,
+before either reaches the engine, and `MatchSession` refuses with the dart named and the rule said
+out loud. That makes the app's behaviour consistent and stops it recording a leg nobody won. It does
+**not** record the bust, and the refusal says so rather than implying the visit was scored.
+
+The decision is what should happen instead:
+
+- Does the engine learn about darts — a `recordVisit` that may carry them, or a new command — in
+  Swift and Kotlin together, re-baselining the conformance corpus? That is the complete answer and
+  the most expensive one, and it reopens PD-008's reasoning about what a visit is.
+- Or does the visit total stay the engine's only input, with the entry layer converting an illegal
+  finish into the visit total that produces the same bust? There is no such total: a bust from 60 on
+  a treble and a checkout from 60 are the same 60.
+- Or does per-dart entry keep refusing it, and the player switches notation for that one visit —
+  where the app will then tell them they won?
+
+**Must not be decided by:** which is easiest to build. The third option is free and is the one that
+leaves a player holding a phone that says they won a leg they busted.
+

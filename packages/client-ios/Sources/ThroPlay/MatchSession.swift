@@ -409,6 +409,14 @@ public final class MatchSession: ObservableObject {
         guard !darts.isEmpty, let seat = thrower, dartsMayBeEntered else { return }
         bust = nil
         notice = nil
+        // Darts that cannot have finished the leg are refused here, with the dart named, rather
+        // than reaching an engine that would reject some of them for a reason a player cannot act
+        // on and accept the rest as a leg won. See `DartVisit.illegalFinish`.
+        if let offending = DartVisit.illegalFinish(darts, from: remaining(seat), outRule: record.outRule) {
+            notice = Notice(text: Copy.finishNotAllowed(offending.written, outRule: record.outRule),
+                            tone: .error)
+            return
+        }
         let carried = DartVisit.evidence(darts, from: remaining(seat), outRule: record.outRule)
         let total = darts.total
         darts = ThroDartEntry()
@@ -592,6 +600,13 @@ public final class MatchSession: ObservableObject {
 /// a double-out match and a straight-out one gives a number that is not a checkout percentage of
 /// anything. Refusing it is a fact about the sample, and it says so rather than showing a figure.
 public enum PersonSummary {
+    /// What PD-018's figure is called, in one place.
+    ///
+    /// A screen that wants to lead with it has to find it in the list, and finding it by comparing
+    /// against a string literal typed at the call site is how a renamed label silently becomes a
+    /// profile with no headline and one extra cell in its grid.
+    public static let formLabel = "Recent form"
+
     public static func figures(for personId: String, in journal: Journal) throws -> [StatLine] {
         let history = try journal.history(of: personId)
         let records = history.visits.map {
@@ -616,7 +631,7 @@ public enum PersonSummary {
         // reason this is allowed to ship while that stays open. The window is in the label, because
         // a number without its sample is a claim rather than a description.
         let form = Statistics.recentForm(records)
-        var formLine = StatPresentation.line("Recent form", form.average, kind: .average)
+        var formLine = StatPresentation.line(PersonSummary.formLabel, form.average, kind: .average)
         if form.isAvailable {
             formLine = StatLine(label: formLine.label, value: formLine.value,
                                 note: [formLine.note,
@@ -849,6 +864,23 @@ public enum Copy {
     }
 
     public static let nothingToUndo = "Nothing to undo."
+
+    /// What the board says when the darts entered reach zero on a dart that cannot end a leg.
+    ///
+    /// It names the dart, names the rule, and gives the one thing the player can do. It does **not**
+    /// say the visit was a bust, because THRØ cannot record that today and a sentence claiming
+    /// otherwise would be the app describing something it did not do (OD-023).
+    public static func finishNotAllowed(_ dart: String, outRule: OutRule) -> String {
+        let ending: String
+        switch outRule {
+        case .double: ending = "a double"
+        case .master: ending = "a double or a treble"
+        case .straight: ending = "a scoring dart"
+        }
+        return "That reaches zero on \(dart), and this leg has to end on \(ending). Take that dart "
+             + "back. THRØ records a visit rather than three darts, so it cannot yet score the bust "
+             + "this actually is."
+    }
 
     public static func undone(_ player: String, _ total: Int, next: String) -> String {
         next.isEmpty ? "Undone: \(player)'s \(total)." : "Undone: \(player)'s \(total). \(next) to throw."

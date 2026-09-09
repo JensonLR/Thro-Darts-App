@@ -892,16 +892,17 @@ public struct ClubsFlow: View {
     /// device is attributed to anybody: a local match is two names typed at the oche, not two
     /// accounts. `Figure.unavailable` exists for exactly this — a dash with the reason under it,
     /// never a zero and never a blank.
-    static func figures(for member: ClubMember) -> [ProfileScreen.Figure] {
+    static func figures(for member: ClubMember) -> [StatItem] {
         let why = "Needs an account. Matches on this phone are not attributed to anybody."
+        var out: [StatItem] = []
         if let average = member.threeDartAverage {
-            return [ProfileScreen.Figure(value: String(format: "%.2f", average), label: "3-dart average"),
-                    ProfileScreen.Figure(value: "—", label: "Checkout %", unavailable: why),
-                    ProfileScreen.Figure(value: "—", label: "Legs won", unavailable: why)]
+            out.append(.exact("3-dart average", String(format: "%.2f", average)))
+        } else {
+            out.append(.unavailable("3-dart average", why: why))
         }
-        return [ProfileScreen.Figure(value: "—", label: "3-dart average", unavailable: why),
-                ProfileScreen.Figure(value: "—", label: "Checkout %", unavailable: why),
-                ProfileScreen.Figure(value: "—", label: "Legs won", unavailable: why)]
+        out.append(.unavailable("Checkout %", why: why))
+        out.append(.unavailable("Legs won", why: why))
+        return out
     }
 
     /// A club that was there and is not. Only reachable by deleting one, and it says which.
@@ -1266,9 +1267,15 @@ public struct PersonScreen: View {
         ProfileScreen(name: person.name,
                       meta: problem ?? "Matches played on this phone",
                       heading: "On this phone",
-                      figures: figures.map {
-                          ProfileScreen.Figure(value: $0.value, label: $0.label, unavailable: $0.note)
-                      },
+                      // **The form figure leads the page.** PD-018's one descriptive number is what
+                      // a player opens their own profile for, and it used to sit in the middle of a
+                      // grid at the same size as the count of legs won.
+                      headline: figures.first { $0.label == PersonSummary.formLabel }?.item,
+                      // `.item` and not a hand-made triple: `StatLine` carries a confidence and the
+                      // old mapping dropped it, so a **bounded** figure — one the honesty layer
+                      // marks as a range everywhere else in this app — was drawn on a profile as
+                      // though it were exact.
+                      figures: figures.filter { $0.label != PersonSummary.formLabel }.map(\.item),
                       clubs: clubs,
                       // A person on this phone has no recorded age — the person table holds a name
                       // and nothing else — so by the app's own rule they may not have a picture, and

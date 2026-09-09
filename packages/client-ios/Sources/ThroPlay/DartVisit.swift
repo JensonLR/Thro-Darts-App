@@ -71,6 +71,48 @@ public enum DartVisit {
         remaining - entry.total == 0 && RuleTables.checkouts(outRule).contains(remaining)
     }
 
+    /// Whether a dart may be the one that ends a leg, under this out rule.
+    public static func mayFinish(_ dart: ThroDart, outRule: OutRule) -> Bool {
+        switch outRule {
+        case .double: return dart.isDouble
+        case .master: return dart.isDouble || dart.ring == .treble
+        case .straight: return dart.value > 0
+        }
+    }
+
+    /// The dart in the entry that reaches zero but is not allowed to, if there is one.
+    ///
+    /// **This is the thing per-dart entry can see and a visit total cannot**, and it turned up as a
+    /// row of red in CI rather than as a thought. A player on 60 who throws `T20` reaches zero on a
+    /// treble: under double-out that is a bust, not a checkout. The engine scores a visit
+    /// (`ThroEngine/Types.swift:26`), so all it can ask is whether the score the visit STARTED from
+    /// was finishable — 60 is — and it has no way to know the last dart was not a double.
+    ///
+    /// Left to itself the engine then answers two ways for one situation, which is worse than
+    /// either answer alone: `T20` from 60 produces `dartsAtDouble: 0`, which it rejects as
+    /// `DARTS_AT_DOUBLE_INVALID` — a true refusal with a reason no player can act on — while `20`
+    /// from 20 produces `dartsAtDouble: 1`, because 20 is `D10` and the dart was thrown from a
+    /// one-dart finish, and it accepts it as a leg won that never happened.
+    ///
+    /// So the entry layer refuses **both**, before either reaches the engine, and says which dart
+    /// and why. That is not a second authority on what a bust is: nothing here decides the visit,
+    /// and nothing pretends to record the bust. It refuses to submit darts that cannot have been
+    /// thrown, exactly as the keypad refuses a fourth dart.
+    ///
+    /// **What is still not built** is recording that bust. It needs an engine that scores darts, in
+    /// Swift and Kotlin together behind ADR-002's conformance corpus, and that is the founder's
+    /// call — OD-023.
+    public static func illegalFinish(_ entry: ThroDartEntry, from remaining: Int,
+                                     outRule: OutRule) -> ThroDart? {
+        // `finishes` and not merely "reaches zero": from a bogey — 159 under double-out — reaching
+        // zero is a bust the engine sees for itself (`NOT_CHECKOUT_POSSIBLE`), and refusing it here
+        // would take away a bust the app records correctly today. This only speaks where the engine
+        // would otherwise call it a leg won.
+        guard finishes(entry, from: remaining, outRule: outRule), let last = entry.darts.last,
+              !mayFinish(last, outRule: outRule) else { return nil }
+        return last
+    }
+
     /// Whether the entry has settled the visit — finished it, or busted it — so there is nothing
     /// further to throw. A bust after one dart is a real thing: on 20, a double 20 is a bust and the
     /// player stops.
@@ -131,11 +173,16 @@ public enum DartVisit {
 // finishable — which means a player on 6 who records a total of 6 wins the leg, whether the last
 // dart was D3 or S6. That is true of the app today and is why PD-001 asks about doubles at all.
 //
-// Entering three darts makes the last dart's ring visible for the first time, so the app could now
-// tell the difference. It does not, because there is only one honest way to act on it and both
-// halves are out of this slice's reach: the engine would have to become dart-aware, in Swift and in
-// Kotlin together, behind the conformance corpus that ADR-002 keeps them parallel with — or the
-// entry layer would have to overrule the engine about what a bust is, which puts two authorities on
-// the one question the whole design exists to keep in one place.
+// Entering three darts makes the last dart's ring visible for the first time, and `illegalFinish`
+// above now catches it — so the app refuses such an entry rather than recording a leg nobody won.
 //
-// Recorded rather than half-fixed. Nothing here claims to catch it.
+// **What this comment got wrong when it was first written.** It said the engine's own rules would
+// not catch any of it. They catch about half: a finish whose last dart is not itself a one-dart
+// finish produces `dartsAtDouble: 0`, which the engine rejects under double-out. The other half —
+// a single 20 thrown from 20 — produces 1, because 20 is `D10`, and is accepted as a leg won. Two
+// behaviours for one situation, and the more common one was the wrong one. That is what made this
+// worth acting on rather than only recording.
+//
+// **What is still not built is recording the bust**, and that has not changed: it needs an engine
+// that scores darts, in Swift and Kotlin together behind ADR-002's conformance corpus, and it
+// reopens PD-008's reasoning about what a visit is. OD-023, and the founder's.

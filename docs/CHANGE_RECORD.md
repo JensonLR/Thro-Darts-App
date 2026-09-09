@@ -1552,3 +1552,117 @@ It is now twenty rounds on the same terms. What it demands of `BackupPolicy` did
 simply stopped depending on something outside itself.
 
 19 guards now. `check_module_imports.py` would have caught both compile failures this branch has had.
+
+---
+
+# A leg won that never happened, and a player's own page
+
+Two things, both found by the same push going red.
+
+## Per-dart entry can see a bust the engine cannot
+
+CI rejected six of the evidence pairs `DartVisit` produces, all with `DARTS_AT_DOUBLE_INVALID`:
+
+```
+3 3 · 3 T1 · 60 — T20 · 60 T20 · 81 T7 T20 · 100 D20 T20
+```
+
+Every one of them reaches zero on a dart that cannot end a double-out leg. **The engine was right,
+and the refusal was useless.** `Engine.recordVisit` requires a double-out finish to claim at least
+one dart at a double; a visit that reaches zero on a treble has none by the corrected definition, so
+it is rejected — with a reason a player at an oche cannot act on.
+
+Worse, it only catches half of them. A player on 20 who throws a single 20 also reaches zero
+illegally, but 20 **is** a one-dart finish (`D10`), so `dartsAtDouble` comes out 1 and the engine
+**accepts it as a leg won that never happened**. Two behaviours for one situation, and the more
+common one is the wrong one.
+
+`DartVisit.illegalFinish` now catches both before either reaches the engine, and `MatchSession`
+refuses with the dart named:
+
+> That reaches zero on T20, and this leg has to end on a double. Take that dart back. THRØ records a
+> visit rather than three darts, so it cannot yet score the bust this actually is.
+
+Three things about that are deliberate:
+
+- **It is not a second authority on what a bust is.** Nothing here decides a visit. It refuses to
+  submit darts that cannot have been thrown, exactly as the keypad refuses a fourth dart.
+- **A zero reached from a bogey is left alone.** From 159 under double-out, reaching zero is
+  `NOT_CHECKOUT_POSSIBLE` — a bust the engine sees for itself and records correctly today. Refusing
+  it here would take that away. This only speaks where the engine would otherwise call it a leg won.
+- **It does not claim to have recorded the bust**, because it has not. That needs an engine that
+  scores darts, in Swift and Kotlin together behind ADR-002's corpus, and it reopens PD-008's
+  reasoning about what a visit is. It is the founder's, as **OD-023**.
+
+The previous entry recorded this as a gap per-dart entry "can see and this slice does not close",
+and said the engine's rule would not catch it. That was half right: the engine catches the cases
+where the last dart's own value is not a one-dart finish, and misses the rest. The comment in
+`DartVisit.swift` is corrected with what it got wrong.
+
+## The backup flag, round seven — the host, caught in the act
+
+Rounds 13 and 19 of twenty failed with the attribute present **61 bytes after a `removexattr` that
+returned success**, and the bytes name the culprit:
+
+```
+attribute present, 61 bytes: bplist00_com.apple.backupd…
+```
+
+That is `com.apple.backupd` writing its own exclusion onto a folder under `/var/folders`. The folder
+really is excluded, by Time Machine, and `BackupPolicy` saying so is **correct**. It is the third
+distinct way this one attribute's host has interfered with this one test: an attribute that vanishes
+after a successful write, a `URL` cache that skips a write it thinks is redundant, and now a daemon
+that writes its own.
+
+`exclusionShape` asks the file two questions the reader does not ask — *is it there* and *is it
+ours* — deliberately content-independent, because a helper that classified contents would be a second
+copy of the thing under test and every assertion built on it would be a tautology. Each round then
+asserts against what is actually on the file:
+
+- our own single byte on it → `BackupPolicy` must say excluded;
+- nothing on it → must say included;
+- the host's own flag on it → counted, skipped, and **never silently**: a floor fails the test if not
+  one round of twenty managed each of the first two, and another fails if all twenty went the host's
+  way.
+
+Two reads of one path must still agree with each other whatever is on the file — that is this type's
+own business and no host excuses it, and it is the assertion that once caught three reads of a single
+path disagreeing within a millisecond.
+
+## A player's own page
+
+The founder asked for *"profile pictures for player profiles, proper player profile layouts"*. The
+layout work turned up a defect that had nothing to do with layout.
+
+**A bounded figure was drawn on a profile as though it were exact.** `PersonScreen` mapped each
+`StatLine` into a `(value, label, unavailable)` triple and threw the confidence away, so a checkout
+percentage the honesty layer marks as a **range** on every other screen in the app arrived on a
+player's own page as a plain number. The page draws `StatGrid` now, like everywhere else, and the
+mapping that lost the basis is gone — `StatLine.item` is the one conversion and it carries the
+confidence across.
+
+The rest is what "proper" means here:
+
+- **PD-018's form figure leads the page** at 56 pt in the sport family, instead of sitting in the
+  middle of a three-across grid at the size of the count of legs won. That is the founder's league
+  player's complaint applied off the oche: *"just make what's needed big."* It is found by
+  `PersonSummary.formLabel`, held in one place, so renaming it cannot silently produce a page with no
+  headline and one extra cell.
+- **The mark is 96 pt, not 52.** `PlayerIdentity(.large)` is right in a roster row and wrong as the
+  subject of a page: a profile picture at list size reads as a list that happens to have one row.
+  `PersonMark` already took any size — it was extracted for exactly this.
+- The initials it falls back to are held against `LocalPerson`'s own rule, so a person's mark cannot
+  change between the roster and their own page.
+- `ratingHero` has its first user. It is a **size**; the role exists because a hero figure about a
+  player was always intended, and PD-018 decided what that figure honestly is. What PD-018 forbids is
+  the word, and the word is "Recent form" over a note ending "Not a rating." No rating value exists
+  anywhere in this build — registered absence claim #2, which is the claim that matters.
+
+**The picture itself is the part that is already decided and is not built.** OD-021 closed on
+2026-09-07 as **PD-023**: a person on this phone gets a picture with an account, where the person in
+the photograph answers for their own age rather than whoever is holding the phone answering for
+them. A club member has one today, because a club's admin was asked for their age band when they
+were added, and that profile now shows it at 96 pt. Nothing here reopens PD-023; the founder's ask
+for player pictures runs into their own earlier decision, and that is theirs to revisit.
+
+563 tests. 19 guards green.
