@@ -1,5 +1,10 @@
 #!/usr/bin/env python3
-"""Every Swift file that names a type from another local module must import that module.
+"""Everything a Swift file names from another module must be a thing it can actually reach.
+
+Two questions, both of which have cost this branch a macOS round of four minutes:
+
+  1. **Is the module imported?** A transitive dependency is linkable, not nameable.
+  2. **Is the member public?** A type you can see is not a member you can reach.
 
 **A transitive dependency is linkable, not nameable.** `ThroPlay` depends on `ThroJournal`, so a
 test target that imports `ThroPlay` links `Seat` — and cannot say `Seat` without importing
@@ -9,9 +14,15 @@ different types:
   - `Geometry.swift` moved into `ThroDesign` naming `ThroMotion` with only `import SwiftUI`.
   - `DartVisitTests.swift` named `Seat` with `import ThroEngine` and `@testable import ThroPlay`.
 
-`check_tokens_exist.py` learned this lesson for the token layer and only for the token layer. This
-generalises it: it reads every module's own public top-level declarations, then reads every Swift
-file and asks whether the modules it names are modules it can see.
+**A type you can see is not a member you can reach**, which cost a third round the same day:
+`ClubScreens.swift` calling `StatGrid.spokenValue`, where the type is public and the member was not
+— *"inaccessible due to internal protection level"*.
+
+`check_tokens_exist.py` learned the first lesson for the token layer and only for the token layer.
+This generalises both: it reads every module's own public top-level declarations and every
+non-public member of them, then reads every Swift file and asks whether what it names is reachable.
+`@testable import` grants a test target its module's internals — that is what it is for — so the
+second question is not asked of a module imported that way. The first still is.
 
 **What it deliberately does not do.** It is not a compiler and does not resolve scope. It matches a
 public type name as a whole word in code with comments and string literals stripped, and it only
@@ -51,12 +62,24 @@ DECLARATION = re.compile(
     re.MULTILINE,
 )
 IMPORT = re.compile(r"^\s*(?:@testable\s+)?import\s+(\w+)", re.MULTILINE)
+# `@testable` grants a test target the module's internal members — that is what it is for — so the
+# reachability half below does not apply to a module imported that way. The import half still does:
+# @testable is still an import, and a module you have not imported at all is still unnameable.
+TESTABLE = re.compile(r"^\s*@testable\s+import\s+(\w+)", re.MULTILINE)
 
 # Any type declared anywhere in a file, at any nesting and any access level. This is how a target
 # says "that name is mine": `FixtureActions` declares its own nested `Outcome`, and it is not
 # ThroEngine's however similar they look.
 ANY_DECLARATION = re.compile(
     r"\b(?:enum|struct|class|actor|protocol|typealias)\s+([A-Z]\w*)")
+
+# A direct member of a top-level type — four spaces of indent, no more — and whether it is public.
+# `@MainActor`, `@discardableResult`, `static`, `final` and the rest may sit in front of it.
+MEMBER = re.compile(
+    r"^    (?P<mods>(?:@\w+(?:\([^)]*\))?\s+|static\s+|final\s+|class\s+|mutating\s+|"
+    r"public\s+|internal\s+|private\s+|fileprivate\s+|open\s+|package\s+)*)"
+    r"(?:func|let|var)\s+(?P<name>\w+)",
+    re.MULTILINE)
 
 BLOCK_COMMENT = re.compile(r"/\*.*?\*/", re.DOTALL)
 LINE_COMMENT = re.compile(r"//[^\n]*")
@@ -99,10 +122,29 @@ def main() -> int:
 
     # public name -> the module that declares it, or None where two modules both declare it.
     owner = {}
+    # (module, type) -> the members of that type that are NOT public.
+    shut: dict = {}
     for name, files in mods.items():
         for f in files:
-            for decl in DECLARATION.findall(code_only(f.read_text(encoding="utf-8"))):
+            code = code_only(f.read_text(encoding="utf-8"))
+            for decl in DECLARATION.findall(code):
                 owner[decl] = None if decl in owner and owner[decl] != name else name
+            # Which type each four-space member belongs to: the last column-zero declaration
+            # above it. Only public types matter — a member of an internal type is unreachable
+            # from another module whatever its own access level, and the type is caught first.
+            current = None
+            for line in code.splitlines():
+                top = DECLARATION.match(line)
+                if top:
+                    current = top.group(1)
+                    continue
+                if line and not line.startswith(" ") and not line.startswith("}"):
+                    current = None
+                member = MEMBER.match(line)
+                if member and current:
+                    mods_ = member.group("mods")
+                    if "public" not in mods_ and "open" not in mods_:
+                        shut.setdefault((name, current), set()).add(member.group("name"))
     ambiguous = sorted(n for n, m in owner.items() if m is None)
     declared = {n: m for n, m in owner.items() if m is not None}
     if not declared:
@@ -143,6 +185,7 @@ def main() -> int:
         text = f.read_text(encoding="utf-8")
         code = code_only(text)
         seen = set(IMPORT.findall(text))
+        testable = set(TESTABLE.findall(text))
         mine = home.get(f.resolve())
         unit = unit_of(f)
         if unit not in owns:
@@ -164,17 +207,44 @@ def main() -> int:
                 f"  {f.relative_to(ROOT)} names {where} but does not `import {module}`."
             )
 
+        # **A type you can see is not a member you can reach.** `StatGrid` is public and
+        # `StatGrid.spokenValue` was not, so a screen in another module compiled here and failed on
+        # a macOS runner with "inaccessible due to internal protection level". Same class of round
+        # as the missing import, one layer in.
+        for m in names.finditer(code):
+            type_name = m.group(1)
+            module = declared[type_name]
+            if module == mine or type_name in owns[unit]:
+                continue
+            if module in testable:
+                continue
+            closed = shut.get((module, type_name))
+            if not closed:
+                continue
+            after = code[m.end():]
+            dot = re.match(r"\s*\.\s*(\w+)", after)
+            if dot and dot.group(1) in closed:
+                line = code[: m.start()].count("\n") + 1
+                problems.append(
+                    f"  {f.relative_to(ROOT)} line {line}: {type_name}.{dot.group(1)} is not "
+                    f"public, so it cannot be reached from outside {module}."
+                )
+
     if problems:
-        print("Swift files naming a module they cannot see:", file=sys.stderr)
+        print("Swift files naming something they cannot reach:", file=sys.stderr)
         for p in problems:
             print(p, file=sys.stderr)
-        print("\nA transitive dependency is linkable, not nameable. Importing ThroPlay links "
-              "ThroJournal but does not let the file write `Seat`; add the import.", file=sys.stderr)
+        print("\nA transitive dependency is linkable, not nameable: importing ThroPlay links "
+              "ThroJournal but does not let a file write `Seat`. And a type you can see is not a "
+              "member you can reach: StatGrid is public, StatGrid.spokenValue was not.",
+              file=sys.stderr)
         return 1
 
     note = f", {len(ambiguous)} name(s) skipped as ambiguous" if ambiguous else ""
+    shutcount = sum(len(v) for v in shut.values())
     print(f"ok: {checked} Swift files, {len(declared)} public types across {len(mods)} modules, "
-          f"every named module imported{note}")
+          f"every named module imported and every named member reachable "
+          f"({shutcount} non-public members watched){note}")
     return 0
 
 

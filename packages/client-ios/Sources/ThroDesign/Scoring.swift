@@ -615,14 +615,17 @@ public struct StatGrid: View {
 
     /// Full strength for a fact; the quieter neutral for a figure that is not one. Both neutrals are
     /// on the contrast matrix, so neither can fall below the floor.
-    static func valueColour(_ c: StatItem.Confidence) -> Color {
+    /// Public because a figure is drawn outside this file as well as inside it: a player's own
+    /// page leads with one at 56 pt and has to colour it by the same rule the grid uses, or the
+    /// same basis would read two ways on two screens.
+    public static func valueColour(_ c: StatItem.Confidence) -> Color {
         c == .unavailable ? ThroColor.colorTextSecondary : ThroColor.colorTextPrimary
     }
 
     /// The reason under the figure. Quiet beside a number, **loud when there is no number** — the
     /// two swap, so the cell's most prominent thing is always the thing that carries the meaning.
     /// Both are on the contrast matrix, so neither can fall below its floor.
-    static func noteColour(_ c: StatItem.Confidence) -> Color {
+    public static func noteColour(_ c: StatItem.Confidence) -> Color {
         c == .unavailable ? ThroColor.colorTextPrimary : ThroColor.colorTextSecondary
     }
 
@@ -643,7 +646,7 @@ public struct StatGrid: View {
     /// between two numerals is not a word, and "58.2 61.0" is a pair of figures with no relation
     /// stated — which is exactly the collapse of a range into something else that the statistics
     /// layer exists to prevent.
-    static func spokenValue(_ s: StatItem) -> String {
+    public static func spokenValue(_ s: StatItem) -> String {
         switch s.confidence {
         case .exact: return s.value
         case .range: return "between \(s.value.replacingOccurrences(of: "–", with: " and "))"

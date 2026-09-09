@@ -1730,3 +1730,32 @@ visit of three darts put an em dash on the board with a reason beside it. It car
 total now, in whichever notation the visit was entered.
 
 565 tests. 19 guards green.
+
+## A type you can see is not a member you can reach
+
+The profile rebuild put `StatGrid.valueColour`, `.noteColour` and `.spokenValue` — internal to
+`ThroDesign` — into a screen in `ThroApp`. The package tests compiled it and the **app target** did
+not:
+
+```
+ClubScreens.swift:881: error: 'spokenValue' is inaccessible due to 'internal' protection level
+```
+
+Three of them are public now, with the reason on the first: a figure is drawn outside that file as
+well as inside it, and a player's own page leads with one at 56 pt that has to be coloured by the
+same rule the grid uses, or the same basis reads two ways on two screens.
+
+`check_module_imports.py` gained the second question. It already read every module's public
+top-level declarations; it now also reads every **non-public direct member** of them — 886 of them —
+and flags `Type.member` reached from outside that module. `@testable import` grants a test target
+its module's internals, which is what it is for, so the reachability question is not asked of a
+module imported that way; the import question still is.
+
+Three more perturbations, all behaving: putting `spokenValue` back to internal names the exact line
+CI named; a comment mentioning `StatGrid.valueColour` and `Journal.exec` passes; one line of real
+code touching `Journal.exec` fails, and fails twice — once for the missing import and once for the
+member.
+
+That is three macOS rounds this branch has spent on things a second of Python can see, and all three
+classes are now caught before a runner starts.
+

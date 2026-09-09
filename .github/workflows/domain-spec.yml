@@ -71,12 +71,13 @@ jobs:
       - name: Every orientation offered has a layout behind it
         run: python3 tools/check_orientation_is_earned.py
 
-      # A transitive dependency is linkable, not nameable, and this has now cost two macOS rounds at
-      # four minutes each: Geometry.swift naming ThroMotion with only `import SwiftUI`, and
-      # DartVisitTests naming Seat with `@testable import ThroPlay` and no ThroJournal.
-      # check_tokens_exist learned that lesson for the token layer only; this asks it of every
-      # module, in under a second, on Linux, before a runner is spent.
-      - name: Every module a file names is one it can see
+      # A transitive dependency is linkable, not nameable — and a type you can see is not a member
+      # you can reach. Three macOS rounds at four minutes each, in one day: Geometry.swift naming
+      # ThroMotion with only `import SwiftUI`, DartVisitTests naming Seat with
+      # `@testable import ThroPlay` and no ThroJournal, and ClubScreens calling an internal
+      # StatGrid.spokenValue. check_tokens_exist learned the first for the token layer only; this
+      # asks both of every module, in under a second, on Linux, before a runner is spent.
+      - name: Every module and member a file names is one it can reach
         run: python3 tools/check_module_imports.py
 
       # And a token that does not exist fails a macOS build several minutes in, having already spent
