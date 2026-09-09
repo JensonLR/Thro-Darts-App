@@ -556,21 +556,25 @@ public struct ScoringScreen: View {
                                basis: basis, throwing: throwing)
     }
 
-    /// The leg's visits, most recent last.
+    /// The leg's visits, most recent last, **including the ones a retraction struck**.
     ///
-    /// Built from the replayed visits, which are what the journal actually stands behind. **A
-    /// retracted visit is not among them** — replay excludes it — so no row here is `struck` yet.
-    /// The struck row arrives with a journal read that returns superseded entries as well; the
-    /// shape is here so that when it does, only the source changes.
+    /// From `session.ledger` and not `session.visits`: a replayed visit is evidence every figure
+    /// stands on and every one of them counts, while this is what a scorer's hand put on the board.
+    /// A retraction in the journal is an `INSERT` carrying `corrects_seq` — the record keeps what
+    /// was written — and until now the screen did not, so an undo was a disappearance. That is the
+    /// one thing PD-004 says it is not.
+    ///
+    /// A struck row with no reproducible remainder shows a dash rather than a number it cannot
+    /// stand behind.
     static func ledger(_ session: MatchSession) -> [ThroLedgerRow] {
-        let leg = session.visits.last?.legOrdinal
-        return session.visits.filter { $0.legOrdinal == leg }.map { visit in
-            ThroLedgerRow(id: "\(visit.legOrdinal)-\(visit.seat)-\(visit.visitOrdinal)",
-                          seat: visit.seat == .home ? 0 : 1,
-                          legOrdinal: visit.legOrdinal,
-                          visitTotal: visit.visitTotal,
-                          remainingAfter: visit.remainingAfter,
-                          struck: false)
+        let leg = session.ledger.last?.legOrdinal
+        return session.ledger.filter { $0.legOrdinal == leg }.map { row in
+            ThroLedgerRow(id: "\(row.deviceSeq)",
+                          seat: row.seat == .home ? 0 : 1,
+                          legOrdinal: row.legOrdinal,
+                          visitTotal: row.visitTotal,
+                          remainingAfter: row.remainingAfter,
+                          struck: row.struck)
         }
     }
 

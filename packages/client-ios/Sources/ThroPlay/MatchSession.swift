@@ -17,6 +17,13 @@ public final class MatchSession: ObservableObject {
 
     @Published public private(set) var state: MatchState
     @Published public private(set) var visits: [ReplayedVisit]
+    /// The leg as a scorer would have written it, struck rows included (PD-004).
+    ///
+    /// Separate from `visits` on purpose: `visits` is the evidence every figure stands on and every
+    /// one of them counts, while this is what the board shows — and a retracted visit belongs on the
+    /// board, struck, because that is what the journal did to it. Feeding this to a statistic would
+    /// count a visit that was taken back.
+    @Published public private(set) var ledger: [LedgerEntry]
     @Published public private(set) var entry: String = ""
     @Published public private(set) var prompt: Prompt?
     @Published public private(set) var notice: Notice?
@@ -98,6 +105,7 @@ public final class MatchSession: ObservableObject {
         let replayed = try journal.replayVisits(record.id)
         self.state = replayed.state
         self.visits = replayed.visits
+        self.ledger = (try? journal.ledger(record.id)) ?? []
         // Read on open, so reopening a finished match shows what was actually agreed (PD-011)
         // rather than starting again from nothing.
         self.standing = try journal.standing(for: record.id)
@@ -401,6 +409,10 @@ public final class MatchSession: ObservableObject {
             let replayed = try journal.replayVisits(record.id)
             state = replayed.state
             visits = replayed.visits
+            // The struck row stays on the board. Before this the ledger was built from `visits`,
+            // which excludes it, so a retraction was a disappearance — the one thing PD-004 says it
+            // is not.
+            ledger = (try? journal.ledger(record.id)) ?? ledger
             // Undoing a visit is exactly the case that makes an agreement stale: what somebody
             // confirmed is no longer what is recorded (PD-011).
             standing = (try? journal.standing(for: record.id)) ?? standing
@@ -441,11 +453,12 @@ public final class MatchSession: ObservableObject {
             notice = Notice(text: Copy.rejected(reason, total: total), tone: .error)
 
         case let .accepted(next, effect, bustReason):
+            let written: JournalEntry
             do {
-                try journal.append(command, to: record.id)   // flush …
+                written = try journal.append(command, to: record.id)   // flush …
             } catch {
                 notice = Notice(text: Copy.notSaved(error), tone: .error)
-                return                                        // … or nothing happened
+                return                                                  // … or nothing happened
             }
             let ordinal = visits.filter { $0.seat == seat && $0.legOrdinal == leg }.count + 1
             let won = effect == .leg_won || effect == .set_won || effect == .match_won
@@ -456,6 +469,14 @@ public final class MatchSession: ObservableObject {
                 remainingAfter: won ? 0 : (next.remaining[seat.playerId] ?? before),
                 bust: effect == .bust, wonLeg: won
             ))
+            // And on the board, in the same breath. Appended rather than re-read for the same
+            // reason `visits` is: a full replay on every visit is work a player waits for, sixty
+            // times a leg. `deviceSeq` comes from the row that was actually written, so the board's
+            // identity for this line is the journal's own.
+            ledger.append(LedgerEntry(
+                seat: seat, legOrdinal: leg, visitOrdinal: ordinal, visitTotal: total,
+                remainingAfter: won ? 0 : (next.remaining[seat.playerId] ?? before),
+                struck: false, deviceSeq: written.deviceSeq))
             // A visit written after an agreement makes that agreement stale (PD-011). It is read
             // back rather than reasoned about, so the screen and the journal cannot disagree.
             standing = (try? journal.standing(for: record.id)) ?? standing

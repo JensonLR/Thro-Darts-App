@@ -122,14 +122,17 @@ public struct ThroLedgerRow: Identifiable, Equatable, Sendable {
     public let seat: Int
     public let legOrdinal: Int
     public let visitTotal: Int
-    public let remainingAfter: Int
+    /// What stood on the board after it. **Optional**, because a struck visit the engine can no
+    /// longer apply has no remainder this build can reproduce — and a dash there is the honest
+    /// answer, where a zero would be a score nobody threw.
+    public let remainingAfter: Int?
     /// Superseded by the record itself — a retraction. **Drawn struck and left where it is**, never
     /// removed: a retraction in the journal is an `INSERT` carrying `corrects_seq`, and a screen
     /// that made it disappear would be saying something the record does not.
     public let struck: Bool
 
     public init(id: String, seat: Int, legOrdinal: Int, visitTotal: Int,
-                remainingAfter: Int, struck: Bool) {
+                remainingAfter: Int?, struck: Bool) {
         self.id = id
         self.seat = seat
         self.legOrdinal = legOrdinal
@@ -174,8 +177,10 @@ public struct ThroLedger: View {
         let seats = Set(rows.map(\.seat)).sorted()
         let parts = seats.map { seat -> String in
             let mine = rows.filter { $0.seat == seat }
-            let said = mine.map { row in
-                row.struck ? "\(row.visitTotal) struck" : "\(row.visitTotal), \(row.remainingAfter)"
+            let said = mine.map { row -> String in
+                guard !row.struck else { return "\(row.visitTotal) struck" }
+                guard let left = row.remainingAfter else { return "\(row.visitTotal), not recorded" }
+                return "\(row.visitTotal), \(left)"
             }
             return "\(names(seat)): " + (said.isEmpty ? "nothing yet" : said.joined(separator: ". "))
         }
@@ -220,7 +225,7 @@ public struct ThroLedger: View {
                     Text("\(row.visitTotal)")
                         .thro(ThroTypography.heading3.family(.sport).tracking(em: 0))
                         .foregroundStyle(ThroColor.colorTextOnBoardSecondary)
-                    Text("\(row.remainingAfter)")
+                    Text(row.remainingAfter.map { "\($0)" } ?? "—")
                         .thro(ThroTypography.heading3.family(.sport).weight(.bold).tracking(em: 0))
                         .foregroundStyle(ThroColor.colorTextOnBoard)
                 }

@@ -1241,3 +1241,44 @@ sentence *"That is a whole orientation a player loses, and no test would notice.
 
 Also perturbed: iPad offered with no iPad in `StageTests`; the screen no longer calling
 `ThroStage.choose`; and iPad dropped from `TARGETED_DEVICE_FAMILY`. All four fail.
+
+## A retraction stops being a disappearance
+
+This is SLATE's thesis, and until now it was the one part of it the app contradicted.
+
+PD-004 made a retraction an **`INSERT` carrying `corrects_seq`** rather than a delete, precisely so
+the record keeps what was written — `Journal.swift` has said so since the day it shipped, and
+`testTheExportCarriesEveryRowAsWrittenIncludingTheStruckOnes` has held it. But every screen read
+`replayVisits`, which excludes struck rows by design, so on the phone **an undo made a visit
+vanish**. The journal and the board did not agree about what had happened.
+
+`Journal.ledger(_:)` is a new read beside `replayVisits`, never a change to it. It returns every
+scoring row in order, struck ones included, and:
+
+- **A struck visit does not advance the match.** It was taken back, so whatever came next was thrown
+  against the state before it. Its remainder is what stood on the board *at the moment it was
+  written*, reproduced by applying it and then not keeping the result.
+- **A struck row and the visit that replaced it share their place in the running order.** They are
+  the same turn; numbering the replacement fresh would make the leg read one visit longer than it
+  was thrown.
+- **A struck row the engine can no longer apply keeps its place with a dash**, not a zero. A zero
+  there is a score nobody threw.
+- Every row carries the journal's own `deviceSeq` as its identity, because two rows sharing one
+  would have SwiftUI animate a retraction as a number changing — the exact disappearance being
+  fixed.
+
+### The one test that makes it safe
+
+Every figure in this app stands on `replayVisits`, and a struck visit must never reach one — that is
+what `testTheStatisticsNeverSeeAStruckVisit` has protected since retraction shipped. So the first of
+the nine new tests holds that **the ledger's standing rows are exactly the replayed visits**,
+remainder for remainder, in order. If those ever part company, a figure and the board are reading
+two different matches, and the figure is the one people are judged on.
+
+`LedgerEntry` is deliberately not `ReplayedVisit`. A replayed visit is evidence and every one of
+them counts; a ledger entry is what a scorer's hand put on the board and some of them were taken
+back. One type for both would be an invitation to feed a struck visit to a statistic.
+
+`check_journal_parity.py` still passes unchanged: no stored column, trigger or row kind moved.
+
+9 tests. All 18 `tools/check_*.py` green.

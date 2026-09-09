@@ -266,6 +266,36 @@ public enum Ending: Equatable, Sendable {
 /// won the leg, and the visit's ordinal within the leg FOR THAT SEAT — per (player, leg), never
 /// shared across the two competitors, which is the mistake that once put the wrong three visits
 /// into a first-nine average.
+/// One line of a leg as it was written, struck rows included (PD-004).
+///
+/// Deliberately NOT `ReplayedVisit`: a replayed visit is evidence the statistics stand on and every
+/// one of them counts, while a ledger entry is what a scorer's hand put on the board and some of
+/// them were taken back. Giving them one type would be an invitation to feed a struck visit to a
+/// figure.
+public struct LedgerEntry: Equatable, Sendable {
+    public let seat: Seat
+    public let legOrdinal: Int
+    public let visitOrdinal: Int
+    public let visitTotal: Int
+    /// What stood on the board after it. Nil only for a struck row the engine can no longer apply.
+    public let remainingAfter: Int?
+    /// Superseded by a retraction. Drawn struck and left where it is; never removed.
+    public let struck: Bool
+    /// The row's own sequence, so a caller can key a view on it without inventing an identity.
+    public let deviceSeq: Int64
+
+    public init(seat: Seat, legOrdinal: Int, visitOrdinal: Int, visitTotal: Int,
+                remainingAfter: Int?, struck: Bool, deviceSeq: Int64) {
+        self.seat = seat
+        self.legOrdinal = legOrdinal
+        self.visitOrdinal = visitOrdinal
+        self.visitTotal = visitTotal
+        self.remainingAfter = remainingAfter
+        self.struck = struck
+        self.deviceSeq = deviceSeq
+    }
+}
+
 public struct ReplayedVisit: Equatable, Sendable {
     public let seat: Seat
     public let legOrdinal: Int
@@ -1054,6 +1084,68 @@ public final class Journal {
             }
         }
         return (state, visits)
+    }
+
+    /// The leg as a scorer would have written it: every visit that was ever put on the board, in
+    /// order, **including the ones a retraction struck**.
+    ///
+    /// PD-004 made a retraction an `INSERT` carrying `corrects_seq` rather than a delete, precisely
+    /// so the record keeps what was written. The screen did not: a retracted visit simply vanished
+    /// from the running order, which is the one thing PD-004 insists it is not. This is the read
+    /// that lets the board say what the journal says.
+    ///
+    /// **`standingVisits`, `replayVisits` and every statistics path are untouched.** This is a new
+    /// read beside them, not a change to them: no stored column, trigger or row kind moves, no
+    /// figure anywhere changes, and a test holds that this function's standing rows are exactly
+    /// `replayVisits`' rows, remainder for remainder.
+    ///
+    /// A struck visit **does not advance the match** — it was taken back, so whatever came next was
+    /// thrown against the state before it. Its remainder is therefore what stood on the board at the
+    /// moment it was written, reproduced by applying it and then not keeping the result.
+    public func ledger(_ id: MatchId) throws -> [LedgerEntry] {
+        let record = try match(id)
+        var state = record.initialState
+        var rows: [LedgerEntry] = []
+        var ordinal: [Seat: [Int: Int]] = [.home: [:], .away: [:]]
+
+        let all = try entries(for: id)
+        // Same refusal `replayVisits` makes, for the same reason: a row this build cannot interpret
+        // might have been a visit, and a ledger drawn around it would be a running order with a
+        // silent gap in it.
+        if let alien = all.first(where: { $0.kind == .unknown }) {
+            throw JournalError.replayRejected(seq: alien.deviceSeq, reason: "UNKNOWN_ROW_KIND")
+        }
+        let superseded = Set(all.filter { $0.kind == .retraction }.compactMap { $0.correctsSeq })
+
+        for e in all where e.kind.isScoring {
+            guard let command = e.command else { continue }
+            let leg = state.currentLeg
+            let struck = superseded.contains(e.deviceSeq)
+            let n = (ordinal[e.seat]?[leg] ?? 0) + 1
+            switch Engine.apply(state, command) {
+            case let .accepted(next, effect, _):
+                let won = effect == .leg_won || effect == .set_won || effect == .match_won
+                rows.append(LedgerEntry(
+                    seat: e.seat, legOrdinal: leg, visitOrdinal: n, visitTotal: e.visitTotal,
+                    remainingAfter: won ? 0 : (next.remaining[e.seat.playerId] ?? 0),
+                    struck: struck, deviceSeq: e.deviceSeq))
+                guard !struck else { continue }
+                ordinal[e.seat]?[leg] = n
+                state = next
+            case let .rejected(reason):
+                // A STANDING row the engine refuses means the match cannot be read, and that is the
+                // same answer `replayVisits` gives. A STRUCK one is different: it was taken back, and
+                // the reason it no longer applies may be exactly why. It keeps its place with no
+                // remainder rather than taking the whole ledger down with it.
+                guard struck else {
+                    throw JournalError.replayRejected(seq: e.deviceSeq, reason: reason.rawValue)
+                }
+                rows.append(LedgerEntry(
+                    seat: e.seat, legOrdinal: leg, visitOrdinal: n, visitTotal: e.visitTotal,
+                    remainingAfter: nil, struck: true, deviceSeq: e.deviceSeq))
+            }
+        }
+        return rows
     }
 
     // MARK: - a person's history (ADR-016)
