@@ -393,6 +393,7 @@ against PostgreSQL 16 locally; CI runs the same suites.
 | 16 | A team rename keeps the old name with its period | API test |
 | 17 | GLOSSARY, README, ADR index, package READMEs and DESIGN_UNSPECIFIED describe the model above and teach no separate Club | review |
 
+| 19 | A check-in is a person: keyed on (event, player, device), for a live entry of the event, by a member of the entrant — the player themself, one of the pair, or a live team member at that moment; the scoring grant is the person's, never the pair's or the team's | `CompetitionTest` (21 properties) + `MigrationTest`, **delivered** (V020) |
 | 18 | No display name in `evidence.match` or in any payload: the aggregate binds the seats `home` and `away` to competitor ids, the same two words both on-device journals store; a V013 database's named matches are pseudonymised in place with every other payload field untouched; a visit naming anything but a seat is refused | `MigrationTest` (18 properties) + API tests, **delivered** (V018, closes OD-024) |
 
 Also required before Phase C opens a match from a fixture: the Phase D rule that no submission

@@ -102,20 +102,22 @@ public class Competitions(private val connection: Connection) {
         competitorId: UUID,
         deviceId: UUID,
         byOrganiser: UUID,
-        playerId: UUID? = competitorId,
+        playerId: UUID = competitorId,
     ): CheckedIn {
         val sessionEnd = sessionEndOf(eventId)
             ?: throw IllegalArgumentException("no such event")
+        // The grant is the person's, not the entry's (V020): it is what evidence recorded from
+        // their device is annotated with, and a pair or a team cannot hold a phone.
         val grantId = Grants(connection).issue(
-            eventId = eventId, actorId = competitorId, deviceId = deviceId,
+            eventId = eventId, actorId = playerId, deviceId = deviceId,
             actorRole = "participant", sessionEndsAt = sessionEnd, issuedBy = byOrganiser,
         )
         connection.prepareStatement(
             """
             INSERT INTO competition.check_in (event_id, competitor_id, device_id, grant_id, player_id)
             VALUES (?, ?, ?, ?, ?)
-            ON CONFLICT (event_id, competitor_id, device_id)
-              DO UPDATE SET grant_id = EXCLUDED.grant_id, player_id = EXCLUDED.player_id,
+            ON CONFLICT (event_id, player_id, device_id)
+              DO UPDATE SET grant_id = EXCLUDED.grant_id, competitor_id = EXCLUDED.competitor_id,
                             checked_in_at = clock_timestamp()
             """.trimIndent(),
         ).use { ps ->

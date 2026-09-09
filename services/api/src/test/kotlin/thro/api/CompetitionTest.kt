@@ -89,6 +89,36 @@ class CompetitionTest {
             }
         }
 
+        // --- a check-in is a person, whatever entered (V020) ----------------------------------------
+        val pairsNight = UUID.randomUUID()
+        comp.openEvent(pairsNight, "Pairs Night", starts, ends, entrantKind = thro.competition.EntrantKind.PAIR)
+        val sam = newPlayer(); val jo = newPlayer(); val stranger = newPlayer()
+        val samAndJo = orgs.createPair(sam, jo)
+        comp.enter(pairsNight, thro.competition.Entrant.Pair(samAndJo.toString(), sam.toString(), jo.toString()))
+        val samsPhone = UUID.randomUUID()
+        val pairCheckIn = comp.checkIn(pairsNight, samAndJo, samsPhone, organiser, playerId = sam)
+        val (samHolds, samGrant) = grants.authorityFor(UUID.randomUUID(), sam, samsPhone, Instant.now())
+        val (pairHolds, _) = grants.authorityFor(UUID.randomUUID(), samAndJo, samsPhone, Instant.now())
+        check("checking a pair in issues the grant to the person who did it, not to the pair",
+            samHolds == Authority.GRANTED && samGrant == pairCheckIn.grantId && pairHolds == Authority.UNGRANTED)
+        fun refused(fragment: String, block: () -> Unit): Boolean = try { block(); false } catch (e: org.postgresql.util.PSQLException) { e.message!!.contains(fragment) }
+        check("a stranger cannot check a pair in", refused("not part of the entrant") { comp.checkIn(pairsNight, samAndJo, UUID.randomUUID(), organiser, playerId = stranger) })
+        check("nobody can check in for an entry that does not exist", refused("check_in_is_for_an_entry") { comp.checkIn(pairsNight, UUID.randomUUID(), UUID.randomUUID(), organiser, playerId = sam) })
+        val teamNight = UUID.randomUUID()
+        comp.openEvent(teamNight, "Team Knockout", starts, ends, entrantKind = thro.competition.EntrantKind.TEAM)
+        val riverside = orgs.createTeam("Riverside A", "Stockton")
+        val ade = newPlayer(); val kim = newPlayer()
+        orgs.addMember(riverside, ade, from = starts.minus(30, ChronoUnit.DAYS))
+        val kimsOld = orgs.addMember(riverside, kim, from = starts.minus(400, ChronoUnit.DAYS)); orgs.endMembership(kimsOld, at = starts.minus(200, ChronoUnit.DAYS))
+        comp.enter(teamNight, thro.competition.Entrant.Team(riverside.toString()))
+        val adesPhone = UUID.randomUUID()
+        val teamCheckIn = comp.checkIn(teamNight, riverside, adesPhone, organiser, playerId = ade)
+        val (adeHolds, adeGrant) = grants.authorityFor(UUID.randomUUID(), ade, adesPhone, Instant.now())
+        val (teamHolds, _) = grants.authorityFor(UUID.randomUUID(), riverside, adesPhone, Instant.now())
+        check("a live member checks a team in and holds the grant; the team holds none",
+            adeHolds == Authority.GRANTED && adeGrant == teamCheckIn.grantId && teamHolds == Authority.UNGRANTED)
+        check("a former member cannot: membership is read at the moment of check-in", refused("not part of the entrant") { comp.checkIn(teamNight, riverside, UUID.randomUUID(), organiser, playerId = kim) })
+
         // --- the draw, on the field size the design got wrong -------------------------------------
         val big = UUID.randomUUID()
         comp.openEvent(big, "74 entrants", starts, ends)
@@ -155,6 +185,6 @@ class CompetitionTest {
         check("two competitors cannot hold the same seed", clash)
 
         println("  $passed competition properties held")
-        assertEquals(16, passed)
+        assertEquals(21, passed)
     }
 }

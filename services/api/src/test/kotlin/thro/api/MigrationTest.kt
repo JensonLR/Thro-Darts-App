@@ -147,6 +147,10 @@ class MigrationTest {
         val ci = one("SELECT competitor_id, player_id, grant_id FROM competition.check_in WHERE event_id = ?", event)
         check("the check-in survives with its grant", ci[0] == players[0] && ci[2] == grant)
         check("and its player is backfilled from the competitor", ci[1] == players[0])
+        val key = one("SELECT string_agg(a.attname, ',' ORDER BY k.n) FROM pg_constraint c JOIN LATERAL unnest(c.conkey) WITH ORDINALITY k(attnum, n) ON true JOIN pg_attribute a ON a.attrelid = c.conrelid AND a.attnum = k.attnum WHERE c.conrelid = 'competition.check_in'::regclass AND c.contype = 'p'")
+        check("a check-in is keyed on the person present, not the entry (V020)", key[0] == "event_id,player_id,device_id")
+        val fk = one("SELECT convalidated FROM pg_constraint WHERE conname = 'check_in_is_for_an_entry'")
+        check("every legacy check-in named an entry, so the entry rule was validated over them", fk[0] == true)
 
         val rel = one("SELECT count(*) FILTER (WHERE revoked_at IS NULL), count(*) FROM authz.relation WHERE subject_id = ?", organiser)
         check("the authorization tuple survives, live", (rel[0] as Number).toInt() == 1 && (rel[1] as Number).toInt() == 1)
@@ -187,7 +191,7 @@ class MigrationTest {
         check("no application role holds DELETE or TRUNCATE on any competition table", (del[0] as Number).toInt() == 0)
 
         println("  $passed migration properties held")
-        assertEquals(20, passed)
+        assertEquals(22, passed)
     }
 
     /**

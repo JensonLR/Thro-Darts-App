@@ -2226,3 +2226,22 @@ depended on whether the database was fresh, and the *78* the previous entry call
 remembered" was seventy-seven properties and one skip line. Applying is a precondition of the
 properties and is no longer counted; the number is **86**, and it is the same number on a fresh
 database and a current one.
+
+## A check-in is a person
+
+V014 typed entries as player, pair or team and left a note on `check_in`: the person present is a
+person whatever entered, and making them the key was the contract half of an expand-then-contract
+"once the grant actor is a player rather than a competitor". V020 is that half. `check_in` is keyed
+on (event, player, device); the entry it is for must exist — a foreign key V013 never had, added
+`NOT VALID` and validated in the same migration when every existing row satisfies it, otherwise
+left standing for new rows with the count of old ones it could not vouch for said out loud; and the
+person must belong to the entrant, enforced at the write by trigger — the player themself, one of
+the pair, or a member of the team whose membership is live at the moment of check-in. A former
+member is refused; a stranger is refused; an entry that does not exist is refused in the foreign
+key's own words.
+
+The grant follows. `trust.scoring_grant.actor_id` is what the command handler annotates evidence
+with, and an annotation naming a pair names nobody, so check-in now issues the grant to the person
+who did it, and the test holds that the pair and the team hold none. Any legacy check-in whose
+competitor had never become a player is given a legacy player record, exactly as V014 gave one to
+every entry competitor — nothing lost, nothing invented beyond what V014 already did.

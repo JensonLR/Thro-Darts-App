@@ -231,6 +231,12 @@ policy it was taken under; a later decision supersedes an earlier one and the ea
 **Not a bracket tie**: it has no parent-child dependency, can be awarded with no match played, and
 aggregates into a table rather than advancing a competitor.
 
+**Check-in** — a person present at an Event, checked in for one of its Entries from one device, and
+the scoring grant issued to that person at that moment. Keyed on the person: for a Pair or a Team
+the entrant is the competitor and the grant holder is the member who checked it in, because a grant
+annotates evidence recorded from a phone and a pair cannot hold one. The person must belong to the
+entrant — themself, one of the pair, or a live Team member at that moment (V020).
+
 **Bracket tie** — a pairing in a knockout round of an Event, possibly a bye (`bracket_tie`). Not a
 fixture. The Slot states below describe its positions.
 
