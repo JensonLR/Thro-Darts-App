@@ -555,4 +555,101 @@ public class Organisations(private val connection: Connection) {
         }
 
     private data class Sextuple<A, B, C, D, E, F>(val a: A, val b: B, val c: C, val d: D, val e: E, val f: F)
+
+    // --- match night (V021): availability and lineups, at the store level -------------------------
+    // Authorization and the version the author saw live in OrganisationCommands; these write rows.
+
+    public enum class Availability { AVAILABLE, UNAVAILABLE, MAYBE }
+
+    public data class AvailabilityRow(val playerId: UUID, val teamId: UUID, val status: Availability, val recordedBy: UUID, val version: Int)
+
+    /**
+     * Records [playerId]'s availability for [fixtureId] as [by] says it. [expectedVersion] is 0 when
+     * no row exists yet. Returns the new version, or null when the row was not at the expected
+     * version — the store's own refusal (a non-member, a team not in the fixture) is thrown.
+     */
+    public fun recordAvailability(fixtureId: UUID, playerId: UUID, teamId: UUID, status: Availability, by: UUID, expectedVersion: Int): Int? {
+        val n = if (expectedVersion == 0) {
+            connection.prepareStatement(
+                """
+                INSERT INTO competition.availability (fixture_id, player_id, team_id, status, recorded_by)
+                VALUES (?, ?, ?, ?, ?) ON CONFLICT DO NOTHING
+                """.trimIndent(),
+            ).use { ps ->
+                ps.setObject(1, fixtureId); ps.setObject(2, playerId); ps.setObject(3, teamId)
+                ps.setString(4, status.name.lowercase()); ps.setObject(5, by); ps.executeUpdate()
+            }
+        } else {
+            connection.prepareStatement(
+                """
+                UPDATE competition.availability
+                   SET status = ?, team_id = ?, recorded_by = ?, recorded_at = clock_timestamp(), row_version = ?
+                 WHERE fixture_id = ? AND player_id = ? AND row_version = ?
+                """.trimIndent(),
+            ).use { ps ->
+                ps.setString(1, status.name.lowercase()); ps.setObject(2, teamId); ps.setObject(3, by); ps.setInt(4, expectedVersion + 1)
+                ps.setObject(5, fixtureId); ps.setObject(6, playerId); ps.setInt(7, expectedVersion); ps.executeUpdate()
+            }
+        }
+        return if (n == 1) expectedVersion + 1 else null
+    }
+
+    public fun availabilityOf(fixtureId: UUID, playerId: UUID): AvailabilityRow? =
+        connection.prepareStatement("SELECT team_id, status, recorded_by, row_version FROM competition.availability WHERE fixture_id = ? AND player_id = ?").use { ps ->
+            ps.setObject(1, fixtureId); ps.setObject(2, playerId)
+            ps.executeQuery().use { rs ->
+                if (rs.next()) AvailabilityRow(playerId, rs.getObject(1) as UUID, Availability.valueOf(rs.getString(2).uppercase()), rs.getObject(3) as UUID, rs.getInt(4)) else null
+            }
+        }
+
+    /**
+     * Names [teamId]'s side for [fixtureId], in slot order. [expectedVersion] is 0 when no lineup
+     * exists yet. Returns the new version, or null when the lineup was not at the expected version.
+     * The store refuses a non-member, a team not in the fixture, and any change once the fixture
+     * has a live outcome.
+     */
+    public fun nameLineup(fixtureId: UUID, teamId: UUID, players: List<UUID>, by: UUID, expectedVersion: Int): Int? {
+        require(players.isNotEmpty()) { "a lineup names at least one player" }
+        require(players.toSet().size == players.size) { "a player is named once in a lineup" }
+        val n = if (expectedVersion == 0) {
+            connection.prepareStatement(
+                "INSERT INTO competition.lineup (fixture_id, team_id, named_by) VALUES (?, ?, ?) ON CONFLICT DO NOTHING",
+            ).use { ps -> ps.setObject(1, fixtureId); ps.setObject(2, teamId); ps.setObject(3, by); ps.executeUpdate() }
+        } else {
+            connection.prepareStatement(
+                "UPDATE competition.lineup SET named_by = ?, named_at = clock_timestamp(), row_version = ? WHERE fixture_id = ? AND team_id = ? AND row_version = ?",
+            ).use { ps -> ps.setObject(1, by); ps.setInt(2, expectedVersion + 1); ps.setObject(3, fixtureId); ps.setObject(4, teamId); ps.setInt(5, expectedVersion); ps.executeUpdate() }
+        }
+        if (n != 1) return null
+        val version = expectedVersion + 1
+        connection.prepareStatement(
+            "INSERT INTO competition.lineup_entry (fixture_id, team_id, lineup_version, slot, player_id) VALUES (?, ?, ?, ?, ?)",
+        ).use { ps ->
+            // One statement per entry, not a batch: a batch failure surfaces as BatchUpdateException
+            // and the store's refusal — "not a member" — would lose its words on the way out.
+            players.forEachIndexed { i, p ->
+                ps.setObject(1, fixtureId); ps.setObject(2, teamId); ps.setInt(3, version); ps.setInt(4, i + 1); ps.setObject(5, p); ps.executeUpdate()
+            }
+        }
+        return version
+    }
+
+    /** The side as currently named, in slot order; empty when none has been. */
+    public fun currentLineup(fixtureId: UUID, teamId: UUID): List<UUID> =
+        connection.prepareStatement("SELECT player_id FROM competition.current_lineup(?, ?)").use { ps ->
+            ps.setObject(1, fixtureId); ps.setObject(2, teamId)
+            ps.executeQuery().use { rs -> generateSequence { if (rs.next()) rs.getObject(1) as UUID else null }.toList() }
+        }
+
+    /** The side as named under [version], for history. */
+    public fun lineupAt(fixtureId: UUID, teamId: UUID, version: Int): List<UUID> =
+        connection.prepareStatement("SELECT player_id FROM competition.lineup_entry WHERE fixture_id = ? AND team_id = ? AND lineup_version = ? ORDER BY slot").use { ps ->
+            ps.setObject(1, fixtureId); ps.setObject(2, teamId); ps.setInt(3, version)
+            ps.executeQuery().use { rs -> generateSequence { if (rs.next()) rs.getObject(1) as UUID else null }.toList() }
+        }
+
+    public fun lineupVersion(fixtureId: UUID, teamId: UUID): Int =
+        connection.prepareStatement("SELECT row_version FROM competition.lineup WHERE fixture_id = ? AND team_id = ?").use { ps ->
+            ps.setObject(1, fixtureId); ps.setObject(2, teamId); ps.executeQuery().use { rs -> if (rs.next()) rs.getInt(1) else 0 }
+        }
 }

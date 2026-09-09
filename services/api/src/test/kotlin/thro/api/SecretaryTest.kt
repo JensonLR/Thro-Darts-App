@@ -314,8 +314,19 @@ class SecretaryTest {
         c.prepareStatement("INSERT INTO competition.league_fixture_outcome (outcome_id, fixture_id, kind, legs_home, legs_away, decided_by) VALUES (?, ?, 'played', 5, 4, ?)")
             .use { ps -> ps.setObject(1, played); ps.setObject(2, fixture); ps.setObject(3, ade); ps.executeUpdate() }
         val resultTask = sec.onFixtureOutcome(played, dueAt = firstFixtureAt.plus(16, ChronoUnit.DAYS), by = ade)
-        check("a played outcome makes the home team owe the league a result card, prepared and ready", resultTask != null &&
-            c.prepareStatement("SELECT state FROM competition.submission WHERE outcome_id = ?").use { ps -> ps.setObject(1, played); ps.executeQuery().use { rs -> rs.next() && rs.getString(1) == "ready" } })
+        fun resultState() = c.prepareStatement("SELECT state FROM competition.submission WHERE outcome_id = ?").use { ps -> ps.setObject(1, played); ps.executeQuery().use { rs -> rs.next(); rs.getString(1) } }
+        fun missingOn(task: UUID) = c.prepareStatement("SELECT missing_facts FROM competition.admin_task WHERE task_id = ?").use { ps -> ps.setObject(1, task); ps.executeQuery().use { rs -> rs.next(); (rs.getArray(1).array as Array<*>).map { it.toString() }.toSet() } }
+        check("a played outcome makes the home team owe the league a result card — a draft, because neither side has been named, and the task says so",
+            resultTask != null && resultState() == "draft" && missingOn(resultTask) == setOf("home_lineup", "away_lineup"))
+        val card = resultTask!!
+        // Both sides need members before a side can be named; the store refuses anyone else.
+        val grangeCaptain = orgs.createPlayer(); orgs.addMember(grange, grangeCaptain, from = firstFixtureAt.minus(60, ChronoUnit.DAYS))
+        orgs.nameLineup(fixture, riverside, listOf(sam), by = ade, expectedVersion = 0)
+        check("one side named is not enough: the card waits and the task names the other side",
+            sec.onLineupNamed(fixture).isEmpty() && resultState() == "draft" && missingOn(card) == setOf("away_lineup"))
+        orgs.nameLineup(fixture, grange, listOf(grangeCaptain), by = grangeCaptain, expectedVersion = 0)
+        check("both sides named: the card is ready and nothing is missing",
+            sec.onLineupNamed(fixture).size == 1 && resultState() == "ready" && missingOn(card).isEmpty())
         check("recording it twice manufactures nothing", sec.onFixtureOutcome(played, dueAt = firstFixtureAt.plus(16, ChronoUnit.DAYS)) == null)
         val other = orgs.scheduleFixture(season, null, grange, riverside, at = firstFixtureAt.plus(30, ChronoUnit.DAYS))
         val award = orgs.awardFixture(other, grange, "Riverside could not raise a side", by = lee)
@@ -351,6 +362,6 @@ class SecretaryTest {
                 inbox[InboxSection.WAITING_FOR_LEAGUE]?.any { it.taskId == kimTask } == true)
 
         println("  $passed secretary properties held")
-        assertEquals(62, passed)
+        assertEquals(64, passed)
     }
 }

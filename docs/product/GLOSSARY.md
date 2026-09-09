@@ -237,6 +237,16 @@ the entrant is the competitor and the grant holder is the member who checked it 
 annotates evidence recorded from a phone and a pair cannot hold one. The person must belong to the
 entrant — themself, one of the pair, or a live Team member at that moment (V020).
 
+**Availability** — a Player's own word on whether they can make a Fixture, or a captain's on
+their behalf; `recorded_by` says which. One live row per Player per Fixture, every change appended
+with who said it. THRØ records it and decides nothing from it (V021).
+
+**Lineup** — the side a Team names for a Fixture, in slot order. The lineup row carries the
+version; the players are entries under each version, so a renamed side keeps the old one as
+history. Fixed once the Fixture has a live outcome: the side that played is the side that played. A
+first naming after the outcome is allowed and carries the same trust as the result it accompanies
+(V021).
+
 **Bracket tie** — a pairing in a knockout round of an Event, possibly a bye (`bracket_tie`). Not a
 fixture. The Slot states below describe its positions.
 

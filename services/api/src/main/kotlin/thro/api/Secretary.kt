@@ -317,8 +317,53 @@ public class Secretary(private val connection: Connection) {
             ps.setObject(1, submissionId); ps.setObject(2, home); ps.setObject(3, season); ps.setObject(4, outcomeId)
             ps.setObject(5, taskId); ps.setObject(6, policy?.first); ps.setObject(7, by); ps.executeUpdate()
         }
-        transition(submissionId, SubmissionState.DRAFT, SubmissionState.READY, by = null)
+        // The result card needs both sides named, or the league is sent a scoreline with nobody on
+        // it. Until then the submission stays a draft and the task says which side is missing.
+        val missing = lineupsMissing(fixtureId)
+        if (missing.isEmpty()) {
+            transition(submissionId, SubmissionState.DRAFT, SubmissionState.READY, by = null)
+        } else {
+            setMissingFacts(taskId, missing)
+        }
         return taskId
+    }
+
+    /** Which of a fixture's two sides has no lineup named: `home_lineup`, `away_lineup`, or neither. */
+    public fun lineupsMissing(fixtureId: UUID): List<String> =
+        connection.prepareStatement(
+            """
+            SELECT CASE WHEN EXISTS (SELECT 1 FROM competition.current_lineup(f.fixture_id, f.home_team_id)) THEN NULL ELSE 'home_lineup' END,
+                   CASE WHEN EXISTS (SELECT 1 FROM competition.current_lineup(f.fixture_id, f.away_team_id)) THEN NULL ELSE 'away_lineup' END
+              FROM competition.league_fixture f WHERE f.fixture_id = ?
+            """.trimIndent(),
+        ).use { ps ->
+            ps.setObject(1, fixtureId)
+            ps.executeQuery().use { rs -> if (rs.next()) listOfNotNull(rs.getString(1), rs.getString(2)) else emptyList() }
+        }
+
+    /**
+     * A side was named. Any result card for this fixture still waiting on a lineup becomes ready
+     * the moment both sides are there; nothing else moves. Returns the submissions made ready.
+     */
+    public fun onLineupNamed(fixtureId: UUID, by: UUID? = null): List<UUID> {
+        val missing = lineupsMissing(fixtureId)
+        val waiting = mutableListOf<Pair<UUID, UUID>>()
+        connection.prepareStatement(
+            """
+            SELECT s.submission_id, s.task_id FROM competition.submission s
+              JOIN competition.league_fixture_outcome o ON o.outcome_id = s.outcome_id
+             WHERE o.fixture_id = ? AND s.kind = 'result' AND s.state = 'draft'
+            """.trimIndent(),
+        ).use { ps -> ps.setObject(1, fixtureId); ps.executeQuery().use { rs -> while (rs.next()) waiting += (rs.getObject(1) as UUID) to (rs.getObject(2) as UUID) } }
+        val readied = mutableListOf<UUID>()
+        for ((submissionId, taskId) in waiting) {
+            setMissingFacts(taskId, missing)
+            if (missing.isEmpty()) {
+                transition(submissionId, SubmissionState.DRAFT, SubmissionState.READY, by = by)
+                readied += submissionId
+            }
+        }
+        return readied
     }
 
     /**
@@ -587,6 +632,12 @@ public class Secretary(private val connection: Connection) {
     }
 
     private fun closeTask(taskId: UUID, to: TaskState, by: UUID?, note: String) = moveTask(taskId, to, by, note)
+
+    private fun setMissingFacts(taskId: UUID, facts: List<String>) {
+        val t = task(taskId) ?: return
+        connection.prepareStatement("UPDATE competition.admin_task SET missing_facts = ?, row_version = ? WHERE task_id = ? AND row_version = ?")
+            .use { ps -> ps.setArray(1, connection.createArrayOf("text", facts.toTypedArray())); ps.setInt(2, t.version + 1); ps.setObject(3, taskId); ps.setInt(4, t.version); ps.executeUpdate() }
+    }
 
     private fun setMissing(taskId: UUID, missing: Set<RegistrationFact>, manual: List<String>) {
         val t = task(taskId) ?: return

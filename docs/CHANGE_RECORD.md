@@ -2245,3 +2245,45 @@ with, and an annotation naming a pair names nobody, so check-in now issues the g
 who did it, and the test holds that the pair and the team hold none. Any legacy check-in whose
 competitor had never become a player is given a legacy player record, exactly as V014 gave one to
 every entry competitor — nothing lost, nothing invented beyond what V014 already did.
+
+## Match night, at the store level
+
+Phase C's surface waits on the identity decision, but two of its rows do not: who can play, and who
+is playing. V021 adds both as the organisational state ADR-018 describes — server-authoritative,
+versioned, a stale write refused with the current row and never merged — and
+`OrganisationCommands` gains `SetAvailability` and `NameLineup` beside the rename and the
+rearrangement, with the same receipt-first, authorise, apply-at-the-version-seen shape.
+
+**Availability** is a player's own word, which needs no relation, or a captain's on their behalf,
+which needs `team.manage`; either way the row says who said it, and every change is appended to
+`availability_change` by trigger, so *Sam said yes on Monday and the captain said no on Thursday*
+is readable. **A lineup** is the captain's. The lineup row carries the version and the players are
+entries under it, so naming a new side writes a new set and the old one is history rather than gone
+— no role can delete an entry and nothing needs to. The store refuses, in its own words, a team
+that is not one of the fixture's two, a player who is not a live member of that team at the moment
+of writing, an entry under any version but the current one, and any *change* to a named side once
+the fixture has a live outcome; a first naming after the outcome is allowed, because a captain
+filling in the card after the match is recording what happened, and it carries the same trust as
+the result it accompanies. What the store does not decide is deliberately listed: how many a side
+is, whether they must be registered, whether a captain may pick someone who said they could not
+make it. Those are the league's rules and the captain's judgement.
+
+A refusal the store makes itself is now a `Refused` result in the store's words with a receipt,
+not an exception: the command handler rolls back to a savepoint and records it like any other
+refusal, so a replay of a refused lineup returns the refusal. The lineup entries are written one
+statement at a time rather than as a batch, because a batch failure surfaces as a different
+exception type and the words *not a member* were lost on the way out — found by the test that
+expected them.
+
+The Secretary's result card uses it. A played outcome still creates the home team's
+`result_submission_due` task and its `result` submission, but the submission is now a **draft**
+until both sides have a lineup, with the task's missing facts naming the side that has none, and
+`onLineupNamed` makes it ready the moment both are there — the league is not sent a scoreline with
+nobody on it. The existing Secretary property that expected the card ready at once was wrong about
+the product and is replaced by three that are not. Seventeen match-night properties, sixty-four
+Secretary properties; the schema stands at V021 and the script's 86 hold.
+
+Plan §5 now says how ADR-016's local claim and V014's `identity.player_claim` meet — the account's
+live claim names the THRØ ID the local person becomes, and each claimed seat lands as a
+`local_match_claim` row with its digest, self-reported and claimable once — so the two designs
+attach to each other without a migration when the claim flow arrives.

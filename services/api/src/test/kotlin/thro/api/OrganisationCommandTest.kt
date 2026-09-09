@@ -180,4 +180,86 @@ class OrganisationCommandTest {
         c.prepareStatement("SELECT row_version FROM competition.team WHERE team_id = ?").use { ps ->
             ps.setObject(1, team); ps.executeQuery().use { rs -> rs.next(); rs.getInt(1) }
         }
+
+    @Test
+    fun `on match night availability is the player's word or the captain's with provenance, and a lineup is the captain's, versioned, and fixed once played`() {
+        if (!TestDatabase.configured) {
+            println("no database configured (set PGHOST) — match night tests skipped")
+            return
+        }
+        val c = TestDatabase.migrated()
+        val orgs = Organisations(c)
+        val rel = Relations(c)
+        val cmds = OrganisationCommands(c)
+        var passed = 0
+        fun check(name: String, cond: Boolean) {
+            assertTrue(cond, "FAILED: $name")
+            println("  PASS  $name")
+            passed++
+        }
+        val now = Instant.parse("2026-10-01T19:00:00Z")
+        val kim = UUID.randomUUID()   // captain of Riverside A
+        val zed = UUID.randomUUID()   // a stranger
+        val phone = UUID.randomUUID()
+        val sam = orgs.createPlayer(); val jo = orgs.createPlayer(); val ade = orgs.createPlayer(); val lee = orgs.createPlayer()
+        val riverside = orgs.createTeam("Riverside A", by = kim)
+        val grange = orgs.createTeam("Grange B", by = zed)
+        val other = orgs.createTeam("Elsewhere", by = zed)
+        rel.grant(kim, "captain", ObjectRef(ObjectType.TEAM, riverside.toString()))
+        for (p in listOf(sam, jo, ade)) orgs.addMember(riverside, p, from = now.minus(60, ChronoUnit.DAYS))
+        val leeOld = orgs.addMember(riverside, lee, from = now.minus(400, ChronoUnit.DAYS)); orgs.endMembership(leeOld, at = now.minus(100, ChronoUnit.DAYS))
+        val league = orgs.createLeague("Teesside Thursday League")
+        val season = orgs.openSeason(league, "2026/27", LocalDate.of(2026, 9, 1), LocalDate.of(2027, 4, 30))
+        val fixture = orgs.scheduleFixture(season, null, riverside, grange, at = now.plus(7, ChronoUnit.DAYS))
+
+        // --- availability ---------------------------------------------------------------------------
+        fun avail(actor: UUID, player: UUID, status: Organisations.Availability, v: Int, team: UUID = riverside, id: UUID = UUID.randomUUID()) =
+            cmds.handle(OrganisationCommands.Command.SetAvailability(id, phone, actor, fixture, player, team, status, v))
+        check("a player records their own availability, no relation needed", avail(sam, sam, Organisations.Availability.AVAILABLE, 0) == OrganisationCommands.Result.Applied(1))
+        check("a stranger cannot record it for them", avail(zed, sam, Organisations.Availability.UNAVAILABLE, 1) is OrganisationCommands.Result.Refused)
+        check("the captain can, on their behalf", avail(kim, sam, Organisations.Availability.UNAVAILABLE, 1) == OrganisationCommands.Result.Applied(2))
+        val row = orgs.availabilityOf(fixture, sam)!!
+        check("and the row says it was the captain, not the player", row.recordedBy == kim && row.status == Organisations.Availability.UNAVAILABLE && row.version == 2)
+        val stale = avail(sam, sam, Organisations.Availability.AVAILABLE, 1)
+        check("a write from the version the player last saw is refused with the current row, never merged",
+            stale is OrganisationCommands.Result.Stale && stale.currentVersion == 2 && stale.current.contains("unavailable") && orgs.availabilityOf(fixture, sam)!!.status == Organisations.Availability.UNAVAILABLE)
+        val history = c.prepareStatement("SELECT array_agg(to_status ORDER BY row_version), array_agg(recorded_by::text ORDER BY row_version) FROM competition.availability_change WHERE fixture_id = ? AND player_id = ?")
+            .use { ps -> ps.setObject(1, fixture); ps.setObject(2, sam); ps.executeQuery().use { rs -> rs.next(); (rs.getArray(1).array as Array<*>).toList() to (rs.getArray(2).array as Array<*>).toList() } }
+        check("every word is kept with who said it", history.first == listOf("available", "unavailable") && history.second == listOf(sam.toString(), kim.toString()))
+        val former = avail(lee, lee, Organisations.Availability.AVAILABLE, 0)
+        check("a former member's availability is refused by the store, in its words", former is OrganisationCommands.Result.Refused && former.why.contains("not a member"))
+        val wrongTeam = avail(jo, jo, Organisations.Availability.AVAILABLE, 0, team = other)
+        check("availability for a team that is not in the fixture is refused", wrongTeam is OrganisationCommands.Result.Refused && wrongTeam.why.contains("not one of the two"))
+        val replayId = UUID.randomUUID()
+        avail(jo, jo, Organisations.Availability.MAYBE, 0, id = replayId)
+        check("a replayed command returns what it returned and writes nothing",
+            avail(jo, jo, Organisations.Availability.MAYBE, 0, id = replayId) is OrganisationCommands.Result.Replayed && orgs.availabilityOf(fixture, jo)!!.version == 1)
+
+        // --- lineup -----------------------------------------------------------------------------------
+        fun lineup(actor: UUID, players: List<UUID>, v: Int, team: UUID = riverside) =
+            cmds.handle(OrganisationCommands.Command.NameLineup(UUID.randomUUID(), phone, actor, fixture, team, players, v))
+        check("a player who is not the captain cannot name the side", lineup(sam, listOf(sam, jo), 0) is OrganisationCommands.Result.Refused)
+        check("the captain names the side", lineup(kim, listOf(sam, jo), 0) == OrganisationCommands.Result.Applied(1) && orgs.currentLineup(fixture, riverside) == listOf(sam, jo))
+        val nonMember = lineup(kim, listOf(sam, lee), 1)
+        check("a side naming a former member is refused by the store, and nothing was written",
+            nonMember is OrganisationCommands.Result.Refused && nonMember.why.contains("not a member") && orgs.lineupVersion(fixture, riverside) == 1 && orgs.currentLineup(fixture, riverside) == listOf(sam, jo))
+        check("naming it again replaces the side and keeps the old one as history",
+            lineup(kim, listOf(ade, sam, jo), 1) == OrganisationCommands.Result.Applied(2) && orgs.currentLineup(fixture, riverside) == listOf(ade, sam, jo) && orgs.lineupAt(fixture, riverside, 1) == listOf(sam, jo))
+        val staleLineup = lineup(kim, listOf(sam), 1)
+        check("a lineup from a version the captain no longer holds is refused with the current side",
+            staleLineup is OrganisationCommands.Result.Stale && staleLineup.currentVersion == 2 && staleLineup.current.contains(ade.toString()))
+        check("the captain of one side cannot name the other", lineup(kim, listOf(sam), 0, team = grange) is OrganisationCommands.Result.Refused)
+        // Any live outcome fixes the side: here the league awards the fixture (a played outcome
+        // needs the fixture's match, which is Phase C's opening-from-a-fixture and not this test's).
+        orgs.awardFixture(fixture, riverside, "Grange conceded", by = kim)
+        val afterPlayed = lineup(kim, listOf(sam, jo), 2)
+        check("once the fixture has an outcome the side that played is the side that played",
+            afterPlayed is OrganisationCommands.Result.Refused && afterPlayed.why.contains("played") && orgs.currentLineup(fixture, riverside) == listOf(ade, sam, jo))
+        val receipts = c.prepareStatement("SELECT count(*) FILTER (WHERE outcome = 'refused'), count(*) FROM competition.command_receipt WHERE device_id = ?")
+            .use { ps -> ps.setObject(1, phone); ps.executeQuery().use { rs -> rs.next(); rs.getInt(1) to rs.getInt(2) } }
+        check("every command, refused or applied, left a receipt — including the store's own refusals", receipts.second == 14 && receipts.first == 7)
+
+        println("  $passed match night properties held")
+        assertEquals(17, passed)
+    }
 }

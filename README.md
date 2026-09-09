@@ -241,6 +241,7 @@ is removed.
 | Evidence exists only for a real match | Foreign key to the match aggregate |
 | Who is playing cannot be rewritten | No application role holds `UPDATE` on `evidence.match` |
 | An event's entry requirement is stated, never guessed | `competition.event_eligibility` holds it in five checkable terms; an open event refuses one; a stated row is withdrawn with a reason, never rewritten or deleted; `player_satisfies_event` answers null when nothing is stated |
+| Match night is versioned, never merged | `competition.availability` is one live row per player per fixture with `recorded_by` as provenance and every change appended to `availability_change`; `competition.lineup` carries the version and `lineup_entry` the sides under each, old sides kept; a non-member, a team not in the fixture, and any change once the fixture has a live outcome are refused by the store; a result card stays a draft until both sides are named (V021) |
 | A check-in is a person | `competition.check_in` is keyed on (event, player, device); the entry must exist and the person must belong to it — themself, one of the pair, or a live team member at that moment — and the scoring grant is issued to the person (V020) |
 | Evidence names a seat, never a person | `evidence.match` binds the seats `home` and `away` to competitor ids and holds no name column; a visit payload names the seat; a display name is joined at render (V018, OD-024) |
 | A module appends only to streams it owns | Trigger mapping each event type to its owning role |

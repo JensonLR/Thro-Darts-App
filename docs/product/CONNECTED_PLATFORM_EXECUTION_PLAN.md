@@ -1,6 +1,6 @@
 # THRØ — Connected Platform Execution Plan
 
-**Date:** 2026-09-09 · **Status:** Phases A, B2, D and E's read model delivered; B3/C wait on FB-1, E's surface and F on the client · **Precedence:** rank 4 (product/domain
+**Date:** 2026-09-09 · **Status:** Phases A, B2, D, E's read model and C's store (availability, lineups, the result-card gate) delivered; B3 and C's surface wait on FB-1, E's surface and F on the client · **Precedence:** rank 4 (product/domain
 specification), below the founder's instructions and the decision register, above the ADRs it cites.
 
 This plan reconciles the repository as it stands with the founder's product conclusions for the
@@ -192,8 +192,20 @@ What does not exist and must be built, in this order:
 2. **Accounts and sessions.** `identity.account` exists; credentials, sessions and refresh-token
    families do not. The *mechanism* is decided; the *surface* is B4.
 3. **Player ⇄ account.** `competition.player` may exist unclaimed (created by a captain). Claiming
-   binds it to an account through an audited flow with organiser confirmation or a claim code.
-   Merging two players is an appended, reversible identity event, never an UPDATE of foreign keys.
+   binds it to an account through an audited flow with organiser confirmation or a claim code —
+   that is `identity.player_claim` (V014): one live claim per player and per account, fixed when
+   made, revocable, never rewritten. Merging two players is an appended, reversible identity event,
+   never an UPDATE of foreign keys.
+   ADR-016's claim is the other half and the two meet here: ADR-016 binds a **device's local
+   person**, and every seat that person occupied in that device's journal, to an account, carrying
+   a per-match digest over the journal rows so a history cannot be quietly rewritten after it was
+   claimed. On the server that lands as: the account's live `player_claim` names the THRØ ID the
+   local person becomes (created unclaimed by the claim if none exists), and each claimed match's
+   seat is recorded as `local_match_claim (match_id, seat, player_id, device_id, digest, claimed_at)`
+   — self-reported evidence that attaches a history and never corroborates one (ADR-016 §3, PD-002),
+   claimable once per seat, enforced by the server. The table does not exist yet because the claim
+   flow it needs is FB-1's; the shape is fixed now so that V016's consent gate, V018's seats and
+   ADR-016's digest attach to it without a migration.
 4. **Two kinds of state, two sync models.**
    - *Competitive evidence* stays per-device append-only streams with the ADR-006 algorithm.
    - *Organisational state* (roster, fixtures, availability, tasks) is **server-authoritative
@@ -223,8 +235,8 @@ Runs against the real database and the real HTTP layer. Nothing is static data.
 | See roster | read model | `read.team_roster` projection | `team#member` private, public front otherwise |
 | League season affiliation | competition | `team_affiliation` | `team#admin`, accepted by `league_season#admin` |
 | Fixtures | competition | `fixture` rows created by the league admin or agreed friendlies | `league_season#admin`; friendlies later |
-| Availability | competition | `availability (fixture, player, state, recorded_at)` | the player, or `team#captain` on their behalf with provenance |
-| Lineup | competition | `lineup (fixture, team, version, entries)` | `team#captain` |
+| Availability | competition | `availability (fixture, player, team, status, recorded_by, row_version)` + append-only `availability_change` — **store level delivered** (V021, `OrganisationCommands.SetAvailability`) | the player, or `team#captain`/`team#admin` on their behalf; `recorded_by` is the provenance |
+| Lineup | competition | `lineup (fixture, team, row_version)` + `lineup_entry` per version, old sides kept as history; fixed once the fixture has a live outcome — **store level delivered** (V021, `OrganisationCommands.NameLineup`) | `team#captain` or `team#admin` |
 | Score / connect match | match | `evidence.match` opened from the fixture; `fixture.match_id` set once | existing grants |
 | Result with provenance | trust | existing attestation, capture channel and outcome | unchanged |
 | Team history | read model | seasons, honours, tenures, past rosters, from the tables above | public front / private inside |
@@ -278,7 +290,9 @@ never silently passes. Missing facts make a `registration_incomplete` task listi
 missing makes the submission `ready`.
 
 Generalisation, proved by the same tests: a `league_fixture_outcome` creates a
-`result_submission_due` task and a `result` submission for the league; a `league_fixture_change`
+`result_submission_due` task and a `result` submission for the league — a **draft** until both
+sides have a lineup named (V021), with the task's missing facts naming the side that has none, and
+`ready` the moment `onLineupNamed` finds both; a `league_fixture_change`
 creates a `rearrangement_acknowledgement_due` task waiting on the opponent and a
 `fixture_rearrangement` submission. Same task table, same transition table, same evidence rule.
 
@@ -393,6 +407,7 @@ against PostgreSQL 16 locally; CI runs the same suites.
 | 16 | A team rename keeps the old name with its period | API test |
 | 17 | GLOSSARY, README, ADR index, package READMEs and DESIGN_UNSPECIFIED describe the model above and teach no separate Club | review |
 
+| 20 | Match night at the store level: a player records their own availability with no relation, a captain records it on their behalf and the row says so, every word is kept with who said it, a stale write is refused with the current row; a lineup is the captain's, versioned, its old sides kept, a non-member or a team not in the fixture refused by the store in its own words, a change after a live outcome refused; a result card is a draft until both sides are named; every command, refused or applied, leaves a receipt | `OrganisationCommandTest` (17 match-night properties) + `SecretaryTest`, **delivered** (V021) |
 | 19 | A check-in is a person: keyed on (event, player, device), for a live entry of the event, by a member of the entrant — the player themself, one of the pair, or a live team member at that moment; the scoring grant is the person's, never the pair's or the team's | `CompetitionTest` (21 properties) + `MigrationTest`, **delivered** (V020) |
 | 18 | No display name in `evidence.match` or in any payload: the aggregate binds the seats `home` and `away` to competitor ids, the same two words both on-device journals store; a V013 database's named matches are pseudonymised in place with every other payload field untouched; a visit naming anything but a seat is refused | `MigrationTest` (18 properties) + API tests, **delivered** (V018, closes OD-024) |
 

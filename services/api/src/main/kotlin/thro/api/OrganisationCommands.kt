@@ -4,6 +4,7 @@ import java.sql.Connection
 import java.sql.Timestamp
 import java.time.Instant
 import java.util.UUID
+import org.postgresql.util.PSQLException
 import thro.authz.ObjectRef
 import thro.authz.ObjectType
 
@@ -21,6 +22,10 @@ import thro.authz.ObjectType
  * 3. **Apply with the version the author saw.** Zero rows updated is [Result.Stale], carrying the
  *    current row so the person can see what changed under them. Never merged. Never overwritten.
  * 4. **Receipt in the same transaction** as the change, or there is no change.
+ *
+ * A refusal the store makes itself — a non-member in a lineup, a lineup for a fixture already
+ * played — is a [Result.Refused] in the store's own words, with a receipt, not an exception: the
+ * write is rolled back to a savepoint so the receipt can still be recorded in the same transaction.
  */
 public class OrganisationCommands(private val connection: Connection) {
 
@@ -51,6 +56,34 @@ public class OrganisationCommands(private val connection: Connection) {
             val venueId: UUID? = null,
             override val correlationId: UUID = UUID.randomUUID(),
         ) : Command
+
+        /**
+         * A player's word on a fixture, or a captain's on their behalf. [expectedVersion] is 0 for
+         * the first word. Who said it is the actor, and the row keeps it.
+         */
+        public data class SetAvailability(
+            override val commandId: UUID,
+            override val deviceId: UUID,
+            override val actorId: UUID,
+            val fixtureId: UUID,
+            val playerId: UUID,
+            val teamId: UUID,
+            val status: Organisations.Availability,
+            val expectedVersion: Int,
+            override val correlationId: UUID = UUID.randomUUID(),
+        ) : Command
+
+        /** The side a captain names, in slot order. [expectedVersion] is 0 for the first naming. */
+        public data class NameLineup(
+            override val commandId: UUID,
+            override val deviceId: UUID,
+            override val actorId: UUID,
+            val fixtureId: UUID,
+            val teamId: UUID,
+            val players: List<UUID>,
+            val expectedVersion: Int,
+            override val correlationId: UUID = UUID.randomUUID(),
+        ) : Command
     }
 
     public sealed interface Result {
@@ -79,9 +112,20 @@ public class OrganisationCommands(private val connection: Connection) {
                 connection.commit()
                 return Result.Replayed(it)
             }
-            val result = when (cmd) {
-                is Command.RenameTeam -> renameTeam(cmd)
-                is Command.RearrangeFixture -> rearrangeFixture(cmd)
+            val savepoint = connection.setSavepoint()
+            val result = try {
+                when (cmd) {
+                    is Command.RenameTeam -> renameTeam(cmd)
+                    is Command.RearrangeFixture -> rearrangeFixture(cmd)
+                    is Command.SetAvailability -> setAvailability(cmd)
+                    is Command.NameLineup -> nameLineup(cmd)
+                }
+            } catch (e: PSQLException) {
+                // The store said no in its own words (a trigger or check). Roll back to before the
+                // attempt so the refusal can be receipted in this transaction like any other.
+                if (e.sqlState != "23514") throw e
+                connection.rollback(savepoint)
+                Result.Refused(e.serverErrorMessage?.message ?: e.message ?: "refused by the store")
             }
             writeReceipt(cmd, result)
             connection.commit()
@@ -156,7 +200,57 @@ public class OrganisationCommands(private val connection: Connection) {
         return Result.Applied(cmd.expectedVersion + 1)
     }
 
+    private fun setAvailability(cmd: Command.SetAvailability): Result {
+        // The player's own word needs no relation; anyone else needs to run the team, and the row
+        // then says it was them (provenance the plan requires for "on their behalf").
+        if (cmd.actorId != cmd.playerId) {
+            val decision = Relations(connection).decide(
+                cmd.actorId, "team.manage", ObjectRef(ObjectType.TEAM, cmd.teamId.toString()), cmd.correlationId,
+            )
+            if (!decision.allowed) return Result.Refused("only the player, or someone who runs their team, records their availability", decision.excludedBy)
+        }
+        val orgs = Organisations(connection)
+        val current = orgs.availabilityOf(cmd.fixtureId, cmd.playerId)
+        val version = current?.version ?: 0
+        if (version != cmd.expectedVersion) return Result.Stale(version, availabilityJson(cmd.fixtureId, cmd.playerId))
+        val applied = orgs.recordAvailability(cmd.fixtureId, cmd.playerId, cmd.teamId, cmd.status, cmd.actorId, cmd.expectedVersion)
+            ?: return Result.Stale(orgs.availabilityOf(cmd.fixtureId, cmd.playerId)?.version ?: 0, availabilityJson(cmd.fixtureId, cmd.playerId))
+        return Result.Applied(applied)
+    }
+
+    private fun nameLineup(cmd: Command.NameLineup): Result {
+        if (cmd.players.isEmpty()) return Result.Refused("a lineup names at least one player")
+        if (cmd.players.toSet().size != cmd.players.size) return Result.Refused("a player is named once in a lineup")
+        val decision = Relations(connection).decide(
+            cmd.actorId, "team.manage", ObjectRef(ObjectType.TEAM, cmd.teamId.toString()), cmd.correlationId,
+        )
+        if (!decision.allowed) return Result.Refused("you do not run this team", decision.excludedBy)
+        val orgs = Organisations(connection)
+        val version = orgs.lineupVersion(cmd.fixtureId, cmd.teamId)
+        if (version != cmd.expectedVersion) return Result.Stale(version, lineupJson(cmd.fixtureId, cmd.teamId))
+        val applied = orgs.nameLineup(cmd.fixtureId, cmd.teamId, cmd.players, cmd.actorId, cmd.expectedVersion)
+            ?: return Result.Stale(orgs.lineupVersion(cmd.fixtureId, cmd.teamId), lineupJson(cmd.fixtureId, cmd.teamId))
+        return Result.Applied(applied)
+    }
+
     // --- reads ----------------------------------------------------------------------------------
+
+    private fun availabilityJson(fixtureId: UUID, playerId: UUID): String =
+        connection.prepareStatement("SELECT coalesce(to_jsonb(a)::text, 'null') FROM competition.availability a WHERE fixture_id = ? AND player_id = ?").use { ps ->
+            ps.setObject(1, fixtureId); ps.setObject(2, playerId)
+            ps.executeQuery().use { rs -> if (rs.next()) rs.getString(1) else "null" }
+        }
+
+    private fun lineupJson(fixtureId: UUID, teamId: UUID): String =
+        connection.prepareStatement(
+            """
+            SELECT coalesce((SELECT to_jsonb(l) || jsonb_build_object('players', coalesce((SELECT jsonb_agg(player_id ORDER BY slot) FROM competition.current_lineup(l.fixture_id, l.team_id)), '[]'::jsonb))
+                               FROM competition.lineup l WHERE fixture_id = ? AND team_id = ?)::text, 'null')
+            """.trimIndent(),
+        ).use { ps ->
+            ps.setObject(1, fixtureId); ps.setObject(2, teamId)
+            ps.executeQuery().use { rs -> if (rs.next()) rs.getString(1) else "null" }
+        }
 
     /** (version, row as JSON) — the JSON is what a Stale response hands back to the person. */
     private fun currentTeam(teamId: UUID): Pair<Int, String>? =
