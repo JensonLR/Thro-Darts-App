@@ -1984,3 +1984,24 @@ And one in `ThroStage`: *"the route is the first thing to go"*. It is the **seco
 first, and the order is stated three lines away in the type it belongs to.
 
 Small things, and worth the ten minutes: each of them is a sentence a reader would have trusted.
+
+## A 32-point control, in the Settings screen, on this branch
+
+The Settings row for how a visit is entered was written with SwiftUI's `Picker(.pickerStyle(.segmented))`.
+
+A `UISegmentedControl` is **32 points tall**, and a frame around it does not enlarge its segments —
+so that row would have shipped a control below the 44-point floor every other control in this app is
+held to, on the screen whose whole reason for existing is that the founder could not reliably hit
+things. *"Buttons need to be more reactive sometimes when i press close to them they dont react and
+have to be exactly direct on them."*
+
+`SegmentedControl` is in `ThroDesign`, is 44 points, carries `ThroPressStyle` and a `contentShape`,
+and was already drawing the **Appearance** row ten lines above the one I was writing. I reached past
+it for the platform's.
+
+`check_controls_react.py` now fails on `.pickerStyle(.segmented)` anywhere and names the replacement.
+Perturbed by putting the platform control back: it names the file and the line.
+
+The check has caught three distinct classes now, and all three were the same complaint from the
+founder wearing different clothes: a control with no pressed state, a control whose label reaches no
+tap target, and now a control the platform draws too small to hit.

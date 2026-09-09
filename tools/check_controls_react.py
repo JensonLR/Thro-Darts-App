@@ -175,6 +175,17 @@ def main() -> int:
                     f"{rel}:{i + 1}: .buttonStyle(.plain) — no pressed state and a hit area the "
                     f"size of the ink. Use ThroPressStyle."
                 )
+            # **A platform control below the floor.** `UISegmentedControl` is 32 points tall and a
+            # frame around it does not enlarge its segments, so `Picker(.segmented)` ships a target
+            # under the 44-point minimum every other control here is held to. `SegmentedControl` in
+            # ThroDesign is the same thing at 44 with the design's own press behaviour — and this
+            # rule exists because the Settings row for how a visit is entered was written with the
+            # platform one first, ten lines below the Appearance row that uses the right control.
+            if ".pickerStyle(.segmented)" in code.replace(" ", ""):
+                problems.append(
+                    f"{rel}:{i + 1}: Picker(.segmented) — a UISegmentedControl is 32 pt tall and a "
+                    f"frame will not enlarge its segments. Use ThroDesign's SegmentedControl."
+                )
             if not BUTTON.search(code):
                 continue
             if SYSTEM.search(code) and not SHARE.search(code):
@@ -207,7 +218,7 @@ def main() -> int:
             print(f"  {problem}", file=sys.stderr)
         return 1
     print(f"ok: {buttons} controls, every one styled, every one with a tap target, "
-          f"and every icon-only one named")
+          f"every icon-only one named, and no platform control under the floor")
     return 0
 
 

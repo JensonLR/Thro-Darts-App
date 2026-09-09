@@ -1337,6 +1337,13 @@ public struct SettingsScreen: View {
         Binding(get: { Appearance(stored: appearanceRaw) }, set: { appearanceRaw = $0.rawValue })
     }
 
+    /// The stored notation as the value the control works in. The same shape as `appearance`, for
+    /// the same reason: `@AppStorage` holds a string, because that is what survives a build that
+    /// does not know a value, and every reader turns it back into the type at the edge.
+    private var entryMode: Binding<ScoringEntryMode> {
+        Binding(get: { ScoringEntryMode(stored: entryModeRaw) }, set: { entryModeRaw = $0.rawValue })
+    }
+
     public var body: some View {
         VStack(spacing: 0) {
             TopBar("Settings", onBack: onBack, large: true)
@@ -1366,18 +1373,17 @@ public struct SettingsScreen: View {
                         // scoring rail: the founder asked for both notations, and a control that
                         // exists only inside a match is one nobody finds before their first match.
                         // The rail's switch changes the same stored value, so the two cannot drift.
-                        HStack(spacing: 12) {
-                            Icon(.target, size: 18).foregroundStyle(ThroColor.colorTextSecondary)
-                            Picker("How a visit is entered", selection: $entryModeRaw) {
-                                ForEach(ScoringEntryMode.allCases, id: \.rawValue) { mode in
-                                    Text(mode.label).tag(mode.rawValue)
-                                }
-                            }
-                            .pickerStyle(.segmented)
-                            .accessibilityLabel("How a visit is entered")
-                        }
-                        .frame(minHeight: 52)
-                        .overlay(alignment: .bottom) { Rectangle().fill(ThroColor.colorBorderDefault).frame(height: 1) }
+                        // `SegmentedControl` and not SwiftUI's `Picker(.segmented)`, which is what
+                        // the first version of this row reached for. A `UISegmentedControl` is
+                        // **32 points tall** and a frame around it does not enlarge its segments —
+                        // so that row would have shipped a control below the 44-point floor this
+                        // app holds every other control to, on a screen whose whole reason for
+                        // existing is that the founder could not reliably hit things. The design
+                        // system already had the right control, drawing the Appearance row ten
+                        // lines above this one.
+                        Eyebrow("How a visit is entered")
+                        SegmentedControl(ScoringEntryMode.allCases.map { ($0, $0.label) },
+                                         selection: entryMode)
                         Text(SettingsScreen.entryModeNote(ScoringEntryMode(stored: entryModeRaw)))
                             .thro(ThroTypography.metadata)
                             .foregroundStyle(ThroColor.colorTextSecondary)
