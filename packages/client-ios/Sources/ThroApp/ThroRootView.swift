@@ -1282,6 +1282,10 @@ public struct YouScreen: View {
 public struct SettingsScreen: View {
     @AppStorage(Appearance.storageKey) private var appearanceRaw: String = Appearance.system.rawValue
     @AppStorage(ScoringPreferences.keepScreenAwakeKey) private var keepScreenAwake: Bool = true
+    /// Which keypad the scoring screen offers. Held here as well as on the rail because a setting
+    /// that only exists inside a match is a setting nobody finds before their first match.
+    @AppStorage(ScoringPreferences.entryModeKey) private var entryModeRaw: String
+        = ScoringEntryMode.default.rawValue
     @AppStorage(ThroHaptics.enabledKey) private var haptics: Bool = true
     @AppStorage(OpeningPreferences.soundKey) private var openingSound: Bool = true
     @AppStorage(OpeningPreferences.hapticsKey) private var openingHaptics: Bool = true
@@ -1358,6 +1362,26 @@ public struct SettingsScreen: View {
                             .foregroundStyle(ThroColor.colorTextSecondary)
                     }
                     group("Scoring") {
+                        // **How a visit is entered**, and the reason it is here as well as on the
+                        // scoring rail: the founder asked for both notations, and a control that
+                        // exists only inside a match is one nobody finds before their first match.
+                        // The rail's switch changes the same stored value, so the two cannot drift.
+                        HStack(spacing: 12) {
+                            Icon(.target, size: 18).foregroundStyle(ThroColor.colorTextSecondary)
+                            Picker("How a visit is entered", selection: $entryModeRaw) {
+                                ForEach(ScoringEntryMode.allCases, id: \.rawValue) { mode in
+                                    Text(mode.label).tag(mode.rawValue)
+                                }
+                            }
+                            .pickerStyle(.segmented)
+                            .accessibilityLabel("How a visit is entered")
+                        }
+                        .frame(minHeight: 52)
+                        .overlay(alignment: .bottom) { Rectangle().fill(ThroColor.colorBorderDefault).frame(height: 1) }
+                        Text(SettingsScreen.entryModeNote(ScoringEntryMode(stored: entryModeRaw)))
+                            .thro(ThroTypography.metadata)
+                            .foregroundStyle(ThroColor.colorTextSecondary)
+                            .fixedSize(horizontal: false, vertical: true)
                         // The export's Settings lists this row under Scoring, default On. The switch
                         // is the platform's; the export draws no toggle.
                         HStack(spacing: 12) {
@@ -1530,6 +1554,26 @@ public struct SettingsScreen: View {
     /// Reads the picked file and describes it. Static and taking the importer's own result so the
     /// whole path — including the two failures that are not the file's fault — is testable without
     /// a file picker.
+    /// What each notation costs and buys, in the words a player would use.
+    ///
+    /// **It says the cost as well as the gain**, because a setting that only lists advantages is
+    /// one somebody switches and then quietly regrets. Entering darts is more taps and it takes
+    /// room off the board on a small phone; what it buys is that a checkout stops interrupting to
+    /// ask questions the app could have worked out.
+    static func entryModeNote(_ mode: ScoringEntryMode) -> String {
+        switch mode {
+        case .visitTotal:
+            return "Type the total of three darts. Fewer taps, and the way every darts app works — "
+                 + "but a checkout stops to ask how many darts it took and how many were at a "
+                 + "double, because nothing else can know."
+        case .perDart:
+            return "Tap each dart as it lands. A checkout asks nothing, because the answers are in "
+                 + "what you entered — and your checkout percentage becomes exact instead of a "
+                 + "range. It is more taps, and on a small phone the score steps down a size to "
+                 + "make room for the three darts."
+        }
+    }
+
     static func inspect(_ result: Result<URL, Error>, thisDevice: DeviceId? = nil) -> ExportInspection {
         switch result {
         case let .failure(error):

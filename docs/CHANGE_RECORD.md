@@ -1759,3 +1759,45 @@ member.
 That is three macOS rounds this branch has spent on things a second of Python can see, and all three
 classes are now caught before a runner starts.
 
+
+---
+
+# Where a player finds the choice of notation
+
+The founder asked for both notations. The keypad slice put the switch on the scoring rail, which is
+where you want it once you are playing — and nowhere at all before your first match. So it is in
+Settings too, under Scoring beside *Keep screen awake* and *Haptics*, both reading and writing one
+stored value so the two cannot drift.
+
+**The sentence under it names what each notation costs**, not only what it buys, because a setting
+that lists advantages is one somebody switches and quietly regrets:
+
+> **Total** — Type the total of three darts. Fewer taps, and the way every darts app works — but a
+> checkout stops to ask how many darts it took and how many were at a double, because nothing else
+> can know.
+>
+> **Darts** — Tap each dart as it lands. A checkout asks nothing, because the answers are in what
+> you entered — and your checkout percentage becomes exact instead of a range. It is more taps, and
+> on a small phone the score steps down a size to make room for the three darts.
+
+Six tests, following this codebase's existing rule that **no two states may sound the same**: label,
+spoken form and Settings sentence are all distinct, walked over `allCases` so a notation added
+tomorrow is covered by a test written today. An unknown stored value falls back to the default rather
+than guessing, as `Appearance` already does. And the default is `Total`, because per-dart entry is
+the better record and the unfamiliar one — making it the default would meet a new player with six
+taps a visit.
+
+## And one the compiler had to catch
+
+`ClubsFlow.figures(for:)` changed from `[ProfileScreen.Figure]` to `[StatItem]` — that is the change
+that stopped a bounded figure being drawn as exact — and a test in `ClubStoreTests` still read
+`f.unavailable`. `StatItem` calls that `note`, and the reason is on the type rather than beside it:
+`.range` and `.unavailable` both take a **non-optional** reason, so an unexplained dash cannot be
+constructed at all. The test asserts the confidence as well as the reason now, which is the stronger
+claim the type already guarantees.
+
+Nothing static could have caught a renamed property, and nothing should try: that is what a compiler
+is for. The guard's job is the class of failure the compiler only finds on a runner four minutes
+away.
+
+571 tests. 19 guards green.

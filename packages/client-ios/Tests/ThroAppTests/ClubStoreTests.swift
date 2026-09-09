@@ -1,6 +1,7 @@
 import XCTest
 import CoreGraphics
 import ImageIO
+import ThroDesign
 @testable import ThroJournal
 @testable import ThroApp
 
@@ -183,8 +184,11 @@ final class ClubStoreTests: XCTestCase {
         XCTAssertEqual(figures.count, 3)
         XCTAssertEqual(figures.map(\.value), ["—", "—", "—"])
         for f in figures {
-            XCTAssertNotNil(f.unavailable, "\(f.label) is a dash and does not say why")
-            XCTAssertTrue(f.unavailable?.contains("account") == true)
+            // `StatItem` and not a triple of its parts: the type makes an unexplained dash
+            // impossible to construct, which is stronger than a test asserting one is not there.
+            XCTAssertEqual(f.confidence, .unavailable, f.label)
+            XCTAssertNotNil(f.note, "\(f.label) is a dash and does not say why")
+            XCTAssertTrue(f.note?.contains("account") == true)
         }
     }
 
