@@ -24,7 +24,13 @@ public object TestDatabase {
 
     private val roles = listOf("thro_owner", "app_match", "app_trust", "app_rating", "app_read", "app_competition")
 
-    public fun migrated(): Connection {
+    public fun migrated(): Connection = migratedUpTo(Int.MAX_VALUE)
+
+    /**
+     * A database migrated only as far as `V<upTo>`, so a test can populate it the way the world
+     * looked then and prove that the next migration loses nothing. [apply] runs the rest.
+     */
+    public fun migratedUpTo(upTo: Int): Connection {
         val port = System.getenv("PGPORT") ?: "5432"
         val db = System.getenv("PGDATABASE") ?: "postgres"
         val user = System.getenv("PGUSER") ?: "postgres"
@@ -33,11 +39,23 @@ public object TestDatabase {
             for (s in schemas) st.execute("DROP SCHEMA IF EXISTS $s CASCADE")
             for (r in roles) st.execute("DROP ROLE IF EXISTS $r")
         }
-        migrationsDir().listFiles { f -> f.extension == "sql" }?.sortedBy { it.name }?.forEach { f ->
+        migrations().filter { versionOf(it) <= upTo }.forEach { f ->
             c.createStatement().use { it.execute(f.readText()) }
         }
         return c
     }
+
+    /** Applies every migration after [after], in order, on an existing connection. */
+    public fun apply(c: Connection, after: Int) {
+        migrations().filter { versionOf(it) > after }.forEach { f ->
+            c.createStatement().use { it.execute(f.readText()) }
+        }
+    }
+
+    private fun migrations(): List<File> =
+        migrationsDir().listFiles { f -> f.extension == "sql" }?.sortedBy { it.name }.orEmpty()
+
+    private fun versionOf(f: File): Int = f.name.removePrefix("V").substringBefore("__").toInt()
 
     private fun migrationsDir(): File =
         generateSequence(File(".").absoluteFile) { it.parentFile }

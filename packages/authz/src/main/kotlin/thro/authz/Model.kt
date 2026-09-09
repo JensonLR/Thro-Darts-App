@@ -9,7 +9,8 @@ package thro.authz
  * and venue scorer, which the approved design shows happening on day one.
  */
 public enum class ObjectType {
-    ORGANISATION, LEAGUE, SEASON, DIVISION, TEAM, EVENT, DRAW, MATCH, BOARD, VENUE, PLAYER,
+    ORGANISATION, LEAGUE, LEAGUE_SEASON, DIVISION, TEAM, EVENT, TOURNAMENT, SERIES, SERIES_SEASON,
+    DRAW, MATCH, BOARD, VENUE, PLAYER,
 }
 
 public data class ObjectRef(val type: ObjectType, val id: String) {

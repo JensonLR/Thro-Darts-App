@@ -21,7 +21,18 @@ if [ "$already" = "0" ]; then
     else bad "applied $(basename "$f")" "$(echo "$out" | grep -i ERROR | head -1)"; fi
   done
 else
-  ok "schema already present — migrations skipped"
+  # The schema exists, so the migrations are not re-applied — but a database migrated by an EARLIER
+  # checkout is behind this one, and every property of a newer table would then fail for the wrong
+  # reason. The newest table is the sentinel; a database without it must be rebuilt, not tested.
+  latest=$(ls "$(dirname "$0")"/../migrations/V*.sql | sort | tail -1)
+  sentinel=$($PSQL -c "SELECT count(*) FROM information_schema.tables
+    WHERE table_schema='competition' AND table_name='league_fixture';")
+  if [ "$sentinel" = "1" ]; then
+    ok "schema already present and current through $(basename "$latest") — migrations skipped"
+  else
+    bad "schema already present" "but behind $(basename "$latest"); drop the schemas (as the test harness does) and rerun"
+    echo "  $PASS passed, $FAIL failed"; exit 1
+  fi
 fi
 
 # Fresh identifiers per run, so the suite is idempotent. CI always gets a clean database, but a
@@ -403,6 +414,66 @@ r=$($PSQL -c "SET ROLE app_competition; UPDATE identity.device SET revoked_at = 
 if echo "$r" | grep -qi 'cannot be undone'; then
   ok "a device revocation cannot be undone"
 else bad "a device revocation cannot be undone" "un-revoking was permitted"; fi
+
+echo "== the organisational graph: Team, Venue, League, Tournament, Series (ADR-016) =="
+# No application role may delete history anywhere in the competition schema, on any table —
+# including ones a later migration adds, which is what the default privilege is for.
+n=$($PSQL -c "SELECT count(*) FROM information_schema.role_table_grants
+  WHERE table_schema='competition' AND privilege_type IN ('DELETE','TRUNCATE') AND grantee LIKE 'app\_%';")
+check "no application role holds DELETE or TRUNCATE on any competition table" "$n" "0"
+$PSQL -c "SET ROLE thro_owner; CREATE TABLE competition.zz_later_org (id int);" >/dev/null 2>&1
+n=$($PSQL -c "SELECT count(*) FROM information_schema.role_table_grants
+  WHERE table_schema='competition' AND table_name='zz_later_org' AND privilege_type IN ('DELETE','TRUNCATE')
+    AND grantee LIKE 'app\\_%';")
+check "a competition table added by a FUTURE migration is not deletable either" "$n" "0"
+
+# A tournament is not a league, structurally: the two families of tables share no foreign key.
+n=$($PSQL -c "SELECT count(*) FROM information_schema.columns WHERE table_schema='competition'
+  AND table_name IN ('event','entry','check_in','bracket_tie') AND column_name='league_season_id';")
+check "no event, entry, check-in or bracket tie references a league season" "$n" "0"
+n=$($PSQL -c "SELECT count(*) FROM information_schema.columns WHERE table_schema='competition'
+  AND table_name IN ('league_fixture','team_affiliation','player_registration') AND column_name='event_id';")
+check "no league fixture, affiliation or registration references an event" "$n" "0"
+n=$($PSQL -c "SELECT count(*) FROM information_schema.tables WHERE table_schema='competition' AND table_name='fixture';")
+check "the table that was misnamed 'fixture' is gone; the bracket tie is bracket_tie" "$n" "0"
+n=$($PSQL -c "SELECT count(*) FROM information_schema.tables WHERE table_schema='competition' AND table_name LIKE '%standing%';")
+check "no standings table lives beside the competition tables (they are projections)" "$n" "0"
+
+# THRØ ID holds no personal data: the only text on a player is a fixed vocabulary.
+n=$($PSQL -c "SELECT string_agg(column_name, ',') FROM information_schema.columns
+  WHERE table_schema='competition' AND table_name='player' AND data_type IN ('text','character varying');")
+check "a player row carries no free text — a name lives in identity, reached through a claim" "$n" "source"
+
+# Membership and registration share no key.
+n=$($PSQL -c "SELECT count(*) FROM information_schema.columns WHERE table_schema='competition'
+  AND table_name='player_registration' AND column_name LIKE '%membership%';")
+check "a registration does not reference a membership" "$n" "0"
+
+# Closing a dated relationship is the only change permitted, and it happens once.
+TEAM=$($PSQL -c "SELECT gen_random_uuid();"); VEN=$($PSQL -c "SELECT gen_random_uuid();"); TEN=$($PSQL -c "SELECT gen_random_uuid();")
+$PSQL -c "SET ROLE app_competition;
+  INSERT INTO competition.team (team_id, name) VALUES ('$TEAM','Riverside A');
+  INSERT INTO competition.venue (venue_id, name) VALUES ('$VEN','Riverside Club');
+  INSERT INTO competition.team_venue_tenure (tenure_id, team_id, venue_id, kind, valid_from)
+    VALUES ('$TEN','$TEAM','$VEN','home', now() - interval '1 year');
+  UPDATE competition.team_venue_tenure SET valid_until = now() WHERE tenure_id='$TEN';" >/dev/null 2>&1
+r=$($PSQL -c "SET ROLE app_competition; UPDATE competition.team_venue_tenure SET valid_until = NULL WHERE tenure_id='$TEN';" 2>&1)
+if echo "$r" | grep -qi 'closed relationship'; then ok "a closed tenure cannot be reopened"
+else bad "a closed tenure cannot be reopened" "${r:-reopening was permitted}"; fi
+r=$($PSQL -c "SET ROLE app_competition; DELETE FROM competition.team_venue_tenure WHERE tenure_id='$TEN';" 2>&1)
+if echo "$r" | grep -qi 'permission denied'; then ok "a tenure cannot be deleted"
+else bad "a tenure cannot be deleted" "${r:-deletion was permitted}"; fi
+n=$($PSQL -c "SELECT count(*) FROM competition.team_name WHERE team_id='$TEAM';")
+check "a team's name is kept with a period from the moment it is created" "$n" "1"
+
+# The ambiguous 'season' object type is gone from authorization; league_season replaces it.
+r=$($PSQL -c "SET ROLE app_competition; INSERT INTO authz.relation (subject_id, relation, object_type, object_id)
+  VALUES (gen_random_uuid(),'admin','season','x');" 2>&1)
+if echo "$r" | grep -qi 'violates check constraint'; then ok "'season' is no longer an authorization object type"
+else bad "'season' is no longer an authorization object type" "it was accepted"; fi
+r=$($PSQL -c "SET ROLE app_competition; DELETE FROM authz.relation;" 2>&1)
+if echo "$r" | grep -qi 'permission denied'; then ok "an authorization relation is revoked, never deleted"
+else bad "an authorization relation is revoked, never deleted" "${r:-deletion was permitted}"; fi
 
 echo
 echo "-------------------------------------------"

@@ -33,6 +33,10 @@ class CompetitionTest {
         val c = migrated()
         val comp = Competitions(c)
         val grants = Grants(c)
+        val orgs = Organisations(c)
+        // An entrant is a player record, not a bare identifier: the entry table's foreign key
+        // refuses anything else, which is what makes entrant typing real rather than nominal.
+        fun newPlayer(): UUID = orgs.createPlayer(source = "organiser")
         var passed = 0
         fun check(name: String, cond: Boolean) {
             assertTrue(cond, "FAILED: $name")
@@ -46,7 +50,7 @@ class CompetitionTest {
         val ends = starts.plus(10, ChronoUnit.HOURS)
         comp.openEvent(eventId, "County Open", starts, ends, "The Red Lion")
 
-        val alice = UUID.randomUUID()
+        val alice = newPlayer()
         val device = UUID.randomUUID()
         comp.enter(eventId, alice, seed = 1)
 
@@ -88,7 +92,7 @@ class CompetitionTest {
         // --- the draw, on the field size the design got wrong -------------------------------------
         val big = UUID.randomUUID()
         comp.openEvent(big, "74 entrants", starts, ends)
-        repeat(74) { comp.enter(big, UUID.randomUUID(), seed = it + 1) }
+        repeat(74) { comp.enter(big, newPlayer(), seed = it + 1) }
         val fixtures = comp.draw(big)
 
         val math = Bracket.math(74)
@@ -98,7 +102,7 @@ class CompetitionTest {
         check("the draw makes one fixture per bye plus one per match", fixtures.size == 54 + 10)
 
         c.prepareStatement(
-            "SELECT count(*) FILTER (WHERE is_bye), count(*) FILTER (WHERE NOT is_bye) FROM competition.fixture WHERE event_id = ?",
+            "SELECT count(*) FILTER (WHERE is_bye), count(*) FILTER (WHERE NOT is_bye) FROM competition.bracket_tie WHERE event_id = ?",
         ).use { ps ->
             ps.setObject(1, big)
             ps.executeQuery().use { rs ->
@@ -118,7 +122,7 @@ class CompetitionTest {
         )
         val r = try {
             c.prepareStatement(
-                "UPDATE competition.fixture SET match_id = ? WHERE event_id = ? AND is_bye",
+                "UPDATE competition.bracket_tie SET match_id = ? WHERE event_id = ? AND is_bye",
             ).use { ps ->
                 ps.setObject(1, realMatch); ps.setObject(2, big)
                 ps.executeUpdate()
@@ -129,12 +133,24 @@ class CompetitionTest {
         }
         check("a bye can never be given a match", r)
 
+        // Entrant typing: a player cannot be entered into a pairs event, and the refusal is the
+        // database's, not only the sealed type's — the foreign key onto the event's declared kind.
+        val pairs = UUID.randomUUID()
+        comp.openEvent(pairs, "Pairs Open", starts, ends, entrantKind = thro.competition.EntrantKind.PAIR)
+        val wrongKind = try {
+            comp.enter(pairs, newPlayer())
+            false
+        } catch (e: org.postgresql.util.PSQLException) {
+            e.message!!.contains("entry_kind_is_the_event_kind")
+        }
+        check("a pairs event refuses a single-player entry", wrongKind)
+
         // Two competitors cannot share a seed: a non-deterministic draw is uncheckable afterwards.
         val dup = UUID.randomUUID()
         comp.openEvent(dup, "seeds", starts, ends)
-        comp.enter(dup, UUID.randomUUID(), seed = 1)
+        comp.enter(dup, newPlayer(), seed = 1)
         val clash = try {
-            comp.enter(dup, UUID.randomUUID(), seed = 1)
+            comp.enter(dup, newPlayer(), seed = 1)
             false
         } catch (e: org.postgresql.util.PSQLException) {
             e.message!!.contains("entry_seed_unique")
@@ -142,6 +158,6 @@ class CompetitionTest {
         check("two competitors cannot hold the same seed", clash)
 
         println("  $passed competition properties held")
-        assertEquals(15, passed)
+        assertEquals(16, passed)
     }
 }

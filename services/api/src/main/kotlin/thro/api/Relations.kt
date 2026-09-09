@@ -22,7 +22,8 @@ public class Relations(private val connection: Connection) {
         connection.prepareStatement(
             """
             INSERT INTO authz.relation (subject_id, relation, object_type, object_id, granted_by)
-            VALUES (?, ?, ?, ?, ?) ON CONFLICT DO NOTHING
+            VALUES (?, ?, ?, ?, ?)
+            ON CONFLICT (subject_id, relation, object_type, object_id) WHERE revoked_at IS NULL DO NOTHING
             """.trimIndent(),
         ).use { ps ->
             ps.setObject(1, subject)
@@ -34,18 +35,24 @@ public class Relations(private val connection: Connection) {
         }
     }
 
-    /** Revocation is a delete, and it takes effect on the very next request. */
-    public fun revoke(subject: UUID, relation: String, obj: ObjectRef) {
+    /**
+     * Revocation takes effect on the very next request, and it is recorded rather than deleted:
+     * who was captain last season is team history, and "who could have done this" fourteen months
+     * on (ADR-008) needs the tuple that existed then.
+     */
+    public fun revoke(subject: UUID, relation: String, obj: ObjectRef, by: UUID? = null) {
         connection.prepareStatement(
             """
-            DELETE FROM authz.relation
+            UPDATE authz.relation SET revoked_at = clock_timestamp(), revoked_by = ?
              WHERE subject_id = ? AND relation = ? AND object_type = ? AND object_id = ?
+               AND revoked_at IS NULL
             """.trimIndent(),
         ).use { ps ->
-            ps.setObject(1, subject)
-            ps.setString(2, relation)
-            ps.setString(3, obj.type.name.lowercase())
-            ps.setString(4, obj.id)
+            ps.setObject(1, by)
+            ps.setObject(2, subject)
+            ps.setString(3, relation)
+            ps.setString(4, obj.type.name.lowercase())
+            ps.setString(5, obj.id)
             ps.executeUpdate()
         }
     }
@@ -70,7 +77,7 @@ public class Relations(private val connection: Connection) {
         connection.prepareStatement(
             """
             SELECT subject_id FROM authz.relation
-             WHERE relation = ? AND object_type = ? AND object_id = ?
+             WHERE relation = ? AND object_type = ? AND object_id = ? AND revoked_at IS NULL
             """.trimIndent(),
         ).use { ps ->
             ps.setString(1, relation)

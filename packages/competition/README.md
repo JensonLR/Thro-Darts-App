@@ -1,6 +1,7 @@
 # THRØ competition
 
-Competitors, brackets, byes and standings. Pure domain, no dependencies.
+Competitors, brackets, byes, standings, and the organisational vocabulary — Team, Venue, League,
+Tournament, Series and the dated relationships between them (ADR-016). Pure domain, no dependencies.
 
 ```bash
 gradle test
@@ -42,3 +43,20 @@ match in any rating model trained on it.
 
 Drawn fixtures are representable even though the current format's odd leg counts make them
 impossible — "no draws" must not become an invariant of the aggregate.
+
+## The organisational vocabulary (`Organisation.kt`)
+
+There is no `Club`. A **Team** is the competitive organisation whatever it calls itself; a **Venue**
+is the place; the relationship between them is a dated **Tenure**, so `TeamHistory.moveHome` closes
+one tenure and opens another and never touches the team. **Membership** (player ↔ team) and
+**Registration** (player ↔ league season, under an approved policy) share no field beyond the
+player; `Eligibility.isRegistered` takes no membership as input. **LeagueSeason** and **Event** are
+the two arms of a sealed `Competition`, so a `when` must name both. **Entrant** is sealed over
+player, pair and team, and an `Entry` refuses an entrant of the wrong kind for its event at
+construction — the database refuses it again with a foreign key. A **SeriesSeason** holds event
+identifiers and nothing a league has.
+
+`Period` is half-open, `[from, until)`, and `closedAt` is the only change it permits — once.
+
+The match-time `Competitor.Team` is the **lineup** a team fields in one match, not the organisation.
+Both exist on purpose (ADR-012, ADR-016).

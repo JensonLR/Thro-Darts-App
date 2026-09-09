@@ -79,3 +79,21 @@ created a second event — which is exactly the failure that would corrupt a mat
 export PGHOST=… PGPORT=… PGUSER=… PGDATABASE=…
 gradle test        # skips cleanly, rather than passing silently, when no database is configured
 ```
+
+## The organisational graph
+
+V014 adds Team, Venue, League, League season, Division, Tournament, Series and the dated
+relationships between them, renames the bracket tie that was called `fixture`, and types every
+entry (ADR-016). `Organisations` is the store-side API; `OrganisationTest` asserts against a real
+PostgreSQL that a team keeps its identity across a venue move, that one venue hosts several teams,
+that a player may belong to several teams, that membership and registration are independent, that
+closed relationships are frozen and undeletable, that a league season is not a league and a
+tournament is not a league (by schema shape), that entrants are exactly one kind, that a series
+holds events and nothing else, that an approved policy is frozen and two approved versions never
+overlap, that a fixture's schedule changes are logged and its outcomes appended, and that an
+authorization relation is revoked rather than deleted.
+
+`MigrationTest` migrates a database only as far as V013, populates it the way the world looked
+then — free-text venue, bare competitor identifiers, a draw with byes, a check-in and its grant, an
+authorization tuple — applies V014, and reads every row back. THRØ has never run, and the habit is
+formed before it does.

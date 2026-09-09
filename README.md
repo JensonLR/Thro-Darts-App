@@ -12,8 +12,14 @@ are, the tools to improve, and the competition to prove it.
 
 THRØ is a competitive infrastructure platform for darts — not a scorer, not a tournament
 app, not a statistics app. It connects players, matches, visits, legs, sets, teams,
-leagues, seasons, tournaments, venues, boards, ratings, trust and evidence into a single
+leagues, seasons, tournaments, series, venues, boards, ratings, trust and evidence into a single
 competitive graph.
+
+**One organisation concept, one place concept.** A **Team** is the competitive organisation
+whatever it calls itself — darts team, darts club, pub team, side. A **Venue** is where darts is
+played. There is no `Club` in the model: it is a word people use for one or the other (ADR-016).
+A team that moves venue keeps its identity and history; membership of a team and registration in a
+league are different facts; a tournament is not a league; a series links events without becoming one.
 
 The product exists to help a player answer four questions:
 
@@ -39,6 +45,8 @@ database.
 | 8 | Rating | Architecture closed — a replayable projection. **The model is OD-001 and stays open** |
 | 9 | Organiser | Correction and adjudication closed, both under the conflict-of-interest rule |
 | 10+ | Live, notifications, payments | Not started — each waits on a product decision |
+| **A** | **Connected competitive graph** | **Closed** — Team, Venue, League season, Tournament, Series, membership, registration, policy; hostile-reviewed before the migration was cut (`docs/product/CONNECTED_PLATFORM_EXECUTION_PLAN.md`) |
+| B | Network identity and sync | Next — the founder decision pack is §9 of the execution plan |
 
 **What is verified, and how:**
 
@@ -50,9 +58,9 @@ database.
 | Trust and eligibility | 30 tests — a label can never disagree with the provenance under it |
 | Authorization | 21 tests — the conflict-of-interest rule, and age as a dimension |
 | Rating projection | 14 tests — reproducible from a watermark pair; OD-001 stays open |
-| Competition structure | 13 tests — bracket identities exhaustive for every field size to 1024 |
-| Schema and privileges | 71 property assertions against a real PostgreSQL |
-| Command path | 9 integration suites, 132 properties end to end against a real PostgreSQL |
+| Competition structure | 24 tests — bracket identities exhaustive for every field size to 1024, and the organisational vocabulary as pure types |
+| Schema and privileges | 85 property assertions against a real PostgreSQL |
+| Command path and organisations | 11 integration suites against a real PostgreSQL, including V014 applied over a populated V013 database with nothing lost |
 | Design tokens | 50 contrast pairs, absolute thresholds, 0 unrecorded breaches |
 | Design components | 61 components audited mechanically against a baseline ratchet |
 
@@ -75,7 +83,8 @@ packages/
   engine-swift/   The same engine in Swift — ADR-002's spike, same corpus
   durability-probe/  Measures the cost of ADR-006's durability rule, on device
   statistics/     Figures that say when they cannot be computed honestly
-  competition/    Bracket structure — byes, rounds, walkovers
+  competition/    Bracket structure — byes, rounds, walkovers — and the organisational
+                  vocabulary: Team, Venue, League season, Tournament, Series, membership, registration
   trust/          Provenance, derived verification, rating eligibility, reconciliation
   authz/          Relationship-based authorization, and age as a dimension
   rating/         Rating as a versioned replayable projection
@@ -83,12 +92,13 @@ packages/
 services/
   api/            Migrations, the command path, and the playtest harness
 docs/
-  adr/            15 architecture decision records
+  adr/            16 architecture decision records
   architecture/   Conformance corpus spec, latency budgets
   design/         Design authority — provenance, inventory, contrast matrix,
                   token health, what the system does not specify
     extracted/    Token layer, 61 components, 33 participant + 9 organiser screens
-  product/        Glossary, decisions taken, decisions open, rating research harness
+  product/        Glossary, decisions taken, decisions open, rating research harness,
+                  and the connected-platform execution plan
 FOUNDATION_ACCEPTANCE.md   Gate 0 report
 ```
 
@@ -206,6 +216,14 @@ is removed.
 | A statistic that cannot be computed says so | `Basis.EXACT` / `BOUNDED` / `UNAVAILABLE` |
 | Personal data lives in one place | `identity` schema; match, trust and rating cannot read it |
 | Age is available at every decision | A parameter of `Authorizer.check`, not a lookup inside it |
+| A team keeps its identity when it moves venue | The venue is a dated tenure row; nothing on `competition.team` changes |
+| Organisational history is never deleted | No app role holds `DELETE` on any competition table, present or future; closed rows are frozen by trigger |
+| Membership is not registration | The two tables share no key; `Eligibility.isRegistered` takes no membership |
+| A tournament is not a league | No event, entry, check-in or bracket tie references a league season, and no fixture, affiliation or registration references an event — asserted from `information_schema` |
+| An entrant is exactly one of player, pair, team | CHECK plus a foreign key onto the event's declared kind; the competitor id is generated |
+| An approved rule cannot be rewritten | Trigger freezes an approved policy; an exclusion constraint forbids two approved versions in force on one day |
+| A fixture result cannot change without a trail | Outcomes are appended decisions that supersede, never edit; schedule changes are logged by trigger |
+| A player row holds no personal data | The only text column is a fixed vocabulary; the name lives in `identity`, bound through a revocable claim |
 
 ## What is deliberately not decided here
 
