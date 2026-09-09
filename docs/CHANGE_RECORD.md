@@ -1828,3 +1828,33 @@ reason when there is not.
 Worth writing down because of the shape of it: a test that fails is not always a defect in the code.
 This one was a defect in my description of the code, and it went in during a rebuild of that very
 screen — the moment I was most likely to assume I already knew how it drew.
+
+## Two keypads, one command — held end to end at last
+
+The PR description says *"two keypads, one command"*, and until now nothing held it. It is the claim
+the whole per-dart design rests on: the engine scores a visit, three darts are evidence attached to
+it, so a visit entered as darts and the same visit typed as a total must reach the journal as the
+same row. If they can diverge, a player's figures depend on which keypad they happened to be using —
+which is the one thing this design exists to make impossible.
+
+Two tests, over a checkout, a score from a finish and a visit that missed everything: same visit
+total, same darts at a double, same bust, same remainder, same leg, same seat.
+
+**The one column they may differ in is `dartsUsed`, and only in one direction.** PD-001 asks how many
+darts were used *only on a visit that finished*, because that is the only visit whose count is
+ambiguous — so a typed total that merely scored records nil where the darts record three. Writing
+the test is what made that precise: the first version asserted plain equality and would have failed,
+correctly, on a case where the darts carry **more** evidence than the prompt ever offered to collect.
+The assertion states the relation instead: they may never disagree about a *number*; the darts may
+only fill in a blank.
+
+The second test closes the loop from the other side: the evidence the darts supply is the answer the
+prompt would have got by asking. A 141 finish on `T20 T19 D12` is three darts with **one** at a
+double — PD-001's own worked example, applied to a checkout a player actually hits — and the prompt
+raised by typing 141 offers exactly that.
+
+`check_module_imports.py` earned its keep again on the way: the helper's signature names `ThroDart`
+and `ThroDartEntry`, which are `ThroDesign`'s, and the file had no import for them. One second on
+Linux instead of four minutes on a runner.
+
+573 tests.

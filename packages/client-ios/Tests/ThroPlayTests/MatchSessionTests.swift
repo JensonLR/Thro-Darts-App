@@ -1,4 +1,5 @@
 import XCTest
+import ThroDesign
 import ThroEngine
 import ThroJournal
 import ThroStatistics
@@ -907,6 +908,94 @@ final class MatchSessionTests: XCTestCase {
         XCTAssertEqual(s.ledger[0].visitTotal, 180)
         XCTAssertEqual(s.ledger[0].remainingAfter, 321)
         XCTAssertFalse(s.ledger[0].struck)
+    }
+
+
+    /// The two keypads, one command.
+    ///
+    /// **This is the claim the whole per-dart design rests on**, and until now nothing held it end
+    /// to end. The engine scores a visit; three darts are evidence attached to it; so a visit
+    /// entered as darts and the same visit typed as a total — with PD-001 answered the way the
+    /// darts already answer it — must reach the journal as the *same row*. If they ever diverge,
+    /// a player's figures depend on which keypad they happened to be using, which is the one thing
+    /// this design exists to make impossible.
+    private func played(_ mode: String, darts: [ThroDart], answering: (MatchSession) -> Void)
+        throws -> ReplayedVisit? {
+        let s = try session()
+        bringHomeToAFinish(s)
+        if mode == "darts" {
+            for dart in darts { s.dart(dart) }
+            s.enterDarts()
+        } else {
+            s.quick(darts.reduce(0) { $0 + $1.value })
+            answering(s)
+        }
+        return s.visits.last
+    }
+
+    func testAVisitEnteredAsDartsAndTypedAsATotalReachTheJournalAsTheSameRow() throws {
+        // The one column they are allowed to differ in is `dartsUsed`, and the assertion below
+        // states exactly how — see the comment there.
+        // Each case is (the darts, the answers a player would give to PD-001 for that visit).
+        // 141 is where `bringHomeToAFinish` leaves the thrower.
+        let cases: [(name: String, darts: [ThroDart], used: Int?, atDouble: Int?)] = [
+            ("checkout in three", [.treble(20)!, .treble(19)!, .double(12)!], 3, 1),
+            ("scored from a finish", [.treble(20)!, .single(1)!, .single(5)!], nil, 0),
+            ("missed the lot",      [.miss, .miss, .miss],                    nil, 0),
+        ]
+        for c in cases {
+            let asDarts = try played("darts", darts: c.darts) { _ in }
+            let asTotal = try played("total", darts: c.darts) { s in
+                // The prompts come in the order PD-001 defines: darts used only on a finish, then
+                // darts at a double. Answering `nil` is "not sure", which is not what a player who
+                // entered their darts would say, so each case answers with what the darts say.
+                if case .dartsUsed = s.prompt { s.answer(c.used) }
+                if case .dartsAtDouble = s.prompt { s.answer(c.atDouble) }
+            }
+            guard let a = asDarts, let b = asTotal else { return XCTFail("no visit for \(c.name)") }
+            XCTAssertEqual(a.visitTotal, b.visitTotal, c.name)
+            XCTAssertEqual(a.dartsAtDouble, b.dartsAtDouble, "\(c.name): dartsAtDouble")
+            // **`dartsUsed` is the one column where they may differ, and only in one direction.**
+            // PD-001 asks how many darts were used *only on a visit that finished*, because that
+            // is the only visit whose count is ambiguous — so a typed total that scored or missed
+            // records nil. The darts know, and the engine accepts three on any visit. They may
+            // never disagree about a NUMBER; the darts may only fill in a blank the prompt never
+            // offered to ask about.
+            if let typed = b.dartsUsed {
+                XCTAssertEqual(a.dartsUsed, typed, "\(c.name): dartsUsed")
+            } else {
+                XCTAssertEqual(a.dartsUsed, ThroDartEntry.perVisit,
+                               "\(c.name): the darts filled in something other than the whole hand")
+            }
+            XCTAssertEqual(a.bust, b.bust, "\(c.name): bust")
+            XCTAssertEqual(a.remainingBefore, b.remainingBefore, c.name)
+            XCTAssertEqual(a.remainingAfter, b.remainingAfter, c.name)
+            XCTAssertEqual(a.wonLeg, b.wonLeg, c.name)
+            XCTAssertEqual(a.seat, b.seat, c.name)
+        }
+    }
+
+    func testTheEvidenceTheDartsSupplyIsWhatAPlayerWouldHaveAnswered() throws {
+        // The other half of the claim above: the answers the darts produce are the answers PD-001
+        // would have got by asking. A 141 finish on `T20 T19 D12` is three darts with ONE at a
+        // double — PD-001's own worked example, applied to the case a player actually hits.
+        let s = try session()
+        bringHomeToAFinish(s)
+        let entry = ThroDartEntry([ThroDart.treble(20)!, ThroDart.treble(19)!, ThroDart.double(12)!])
+        let carried = DartVisit.evidence(entry, from: s.remaining(.home), outRule: s.record.outRule)
+        XCTAssertEqual(carried.dartsUsed, 3)
+        XCTAssertEqual(carried.dartsAtDouble, 1)
+        // And the prompt a typed total raises offers exactly that answer.
+        s.quick(141)
+        guard case .dartsUsed = s.prompt else { return XCTFail("no darts-used prompt") }
+        XCTAssertTrue(s.prompt?.options.contains(3) ?? false)
+        s.answer(3)
+        guard case let .dartsAtDouble(_, used, finished) = s.prompt else {
+            return XCTFail("no darts-at-a-double prompt")
+        }
+        XCTAssertEqual(used, 3)
+        XCTAssertTrue(finished)
+        XCTAssertTrue(s.prompt?.options.contains(1) ?? false)
     }
 
 }
