@@ -9,58 +9,75 @@ import java.time.LocalDate
  *
  * The one rule the whole module exists to keep: **THRØ is never the sporting authority.** It can
  * say a submission was prepared, sent and delivered because it did those things and holds the
- * evidence. It cannot say a submission was acknowledged or accepted; only a named person on the
- * receiving side can, and the transition records who. A green tick that THRØ awarded itself would
- * be the lie this product exists to remove from grassroots administration.
+ * evidence. It cannot say a submission was acknowledged or accepted; only a named person who
+ * administers the receiving side can, and the transition records who. A green tick that THRØ
+ * awarded itself would be the lie this product exists to remove from grassroots administration.
  */
 
 // --- Requirements ---------------------------------------------------------------------------------
 
 /**
  * A fact a league may require of a player before registering them, limited to facts THRØ can
- * actually check. A requirement THRØ cannot check is not silently passed: `RegistrationPolicy.parse`
- * refuses it, and the league's policy must say how it is met outside THRØ.
+ * actually check. A requirement THRØ cannot check is not silently passed: it is a **manual
+ * requirement**, satisfied only by a named person confirming it with a note, and rendered as a
+ * manual step rather than a tick THRØ awarded.
  */
 public enum class RegistrationFact { NAME, AGE_BAND, ACCOUNT_CLAIMED, CONSENT }
 
 /** How a season's registration deadline is expressed. */
 public sealed interface RegistrationDeadline {
     public data class On(val date: LocalDate) : RegistrationDeadline
-    /** Relative to the team's first fixture in the season. Resolved when the task is created, then fixed. */
+    /** Relative to the team's first fixture in the season. Recomputed when that fixture moves, and the change logged. */
     public data class DaysBeforeFirstFixture(val days: Int) : RegistrationDeadline {
         init { require(days >= 0) { "a deadline is before the fixture, not after" } }
     }
     public data object None : RegistrationDeadline
+
+    /** The rule as the task stores it, so it can be recomputed later. */
+    public val rule: String? get() = when (this) {
+        is On -> "on:$date"
+        is DaysBeforeFirstFixture -> "days_before_first_fixture:$days"
+        None -> null
+    }
 }
 
-/** An approved registration policy, parsed into the facts THRØ can check. */
+/** An approved registration policy, parsed into the facts THRØ can check plus the ones it cannot. */
 public data class RegistrationPolicy(
     val requires: Set<RegistrationFact>,
     val deadline: RegistrationDeadline,
+    /** Requirements THRØ cannot check — "passport photo" — each satisfied only by a named confirmation. */
+    val manualRequirements: List<String> = emptyList(),
     /** Whether a player may hold registrations for two teams in this season. False unless the league says so. */
     val dualRegistrationPermitted: Boolean = false,
 ) {
     public companion object {
-        private val knownKeys = setOf("requires", "registration_closes_on", "deadline_days_before_first_fixture", "dual_registration_permitted")
+        private val knownKeys = setOf(
+            "requires", "manual_requirements", "registration_closes_on", "deadline_days_before_first_fixture",
+            "dual_registration_permitted",
+        )
 
         /**
          * Parses the JSON body of a `registration` policy. Deliberately a small, strict reader:
-         * an unknown key or an unknown requirement is refused, because a rule THRØ silently
-         * ignored is a rule THRØ silently broke.
+         * an unknown key or an unknown checkable requirement is refused, because a rule THRØ
+         * silently ignored is a rule THRØ silently broke. A league that needs something THRØ
+         * cannot check lists it under `manual_requirements`, where it is a manual step by name.
          */
         public fun parse(fields: Map<String, Any?>): RegistrationPolicy {
             val unknown = fields.keys - knownKeys
             require(unknown.isEmpty()) { "registration policy has keys THRØ cannot execute: $unknown" }
             val requires = (fields["requires"] as? List<*>).orEmpty().map { key ->
-                val k = key.toString()
-                when (k) {
+                when (val k = key.toString()) {
                     "name" -> RegistrationFact.NAME
                     "age_band" -> RegistrationFact.AGE_BAND
                     "account_claim" -> RegistrationFact.ACCOUNT_CLAIMED
                     "consent" -> RegistrationFact.CONSENT
-                    else -> throw IllegalArgumentException("registration policy requires '$k', which THRØ cannot check")
+                    else -> throw IllegalArgumentException(
+                        "registration policy requires '$k', which THRØ cannot check; list it under manual_requirements",
+                    )
                 }
             }.toSet()
+            val manual = (fields["manual_requirements"] as? List<*>).orEmpty().map { it.toString() }
+            require(manual.all { it.isNotBlank() } && manual.toSet().size == manual.size) { "manual requirements are distinct and named" }
             val closes = fields["registration_closes_on"]?.toString()
             val days = (fields["deadline_days_before_first_fixture"] as? Number)?.toInt()
             require(closes == null || days == null) { "a policy states one deadline, not two" }
@@ -69,7 +86,7 @@ public data class RegistrationPolicy(
                 days != null -> RegistrationDeadline.DaysBeforeFirstFixture(days)
                 else -> RegistrationDeadline.None
             }
-            return RegistrationPolicy(requires, deadline, fields["dual_registration_permitted"] == true)
+            return RegistrationPolicy(requires, deadline, manual, fields["dual_registration_permitted"] == true)
         }
     }
 }
@@ -90,15 +107,17 @@ public data class RegistrationFacts(
                 RegistrationFact.CONSENT -> consentRecorded
             }
         }.toSet()
+
+    /** Manual requirements not yet confirmed by a named person. */
+    public fun manualOutstanding(policy: RegistrationPolicy, confirmed: Set<String>): List<String> =
+        policy.manualRequirements.filterNot { it in confirmed }
 }
 
 // --- Tasks ------------------------------------------------------------------------------------------
 
 public enum class TaskState { OPEN, WAITING_PLAYER, WAITING_OPPONENT, WAITING_LEAGUE, DONE, CANCELLED }
 
-public enum class TaskKind {
-    REGISTRATION_REQUIRED, REGISTRATION_INCOMPLETE, RESULT_SUBMISSION_DUE, REARRANGEMENT_ACKNOWLEDGEMENT_DUE,
-}
+public enum class TaskKind { REGISTRATION_REQUIRED, CONSENT_REQUIRED, RESULT_SUBMISSION_DUE, REARRANGEMENT_ANSWER_DUE, MANUAL }
 
 /** The captain's inbox headings, derived from state and deadline — never stored. */
 public enum class InboxSection { ACTION_REQUIRED, DUE_TODAY, UPCOMING, WAITING_FOR_PLAYER, WAITING_FOR_OPPONENT, WAITING_FOR_LEAGUE, COMPLETED }
@@ -121,23 +140,28 @@ public object Inbox {
 // --- Submissions ------------------------------------------------------------------------------------
 
 public enum class SubmissionState {
-    DRAFT, READY, SUBMITTED, DELIVERED, ACKNOWLEDGED, ACCEPTED, REJECTED, ACTION_REQUIRED, WITHDRAWN,
+    DRAFT, READY, SUBMITTED, DELIVERED, DELIVERY_FAILED, ACKNOWLEDGED, ACCEPTED, ACCEPTED_CONDITIONAL,
+    REJECTED, ACTION_REQUIRED, WITHDRAWN, SUPERSEDED,
+    ;
+
+    public val isTerminal: Boolean get() = this in setOf(ACCEPTED, REJECTED, WITHDRAWN, SUPERSEDED)
 }
 
 public enum class SubmissionKind { PLAYER_REGISTRATION, RESULT, FIXTURE_REARRANGEMENT }
 
-/** How a submission travels. Ordered by the adapter priority the founder set; provenance, not prestige. */
+/** How a delivery attempt travels. Ordered by the adapter priority the founder set; provenance, not prestige. */
 public enum class Transport { API, STRUCTURED, EXPORT, DOCUMENT, EMAIL, MANUAL }
 
 /**
- * What stands behind a transition. Each kind names where the proof lives; `HUMAN_CONFIRMATION` is
- * a named person saying so, and the transition records who — it is the honest manual step, shown
- * as a manual step, never dressed as a receipt.
+ * What stands behind a transition. `DELIVERY` is an attempt row the transport code wrote;
+ * `ARTEFACT` is retained inbound material from the counterparty; `HUMAN_CONFIRMATION` is a named
+ * person saying so with a note — the honest manual step, shown as a manual step, never dressed as
+ * a receipt.
  */
-public enum class EvidenceKind { MESSAGE_ID, UPLOAD_RECEIPT, API_RESPONSE, COUNTERPARTY_MESSAGE, HUMAN_CONFIRMATION }
+public enum class EvidenceKind { DELIVERY, ARTEFACT, HUMAN_CONFIRMATION }
 
 /** Who may make a transition. */
-public enum class Mover { THRO, SUBMITTER, COUNTERPARTY }
+public enum class Mover { THRO, SUBMITTER, RECIPIENT }
 
 public data class TransitionRule(
     val from: SubmissionState,
@@ -154,27 +178,36 @@ public data class TransitionRule(
  * against each other, and so a reviewer can read the whole rule on one screen.
  */
 public object SubmissionTransitions {
-    private val delivery = setOf(EvidenceKind.MESSAGE_ID, EvidenceKind.UPLOAD_RECEIPT, EvidenceKind.API_RESPONSE, EvidenceKind.HUMAN_CONFIRMATION)
-    private val counterparty = setOf(EvidenceKind.COUNTERPARTY_MESSAGE, EvidenceKind.API_RESPONSE, EvidenceKind.HUMAN_CONFIRMATION)
+    private val delivery = setOf(EvidenceKind.DELIVERY, EvidenceKind.HUMAN_CONFIRMATION)
+    private val recipient = setOf(EvidenceKind.ARTEFACT, EvidenceKind.HUMAN_CONFIRMATION)
 
     public val RULES: List<TransitionRule> = listOf(
         TransitionRule(SubmissionState.DRAFT, SubmissionState.READY, Mover.THRO, emptySet(), actorRequired = false),
         TransitionRule(SubmissionState.READY, SubmissionState.SUBMITTED, Mover.SUBMITTER, emptySet(), actorRequired = true),
         TransitionRule(SubmissionState.SUBMITTED, SubmissionState.DELIVERED, Mover.THRO, delivery, actorRequired = false),
-        TransitionRule(SubmissionState.DELIVERED, SubmissionState.ACKNOWLEDGED, Mover.COUNTERPARTY, counterparty, actorRequired = true),
-        TransitionRule(SubmissionState.ACKNOWLEDGED, SubmissionState.ACCEPTED, Mover.COUNTERPARTY, counterparty, actorRequired = true),
-        TransitionRule(SubmissionState.ACKNOWLEDGED, SubmissionState.REJECTED, Mover.COUNTERPARTY, counterparty, actorRequired = true),
-        TransitionRule(SubmissionState.ACKNOWLEDGED, SubmissionState.ACTION_REQUIRED, Mover.COUNTERPARTY, counterparty, actorRequired = true),
+        TransitionRule(SubmissionState.SUBMITTED, SubmissionState.DELIVERY_FAILED, Mover.THRO, setOf(EvidenceKind.DELIVERY), actorRequired = false),
+        TransitionRule(SubmissionState.DELIVERY_FAILED, SubmissionState.READY, Mover.SUBMITTER, emptySet(), actorRequired = true),
+        TransitionRule(SubmissionState.DELIVERED, SubmissionState.ACKNOWLEDGED, Mover.RECIPIENT, recipient, actorRequired = true),
+        TransitionRule(SubmissionState.ACKNOWLEDGED, SubmissionState.ACCEPTED, Mover.RECIPIENT, recipient, actorRequired = true),
+        TransitionRule(SubmissionState.ACKNOWLEDGED, SubmissionState.ACCEPTED_CONDITIONAL, Mover.RECIPIENT, recipient, actorRequired = true),
+        TransitionRule(SubmissionState.ACKNOWLEDGED, SubmissionState.REJECTED, Mover.RECIPIENT, recipient, actorRequired = true),
+        TransitionRule(SubmissionState.ACKNOWLEDGED, SubmissionState.ACTION_REQUIRED, Mover.RECIPIENT, recipient, actorRequired = true),
+        TransitionRule(SubmissionState.ACCEPTED_CONDITIONAL, SubmissionState.ACCEPTED, Mover.RECIPIENT, recipient, actorRequired = true),
         TransitionRule(SubmissionState.ACTION_REQUIRED, SubmissionState.READY, Mover.SUBMITTER, emptySet(), actorRequired = true),
         TransitionRule(SubmissionState.READY, SubmissionState.WITHDRAWN, Mover.SUBMITTER, emptySet(), actorRequired = true),
         TransitionRule(SubmissionState.SUBMITTED, SubmissionState.WITHDRAWN, Mover.SUBMITTER, emptySet(), actorRequired = true),
-        TransitionRule(SubmissionState.DELIVERED, SubmissionState.WITHDRAWN, Mover.SUBMITTER, emptySet(), actorRequired = true),
+        TransitionRule(SubmissionState.DELIVERY_FAILED, SubmissionState.WITHDRAWN, Mover.SUBMITTER, emptySet(), actorRequired = true),
         TransitionRule(SubmissionState.ACTION_REQUIRED, SubmissionState.WITHDRAWN, Mover.SUBMITTER, emptySet(), actorRequired = true),
-    )
+    ) + SubmissionState.entries.filterNot { it.isTerminal }.map {
+        // The subject was superseded (a voided result); THRØ closes what carried it.
+        TransitionRule(it, SubmissionState.SUPERSEDED, Mover.THRO, emptySet(), actorRequired = false)
+    }
 
-    /** The states THRØ may never take a submission past on its own. */
-    public val NEVER_BY_THRO: Set<SubmissionState> =
-        setOf(SubmissionState.ACKNOWLEDGED, SubmissionState.ACCEPTED, SubmissionState.REJECTED, SubmissionState.ACTION_REQUIRED)
+    /** The states THRØ, or the team that sent the submission, may never reach on its own. */
+    public val NEVER_BY_THRO: Set<SubmissionState> = setOf(
+        SubmissionState.ACKNOWLEDGED, SubmissionState.ACCEPTED, SubmissionState.ACCEPTED_CONDITIONAL,
+        SubmissionState.REJECTED, SubmissionState.ACTION_REQUIRED,
+    )
 
     public sealed interface Verdict {
         public data object Permitted : Verdict
@@ -189,6 +222,9 @@ public object SubmissionTransitions {
         }
         if (rule.evidence.isNotEmpty() && (evidence == null || evidence !in rule.evidence)) {
             return Verdict.Refused("${to.name.lowercase()} needs evidence of kind ${rule.evidence.joinToString("|") { it.name.lowercase() }}")
+        }
+        if (evidence == EvidenceKind.HUMAN_CONFIRMATION && !actorNamed) {
+            return Verdict.Refused("a human confirmation names the human")
         }
         return Verdict.Permitted
     }

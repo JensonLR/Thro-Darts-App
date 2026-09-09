@@ -153,7 +153,7 @@ class OrganisationTest {
             """{"requires":["full_name","date_of_birth"],"deadline_days_before_first_fixture":7}""",
             provenance = "manual", by = admin,
         )
-        check("registering under a draft policy is refused", refused("registered_under_a_policy") {
+        check("registering under a draft policy is refused", refused("approved and in force") {
             c.prepareStatement(
                 """
                 INSERT INTO competition.player_registration
@@ -184,13 +184,6 @@ class OrganisationTest {
         check("and still says which team it was for", c.prepareStatement(
             "SELECT team_id FROM competition.player_registration WHERE registration_id = ?",
         ).use { ps -> ps.setObject(1, reg); ps.executeQuery().use { rs -> rs.next(); rs.getObject(1) == riversideA } })
-        // A transfer is a new registration superseding the old, not an edit.
-        orgs.endRegistration(reg, at = t2, reason = "transferred")
-        val transfer = orgs.register(sam, s2026, grangeA, draft, from = t2, supersedes = reg)
-        check("a transfer supersedes rather than rewrites", transfer != reg && orgs.isRegistered(sam, s2026, t2.plusSeconds(1)))
-        check("the superseded registration's team is still on record", c.prepareStatement(
-            "SELECT team_id, valid_until FROM competition.player_registration WHERE registration_id = ?",
-        ).use { ps -> ps.setObject(1, reg); ps.executeQuery().use { rs -> rs.next(); rs.getObject(1) == riversideA && rs.getTimestamp(2) != null } })
 
         // --- 12. Approved policy is frozen ---------------------------------------------------------
         check("an approved policy's body cannot change", refused("cannot be rewritten") {
@@ -217,6 +210,21 @@ class OrganisationTest {
         check("once the first is closed the second may be approved", c.prepareStatement(
             "SELECT approval_state FROM competition.policy WHERE policy_id = ?",
         ).use { ps -> ps.setObject(1, v2); ps.executeQuery().use { rs -> rs.next(); rs.getString(1) == "approved" } })
+        // A transfer is a new registration superseding the old, not an edit — and it cites the
+        // policy in force on its own start date, which by now is v2.
+        orgs.endRegistration(reg, at = t2, reason = "transferred")
+        check("a transfer cannot cite a policy no longer in force", refused("approved and in force") {
+            orgs.register(sam, s2026, grangeA, draft, from = t2, supersedes = reg)
+        })
+        val transfer = orgs.register(sam, s2026, grangeA, v2, from = t2, supersedes = reg)
+        check("a transfer supersedes rather than rewrites", transfer != reg && orgs.isRegistered(sam, s2026, t2.plusSeconds(1)))
+        check("the superseded registration's team is still on record", c.prepareStatement(
+            "SELECT team_id, valid_until FROM competition.player_registration WHERE registration_id = ?",
+        ).use { ps -> ps.setObject(1, reg); ps.executeQuery().use { rs -> rs.next(); rs.getObject(1) == riversideA && rs.getTimestamp(2) != null } })
+        check("a registration's status never moves backwards", refused("does not move") {
+            c.prepareStatement("UPDATE competition.player_registration SET status = 'pending' WHERE registration_id = ?")
+                .use { ps -> ps.setObject(1, transfer); ps.executeUpdate() }
+        })
         check("a policy cannot cite a season that does not exist", refused("policy_league_season_id_fkey") {
             orgs.draftPolicy("league_season", UUID.randomUUID(), "points", 1, LocalDate.of(2026, 9, 1), "{}")
         })
@@ -421,6 +429,6 @@ class OrganisationTest {
         ).use { ps -> ps.executeQuery().use { rs -> rs.next(); rs.getInt(1) == 1 } })
 
         println("  $passed organisation properties held")
-        assertEquals(66, passed)
+        assertEquals(68, passed)
     }
 }

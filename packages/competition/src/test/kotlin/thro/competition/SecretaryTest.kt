@@ -24,6 +24,12 @@ class SecretaryTest {
         // A league that requires a passport photo has a rule THRØ cannot check. Passing it silently
         // would register a player the league would not have.
         assertFailsWith<IllegalArgumentException> { RegistrationPolicy.parse(mapOf("requires" to listOf("name", "photo"))) }
+        // ...but the league may name it as a manual step, satisfied only by a named confirmation.
+        val manual = RegistrationPolicy.parse(mapOf("requires" to listOf("name"), "manual_requirements" to listOf("passport photo")))
+        assertEquals(listOf("passport photo"), manual.manualRequirements)
+        assertEquals(listOf("passport photo"), RegistrationFacts(true, true, true, true).manualOutstanding(manual, emptySet()))
+        assertEquals(emptyList(), RegistrationFacts(true, true, true, true).manualOutstanding(manual, setOf("passport photo")))
+        assertEquals("days_before_first_fixture:7", p.deadline.rule)
         assertFailsWith<IllegalArgumentException> { RegistrationPolicy.parse(mapOf("requires" to listOf("name"), "fee_paid" to true)) }
         assertFailsWith<IllegalArgumentException> {
             RegistrationPolicy.parse(mapOf("registration_closes_on" to "2026-09-30", "deadline_days_before_first_fixture" to 7))
@@ -67,17 +73,27 @@ class SecretaryTest {
         assertEquals(SubmissionTransitions.Verdict.Permitted, t.check(SubmissionState.READY, SubmissionState.SUBMITTED, null, actorNamed = true))
         // Delivered needs transport evidence; "we sent it" is not evidence.
         assertTrue(t.check(SubmissionState.SUBMITTED, SubmissionState.DELIVERED, null, actorNamed = false) is SubmissionTransitions.Verdict.Refused)
-        assertEquals(SubmissionTransitions.Verdict.Permitted, t.check(SubmissionState.SUBMITTED, SubmissionState.DELIVERED, EvidenceKind.MESSAGE_ID, actorNamed = false))
-        // Acknowledged needs the counterparty, named. A message id proves delivery, not reading.
-        assertTrue(t.check(SubmissionState.DELIVERED, SubmissionState.ACKNOWLEDGED, EvidenceKind.MESSAGE_ID, actorNamed = true) is SubmissionTransitions.Verdict.Refused)
-        assertTrue(t.check(SubmissionState.DELIVERED, SubmissionState.ACKNOWLEDGED, EvidenceKind.COUNTERPARTY_MESSAGE, actorNamed = false) is SubmissionTransitions.Verdict.Refused)
-        assertEquals(SubmissionTransitions.Verdict.Permitted, t.check(SubmissionState.DELIVERED, SubmissionState.ACKNOWLEDGED, EvidenceKind.COUNTERPARTY_MESSAGE, actorNamed = true))
+        assertEquals(SubmissionTransitions.Verdict.Permitted, t.check(SubmissionState.SUBMITTED, SubmissionState.DELIVERED, EvidenceKind.DELIVERY, actorNamed = false))
+        // A human confirmation of delivery names the human.
+        assertTrue(t.check(SubmissionState.SUBMITTED, SubmissionState.DELIVERED, EvidenceKind.HUMAN_CONFIRMATION, actorNamed = false) is SubmissionTransitions.Verdict.Refused)
+        assertEquals(SubmissionTransitions.Verdict.Permitted, t.check(SubmissionState.SUBMITTED, SubmissionState.DELIVERED, EvidenceKind.HUMAN_CONFIRMATION, actorNamed = true))
+        // Acknowledged needs the recipient, named. A delivery proves arrival, not reading.
+        assertTrue(t.check(SubmissionState.DELIVERED, SubmissionState.ACKNOWLEDGED, EvidenceKind.DELIVERY, actorNamed = true) is SubmissionTransitions.Verdict.Refused)
+        assertTrue(t.check(SubmissionState.DELIVERED, SubmissionState.ACKNOWLEDGED, EvidenceKind.ARTEFACT, actorNamed = false) is SubmissionTransitions.Verdict.Refused)
+        assertEquals(SubmissionTransitions.Verdict.Permitted, t.check(SubmissionState.DELIVERED, SubmissionState.ACKNOWLEDGED, EvidenceKind.ARTEFACT, actorNamed = true))
         // No skipping: submitted cannot become accepted.
-        assertTrue(t.check(SubmissionState.SUBMITTED, SubmissionState.ACCEPTED, EvidenceKind.COUNTERPARTY_MESSAGE, actorNamed = true) is SubmissionTransitions.Verdict.Refused)
+        assertTrue(t.check(SubmissionState.SUBMITTED, SubmissionState.ACCEPTED, EvidenceKind.ARTEFACT, actorNamed = true) is SubmissionTransitions.Verdict.Refused)
+        // Delivery can fail, and failure goes back to ready by the submitter — never to delivered.
+        assertEquals(SubmissionTransitions.Verdict.Permitted, t.check(SubmissionState.SUBMITTED, SubmissionState.DELIVERY_FAILED, EvidenceKind.DELIVERY, actorNamed = false))
+        assertTrue(t.check(SubmissionState.DELIVERY_FAILED, SubmissionState.DELIVERED, EvidenceKind.DELIVERY, actorNamed = false) is SubmissionTransitions.Verdict.Refused)
+        // Nothing delivered is unsent: withdrawn is not reachable from delivered.
+        assertTrue(t.check(SubmissionState.DELIVERED, SubmissionState.WITHDRAWN, null, actorNamed = true) is SubmissionTransitions.Verdict.Refused)
+        // A conditional acceptance is not an acceptance until the recipient lifts the condition.
+        assertEquals(SubmissionTransitions.Verdict.Permitted, t.check(SubmissionState.ACCEPTED_CONDITIONAL, SubmissionState.ACCEPTED, EvidenceKind.HUMAN_CONFIRMATION, actorNamed = true))
         // Action required goes back to ready, by the submitter.
         assertEquals(SubmissionTransitions.Verdict.Permitted, t.check(SubmissionState.ACTION_REQUIRED, SubmissionState.READY, null, actorNamed = true))
         // Terminal states do not move.
-        for (terminal in listOf(SubmissionState.ACCEPTED, SubmissionState.REJECTED, SubmissionState.WITHDRAWN)) {
+        for (terminal in SubmissionState.entries.filter { it.isTerminal }) {
             for (to in SubmissionState.entries) {
                 assertTrue(t.check(terminal, to, EvidenceKind.HUMAN_CONFIRMATION, actorNamed = true) is SubmissionTransitions.Verdict.Refused,
                     "$terminal must not move to $to")
@@ -86,13 +102,13 @@ class SecretaryTest {
     }
 
     @Test
-    fun `THRØ alone can never take a submission to acknowledged, accepted, rejected or action required`() {
+    fun `THRØ alone can never take a submission to acknowledged, accepted, conditionally accepted, rejected or action required`() {
         // Exhaustive over the table: every rule landing in one of those states requires a named
         // actor and counterparty evidence, and is moved by the counterparty, never by THRØ.
         for (rule in SubmissionTransitions.RULES) {
             if (rule.to in SubmissionTransitions.NEVER_BY_THRO) {
                 assertTrue(rule.actorRequired, "${rule.to} without a named actor")
-                assertEquals(Mover.COUNTERPARTY, rule.mover, "${rule.to} moved by ${rule.mover}")
+                assertEquals(Mover.RECIPIENT, rule.mover, "${rule.to} moved by ${rule.mover}")
                 assertTrue(rule.evidence.isNotEmpty(), "${rule.to} without evidence")
             }
             if (rule.mover == Mover.THRO) {
@@ -102,7 +118,7 @@ class SecretaryTest {
         // And there is no rule at all that lands in those states from a state THRØ controls alone.
         for (from in listOf(SubmissionState.DRAFT, SubmissionState.READY, SubmissionState.SUBMITTED)) {
             for (to in SubmissionTransitions.NEVER_BY_THRO) {
-                assertTrue(SubmissionTransitions.check(from, to, EvidenceKind.API_RESPONSE, actorNamed = true) is SubmissionTransitions.Verdict.Refused,
+                assertTrue(SubmissionTransitions.check(from, to, EvidenceKind.ARTEFACT, actorNamed = true) is SubmissionTransitions.Verdict.Refused,
                     "$from -> $to must not exist")
             }
         }

@@ -97,3 +97,14 @@ authorization relation is revoked rather than deleted.
 then — free-text venue, bare competitor identifiers, a draw with byes, a check-in and its grant, an
 authorization tuple — applies V014, and reads every row back. THRØ has never run, and the habit is
 formed before it does.
+
+## THRØ Secretary
+
+V016 and `Secretary`: an administrator enters a sporting fact once — a player joined a team, a
+fixture was played, a date was proposed — and THRØ derives the tasks that follow and carries the
+submissions, with the evidence for every move. `SecretaryTest` proves 62 properties end to end,
+most of them refusals: THRØ alone cannot submit, deliver-by-assertion, acknowledge or accept; the
+team that sent a registration cannot accept it; a placeholder the captain typed in never leaves
+THRØ; a minor's own consent does not open the gate; a draft policy registers nobody; a played
+outcome that is voided supersedes the result card that carried it; a rearrangement is a proposal
+the opponent answers and the league applies. The same engine, the same tables, for all three.

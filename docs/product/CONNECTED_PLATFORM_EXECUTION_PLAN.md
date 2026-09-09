@@ -1,6 +1,6 @@
 # THRØ — Connected Platform Execution Plan
 
-**Date:** 2026-09-09 · **Status:** Phase A delivered; Phase B next · **Precedence:** rank 4 (product/domain
+**Date:** 2026-09-09 · **Status:** Phases A, B2 and D delivered; B3/C wait on FB-1, E/F on the client · **Precedence:** rank 4 (product/domain
 specification), below the founder's instructions and the decision register, above the ADRs it cites.
 
 This plan reconciles the repository as it stands with the founder's product conclusions for the
@@ -311,7 +311,7 @@ local and CI work is not blocked.
 | B3 | Accounts, sessions, passkeys, claim flow | B1 | **FB-1** |
 | B4 | Push delivery record; media storage contract | B1 | FB-2 for staging only |
 | C | Team OS slice end to end | B1–B3 | FB-1 |
-| D | Secretary: registration, then result submission and rearrangement | C, policy table from A | nothing further |
+| D | Secretary: registration, then result submission and rearrangement (**delivered at the domain and store level**: V016, `Secretary`, 62 properties; the HTTP and client surfaces wait on B1/B3) | A, B2 | nothing further |
 | E | Tournament editions, series, discovery | A, B1 | nothing |
 | F | Map (MapKit on iOS, when the client exists); friendly request loop | C, E, iOS client | Gate 5 (device journal) for the client |
 
@@ -367,3 +367,30 @@ append-only match aggregate) and the Phase D rule that no submission carrying an
 non-adult player leaves `READY` without a recorded consent artefact (PD-004).
 
 Phases B–F carry their own acceptance tables, written when each phase opens and before its code.
+
+## 12b. Acceptance criteria — Phase D (Secretary), delivered
+
+All green on 2026-09-09. `SecretaryTest` (62 properties), `SecretaryTest` in the competition
+package (pure, 5), and `schema_properties.sh`. Hostile review of the §7 design produced eighteen
+findings before implementation; the schema closes the four blockers in the database itself.
+
+| # | Criterion | Enforced by |
+|---|---|---|
+| D1 | A member of an affiliated team under an approved policy owes exactly one registration; reconciling again manufactures nothing; a hand-inserted duplicate is refused | `reconcileTeam` + partial unique index |
+| D2 | Nothing is owed without an affiliation, or without an approved policy in force | test |
+| D3 | The task cites the policy version it was made under; a later version does not rewrite it; a new member after v2 is assessed under v2 | test |
+| D4 | Deadline is derived from the rule, recomputed when the anchor fixture moves, and the old deadline survives in the task's history against the change that caused it | `refreshDeadlines` + `admin_task_event` |
+| D5 | THRØ alone cannot submit; a replay with a stale version is refused; a message id typed by hand is not delivery evidence; a failed attempt is `delivery_failed`, never `delivered` | trigger + CHECK |
+| D6 | Acknowledged, accepted, conditionally accepted, rejected and action-required require a named person who administers the receiving side; the team admin who sent it cannot; THRØ alone cannot; every such transition names the league | trigger (`administers_recipient`) |
+| D7 | An acceptance names the date registered from; conditions make it conditional and register nobody; the registration is created from that date under the policy in force on it | trigger + `answer` |
+| D8 | No application role may update a submission row; transitions, deliveries, artefacts and task events are append-only | grants + `schema_properties.sh` |
+| D9 | A placeholder the captain typed in starts with no consent basis whatever was passed; nothing about an unclaimed player leaves THRØ; a minor's own consent does not open the gate, a guardian's does and closes the player's own consent task | `player_may_be_disclosed`, `account_consent_starts_honest` |
+| D10 | A requirement THRØ cannot check is a manual step satisfied only by a named confirmation with a note | `manual_requirements` + `admin_task_manual_confirmation` |
+| D11 | A registration under a draft policy is refused at the row, whoever writes it; a registration's status never moves backwards | trigger |
+| D12 | A played outcome makes the home team owe a result card; recording it twice creates nothing; an outcome the league decided itself creates nothing; voiding the outcome supersedes the submission that carried it | `onFixtureOutcome` + trigger |
+| D13 | A rearrangement is a proposal to the opponent, delivered in-app with a delivery row; the proposer cannot answer it; the opponent's admin can; the fixture does not move until the league applies it, and the change cites the proposal | `proposeRearrangement`, `applyProposal` |
+| D14 | The league sees nothing before it was sent; the captain's inbox groups by state and deadline | `submissionsForLeague`, `inbox` |
+
+Deferred, recorded: a payload gate for result submissions that carry lineups (no lineup exists
+until Phase C); a `transport_evidence_rule` table when the second adapter arrives; `lapsed` as a
+league decision with a reason, not a payment flag (OD-009).

@@ -475,6 +475,28 @@ r=$($PSQL -c "SET ROLE app_competition; DELETE FROM authz.relation;" 2>&1)
 if echo "$r" | grep -qi 'permission denied'; then ok "an authorization relation is revoked, never deleted"
 else bad "an authorization relation is revoked, never deleted" "${r:-deletion was permitted}"; fi
 
+echo "== the Secretary: a submission's state is the transitions', and nothing else's (V016) =="
+n=$($PSQL -c "SELECT count(*) FROM information_schema.role_table_grants
+  WHERE table_schema='competition' AND table_name='submission' AND privilege_type='UPDATE' AND grantee LIKE 'app\\_%';")
+check "no application role holds UPDATE on competition.submission" "$n" "0"
+n=$($PSQL -c "SELECT count(*) FROM information_schema.role_table_grants
+  WHERE table_schema='competition' AND table_name IN ('submission_transition','submission_delivery','submission_artefact','admin_task_event')
+    AND privilege_type IN ('UPDATE','DELETE','TRUNCATE') AND grantee LIKE 'app\\_%';")
+check "transitions, deliveries, artefacts and task events are append-only for every application role" "$n" "0"
+n=$($PSQL -c "SELECT prosecdef::int FROM pg_proc WHERE proname='submission_moves_only_with_evidence';")
+check "the transition trigger runs as the owner, so it alone projects the state" "$n" "1"
+# The disclosure gate: a self-created adult passes; a claimed minor with only their own consent does not; an unclaimed player never does.
+ADULT=$($PSQL -c "SELECT gen_random_uuid();"); MINOR=$($PSQL -c "SELECT gen_random_uuid();"); PA=$($PSQL -c "SELECT gen_random_uuid();"); PM=$($PSQL -c "SELECT gen_random_uuid();"); PU=$($PSQL -c "SELECT gen_random_uuid();")
+$PSQL -c "SET ROLE app_competition;
+  INSERT INTO identity.account (account_id, display_name, age_band, age_assurance) VALUES ('$ADULT','An Adult','adult','self_declared');
+  INSERT INTO identity.account (account_id, display_name, age_band, age_assurance) VALUES ('$MINOR','A Minor','minor','self_declared');
+  INSERT INTO competition.player (player_id) VALUES ('$PA'), ('$PM'), ('$PU');
+  INSERT INTO identity.player_claim (claim_id, player_id, account_id, method) VALUES (gen_random_uuid(),'$PA','$ADULT','self_created');
+  INSERT INTO identity.player_claim (claim_id, player_id, account_id, method) VALUES (gen_random_uuid(),'$PM','$MINOR','self_created');" >/dev/null 2>&1
+check "a self-created adult may be disclosed" "$($PSQL -c "SELECT identity.player_may_be_disclosed('$PA');")" "t"
+check "a minor with only their own consent may not" "$($PSQL -c "SELECT identity.player_may_be_disclosed('$PM');")" "f"
+check "an unclaimed player never may" "$($PSQL -c "SELECT identity.player_may_be_disclosed('$PU');")" "f"
+
 echo
 echo "-------------------------------------------"
 echo "  $PASS passed, $FAIL failed"

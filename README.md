@@ -46,7 +46,8 @@ database.
 | 9 | Organiser | Correction and adjudication closed, both under the conflict-of-interest rule |
 | 10+ | Live, notifications, payments | Not started — each waits on a product decision |
 | **A** | **Connected competitive graph** | **Closed** — Team, Venue, League season, Tournament, Series, membership, registration, policy; hostile-reviewed before the migration was cut (`docs/product/CONNECTED_PLATFORM_EXECUTION_PLAN.md`) |
-| B | Network identity and sync | Next — the founder decision pack is §9 of the execution plan |
+| B | Network identity and sync | Organisational commands with a two-writer conflict test closed (ADR-017); accounts and the HTTP surface wait on founder decision FB-1 (execution plan §9) |
+| **D** | **THRØ Secretary** | **Closed at domain and store level** — tasks derived from facts and approved policy, submissions that move only with evidence, and a database that will not let THRØ or a team say the league accepted anything |
 
 **What is verified, and how:**
 
@@ -59,8 +60,8 @@ database.
 | Authorization | 21 tests — the conflict-of-interest rule, and age as a dimension |
 | Rating projection | 14 tests — reproducible from a watermark pair; OD-001 stays open |
 | Competition structure | 24 tests — bracket identities exhaustive for every field size to 1024, and the organisational vocabulary as pure types |
-| Schema and privileges | 85 property assertions against a real PostgreSQL |
-| Command path and organisations | 11 integration suites against a real PostgreSQL, including V014 applied over a populated V013 database with nothing lost |
+| Schema and privileges | 93 property assertions against a real PostgreSQL |
+| Command path, organisations, Secretary | 13 integration suites against a real PostgreSQL, including V014 applied over a populated V013 database with nothing lost, two concurrent writers on one row, and 62 Secretary properties |
 | Design tokens | 50 contrast pairs, absolute thresholds, 0 unrecorded breaches |
 | Design components | 61 components audited mechanically against a baseline ratchet |
 
@@ -224,6 +225,10 @@ is removed.
 | An approved rule cannot be rewritten | Trigger freezes an approved policy; an exclusion constraint forbids two approved versions in force on one day |
 | A fixture result cannot change without a trail | Outcomes are appended decisions that supersede, never edit; schedule changes are logged by trigger |
 | A player row holds no personal data | The only text column is a fixed vocabulary; the name lives in `identity`, bound through a revocable claim |
+| Two admins cannot overwrite each other | Every organisational row carries a version; a write that does not carry the version it saw is refused with the current row, and a receipt makes a replay idempotent |
+| THRØ never says the league accepted a submission | Acknowledged, accepted, rejected and action-required transitions require a named person holding an administrative relation on the receiving side, checked in the trigger; no app role can update a submission row |
+| Nothing about a person leaves THRØ without a basis | `identity.player_may_be_disclosed`: a live claim to an account that is an adult with their own consent, or has a guardian's; unknown is not adult |
+| Delivery evidence cannot be typed by hand | `delivered` needs a delivery attempt row written by the transport code, or a named human confirmation with a note |
 
 ## What is deliberately not decided here
 

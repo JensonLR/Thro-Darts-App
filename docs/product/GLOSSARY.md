@@ -236,6 +236,35 @@ rendering.
 **Awarded** — a fixture outcome decided by the organiser without play. A distinct, auditable outcome
 type, never a synthetic scoreline.
 
+## Administration (THRØ Secretary)
+
+**Admin task** — something owed: by a Team, a League season or a Player; with a kind, a source, a
+subject, a reason and missing facts materialised at creation, a deadline and the rule it was derived
+from, a state (`open`, `waiting_player`, `waiting_opponent`, `waiting_league`, `done`, `cancelled`)
+and an appended history of every change of state or deadline. Derived from facts and an approved
+policy by reconciliation; a fact produces its task once. Never manufactured.
+
+**Submission** — one thing sent by a Team to a League season's administration or to an opposing
+Team: a player registration, a result, a rearrangement proposal. Its state is a projection of its
+**transitions**, each of which names who moved it and the evidence — a **delivery** attempt the
+transport code wrote, an **artefact** retained from the recipient, or a **human confirmation** with
+a name and a note. `draft → ready → submitted → delivered → acknowledged → accepted |
+accepted_conditional | rejected | action_required`, with `delivery_failed`, `withdrawn` (only before
+delivery) and `superseded`. THRØ may take a submission to `delivered`; every later state is the
+recipient's word, recorded with the name of the person who said it.
+
+**Disclosure gate** — the one rule for whether anything about a Player may leave THRØ: a live claim
+to an account that is an adult with their own live consent, or that has a guardian's. Unknown is
+not adult. Checked by the database when a submission is sent.
+
+**Consent record** — a basis (self or guardian), the actor who gave it, an artefact reference and a
+time; revocable, never edited. An account a person created for themselves carries its own; one
+somebody else typed in starts with none.
+
+**Rearrangement proposal** — one Team's proposed new date for a Fixture, answered by the opponent's
+administration and applied by the League through the same command every rearrangement goes
+through. A Team's agreement is never the League's act.
+
 ## Development
 
 **Passport** — a player's durable competitive history, measured in years. Not an activity feed.
