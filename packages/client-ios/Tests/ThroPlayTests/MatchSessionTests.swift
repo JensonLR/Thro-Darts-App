@@ -949,8 +949,8 @@ final class MatchSessionTests: XCTestCase {
                 // The prompts come in the order PD-001 defines: darts used only on a finish, then
                 // darts at a double. Answering `nil` is "not sure", which is not what a player who
                 // entered their darts would say, so each case answers with what the darts say.
-                if case .dartsUsed = s.prompt { s.answer(c.used) }
-                if case .dartsAtDouble = s.prompt { s.answer(c.atDouble) }
+                if case .dartsUsed? = s.prompt { s.answer(c.used) }
+                if case .dartsAtDouble? = s.prompt { s.answer(c.atDouble) }
             }
             guard let a = asDarts, let b = asTotal else { return XCTFail("no visit for \(c.name)") }
             XCTAssertEqual(a.visitTotal, b.visitTotal, c.name)
@@ -987,10 +987,10 @@ final class MatchSessionTests: XCTestCase {
         XCTAssertEqual(carried.dartsAtDouble, 1)
         // And the prompt a typed total raises offers exactly that answer.
         s.quick(141)
-        guard case .dartsUsed = s.prompt else { return XCTFail("no darts-used prompt") }
+        guard case .dartsUsed? = s.prompt else { return XCTFail("no darts-used prompt") }
         XCTAssertTrue(s.prompt?.options.contains(3) ?? false)
         s.answer(3)
-        guard case let .dartsAtDouble(_, used, finished) = s.prompt else {
+        guard case let .dartsAtDouble(_, used, finished)? = s.prompt else {
             return XCTFail("no darts-at-a-double prompt")
         }
         XCTAssertEqual(used, 3)
