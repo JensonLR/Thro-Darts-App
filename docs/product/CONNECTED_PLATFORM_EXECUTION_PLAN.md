@@ -1,6 +1,6 @@
 # THRØ — Connected Platform Execution Plan
 
-**Date:** 2026-09-09 · **Status:** Phases A, B2, D, E's read model and C's store (availability, lineups, the result-card gate) delivered; B3 and C's surface wait on FB-1, E's surface and F on the client · **Precedence:** rank 4 (product/domain
+**Date:** 2026-09-09 · **Status:** Phases A, B2, D, E's read model, C's store (availability, lineups, the result-card gate) and the HTTP layer behind a development authenticator delivered; accounts (B3) and C's surface wait on FB-1, E's surface and F on the client · **Precedence:** rank 4 (product/domain
 specification), below the founder's instructions and the decision register, above the ADRs it cites.
 
 This plan reconciles the repository as it stands with the founder's product conclusions for the
@@ -188,7 +188,15 @@ container on a PaaS in UK/EU (ADR-011), three kinds of configuration (ADR-014).
 What does not exist and must be built, in this order:
 
 1. **The HTTP layer.** Ktor routes over the existing handlers; OpenAPI emitted by the server and
-   gated in CI (ADR-001's unproven mitigation, proved here).
+   gated in CI (ADR-001's unproven mitigation, proved here). **Built** (`services/api/src/main/kotlin/
+   thro/api/http`): one command endpoint carrying visits and every organisational command, the
+   caller's inbox, a team's inbox (filtered on `team.manage`), discovery, health, and `/openapi.json`
+   rendered from the same registry the routes are mounted from — the server refuses to start if a
+   handler and an endpoint disagree, and `HttpTest` holds the served document equal to the committed
+   `services/api/openapi.json`. It runs only behind a development authenticator that cannot be
+   constructed without `THRO_DEV_AUTH=1`. Not yet done from ADR-001's acceptance condition: a client
+   *generated* from the emitted schema — there is no organiser web console to generate one for yet,
+   and the record is not marked accepted until there is. SSE fan-out (ADR-007) is not built.
 2. **Accounts and sessions.** `identity.account` exists; credentials, sessions and refresh-token
    families do not. The *mechanism* is decided; the *surface* is B4.
 3. **Player ⇄ account.** `competition.player` may exist unclaimed (created by a captain). Claiming

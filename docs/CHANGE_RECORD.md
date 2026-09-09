@@ -2332,3 +2332,31 @@ requires does not exist yet, recorded as a debt rather than left to be discovere
 The `schema` workflow had also failed on the previous push for a reason that was not ours — a
 third-party apt mirror's hash mismatch while installing `psql`, which the runner image already
 ships. The step now consults apt only when `psql` is absent.
+
+## The HTTP layer, behind a door that says what it is
+
+Plan §5's first item. `services/api/src/main/kotlin/thro/api/http` is Ktor routes over the handlers
+that already existed, and it decides nothing they do not: one command endpoint carrying a visit or
+any organisational command (ADR-007), the caller's inbox, a team's inbox filtered on `team.manage`,
+discovery, health, and the contract itself. Three rules hold across every route and the test names
+each: **identity is the principal** — the authenticator says who is calling, and an actor named in
+a request body is ignored, so a stranger who writes the admin's id is refused as the stranger;
+**one connection per request**, closed whatever happens; and **a replay returns what it returned**,
+status included, so a replayed stale is still a 409 — compared as the parsed answer, because the
+stored receipt comes back through jsonb, which normalises whitespace and key order.
+
+ADR-001 accepted Kotlin on the condition that the organiser console's contract be machine-checked
+against a server-emitted schema, and doubted the framework could emit one. It cannot; the answer is
+a registry. Every route is an `Endpoint` in one list, `/openapi.json` is rendered from that list,
+the server refuses to start if a handler and an endpoint disagree, and `HttpTest` holds the served
+document equal to the committed `services/api/openapi.json` on every run — so a change to the
+contract is a change to a reviewed file. The other half of the condition, a client *generated*
+from the schema, is not met, because the console it would serve does not exist; ADR-001 now says so
+in a dated note rather than being read as accepted.
+
+The server refuses to start without an authenticator, and the only one that exists is the
+development one: it trusts an `X-Thro-Dev-Subject` header, cannot be constructed unless
+`THRO_DEV_AUTH=1` is set, and says on every start that anyone who can reach the port is whoever
+they claim. It exists so the layer could be built and tested before FB-1 is decided, not so a
+server can be run without deciding it. A malformed date is the caller's 400, not the server's 500,
+which the test found. Twenty HTTP properties; the runbook is `docs/runbooks/API.md`.

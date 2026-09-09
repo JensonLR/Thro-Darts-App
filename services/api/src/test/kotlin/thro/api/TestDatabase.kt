@@ -44,6 +44,10 @@ public object TestDatabase {
 
     public fun migrated(): Connection = migratedUpTo(Int.MAX_VALUE)
 
+    /** A further connection to the same database, for code that opens one per request. */
+    public fun connect(): Connection =
+        DriverManager.getConnection("jdbc:postgresql://$host:${env("PGPORT", "5432")}/${env("PGDATABASE", "postgres")}", env("PGUSER", "postgres"), "")
+
     /**
      * A database migrated only as far as `V<upTo>`, so a test can populate it the way the world
      * looked then and prove that the next migration loses nothing. [apply] runs the rest.

@@ -91,3 +91,15 @@ domain code, where Kotlin is the strongest verified language available.
 Organiser web work exceeds ~50% of commits for two consecutive quarters; **or** the agent-correction
 rate on server plumbing is materially worse than on the mobile clients; **or** hosting cost per
 instance becomes a genuine constraint.
+
+## Note — 2026-09-09
+
+The mitigation's first half exists: the server emits `/openapi.json` from the same registry its
+routes are mounted from (`services/api/src/main/kotlin/thro/api/http/Api.kt`), so the document
+cannot describe an unserved route or omit a served one, and `HttpTest` holds the served document
+equal to the committed `services/api/openapi.json` on every CI run. The framework has no
+route-derived schema generation, as the record feared; the registry-as-schema is the answer, with
+no plugin. The acceptance condition — a *working client generated* from that schema for three
+endpoints, in CI — is **not yet met**, because the organiser web console it would serve does not
+exist. The condition stands and this record is not relied upon for the console until it is met.
+

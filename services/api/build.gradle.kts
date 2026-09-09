@@ -10,7 +10,12 @@ dependencies {
     implementation("thro-trust:thro-trust")
     implementation("thro-competition:thro-competition")
     implementation("org.postgresql:postgresql:42.7.4")
+    // ADR-001: Ktor. The HTTP layer is thin — routes over the existing handlers — and the contract
+    // it serves at /openapi.json is emitted from the same registry the routes are built from.
+    implementation("io.ktor:ktor-server-core:3.0.3")
+    implementation("io.ktor:ktor-server-cio:3.0.3")
     testImplementation(kotlin("test"))
+    testImplementation("io.ktor:ktor-server-test-host:3.0.3")
 }
 kotlin { explicitApi() }
 tasks.test {
@@ -24,7 +29,7 @@ tasks.test {
     // Each is forwarded only when it has a value. Passing an empty string is not the same as passing
     // nothing: it defeats the `?: "5432"` fallbacks on the other side, and produced the unparseable
     // `jdbc:postgresql://host:/` for anyone who set PGHOST alone.
-    for (name in listOf("PGHOST", "PGPORT", "PGUSER", "PGDATABASE", "THRO_REQUIRE_DB")) {
+    for (name in listOf("PGHOST", "PGPORT", "PGUSER", "PGDATABASE", "THRO_REQUIRE_DB", "THRO_WRITE_OPENAPI")) {
         System.getenv(name)?.takeIf { it.isNotBlank() }?.let { environment(name, it) }
     }
 }
@@ -37,6 +42,18 @@ application {
 tasks.named<JavaExec>("run") {
     standardInput = System.`in`
     for (v in listOf("PGHOST", "PGPORT", "PGUSER", "PGDATABASE", "PORT")) {
+        System.getenv(v)?.let { environment(v, it) }
+    }
+}
+
+// `gradle -p services/api serve` starts the HTTP API. It refuses to start without an authenticator;
+// the only one that exists is the development one, enabled by THRO_DEV_AUTH=1 and nothing else.
+tasks.register<JavaExec>("serve") {
+    group = "application"
+    description = "Start the THRØ HTTP API (Ktor)"
+    classpath = sourceSets["main"].runtimeClasspath
+    mainClass.set("thro.api.http.MainKt")
+    for (v in listOf("PGHOST", "PGPORT", "PGUSER", "PGDATABASE", "PORT", "THRO_DEV_AUTH")) {
         System.getenv(v)?.let { environment(v, it) }
     }
 }

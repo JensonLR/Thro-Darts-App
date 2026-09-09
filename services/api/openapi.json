@@ -1,0 +1,41 @@
+{
+"openapi":"3.1.0",
+"info":{"title":"THRØ API","version":"0.1.0","description":"Routes over the command handlers. One command endpoint (ADR-007); identity from the principal, never the body (ADR-008); every relationship decision recorded."},
+"components":{"securitySchemes":{"principal":{"type":"apiKey","in":"header","name":"X-Thro-Dev-Subject","description":"Development authenticator only (THRO_DEV_AUTH=1). The production scheme is founder decision FB-1 and replaces this entry."}}},
+"paths":{
+  "/healthz":{
+    "get":{"operationId":"health","summary":"Liveness, and the schema version the database stands at","description":"Unauthenticated. Reports the migration ledger's current version; a database the code cannot serve is a 503.","parameters":[],"responses":{"200":{"description":"ok, with schemaVersion"},"503":{"description":"database unreachable or behind the code"}}}
+  },
+  "/openapi.json":{
+    "get":{"operationId":"openapi","summary":"This document","description":"Rendered from the same registry the routes are mounted from.","parameters":[],"responses":{"200":{"description":"OpenAPI 3.1 document"}}}
+  },
+  "/v1/commands":{
+    "post":{"operationId":"commands","summary":"The one command endpoint (ADR-007)","description":"Every client-to-server state change, online or from a queue. Identity comes from the principal, the device from X-Thro-Device. Applied is 200; a replay returns what it returned; stale is 409 with the current row; a refusal is 422 in the store's words; a sequence gap is 409; a match the caller is not in is 404.","parameters":[],"security":[{"principal":[]}],"requestBody":{"required":true,"content":{"application/json":{"schema":{"type":"object","required":["type","commandId"],
+ "description":"One command. `type` selects the shape; the caller's identity is the authenticated principal and is never read from the body; the device is the X-Thro-Device header.",
+ "properties":{
+   "type":{"type":"string","enum":["RecordVisit","RenameTeam","RearrangeFixture","SetAvailability","NameLineup"]},
+   "commandId":{"type":"string","format":"uuid","description":"Idempotency key per device: a replay returns the stored response verbatim."},
+   "matchId":{"type":"string","format":"uuid"},
+   "deviceSeq":{"type":"integer","description":"RecordVisit: the device's gapless sequence for this match."},
+   "player":{"type":"string","enum":["home","away"],"description":"RecordVisit: the seat that threw."},
+   "visitTotal":{"type":"integer"},"dartsUsed":{"type":["integer","null"]},"dartsAtDouble":{"type":["integer","null"]},
+   "occurredAt":{"type":"string","format":"date-time"},"occurredTz":{"type":"string"},
+   "clientEffect":{"type":["string","null"]},"engineVersion":{"type":"string"},
+   "teamId":{"type":"string","format":"uuid"},"to":{"type":"string","description":"RenameTeam: the new name. RearrangeFixture: the new date-time."},
+   "fixtureId":{"type":"string","format":"uuid"},"venueId":{"type":["string","null"],"format":"uuid"},
+   "playerId":{"type":"string","format":"uuid"},"status":{"type":"string","enum":["available","unavailable","maybe"]},
+   "players":{"type":"array","items":{"type":"string","format":"uuid"},"description":"NameLineup: the side in slot order."},
+   "expectedVersion":{"type":"integer","description":"The row version the author last saw; 0 when the row does not exist yet. A different current version is a 409 with the current row."}
+ }}}}},"responses":{"200":{"description":"applied, or a replay of an earlier answer"},"400":{"description":"malformed"},"401":{"description":"no principal"},"404":{"description":"not this match"},"409":{"description":"stale version, or sequence gap"},"422":{"description":"refused"}}}
+  },
+  "/v1/me/discovery":{
+    "get":{"operationId":"me.discovery","summary":"Darts the caller can play, and why each card is there","description":"The discovery read model for the caller between from and to. Every card carries its reasons; nothing is called eligible that THRØ cannot check.","parameters":[{"name":"from","in":"query","required":false,"description":"date-time, default now","schema":{"type":"string"}},{"name":"to","in":"query","required":false,"description":"date-time, default from + 60 days","schema":{"type":"string"}},{"name":"locality","in":"query","required":false,"description":"the caller's team's locality, optional","schema":{"type":"string"}}],"security":[{"principal":[]}],"responses":{"200":{"description":"sections of cards"},"400":{"description":"malformed dates"},"401":{"description":"no principal"}}}
+  },
+  "/v1/me/inbox":{
+    "get":{"operationId":"me.inbox","summary":"The caller's own Secretary tasks, by section","description":"Tasks whose subject is the caller: consent, claims, anything the Secretary needs from them.","parameters":[],"security":[{"principal":[]}],"responses":{"200":{"description":"sections of tasks"},"401":{"description":"no principal"}}}
+  },
+  "/v1/teams/{teamId}/inbox":{
+    "get":{"operationId":"team.inbox","summary":"A team's Secretary inbox, for those who run it","description":"Requires team.manage on the team (admin or captain). Anyone else is 403, and the refusal is on the audit record.","parameters":[{"name":"teamId","in":"path","required":true,"schema":{"type":"string","format":"uuid"}}],"security":[{"principal":[]}],"responses":{"200":{"description":"sections of tasks"},"401":{"description":"no principal"},"403":{"description":"you do not run this team"}}}
+  }
+}
+}
