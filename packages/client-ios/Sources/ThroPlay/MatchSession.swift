@@ -25,6 +25,10 @@ public final class MatchSession: ObservableObject {
     /// count a visit that was taken back.
     @Published public private(set) var ledger: [LedgerEntry]
     @Published public private(set) var entry: String = ""
+    /// The darts entered so far, when the player is scoring dart by dart. Empty otherwise, and
+    /// emptied by everything that empties `entry` — the two are one entry in two notations, and a
+    /// player who switches keypads mid-visit must not find a stale half-entry in the other one.
+    @Published public private(set) var darts = ThroDartEntry()
     @Published public private(set) var prompt: Prompt?
     @Published public private(set) var notice: Notice?
     /// Set after a bust so the screen can show the restored score in the error colour until the
@@ -335,6 +339,7 @@ public final class MatchSession: ObservableObject {
         bust = nil
         notice = nil
         entry = ""
+        darts = ThroDartEntry()
     }
 
     public func quick(_ total: Int) {
@@ -356,6 +361,58 @@ public final class MatchSession: ObservableObject {
         bust = nil
         notice = nil
         commit(total)
+    }
+
+    // MARK: - the keypad that takes three darts
+
+    /// A dart lands. Refused once the hand is spent, so an entry can never carry a fourth.
+    public func dart(_ dart: ThroDart) {
+        guard prompt == nil, retraction == nil, announcement == nil, !isComplete else { return }
+        bust = nil
+        notice = nil
+        darts.add(dart)
+    }
+
+    /// Take back the dart at `index` and everything after it.
+    ///
+    /// Not just the last one: a player pointing at the middle dart on the board means *that* dart
+    /// was wrong, and the two after it were entered on top of a wrong number. Taking back only the
+    /// last would leave the mistake in place with the correction sitting behind it.
+    public func takeBackDarts(from index: Int) {
+        guard prompt == nil, retraction == nil, announcement == nil else { return }
+        guard index >= 0, index < darts.darts.count else { return }
+        bust = nil
+        notice = nil
+        darts = ThroDartEntry(Array(darts.darts.prefix(index)))
+    }
+
+    /// Whether the entered darts may be committed.
+    ///
+    /// The hand is spent, or the visit is already settled — a bust after one dart is a real thing
+    /// and the player has nothing left to enter. Anything else and Enter stays out of the light,
+    /// because a two-dart entry that neither finishes nor busts is a visit the engine refuses
+    /// (`DARTS_USED_INVALID`), and a refusal a player cannot act on is a dead end.
+    public var dartsMayBeEntered: Bool {
+        guard !darts.isEmpty, let seat = thrower else { return false }
+        return darts.handIsSpent
+            || DartVisit.settles(darts, from: remaining(seat), outRule: record.outRule)
+    }
+
+    /// Commit what was thrown.
+    ///
+    /// **This is where per-dart entry pays for itself.** Three darts answer PD-001's two questions —
+    /// how many darts were used, and how many were thrown at a double — so the player is not stopped
+    /// and asked what they have already told the app. The command is otherwise identical to the one
+    /// a typed total produces: same `visitTotal`, same engine, same journal columns.
+    public func enterDarts() {
+        guard prompt == nil, retraction == nil, announcement == nil, !isComplete else { return }
+        guard !darts.isEmpty, let seat = thrower, dartsMayBeEntered else { return }
+        bust = nil
+        notice = nil
+        let carried = DartVisit.evidence(darts, from: remaining(seat), outRule: record.outRule)
+        let total = darts.total
+        darts = ThroDartEntry()
+        submit(total, dartsUsed: carried.dartsUsed, dartsAtDouble: carried.dartsAtDouble)
     }
 
     /// Dismisses the bust or leg announcement; scoring resumes.
@@ -382,6 +439,10 @@ public final class MatchSession: ObservableObject {
     /// the last visit, which the player must confirm.
     public func undoKey() {
         guard prompt == nil, retraction == nil, announcement == nil else { return }
+        // A part-entered visit is taken back before the record is. In per-dart mode that is one
+        // dart, not the whole hand: the mistake a player makes is one dart in three, and clearing
+        // all three to fix the second is the correction costing more than the error.
+        if !darts.isEmpty { bust = nil; notice = nil; darts.removeLast(); return }
         if !entry.isEmpty { clearEntry(); return }
         proposeRetraction()
     }
@@ -417,6 +478,7 @@ public final class MatchSession: ObservableObject {
             // confirmed is no longer what is recorded (PD-011).
             standing = (try? journal.standing(for: record.id)) ?? standing
             entry = ""
+            darts = ThroDartEntry()
             bust = nil
             notice = Notice(text: Copy.undone(name(proposal.seat), proposal.visitTotal, next: thrower.map(name) ?? ""),
                             tone: .neutral)
@@ -482,6 +544,7 @@ public final class MatchSession: ObservableObject {
             standing = (try? journal.standing(for: record.id)) ?? standing
             state = next                                      // … then apply
             entry = ""
+            darts = ThroDartEntry()
 
             notice = nil
             switch effect {

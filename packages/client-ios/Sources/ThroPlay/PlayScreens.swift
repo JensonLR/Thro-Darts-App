@@ -312,6 +312,10 @@ public struct ScoringScreen: View {
     @AppStorage(Appearance.storageKey) private var appearanceRaw: String = Appearance.system.rawValue
     @AppStorage(ScoringPreferences.keepScreenAwakeKey) private var keepScreenAwake: Bool = true
     @AppStorage(ThroHaptics.enabledKey) private var haptics: Bool = true
+    /// Which keypad this scorer uses. Stored on the device, not on the match: it is how this person
+    /// scores, and the two keypads produce the same command, so it can be changed mid-leg.
+    @AppStorage(ScoringPreferences.entryModeKey) private var entryModeRaw: String
+        = ScoringEntryMode.default.rawValue
     private let board = LiveBoard()
     /// What the board is currently saying back about the last entry. Set when a visit lands, a bust
     /// happens or an entry is refused; cleared after `ThroChalkMark.dwell`.
@@ -339,6 +343,7 @@ public struct ScoringScreen: View {
         GeometryReader { proxy in
             let stage = ThroStage.choose(width: proxy.size.width, height: proxy.size.height,
                                          onAFinish: session.throwerOnAFinish,
+                                         perDart: entryMode == .perDart,
                                          textScale: ThroDynamicType.scale(at: typeSize))
             ThroBoard(grainSeed: ThroBoardSeed.match(session.record.id.value)) {
                 ZStack {
@@ -470,6 +475,12 @@ public struct ScoringScreen: View {
             RetractionCard(proposal: proposal, playerName: session.name(proposal.seat),
                            onConfirm: session.confirmRetraction, onCancel: session.cancelRetraction)
                 .throLanding()
+        } else if entryMode == .perDart {
+            DartKeypad(entry: session.darts,
+                       disabled: session.isComplete || session.announcement != nil,
+                       ready: session.dartsMayBeEntered,
+                       onDart: session.dart, onEnter: session.enterDarts)
+                .throPinnedKeypadTypeCeiling()
         } else {
             ScoreKeypad(value: session.entry, disabled: session.isComplete || session.announcement != nil,
                         onDigit: session.digit, onQuick: session.quick,
@@ -485,6 +496,7 @@ public struct ScoringScreen: View {
                         format: session.formatLabel,
                         onBack: onLeave,
                         onEnd: session.mayEndShort ? session.offerToEnd : nil,
+                        mode: entryMode.label, onSwitchMode: switchEntryMode,
                         onBoard: true)
             ThroBoardHead(home: ScoringScreen.column(session, .home),
                           away: ScoringScreen.column(session, .away),
@@ -508,6 +520,16 @@ public struct ScoringScreen: View {
                     .padding(.top, ThroSpacing.spacing2)
             }
             Spacer(minLength: 0)
+            // **The three darts, on the board.** What is being written goes where the chalk is, and
+            // a player checks it against what they threw while they are still looking at the board.
+            // `ThroStage` counts this row (`dartLine`) before it picks a rung, so it is never a row
+            // that clips: on the smallest phone the hero steps down the ladder to make room for it,
+            // which is the cost of the notation and is the player's to choose.
+            if entryMode == .perDart {
+                ThroDartLine(entry: session.darts, onTakeBackTo: session.takeBackDarts)
+                    .padding(.horizontal, ThroStage.gutter)
+                    .padding(.bottom, ThroSpacing.spacing2)
+            }
             // The leg so far: the running column every paper scoresheet has had for a century, and
             // the only way a player catches a mis-key without replaying the leg in their head.
             ThroLedger(rows: ScoringScreen.ledger(session), stage: stage) { seat in
@@ -593,6 +615,18 @@ public struct ScoringScreen: View {
     //    states something untrue, and the head already says whose throw it is three ways: the
     //    double rule under their column, the 45° marker beside their name, and the name's own ink.
     //    They come back the day per-dart entry gives them something true to show.
+
+    var entryMode: ScoringEntryMode { ScoringEntryMode(stored: entryModeRaw) }
+
+    /// Change notation. **The part-entered visit is cleared**, because the two keypads hold the same
+    /// entry in different notations and carrying one across is guesswork: three darts have a total,
+    /// but a total does not have three darts, and inventing them would put a number in the evidence
+    /// column that nobody threw.
+    private func switchEntryMode() {
+        ThroHaptics.play(.key, enabled: haptics)
+        session.clearEntry()
+        entryModeRaw = entryMode.other.rawValue
+    }
 
     /// Put a mark on the board and take it off again after its dwell. The haptic comes from the
     /// mark itself, so what is felt and what is seen cannot drift apart.

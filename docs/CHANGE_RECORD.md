@@ -1340,3 +1340,147 @@ measuring nothing.
 27 tests. All 18 `tools/check_*.py` green. The keypad's dart mode and the storage of the individual
 darts are the next two slices; this one is the vocabulary and the evidence, and it is complete and
 held on its own.
+
+---
+
+# The keypad that takes three darts
+
+*"Option to enter per dart (for 3 darts) or total score of 3 darts."* — the founder, relaying a
+player in a local league: *"Just make what's needed big that's the main hiccup u see."*
+
+The previous entry built the vocabulary and the evidence layer. This one puts it in a player's
+hands: a second keypad, the darts drawn on the board as they land, and the two PD-001 prompts
+skipped when the darts have already answered them.
+
+## The correction that came first
+
+**`dartsAtDouble` was counting the wrong thing, and PD-001 says so in its own worked example.**
+
+The definition I shipped in the previous entry was *a dart thrown from a checkable number*. PD-001's
+decision text says:
+
+> finishing 100 as T20 then D20 is two darts with **one** at a double
+
+Under the definition I had written, that visit has **two**: 100 is a checkout and so is 40. Under the
+definition PD-001 is actually describing — *a dart thrown from a score one dart could finish* — it
+has one, which is also the answer the player gives when the app stops and asks them.
+
+The consequence was not a crash. `Statistics.checkoutPercentage` divides leg wins by the sum of this
+column, so an inflated count makes every player's checkout percentage look worse, silently, forever;
+and a match scored partly by hand and partly from darts would have carried two different definitions
+in one column. A 141 finish would have been recorded as three attempts rather than one.
+
+| | old, wrong | now |
+|---|---|---|
+| 141 `T20 T19 D12` | 3 | **1** |
+| 100 `T20 D20` | 2 | **1** — PD-001's own example |
+| 32 `S16 S8 D4` | 3 | 3 |
+| 40 `D20` | 1 | 1 |
+
+`DartVisit.oneDartFinishes` is derived from the engine's route table — a route of length one **is** a
+one-dart finish — rather than transcribed, and a test holds it against
+`RuleTables.oneDartFinishesDouble`, the literal the engine has carried unused since it shipped. That
+literal now has a job.
+
+**This also corrects the previous entry's table of my own wrong assertions.** The first row of it —
+*"141 → 81 → 24 has three darts at a double"* — was wrong for a second time, in the other direction.
+It has one. The row is left standing above rather than edited, because the record of what I got
+wrong is worth more than a tidy one.
+
+## Three rules the engine already enforces, met from this side
+
+`Engine.recordVisit` refuses evidence it cannot believe. Per-dart entry has to produce evidence that
+survives, because a refusal a player cannot act on is a dead end:
+
+- **Only a leg-winning visit may record fewer than three darts.** A bust, by the engine's
+  convention, consumed the whole hand whatever the player had thrown when it happened. So a bust
+  after one dart records `dartsUsed: nil` — one is the observed count, three is the convention, and
+  nil is the only one of the three the record can stand behind.
+- **`dartsAtDouble` may not exceed `dartsUsed`**, clamped.
+- **`dartsAtDouble` may not be claimed from a remaining no three darts can finish.** The walk cannot
+  produce that — a one-dart finish is at most 60, and two darts take at most 120 off, so nothing
+  above 180 can reach one — and `testAOneDartFinishIsUnreachableFromAnythingThreeDartsCannotFinish`
+  walks every out rule, every start and every one- and two-dart run to prove the floor is never
+  load-bearing.
+
+And `MatchSession.dartsMayBeEntered` keeps Enter out of the light until the hand is spent or the
+visit has settled, so a two-dart entry that neither finishes nor busts is never offered to an engine
+that would refuse it. The Enter key says *"One more dart"* rather than sitting unlit and unexplained.
+
+## Six rows, because a ninth would cost the board its number
+
+The obvious dart keypad is nine rows: a ring row, five rows of sectors, a bull row and Enter. On the
+iPhone SE upright there are 647 points of safe area. A nine-row tray is 644 of them.
+
+```
+  9 rows: tray 644, board  63  ->  rungs of the hero ladder that fit: NONE
+  6 rows: tray 434, board 161  ->  rungs that fit: 96, 72, 56, 40
+```
+
+So the tray is six rows, exactly like the visit tray, and the design came out of the arithmetic
+rather than surviving it:
+
+```
+  1     SINGLE · DOUBLE · TREBLE        the ring, held
+  2–5   the twenty sectors, five a row, in the board's own order
+  6     25 · BULL · MISS · ENTER
+```
+
+- **The sectors are in the board's order, not 1-to-20.** A player looks for 20 where it is, between
+  1 and 5. A keypad in counting order is one you have to read rather than find.
+- **MISS sits between BULL and Enter.** Enter is the one control in this app that commits evidence,
+  so the key beside it should be the one that costs nothing when a thumb catches it: a slip onto
+  MISS adds zero, the same slip onto BULL would add fifty.
+- **The ring is held, and falls back to single after each dart.** Holding TREBLE across one dart is a
+  convenience; holding it across a visit is the mis-key that turns a 5 into a 15 with no tap in
+  between.
+- **A sector key shows the dart it would enter** — `20`, `D20`, `T20` — before the player commits to
+  it, not after.
+
+## The three darts go on the board, and the board was told about them
+
+`ThroDartLine` draws the entry under the head, where the chalk is, because that is what is being
+written and it is where a player is already looking. Each dart is its own tap target: tapping one
+takes back everything from it onwards, which is what a player means when they point at the middle
+dart and say *"that one was a five"*.
+
+A row drawn hopefully is a row that clips on the smallest phone, so `ThroStage.choose` gained
+`perDart:` and counts `dartLine` (44 + 8) into the head before it picks a rung. The cost is real and
+declared: on a 6.1-inch phone the hero stays at 96 and the ledger drops from rows to a tally; on the
+SE the hero steps from 96 to 56 and the ledger goes. That is the price of the notation, and it is
+the player's to choose — which is why the notation is a switch in the rail (`TOTAL` / `DARTS`) and
+not a setting buried somewhere, and why it is stored per device rather than per match.
+
+`TurnIndicator` was deleted three slices ago with the note *"they come back the day per-dart entry
+gives them something true to show."* This is that day, and what came back is not three empty pips
+but the three darts themselves.
+
+## What per-dart entry actually buys
+
+A 141 checkout, typed as a total, stops the player twice mid-celebration: *how many darts?* and
+*how many at a double?* Entered as darts it asks nothing — both answers are in the evidence. And
+`dartsUsed` and `dartsAtDouble`, which are **nil on every visit today** unless PD-001 interrupts,
+start arriving on every visit a per-dart scorer enters.
+
+## A gap this slice can see and does not close
+
+Under double-out the winning dart must be a double. The engine scores a visit, not a dart, so it can
+only ask whether the score *before* the visit was finishable — a player on 6 who records 6 wins the
+leg whether the last dart was D3 or S6. That is true of the app today and is why PD-001 asks about
+doubles at all.
+
+Entering three darts makes the last dart's ring visible for the first time, so the app could now
+tell the difference. It does not. There is only one honest way to act on it and both halves are out
+of reach here: the engine would have to become dart-aware, in Swift and Kotlin together, behind the
+conformance corpus ADR-002 keeps them parallel with — or the entry layer would have to overrule the
+engine about what a bust is, putting two authorities on the one question the design exists to keep
+in one place. It is recorded in `DartVisit.swift` and here, and nothing claims to catch it.
+
+## Held
+
+20 design tests on the keypad, 5 net new on the evidence rules (9 written, 4 replaced because they
+asserted the definition this slice corrects), 11 on the session. 548 in all. All 18
+`tools/check_*.py` green — two of which caught defects in this slice before CI did:
+`check_tokens_exist.py` found a test file naming `ThroSpacing` without importing `ThroTokens` (the
+exact failure that cost a CI round last time), and `check_test_counts.py` found four stale numbers
+in the README and the runbook.

@@ -210,19 +210,27 @@ public struct MatchHeader: View {
     private let format: String?
     private let onBack: (() -> Void)?
     private let onEnd: (() -> Void)?
+    /// The scoring notation in use, and how to change it. A word rather than a glyph, because the
+    /// two notations are TOTAL and DARTS and there is no icon for either that a player would read
+    /// correctly the first time. Shown only when both are supplied.
+    private let mode: String?
+    private let onSwitchMode: (() -> Void)?
     /// Whether this rail sits on a board (SLATE D.1). On paper it keeps the surface and hairline it
     /// has always had; on a board it takes the board's own inks, no fill of its own, and a
     /// `ChalkRule` instead of a 1.26:1 hairline nobody can see.
     private let onBoard: Bool
 
     public init(competition: String, round: String? = nil, board: String? = nil, format: String? = nil,
-                onBack: (() -> Void)? = nil, onEnd: (() -> Void)? = nil, onBoard: Bool = false) {
+                onBack: (() -> Void)? = nil, onEnd: (() -> Void)? = nil,
+                mode: String? = nil, onSwitchMode: (() -> Void)? = nil, onBoard: Bool = false) {
         self.competition = competition
         self.round = round
         self.board = board
         self.format = format
         self.onBack = onBack
         self.onEnd = onEnd
+        self.mode = mode
+        self.onSwitchMode = onSwitchMode
         self.onBoard = onBoard
     }
 
@@ -249,6 +257,25 @@ public struct MatchHeader: View {
                 if let round { cell("Round", round, sport: false) }
                 if let board { cell("Board", board, sport: true) }
                 if let format { cell("Format", format, sport: true) }
+            }
+            if let mode, let onSwitchMode {
+                Button(action: onSwitchMode) {
+                    Text(mode)
+                        .thro(ThroTypography.labelStrong.uppercase(true).tracking(em: 0.06))
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.8)
+                        .foregroundStyle(primaryInk)
+                        .padding(.horizontal, ThroSpacing.spacing2)
+                        .frame(minWidth: ThroSpacing.touchTargetMinimum,
+                               minHeight: ThroSpacing.touchTargetMinimum)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(ThroPressStyle(radius: ThroSpacing.radiusStatus))
+                // The label says what you are using; the hint says what tapping does. A control
+                // whose label is its own state has to say both, or a screen-reader player cannot
+                // tell whether TOTAL is what they have or what they would get.
+                .accessibilityLabel("Scoring by \(mode.lowercased())")
+                .accessibilityHint("Switches how a visit is entered")
             }
             if let onEnd {
                 Button(action: onEnd) {

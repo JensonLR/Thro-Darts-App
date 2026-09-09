@@ -58,6 +58,15 @@ public struct ThroStage: Equatable, Sendable {
 
     /// The rail: 6 + a 44 pt control + 6.
     public static let rail: CGFloat = 52
+
+    /// The line of three darts, when the player is scoring dart by dart: a 44 pt row and the gap
+    /// above it.
+    ///
+    /// It is on the board rather than in the tray because it is what is being written, and because
+    /// a player checks it against what they threw while they are still looking at the board. It is
+    /// counted here rather than drawn hopefully: a row the arithmetic does not know about is a row
+    /// that clips on the smallest phone, and this screen's one promise is that it never does.
+    public static let dartLine: CGFloat = ThroSpacing.touchTargetMinimum + ThroSpacing.spacing2
     /// The head's fixed furniture — names, the gap, the basis rules, and its padding — everything
     /// except the numerals themselves, whose height is the cap box of whichever rung is chosen.
     public static let headFurniture: CGFloat = 63
@@ -100,6 +109,7 @@ public struct ThroStage: Equatable, Sendable {
     /// rather than read, so this stays a pure function and a test can walk the range.
     public static func choose(width: CGFloat, height: CGFloat,
                               onAFinish: Bool = false,
+                              perDart: Bool = false,
                               textScale: CGFloat = 1) -> ThroStage {
         let arrangement: Arrangement = width >= height * besideRatio ? .beside : .stacked
         let trayWidth = arrangement == .beside ? min(trayMaximum, width * 0.42) : width
@@ -116,7 +126,7 @@ public struct ThroStage: Equatable, Sendable {
 
         // What is left for the board: everything but the rail, and — when stacked — the tray.
         let boardHeight = height - rail - (arrangement == .stacked ? trayHeight : 0)
-        let headFixed = headFurniture + (onAFinish ? checkoutRow : 0)
+        let headFixed = headFurniture + (onAFinish ? checkoutRow : 0) + (perDart ? dartLine : 0)
 
         // The largest rung whose two registers fit across the board AND whose head fits down it,
         // with the ledger's floor still standing. Largest first, so the first that fits wins.

@@ -757,4 +757,156 @@ final class MatchSessionTests: XCTestCase {
         XCTAssertEqual(matches?.note?.contains("1 ended in a retirement"), true, matches?.note ?? "no note")
         XCTAssertEqual(matches?.note?.contains("1 abandoned with no result"), true, matches?.note ?? "no note")
     }
+
+    // MARK: - per-dart entry
+
+    func testThreeDartsCommitAsOneVisitWithTheSameTotalATypedTotalWouldHave() throws {
+        let s = try session()
+        s.dart(.treble(20)!); s.dart(.treble(20)!); s.dart(.treble(20)!)
+        XCTAssertEqual(s.darts.total, 180)
+        XCTAssertEqual(s.darts.written, "T20 T20 T20")
+        s.enterDarts()
+        XCTAssertEqual(s.remaining(.home), 321)
+        XCTAssertEqual(s.visits.count, 1)
+        XCTAssertEqual(s.visits[0].visitTotal, 180)
+        XCTAssertTrue(s.darts.isEmpty, "the entry is spent")
+        XCTAssertEqual(s.thrower, .away)
+    }
+
+    func testAFourthDartIsRefused() throws {
+        let s = try session()
+        for _ in 0..<4 { s.dart(.single(1)!) }
+        XCTAssertEqual(s.darts.darts.count, 3)
+    }
+
+    func testACheckoutEnteredAsDartsIsNotAskedPDZeroZeroOnesQuestions() throws {
+        // **What per-dart entry is for.** Typed as a total, a 141 finish stops the player twice —
+        // how many darts, and how many at a double — mid-celebration. Entered as darts it answers
+        // both from the evidence and asks nothing.
+        let s = try session()
+        bringHomeToAFinish(s)
+        s.dart(.treble(20)!); s.dart(.treble(19)!); s.dart(.double(12)!)
+        XCTAssertTrue(s.dartsMayBeEntered)
+        s.enterDarts()
+        XCTAssertNil(s.prompt, "the player was not stopped and asked what they had just told the app")
+        XCTAssertEqual(s.visits.count, 5)
+        XCTAssertEqual(s.visits[4].dartsUsed, 3)
+        XCTAssertEqual(s.visits[4].dartsAtDouble, 1, "one dart at a double: 141, 81 and then 24")
+        XCTAssertTrue(s.visits[4].wonLeg)
+    }
+
+    func testAThreeDartCheckoutOnTheLastDartRecordsOneDartAtADouble() throws {
+        // The same finish typed as a total answers "3" and "1" only if the player remembers to; the
+        // point of the evidence path is that the two answers now agree by construction.
+        let s = try session()
+        bringHomeToAFinish(s)
+        s.quick(141)
+        XCTAssertNotNil(s.prompt, "typed, it still asks")
+        s.answer(3)
+        s.answer(1)
+        XCTAssertEqual(s.visits.last?.dartsUsed, 3)
+        XCTAssertEqual(s.visits.last?.dartsAtDouble, 1)
+    }
+
+    func testAOneDartCheckoutCarriesOneDart() throws {
+        let s = try session()
+        s.quick(180); s.quick(60)
+        s.quick(180); s.quick(60)
+        s.quick(101)                       // home 141 → 40
+        XCTAssertNotNil(s.prompt)
+        s.answer(0)                        // darts at a double, not a finish
+        XCTAssertEqual(s.remaining(.home), 40)
+        s.quick(60)                        // away throws
+        XCTAssertEqual(s.thrower, .home)
+        s.dart(.double(20)!)
+        XCTAssertTrue(s.dartsMayBeEntered, "a finish may be entered before the hand is spent")
+        s.enterDarts()
+        XCTAssertNil(s.prompt)
+        XCTAssertEqual(s.visits.last?.dartsUsed, 1)
+        XCTAssertEqual(s.visits.last?.dartsAtDouble, 1)
+        XCTAssertTrue(s.visits.last?.wonLeg ?? false)
+    }
+
+    func testAPartEnteredVisitCannotBeCommitted() throws {
+        // Two darts that neither finish nor bust is a visit the engine refuses, so Enter is out of
+        // the light rather than a dead end the player has to discover.
+        let s = try session()
+        s.dart(.treble(20)!); s.dart(.treble(20)!)
+        XCTAssertFalse(s.dartsMayBeEntered)
+        s.enterDarts()
+        XCTAssertEqual(s.visits.count, 0, "nothing was written")
+        XCTAssertEqual(s.darts.darts.count, 2, "and nothing was lost")
+        s.dart(.miss)
+        XCTAssertTrue(s.dartsMayBeEntered)
+        s.enterDarts()
+        XCTAssertEqual(s.visits.count, 1)
+        XCTAssertEqual(s.visits[0].visitTotal, 120)
+        XCTAssertEqual(s.visits[0].dartsUsed, 3)
+    }
+
+    func testABustAfterOneDartMayBeEnteredAndRecordsNoDartCount() throws {
+        // On 20 a double 20 goes below zero. The player stops; the record does not claim one dart,
+        // because the engine's convention is that a bust consumed the whole hand.
+        let s = try session()
+        s.quick(180); s.quick(60)
+        s.quick(180); s.quick(60)
+        s.quick(121)                       // home 141 → 20
+        s.answer(0)
+        s.quick(60)
+        XCTAssertEqual(s.remaining(.home), 20)
+        s.dart(.double(20)!)
+        XCTAssertTrue(s.dartsMayBeEntered, "a bust settles the visit; there is nothing more to throw")
+        s.enterDarts()
+        XCTAssertEqual(s.remaining(.home), 20, "the score is restored")
+        XCTAssertTrue(s.visits.last?.bust ?? false)
+        XCTAssertNil(s.visits.last?.dartsUsed)
+    }
+
+    func testUndoTakesBackOneDartBeforeItTakesBackTheRecord() throws {
+        let s = try session()
+        s.dart(.treble(20)!); s.dart(.single(5)!)
+        s.undoKey()
+        XCTAssertEqual(s.darts.written, "T20", "one dart, not the hand")
+        XCTAssertNil(s.retraction)
+        s.undoKey()
+        XCTAssertTrue(s.darts.isEmpty)
+        XCTAssertNil(s.retraction, "still nothing on the record to strike")
+        s.undoKey()
+        XCTAssertNil(s.retraction, "and no visit yet, so nothing is proposed")
+    }
+
+    func testTakingBackADartTakesBackEverythingAfterIt() throws {
+        // What a player means when they point at the middle dart: that one was wrong, and the one
+        // after it was entered on top of a wrong number.
+        let s = try session()
+        s.dart(.treble(20)!); s.dart(.double(16)!); s.dart(.single(5)!)
+        s.takeBackDarts(from: 1)
+        XCTAssertEqual(s.darts.written, "T20")
+        s.takeBackDarts(from: 5)
+        XCTAssertEqual(s.darts.written, "T20", "an index that is not there changes nothing")
+        s.takeBackDarts(from: 0)
+        XCTAssertTrue(s.darts.isEmpty)
+    }
+
+    func testSwitchingNotationMidVisitLeavesNothingBehind() throws {
+        // The screen calls `clearEntry` when the keypad changes, because three darts have a total
+        // but a total does not have three darts.
+        let s = try session()
+        s.dart(.treble(20)!)
+        s.digit("6"); s.digit("0")
+        s.clearEntry()
+        XCTAssertTrue(s.darts.isEmpty)
+        XCTAssertEqual(s.entry, "")
+    }
+
+    func testAVisitEnteredAsDartsLandsOnTheLedgerLikeAnyOther() throws {
+        let s = try session()
+        s.dart(.treble(20)!); s.dart(.treble(20)!); s.dart(.treble(20)!)
+        s.enterDarts()
+        XCTAssertEqual(s.ledger.count, 1)
+        XCTAssertEqual(s.ledger[0].visitTotal, 180)
+        XCTAssertEqual(s.ledger[0].remainingAfter, 321)
+        XCTAssertFalse(s.ledger[0].struck)
+    }
+
 }
