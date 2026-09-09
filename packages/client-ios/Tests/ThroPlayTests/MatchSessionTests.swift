@@ -998,4 +998,42 @@ final class MatchSessionTests: XCTestCase {
         XCTAssertTrue(s.prompt?.options.contains(1) ?? false)
     }
 
+
+    func testADartThatCannotEndTheLegIsRefusedOnTheBoardAndWritesNothing() throws {
+        // The runbook tells the founder this happens, in these words, so something has to hold it:
+        // on 60 a `T20` reaches zero on a treble, which under double-out is a bust and not a
+        // checkout. The engine would call it a leg won (see OD-023), so the entry layer refuses it.
+        let s = try session()
+        s.quick(180); s.quick(60)
+        s.quick(180); s.quick(60)
+        s.quick(81)                                  // home 141 → 60
+        s.answer(0)                                  // darts at a double, from a finish
+        s.quick(60)
+        XCTAssertEqual(s.remaining(.home), 60)
+        XCTAssertEqual(s.thrower, .home)
+        let written = s.visits.count
+
+        s.dart(.treble(20)!)
+        XCTAssertTrue(s.dartsMayBeEntered, "it settles the visit, so Enter is offered")
+        s.enterDarts()
+
+        XCTAssertEqual(s.visits.count, written, "nothing was written")
+        XCTAssertEqual(s.remaining(.home), 60, "and nothing moved")
+        XCTAssertFalse(s.visits.last?.wonLeg ?? false)
+        XCTAssertEqual(s.notice?.tone, .error)
+        XCTAssertTrue(s.notice?.text.contains("T20") ?? false, s.notice?.text ?? "no notice")
+        XCTAssertTrue(s.notice?.text.contains("a double") ?? false, s.notice?.text ?? "no notice")
+        XCTAssertEqual(s.darts.written, "T20", "the dart is still there to be taken back")
+    }
+
+    func testTheSameDartIsAcceptedWhereTheOutRuleAllowsIt() throws {
+        // The refusal is the out rule's, not a rule of its own: under master-out a treble ends a
+        // leg, and 60 is `T20`. If this ever starts refusing it, the check has stopped reading the
+        // match's rule and started asserting double-out everywhere.
+        XCTAssertNil(DartVisit.illegalFinish(ThroDartEntry([ThroDart.treble(20)!]),
+                                             from: 60, outRule: .master))
+        XCTAssertEqual(DartVisit.illegalFinish(ThroDartEntry([ThroDart.treble(20)!]),
+                                               from: 60, outRule: .double)?.written, "T20")
+    }
+
 }

@@ -164,6 +164,34 @@ final class StageTests: XCTestCase {
                              "a 52 pt row was added to the board and nothing anywhere gave way")
     }
 
+    func testTheSmallestPhoneEnteringDartsOnAFinishGivesUpTheRouteAndTheLedger() {
+        // The runbook tells the founder exactly this, in these words, so it is held here rather
+        // than left as prose that decays. The SE upright has 647 points of safe area; the tray
+        // takes 434 and the rail 52, leaving the board 161. Its furniture is 63, the three darts
+        // 52 and the checkout route 39 — 154 before a single numeral is drawn.
+        let se = StageTests.devices[0]
+        XCTAssertEqual(se.name, "iPhone SE (3rd gen)", "the tightest device moved")
+        let safe = se.height - se.portraitInsets.top - se.portraitInsets.bottom
+        let stage = ThroStage.choose(width: se.width, height: safe, onAFinish: true, perDart: true)
+
+        XCTAssertFalse(stage.checkout, "the route is asked for and there is no room for it")
+        XCTAssertEqual(stage.ledger, .hidden)
+        XCTAssertEqual(stage.hero, 56, "the third rung — still a number you can read from an oche")
+        XCTAssertTrue(ThroTypography.ladder.contains(stage.hero), "and it is on the ladder")
+        XCTAssertEqual(stage.keyHeight, ThroSpacing.touchTargetScoring,
+                       "the keys are untouched: this phone pays for the row out of the board")
+        XCTAssertTrue(stage.keysFit(in: safe))
+
+        // The same phone typing totals keeps the route, so nothing above is a general regression.
+        // Its hero is 72 rather than 96, and that is the checkout row's own cost and predates this:
+        // the SE upright fits the top rung only when nobody is on a finish.
+        let totals = ThroStage.choose(width: se.width, height: safe, onAFinish: true)
+        XCTAssertTrue(totals.checkout)
+        XCTAssertEqual(totals.hero, 72)
+        XCTAssertEqual(ThroStage.choose(width: se.width, height: safe).hero, 96,
+                       "and off a finish it is still the biggest number on the ladder")
+    }
+
     func testTheNotationOnlyChangesTheBoardWhereTheBoardCannotHoldTheRow() {
         // The other half: a screen with room must be **identical** in both notations apart from the
         // row itself. A change to the tray's height or the hero on a device that had the space

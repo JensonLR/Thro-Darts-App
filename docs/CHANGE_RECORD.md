@@ -1858,3 +1858,24 @@ and `ThroDartEntry`, which are `ThroDesign`'s, and the file had no import for th
 Linux instead of four minutes on a runner.
 
 573 tests.
+
+## Two claims the runbook now makes to the founder, held by tests
+
+The runbook's first-run plan tells the founder, in these words, that two surprising things are
+deliberate. A sentence in a runbook that nothing checks is the defect this repository has been
+caught by more than once, so both are assertions now.
+
+- **On 60, entering `T20` is refused with the reason.** A treble cannot end a double-out leg; the
+  engine would call it a leg won (OD-023). The session test plays a real match to 60, enters the
+  dart, presses Enter and asserts that **nothing was written**, the score did not move, the notice
+  names `T20` and the rule, and the dart is still there to take back. A companion assertion holds
+  that the same dart is **accepted** under master-out, so the refusal stays the out rule's rather
+  than becoming a rule of its own.
+- **On an iPhone SE, entering darts on a finish, the route and the ledger go and the score is 56 pt.**
+  Writing that test corrected the runbook: I had written *"the number never shrinks below the
+  ladder"*, which is true and vague. The real numbers are 72 in totals mode and **56** entering
+  darts — and off a finish the same phone still gets the top rung at 96. The checkout row's own cost
+  on that phone predates this round entirely; the sentence now says so.
+
+**CI green at `3734411`:** 573 tests, the app target builds for the simulator, 19 guards and the
+token gate.
