@@ -470,6 +470,18 @@ def main():
     if len(rows) + sum(1 for b in breaches if "cannot be checked" in b) != expected:
         breaches.append(f"the gate checked {len(rows)} pairs, not the {expected} its lists name — "
                         "a pair has gone missing")
+    # **The number in the README is a claim like any other.** It said 60 for four days after the
+    # board's eighteen pairs and the status inks took it to 82 — the same drift `check_test_counts`
+    # exists to stop, in the one document a reader trusts most, and nothing was watching it because
+    # it is not a test count. It is watched here, where the real number is computed.
+    readme = (HERE.parent.parent / "README.md").read_text(encoding="utf-8")
+    stated = re.search(r"\|\s*Design tokens\s*\|\s*(\d+) contrast pairs", readme)
+    if not stated:
+        breaches.append("the README no longer states a contrast-pair count where this check looks "
+                        "for one — a claim that has quietly stopped being checked")
+    elif int(stated.group(1)) != len(rows):
+        breaches.append(f"the README says {stated.group(1)} contrast pairs; the gate checks "
+                        f"{len(rows)}")
     n_sets = sum(1 for k in artefacts if k.endswith(".colorset/Contents.json"))
     print(f"tokens: {len(doc['tokens'])}  platforms: swift ({n_sets} colour sets), kotlin, css")
     print(f"contrast: {len(rows)} pairs checked, {n_fail} below threshold, "
