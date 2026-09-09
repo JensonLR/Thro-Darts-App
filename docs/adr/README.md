@@ -22,6 +22,7 @@ a guess wearing a suit.
 | [014](ADR-014-configuration-and-policy.md) | Configuration and policy versioning | Accepted |
 | [015](ADR-015-notifications.md) | Notifications | Accepted |
 | [016](ADR-016-organisational-vocabulary.md) | Organisational vocabulary: Team, Venue, League, Tournament, Series — Club is not an entity | Accepted |
+| [017](ADR-017-organisational-state.md) | Organisational state: server-authoritative versioned rows beside the evidence log; refused, never overwritten | Accepted |
 
 ## Standing constraint on all of them
 

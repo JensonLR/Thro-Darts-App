@@ -92,7 +92,7 @@ packages/
 services/
   api/            Migrations, the command path, and the playtest harness
 docs/
-  adr/            16 architecture decision records
+  adr/            17 architecture decision records
   architecture/   Conformance corpus spec, latency budgets
   design/         Design authority — provenance, inventory, contrast matrix,
                   token health, what the system does not specify
