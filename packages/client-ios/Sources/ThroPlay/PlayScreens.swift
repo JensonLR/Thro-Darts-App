@@ -380,8 +380,10 @@ public struct ScoringScreen: View {
         // ladder and a shorter ledger, not a scroll bar under their scoring thumb. The keypad keeps
         // its own pin, which was always a separate promise: the key under a thumb does not move.
         //
-        // 440 screens hold this: eleven devices, both ways up, every Dynamic Type size, on a finish
-        // and not. See `StageTests`.
+        // 1,056 screens hold this: eleven devices, both ways up, every Dynamic Type size, on a
+        // finish and not, and in both notations — the last of those because per-dart entry puts a
+        // 52 pt row on the board and walking only one notation would leave the other's arithmetic
+        // asserted by nothing. See `StageTests`.
         .onReceive(session.$state) { state in
             if state.isComplete { onComplete() }
         }
@@ -428,8 +430,13 @@ public struct ScoringScreen: View {
         .onChange(of: session.notice?.text) { _, text in
             // A refusal never reached the board at all, so it is `absent` rather than struck.
             guard let text, session.notice?.tone == .error else { return }
-            show(ThroChalkMark(kind: .refused, figure: session.entry.isEmpty ? "—" : session.entry,
-                               detail: text))
+            // What was refused, in the notation it was entered in. `session.entry` is the typed
+            // string and is EMPTY in per-dart mode, so a refused visit of three darts used to put
+            // an em dash on the board with the reason beside it — a mark about nothing.
+            let refused = session.darts.isEmpty
+                ? (session.entry.isEmpty ? "—" : session.entry)
+                : "\(session.darts.total)"
+            show(ThroChalkMark(kind: .refused, figure: refused, detail: text))
         }
         .onAppear {
             setIdleTimer(disabled: keepScreenAwake)
@@ -514,7 +521,10 @@ public struct ScoringScreen: View {
                     .padding(.horizontal, ThroStage.gutter)
                     .padding(.top, ThroSpacing.spacing2)
                     .accessibilityAddTraits(.isStaticText)
-            } else if session.bust == nil, session.throwerOnAFinish, let seat = session.thrower {
+            } else if session.bust == nil, stage.checkout, let seat = session.thrower {
+                // `stage.checkout` and not `session.throwerOnAFinish`: the route is drawn only where
+                // the board can hold it. It is the second thing to give way after the ledger, and
+                // `ThroStage` is where that order is decided rather than here.
                 CheckoutCard(required: session.remaining(seat), route: session.throwerRoute,
                              compact: true, hideValue: true)
                     .padding(.top, ThroSpacing.spacing2)

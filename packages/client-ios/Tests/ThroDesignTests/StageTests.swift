@@ -77,12 +77,19 @@ final class StageTests: XCTestCase {
     // MARK: - The claim
 
     func testTheScoringScreenFitsOnEveryDeviceBothWaysUpAtEveryTextSize() {
+        // **Both notations, because per-dart entry added a row to the board.** `ThroStage.choose`
+        // gained `perDart:` and counts `dartLine` into the head, which changes which rung fits and
+        // what the ledger can honestly show. This claim — the whole reason this file exists — was
+        // written before that mode existed, and walking only one of the two would have left the
+        // other's arithmetic asserted by nothing.
         for screen in StageTests.everyScreen() {
             for scale in StageTests.textScales {
-                for finish in [false, true] {
+                for (finish, perDart) in [(false, false), (true, false), (false, true), (true, true)] {
                     let stage = ThroStage.choose(width: screen.width, height: screen.height,
-                                                 onAFinish: finish, textScale: scale)
-                    let where_ = "\(screen.name) at \(scale)× \(finish ? "on a finish" : "")"
+                                                 onAFinish: finish, perDart: perDart,
+                                                 textScale: scale)
+                    let where_ = "\(screen.name) at \(scale)× \(finish ? "on a finish " : "")"
+                        + "\(perDart ? "entering darts" : "entering totals")"
 
                     // Every key is hittable AND the tray fits. Both, because either alone is a
                     // lie: keyHeight is clamped at 44 so it never reports an unhittable key, which
@@ -101,8 +108,12 @@ final class StageTests: XCTestCase {
                         ? ThroStage.trayRows * stage.keyHeight
                             + (ThroStage.trayRows - 1) * ThroStage.trayGap + ThroStage.trayPadding
                         : 0
-                    let head = ThroStage.headFurniture + (finish ? ThroStage.checkoutRow : 0)
+                    let head = ThroStage.headFurniture
+                        + (stage.checkout ? ThroStage.checkoutRow : 0)
+                        + (perDart ? ThroStage.dartLine : 0)
                         + ThroStage.capBox(stage.hero, textScale: scale)
+                    XCTAssertFalse(stage.checkout && !finish,
+                                   "\(where_): a checkout row where nobody is on a finish")
                     let ledger: CGFloat
                     switch stage.ledger {
                     case let .rows(n): ledger = CGFloat(n) * ThroStage.ledgerRow
@@ -113,6 +124,59 @@ final class StageTests: XCTestCase {
                                              screen.height + 0.5,
                                              "\(where_): the screen does not fit")
                 }
+            }
+        }
+    }
+
+    func testEnteringDartsCostsTheBoardSomethingAndItIsNeverTheNumberOrTheKeys() {
+        // **The order of sacrifice, with a row added to the board.** A line of three darts is 52
+        // points the board did not have to find before, and on the smallest phone there is nowhere
+        // free to find it. What gives way is stated rather than discovered: the ledger first, then
+        // the checkout route, then the tray's comfort down to the accessibility floor — and never
+        // the hero, never a key below 44, never a scroll.
+        var routeDropped = 0
+        var keysShrank = 0
+        for screen in StageTests.everyScreen() {
+            for scale in StageTests.textScales {
+                for finish in [false, true] {
+                    let totals = ThroStage.choose(width: screen.width, height: screen.height,
+                                                  onAFinish: finish, perDart: false, textScale: scale)
+                    let darts = ThroStage.choose(width: screen.width, height: screen.height,
+                                                 onAFinish: finish, perDart: true, textScale: scale)
+                    let where_ = "\(screen.name) at \(scale)×\(finish ? " on a finish" : "")"
+
+                    // Entering darts can never buy anything: every part of the board is the same or
+                    // smaller, never larger.
+                    XCTAssertLessThanOrEqual(darts.hero, totals.hero, where_)
+                    XCTAssertLessThanOrEqual(darts.ledgerRows, totals.ledgerRows, where_)
+                    XCTAssertLessThanOrEqual(darts.keyHeight, totals.keyHeight, where_)
+                    if !totals.checkout { XCTAssertFalse(darts.checkout, where_) }
+
+                    XCTAssertGreaterThanOrEqual(darts.keyHeight, ThroSpacing.touchTargetMinimum, where_)
+                    XCTAssertTrue(darts.keysFit(in: screen.height), where_)
+                    if totals.checkout && !darts.checkout { routeDropped += 1 }
+                    if darts.keyHeight < totals.keyHeight { keysShrank += 1 }
+                }
+            }
+        }
+        // And it costs something somewhere, or the row is being drawn out of thin air.
+        XCTAssertGreaterThan(routeDropped + keysShrank, 0,
+                             "a 52 pt row was added to the board and nothing anywhere gave way")
+    }
+
+    func testTheNotationOnlyChangesTheBoardWhereTheBoardCannotHoldTheRow() {
+        // The other half: a screen with room must be **identical** in both notations apart from the
+        // row itself. A change to the tray's height or the hero on a device that had the space
+        // would mean the arithmetic is charging for the row twice.
+        for screen in StageTests.everyScreen() where screen.name.hasPrefix("iPad") {
+            for scale in StageTests.textScales {
+                let totals = ThroStage.choose(width: screen.width, height: screen.height,
+                                              textScale: scale)
+                let darts = ThroStage.choose(width: screen.width, height: screen.height,
+                                             perDart: true, textScale: scale)
+                XCTAssertEqual(darts.keyHeight, totals.keyHeight, screen.name)
+                XCTAssertEqual(darts.hero, totals.hero, screen.name)
+                XCTAssertEqual(darts.arrangement, totals.arrangement, screen.name)
             }
         }
     }

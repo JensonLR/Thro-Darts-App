@@ -49,6 +49,14 @@ public struct ThroStage: Equatable, Sendable {
     /// The opponent's numeral. One rung down, so it is legible without competing.
     public let opponent: CGFloat
     public let ledger: Ledger
+    /// Whether the checkout route is drawn under the head.
+    ///
+    /// **The second thing to give way, after the ledger and before anything else.** The route is a
+    /// suggestion; the number, the keys and the darts being entered are the product. It goes only
+    /// where the board cannot hold its own furniture plus the smallest rung of the ladder — which,
+    /// across eleven devices both ways up at every text size, is the iPhone SE upright while a
+    /// player is entering darts, and nowhere else at all.
+    public let checkout: Bool
     /// The height of one key in the tray.
     public let keyHeight: CGFloat
     /// How wide the tray is as a fraction of the screen, in `beside`. Zero when stacked.
@@ -114,9 +122,26 @@ public struct ThroStage: Equatable, Sendable {
         let arrangement: Arrangement = width >= height * besideRatio ? .beside : .stacked
         let trayWidth = arrangement == .beside ? min(trayMaximum, width * 0.42) : width
         let boardWidth = arrangement == .beside ? width - trayWidth : width
+        let dart = perDart ? dartLine : 0
 
-        // The tray's height. Stacked, it takes what it needs; beside, it has the whole screen.
-        let trayRoom = arrangement == .beside ? height : trayIdeal
+        // **The least the board can honestly be drawn in**, and the tray may not take it.
+        //
+        // Its furniture, the line of darts when there is one, and the smallest rung of the ladder.
+        // The checkout row is deliberately not in it: the route is the first thing to go, and
+        // reserving room for it would take that room from the number instead.
+        //
+        // The tray used to take `trayIdeal` unconditionally and the board took what was left, which
+        // was right while the board's contents were fixed. Adding a row to the board broke it: on
+        // the iPhone SE upright at the largest accessibility sizes, a player entering darts got a
+        // board 5 points shorter than its own smallest layout — and `keysFit` would have reported a
+        // comfortable 64 pt key sitting above a clipped board.
+        let boardFloor = headFurniture + dart
+            + capBox(ThroTypography.ladder.last ?? 40, textScale: textScale)
+
+        // The tray's height. Stacked, it takes what it needs and no more than is left; beside, it
+        // has the whole screen. A key never goes below the accessibility floor, and a tray that
+        // still does not fit is a failure `keysFit` reports rather than one this hides.
+        let trayRoom = arrangement == .beside ? height : min(trayIdeal, max(0, height - rail - boardFloor))
         let keyHeight = max(ThroSpacing.touchTargetMinimum,
                             min(ThroSpacing.touchTargetScoring,
                                 ((trayRoom - trayPadding - (trayRows - 1) * trayGap) / trayRows).rounded(.down)))
@@ -126,7 +151,15 @@ public struct ThroStage: Equatable, Sendable {
 
         // What is left for the board: everything but the rail, and — when stacked — the tray.
         let boardHeight = height - rail - (arrangement == .stacked ? trayHeight : 0)
-        let headFixed = headFurniture + (onAFinish ? checkoutRow : 0) + (perDart ? dartLine : 0)
+
+        // The route gives way where the board cannot hold it and the smallest rung together. It is
+        // a suggestion; the number is the product.
+        var checkout = onAFinish
+        var headFixed = headFurniture + (checkout ? checkoutRow : 0) + dart
+        if checkout, headFixed + capBox(ThroTypography.ladder.last ?? 40, textScale: textScale) > boardHeight {
+            checkout = false
+            headFixed = headFurniture + dart
+        }
 
         // The largest rung whose two registers fit across the board AND whose head fits down it,
         // with the ledger's floor still standing. Largest first, so the first that fits wins.
@@ -147,7 +180,7 @@ public struct ThroStage: Equatable, Sendable {
         }
 
         return ThroStage(arrangement: arrangement, hero: hero, opponent: opponent, ledger: ledger,
-                         keyHeight: keyHeight,
+                         checkout: checkout, keyHeight: keyHeight,
                          trayFraction: arrangement == .beside ? trayWidth / width : 0)
     }
 

@@ -1666,3 +1666,67 @@ were added, and that profile now shows it at 96 pt. Nothing here reopens PD-023;
 for player pictures runs into their own earlier decision, and that is theirs to revisit.
 
 563 tests. 19 guards green.
+
+---
+
+# The row I added to the board, and what it cost
+
+`ThroStage.choose` gained `perDart:` in the keypad slice, and the test that holds this screen's one
+promise — *on every device THRØ runs on, in every orientation, at every text size, the scoring
+screen fits without scrolling and every key is still big enough to hit* — was written before that
+mode existed. It walked one notation of two.
+
+A Python model of `choose`, run before the push, found fourteen failures the walk would have found
+on a macOS runner four minutes later. All of them the iPhone SE upright, entering darts:
+
+```
+iPhone SE upright, on a finish, entering darts: hero 40, sum 670 > 647
+```
+
+The board there is 161 points. Its furniture is 63, the checkout route 39, a line of three darts 52,
+and the smallest rung's cap box 30 — **184**. There is no rung of the ladder that fits, and
+`ladderRung` returns the floor rather than crashing, so the screen simply overflowed.
+
+## Two things now give way, in a stated order
+
+The screen already had an order of sacrifice: **the ledger before the number**. It has two more
+steps, and both are decided in `ThroStage` rather than in the view.
+
+1. **The ledger**, as before.
+2. **The checkout route.** It is a suggestion; the number, the keys and the darts being entered are
+   the product. `ThroStage.checkout` says whether it is drawn, and `ScoringScreen` reads that
+   instead of asking whether the thrower is on a finish.
+3. **The tray's comfort**, down to the accessibility floor. The tray used to take `trayIdeal`
+   unconditionally and the board took what was left, which was right while the board's contents were
+   fixed. It now takes the lesser of `trayIdeal` and what is left after the board's own floor — its
+   furniture, the dart line, and the smallest rung. A key never goes below 44, and a tray that still
+   does not fit is a failure `keysFit` reports rather than one this hides.
+
+Never the hero, never a key under 44, never a scroll.
+
+## What it actually costs, measured
+
+Across eleven devices both ways up at every Dynamic Type size, in both notations — 1,056 screens:
+
+| | happens | where |
+|---|---|---|
+| checkout route dropped | 12 of 1,056 | iPhone SE upright, entering darts, on a finish |
+| tray shrunk (64 → 63) | 4 of 1,056 | iPhone SE upright, entering darts, largest two accessibility sizes |
+| **visit-total mode changed** | **0** | — |
+
+Two tests hold that, and the second is the one that matters as much as the first: **entering darts
+can never buy anything** — hero, ledger rows, key height and the checkout route are all the same or
+smaller, never larger — and **a screen with room is identical in both notations**, asserted on every
+iPad, so the arithmetic cannot start charging for the row twice.
+
+A third assertion is that it costs something *somewhere*: if a 52 pt row goes onto the board and
+nothing anywhere gives way, the row is being drawn out of thin air.
+
+## And the mark that confirmed nothing
+
+`ScoringScreen` draws a refused entry on the board as a chalk mark carrying what was refused.
+It read `session.entry`, which is the **typed** string and is empty in per-dart mode — so a refused
+visit of three darts put an em dash on the board with a reason beside it. It carries the darts'
+total now, in whichever notation the visit was entered.
+
+565 tests. 19 guards green.
