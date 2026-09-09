@@ -2021,3 +2021,52 @@ and *"Enter the total of three darts"*, with the hint still saying that tapping 
 `MatchHeader` takes `modeSpoken:` as a defaulted parameter, so every other caller is untouched and
 one that has nothing better to say falls back to the word on the key. A test holds that the spoken
 form is a sentence rather than the label with different capitals.
+
+## "Deleted" was true of the use and not of the type
+
+A scan for public API referenced nowhere but its own declaration turned up **19** across the client,
+and one of them was a claim this record already made:
+
+> ### `TurnIndicator` is deleted rather than fixed
+
+Its *use* was deleted, three slices ago. The type sat in `ThroDesign/Scoring.swift` the whole time,
+public, compiled, drawing three dart pips from a `dartsThrown` nobody passed — and both this record
+and the comment in `ScoringScreen` said it was gone. It is gone now, and both sentences say when.
+
+The day per-dart entry gave the pips something true to show, they were not what came back:
+`ThroDartLine` shows **which** darts, not how many, and that is strictly more. So the type had no
+future either.
+
+`check_screens_reachable.py` exists because of this exact shape and its own story ends *"deleted
+rather than kept for later, which is the rule it exists for"* — it holds screens and routes, and a
+component with no caller is one layer under it.
+
+### The other eighteen, reported rather than acted on
+
+Each of these is public and referenced by nothing at all, its own declaration included:
+
+```
+BasisRule.readableFrom            MarkGeometry.ringInnerRatio     RuleTables.specVersion
+Club.hasEverHadAFixture           MarkGeometry.ringOuterRatio     Statistics.doublesHitRate
+ClubStore.linkResult              MatchResult.homeWon             StoredFixture.isDrawn
+Dialog                            OfflineState                    SyncState
+Groups.matchCount                 ResultUnit.forAgainst           ThroLiveScoreboard.isRunning
+ImagePolicy.purgeWithinDays       RuleTables.bustImpossibleAtOrAbove
+WordmarkGeometry.descenderPerEm
+```
+
+They are **not** all defects, and that is why this is a report and not a sweep:
+
+- `SyncState` and `OfflineState` are a **registered absence claim** — the claim is precisely that no
+  screen constructs them.
+- `RuleTables.specVersion` and `bustImpossibleAtOrAbove` belong to an engine that must not change,
+  and are the kind of stated constant ADR-002 keeps parallel across two languages.
+- `ImagePolicy.purgeWithinDays` describes a **server-side** schedule for bytes; on a phone
+  `ImageStore.delete` removes them at once. It is a policy waiting for the surface OD-019 covers,
+  not a promise this build breaks.
+- `Statistics.doublesHitRate` is a computed figure no screen shows, which is a product question
+  rather than a tidying one.
+
+Deciding each would be making calls that are the founder's, so the list is written down where the
+next session and the founder can both see it.
+

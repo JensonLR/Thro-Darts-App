@@ -636,7 +636,8 @@ public struct ScoringScreen: View {
     //    opponent's remaining is the second-most-asked question in darts and it was the smallest
     //    text on the screen.**
     //  - `LegState` moved to the middle of the head, between the two players it is about.
-    //  - `TurnIndicator` is **deleted**, not moved. Its three dart pips were drawn from a hardcoded
+    //  - `TurnIndicator` is **deleted**, not moved — and the type itself only went on 2026-09-09,
+    //    three slices after this sentence first said it had. Its three dart pips were drawn from a hardcoded
     //    `dartsThrown: 0`, so they were permanently empty and VoiceOver permanently said "0 of 3
     //    darts thrown". That was not a wiring defect to fix — the engine scores a visit, not a
     //    dart, so there is no count to wire. Three pips that can never fill are furniture that

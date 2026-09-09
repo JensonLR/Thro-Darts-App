@@ -327,42 +327,6 @@ public struct MatchHeader: View {
     }
 }
 
-/// components/scoring/TurnIndicator.jsx. The export's one colour literal, `rgba(247,246,242,0.6)`,
-/// is chalk at 60% — written here through the token so the contrast matrix can see it.
-public struct TurnIndicator: View {
-    private let player: String
-    private let dartsThrown: Int
-    private let active: Bool
-
-    public init(player: String, dartsThrown: Int = 0, active: Bool = true) {
-        self.player = player
-        self.dartsThrown = dartsThrown
-        self.active = active
-    }
-
-    public var body: some View {
-        HStack(spacing: ThroSpacing.spacing3) {
-            Text(active ? "\(player) to throw" : "\(player) waiting")
-                .thro(ThroTypography.label.weight(.bold).uppercase(true).tracking(em: 0.04))
-                .foregroundStyle(active ? ThroColor.throChalk : ThroColor.colorTextSecondary)
-                .lineLimit(1)
-            HStack(spacing: 4) {
-                ForEach(0..<3, id: \.self) { i in
-                    Circle()
-                        .fill(i < dartsThrown ? (active ? ThroColor.throChalk : ThroColor.colorTextSecondary) : Color.clear)
-                        .overlay(Circle().strokeBorder(active ? ThroColor.throChalk.opacity(0.6) : ThroColor.colorBorderStrong, lineWidth: 1))
-                        .frame(width: 7, height: 7)
-                }
-            }
-            .accessibilityLabel("\(dartsThrown) of 3 darts thrown")
-        }
-        .padding(.vertical, ThroSpacing.spacing2)
-        .padding(.horizontal, ThroSpacing.spacing4)
-        .background(RoundedRectangle(cornerRadius: ThroSpacing.radiusStatus, style: .continuous)
-            .fill(active ? ThroColor.colorBackgroundBrand : ThroColor.colorSurfaceSecondary))
-    }
-}
-
 /// components/scoring/ScoreKeypad.jsx: six quick totals, nine digits, Miss / 0 / clear, Enter.
 ///
 /// One reading differs from the JSX and is recorded here rather than hidden. The export's Enter
