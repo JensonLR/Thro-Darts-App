@@ -1,0 +1,335 @@
+# THRØ — Connected Platform Execution Plan
+
+**Date:** 2026-09-09 · **Status:** Phase A delivered; Phase B next · **Precedence:** rank 4 (product/domain
+specification), below the founder's instructions and the decision register, above the ADRs it cites.
+
+This plan reconciles the repository as it stands with the founder's product conclusions for the
+connected platform: Team → Venue → League → Tournament → Series → Fixture → Match → Result →
+Evidence. It is written so that a contributor with no other context can tell what exists, what is
+wrong, what changes, in what order, and what "done" means mechanically.
+
+It is **not** a feature brainstorm and it does not redesign THRØ. Every ADR remains in force unless
+this document names an amendment.
+
+---
+
+## 1. Current state — what actually exists
+
+The repository is a **modular-monolith foundation, not a product**. Verified by reading every
+migration, every Kotlin domain package and every ADR, and by running the whole suite on this Mac
+against a local PostgreSQL 16 (71 schema properties and every Gradle suite green, 2026-09-09).
+
+| Layer | What exists | What does not |
+|---|---|---|
+| **Database** | Eight schemas: `evidence` (append-only event log, match aggregate), `trust` (grants, attestations, disputes, quarantine), `rating` (snapshots, singleton published model), `read`, `audit` (hash-chained), `authz` (relation tuples), `identity` (account, device, age band), `competition` (event, entry, check-in, board, and a table called `fixture`) | Team, Venue, League, League season, Division, Membership, Registration, Affiliation, Tournament identity, Series, any policy table, any external identity |
+| **Domain (Kotlin)** | `engine` (scoring, 86k exhaustive transitions), `statistics`, `competition` (`Competitor = Player \| Pair \| Team`, `Slot`, bracket maths, standings with declared tie-breaks, `FixtureOutcome`), `trust`, `authz` (relationship algebra with `Except`), `rating` (replayable projection) | Any organisational aggregate. `Competitor.Team(id, players)` is a **match-time lineup**, not a persistent organisation |
+| **Command path** | One tested handler: idempotent receipt, gap check, rehydrate, engine revalidation, append and receipt in one transaction; two-device corroboration proved against Postgres | **No HTTP layer.** `PlaytestServer` is a browser harness, not an API |
+| **Clients** | Swift engine port (same corpus, zero divergences); an iOS durability probe measured on a physical iPhone (P95 1.6 ms, kill test passed) | **No iOS application, no Android application, no on-device journal, no deep links, no widgets, no Spotlight, no MapKit.** Gate 5's on-device journal is blocked on the SE-class and Android measurements |
+| **Authentication** | Mechanism decided (ADR-008): passkeys primary, per-request relationship authorization, device binding, offline grants | **No surface** (blocker B4), no account creation, no session, no claim flow |
+| **Design** | 61 components, 42 screens, token pipeline, contrast and component audits | No auth screens, no team-management screens beyond an organiser roster panel, no participant attestation surface |
+
+Consequence for this plan: the founder's brief assumes an iOS client with stored device data and a
+`Club` type. **Neither exists.** Phase A is therefore server-and-domain work with no device-storage
+migration, and the "rename" is a vocabulary correction, not a refactor.
+
+## 2. Terminology conflicts
+
+Each conflict is stated with where it lives and what it actually means. `Club` first, because the
+founder asked.
+
+| # | Where | What it says | What it actually is | Resolution |
+|---|---|---|---|---|
+| C1 | `docs/design/extracted/**` (7 occurrences) | "Riverside Club", "Boro Legion Club" as venue names; "Your club affiliation" in settings copy; "Club protection · First round only" in draw setup | (a) proper nouns of **Venues**; (b) a synonym for **Team** affiliation; (c) a **draw policy** that keeps players of the same Team apart in round one | ADR-016: `Club` is never an entity. (a) stays as user-authored names; (b) is Team; (c) becomes a versioned competition policy named *team separation* |
+| C2 | `competition.fixture` (V013), `Competitions.draw`, `CompetitionTest` | "fixture" | A **knockout bracket tie**: `round_number`, `position`, `is_bye`. GLOSSARY and ADR-012 define Fixture as a league scheduled meeting and say "Not a slot" | Rename to `competition.bracket_tie`; introduce `competition.fixture` with the league lifecycle |
+| C3 | `competition.event.venue text` | free-text venue | A Venue is meant to be an entity (`authz` has `VENUE`; ADR-005 gives `competition` ownership of venues) | Add `competition.venue`, `event.venue_id`; keep the text as `venue_label` until every writer sends an id |
+| C4 | `competition.event` | "event" | A **TournamentEdition** — one occurrence with entries, check-in and draw. No persistent Tournament identity, no Series | Add `competition.tournament` (persistent, optional) and `event.tournament_id`; add Series tables |
+| C5 | `thro.competition.Competitor.Team` | "Team" | The **lineup** a Team fields in one match | Keep as the match-time competitor; the organisation is `competition.team`. The ADR names both and the difference |
+| C6 | `competition.entry.competitor_id uuid` | untyped | Entrant kind (player, pair, team) is unrecoverable from the row | Add `entrant_kind` and typed references with a CHECK; add `competition.pair` |
+| C7 | `authz.relation.object_type` CHECK, `ObjectType` | `SEASON`, no `TOURNAMENT`, no `SERIES` | `SEASON` is ambiguous between a league season and a series season | Add `league_season`, `series`, `series_season`, `tournament`; `season` stays as an alias until Phase C removes it |
+| C8 | `docs/product/GLOSSARY.md` | "Fixture" defined twice; "Competition = a tournament, a league season, or a division" | Series is missing; Team/Venue/Membership/Registration are undefined | Rewrite the Competition section |
+| C9 | `docs/adr/ADR-005`, `README.md` | `competition` "owns venues, boards, teams, leagues, divisions, seasons" | Only events, entries, check-in, boards and bracket ties exist | README states what exists; ADR-005 stands as the target ownership |
+| C10 | `docs/design/.../screens-account.jsx` | "Team and venue · Your club affiliation" | Team affiliation | Copy is rank 3 design; noted in DESIGN_UNSPECIFIED as a term to correct at implementation, not a domain concept |
+
+## 3. Target domain
+
+The canonical vocabulary (ADR-016), as V014 builds it. Every table is in the `competition` schema
+unless stated. Every relationship that changes over time carries `valid_from`/`valid_until`, is
+frozen once closed, and is never deleted. Hostile review before implementation changed this section
+in seven places; each is marked †.
+
+```
+PLAYER            player (no personal data, no free text)            one sporting identity; may be unclaimed
+CLAIM †           identity.player_claim (player, account, method, confirmed_by, claimed_at, revoked_at)
+                                                                    appended and revocable — never a repointed key
+TEAM              team (+ team_name history †, dissolved_at †, row_version)
+VENUE             venue                                             the physical place; hosts many teams
+TEAM VENUE TENURE team_venue_tenure (team, venue, kind, period)     home periods never overlap †
+TEAM MEMBERSHIP   team_membership (player, team, role, status, period)
+LEAGUE            league
+LEAGUE SEASON     league_season (league, label, dates, registration_kind †, standings_policy_id †)
+DIVISION          division (league_season, name, ordinal)
+TEAM AFFILIATION  team_affiliation (team, league_season, division?, status, period)
+PLAYER REGISTRATION player_registration (player, league_season, kind, team?, status, policy, supersedes †, period)
+                                                                    DISTINCT from membership; overlap refused unless a policy permits
+TOURNAMENT        tournament                                        persistent identity of a recurring open
+EVENT (edition)   event (tournament?, venue?, entrant_kind, access, starts, session_ends, state)
+PAIR              pair (player_a < player_b)
+ENTRY             entry (event, entrant_kind FK→event kind †, player|pair|team, competitor_id GENERATED †)
+BRACKET TIE       bracket_tie (event, round, position, home, away, is_bye, board, match)
+LEAGUE FIXTURE †  league_fixture (season, division?, home, away, scheduled_at, venue copied, schedule_state, match?, row_version)
+                  league_fixture_change (append-only, by trigger)
+                  league_fixture_outcome (append-only decisions: played|awarded|walkover|void, actor, time, policy, supersedes)
+SERIES            series · series_season · series_event (season, event, ordinal)
+POLICY            policy (typed authority FK †, kind, version, effective period, provenance, approval, body)
+                                                                    approved versions never overlap †; frozen once approved
+AUTHZ             authz.relation gains revoked_at/revoked_by †; `season` → `league_season`; + tournament, series, series_season
+MATCH             evidence.match — unchanged; a fixture or bracket tie points at it, never the reverse
+```
+
+Rules the graph enforces, each with a test in §12:
+
+- **A Team's identity is its row; its Venue is a tenure.** Moving venue closes one tenure and opens
+  another. The team row is untouched. A rename keeps the old name and its period.
+- **One Venue, many Teams.** No uniqueness on venue.
+- **Membership ≠ registration.** No shared key. A registration names the team it was made for and
+  outlives the membership; a transfer supersedes rather than edits.
+- **LeagueSeason ≠ League.** Policies, affiliations, registrations and fixtures attach to seasons.
+- **Tournament ≠ League.** No event, entry, check-in or bracket tie references a league season; no
+  league fixture, affiliation or registration references an event. Asserted from
+  `information_schema`.
+- **Series contains events, never fixtures.** No standings table lives in `competition`.
+- **Entrant is typed.** Exactly one of player, pair, team; its kind is the event's kind by foreign
+  key; the resolved competitor id is generated and cannot disagree.
+- **Policy is data with provenance and approval.** Typed authority, unique version, no overlapping
+  approved periods, frozen once approved, state moves forward only.
+- **Fixture outcomes are decisions, not columns.** Appended with actor, time and policy; a later
+  decision supersedes and the earlier one stays. Schedule changes are logged with the original date.
+- **Authorization relations are revoked, never deleted.**
+
+## 4. Safe migration — V014, as executed
+
+There is no production data and no device data ("THRØ has never run"), stated in the migration. It
+is still written and tested as if there were: `MigrationTest` migrates to V013, populates an event
+with a free-text venue, five bare-identifier entries, a draw with byes, a check-in with its grant
+and an authorization tuple, applies V014, and reads every row back (14 properties).
+
+1. `CREATE EXTENSION btree_gist` as the connecting user (a trusted extension; the owner role holds
+   no CREATE on the database), for the exclusion constraints on tenure, registration and policy.
+2. Create `venue`, `team`, `team_name`, `team_venue_tenure`, `player`, `identity.player_claim`,
+   `team_membership`, `league`, `league_season`, `division`, `tournament`, `series`, `series_season`,
+   `policy`, `team_affiliation`, `player_registration`, `pair`, `league_fixture`,
+   `league_fixture_change`, `league_fixture_outcome`, `series_event`.
+3. `identity.account` gains `created_via` and `consent_basis` (PD-004).
+4. `event`: rename `venue` → `venue_label`; add `venue_id`, `tournament_id`, `entrant_kind`
+   (default `player`), `access` (default `open`); `UNIQUE (event_id, entrant_kind)` so entries can
+   reference the kind.
+5. `entry`: add `entrant_kind`, `player_id`, `pair_id`, `team_id`; create a `legacy` player row per
+   existing bare `competitor_id`; backfill `player_id`; **drop and re-add `competitor_id` as a
+   generated column** over the typed columns; re-add the uniqueness and seed index; add the
+   exactly-one CHECK and the composite FK onto the event's kind.
+6. `check_in` gains `player_id` (the person present), backfilled where the competitor is a player.
+   Making it the key and the grant actor is V015's expand-then-contract.
+7. `ALTER TABLE competition.fixture RENAME TO bracket_tie`, with its constraints and index renamed.
+   The league concept is `league_fixture`, a different name on purpose (ADR-016).
+8. `authz.relation`: replace `season` with `league_season` in the CHECK (zero rows existed); add
+   `tournament`, `series`, `series_season`; add the same CHECK to `hierarchy`; surrogate primary
+   key, `revoked_at`/`revoked_by`, partial uniqueness over live tuples, revocation trigger; DELETE
+   revoked from the competition role.
+9. Triggers: team name history and row-version; closed relationships frozen and parties fixed;
+   status moves forward only; policy frozen once approved; fixture change log and stale-write
+   refusal; outcome must supersede its predecessor; claim history immutable.
+10. Grants: SELECT to every app role; INSERT/UPDATE to `app_competition` on the mutable tables;
+    INSERT only on the append-only tables; **no DELETE or TRUNCATE for any app role on any
+    competition table, present or future** (default privileges).
+
+Kotlin: `Competitions.draw` writes `bracket_tie`; `enter` takes a sealed `Entrant`; `checkIn`
+records the player present; `Relations.revoke` is an UPDATE; `ObjectType.SEASON` is
+`LEAGUE_SEASON`. No route names, deep links or device journals exist to migrate; the README says
+so.
+
+## 5. Network architecture — what must change for multi-user THRØ
+
+Decided already and unchanged: Kotlin/Ktor (ADR-001), one Postgres (ADR-003), per-device evidence
+streams (ADR-004), modular monolith (ADR-005), offline grants and the server algorithm (ADR-006),
+SSE fan-out and one HTTP command endpoint (ADR-007), relationship authorization (ADR-008), single
+container on a PaaS in UK/EU (ADR-011), three kinds of configuration (ADR-014).
+
+What does not exist and must be built, in this order:
+
+1. **The HTTP layer.** Ktor routes over the existing handlers; OpenAPI emitted by the server and
+   gated in CI (ADR-001's unproven mitigation, proved here).
+2. **Accounts and sessions.** `identity.account` exists; credentials, sessions and refresh-token
+   families do not. The *mechanism* is decided; the *surface* is B4.
+3. **Player ⇄ account.** `competition.player` may exist unclaimed (created by a captain). Claiming
+   binds it to an account through an audited flow with organiser confirmation or a claim code.
+   Merging two players is an appended, reversible identity event, never an UPDATE of foreign keys.
+4. **Two kinds of state, two sync models.**
+   - *Competitive evidence* stays per-device append-only streams with the ADR-006 algorithm.
+   - *Organisational state* (roster, fixtures, availability, tasks) is **server-authoritative
+     versioned rows** with a `row_version`; clients send commands carrying the version they saw,
+     and a stale version is a refusal with the current row, never a silent overwrite. Two admins
+     cannot clobber each other because the second write fails closed.
+   - Clients keep a local read cache of organisational state so a captain can see tonight's
+     fixture and lineup in a basement; **edits queue as commands** and are applied on reconnect
+     under the same version rule.
+5. **Media.** Object storage behind signed URLs; badge and crest uploads only in Phase C, with the
+   safeguarding image policy from OD-010 gating anything showing people.
+6. **Push.** ADR-015 stands; APNs first, with the delivery record it requires.
+
+Founder-level decisions inside this are in §9. Everything else proceeds.
+
+## 6. First vertical slice — Team OS (Phase C)
+
+Runs against the real database and the real HTTP layer. Nothing is static data.
+
+| Step | Module | Persisted where | Authorization |
+|---|---|---|---|
+| Create a Team | competition | `team`, `authz.relation team#admin` | any account |
+| Configure identity | competition | `team` columns; `team_venue_tenure` for home venue | `team#admin` |
+| Associate a public Venue | competition | `venue` (create or pick), `team_venue_tenure` | `team#admin` |
+| Invite players | competition + identity | `player` (unclaimed allowed), `team_membership status=invited` | `team#admin` |
+| Assign captain / admin | competition + authz | `team_membership.role`, `team#captain`, `team#admin` | `team#admin` |
+| See roster | read model | `read.team_roster` projection | `team#member` private, public front otherwise |
+| League season affiliation | competition | `team_affiliation` | `team#admin`, accepted by `league_season#admin` |
+| Fixtures | competition | `fixture` rows created by the league admin or agreed friendlies | `league_season#admin`; friendlies later |
+| Availability | competition | `availability (fixture, player, state, recorded_at)` | the player, or `team#captain` on their behalf with provenance |
+| Lineup | competition | `lineup (fixture, team, version, entries)` | `team#captain` |
+| Score / connect match | match | `evidence.match` opened from the fixture; `fixture.match_id` set once | existing grants |
+| Result with provenance | trust | existing attestation, capture channel and outcome | unchanged |
+| Team history | read model | seasons, honours, tenures, past rosters, from the tables above | public front / private inside |
+
+## 7. Secretary wedge — player registration (Phase D)
+
+```
+team_membership(status=active)
+  → policy(kind=registration, authority=league_season, approved)
+  → registration_requirement derived per (player, league_season): required fields, deadline
+  → missing-data detection → admin_task(kind=registration_incomplete, owner=team#admin, due=deadline)
+  → submission(kind=player_registration, transport=email|export|manual, state machine)
+  → acknowledgement recorded with evidence (a message id, an upload receipt, a human tick with actor)
+  → player_registration(status=registered, from=…)
+```
+
+Submission states: `DRAFT → READY → SUBMITTED → DELIVERED → ACKNOWLEDGED → ACCEPTED | REJECTED |
+ACTION_REQUIRED`. `DELIVERED` requires transport evidence; `ACKNOWLEDGED` and `ACCEPTED` require a
+recorded actor on the receiving side or an explicit human confirmation with a name. THRØ never
+advances a submission past `SUBMITTED` on its own.
+
+The example league policy is a fixture in the test suite, not a real league's rules, and is cited
+by version on every task and submission it produces. The same pipeline is then shown to produce a
+result-submission task from a `fixture.state=played` transition and a rearrangement task from a
+`fixture.state=rearranged` transition.
+
+## 8. Tournament model
+
+`tournament` is the recurring identity ("The Riverside Open"); `event` is one edition. An event
+declares `entry_kind ∈ {singles, pairs, team}` and `access ∈ {open, invitational, qualified,
+restricted, member_only}`. Entries are typed (§3). Draw, check-in, boards and bracket ties are the
+existing lifecycle. A `series_season` links editions across venues with an ordinal; points and
+standings are a policy of the series season, computed as a projection, and are **not** built until
+the entities exist. Discovery (Phase E) reads `event` × `venue` × `access` × the caller's
+registrations and memberships, and every card can state why it appears.
+
+A tournament cannot behave like a league because no fixture, affiliation or registration references
+an event, and no entry, check-in or bracket tie references a league season.
+
+## 9. Founder blockers — genuine product decisions only
+
+Two are genuine. Two more are recorded as delegated decisions with reversal paths so work continues.
+
+**FB-1 — Identity provider and the claim policy (extends B4).**
+*Why it matters:* an account is a competitive identity; recovery and claiming are account-takeover
+surfaces.
+*Option A:* self-hosted WebAuthn/passkeys in the Kotlin service, email magic-link bootstrap, own
+session store. *Option B:* a managed identity provider (Auth0, Clerk, Cognito, Firebase Auth)
+fronting the same API. *Option C:* Sign in with Apple and Google only, plus own passkeys later.
+*Recommendation:* A. ADR-008 already forbids permissions in tokens and requires per-request
+relation checks, which leaves a managed provider doing only credential storage; the WebAuthn
+libraries on the JVM are mature; and identity data stays in the one `identity` schema ADR-005
+depends on for deletion and export. *Cost of reversing:* moderate — credential export from a
+managed provider is possible but recovery flows are rewritten. *Blocks:* Phase B's account surface,
+every authenticated route, the claim flow.
+
+**FB-2 — Hosting vendor for the single container and managed Postgres.**
+*Why:* ADR-011 fixes the topology, not the vendor; point-in-time recovery, UK/EU residency and
+HTTP/2 to origin (ADR-007) must be confirmed against a real provider. *Options:* Fly.io + Neon or
+Fly Postgres; Render; Railway; a single AWS account with App Runner + RDS. *Recommendation:* Fly.io
+with a managed Postgres provider offering PITR in London, because it is the cheapest that meets
+every ADR-011 requirement and the infrastructure-as-code footprint is smallest. *Cost of reversing:*
+low — one image, one database dump. *Blocks:* staging and the two-device sync release check only;
+local and CI work is not blocked.
+
+**Delegated, reversal path recorded (see DECISIONS.md PD-003, PD-004):**
+
+- **PD-003 — Canonical organisational vocabulary.** ADR-016. Reversal: the tables are new and the
+  rename is one statement.
+- **PD-004 — Unclaimed player records.** A team admin may create a player who has no account. The
+  record is private, carries `age_band='unknown'` and is treated as a minor for every exposure rule
+  until claimed. Reversal: a policy flag refusing unclaimed creation; existing records stay.
+
+## 10. Implementation sequence
+
+| Order | Work | Depends on | Blocked by |
+|---|---|---|---|
+| A1–A6 | Audit, ADR-016, V014, Kotlin organisational domain, tests, docs | nothing | nothing |
+| B1 | Ktor HTTP layer over existing handlers; OpenAPI in CI | A | nothing |
+| B2 | Organisational command model with row versions; local cache contract | A | nothing |
+| B3 | Accounts, sessions, passkeys, claim flow | B1 | **FB-1** |
+| B4 | Push delivery record; media storage contract | B1 | FB-2 for staging only |
+| C | Team OS slice end to end | B1–B3 | FB-1 |
+| D | Secretary: registration, then result submission and rearrangement | C, policy table from A | nothing further |
+| E | Tournament editions, series, discovery | A, B1 | nothing |
+| F | Map (MapKit on iOS, when the client exists); friendly request loop | C, E, iOS client | Gate 5 (device journal) for the client |
+
+The iOS client itself is a separate stream gated by ADR-006's outstanding SE-class and Android
+measurements, and by B3 (design commission for auth screens).
+
+## 11. Risks
+
+**Technical.** Organisational sync is a second consistency model beside the evidence log; the
+row-version rule must be tested with two concurrent writers or it will drift into last-write-wins.
+The `season` object type alias in `authz` is a temporary dual concept and has a removal task.
+Migrations run as `thro_owner` and the new tables must inherit the same no-DELETE stance or history
+becomes deletable.
+
+**Sporting.** Registration ≠ eligibility: a task pipeline that marks a player registered because a
+form was sent would make THRØ the authority it must not be. Team separation in draws
+(design's "club protection") is a policy and must be versioned or a draw cannot justify itself later.
+Identity resolution: a captain typing "J. Smith" twice must produce two players until a human merges
+them.
+
+**Commercial.** The Secretary wedge only earns revenue if leagues accept THRØ's submissions; the
+adapter priority (API → structured → export → document → email → human) must show provenance or an
+organiser will not trust the green tick. Building the map before Teams exist would produce an empty
+map.
+
+## 12. Acceptance criteria — Phase A
+
+Mechanical. Each is a test that fails when the property is removed. **All green on 2026-09-09**
+against PostgreSQL 16 locally; CI runs the same suites.
+
+| # | Criterion | Enforced by |
+|---|---|---|
+| 1 | Team identity survives a venue change: same `team_id`, two tenures, first closed, row untouched | `OrganisationTest` (API) · `OrganisationTest` (competition, pure) |
+| 2 | One venue hosts several teams at once | both |
+| 3 | A player holds two concurrent active team memberships; a policy cap is respected | both |
+| 4 | Membership and registration are independent: member with no registration; registration for a team the player has left; transfer supersedes | both |
+| 5 | Closing a membership never deletes it; a closed row is frozen; parties and start are fixed; no app role can delete | API test + `schema_properties.sh` |
+| 6 | Two seasons of one league coexist; a division cannot attach to another season | API test |
+| 7 | No event, entry, check-in or bracket tie references a league season; no league fixture, affiliation or registration references an event; no standings table in `competition` | API test + `schema_properties.sh` |
+| 8 | An entry is exactly one of player, pair, team; its kind is its event's; a bare identifier is refused; `(a,b)` = `(b,a)` | both |
+| 9 | A series season links events at two venues; ordinals unique | API test |
+| 10 | V014 over a populated V013 database preserves every event, entry, check-in, grant, tie and tuple, the venue label, the seeds and the draw | `MigrationTest` (14 properties) |
+| 11 | Existing suites remain green, including the 74-entrant draw against `bracket_tie` and a pairs event refusing a singles entry | `CompetitionTest` (16) and every other suite |
+| 12 | An approved policy cannot change body, date or be un-approved; two approved versions cannot overlap; a superseded one may be followed; a policy cannot cite a season that does not exist | API test |
+| 13 | No DELETE or TRUNCATE on any competition table for any app role, including a table added later; `authz.relation` is revoked not deleted; `season` is gone | `schema_properties.sh` (85 properties) |
+| 14 | A fixture's venue is frozen at scheduling; a stale rearrangement is refused; the original date survives in the change log; teams cannot be switched; an award must go to one of the two teams; a second outcome must supersede; outcomes are not editable | API test |
+| 15 | A player row carries no free text; a claim is one live per player and per account, fixed when made, revocable; an organiser confirmation names the organiser | API test + `schema_properties.sh` |
+| 16 | A team rename keeps the old name with its period | API test |
+| 17 | GLOSSARY, README, ADR index, package READMEs and DESIGN_UNSPECIFIED describe the model above and teach no separate Club | review |
+
+Also required before Phase C opens a match from a fixture: **OD-015** (display names inside the
+append-only match aggregate) and the Phase D rule that no submission carrying an unclaimed or
+non-adult player leaves `READY` without a recorded consent artefact (PD-004).
+
+Phases B–F carry their own acceptance tables, written when each phase opens and before its code.

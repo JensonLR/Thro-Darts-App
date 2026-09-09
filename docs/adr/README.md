@@ -21,6 +21,7 @@ a guess wearing a suit.
 | [013](ADR-013-migrations.md) | Migrations and schema evolution | Accepted |
 | [014](ADR-014-configuration-and-policy.md) | Configuration and policy versioning | Accepted |
 | [015](ADR-015-notifications.md) | Notifications | Accepted |
+| [016](ADR-016-organisational-vocabulary.md) | Organisational vocabulary: Team, Venue, League, Tournament, Series — Club is not an entity | Accepted |
 
 ## Standing constraint on all of them
 

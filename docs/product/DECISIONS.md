@@ -165,3 +165,64 @@ as a later refinement.
 Field evidence shows a material share of competitive matches never receiving a second confirmation.
 That would mean the floor is costing real competitive history rather than merely delaying it, and the
 trade-off should be re-taken with data.
+
+---
+
+## PD-003 — Canonical organisational vocabulary: Club is not an entity
+
+**Founder instruction, 2026-09-09.** Recorded as ADR-016.
+
+### Decided
+
+THRØ carries one competitive organisation, **Team**, and one physical place, **Venue**. "Club" is a
+word people use for either and is never a separate concept. A Team's venue is a dated tenure, so a
+Team that moves keeps its identity, history, roster, results, honours and followers. Team membership
+and league registration are different facts in different tables. League and league season are
+distinct. Tournament (persistent identity) and event (one edition) are distinct from a league, and a
+series links events without becoming a league. Entrants are typed as player, pair or team.
+Competition policy is versioned data with authority, effective period, provenance and approval.
+
+### Why
+
+Grassroots darts terminology is inconsistent and the next fifty features would each have been built
+on whichever concept existed first. The repository had no `Club` type; it had a bracket tie called a
+fixture, a free-text venue, an untyped entrant and an authorization vocabulary that nothing backed.
+
+### How to reverse
+
+The tables are new and empty. The rename of the bracket tie is one statement. Nothing in `evidence`
+changed.
+
+---
+
+## PD-004 — Unclaimed player records
+
+**Taken on delegated authority, 2026-09-09.** Reversible by a policy flag.
+
+### Decided
+
+A team admin or organiser may create a **player** — a sporting identity — for a person who has no
+THRØ account, because a captain enters a roster before every member has installed anything. Such a
+player is *unclaimed*. Its personal data, if any was entered, lives in an `identity.account` row
+marked as created by a third party with no recorded consent basis, and the player is treated as a
+**minor** by every exposure rule until an account with a known age band claims it.
+
+Claiming is an appended, revocable `identity.player_claim`, never a foreign key updated in place. A
+wrong claim is revoked with a reason and both identities stand. A merge of two players is a later,
+separate identity event with a stated basis; a name is never a basis.
+
+### The consequence that must be stated plainly
+
+A submission to a league (Phase D) that carries an unclaimed player, or any account whose age band is
+not `adult`, may **not** leave `READY` until a consent artefact — self or guardian, with an actor —
+is recorded against it. THRØ must not email a third party's details to a league secretary on a
+captain's say-so.
+
+### How to reverse
+
+A policy flag refusing third-party creation. Existing records stay, with their provenance.
+
+### Escalate back to the founder if
+
+OD-010's research concludes that holding third-party-entered data about a possible minor, even
+privately and pending consent, is not permissible in the target jurisdictions.

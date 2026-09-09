@@ -82,6 +82,11 @@ Sourced by reading the whole export: 61 components, 33 participant screens, 9 or
 23. **Landscape orientation for scoring.**
 24. **Truncation policy for long player, venue and team names.** Only 8 of 61 components handle overflow.
 25. **Haptics** — nothing is specified for the scoring keypad, where it matters most.
+26. **The word "club".** Settings reads "Team and venue · Your club affiliation" and draw setup reads
+    "Club protection". The domain has no Club (ADR-016): the first means the player's **team**, the
+    second is a **team separation** draw policy. Implementation copy says team; the design copy
+    should be corrected at the next commission rather than teaching contributors a concept the
+    model does not have.
 
 Also outstanding, and smaller: **the brand assets** (`logo-chalk.svg` and `mark-chalk.svg` are both
 referenced throughout and neither was exported); the **icon legibility floor** (a 2px stroke on a 24

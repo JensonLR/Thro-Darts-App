@@ -150,13 +150,74 @@ dart-level proof. The only such case.
 
 **Highest checkout** — the remaining score at the start of a winning visit. Exact.
 
-## Competition
+## Competition and organisation
 
-**Competition** — any structure producing matches: a tournament, a league season, or a division.
+One organisation concept, one place concept, and dated relationships between them (ADR-016). **There
+is no Club.** It is a word people use for a Team or for a Venue, and it resolves to one of them every
+time; THRØ's own copy says *team* and *venue*.
 
-**Event** — a discrete competitive occasion players discover, register for and check in to.
+**Player** — one persistent sporting identity (the THRØ ID). May exist before any account claims it.
+Holds no personal data; a name lives in the identity module, reached through a **claim** that is
+appended and revocable, never a column updated in place.
 
-**Fixture** — a scheduled match within a league or division.
+**Team** — the competitive organisation, whatever it calls itself: darts team, darts club, pub team,
+side. Its venue is a **tenure**, so a Team that moves keeps its identity, history, roster, results,
+honours and followers. Distinct from the match-time `Competitor.Team`, which is the **lineup** a
+Team fields in one match.
+
+**Venue** — the physical place darts is played. Hosts many Teams and many Events; owns none of them.
+
+**Team venue tenure** — the dated relationship between a Team and a Venue (home, training,
+registered). Home tenures never overlap in time.
+
+**Team membership** — a Player's dated relationship with a Team, with a role (player, captain,
+vice-captain, admin) and a status. Says nothing about any League.
+
+**League** — the recurring competition authority. **League season** — one occurrence of it, with
+dates, divisions, affiliated Teams and registered Players ("Teesside Thursday League — 2026/27").
+The design's "Season" is a league season. **Division** — an optional subdivision of a league season.
+
+**Team affiliation** — a Team's dated registration to a League season and optionally a Division.
+About the Team, never about a Player.
+
+**Player registration** — a Player's dated eligibility record in a League season, naming the Team it
+was made for as it stood at the time. **Not membership**: a member need not be registered, and a
+registration outlives the membership it was made under. A transfer is a new registration that
+supersedes the old. Eligibility is derived from registration under the season's approved **policy**,
+never from membership and never from payment.
+
+**Policy** — a versioned rule body belonging to one authority (League, League season, Event, Series,
+Series season) with an effective period, provenance (`manual`, `imported`, `extracted` — an
+AI-assisted extraction a human reviewed) and an approval by a named actor. Only an approved policy
+may be cited by anything executable; an approved policy is frozen and change is a new version. Two
+approved versions of one rule are never in force on the same day.
+
+**Competition** — any structure producing matches: a League season or an Event. Exhaustive.
+
+**Tournament** — the persistent identity of a discrete competition that may recur ("The Riverside
+Open"). Not a League.
+
+**Event** — one edition of a Tournament: the discrete competitive occasion players discover, register
+for and check in to, with an **entrant kind** (player, pair, team) and an **access** (open,
+invitational, qualified, restricted, member-only). Nothing in an Event references a League season.
+
+**Entry** — a typed entrant in an Event: exactly one of a Player, a **Pair** or a Team, and its kind
+is its Event's kind. The database refuses anything else.
+
+**Series** — a linked collection of Tournaments. **Series season** — a dated occurrence, linking
+specific Events in order at any number of Venues. A Series holds Events and nothing a League has;
+series points and standings are projections, never rows beside the competition tables.
+
+**Fixture** — a scheduled meeting between two Teams in a League season (`league_fixture`). Its
+schedule has a lifecycle — scheduled, rearranged, postponed — and every change is logged with the
+original date. Its venue is copied from the home Team's tenure at scheduling and frozen. Its
+**outcome** is a recorded decision (played, awarded, walkover, void) with an actor, a time and the
+policy it was taken under; a later decision supersedes an earlier one and the earlier one stays.
+**Not a bracket tie**: it has no parent-child dependency, can be awarded with no match played, and
+aggregates into a table rather than advancing a competitor.
+
+**Bracket tie** — a pairing in a knockout round of an Event, possibly a bye (`bracket_tie`). Not a
+fixture. The Slot states below describe its positions.
 
 **Board** — a physical playing position. States (design): `free`, `called`, `playing`, `awaiting`,
 `disputed`, `closed`.
@@ -165,15 +226,12 @@ dart-level proof. The only such case.
 product**, including notifications and coaching insight.
 
 **Draw** — the assignment of entrants to bracket slots. Reversible only through a recorded
-correction.
+correction. **Team separation** (the design's "Club protection") — a draw policy keeping entrants of
+one Team apart in the first round; a policy row, not a flag.
 
 **Slot** — a bracket position in a tournament, which may hold a competitor, be undetermined, be a
 bye, or be vacated by walkover or withdrawal. These are five different facts and must not share a
 rendering.
-
-**Fixture** — a scheduled meeting between two competitors in a league division. **Not a slot**: it has
-no parent-child dependency, carries a rearrangement lifecycle, can be *awarded* with no match played,
-and aggregates into a table rather than advancing a competitor.
 
 **Awarded** — a fixture outcome decided by the organiser without play. A distinct, auditable outcome
 type, never a synthetic scoreline.

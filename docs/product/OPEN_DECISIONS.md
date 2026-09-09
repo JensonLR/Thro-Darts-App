@@ -167,3 +167,17 @@ reads attestation, never the label.
 
 **Escalate if:** the design intends `thro-recorded` to imply corroboration, which would make it a
 higher trust claim than the domain can support.
+
+## OD-015 — Display names inside the append-only match aggregate
+**Status:** OPEN · **Impact:** privacy, safeguarding, ADR-005
+
+`evidence.match.home_name` and `away_name` (V006) are personal data in a table nothing may update or
+delete, because the engine works in display names and the aggregate joins identifiers to them.
+Hostile review of ADR-016 named it: once a match is opened from a league fixture, an unclaimed or
+non-adult player's name would enter evidence that can never be rectified or erased.
+
+**Resolved for now by:** nothing yet opening a match from a fixture. Phase B's command-path work must
+make the engine and the aggregate work in identifiers, join names from `identity` at render, and
+write a pseudonymous label for any account whose age band is not `adult`.
+
+**Must not be decided by:** Phase C opening a match from a fixture with the names as they are.
