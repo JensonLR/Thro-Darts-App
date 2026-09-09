@@ -238,26 +238,67 @@ final class ExportTests: XCTestCase {
     /// run three reads of a single path within a millisecond disagreed with each other.
     ///
     /// `BackupPolicy` now reads the extended attribute the flag actually is, so there is no cache
-    /// on a URL to go stale and nothing between the question and the file. The test is unchanged in
-    /// what it demands: the flag is written through a `URL` here, deliberately, because Foundation's
-    /// own writer is what the app used to rely on and cross-checking it against the raw attribute is
-    /// stronger than trusting either alone.
+    /// on a URL to go stale and nothing between the question and the file. The flag is still written
+    /// through a `URL` here, deliberately, because Foundation's own writer is what the app used to
+    /// rely on and cross-checking it against the raw attribute is stronger than trusting either
+    /// alone — and because `BackupPolicy` misreading Foundation's property-list form is a defect
+    /// that shipped here once already.
     ///
     /// The `url` is the one written through repeatedly, because a fresh `URL` has nothing cached and
     /// would have passed either way — which is why CI found the original defect only intermittently.
+    ///
+    /// **The Foundation half is now twenty rounds too, and this is the sixth round on this flag.**
+    /// It was four straight-line assertions, and CI went red on the second of them on a commit that
+    /// touched nothing near it — then green on the same commit on the other run of the same push.
+    /// The loop lower down had already been rewritten for exactly that reason and this block had
+    /// not been; it is now, on the same terms. What it demands of `BackupPolicy` did not go down:
+    /// every round still asserts that the file decides, and the two claims that need the fixture to
+    /// have held are counted with a floor of one rather than dropped.
     func testTheAnswerComesFromTheFileSystemAndNotFromWhatTheURLRemembers() throws {
         var url = dir!
 
-        var exclude = URLResourceValues()
-        exclude.isExcludedFromBackup = true
-        try url.setResourceValues(exclude)
-        XCTAssertEqual(BackupPolicy.read(url), .excluded)
+        // **The Foundation half, twenty rounds, for the reason the rest of this file already gives.**
+        //
+        // This block asserted two things in four lines and CI went red on the second of them on a
+        // commit that touched nothing near it — and green on the SAME commit on the other run. That
+        // is the host, not this type: `com.apple.metadata:` is the Spotlight daemon's namespace, an
+        // attribute written there on a folder under `/var/folders` can be gone or rewritten a
+        // millisecond later, and the loop lower down was already written that way for exactly that
+        // reason. This block simply had not been.
+        //
+        // "It's the environment" is the excuse this repository refuses, so it is not asserted here
+        // either. Each round asserts the thing that is true whatever the daemon does — **the file
+        // decides, not the URL's memory** — and the two claims that depend on the fixture holding
+        // are counted instead, with a floor of one, so a fixture that has stopped working
+        // altogether fails the test rather than turning twenty rounds into twenty no-ops.
+        var rememberedAnExclusion = 0
+        var foundationsWriteWasSeen = 0
+        for round in 1...20 {
+            var exclude = URLResourceValues()
+            exclude.isExcludedFromBackup = true
+            try? url.setResourceValues(exclude)
+            // Foundation's writer, cross-checked against this type's reader. It is kept because it
+            // is the one thing in this test that proves `BackupPolicy` understands the property-list
+            // form Foundation actually writes — the defect that shipped once already.
+            if BackupPolicy.read(url) == .excluded { foundationsWriteWasSeen += 1 }
+            // What the URL itself now believes, asked of the URL and not of the file.
+            let remembered = (try? url.resourceValues(forKeys: [.isExcludedFromBackupKey]))?
+                .isExcludedFromBackup
+            if remembered == true { rememberedAnExclusion += 1 }
 
-        var include = URLResourceValues()
-        include.isExcludedFromBackup = false
-        try url.setResourceValues(include)
-        XCTAssertEqual(BackupPolicy.read(url), .included,
-                       "the URL remembers being excluded; the file system does not")
+            // Now change the file underneath it with a raw `removexattr`, which cannot touch a
+            // `URL`'s cache. Whatever the URL remembers, the answer must come from the file.
+            XCTAssertTrue(setExclusion(false, at: dir.path), "round \(round): removexattr failed")
+            XCTAssertEqual(BackupPolicy.read(url), .included,
+                           "round \(round): the file carries no exclusion and BackupPolicy claimed "
+                         + "one — \(exclusionOnDisk(dir.path))")
+        }
+        XCTAssertGreaterThan(foundationsWriteWasSeen, 0,
+                             "not one of twenty rounds saw a flag Foundation had just written, so "
+                           + "nothing here cross-checked BackupPolicy against Foundation's own form")
+        XCTAssertGreaterThan(rememberedAnExclusion, 0,
+                             "not one of twenty rounds left the URL believing it was excluded, so "
+                           + "nothing here tested a stale cache at all")
 
         // And the same through the policy's own writer.
         //

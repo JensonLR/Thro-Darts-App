@@ -1,6 +1,7 @@
 import XCTest
 import ThroDesign
 import ThroEngine
+import ThroJournal
 @testable import ThroPlay
 
 /// Three entered darts becoming the evidence a visit carries.

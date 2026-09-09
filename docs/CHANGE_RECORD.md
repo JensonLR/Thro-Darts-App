@@ -1479,8 +1479,76 @@ in one place. It is recorded in `DartVisit.swift` and here, and nothing claims t
 ## Held
 
 20 design tests on the keypad, 5 net new on the evidence rules (9 written, 4 replaced because they
-asserted the definition this slice corrects), 11 on the session. 548 in all. All 18
+asserted the definition this slice corrects), 11 on the session. 548 in all. All
 `tools/check_*.py` green — two of which caught defects in this slice before CI did:
 `check_tokens_exist.py` found a test file naming `ThroSpacing` without importing `ThroTokens` (the
 exact failure that cost a CI round last time), and `check_test_counts.py` found four stale numbers
 in the README and the runbook.
+
+---
+
+# Two rounds of CI, and the guard that ends that class of round
+
+`18dd3d6` and `9df01fc` both went red, and neither for a reason a macOS runner was needed to find.
+
+## `Seat` was named in a file that could not see it
+
+```
+DartVisitTests.swift:29: error: cannot find 'Seat' in scope
+```
+
+`Seat` is `ThroJournal`'s. The file had `import ThroEngine` and `@testable import ThroPlay`, and
+`ThroPlay` depends on `ThroJournal` — so `Seat` was **linked** and not **nameable**. Four minutes on
+a runner to learn a fact that is in the source tree.
+
+This is the second time. `Geometry.swift` cost a round naming `ThroMotion` with only
+`import SwiftUI`, and the answer then was to teach `check_tokens_exist.py` to ask whether a file
+that names a token can see the token layer. That fixed one module.
+
+`tools/check_module_imports.py` asks it of all eight: it reads every module's **top-level** public
+declarations, strips comments and string literals from every Swift file, and reports any name whose
+declaring module the file does not import. It runs in about a second on Linux.
+
+Three passes to make it honest, each one a false positive teaching the rule:
+
+| It flagged | Because | The rule that fixed it |
+|---|---|---|
+| SwiftUI's `Group`, the stdlib's `Result` and `Failure` | matched our own **nested** `Groups.Group`, `Scoring.Result`, `Images.Failure` | only declarations at **column zero** — a nested type is not nameable unqualified from anywhere |
+| `AccessibilityNotification.Announcement` | matched ThroApp's top-level `Announcement` | a name preceded by `.` is a **member**, and never needs its module imported |
+| `FixtureActions`'s own nested `Outcome`, `MatchSession`'s own `Announcement` | the file's own target declares it | a name declared **anywhere in the file's own target**, at any nesting or access, is that target's |
+
+Perturbed four ways: taking the `ThroJournal` import back out of `DartVisitTests` names all four
+`Seat` lines; taking `ThroTokens` back out of `Geometry.swift` names all four `ThroMotion` lines; a
+comment naming `Seat`, `MatchSession` and `BackupPolicy` passes cleanly; and one line of real code
+naming `MatchSession` fails.
+
+It is deliberately not a compiler. It matches whole words in stripped code and skips any name two of
+our modules both declare rather than guessing — so it can miss a defect and cannot invent one, which
+is the direction a guard should fail in.
+
+## The backup flag, round six
+
+`88d0c0f` went red on `testTheAnswerComesFromTheFileSystemAndNotFromWhatTheURLRemembers` — and
+`acd33d5` went **green on one run of the same push and red on the other**, which is the shape this
+flag has had since it was first touched.
+
+The bottom of that test is a twenty-round loop written specifically because
+`com.apple.metadata:` is the Spotlight daemon's namespace and an attribute written there on a folder
+under `/var/folders` can be gone or rewritten a millisecond after `setxattr` returns success. The
+**top** of it was still four straight-line assertions depending on the fixture holding across two
+consecutive operations.
+
+It is now twenty rounds on the same terms. What it demands of `BackupPolicy` did not go down:
+
+- Every round still asserts the thing the test exists for — after a raw `removexattr`, the answer
+  must be `.included` whatever the `URL` remembers.
+- The two claims that need the fixture to have held are **counted with a floor of one**: at least
+  one round must have seen a flag Foundation had just written (which is what cross-checks
+  `BackupPolicy` against Foundation's property-list form — a defect that shipped here once), and at
+  least one round must have left the URL believing it was excluded. A fixture that stops working
+  altogether fails the test rather than turning twenty rounds into twenty no-ops.
+
+"It's the environment" is not asserted, because that is the excuse this repository refuses. The test
+simply stopped depending on something outside itself.
+
+19 guards now. `check_module_imports.py` would have caught both compile failures this branch has had.
