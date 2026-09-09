@@ -503,7 +503,8 @@ public struct ScoringScreen: View {
                         format: session.formatLabel,
                         onBack: onLeave,
                         onEnd: session.mayEndShort ? session.offerToEnd : nil,
-                        mode: entryMode.label, onSwitchMode: switchEntryMode,
+                        mode: entryMode.label, modeSpoken: entryMode.spoken,
+                        onSwitchMode: switchEntryMode,
                         onBoard: true)
             ThroBoardHead(home: ScoringScreen.column(session, .home),
                           away: ScoringScreen.column(session, .away),

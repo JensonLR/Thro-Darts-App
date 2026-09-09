@@ -36,6 +36,19 @@ final class EntryModeTests: XCTestCase {
         XCTAssertEqual(ScoringEntryMode.allCases.count, 2)
     }
 
+    func testTheSpokenFormIsASentenceAndNotTheWordOnTheKey() {
+        // **TOTAL and DARTS are one word each, and one word is not enough.** Read out on its own,
+        // "darts" is a noun this whole app is about and says nothing about what the control does.
+        // The rail's switch speaks this instead; `spoken` had no caller at all until it did, which
+        // is the shape of defect this repository has recorded twice — a public API, tested, called
+        // from nowhere.
+        for mode in ScoringEntryMode.allCases {
+            XCTAssertNotEqual(mode.spoken, mode.label, mode.label)
+            XCTAssertGreaterThan(mode.spoken.split(separator: " ").count, 2,
+                                 "\(mode.label) is spoken as \(mode.spoken), which is not a sentence")
+        }
+    }
+
     func testNoTwoNotationsDescribeThemselvesTheSameWay() {
         // Two states a reader cannot tell apart are one state. Walked over `allCases`, so a
         // notation added tomorrow is covered by a test written today.

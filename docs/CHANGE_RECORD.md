@@ -2005,3 +2005,19 @@ Perturbed by putting the platform control back: it names the file and the line.
 The check has caught three distinct classes now, and all three were the same complaint from the
 founder wearing different clothes: a control with no pressed state, a control whose label reaches no
 tap target, and now a control the platform draws too small to hit.
+
+## `spoken` had no caller
+
+`ScoringEntryMode.spoken` was written with the type, asserted distinct by a test, and used by no
+screen. That is the exact shape of defect this record has entered twice already — `ClubStore.setAvatar`
+public and tested and called from nowhere, `EditClubScreen` written with no route to it — and a test
+asserting a property is distinct is not the same as anything using it.
+
+It has a caller now, and the caller needed it. The rail's switch reads **TOTAL** or **DARTS**, one
+word each, and one word is not enough for a screen reader: read out on its own, *"darts"* is a noun
+this whole app is about and says nothing about what the control does. It speaks *"Enter each dart"*
+and *"Enter the total of three darts"*, with the hint still saying that tapping switches.
+
+`MatchHeader` takes `modeSpoken:` as a defaulted parameter, so every other caller is untouched and
+one that has nothing better to say falls back to the word on the key. A test holds that the spoken
+form is a sentence rather than the label with different capitals.

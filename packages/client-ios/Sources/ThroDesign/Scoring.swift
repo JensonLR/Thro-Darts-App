@@ -214,6 +214,11 @@ public struct MatchHeader: View {
     /// two notations are TOTAL and DARTS and there is no icon for either that a player would read
     /// correctly the first time. Shown only when both are supplied.
     private let mode: String?
+    /// The same thing in a sentence, for a screen reader. **TOTAL and DARTS are one word each and
+    /// one word is not enough**: read out on its own, "darts" is a noun this whole app is about and
+    /// says nothing about what the control does. Defaulted, so a caller with nothing better to say
+    /// falls back to the word on the key.
+    private let modeSpoken: String?
     private let onSwitchMode: (() -> Void)?
     /// Whether this rail sits on a board (SLATE D.1). On paper it keeps the surface and hairline it
     /// has always had; on a board it takes the board's own inks, no fill of its own, and a
@@ -222,7 +227,8 @@ public struct MatchHeader: View {
 
     public init(competition: String, round: String? = nil, board: String? = nil, format: String? = nil,
                 onBack: (() -> Void)? = nil, onEnd: (() -> Void)? = nil,
-                mode: String? = nil, onSwitchMode: (() -> Void)? = nil, onBoard: Bool = false) {
+                mode: String? = nil, modeSpoken: String? = nil,
+                onSwitchMode: (() -> Void)? = nil, onBoard: Bool = false) {
         self.competition = competition
         self.round = round
         self.board = board
@@ -230,6 +236,7 @@ public struct MatchHeader: View {
         self.onBack = onBack
         self.onEnd = onEnd
         self.mode = mode
+        self.modeSpoken = modeSpoken
         self.onSwitchMode = onSwitchMode
         self.onBoard = onBoard
     }
@@ -274,7 +281,7 @@ public struct MatchHeader: View {
                 // The label says what you are using; the hint says what tapping does. A control
                 // whose label is its own state has to say both, or a screen-reader player cannot
                 // tell whether TOTAL is what they have or what they would get.
-                .accessibilityLabel("Scoring by \(mode.lowercased())")
+                .accessibilityLabel(modeSpoken ?? "Scoring by \(mode.lowercased())")
                 .accessibilityHint("Switches how a visit is entered")
             }
             if let onEnd {
