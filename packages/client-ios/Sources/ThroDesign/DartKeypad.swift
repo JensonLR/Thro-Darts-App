@@ -18,8 +18,11 @@ import ThroTokens
 //
 // Two orderings are deliberate.
 //
-// **The sectors are in the board's order, not 1-to-20.** A player looks for 20 where it is, between
-// 1 and 5. A keypad in counting order is a keypad you have to read instead of one you can find.
+// **The sectors are in the board's order, not 1-to-20** — read clockwise from the top and wrapped
+// into four rows of five, so the first row is `20 1 18 4 13`. That is the board's *sequence*, which
+// is how a player remembers where a number is; it is deliberately **not** the ring's geometry, and
+// the wrap costs one adjacency — 5 sits at the far corner from 20 rather than beside it. Both are
+// better than counting order, which is a keypad you have to read instead of one you can find.
 //
 // **MISS sits between BULL and ENTER.** Enter is the one control in this app that commits evidence,
 // so the key next to it should be the one that costs nothing when it is hit by mistake. A fat-thumb
@@ -53,6 +56,8 @@ public struct DartKeypad: View {
     public static let rings: [ThroDart.Ring] = [.single, .double, .treble]
 
     /// The sectors as the keypad lays them out: four rows of five, in the board's order.
+    ///
+    /// `[[20, 1, 18, 4, 13], [6, 10, 15, 2, 17], [3, 19, 7, 16, 8], [11, 14, 9, 12, 5]]`.
     public static let rows: [[Int]] = stride(from: 0, to: ThroDart.sectors.count, by: 5).map {
         Array(ThroDart.sectors[$0..<min($0 + 5, ThroDart.sectors.count)])
     }

@@ -127,8 +127,9 @@ public struct ThroStage: Equatable, Sendable {
         // **The least the board can honestly be drawn in**, and the tray may not take it.
         //
         // Its furniture, the line of darts when there is one, and the smallest rung of the ladder.
-        // The checkout row is deliberately not in it: the route is the first thing to go, and
-        // reserving room for it would take that room from the number instead.
+        // The checkout row is deliberately not in it. The order of sacrifice on this screen is
+        // the ledger, then the route, then the tray's comfort — never the number — so reserving
+        // room here for the thing that gives way second would take it from the number instead.
         //
         // The tray used to take `trayIdeal` unconditionally and the board took what was left, which
         // was right while the board's contents were fixed. Adding a row to the board broke it: on

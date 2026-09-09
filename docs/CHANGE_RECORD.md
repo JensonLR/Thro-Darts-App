@@ -1958,3 +1958,29 @@ What `including` is held to also got sharper, because two of its four old assert
 daemon rather than about it: the removal must not **fail**, and this test's own byte must be **gone**
 afterwards. Whether the daemon has since written its own is not `including`'s business.
 
+
+## Three sentences about the keypad that were not quite true
+
+The same sweep, continued through what I wrote about the dart keypad's layout.
+
+The runbook told the founder that **"20 is top-left, between 1 and 5, where it is on a real board."**
+It is top-left, and it is between 1 and 5 *on a board* — but not on this keypad. The grid is the
+board's sequence read clockwise from the top and wrapped into four rows of five:
+
+```
+20  1 18  4 13
+ 6 10 15  2 17
+ 3 19  7 16  8
+11 14  9 12  5
+```
+
+so 5 ends up at the far corner from 20 rather than beside it. That is the wrap's one cost, and the
+choice is still right — the board's **sequence** is how a player remembers where a number is, and
+either beats 1-to-20 in rows — but the sentence claimed something the layout does not do. It says
+what the layout actually is now, in the runbook, in the README and in `DartKeypad`'s own header,
+with the cost named rather than glossed.
+
+And one in `ThroStage`: *"the route is the first thing to go"*. It is the **second**; the ledger goes
+first, and the order is stated three lines away in the type it belongs to.
+
+Small things, and worth the ten minutes: each of them is a sentence a reader would have trusted.
