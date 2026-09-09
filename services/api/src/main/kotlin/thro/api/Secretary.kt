@@ -352,7 +352,9 @@ public class Secretary(private val connection: Connection) {
             """
             SELECT s.submission_id, s.task_id FROM competition.submission s
               JOIN competition.league_fixture_outcome o ON o.outcome_id = s.outcome_id
+              JOIN competition.admin_task t ON t.task_id = s.task_id
              WHERE o.fixture_id = ? AND s.kind = 'result' AND s.state = 'draft'
+               AND t.state NOT IN ('done','cancelled')
             """.trimIndent(),
         ).use { ps -> ps.setObject(1, fixtureId); ps.executeQuery().use { rs -> while (rs.next()) waiting += (rs.getObject(1) as UUID) to (rs.getObject(2) as UUID) } }
         val readied = mutableListOf<UUID>()

@@ -23,6 +23,9 @@
 
 SET ROLE thro_owner;
 
+-- APPROVED-EVIDENCE-REWRITE (pseudonymisation): the display name in every visit payload's `player` field is replaced by the seat it labelled ('home' or 'away'); no score, sequence, seat or row changes. A read-time upcast cannot do this because the name would still be stored, and OD-024's point is that it must not be (ADR-013 amendment, 2026-09-09).
+-- APPROVED-DESTRUCTIVE: evidence.match.home_name and away_name are personal data; what they held is intentionally derivable from nothing in this schema after this migration. The two seats are bound to home_id and away_id, which stay.
+
 -- 0. Refuse to guess. A match whose two names are the same cannot say which seat a name meant;
 --    if such a match has visits, a person resolves it before this runs. (The handler never
 --    accepted one — the engine refuses two equal labels — so this guards rows written some other way.)

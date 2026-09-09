@@ -215,6 +215,10 @@ What does not exist and must be built, in this order:
    - Clients keep a local read cache of organisational state so a captain can see tonight's
      fixture and lineup in a basement; **edits queue as commands** and are applied on reconnect
      under the same version rule.
+   *A dependency to carry into the HTTP layer:* today every authorization subject is a THRØ ID,
+   and `SetAvailability`'s "the player's own word" is `actorId == playerId`. When actors become
+   accounts, the API boundary resolves an account to its live `player_claim` before any command
+   handler runs — the handlers keep speaking THRØ IDs — or self-recording silently stops holding.
 5. **Media.** Object storage behind signed URLs; badge and crest uploads only in Phase C, with the
    safeguarding image policy from OD-010 gating anything showing people.
 6. **Push.** ADR-015 stands; APNs first, with the delivery record it requires.
@@ -357,7 +361,7 @@ local and CI work is not blocked.
 | B4 | Push delivery record; media storage contract | B1 | FB-2 for staging only |
 | C | Team OS slice end to end | B1–B3 | FB-1 |
 | D | Secretary: registration, then result submission and rearrangement (**delivered at the domain and store level**: V016, `Secretary`, 62 properties; the HTTP and client surfaces wait on B1/B3) | A, B2 | nothing further |
-| E | Tournament editions, series, discovery (**store-level read delivered**: V017 + V019, `Discovery`, 25 properties — every card explains itself, nothing is called eligible that THRØ cannot check; the consumer surface waits on the client) | A, B1 | client for the surface |
+| E | Tournament editions, series, discovery (**store-level read delivered**: V017 + V019 + V022, `Discovery`, 26 properties — every card explains itself, nothing is called eligible that THRØ cannot check; the consumer surface waits on the client) | A, B1 | client for the surface |
 | F | Map (MapKit on iOS, when the client exists); friendly request loop | C, E, iOS client | Gate 5 (device journal) for the client |
 
 The iOS client itself is a separate stream gated by ADR-006's outstanding SE-class and Android
@@ -406,10 +410,9 @@ against PostgreSQL 16 locally; CI runs the same suites.
 | 15 | A player row carries no free text; a claim is one live per player and per account, fixed when made, revocable; an organiser confirmation names the organiser | API test + `schema_properties.sh` |
 | 16 | A team rename keeps the old name with its period | API test |
 | 17 | GLOSSARY, README, ADR index, package READMEs and DESIGN_UNSPECIFIED describe the model above and teach no separate Club | review |
-
-| 20 | Match night at the store level: a player records their own availability with no relation, a captain records it on their behalf and the row says so, every word is kept with who said it, a stale write is refused with the current row; a lineup is the captain's, versioned, its old sides kept, a non-member or a team not in the fixture refused by the store in its own words, a change after a live outcome refused; a result card is a draft until both sides are named; every command, refused or applied, leaves a receipt | `OrganisationCommandTest` (17 match-night properties) + `SecretaryTest`, **delivered** (V021) |
-| 19 | A check-in is a person: keyed on (event, player, device), for a live entry of the event, by a member of the entrant — the player themself, one of the pair, or a live team member at that moment; the scoring grant is the person's, never the pair's or the team's | `CompetitionTest` (21 properties) + `MigrationTest`, **delivered** (V020) |
 | 18 | No display name in `evidence.match` or in any payload: the aggregate binds the seats `home` and `away` to competitor ids, the same two words both on-device journals store; a V013 database's named matches are pseudonymised in place with every other payload field untouched; a visit naming anything but a seat is refused | `MigrationTest` (18 properties) + API tests, **delivered** (V018, closes OD-024) |
+| 19 | A check-in is a person: keyed on (event, player, device), for a live entry of the event, by a member of the entrant — the player themself, one of the pair, or a live team member at that moment; the scoring grant is the person's, never the pair's or the team's | `CompetitionTest` (21 properties) + `MigrationTest`, **delivered** (V020) |
+| 20 | Match night at the store level: a player records their own availability with no relation, a captain records it on their behalf and the row says so, every word is kept with who said it, a stale write is refused with the current row; a lineup is the captain's, versioned, its old sides kept, a non-member or a team not in the fixture refused by the store in its own words, a change after a live outcome refused; a result card is a draft until both sides are named; every command, refused or applied, leaves a receipt | `OrganisationCommandTest` (20 match-night properties) + `SecretaryTest`, **delivered** (V021) |
 
 Also required before Phase C opens a match from a fixture: the Phase D rule that no submission
 carrying an unclaimed or non-adult player leaves `READY` without a recorded consent artefact
@@ -446,7 +449,7 @@ league decision with a reason, not a payment flag (OD-009).
 
 ## 12c. Acceptance criteria — Phase E read model, delivered
 
-`DiscoveryTest`, 25 properties, green 2026-09-09. A past event is not offered; every card carries
+`DiscoveryTest`, 26 properties, green 2026-09-09. A past event is not offered; every card carries
 a date, a kind and an access reason; THIS WEEKEND is Saturday and Sunday; NEAR YOU is the locality
 of the team's venue, never the person's location; CLOSING SOON is a stated closing date within a
 week and an unstated one is said to be unstated; YOU ARE ELIGIBLE means open, singles, still open

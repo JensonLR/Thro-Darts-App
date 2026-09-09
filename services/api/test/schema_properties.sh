@@ -27,6 +27,12 @@ if [ "$recorded" = "0" ] && [ "$present" != "0" ]; then
   bad "migration ledger" "this database has THRØ's schemas but no ledger; its version cannot be known — drop the schemas (as the test harness does) and rerun"
   echo "  $PASS passed, $FAIL failed"; exit 1
 fi
+ahead=$($PSQL -c "SELECT max(version) FROM thro.schema_migration;")
+latest=$(ls "$DIR"/V*.sql | sed -E 's/.*\/V0*([0-9]+)__.*/\1/' | sort -n | tail -1)
+if [ -n "$ahead" ] && [ "$ahead" -gt "$latest" ]; then
+  bad "migration ledger" "the database records V$ahead and this checkout stops at V$latest: the database is ahead of the code"
+  echo "  $PASS passed, $FAIL failed"; exit 1
+fi
 for f in "$DIR"/V*.sql; do
   name=$(basename "$f"); v=$(echo "$name" | sed -E 's/^V0*([0-9]+)__.*/\1/')
   sum=$(shasum -a 256 "$f" | cut -d' ' -f1)

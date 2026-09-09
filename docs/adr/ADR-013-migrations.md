@@ -69,3 +69,56 @@ explicit chain, and it needs an owner and a test or it decays:
 
 The first migration that cannot be expressed forward-only without downtime — at which point the
 expand/contract discipline needs a documented exception process rather than an ad-hoc one.
+
+## Amendments — 2026-09-09
+
+Written after the connected-platform build (V014–V021) had run into three things this record
+described and nothing enforced.
+
+**1. The mechanism has a name.** Applying is done by a ledger runner — `Migrations.kt` in the API
+service, and the same logic in bash at the top of `services/api/test/schema_properties.sh` — which
+keeps `thro.schema_migration (version, filename, sha256, applied_at)`. Every file the ledger does
+not hold is applied in its own transaction together with its ledger row; a file that fails leaves
+neither. Three databases are refused rather than guessed at: one with THRØ's schemas and no ledger
+(migrated before the ledger existed; its version cannot be known, so it is rebuilt); one whose
+recorded file has different content on disk (migrations are forward-only, so an edit to an applied
+one is a new migration or a rebuild); one recording a version this checkout has no file for (the
+database is ahead of the code). The application roles hold nothing on the ledger. Until this
+existed every runner applied migrations only when the `evidence` schema was absent, so a database
+behind the code sat silently behind it — after V018 it could not open a match at all.
+
+**2. The discipline is enforced.** `tools/check_migrations.py` runs first in the `schema` workflow
+and fails on: a file that does not run as `thro_owner` from its first owned statement to `RESET
+ROLE`; a `DROP`, `TRUNCATE` or column type change without an `-- APPROVED-DESTRUCTIVE: <reason>`
+line in the file; `UPDATE` or `DELETE` against `evidence` without the marker in §3; a file name
+the ledger cannot parse; versions that are not unique and contiguous. A marker with no reason fails
+too. The narrowing-`ALTER TYPE` rule is held as "any column type change needs a marker", because a
+script cannot tell narrowing from widening and the reviewer can. The digest is over the file's
+bytes, comments included, so adding a marker to an applied file changes its digest and the ledger
+refuses the database until it is rebuilt: before the first deployment that is the intended cost of
+editing an applied file at all, and the markers on V014, V018 and V020 were added in one commit for
+that reason.
+
+**3. The one permitted rewrite of evidence: removing personal data.** The rule stands — evidence
+is never rewritten, a change of shape is a read-time upcast — with one exception the data-protection
+promise forces: when the thing that must change *is personal data that must cease to be stored*
+(rectification or erasure under UK GDPR; ADR-011's pseudonymisation gate), a read-time upcast cannot
+do it, because the data would still be there. Such a migration is permitted when it (a) replaces a
+personal value with a label that carries none, (b) changes no competitive fact — no score, sequence,
+seat, actor or row count, (c) refuses to run if any row would be left carrying the data or would
+have to be guessed at, (d) is performed once by the owner role, and (e) carries
+`-- APPROVED-EVIDENCE-REWRITE (pseudonymisation|erasure): <reason>` and a test that populates the
+old shape and reads every row back. V018 (display names in visit payloads become the seat they
+labelled) is the first and the model.
+
+**4. Expand-then-contract before the first deployment.** "Each a separate deployment" presumes a
+running image to stay compatible with. Until THRØ's first production deployment there is none and
+there is no production data, so V014, V018 and V020 expand and contract in one file, each marked
+and each held by `MigrationTest` over a populated earlier schema. From the first deployment the
+rule applies as written.
+
+**5. Recorded as not yet built.** The frozen payload corpus and read-time upcast chain this record
+requires do not exist, because no event type has yet had a second `schema_version`. The first
+migration or code change that introduces one must bring the corpus with it; this line is here so
+that the omission is a known debt rather than a discovery.
+

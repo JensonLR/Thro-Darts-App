@@ -2287,3 +2287,48 @@ Plan §5 now says how ADR-016's local claim and V014's `identity.player_claim` m
 live claim names the THRØ ID the local person becomes, and each claimed seat lands as a
 `local_match_claim` row with its digest, self-reported and claimable once — so the two designs
 attach to each other without a migration when the claim flow arrives.
+
+## The second hostile review, and a rule that had no teeth
+
+A hostile review of V019–V021 and the ledger came back with twelve findings. The ones that were
+holes are closed at the store, in V022, and the ones that were choices are now written down.
+
+**The lineup was not fixed.** The freeze covered the lineup row and not its entries: after an
+outcome, an entry under the current version could still be inserted, and the membership check ran
+at the old naming time — a departed member could be slipped into a side that had "played". Now a
+lineup is named at the transaction's own time and its entries must be written in that transaction;
+the store holds the two to each other, so a side is complete when the naming commits and nobody can
+be added afterwards, by any role. **A void froze the side for ever.** A void says the result did not
+stand — often because the wrong side was named — so a void no longer freezes; played, awarded and
+walkover do. **Open was not open in both directions.** An event could be set back to `open` while
+live requirement rows stood, and discovery would then call it open; the store refuses that until the
+requirement is withdrawn with a reason. **The audit row was rolled back.** A store refusal rolled
+back to a savepoint taken before the authorization decision, discarding the ADR-008 record of the
+decision that let the captain try; commands now authorise first, then take the savepoint, and the
+test counts the audit rows. **Finished tasks are history**: `onLineupNamed` no longer rewrites the
+missing facts of a done or cancelled task. **`currentVersion` could not return null** because the
+ledger table is resolved at parse time; it asks `to_regclass` first. **Two runners racing** each
+other to V001 now take turns under an advisory lock, and the script gained the "database ahead of
+the code" refusal the Kotlin runner already had. The choices — a qualifier counts a player's own
+entry or a pair containing them and not a team entry; the self-recording path compares THRØ IDs and
+the HTTP layer must map an account to its claim before handlers run — are in the glossary, the
+migration and plan §5.
+
+**ADR-013 had no teeth.** The record of 3 September requires CI to fail on an unmarked destructive
+statement and on any rewrite of evidence, and nothing enforced either: V014 dropped a column, V018
+rewrote payloads and dropped two, V020 replaced a primary key, all unmarked and all green.
+`tools/check_migrations.py` now runs first in the schema workflow and holds the discipline per
+statement — destructive statements need `APPROVED-DESTRUCTIVE` with a reason, evidence rewrites need
+`APPROVED-EVIDENCE-REWRITE (pseudonymisation|erasure)` with a reason, every file runs as the owner
+from its first owned statement to `RESET ROLE`, and versions are contiguous. The three files carry
+their markers, which changed their digests: a database migrated from the previous commit is refused
+by the ledger and rebuilt, which is the intended cost of editing an applied file before the first
+deployment and is now said in the ADR. The ADR is amended in five points: the ledger is its named
+mechanism; the checker is its enforcement; the one permitted rewrite of evidence is the removal of
+personal data that a read-time upcast cannot achieve, under five conditions V018 satisfies; expand
+and contract may share a file until the first deployment; and the payload upcast corpus the record
+requires does not exist yet, recorded as a debt rather than left to be discovered.
+
+The `schema` workflow had also failed on the previous push for a reason that was not ours — a
+third-party apt mirror's hash mismatch while installing `psql`, which the runner image already
+ships. The step now consults apt only when `psql` is absent.

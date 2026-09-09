@@ -32,6 +32,7 @@ INSERT INTO competition.player (player_id, source)
   ON CONFLICT (player_id) DO NOTHING;
 UPDATE competition.check_in SET player_id = competitor_id WHERE player_id IS NULL;
 
+-- APPROVED-DESTRUCTIVE: the primary key is replaced, not removed — (event, competitor, device) becomes (event, player, device) in the same statement, and every row keeps every column.
 ALTER TABLE competition.check_in
   ALTER COLUMN player_id SET NOT NULL,
   DROP CONSTRAINT check_in_pkey,

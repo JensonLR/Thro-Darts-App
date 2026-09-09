@@ -112,20 +112,21 @@ public class OrganisationCommands(private val connection: Connection) {
                 connection.commit()
                 return Result.Replayed(it)
             }
-            val savepoint = connection.setSavepoint()
-            val result = try {
-                when (cmd) {
-                    is Command.RenameTeam -> renameTeam(cmd)
-                    is Command.RearrangeFixture -> rearrangeFixture(cmd)
-                    is Command.SetAvailability -> setAvailability(cmd)
-                    is Command.NameLineup -> nameLineup(cmd)
+            // Authorise first, and record the decision whichever way it goes (ADR-008); only then
+            // take the savepoint, so a refusal the store makes afterwards rolls back the attempt and
+            // not the audit row.
+            val denied = authorise(cmd)
+            val result = if (denied != null) denied else {
+                val savepoint = connection.setSavepoint()
+                try {
+                    apply(cmd)
+                } catch (e: PSQLException) {
+                    // The store said no in its own words (a trigger or check). Roll back to before
+                    // the attempt so the refusal can be receipted in this transaction like any other.
+                    if (e.sqlState != "23514") throw e
+                    connection.rollback(savepoint)
+                    Result.Refused(e.serverErrorMessage?.message ?: e.message ?: "refused by the store")
                 }
-            } catch (e: PSQLException) {
-                // The store said no in its own words (a trigger or check). Roll back to before the
-                // attempt so the refusal can be receipted in this transaction like any other.
-                if (e.sqlState != "23514") throw e
-                connection.rollback(savepoint)
-                Result.Refused(e.serverErrorMessage?.message ?: e.message ?: "refused by the store")
             }
             writeReceipt(cmd, result)
             connection.commit()
@@ -138,16 +139,47 @@ public class OrganisationCommands(private val connection: Connection) {
         }
     }
 
-    // --- the two commands ---------------------------------------------------------------------
+    // --- authorise, then apply -----------------------------------------------------------------
+
+    private fun authorise(cmd: Command): Result.Refused? = when (cmd) {
+        is Command.RenameTeam -> {
+            if (cmd.to.isBlank()) Result.Refused("a team needs a name")
+            else decide(cmd.actorId, "team.manage", ObjectRef(ObjectType.TEAM, cmd.teamId.toString()), cmd.correlationId, "you do not run this team")
+        }
+        is Command.RearrangeFixture -> {
+            val season = seasonOf(cmd.fixtureId)
+            if (season == null) Result.Refused("no such fixture")
+            else decide(cmd.actorId, "league_fixture.rearrange", ObjectRef(ObjectType.LEAGUE_SEASON, season), cmd.correlationId, "you do not administer this league season")
+        }
+        is Command.SetAvailability -> {
+            // The player's own word needs no relation; anyone else needs to run the team, and the
+            // row then says it was them — the provenance "on their behalf" requires. The actor id
+            // here is the player's THRØ ID; when actors become accounts (FB-1) the API boundary maps
+            // an account to its live claim before this point (plan §5).
+            if (cmd.actorId == cmd.playerId) null
+            else decide(cmd.actorId, "team.manage", ObjectRef(ObjectType.TEAM, cmd.teamId.toString()), cmd.correlationId,
+                "only the player, or someone who runs their team, records their availability")
+        }
+        is Command.NameLineup -> {
+            if (cmd.players.isEmpty()) Result.Refused("a lineup names at least one player")
+            else if (cmd.players.toSet().size != cmd.players.size) Result.Refused("a player is named once in a lineup")
+            else decide(cmd.actorId, "team.manage", ObjectRef(ObjectType.TEAM, cmd.teamId.toString()), cmd.correlationId, "you do not run this team")
+        }
+    }
+
+    private fun decide(actor: UUID, action: String, obj: ObjectRef, correlation: UUID, why: String): Result.Refused? {
+        val decision = Relations(connection).decide(actor, action, obj, correlation)
+        return if (decision.allowed) null else Result.Refused(why, decision.excludedBy)
+    }
+
+    private fun apply(cmd: Command): Result = when (cmd) {
+        is Command.RenameTeam -> renameTeam(cmd)
+        is Command.RearrangeFixture -> rearrangeFixture(cmd)
+        is Command.SetAvailability -> setAvailability(cmd)
+        is Command.NameLineup -> nameLineup(cmd)
+    }
 
     private fun renameTeam(cmd: Command.RenameTeam): Result {
-        if (cmd.to.isBlank()) return Result.Refused("a team needs a name")
-        val decision = Relations(connection).decide(
-            cmd.actorId, "team.manage", ObjectRef(ObjectType.TEAM, cmd.teamId.toString()), cmd.correlationId,
-        )
-        if (!decision.allowed) {
-            return Result.Refused("you do not run this team", decision.excludedBy)
-        }
         val current = currentTeam(cmd.teamId) ?: return Result.Refused("no such team")
         if (current.first != cmd.expectedVersion) {
             return Result.Stale(current.first, current.second)
@@ -170,14 +202,6 @@ public class OrganisationCommands(private val connection: Connection) {
     }
 
     private fun rearrangeFixture(cmd: Command.RearrangeFixture): Result {
-        val decision = Relations(connection).decide(
-            cmd.actorId, "league_fixture.rearrange",
-            ObjectRef(ObjectType.LEAGUE_SEASON, seasonOf(cmd.fixtureId) ?: return Result.Refused("no such fixture")),
-            cmd.correlationId,
-        )
-        if (!decision.allowed) {
-            return Result.Refused("you do not administer this league season", decision.excludedBy)
-        }
         val current = currentFixture(cmd.fixtureId) ?: return Result.Refused("no such fixture")
         if (current.first != cmd.expectedVersion) {
             return Result.Stale(current.first, current.second)
@@ -201,14 +225,6 @@ public class OrganisationCommands(private val connection: Connection) {
     }
 
     private fun setAvailability(cmd: Command.SetAvailability): Result {
-        // The player's own word needs no relation; anyone else needs to run the team, and the row
-        // then says it was them (provenance the plan requires for "on their behalf").
-        if (cmd.actorId != cmd.playerId) {
-            val decision = Relations(connection).decide(
-                cmd.actorId, "team.manage", ObjectRef(ObjectType.TEAM, cmd.teamId.toString()), cmd.correlationId,
-            )
-            if (!decision.allowed) return Result.Refused("only the player, or someone who runs their team, records their availability", decision.excludedBy)
-        }
         val orgs = Organisations(connection)
         val current = orgs.availabilityOf(cmd.fixtureId, cmd.playerId)
         val version = current?.version ?: 0
@@ -219,12 +235,6 @@ public class OrganisationCommands(private val connection: Connection) {
     }
 
     private fun nameLineup(cmd: Command.NameLineup): Result {
-        if (cmd.players.isEmpty()) return Result.Refused("a lineup names at least one player")
-        if (cmd.players.toSet().size != cmd.players.size) return Result.Refused("a player is named once in a lineup")
-        val decision = Relations(connection).decide(
-            cmd.actorId, "team.manage", ObjectRef(ObjectType.TEAM, cmd.teamId.toString()), cmd.correlationId,
-        )
-        if (!decision.allowed) return Result.Refused("you do not run this team", decision.excludedBy)
         val orgs = Organisations(connection)
         val version = orgs.lineupVersion(cmd.fixtureId, cmd.teamId)
         if (version != cmd.expectedVersion) return Result.Stale(version, lineupJson(cmd.fixtureId, cmd.teamId))

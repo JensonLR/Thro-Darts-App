@@ -147,7 +147,9 @@ public class Discovery(private val connection: Connection) {
 
     /**
      * The event's live requirement rows with, per row, whether the store says it holds for the
-     * player and how to say it either way. The verdict comes from the same predicate as
+     * player and how to say it either way. One query per gated card, deliberately: the number of
+     * gated events in a sixty-day window is small and the honesty of the per-row verdict is not
+     * worth trading for a join. The verdict comes from the same predicate as
      * `competition.player_satisfies_event`, so the card and the store cannot disagree.
      */
     private fun requirementsOf(eventId: UUID, playerId: UUID, at: Instant): List<Row> {

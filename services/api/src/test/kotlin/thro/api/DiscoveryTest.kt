@@ -121,6 +121,10 @@ class DiscoveryTest {
         check("every group must hold: a member who cannot show an age band is not eligible, and the card names the unmet group",
             memberAndAdult !in ids(Discovery.Section.YOU_ARE_ELIGIBLE) && card(memberAndAdult).reasons.contains("restricted entry — requires a claimed account whose age band is adult"))
         check("an open event refuses a requirement: open means open", openRefused)
+        val reopened = try {
+            c.prepareStatement("UPDATE competition.event SET access = 'open' WHERE event_id = ?").use { ps -> ps.setObject(1, memberOnly); ps.executeUpdate() }; false
+        } catch (e: org.postgresql.util.PSQLException) { e.message!!.contains("cannot become open") }
+        check("and in the other direction: an event with a live requirement cannot be made open until the requirement is withdrawn", reopened)
         check("the store's own answer agrees with the card", orgs.satisfiesEvent(sam, memberOnly, now) == true && orgs.satisfiesEvent(sam, othersOnly, now) == false && orgs.satisfiesEvent(sam, unstated, now) == null)
         orgs.withdrawRequirement(wrongTeam, organiser, "stated on the wrong team")
         val after = Discovery(c).forPlayer(sam, from = now, to = now.plus(60, ChronoUnit.DAYS), homeLocality = "Stockton")[Discovery.Section.ALL].orEmpty().single { it.eventId == othersOnly }
@@ -137,6 +141,6 @@ class DiscoveryTest {
         check("nothing about the player's location was read: the locality came from the team's venue", card(weekendOpen).reasons.contains("in Stockton, where your team plays"))
 
         println("  $passed discovery properties held")
-        assertEquals(25, passed)
+        assertEquals(26, passed)
     }
 }

@@ -240,9 +240,12 @@ class OrganisationCommandTest {
             cmds.handle(OrganisationCommands.Command.NameLineup(UUID.randomUUID(), phone, actor, fixture, team, players, v))
         check("a player who is not the captain cannot name the side", lineup(sam, listOf(sam, jo), 0) is OrganisationCommands.Result.Refused)
         check("the captain names the side", lineup(kim, listOf(sam, jo), 0) == OrganisationCommands.Result.Applied(1) && orgs.currentLineup(fixture, riverside) == listOf(sam, jo))
+        fun decisions() = c.prepareStatement("SELECT count(*) FROM audit.decision WHERE subject_id = ? AND action = 'team.manage'").use { ps -> ps.setObject(1, kim); ps.executeQuery().use { rs -> rs.next(); rs.getInt(1) } }
+        val decisionsBefore = decisions()
         val nonMember = lineup(kim, listOf(sam, lee), 1)
         check("a side naming a former member is refused by the store, and nothing was written",
             nonMember is OrganisationCommands.Result.Refused && nonMember.why.contains("not a member") && orgs.lineupVersion(fixture, riverside) == 1 && orgs.currentLineup(fixture, riverside) == listOf(sam, jo))
+        check("and the authorization decision that let the captain try is on the audit record, not rolled back with the attempt", decisions() == decisionsBefore + 1)
         check("naming it again replaces the side and keeps the old one as history",
             lineup(kim, listOf(ade, sam, jo), 1) == OrganisationCommands.Result.Applied(2) && orgs.currentLineup(fixture, riverside) == listOf(ade, sam, jo) && orgs.lineupAt(fixture, riverside, 1) == listOf(sam, jo))
         val staleLineup = lineup(kim, listOf(sam), 1)
@@ -251,15 +254,24 @@ class OrganisationCommandTest {
         check("the captain of one side cannot name the other", lineup(kim, listOf(sam), 0, team = grange) is OrganisationCommands.Result.Refused)
         // Any live outcome fixes the side: here the league awards the fixture (a played outcome
         // needs the fixture's match, which is Phase C's opening-from-a-fixture and not this test's).
-        orgs.awardFixture(fixture, riverside, "Grange conceded", by = kim)
+        val award = orgs.awardFixture(fixture, riverside, "Grange conceded", by = kim)
         val afterPlayed = lineup(kim, listOf(sam, jo), 2)
         check("once the fixture has an outcome the side that played is the side that played",
             afterPlayed is OrganisationCommands.Result.Refused && afterPlayed.why.contains("played") && orgs.currentLineup(fixture, riverside) == listOf(ade, sam, jo))
+        val lateEntry = try {
+            c.prepareStatement("INSERT INTO competition.lineup_entry (fixture_id, team_id, lineup_version, slot, player_id) VALUES (?, ?, 2, 4, ?)")
+                .use { ps -> ps.setObject(1, fixture); ps.setObject(2, riverside); ps.setObject(3, jo); ps.executeUpdate() }; false
+        } catch (e: org.postgresql.util.PSQLException) { e.message!!.contains("written in the transaction that named it") }
+        check("nor can a player be slipped into the current side afterwards: entries are written with the naming or not at all",
+            lateEntry && orgs.currentLineup(fixture, riverside) == listOf(ade, sam, jo))
+        orgs.voidOutcome(fixture, supersedes = award, reason = "awarded in error; the fixture is to be played", by = kim)
+        check("a void says the result did not stand, so it does not freeze the side",
+            lineup(kim, listOf(sam, jo), 2) == OrganisationCommands.Result.Applied(3) && orgs.currentLineup(fixture, riverside) == listOf(sam, jo))
         val receipts = c.prepareStatement("SELECT count(*) FILTER (WHERE outcome = 'refused'), count(*) FROM competition.command_receipt WHERE device_id = ?")
             .use { ps -> ps.setObject(1, phone); ps.executeQuery().use { rs -> rs.next(); rs.getInt(1) to rs.getInt(2) } }
-        check("every command, refused or applied, left a receipt — including the store's own refusals", receipts.second == 14 && receipts.first == 7)
+        check("every command, refused or applied, left a receipt — including the store's own refusals", receipts.second == 15 && receipts.first == 7)
 
         println("  $passed match night properties held")
-        assertEquals(17, passed)
+        assertEquals(20, passed)
     }
 }

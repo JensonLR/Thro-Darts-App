@@ -214,7 +214,8 @@ is its Event's kind. The database refuses anything else.
 `invitational`) requires of an entrant, stated by the organiser in the five terms THRØ can check
 against its own records: a live Team membership, a live League-season registration, a live entry to
 a named qualifier Event, the claimed account's age band, or an invitation by name. Rows in one group
-are alternatives; every group must hold. An Event that states none has not stated its requirement,
+are alternatives; every group must hold. A qualifier counts a Player's own entry or a Pair containing
+them; a Team entry names no individual and does not count. An Event that states none has not stated its requirement,
 and discovery says so — it never calls the player eligible. A requirement is withdrawn with a
 reason, never rewritten or deleted, so an entrant can be shown the rule as it stood when they were
 told (V019).
@@ -243,9 +244,11 @@ with who said it. THRØ records it and decides nothing from it (V021).
 
 **Lineup** — the side a Team names for a Fixture, in slot order. The lineup row carries the
 version; the players are entries under each version, so a renamed side keeps the old one as
-history. Fixed once the Fixture has a live outcome: the side that played is the side that played. A
-first naming after the outcome is allowed and carries the same trust as the result it accompanies
-(V021).
+history. The entries are written in the same transaction as the naming and the store holds them to
+it, so a side is complete when it is named and nobody can be slipped in afterwards. Fixed once the
+Fixture has a live outcome that is played, awarded or a walkover: the side that played is the side
+that played. A void says the result did not stand, so it does not freeze. A first naming after the
+outcome is allowed and carries the same trust as the result it accompanies (V021, V022).
 
 **Bracket tie** — a pairing in a knockout round of an Event, possibly a bye (`bracket_tie`). Not a
 fixture. The Slot states below describe its positions.

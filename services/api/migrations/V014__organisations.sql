@@ -518,6 +518,7 @@ ALTER TABLE competition.entry
   ADD COLUMN pair_id      uuid REFERENCES competition.pair(pair_id),
   ADD COLUMN team_id      uuid REFERENCES competition.team(team_id);
 
+-- APPROVED-DESTRUCTIVE: entry.competitor_id is re-created as a generated column over the typed ids one statement later; the old unique constraint and seed index are re-created over it; nothing a row held is lost (MigrationTest reads every entry back). authz.relation's check and primary key are replaced by wider ones in the same file.
 INSERT INTO competition.player (player_id, source)
   SELECT DISTINCT competitor_id, 'legacy' FROM competition.entry
   ON CONFLICT (player_id) DO NOTHING;

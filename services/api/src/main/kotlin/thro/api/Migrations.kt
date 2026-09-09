@@ -23,6 +23,9 @@ import java.sql.Connection
  *    an applied one is a new migration or a rebuild, never a re-run;
  *  - a recorded version this checkout has no file for: the database is ahead of the code.
  *
+ * Two runners at once — two API instances booting together — take turns: an advisory lock is held
+ * for the whole run, so the second sees the first's ledger rows rather than racing it to V001.
+ *
  * The ledger belongs to the deploy role that runs migrations, not to any application role; nothing
  * grants it to them.
  */
@@ -41,6 +44,7 @@ public object Migrations {
         c.autoCommit = false
         try {
             c.createStatement().use { st ->
+                st.execute("SELECT pg_advisory_lock($LOCK)")
                 st.execute("CREATE SCHEMA IF NOT EXISTS thro")
                 st.execute(
                     """
@@ -101,16 +105,22 @@ public object Migrations {
             }
             return applied
         } finally {
+            try { c.createStatement().use { it.execute("SELECT pg_advisory_unlock($LOCK)") } } catch (_: Exception) { }
             c.autoCommit = previous
         }
     }
 
+    /** One lock for every runner of this ledger; the number is arbitrary and must not change. */
+    private const val LOCK: Long = 7_412_090_918L
+
     /** The highest version the ledger records, or null when there is no ledger yet. */
     public fun currentVersion(c: Connection): Int? =
         c.createStatement().use { st ->
-            st.executeQuery(
-                "SELECT max(version) FROM thro.schema_migration WHERE EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'thro' AND table_name = 'schema_migration')",
-            ).use { rs -> if (rs.next()) rs.getObject(1)?.let { (it as Number).toInt() } else null }
+            // The table is resolved at parse time, so its absence has to be asked about first;
+            // a WHERE EXISTS guard in the same query would never run.
+            val exists = st.executeQuery("SELECT to_regclass('thro.schema_migration') IS NOT NULL").use { rs -> rs.next(); rs.getBoolean(1) }
+            if (!exists) return null
+            st.executeQuery("SELECT max(version) FROM thro.schema_migration").use { rs -> if (rs.next()) rs.getObject(1)?.let { (it as Number).toInt() } else null }
         }
 
     private fun sha256(bytes: ByteArray): String =

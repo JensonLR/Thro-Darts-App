@@ -606,18 +606,36 @@ public class Organisations(private val connection: Connection) {
      * Names [teamId]'s side for [fixtureId], in slot order. [expectedVersion] is 0 when no lineup
      * exists yet. Returns the new version, or null when the lineup was not at the expected version.
      * The store refuses a non-member, a team not in the fixture, and any change once the fixture
-     * has a live outcome.
+     * has a live outcome other than a void. The entries are written in the same transaction as the
+     * naming and the store holds them to it (V022), so the side is complete when this commits.
      */
     public fun nameLineup(fixtureId: UUID, teamId: UUID, players: List<UUID>, by: UUID, expectedVersion: Int): Int? {
         require(players.isNotEmpty()) { "a lineup names at least one player" }
         require(players.toSet().size == players.size) { "a player is named once in a lineup" }
+        // The naming and its entries are one transaction, whatever the caller's mode: the store
+        // holds the entries to the naming's timestamp (V022), so they cannot be two.
+        if (!connection.autoCommit) return nameLineupInTransaction(fixtureId, teamId, players, by, expectedVersion)
+        connection.autoCommit = false
+        try {
+            val v = nameLineupInTransaction(fixtureId, teamId, players, by, expectedVersion)
+            connection.commit()
+            return v
+        } catch (e: Exception) {
+            connection.rollback()
+            throw e
+        } finally {
+            connection.autoCommit = true
+        }
+    }
+
+    private fun nameLineupInTransaction(fixtureId: UUID, teamId: UUID, players: List<UUID>, by: UUID, expectedVersion: Int): Int? {
         val n = if (expectedVersion == 0) {
             connection.prepareStatement(
                 "INSERT INTO competition.lineup (fixture_id, team_id, named_by) VALUES (?, ?, ?) ON CONFLICT DO NOTHING",
             ).use { ps -> ps.setObject(1, fixtureId); ps.setObject(2, teamId); ps.setObject(3, by); ps.executeUpdate() }
         } else {
             connection.prepareStatement(
-                "UPDATE competition.lineup SET named_by = ?, named_at = clock_timestamp(), row_version = ? WHERE fixture_id = ? AND team_id = ? AND row_version = ?",
+                "UPDATE competition.lineup SET named_by = ?, named_at = now(), row_version = ? WHERE fixture_id = ? AND team_id = ? AND row_version = ?",
             ).use { ps -> ps.setObject(1, by); ps.setInt(2, expectedVersion + 1); ps.setObject(3, fixtureId); ps.setObject(4, teamId); ps.setInt(5, expectedVersion); ps.executeUpdate() }
         }
         if (n != 1) return null
