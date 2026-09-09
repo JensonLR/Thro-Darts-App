@@ -160,5 +160,15 @@ public object Rules {
         "match.adjudicate" to Rule.Except(base = eventOfficial, minus = matchParticipant),
 
         "event.manage" to Rule.AnyOf(listOf(Rule.Direct("organiser"), Rule.Inherited("organiser"))),
+
+        // Team OS (ADR-016, ADR-017). A team is run by its admins and its captain; the design shows
+        // one person being both, and a captain who is not an admin still selects the side.
+        "team.manage" to Rule.AnyOf(listOf(Rule.Direct("admin"), Rule.Direct("captain"))),
+
+        // A league fixture is rearranged by the season's administration: an admin of the league
+        // season the fixture belongs to, or of anything that season hangs off. A captain proposing
+        // a new date is a Secretary workflow with opponent acknowledgement, not a unilateral write,
+        // so captains are not here.
+        "league_fixture.rearrange" to Rule.AnyOf(listOf(Rule.Direct("admin"), Rule.Inherited("admin"))),
     )
 }

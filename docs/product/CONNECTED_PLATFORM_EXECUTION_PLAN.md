@@ -200,25 +200,59 @@ Runs against the real database and the real HTTP layer. Nothing is static data.
 
 ## 7. Secretary wedge — player registration (Phase D)
 
+The administrator enters a sporting fact once — *Sam joined Riverside A* — and THRØ carries the
+administration that legitimately follows, without ever becoming the authority that says Sam is
+registered. Concrete design, V016:
+
 ```
-team_membership(status=active)
-  → policy(kind=registration, authority=league_season, approved)
-  → registration_requirement derived per (player, league_season): required fields, deadline
-  → missing-data detection → admin_task(kind=registration_incomplete, owner=team#admin, due=deadline)
-  → submission(kind=player_registration, transport=email|export|manual, state machine)
-  → acknowledgement recorded with evidence (a message id, an upload receipt, a human tick with actor)
-  → player_registration(status=registered, from=…)
+admin_task            (task_id, kind, owner team_id | league_season_id (typed, exactly one),
+                       source_kind + source_id, subject player_id? fixture_id? registration_id?,
+                       reason, due_at, state, policy_id?, row_version, created_by)
+admin_task_event      append-only by trigger: (task_id, from_state, to_state, at, by, note)
+submission            (submission_id, kind, league_season_id, registration_id? | fixture_id? | outcome_id?
+                       (typed, exactly one), task_id?, transport, state, policy_id, row_version)
+submission_transition append-only: (submission_id, from_state, to_state, at, by, evidence_kind,
+                       evidence_ref, note) — the trigger validates the graph and the evidence,
+                       then projects the new state onto the submission row
 ```
 
-Submission states: `DRAFT → READY → SUBMITTED → DELIVERED → ACKNOWLEDGED → ACCEPTED | REJECTED |
-ACTION_REQUIRED`. `DELIVERED` requires transport evidence; `ACKNOWLEDGED` and `ACCEPTED` require a
-recorded actor on the receiving side or an explicit human confirmation with a name. THRØ never
-advances a submission past `SUBMITTED` on its own.
+Task states: `open`, `waiting_player`, `waiting_opponent`, `waiting_league`, `done`, `cancelled`.
+Task kinds in this slice: `registration_required`, `registration_incomplete`,
+`result_submission_due`, `rearrangement_acknowledgement_due`. The inbox is a read over
+`admin_task` by owner and `due_at`: ACTION REQUIRED, DUE TODAY, UPCOMING, WAITING FOR …, COMPLETED.
+No task is created when the fact it would chase is already true (a registered player gets no
+registration task); tasks are derived from facts and policy, never manufactured to fill a list.
 
-The example league policy is a fixture in the test suite, not a real league's rules, and is cited
-by version on every task and submission it produces. The same pipeline is then shown to produce a
-result-submission task from a `fixture.state=played` transition and a rearrangement task from a
-`fixture.state=rearranged` transition.
+Submission states and the evidence each transition demands:
+
+| From → to | Who | Evidence required |
+|---|---|---|
+| `draft → ready` | THRØ, when nothing is missing | none |
+| `ready → submitted` | a team admin, naming the transport | none; **refused** if the subject player is unclaimed or has no recorded consent basis (PD-004) |
+| `submitted → delivered` | THRØ or the admin | transport evidence: `message_id`, `upload_receipt`, `api_response`, or `human_confirmation` with the actor |
+| `delivered → acknowledged` | a named person | `counterparty_message`, `api_response`, or `human_confirmation` |
+| `acknowledged → accepted` / `rejected` / `action_required` | a named person | as above; `accepted` on a `player_registration` sets the registration `registered` under the cited policy |
+| `action_required → ready` | a team admin | none |
+| anything → `withdrawn` | a team admin | none |
+
+THRØ never moves a submission past `submitted` on its own. `accepted` is a fact about the league's
+answer, and the row records who said so and how. A transition without the evidence its kind
+requires is refused by the trigger, not by convention.
+
+Registration requirements come from the season's **approved** `registration` policy, parsed by
+`RegistrationPolicy` into facts THRØ can check — a display name, a known age band, a bound account,
+a recorded consent basis, a deadline (an absolute date or days before the team's first fixture) —
+and nothing else; an unknown requirement key is refused at parse, so a league's "passport photo"
+never silently passes. Missing facts make a `registration_incomplete` task listing them; none
+missing makes the submission `ready`.
+
+Generalisation, proved by the same tests: a `league_fixture_outcome` creates a
+`result_submission_due` task and a `result` submission for the league; a `league_fixture_change`
+creates a `rearrangement_acknowledgement_due` task waiting on the opponent and a
+`fixture_rearrangement` submission. Same task table, same transition table, same evidence rule.
+
+The example league policy is a fixture in the test suite, not a real league's rules, and every task
+and submission cites the policy version it was produced under.
 
 ## 8. Tournament model
 
@@ -273,7 +307,7 @@ local and CI work is not blocked.
 |---|---|---|---|
 | A1–A6 | Audit, ADR-016, V014, Kotlin organisational domain, tests, docs | nothing | nothing |
 | B1 | Ktor HTTP layer over existing handlers; OpenAPI in CI | A | nothing |
-| B2 | Organisational command model with row versions; local cache contract | A | nothing |
+| B2 | Organisational command model with row versions (**delivered**: V015, `OrganisationCommands`, two-writer conflict test); local cache contract | A | nothing |
 | B3 | Accounts, sessions, passkeys, claim flow | B1 | **FB-1** |
 | B4 | Push delivery record; media storage contract | B1 | FB-2 for staging only |
 | C | Team OS slice end to end | B1–B3 | FB-1 |
