@@ -1,6 +1,6 @@
 # THRØ — Connected Platform Execution Plan
 
-**Date:** 2026-09-09 · **Status:** Phases A, B2 and D delivered; B3/C wait on FB-1, E/F on the client · **Precedence:** rank 4 (product/domain
+**Date:** 2026-09-09 · **Status:** Phases A, B2, D and E's read model delivered; B3/C wait on FB-1, E's surface and F on the client · **Precedence:** rank 4 (product/domain
 specification), below the founder's instructions and the decision register, above the ADRs it cites.
 
 This plan reconciles the repository as it stands with the founder's product conclusions for the
@@ -312,7 +312,7 @@ local and CI work is not blocked.
 | B4 | Push delivery record; media storage contract | B1 | FB-2 for staging only |
 | C | Team OS slice end to end | B1–B3 | FB-1 |
 | D | Secretary: registration, then result submission and rearrangement (**delivered at the domain and store level**: V016, `Secretary`, 62 properties; the HTTP and client surfaces wait on B1/B3) | A, B2 | nothing further |
-| E | Tournament editions, series, discovery | A, B1 | nothing |
+| E | Tournament editions, series, discovery (**store-level read delivered**: V017, `Discovery`, 16 properties — every card explains itself, nothing is called eligible that THRØ cannot check; the consumer surface waits on the client) | A, B1 | client for the surface |
 | F | Map (MapKit on iOS, when the client exists); friendly request loop | C, E, iOS client | Gate 5 (device journal) for the client |
 
 The iOS client itself is a separate stream gated by ADR-006's outstanding SE-class and Android
@@ -394,3 +394,15 @@ findings before implementation; the schema closes the four blockers in the datab
 Deferred, recorded: a payload gate for result submissions that carry lineups (no lineup exists
 until Phase C); a `transport_evidence_rule` table when the second adapter arrives; `lapsed` as a
 league decision with a reason, not a payment flag (OD-009).
+
+## 12c. Acceptance criteria — Phase E read model, delivered
+
+`DiscoveryTest`, 16 properties, green 2026-09-09. A past event is not offered; every card carries
+a date, a kind and an access reason; THIS WEEKEND is Saturday and Sunday; NEAR YOU is the locality
+of the team's venue, never the person's location; CLOSING SOON is a stated closing date within a
+week and an unstated one is said to be unstated; YOU ARE ELIGIBLE means open, singles, still open
+to entries, with a place if a capacity was stated — an invitational, a member-only event, a pairs
+event and a full event are never called eligible; an unstated capacity is null, never unlimited;
+places are counted from live entries; a series the player already plays in surfaces its other legs
+and says why; an entered event appears only as entered. Eligibility policies for `qualified`,
+`restricted` and `member_only` events are not yet modelled and the card says so.

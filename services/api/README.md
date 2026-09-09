@@ -108,3 +108,12 @@ team that sent a registration cannot accept it; a placeholder the captain typed 
 THRØ; a minor's own consent does not open the gate; a draft policy registers nobody; a played
 outcome that is voided supersedes the result card that carried it; a rearrangement is a proposal
 the opponent answers and the league applies. The same engine, the same tables, for all three.
+
+## Discovery
+
+`Discovery.forPlayer` answers "what can I play next?" from facts, and every card carries the
+reasons it appears. Eligibility is claimed only where THRØ can check it — open entry, singles,
+entries still open, a place if a capacity was stated — and an event whose access THRØ cannot yet
+check says so rather than being called eligible. Capacity and closing dates are what the organiser
+declared; "not stated" is a value, never "unlimited". Nothing reads a person's location: "near you"
+is the locality of the venue the player's team plays at. 16 properties.

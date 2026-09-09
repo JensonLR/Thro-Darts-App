@@ -34,13 +34,15 @@ public class Competitions(private val connection: Connection) {
         tournamentId: UUID? = null,
         entrantKind: EntrantKind = EntrantKind.PLAYER,
         access: EventAccess = EventAccess.OPEN,
+        entriesCloseAt: Instant? = null,
+        capacity: Int? = null,
     ) {
         connection.prepareStatement(
             """
             INSERT INTO competition.event
               (event_id, name, venue_label, venue_id, tournament_id, starts_at, session_ends_at,
-               entrant_kind, access)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+               entrant_kind, access, entries_close_at, capacity)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """.trimIndent(),
         ).use { ps ->
             ps.setObject(1, eventId); ps.setString(2, name); ps.setString(3, venueLabel)
@@ -49,6 +51,8 @@ public class Competitions(private val connection: Connection) {
             ps.setObject(7, java.sql.Timestamp.from(sessionEndsAt))
             ps.setString(8, entrantKind.name.lowercase())
             ps.setString(9, access.name.lowercase())
+            ps.setObject(10, entriesCloseAt?.let { java.sql.Timestamp.from(it) })
+            if (capacity == null) ps.setNull(11, java.sql.Types.INTEGER) else ps.setInt(11, capacity)
             ps.executeUpdate()
         }
     }

@@ -47,6 +47,7 @@ database.
 | 10+ | Live, notifications, payments | Not started — each waits on a product decision |
 | **A** | **Connected competitive graph** | **Closed** — Team, Venue, League season, Tournament, Series, membership, registration, policy; hostile-reviewed before the migration was cut (`docs/product/CONNECTED_PLATFORM_EXECUTION_PLAN.md`) |
 | B | Network identity and sync | Organisational commands with a two-writer conflict test closed (ADR-017); accounts and the HTTP surface wait on founder decision FB-1 (execution plan §9) |
+| E | Tournament discovery | Read model closed: every card explains why it appears, and nothing is called eligible that THRØ cannot check; the consumer surface waits on the client |
 | **D** | **THRØ Secretary** | **Closed at domain and store level** — tasks derived from facts and approved policy, submissions that move only with evidence, and a database that will not let THRØ or a team say the league accepted anything |
 
 **What is verified, and how:**
@@ -61,7 +62,7 @@ database.
 | Rating projection | 14 tests — reproducible from a watermark pair; OD-001 stays open |
 | Competition structure | 24 tests — bracket identities exhaustive for every field size to 1024, and the organisational vocabulary as pure types |
 | Schema and privileges | 93 property assertions against a real PostgreSQL |
-| Command path, organisations, Secretary | 13 integration suites against a real PostgreSQL, including V014 applied over a populated V013 database with nothing lost, two concurrent writers on one row, and 62 Secretary properties |
+| Command path, organisations, Secretary, discovery | 14 integration suites against a real PostgreSQL, including V014 applied over a populated V013 database with nothing lost, two concurrent writers on one row, and 62 Secretary properties |
 | Design tokens | 50 contrast pairs, absolute thresholds, 0 unrecorded breaches |
 | Design components | 61 components audited mechanically against a baseline ratchet |
 
