@@ -137,8 +137,11 @@ Everything below is what the tests assert; the phone is the first place anyone w
   throws first, **Continue**. *Match ready* shows both players and the format; **Start scoring**.
 - **A refusal.** Tap **1 7 9** then **Enter 179**. A red bar says *179 cannot be scored with three
   darts.* and nothing else changes. The undo key clears the entry.
-- **A normal visit.** Tap the **180** quick key. The remaining drops, the turn indicator names the
-  other player. Give them a **60**.
+- **A normal visit.** Tap the **180** quick key. The remaining drops, the other player's column
+  takes the throw marker, and **180** is chalked across the foot of the board for about a second
+  with *<name> · 321 left* beside it. **Check it does not cross the big number** — it is aligned to
+  the bottom of the board precisely so it cannot, and no test in this repository can hold an
+  alignment. Give the other player a **60**.
 - **A finish position.** Give the first player another **180** (321 → 141). A *Checkout available*
   card appears and the remaining turns brand-green. Give the second player **60**.
 - **The first question.** For the first player tap **1 0 0**, **Enter**. Instead of the keypad:

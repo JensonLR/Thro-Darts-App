@@ -558,11 +558,23 @@ public struct ScoringScreen: View {
             }
         }
         // **What the board says back.** The founder asked for a confirmation when a score is
-        // entered; on a board that is chalk landing, not an iOS toast. It sits under the head so it
-        // never covers the numerals it is confirming, and it goes on its own after `dwell`.
-        .overlay(alignment: .center) {
+        // entered; on a board that is chalk landing, not an iOS toast. It goes on its own after
+        // `dwell`.
+        //
+        // **`.bottom` and not `.center`, and the comment here used to claim `.center` was under the
+        // head.** It is not, on a short screen: the iPhone SE's board is 161 points, of which the
+        // head is about 132, so the middle of the board is *inside the head* and the confirmation
+        // landed across the number it was confirming — on the one phone with the least room to
+        // spare. At the foot it is over the ledger for a beat instead, which is the right thing to
+        // cover: the ledger is what has been written and the mark is what has just gone onto it,
+        // while the hero is the number the whole screen exists to show.
+        //
+        // No test here can hold an alignment — nothing in this repository constructs a screen — so
+        // this is a claim the phone has to check, and it is in the runbook's plan for that reason.
+        .overlay(alignment: .bottom) {
             if let mark {
                 ThroChalkMarkView(mark)
+                    .padding(.bottom, ThroSpacing.spacing3)
             }
         }
         .animation(.throEnter(), value: session.notice != nil)

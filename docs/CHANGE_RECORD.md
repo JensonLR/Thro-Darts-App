@@ -1879,3 +1879,29 @@ caught by more than once, so both are assertions now.
 
 **CI green at `3734411`:** 573 tests, the app target builds for the simulator, 19 guards and the
 token gate.
+
+## The confirmation was landing on the number it was confirming
+
+Reading my own comment against the code it sits on:
+
+```swift
+// It sits under the head so it never covers the numerals it is confirming …
+.overlay(alignment: .center) { … }
+```
+
+The comment states the requirement and the code does not implement it. `.center` is the middle of
+the **board side**, not a point under the head — and on the iPhone SE the board is 161 points of
+which the head is about 132, so the middle of the board is *inside the head*. The chalk mark
+confirming a visit landed across the number the whole screen exists to show, on the one phone with
+the least room to spare.
+
+It is `.bottom` now, over the ledger for its beat. That is the right thing to cover: the ledger is
+what has been written and the mark is what has just gone onto it, while the hero is the product.
+
+**Nothing here can hold an alignment** — no test in this repository constructs a screen, which is
+the same admission the design-layer row in the README already makes. So it goes into the runbook's
+first-run plan as something for the phone to check, with the reason next to it, rather than being
+recorded as verified. That is the honest place for it.
+
+Worth noting how it was found: not by a test and not by CI, but by reading a comment I had written
+and asking whether the line under it does what it says.
