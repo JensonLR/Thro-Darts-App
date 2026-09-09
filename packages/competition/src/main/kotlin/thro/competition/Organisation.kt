@@ -3,7 +3,7 @@ package thro.competition
 import java.time.Instant
 
 /**
- * The organisational graph, as pure types. ADR-016.
+ * The organisational graph, as pure types. ADR-017.
  *
  * `Club` is not here, on purpose. It is a word people use for a [Team] or for a [Venue], and it
  * resolves to one of them every time. Everything below is a persistent identity or a **dated**

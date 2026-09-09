@@ -13,6 +13,9 @@ public data class ThroColors(
     public val colorBackgroundPrimary: Color,
     public val colorBackgroundRaised: Color,
     public val colorBackgroundSecondary: Color,
+    public val colorBoardField: Color,
+    public val colorBoardLit: Color,
+    public val colorBoardSunken: Color,
     public val colorBorderBrand: Color,
     public val colorBorderDefault: Color,
     public val colorBorderFocus: Color,
@@ -24,8 +27,10 @@ public data class ThroColors(
     public val colorChartReference: Color,
     public val colorChartSecondary: Color,
     public val colorFocusRing: Color,
+    public val colorMarkOnBoard: Color,
     public val colorStatusDisputed: Color,
     public val colorStatusError: Color,
+    public val colorStatusErrorOnBoard: Color,
     public val colorStatusErrorSurface: Color,
     public val colorStatusInfo: Color,
     public val colorStatusInfoSurface: Color,
@@ -38,6 +43,7 @@ public data class ThroColors(
     public val colorStatusSuccessSurface: Color,
     public val colorStatusVerified: Color,
     public val colorStatusWarning: Color,
+    public val colorStatusWarningOnBoard: Color,
     public val colorStatusWarningSurface: Color,
     public val colorSurfaceBrand: Color,
     public val colorSurfaceFocus: Color,
@@ -47,6 +53,8 @@ public data class ThroColors(
     public val colorTextBrand: Color,
     public val colorTextInverse: Color,
     public val colorTextInverseSecondary: Color,
+    public val colorTextOnBoard: Color,
+    public val colorTextOnBoardSecondary: Color,
     public val colorTextPrimary: Color,
     public val colorTextSecondary: Color,
     public val colorTextTertiary: Color,
@@ -87,6 +95,9 @@ public fun throLightColors(): ThroColors = ThroColors(
     colorBackgroundPrimary = Color(0xFFF7F6F2),
     colorBackgroundRaised = Color(0xFFFFFFFF),
     colorBackgroundSecondary = Color(0xFFEFEDE7),
+    colorBoardField = Color(0xFF0F3D2E),
+    colorBoardLit = Color(0xFF174F3C),
+    colorBoardSunken = Color(0xFF0A2A20),
     colorBorderBrand = Color(0xFF0F3D2E),
     colorBorderDefault = Color(0xFFDFDCD3),
     colorBorderFocus = Color(0xFF101211),
@@ -98,8 +109,10 @@ public fun throLightColors(): ThroColors = ThroColors(
     colorChartReference = Color(0xFFDFDCD3),
     colorChartSecondary = Color(0xFF717875),
     colorFocusRing = Color(0xFF174F3C),
+    colorMarkOnBoard = Color(0xFF8FB3A4),
     colorStatusDisputed = Color(0xFF8A4B17),
     colorStatusError = Color(0xFF8C1D18),
+    colorStatusErrorOnBoard = Color(0xFFF2A096),
     colorStatusErrorSurface = Color(0xFFF5E5E3),
     colorStatusInfo = Color(0xFF1F5470),
     colorStatusInfoSurface = Color(0xFFE3ECF1),
@@ -112,6 +125,7 @@ public fun throLightColors(): ThroColors = ThroColors(
     colorStatusSuccessSurface = Color(0xFFE4EFE9),
     colorStatusVerified = Color(0xFF0F3D2E),
     colorStatusWarning = Color(0xFF8A5A0B),
+    colorStatusWarningOnBoard = Color(0xFFE7B65C),
     colorStatusWarningSurface = Color(0xFFF6EEDC),
     colorSurfaceBrand = Color(0xFF0F3D2E),
     colorSurfaceFocus = Color(0xFF101211),
@@ -121,6 +135,8 @@ public fun throLightColors(): ThroColors = ThroColors(
     colorTextBrand = Color(0xFF0F3D2E),
     colorTextInverse = Color(0xFFF7F6F2),
     colorTextInverseSecondary = Color(0xFFA7ADAA),
+    colorTextOnBoard = Color(0xFFF7F6F2),
+    colorTextOnBoardSecondary = Color(0xFFADB9B3),
     colorTextPrimary = Color(0xFF101211),
     colorTextSecondary = Color(0xFF5C6360),
     colorTextTertiary = Color(0xFF6B726F),
@@ -161,6 +177,9 @@ public fun throDarkColors(): ThroColors = ThroColors(
     colorBackgroundPrimary = Color(0xFF101211),
     colorBackgroundRaised = Color(0xFF1B1F1D),
     colorBackgroundSecondary = Color(0xFF1B1F1D),
+    colorBoardField = Color(0xFF0A2C21),
+    colorBoardLit = Color(0xFF123A2C),
+    colorBoardSunken = Color(0xFF071F18),
     colorBorderBrand = Color(0xFF57A385),
     colorBorderDefault = Color(0xFF2C312E),
     colorBorderFocus = Color(0xFFF7F6F2),
@@ -172,8 +191,10 @@ public fun throDarkColors(): ThroColors = ThroColors(
     colorChartReference = Color(0xFF2C312E),
     colorChartSecondary = Color(0xFF7C8380),
     colorFocusRing = Color(0xFF57A385),
+    colorMarkOnBoard = Color(0xFF7FA695),
     colorStatusDisputed = Color(0xFFDE9557),
     colorStatusError = Color(0xFFE8756A),
+    colorStatusErrorOnBoard = Color(0xFFEC9084),
     colorStatusErrorSurface = Color(0xFF2E1815),
     colorStatusInfo = Color(0xFF6FB2D6),
     colorStatusInfoSurface = Color(0xFF152730),
@@ -186,6 +207,7 @@ public fun throDarkColors(): ThroColors = ThroColors(
     colorStatusSuccessSurface = Color(0xFF12291F),
     colorStatusVerified = Color(0xFF57A385),
     colorStatusWarning = Color(0xFFDFA53A),
+    colorStatusWarningOnBoard = Color(0xFFDFAC50),
     colorStatusWarningSurface = Color(0xFF2C2314),
     colorSurfaceBrand = Color(0xFF174F3C),
     colorSurfaceFocus = Color(0xFFF7F6F2),
@@ -195,6 +217,8 @@ public fun throDarkColors(): ThroColors = ThroColors(
     colorTextBrand = Color(0xFF57A385),
     colorTextInverse = Color(0xFF101211),
     colorTextInverseSecondary = Color(0xFF717875),
+    colorTextOnBoard = Color(0xFFEFEDE7),
+    colorTextOnBoardSecondary = Color(0xFFA8BDB2),
     colorTextPrimary = Color(0xFFF7F6F2),
     colorTextSecondary = Color(0xFFA7ADAA),
     colorTextTertiary = Color(0xFF7C8380),
@@ -234,9 +258,9 @@ public object ThroSpacing {
     public val borderWidthStrong = 2.dp
     public val focusRingOffset = 2.dp
     public val focusRingWidth = 2.dp
-    public val motionTravelLarge = 0.dp
-    public val motionTravelMedium = 0.dp
-    public val motionTravelSmall = 0.dp
+    public val motionTravelLarge = 24.dp
+    public val motionTravelMedium = 12.dp
+    public val motionTravelSmall = 6.dp
     public val radiusCard = 10.dp
     public val radiusControl = 6.dp
     public val radiusField = 6.dp
@@ -249,6 +273,7 @@ public object ThroSpacing {
     public val radiusSmall = 2.dp
     public val radiusStatus = 999.dp
     public val radiusXlarge = 14.dp
+    public val spaceChalkRuleWeight = 3.dp
     public val spaceControlPadX = 20.dp
     public val spaceControlPadY = 14.dp
     public val spaceGroupGap = 16.dp

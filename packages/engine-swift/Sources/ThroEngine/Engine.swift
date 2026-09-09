@@ -49,6 +49,19 @@ public enum Engine {
             return .rejected(reason: .DARTS_AT_DOUBLE_INVALID)
         }
 
+        // Opening (PD-008). A player who has not opened records the score FROM the opening dart
+        // onward — that is what the scorer calls, and it is the only thing a visit total can carry
+        // honestly, since the engine never sees the individual darts. Zero means they did not open.
+        // A non-zero total must be one an opening sequence can make: 180 is three trebles, and
+        // three trebles cannot open a double-in leg, so recording it is not a mis-key but a claim
+        // about darts that cannot have been thrown.
+        let wasOpen = state.opened[player] ?? true
+        if !wasOpen, visitTotal != 0,
+           !RuleTables.openingTotals(state.format.inRule).contains(visitTotal) {
+            return .rejected(reason: .IMPOSSIBLE_OPENING_TOTAL)
+        }
+        let nowOpen = wasOpen || visitTotal != 0
+
         guard let before = state.remaining[player] else { return .rejected(reason: .NOT_YOUR_TURN) }
         let left = before - visitTotal
         let checkouts = RuleTables.checkouts(state.format.outRule)
@@ -81,6 +94,8 @@ public enum Engine {
             // remaining reverts to the pre-visit total — not to a per-dart position
             next.thrower = state.opponentOf(player)
             next.visitsInLeg = state.visitsInLeg + 1
+            // A bust reverts the score, never the opening: the double was thrown and it landed.
+            next.opened[player] = nowOpen
             return .accepted(state: next, effect: .bust, bustReason: bustReason)
         }
 
@@ -91,6 +106,7 @@ public enum Engine {
             next.remaining[player] = left
             next.thrower = state.opponentOf(player)
             next.visitsInLeg = state.visitsInLeg + 1
+            next.opened[player] = nowOpen
             return .accepted(state: next, effect: .scored, bustReason: nil)
         }
 
@@ -173,7 +189,14 @@ public enum Engine {
         next.legStarter = starter
         next.thrower = starter
         next.visitsInLeg = 0
+        next.opened = freshOpening(state)
         return next
+    }
+
+    /// Opening is a fact about a leg, so every new leg and every new set closes the door again.
+    private static func freshOpening(_ state: MatchState) -> [PlayerId: Bool] {
+        let open = !state.format.inRule.requiresOpening
+        return [state.home: open, state.away: open]
     }
 
     private static func nextSet(
@@ -196,6 +219,7 @@ public enum Engine {
         next.setStarter = starter
         next.thrower = starter
         next.visitsInLeg = 0
+        next.opened = freshOpening(state)
         return next
     }
 

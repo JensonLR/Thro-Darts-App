@@ -5,6 +5,13 @@ on:
     branches: ["**"]
   pull_request:
 
+
+# These jobs read the repository and write nothing back. Stating that here rather than
+# inheriting whatever the repository's default happens to be means a token that leaks out of a
+# build step cannot push, comment, or publish.
+permissions:
+  contents: read
+
 jobs:
   properties:
     name: Event model property tests
@@ -21,6 +28,8 @@ jobs:
           --health-timeout 5s --health-retries 10
     env:
       PGHOST: localhost
+      # If the service ever fails to come up, these suites must fail rather than skip themselves.
+      THRO_REQUIRE_DB: "1"
       PGPORT: "5432"
       PGUSER: postgres
       PGDATABASE: postgres
@@ -49,6 +58,8 @@ jobs:
           --health-timeout 5s --health-retries 10
     env:
       PGHOST: localhost
+      # If the service ever fails to come up, these suites must fail rather than skip themselves.
+      THRO_REQUIRE_DB: "1"
       PGPORT: "5432"
       PGUSER: postgres
       PGDATABASE: postgres

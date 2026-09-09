@@ -16,6 +16,12 @@ public enum ThroColor {
     public static let colorBackgroundRaised = Color("colorBackgroundRaised", bundle: .module)
     /// light #EFEDE7   dark #1B1F1D
     public static let colorBackgroundSecondary = Color("colorBackgroundSecondary", bundle: .module)
+    /// light #0F3D2E   dark #0A2C21
+    public static let colorBoardField = Color("colorBoardField", bundle: .module)
+    /// light #174F3C   dark #123A2C
+    public static let colorBoardLit = Color("colorBoardLit", bundle: .module)
+    /// light #0A2A20   dark #071F18
+    public static let colorBoardSunken = Color("colorBoardSunken", bundle: .module)
     /// light #0F3D2E   dark #57A385
     public static let colorBorderBrand = Color("colorBorderBrand", bundle: .module)
     /// light #DFDCD3   dark #2C312E
@@ -38,10 +44,16 @@ public enum ThroColor {
     public static let colorChartSecondary = Color("colorChartSecondary", bundle: .module)
     /// light #174F3C   dark #57A385
     public static let colorFocusRing = Color("colorFocusRing", bundle: .module)
+    /// light #8FB3A4   dark #7FA695
+    public static let colorMarkOnBoard = Color("colorMarkOnBoard", bundle: .module)
+    /// light rgba(16,18,17,0.48)   dark rgba(8,10,9,0.64)
+    public static let colorScrim = Color("colorScrim", bundle: .module)
     /// light #8A4B17   dark #DE9557
     public static let colorStatusDisputed = Color("colorStatusDisputed", bundle: .module)
     /// light #8C1D18   dark #E8756A
     public static let colorStatusError = Color("colorStatusError", bundle: .module)
+    /// light #F2A096   dark #EC9084
+    public static let colorStatusErrorOnBoard = Color("colorStatusErrorOnBoard", bundle: .module)
     /// light #F5E5E3   dark #2E1815
     public static let colorStatusErrorSurface = Color("colorStatusErrorSurface", bundle: .module)
     /// light #1F5470   dark #6FB2D6
@@ -66,6 +78,8 @@ public enum ThroColor {
     public static let colorStatusVerified = Color("colorStatusVerified", bundle: .module)
     /// light #8A5A0B   dark #DFA53A
     public static let colorStatusWarning = Color("colorStatusWarning", bundle: .module)
+    /// light #E7B65C   dark #DFAC50
+    public static let colorStatusWarningOnBoard = Color("colorStatusWarningOnBoard", bundle: .module)
     /// light #F6EEDC   dark #2C2314
     public static let colorStatusWarningSurface = Color("colorStatusWarningSurface", bundle: .module)
     /// light #0F3D2E   dark #174F3C
@@ -84,6 +98,10 @@ public enum ThroColor {
     public static let colorTextInverse = Color("colorTextInverse", bundle: .module)
     /// light #A7ADAA   dark #717875
     public static let colorTextInverseSecondary = Color("colorTextInverseSecondary", bundle: .module)
+    /// light #F7F6F2   dark #EFEDE7
+    public static let colorTextOnBoard = Color("colorTextOnBoard", bundle: .module)
+    /// light #ADB9B3   dark #A8BDB2
+    public static let colorTextOnBoardSecondary = Color("colorTextOnBoardSecondary", bundle: .module)
     /// light #101211   dark #F7F6F2
     public static let colorTextPrimary = Color("colorTextPrimary", bundle: .module)
     /// light #5C6360   dark #A7ADAA
@@ -154,9 +172,9 @@ public enum ThroSpacing {
     public static let borderWidthStrong: CGFloat = 2
     public static let focusRingOffset: CGFloat = 2
     public static let focusRingWidth: CGFloat = 2
-    public static let motionTravelLarge: CGFloat = 0
-    public static let motionTravelMedium: CGFloat = 0
-    public static let motionTravelSmall: CGFloat = 0
+    public static let motionTravelLarge: CGFloat = 24
+    public static let motionTravelMedium: CGFloat = 12
+    public static let motionTravelSmall: CGFloat = 6
     public static let radiusCard: CGFloat = 10
     public static let radiusControl: CGFloat = 6
     public static let radiusField: CGFloat = 6
@@ -169,6 +187,7 @@ public enum ThroSpacing {
     public static let radiusSmall: CGFloat = 2
     public static let radiusStatus: CGFloat = 999
     public static let radiusXlarge: CGFloat = 14
+    public static let spaceChalkRuleWeight: CGFloat = 3
     public static let spaceControlPadX: CGFloat = 20
     public static let spaceControlPadY: CGFloat = 14
     public static let spaceGroupGap: CGFloat = 16
@@ -204,6 +223,23 @@ public enum ThroSpacing {
     public static let typographyRatingHeroLine: CGFloat = 54
     public static let typographyScoreHeroLine: CGFloat = 88
     public static let typographySportHeroLine: CGFloat = 68
+}
+
+/// Motion tokens. Durations in seconds; easings as the four cubic-bezier control values,
+/// for `Animation.timingCurve(_:_:_:_:duration:)`. Under Reduce Motion the token layer sets
+/// every duration to zero; code that animates checks `accessibilityReduceMotion` itself.
+public enum ThroMotion {
+    public static let motionDurationEmphasis: Double = 0.34
+    public static let motionDurationFast: Double = 0.14
+    public static let motionDurationInstant: Double = 0.08
+    public static let motionDurationResolve: Double = 0.48
+    public static let motionDurationStandard: Double = 0.22
+    public static let motionEasingExit: (CGFloat, CGFloat, CGFloat, CGFloat) = (0.4, 0, 1, 1)
+    public static let motionEasingImpact: (CGFloat, CGFloat, CGFloat, CGFloat) = (0.16, 1, 0.3, 1)
+    public static let motionEasingResolve: (CGFloat, CGFloat, CGFloat, CGFloat) = (0.4, 0, 0.2, 1)
+    public static let motionEasingSet: (CGFloat, CGFloat, CGFloat, CGFloat) = (0.32, 0.72, 0, 1)
+    public static let motionEasingThrow: (CGFloat, CGFloat, CGFloat, CGFloat) = (0.2, 0.9, 0.1, 1)
+    public static let motionScaleImpact: CGFloat = 1.02
 }
 
 /// Type roles bind to a text style so Dynamic Type scales them. A fixed-size font

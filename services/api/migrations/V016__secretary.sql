@@ -12,12 +12,12 @@
 --   2. A person's details leaving THRØ without a basis to hold them. A submission naming a player
 --      cannot be submitted unless that player is bound to an account by a live claim AND either
 --      the account is an adult with a live consent of their own or a guardian's consent is on
---      record. Unknown is not adult (PD-004, OD-010).
+--      record. Unknown is not adult (PD-029, OD-010).
 --   3. A registration made under a policy that was never approved, or not in force on the day.
 --   4. Delivery evidence typed by hand. `delivered` requires a delivery attempt row written by the
 --      transport code, or a human confirmation that names the human and says what they did.
 --
--- Truth and projection, as ADR-017 has it: the transition tables are the record; the state on a
+-- Truth and projection, as ADR-018 has it: the transition tables are the record; the state on a
 -- task or submission row is a projection the trigger maintains, and no application role may update
 -- a submission row directly.
 --
@@ -49,7 +49,7 @@ CREATE TABLE identity.consent_record (
 CREATE INDEX consent_live_by_account ON identity.consent_record (account_id, basis) WHERE revoked_at IS NULL;
 
 -- account.consent_basis becomes a projection of the live records: 'guardian' if one is live, else
--- 'self' if one is live, else 'none'. It is kept because PD-004 and the read models name it, and
+-- 'self' if one is live, else 'none'. It is kept because PD-029 and the read models name it, and
 -- it is maintained here so that it can never disagree with the records beneath it.
 CREATE FUNCTION identity.project_consent_basis() RETURNS trigger AS $$
 DECLARE
@@ -534,7 +534,7 @@ BEGIN
   ELSIF NEW.from_state = 'ready' AND NEW.to_state = 'submitted' THEN
     IF NEW.actor_id IS NULL THEN RAISE EXCEPTION 'submitting needs a named person'; END IF;
     IF s.subject_player_id IS NOT NULL AND NOT identity.player_may_be_disclosed(s.subject_player_id) THEN
-      RAISE EXCEPTION 'nothing about this player leaves THRO: they are not bound to an account with a consent basis THRO can rely on (PD-004)';
+      RAISE EXCEPTION 'nothing about this player leaves THRO: they are not bound to an account with a consent basis THRO can rely on (PD-029)';
     END IF;
   ELSIF NEW.from_state = 'submitted' AND NEW.to_state = 'delivered' THEN
     IF NOT ((NEW.evidence_kind = 'delivery' AND d.status = 'delivered')

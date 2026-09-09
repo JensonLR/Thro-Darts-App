@@ -1,0 +1,95 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>UIAppFonts</key>
+	<array>
+		<string>Archivo-Regular.ttf</string>
+		<string>Archivo-Medium.ttf</string>
+		<string>Archivo-SemiBold.ttf</string>
+		<string>Archivo-Bold.ttf</string>
+		<string>Archivo-ExtraBold.ttf</string>
+		<string>Archivo-Black.ttf</string>
+		<string>IBMPlexSansCondensed-Regular.ttf</string>
+		<string>IBMPlexSansCondensed-Medium.ttf</string>
+		<string>IBMPlexSansCondensed-SemiBold.ttf</string>
+		<string>IBMPlexSansCondensed-Bold.ttf</string>
+	</array>
+	<!-- The Lock Screen and Dynamic Island scoreboard. Nothing else is needed for it: a Live
+	     Activity is started and updated from the app itself, so there is no entitlement, no push
+	     certificate and no server behind this key. -->
+	<!-- Club TV mode. The system creates this scene when a display is attached or when the
+	     player turns on AirPlay screen mirroring; `UIScreen.screens` and the older
+	     `windowExternalDisplay` role were both deprecated in iOS 16.0.
+
+	     `UIApplicationSupportsMultipleScenes` is YES, corrected from NO. The original reasoning —
+	     "the phone still has one window, and only the external role is added" — described what the
+	     player sees and not what the key means: it declares whether the app can have two scenes
+	     CONNECTED AT ONCE, and a board on a wall while the keypad is in somebody's hand is exactly
+	     two. With NO, UIKit is entitled never to connect the second one, and the failure is silent:
+	     the cable mirrors the phone, `configurationForConnecting` is never called, and nothing
+	     anywhere reports a problem. On an iPhone-only, portrait-only app YES adds no window the
+	     player can reach — iOS offers no way to open a second one — so the two possible mistakes
+	     are not the same size, and this is the one that fails safely.
+
+	     The claim is checked twice rather than assumed: `tools/check_scene_manifest.py` holds this
+	     file to declaring the role and the delegate on every push, and the readiness screen reads
+	     the manifest on the running phone and says **Blocked** if it cannot be given a screen. -->
+	<key>UIApplicationSceneManifest</key>
+	<dict>
+		<key>UIApplicationSupportsMultipleScenes</key>
+		<true/>
+		<key>UISceneConfigurations</key>
+		<dict>
+			<key>UIWindowSceneSessionRoleApplication</key>
+			<array>
+				<dict>
+					<key>UISceneConfigurationName</key>
+					<string>Default Configuration</string>
+				</dict>
+			</array>
+			<key>UIWindowSceneSessionRoleExternalDisplayNonInteractive</key>
+			<array>
+				<dict>
+					<key>UISceneConfigurationName</key>
+					<string>Venue</string>
+					<key>UISceneDelegateClassName</key>
+					<string>$(PRODUCT_MODULE_NAME).ThroVenueSceneDelegate</string>
+				</dict>
+			</array>
+		</dict>
+	</dict>
+	<!-- EventKit, WRITE ONLY. `requestWriteOnlyAccessToEvents()` is the narrowest thing EventKit
+	     offers that can still add an event, and it is what the app asks for: THRØ cannot see what
+	     else is in the player's calendar. There is deliberately no NSCalendarsFullAccessUsageDescription,
+	     because full access would work too and would be asking for something this app has no use for. -->
+	<key>NSCalendarsWriteOnlyAccessUsageDescription</key>
+	<string>THRØ adds a fixture to your calendar when you ask it to. It never reads your calendar.</string>
+	<key>NSSupportsLiveActivities</key>
+	<true/>
+	<key>ITSAppUsesNonExemptEncryption</key>
+	<false/>
+	<!-- ADR-011 fixes the public URL shapes as /e/{eventId}, /m/{matchId}, /p/{playerHandle} and
+	     requires every identifier to be ASCII, so the scheme is `thro` and not the product name.
+	     ThroRoute reads these paths and the same paths under https://, so adopting universal links
+	     later is a hosting decision rather than a code change. -->
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleTypeRole</key>
+			<string>Editor</string>
+			<key>CFBundleURLName</key>
+			<string>app.thro.darts</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>thro</string>
+			</array>
+		</dict>
+	</array>
+	<key>UILaunchScreen</key>
+	<dict>
+		<key>UIColorName</key>
+		<string>LaunchBackground</string>
+	</dict>
+</dict>
+</plist>

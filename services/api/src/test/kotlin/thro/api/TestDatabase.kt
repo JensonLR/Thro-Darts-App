@@ -16,13 +16,32 @@ public object TestDatabase {
 
     private val host: String get() = System.getenv("PGHOST").orEmpty()
 
-    /** False when no database is configured, so integration tests skip cleanly rather than lie. */
-    public val configured: Boolean get() = host.isNotBlank()
+    /**
+     * False when no database is configured, so integration tests skip cleanly rather than lie —
+     * except where the run has declared that it must have one. CI sets `THRO_REQUIRE_DB=1`, so if the
+     * Postgres service ever fails to come up, or the variable is dropped from the workflow, these nine
+     * suites fail loudly instead of reporting a green pass over nothing. A suite that can silently run
+     * no assertions is worse than no suite: it produces evidence of work that did not happen.
+     */
+    public val configured: Boolean
+        get() {
+            if (host.isNotBlank()) return true
+            check(System.getenv("THRO_REQUIRE_DB").isNullOrBlank()) {
+                "THRO_REQUIRE_DB is set but PGHOST is empty: this run must have a database and does not. " +
+                    "The integration suites will not skip themselves here."
+            }
+            return false
+        }
 
     /** Every schema the migrations create. Dropping them all is what makes a run repeatable. */
     private val schemas = listOf("evidence", "trust", "rating", "read", "audit", "authz", "identity", "competition")
 
     private val roles = listOf("thro_owner", "app_match", "app_trust", "app_rating", "app_read", "app_competition")
+
+    /** An environment variable's value, treating blank as absent — because a build that forwards
+     *  every name unconditionally supplies "" for the ones nobody set, and "" is not a port. */
+    private fun env(name: String, fallback: String): String =
+        System.getenv(name)?.takeIf { it.isNotBlank() } ?: fallback
 
     public fun migrated(): Connection = migratedUpTo(Int.MAX_VALUE)
 
@@ -31,9 +50,9 @@ public object TestDatabase {
      * looked then and prove that the next migration loses nothing. [apply] runs the rest.
      */
     public fun migratedUpTo(upTo: Int): Connection {
-        val port = System.getenv("PGPORT") ?: "5432"
-        val db = System.getenv("PGDATABASE") ?: "postgres"
-        val user = System.getenv("PGUSER") ?: "postgres"
+        val port = env("PGPORT", "5432")
+        val db = env("PGDATABASE", "postgres")
+        val user = env("PGUSER", "postgres")
         val c = DriverManager.getConnection("jdbc:postgresql://$host:$port/$db", user, "")
         c.createStatement().use { st ->
             for (s in schemas) st.execute("DROP SCHEMA IF EXISTS $s CASCADE")

@@ -39,7 +39,7 @@ founder asked.
 
 | # | Where | What it says | What it actually is | Resolution |
 |---|---|---|---|---|
-| C1 | `docs/design/extracted/**` (7 occurrences) | "Riverside Club", "Boro Legion Club" as venue names; "Your club affiliation" in settings copy; "Club protection · First round only" in draw setup | (a) proper nouns of **Venues**; (b) a synonym for **Team** affiliation; (c) a **draw policy** that keeps players of the same Team apart in round one | ADR-016: `Club` is never an entity. (a) stays as user-authored names; (b) is Team; (c) becomes a versioned competition policy named *team separation* |
+| C1 | `docs/design/extracted/**` (7 occurrences) | "Riverside Club", "Boro Legion Club" as venue names; "Your club affiliation" in settings copy; "Club protection · First round only" in draw setup | (a) proper nouns of **Venues**; (b) a synonym for **Team** affiliation; (c) a **draw policy** that keeps players of the same Team apart in round one | ADR-017: `Club` is never an entity. (a) stays as user-authored names; (b) is Team; (c) becomes a versioned competition policy named *team separation* |
 | C2 | `competition.fixture` (V013), `Competitions.draw`, `CompetitionTest` | "fixture" | A **knockout bracket tie**: `round_number`, `position`, `is_bye`. GLOSSARY and ADR-012 define Fixture as a league scheduled meeting and say "Not a slot" | Rename to `competition.bracket_tie`; introduce `competition.fixture` with the league lifecycle |
 | C3 | `competition.event.venue text` | free-text venue | A Venue is meant to be an entity (`authz` has `VENUE`; ADR-005 gives `competition` ownership of venues) | Add `competition.venue`, `event.venue_id`; keep the text as `venue_label` until every writer sends an id |
 | C4 | `competition.event` | "event" | A **TournamentEdition** — one occurrence with entries, check-in and draw. No persistent Tournament identity, no Series | Add `competition.tournament` (persistent, optional) and `event.tournament_id`; add Series tables |
@@ -52,7 +52,7 @@ founder asked.
 
 ## 3. Target domain
 
-The canonical vocabulary (ADR-016), as V014 builds it. Every table is in the `competition` schema
+The canonical vocabulary (ADR-017), as V014 builds it. Every table is in the `competition` schema
 unless stated. Every relationship that changes over time carries `valid_from`/`valid_until`, is
 frozen once closed, and is never deleted. Hostile review before implementation changed this section
 in seven places; each is marked †.
@@ -119,7 +119,7 @@ and an authorization tuple, applies V014, and reads every row back (14 propertie
    `team_membership`, `league`, `league_season`, `division`, `tournament`, `series`, `series_season`,
    `policy`, `team_affiliation`, `player_registration`, `pair`, `league_fixture`,
    `league_fixture_change`, `league_fixture_outcome`, `series_event`.
-3. `identity.account` gains `created_via` and `consent_basis` (PD-004).
+3. `identity.account` gains `created_via` and `consent_basis` (PD-029).
 4. `event`: rename `venue` → `venue_label`; add `venue_id`, `tournament_id`, `entrant_kind`
    (default `player`), `access` (default `open`); `UNIQUE (event_id, entrant_kind)` so entries can
    reference the kind.
@@ -130,7 +130,7 @@ and an authorization tuple, applies V014, and reads every row back (14 propertie
 6. `check_in` gains `player_id` (the person present), backfilled where the competitor is a player.
    Making it the key and the grant actor is V015's expand-then-contract.
 7. `ALTER TABLE competition.fixture RENAME TO bracket_tie`, with its constraints and index renamed.
-   The league concept is `league_fixture`, a different name on purpose (ADR-016).
+   The league concept is `league_fixture`, a different name on purpose (ADR-017).
 8. `authz.relation`: replace `season` with `league_season` in the CHECK (zero rows existed); add
    `tournament`, `series`, `series_season`; add the same CHECK to `hierarchy`; surrogate primary
    key, `revoked_at`/`revoked_by`, partial uniqueness over live tuples, revocation trigger; DELETE
@@ -228,7 +228,7 @@ Submission states and the evidence each transition demands:
 | From → to | Who | Evidence required |
 |---|---|---|
 | `draft → ready` | THRØ, when nothing is missing | none |
-| `ready → submitted` | a team admin, naming the transport | none; **refused** if the subject player is unclaimed or has no recorded consent basis (PD-004) |
+| `ready → submitted` | a team admin, naming the transport | none; **refused** if the subject player is unclaimed or has no recorded consent basis (PD-029) |
 | `submitted → delivered` | THRØ or the admin | transport evidence: `message_id`, `upload_receipt`, `api_response`, or `human_confirmation` with the actor |
 | `delivered → acknowledged` | a named person | `counterparty_message`, `api_response`, or `human_confirmation` |
 | `acknowledged → accepted` / `rejected` / `action_required` | a named person | as above; `accepted` on a `player_registration` sets the registration `registered` under the cited policy |
@@ -293,11 +293,11 @@ every ADR-011 requirement and the infrastructure-as-code footprint is smallest. 
 low — one image, one database dump. *Blocks:* staging and the two-device sync release check only;
 local and CI work is not blocked.
 
-**Delegated, reversal path recorded (see DECISIONS.md PD-003, PD-004):**
+**Delegated, reversal path recorded (see DECISIONS.md PD-028, PD-029):**
 
-- **PD-003 — Canonical organisational vocabulary.** ADR-016. Reversal: the tables are new and the
+- **PD-028 — Canonical organisational vocabulary.** ADR-017. Reversal: the tables are new and the
   rename is one statement.
-- **PD-004 — Unclaimed player records.** A team admin may create a player who has no account. The
+- **PD-029 — Unclaimed player records.** A team admin may create a player who has no account. The
   record is private, carries `age_band='unknown'` and is treated as a minor for every exposure rule
   until claimed. Reversal: a policy flag refusing unclaimed creation; existing records stay.
 
@@ -305,7 +305,7 @@ local and CI work is not blocked.
 
 | Order | Work | Depends on | Blocked by |
 |---|---|---|---|
-| A1–A6 | Audit, ADR-016, V014, Kotlin organisational domain, tests, docs | nothing | nothing |
+| A1–A6 | Audit, ADR-017, V014, Kotlin organisational domain, tests, docs | nothing | nothing |
 | B1 | Ktor HTTP layer over existing handlers; OpenAPI in CI | A | nothing |
 | B2 | Organisational command model with row versions (**delivered**: V015, `OrganisationCommands`, two-writer conflict test); local cache contract | A | nothing |
 | B3 | Accounts, sessions, passkeys, claim flow | B1 | **FB-1** |
@@ -362,9 +362,9 @@ against PostgreSQL 16 locally; CI runs the same suites.
 | 16 | A team rename keeps the old name with its period | API test |
 | 17 | GLOSSARY, README, ADR index, package READMEs and DESIGN_UNSPECIFIED describe the model above and teach no separate Club | review |
 
-Also required before Phase C opens a match from a fixture: **OD-015** (display names inside the
+Also required before Phase C opens a match from a fixture: **OD-024** (display names inside the
 append-only match aggregate) and the Phase D rule that no submission carrying an unclaimed or
-non-adult player leaves `READY` without a recorded consent artefact (PD-004).
+non-adult player leaves `READY` without a recorded consent artefact (PD-029).
 
 Phases B–F carry their own acceptance tables, written when each phase opens and before its code.
 

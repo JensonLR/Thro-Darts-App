@@ -12,7 +12,7 @@ import thro.competition.TenureKind
 
 /**
  * The organisational graph as the store holds it: teams, venues, leagues and their seasons,
- * tournaments, series, and the dated relationships between them (ADR-016).
+ * tournaments, series, and the dated relationships between them (ADR-017).
  *
  * Three rules every method here obeys, because the schema does:
  *

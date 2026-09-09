@@ -3,6 +3,8 @@ package thro.engine
 import java.io.File
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
+import kotlin.test.assertNotEquals
 import kotlin.test.assertTrue
 import kotlin.test.fail
 
@@ -124,6 +126,17 @@ class ConformanceTest {
         if (wantLeg != null && wantLeg != state.currentLeg) {
             failures += "$id: currentLeg ${state.currentLeg} != $wantLeg"
         }
+        // Set play (the `sets-and-legs` family). Absent from every other family, so these are
+        // checked only when the vector carries them — a set format is a different match, not an
+        // extra field on this one.
+        ws.opt("setsWon")?.obj()?.forEach { (p, v) ->
+            val got = state.setsWon.getValue(PlayerId(p))
+            if (got != v.int()) failures += "$id: setsWon[$p] $got != ${v.int()}"
+        }
+        val wantSet = ws.opt("currentSet")?.int()
+        if (wantSet != null && wantSet != state.currentSet) {
+            failures += "$id: currentSet ${state.currentSet} != $wantSet"
+        }
         return cmds.size
     }
 
@@ -137,10 +150,12 @@ class ConformanceTest {
 
     private fun format(f: Map<String, J>): MatchFormat {
         val structure = f.getValue("structure").obj()
-        val legs = Structure(
-            mode = if (structure.containsKey("firstTo")) StructureMode.FIRST_TO else StructureMode.BEST_OF,
-            target = (structure.opt("firstTo") ?: structure.getValue("bestOf")).int(),
-        )
+        // A sets structure carries the SETS unit at the top and the legs unit inside `legsPerSet`.
+        // Until the `sets-and-legs` family this branch did not exist in either runner, so a whole
+        // competition format was implemented in two engines and reached by no vector at all.
+        val playingSets = structure.opt("kind")?.str() == "sets"
+        val legsFrom = if (playingSets) structure.getValue("legsPerSet").obj() else structure
+        val legs = unit(legsFrom)
         return MatchFormat(
             startingScore = f.getValue("startingScore").int(),
             inRule = when (f.getValue("inRule").str()) {
@@ -154,11 +169,18 @@ class ConformanceTest {
                 else -> OutRule.DOUBLE
             },
             legs = legs,
+            sets = if (playingSets) unit(structure) else null,
             throwFirst = PlayerId(f.getValue("throwFirst").str()),
             alternation = if (f.opt("alternateStart")?.str() == "perSet") Alternation.PER_SET
                           else Alternation.PER_LEG,
         )
     }
+
+    /** A `firstTo` / `bestOf` pair, wherever it appears — the legs unit or the sets unit. */
+    private fun unit(o: Map<String, J>): Structure = Structure(
+        mode = if (o.containsKey("firstTo")) StructureMode.FIRST_TO else StructureMode.BEST_OF,
+        target = (o.opt("firstTo") ?: o.getValue("bestOf")).int(),
+    )
 
     /**
      * The exhaustive transition table, when CI has generated it. Every reachable remaining against
@@ -169,6 +191,12 @@ class ConformanceTest {
     fun `engine reproduces the exhaustive transition table when present`() {
         val file = File(vectors, "core-transitions.jsonl")
         if (!file.exists()) {
+            // CI generates the table (generate.py --full) and sets THRO_REQUIRE_CORPUS=1, so a run that
+            // has lost the table fails here rather than passing this test having checked nothing.
+            check(System.getenv("THRO_REQUIRE_CORPUS").isNullOrBlank()) {
+                "THRO_REQUIRE_CORPUS is set but ${'$'}{file.path} is missing: this run must check the exhaustive " +
+                    "transition table and cannot. Run packages/domain-spec/generate.py --full."
+            }
             println("exhaustive table absent (run generate.py --full) — skipped")
             return
         }
@@ -229,10 +257,31 @@ class ConformanceTest {
 
     @Test
     fun `rule tables match the generated spec version`() {
-        assertEquals("1.2.0", RuleTables.SPEC_VERSION)
+        // 1.3.0 added the opening tables, which is what made double-in scorable (PD-008).
+        assertEquals("1.3.0", RuleTables.SPEC_VERSION)
         assertEquals(180, RuleTables.MAX_VISIT_TOTAL)
         assertEquals(170, RuleTables.checkouts(OutRule.DOUBLE).max())
         assertEquals(180, RuleTables.checkouts(OutRule.MASTER).max())
         assertEquals(21, RuleTables.ONE_DART_FINISHES_DOUBLE.size)
+        // Opening and checking out are the same set, for every rule — which is not a coincidence and
+        // is worth asserting because it would catch either table being wrong. A checkout is up to two
+        // free darts and then a finishing segment; an opening is an opening segment and then up to two
+        // free darts. The segment sets are the same and addition commutes, so the totals are too. It
+        // holds at the top as well: a double-in leg opens on D25+T20+T20 and a double-out leg finishes
+        // from T20+T20+D25, both 170.
+        assertEquals(170, RuleTables.openingTotals(InRule.DOUBLE).max())
+        assertEquals(180, RuleTables.openingTotals(InRule.MASTER).max())
+        assertEquals(RuleTables.openingTotals(InRule.DOUBLE), RuleTables.checkouts(OutRule.DOUBLE))
+        assertEquals(RuleTables.openingTotals(InRule.MASTER), RuleTables.checkouts(OutRule.MASTER))
+        assertEquals(RuleTables.openingTotals(InRule.STRAIGHT), RuleTables.checkouts(OutRule.STRAIGHT))
+        assertTrue(41 in RuleTables.openingTotals(InRule.DOUBLE), "D1, 19, 20")
+        assertFalse(180 in RuleTables.openingTotals(InRule.DOUBLE), "three trebles cannot open")
+        // And the floor of a checkout set is the rule's own, not the constant 2. Under straight-out a
+        // single 1 finishes, so 1 is a checkout — both engines hardcoded a floor of 2 and would have
+        // busted a player who finished from 1. It was invisible because the exhaustive table covered
+        // double-out alone; it now covers all three, from a remaining of 1.
+        assertTrue(1 in RuleTables.checkouts(OutRule.STRAIGHT), "a single 1 finishes a straight-out leg")
+        assertFalse(1 in RuleTables.checkouts(OutRule.DOUBLE))
+        assertFalse(1 in RuleTables.checkouts(OutRule.MASTER))
     }
 }

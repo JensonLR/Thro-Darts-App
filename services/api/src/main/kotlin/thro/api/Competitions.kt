@@ -16,7 +16,7 @@ import thro.competition.EventAccess
  * at it — and a player arriving at a dead-signal venue must still be able to score. Check-in is
  * inherently online, since it is how the organiser knows who is present.
  *
- * An `event` is one edition of a tournament (ADR-016). It is not a league season: nothing here
+ * An `event` is one edition of a tournament (ADR-017). It is not a league season: nothing here
  * affiliates a team or registers a player, and nothing in a league season enters, checks in or
  * draws.
  */

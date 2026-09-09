@@ -101,6 +101,15 @@ the report file the app now writes; the founder read the screen. Every configura
 screen-read result and nothing more — no figure from it is entered, because sixteen numbers copied
 by eye are not the grade of evidence this table holds.
 
+A second such run, later on 2026-09-05, arrived as a screenshot of the probe screen: every
+configuration again "meets the budget", and the deciding row (WAL + `fullfsync`) showed P50 0.86,
+P95 1.81, P99 2.38, worst 2.93 ms — the same order as the two console-captured runs and inside the
+budget by about eleven times. The founder later named the device: iPhone 14 Pro Max, model
+MQ9P3ZD/A, iOS 26.6.1 — the same `iPhone15,3` as the two console-captured runs. The figures still stay
+out of the table for the provenance reason above. The probe now
+writes its report block to the app's container; the next run that is pulled from there rather than
+photographed can be entered.
+
 **CI is roughly 3x slower than the real machine** (P95 2.01 ms against 0.55–0.73 ms), which is the
 useful direction: the CI job is a conservative proxy for a Mac rather than an optimistic one, so a
 regression that pushes the barrier cost up will show there first.
@@ -123,6 +132,28 @@ configuration measured on the phone meets the budget, including the rollback jou
 with the database demoted to a projection, a second storage engine on both clients — is not
 required. The client architecture is unblocked to the extent that one device can unblock it.
 
+**Fixed, 2026-09-05.** The founder directed the client build on the strength of this measurement,
+and the journal this ADR describes now exists: `packages/client-ios/Sources/ThroJournal`. It runs
+under exactly the measured configuration — WAL, `synchronous=FULL`, `fullfsync`,
+`checkpoint_fullfsync` — and reads every pragma back on open, refusing to run if the database
+reports anything else, because `PRAGMA journal_mode` does not fail when it cannot switch. It is
+append-only by trigger, sequenced per (match, device), and replayed through the engine, throwing on
+a row the engine rejects. The scoring session applies a visit only after the journal has committed
+it (`MatchSession.submit`). The module graph gives it no path to a network.
+
+What that fixes is the *storage* of the client architecture, on the one device measured. The
+caveats above stand and are not softened by the code existing: the SE-class iPhone and the Android
+reference device are unmeasured, the power-cut test is outstanding, and the app has been built and
+tested on CI but not yet run on a phone.
+
+**The Android half of that storage now exists too** (`packages/journal`): the same schema, the same
+append-only triggers including PD-026's narrowed delete, the same gapless per-device sequence, the
+same replay through the Kotlin engine. It is a second *rendering* rather than a second design, and
+that is checked rather than trusted — `tools/check_journal_parity.py` compares the columns of both
+tables in order, both triggers verbatim, and the stored row kinds, on every push. What it is not is
+a durability claim: those tests run on the JVM's SQLite, not Android's, and the paragraph above says
+what is missing.
+
 Two properties of the phone's numbers are worth keeping:
 
 - **The phone sits between the two Macs**: slower than the MacBook Air (P95 0.55–0.73 ms), faster
@@ -142,7 +173,14 @@ What this does **not** close:
   yet. Twelve times of headroom makes it unlikely that the SE-class run overturns this — and
   "unlikely" is a prediction, not a measurement, which is the distinction this ADR exists to
   enforce.
-- **The Android reference device has not been measured at all.**
+- **The Android reference device has not been measured at all.** As of 2026-09-07 the Android
+  *journal* exists (`packages/journal`, Kotlin, 32 tests) and the measurement does not, and the two
+  must not be confused. That package sets WAL and `synchronous=FULL` and reads **both** back; it
+  does **not** set `fullfsync` or `checkpoint_fullfsync`, because Apple's `F_FULLSYNC` has no Android
+  equivalent and SQLite would store the pragma and read it back as 1 while nothing had happened to
+  the hardware — a verification that always passes, which is worse than none. So the Android journal
+  asks only for what it can confirm, a test holds it to exactly those two pragmas, and **no
+  durability figure is claimed for Android by anything in this repository.**
 
 One limit of the probe itself, worth stating so the numbers are not over-read: **it measures
 latency, not durability.** The guard test proves the pragmas changed the system's behaviour; it does
@@ -259,6 +297,29 @@ without those the figures are unattributable and cannot be compared to a later r
 The half-typed entry buffer is **UI draft state in a separate non-evidence table**. It must never be
 foldable into the journal.
 
+### Reference data is not evidence, and lives in its own database
+
+The device also holds a **club book** (`ThroJournal/ClubBook.swift`, `clubs.sqlite`): the clubs,
+leagues and tournaments a person keeps, with their rosters and fixture lists (PD-009). It is a
+separate SQLite file from the journal, deliberately.
+
+The journal's whole story is that nothing in it is ever edited — two triggers enforce it, and every
+correction is a new event that supersedes an old one. A roster is the opposite: a member leaves, a
+fixture is postponed, a name typed wrong is fixed. Putting mutable rows in the same file as
+append-only evidence would leave the file's guarantee true only of some of its tables, which is the
+kind of qualification nobody remembers a year later. Two files, two rules, both stated in one line.
+
+It **keeps the measured durability configuration** — WAL, `synchronous=FULL`, `fullfsync`,
+`checkpoint_fullfsync`, all read back on open — because there is no reason to write a captain's
+roster less carefully than a leg, and because the same open path then verifies both.
+
+When sync exists, the server is authoritative for a club: membership, roles and fixtures come from
+it, and this book becomes the device's side of the reconciliation this ADR already specifies — a
+watch and a phone, or a phone and a server, are the same problem. Nothing about the local shape
+prejudges that: the client's `Club` carries the viewer's role as a value rather than assuming it,
+and today's mapping supplies `admin` for the one honest reason that a club nobody else can see is
+one its keeper keeps.
+
 ## Scoring authority — three mechanisms
 
 A single writer is not sufficient on its own, because the approved dispute screen shows a per-leg
@@ -342,3 +403,66 @@ that a claim is **rule-consistent**, never that it is what happened.
 
 Any evidence loss observed in the field; or divergence alerts firing more than negligibly, which
 would trigger ADR-002's kill criteria.
+
+## Amendment, 2026-09-07 — the journal belongs in the device backup (PD-017)
+
+PD-012 chose local-first, which made the on-device journal the **only** copy of what was thrown.
+That is a durability decision this ADR had not taken: everything above concerns surviving a crash
+or a power cut on one device, and none of it survives the device itself.
+
+Two things follow, both built.
+
+**The container is marked as included in the backup, and the flag is read back.** Application
+Support is backed up by iOS unless something excludes it, so on paper there was nothing to do —
+which is exactly the situation the durability probe was caught by, measuring a configuration SQLite
+had refused because nobody read the pragmas back. Apple's guidance is to exclude *regenerable* data;
+a journal is the only record of what was thrown and regenerates from nothing, so including it is the
+decision rather than the absence of one. `BackupPolicy` sets it, reads it back, and Settings reports
+what was found. A future change that excluded the container — for a cache, for a temporary file, for
+a reason that seemed local at the time — is noticed here instead of on somebody's new phone.
+
+**An export carries the same rows out of the app.** One JSON file: every match, every journal row as
+written including the struck ones, every person, every club. It carries a digest over its content,
+which detects a file that changed between the phone and wherever it ended up and proves nothing
+about who wrote the rows — the same claim, and no larger, than ADR-016 makes about a claimed local
+history.
+
+**There is deliberately no importer.** Merging an exported journal into a live one is the
+reconciliation this ADR specifies for sync: two append-only streams, each with its own gapless
+per-device sequence, whose ordering has to be re-established without either device's `device_seq`
+lying afterwards. That is built and tested for the *server* case and is not wired to anything on the
+client. An import that pretended to do it would produce a journal whose sequence claims this device
+wrote rows it did not. Reading an export is therefore read-only until sync exists, and a test asserts
+that reading one writes nothing.
+
+## Amendment, 2026-09-07 — a replay returns what was stored, on the device too
+
+The server has answered a repeated command this way since the command path shipped: **a replay
+returns the stored response, including a stored refusal.** `CommandHandler` looks the command id up
+before it does anything else and hands back `CommandResult.Replayed`. Neither journal did, and
+neither had a test that said so.
+
+The consequence was not theoretical. `command_id TEXT NOT NULL UNIQUE` means a repeat hit the
+constraint, the insert threw, the transaction rolled back, and the caller was told the write had
+failed — which the client turns into *"Not saved, so not recorded"* for a visit that **was** saved.
+That is the worst shape a durability error can take: the record is right and the player is told it
+is not, and the correction they make next puts the score in twice.
+
+Both journals now check the id first and return the stored row. Three details are the decision
+rather than the mechanism:
+
+- **The replay is answered before the ending is checked.** A retry of a visit that landed must not
+  be refused on the ground that the match has since been retired; the row is already there. A
+  genuinely new visit after an ending is still refused, and a test holds both directions.
+- **A command id offered for a *different* command is refused, not accepted.** Two commands claiming
+  one identity is corruption, and returning the stored row would silently swallow the second. It
+  throws `commandIdReused` / `CommandIdReused` naming what is already stored and what was asked for.
+- **The instant a write returns is the instant the journal holds.** It was not: the returned entry
+  carried the caller's sub-millisecond precision while the stored ISO-8601 string carries
+  milliseconds, so a replay handed back a row that differed from the one the first call returned. The
+  timestamp is now round-tripped through the stored format before it is used, on both platforms.
+
+**Nothing in either client passes a command id yet** — every caller takes the default UUID, so no
+behaviour a player can see changes today. This is the property the reconciliation above needs before
+it can be built: sync replays commands by id, and a journal that answers a replay with an error
+cannot take part in one.

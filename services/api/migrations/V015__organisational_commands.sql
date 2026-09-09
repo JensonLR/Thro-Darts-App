@@ -1,4 +1,4 @@
--- THRØ V015 — receipts for organisational commands (ADR-017).
+-- THRØ V015 — receipts for organisational commands (ADR-018).
 --
 -- Organisational state — a team's name, a fixture's date — is a server-authoritative row with a
 -- version. A command that changes one carries the version its author last saw; a stale version is

@@ -152,7 +152,7 @@ dart-level proof. The only such case.
 
 ## Competition and organisation
 
-One organisation concept, one place concept, and dated relationships between them (ADR-016). **There
+One organisation concept, one place concept, and dated relationships between them (ADR-017). **There
 is no Club.** It is a word people use for a Team or for a Venue, and it resolves to one of them every
 time; THRØ's own copy says *team* and *venue*.
 

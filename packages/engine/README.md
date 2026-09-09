@@ -21,7 +21,7 @@ averages and checkout rates belong to a separate layer, which is why no floating
 
 | | |
 |---|---|
-| **Conformance** | 58 cases, 353 commands from `packages/domain-spec/vectors` |
+| **Conformance** | 64 cases, 393 commands across seven vector families from `packages/domain-spec/vectors`, plus the 86,000-row exhaustive transition table that `generate.py --full` produces and CI now generates before this runs |
 | **Exhaustive properties** | 71,261 scored and 14,577 bust transitions, every reachable remaining against every achievable visit total |
 | **Determinism guard** | build-time check on the main sources |
 

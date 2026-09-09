@@ -1,5 +1,5 @@
 -- THRØ V014 — the organisational graph: Team, Venue, League, Tournament, Series, and the dated
--- relationships between them. ADR-016; founder instruction PD-003.
+-- relationships between them. ADR-017; founder instruction PD-028.
 --
 -- Two things this migration is NOT:
 --
@@ -144,7 +144,7 @@ CREATE INDEX tenure_by_venue ON competition.team_venue_tenure (venue_id) WHERE v
 -- The sporting identity: THRØ ID. It holds NO personal data and no text at all; a display name and
 -- an age band live in identity.account (ADR-005), reached through a claim. A player row may exist
 -- before any account holds it — a captain enters a roster before every member has installed
--- anything — and is then `unclaimed`, treated as a minor by every exposure rule (PD-004).
+-- anything — and is then `unclaimed`, treated as a minor by every exposure rule (PD-029).
 CREATE TABLE competition.player (
   player_id    uuid        PRIMARY KEY,
   source       text        NOT NULL DEFAULT 'self'
@@ -562,7 +562,7 @@ ALTER INDEX competition.fixture_by_round RENAME TO bracket_tie_by_round;
 COMMENT ON TABLE competition.bracket_tie IS
   'A pairing in a knockout round of an event, possibly a bye. Not a fixture: it has a parent-child '
   'dependency on earlier ties, no rearrangement lifecycle, and advances a competitor rather than '
-  'feeding a table. See ADR-012 and ADR-016.';
+  'feeding a table. See ADR-012 and ADR-017.';
 
 -- ---------------------------------------------------------------------------------------------
 -- The league fixture: identity plus current schedule; every change logged; outcomes appended

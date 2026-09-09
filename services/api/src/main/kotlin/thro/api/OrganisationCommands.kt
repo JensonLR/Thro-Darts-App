@@ -8,7 +8,7 @@ import thro.authz.ObjectRef
 import thro.authz.ObjectType
 
 /**
- * Commands over organisational state (ADR-017): the second command family beside visits.
+ * Commands over organisational state (ADR-018): the second command family beside visits.
  *
  * A visit is evidence and travels as a per-device append-only stream. A team's name or a fixture's
  * date is a server-authoritative row with a version. The rule here is the one the founder's brief

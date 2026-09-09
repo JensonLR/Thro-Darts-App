@@ -241,7 +241,7 @@ class SecretaryTest {
             "INSERT INTO competition.submission (submission_id, kind, from_team_id, to_league_season_id, subject_player_id, subject_league_season_id, policy_id) VALUES (?, 'player_registration', ?, ?, ?, ?, ?)",
         ).use { ps -> ps.setObject(1, forged); ps.setObject(2, riverside); ps.setObject(3, season); ps.setObject(4, jo); ps.setObject(5, season); ps.setObject(6, policyV1); ps.executeUpdate() }
         c.prepareStatement("INSERT INTO competition.submission_transition (submission_id, expected_version, from_state, to_state) VALUES (?, 1, 'draft', 'ready')").use { ps -> ps.setObject(1, forged); ps.executeUpdate() }
-        check("a submission about an unclaimed player cannot be submitted, whoever tries", sec.submit(forged, by = ade).let { it is Secretary.Moved.Refused && it.why.contains("PD-004") })
+        check("a submission about an unclaimed player cannot be submitted, whoever tries", sec.submit(forged, by = ade).let { it is Secretary.Moved.Refused && it.why.contains("PD-029") })
 
         // --- 7. Kim: a claimed minor. Their guardian's consent is the player's task, not the captain's --
         orgs.addMember(riverside, kim, from = t0)

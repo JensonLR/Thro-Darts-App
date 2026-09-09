@@ -33,7 +33,7 @@ import thro.competition.Transport
  *   recipient's words; the trigger refuses them from anyone who does not administer the receiving
  *   side, and this class offers no method that tries otherwise.
  * - **Send a person the league has no basis to know about.** The disclosure gate is a database
- *   function and the trigger calls it (PD-004); this class merely reports the refusal in words.
+ *   function and the trigger calls it (PD-029); this class merely reports the refusal in words.
  *
  * Every method that changes state carries the actor, and the database records it.
  */

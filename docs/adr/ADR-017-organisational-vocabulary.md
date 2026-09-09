@@ -1,6 +1,6 @@
-# ADR-016 — Organisational vocabulary: Team, Venue, League, Tournament, Series
+# ADR-017 — Organisational vocabulary: Team, Venue, League, Tournament, Series
 
-**Status:** Accepted · **Date:** 2026-09-09 · **Founder instruction** recorded as PD-003
+**Status:** Accepted · **Date:** 2026-09-09 · **Founder instruction** recorded as PD-028
 
 ## Context
 
@@ -138,7 +138,7 @@ concepts because the vocabulary at the board is inconsistent.
 - **`evidence.match.home_name` / `away_name` are personal data in an append-only table.** Correct,
   and pre-existing (V006). Resolving it means the command handler and engine working in
   identifiers with names joined at render, and a pseudonymous label for a non-adult account.
-  That is Phase B work on the command path, tracked as OD-015, and this migration does not walk
+  That is Phase B work on the command path, tracked as OD-024, and this migration does not walk
   an unclaimed player into `evidence.match` because nothing yet opens a match from a fixture.
 - **A merge of two players** (`identity.player_alias`) is not created here. It depends on the
   claim flow that B4 gates. The rule is recorded now: a merge is an appended, reversible identity

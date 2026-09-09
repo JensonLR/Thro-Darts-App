@@ -5,7 +5,173 @@ on:
     branches: ["**"]
   pull_request:
 
+
+# These jobs read the repository and write nothing back. Stating that here rather than
+# inheriting whatever the repository's default happens to be means a token that leaks out of a
+# build step cannot push, comment, or publish.
+permissions:
+  contents: read
+
 jobs:
+  # The README states how many tests hold each part of this repository. Those counts have drifted
+  # three times, and each time it was a person who noticed afterwards. A count in prose is a claim
+  # like any other, and a claim nobody checks is a claim that stops being true.
+  counts:
+    name: The README's test counts are the tests that exist
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Counts
+        run: python3 tools/check_test_counts.py
+
+  # A screen that compiles, is documented, and that nobody using the app can open, is a claim in the
+  # pull request that is not true on the phone. This repository has done that three times — most
+  # recently the club edit screen, which meant no club could be renamed, recoloured, given a badge or
+  # deleted. No test here constructs a screen, so the suite cannot see it and this job does.
+  reachable:
+    name: Every screen is reachable, and its bar is a component
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Reachability
+        run: python3 tools/check_screens_reachable.py
+
+      # And a screen you can open still has to be usable. Four pages hand-rolled the same top bar
+      # and all four put the back chevron off the left edge of the phone and cropped the last action
+      # off the right. The founder found it on a screenshot; this finds it on a push.
+      - name: Top bars
+        run: python3 tools/check_screen_bars.py
+
+      # And a bar you can see still has to react to a finger. `.buttonStyle(.plain)` is SwiftUI for
+      # "do nothing": no pressed state, and a hit area the size of the ink. It was on 32 controls,
+      # including the app's primary button. No test in this repository constructs a screen, and a
+      # hit area is not a thing a unit test can see, so it is checked on the source.
+      - name: Controls react
+        run: python3 tools/check_controls_react.py
+
+      # SLATE's rule: a control a player cannot use is drawn on a darker ground, never faded.
+      # Fading composites a label towards its background, so it moves both sides of the contrast
+      # ratio at once — the resting Enter key measured 2.20:1 that way, on the one control in this
+      # app that commits evidence. WCAG exempts inactive components from the contrast minimum
+      # entirely, which is exactly why this cannot be left to the contrast gate.
+      - name: Unavailable is never a fade
+        run: python3 tools/check_no_dimming.py
+
+      # Turning on landscape and iPad is two lines in a project file and free; what they promise is
+      # not. This holds both directions — every orientation the project offers is one ThroStage
+      # decides and StageTests walks, AND every orientation THRØ decided to offer is still offered.
+      # The first version only checked the first half and passed cleanly when landscape was deleted
+      # from the iPhone key, because the iPad key still carried it.
+      - name: Every orientation offered has a layout behind it
+        run: python3 tools/check_orientation_is_earned.py
+
+      # A transitive dependency is linkable, not nameable — and a type you can see is not a member
+      # you can reach. Three macOS rounds at four minutes each, in one day: Geometry.swift naming
+      # ThroMotion with only `import SwiftUI`, DartVisitTests naming Seat with
+      # `@testable import ThroPlay` and no ThroJournal, and ClubScreens calling an internal
+      # StatGrid.spokenValue. check_tokens_exist learned the first for the token layer only; this
+      # asks both of every module, in under a second, on Linux, before a runner is spent.
+      - name: Every module and member a file names is one it can reach
+        run: python3 tools/check_module_imports.py
+
+      # And a token that does not exist fails a macOS build several minutes in, having already spent
+      # a runner. `motionScaleImpact` is ThroMotion's and `motionTravelMedium` is ThroSpacing's; this
+      # says so in under a second, on Linux, before any of that starts.
+      - name: Tokens exist
+        run: python3 tools/check_tokens_exist.py
+
+      # And a document that describes the build has to still be true of it. The runbook said
+      # "Attestation | Not in the app" three weeks after PD-011 shipped, "Haptics | None" after
+      # PD-015 shipped four, and that the checkout card carried no route because no route table
+      # existed — after PD-013 built one per out-rule. A claim of absence decays in the direction
+      # of a lie: the code gains something and the sentence does not notice.
+      - name: Claims of absence are still true
+        run: python3 tools/check_absence_claims.py
+
+      # And the one file nothing checked. The Xcode project is written by hand here — there is no
+      # generator — and a mistyped 24-character object id costs a macOS runner several minutes to
+      # discover, on a runner that bills ten times what this one does.
+      - name: The Xcode project holds together
+        run: python3 tools/check_xcode_project.py
+
+      # And the one picture this app makes that leaves the phone. A share card is a raster: it
+      # cannot be tapped for a basis and cannot be corrected once it is in somebody's group chat, so
+      # it has to be the same picture whoever drew it. Most colour tokens resolve by the phone's
+      # light or dark trait; the brand ones do not, and this holds the card to those.
+      - name: The share card looks the same whoever draws it
+        run: python3 tools/check_share_card_tokens.py
+
+      # And the identifier that decides whether the widgets can see anything at all. A mismatch
+      # between the Swift and either entitlements file produces NO error: the container simply is
+      # not there, the app writes nothing, the widget reads nothing, and both look like a phone
+      # with no match on it.
+      - name: The App Group holds together
+        run: python3 tools/check_app_group.py
+
+      # And the association file, against the parser it has to agree with. A universal link iOS
+      # accepts and the app cannot read opens THRØ and does nothing — which looks exactly like the
+      # app being broken, on a link somebody shared. `ThroRoute` refuses an unknown path rather than
+      # guessing, deliberately, so the refusal is silent and the mismatch has to be caught here.
+      - name: The link file matches the parser
+        run: python3 tools/check_aasa.py
+
+      # And the one screen whose whole job is telling somebody where to go and find something. Every
+      # other screen shows you what it has; that one says "tap **Share the result** under the score",
+      # which a rename in a different file falsifies with nothing failing anywhere. It is the failure
+      # the screen exists to prevent, arriving through the screen itself — and it already happened
+      # once, in that screen's first version.
+      - name: The readiness screen's directions match the app
+        run: python3 tools/check_readiness_directions.py
+
+      # And the two property-list keys club TV mode is made of. This build declared the
+      # external-display scene role and said it could not hold two scenes at once, which makes the
+      # role decoration: iOS never asks for a configuration, the cable mirrors the phone, and no
+      # error is raised anywhere. Correct Swift, unreachable.
+      - name: The wall can be given a screen
+        run: python3 tools/check_scene_manifest.py
+
+      # And the type, read from the font files rather than from their names. A face that does not
+      # register does not raise: iOS falls back, every screen still draws, and the app looks like
+      # every other app — the founder's "no generic slop anywhere" arriving as a build problem. The
+      # worst of the three ways in is a file whose PostScript name is not the one the Swift asks
+      # for, because the family still registers and only the weight is wrong.
+      - name: The bundle carries the faces the design system asks for
+        run: python3 tools/check_bundle_faces.py
+
+      # And the colour iOS paints before the app has run. It is a hand-copied duplicate of a brand
+      # token in a property list, and if the two ever part the app opens with a flash of the wrong
+      # green — a third of a second, at the moment the opening exists to get right, and over before
+      # a screenshot could catch it.
+      - name: The launch screen and the opening are the same green
+        run: python3 tools/check_launch_colour.py
+
+  journal:
+    name: The on-device journal, on Android's half
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+      - uses: gradle/actions/setup-gradle@v4
+
+      - name: Journal
+        working-directory: packages/journal
+        run: gradle test --no-daemon
+
+      # A journal is a file, and a file outlives the process that wrote it. The two implementations
+      # must agree about what is ON DISK or a row written on one phone is unreadable on the other —
+      # silently, because both readers refuse a row they cannot interpret rather than guess.
+      - name: The two journals agree on disk
+        run: python3 tools/check_journal_parity.py
+
   conformance:
     name: Scoring rules and conformance corpus
     runs-on: ubuntu-latest
@@ -45,10 +211,21 @@ jobs:
           python3 packages/domain-spec/generate.py
           git diff --exit-code -- packages/engine/src/main/kotlin/thro/engine/RuleTables.kt
 
-      # Runs the conformance corpus against the engine, the exhaustive property tests, and the
-      # determinism guard that forbids a clock, randomness, floating point or I/O in the engine.
+      # The exhaustive transition table is generated, never committed (it is 9 MB), so this job has to
+      # make it before the engine can be held to it. Without this step the Kotlin runner skipped that
+      # family silently while the Swift runner ran it — so "86,000 exhaustive transitions on two
+      # independent implementations" was true of one of them. THRO_REQUIRE_CORPUS makes a missing table
+      # a failure rather than a skip, so it cannot quietly stop running again.
+      - name: The exhaustive transition table
+        run: python3 packages/domain-spec/generate.py --full
+
+      # Runs the conformance corpus against the engine, the exhaustive transition table, the exhaustive
+      # property tests, and the determinism guard that forbids a clock, randomness, floating point or
+      # I/O in the engine.
       - name: Conformance, properties and determinism
         working-directory: packages/engine
+        env:
+          THRO_REQUIRE_CORPUS: "1"
         run: gradle check --no-daemon
 
   statistics:
@@ -121,6 +298,22 @@ jobs:
         working-directory: packages/competition
         run: gradle test --no-daemon
 
+  organisation:
+    name: Clubs, leagues and the safeguarding boundary
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with: { distribution: temurin, java-version: "21" }
+      - uses: gradle/actions/setup-gradle@v4
+      # Asserts the whole authority table of an organisation rather than examples of it; that a club's
+      # accent can never make the app unreadable, by sweeping the colour cube rather than trusting a
+      # threshold; and that an announcement reaches nobody whose age is minor OR unknown until
+      # somebody has answered OD-010. The last one is the reason this job exists.
+      - name: Organisation
+        working-directory: packages/organisation
+        run: gradle test --no-daemon
+
   tokens:
     name: Design tokens and contrast
     runs-on: ubuntu-latest
@@ -138,3 +331,12 @@ jobs:
       # them, and anything NEW fails — so a re-export of the design system cannot regress silently.
       - name: Design components have no new findings
         run: python3 docs/design/audit_components.py --check
+
+      # Two mechanisms rest on "color* flips and thro* does not" and neither of them checked it.
+      # The pigment rule in check_tokens_exist.py only means something if the semantic token an
+      # author is sent to instead actually differs between appearances; and the contrast gate would
+      # go on printing two rows for a token that had stopped flipping, checking one fact twice with
+      # no change in its count. 50 of 50 flip today, with no exemption — which is why this is
+      # written now rather than after something breaks it.
+      - name: Semantic tokens flip
+        run: python3 tools/check_semantic_tokens_flip.py

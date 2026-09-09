@@ -415,7 +415,7 @@ if echo "$r" | grep -qi 'cannot be undone'; then
   ok "a device revocation cannot be undone"
 else bad "a device revocation cannot be undone" "un-revoking was permitted"; fi
 
-echo "== the organisational graph: Team, Venue, League, Tournament, Series (ADR-016) =="
+echo "== the organisational graph: Team, Venue, League, Tournament, Series (ADR-017) =="
 # No application role may delete history anywhere in the competition schema, on any table —
 # including ones a later migration adds, which is what the default privilege is for.
 n=$($PSQL -c "SELECT count(*) FROM information_schema.role_table_grants

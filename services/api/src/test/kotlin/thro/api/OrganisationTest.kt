@@ -16,7 +16,7 @@ import thro.competition.Entrant
 import thro.competition.MembershipRole
 
 /**
- * The organisational graph against a real PostgreSQL (ADR-016), and the acceptance criteria of
+ * The organisational graph against a real PostgreSQL (ADR-017), and the acceptance criteria of
  * the execution plan's §12 that are database properties.
  *
  * Every property here is one a contributor would otherwise "fix" by editing a row: moving a team's

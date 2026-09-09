@@ -9,7 +9,7 @@ import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 /**
- * The organisational vocabulary (ADR-016) as pure types. These are the properties a contributor
+ * The organisational vocabulary (ADR-017) as pure types. These are the properties a contributor
  * would otherwise "fix" by adding a venue column to Team or a team column to Registration, so
  * each one fails the moment somebody does.
  */
@@ -169,7 +169,7 @@ class OrganisationTest {
 
     @Test
     fun `the match-time Competitor Team is a lineup, not the organisation`() {
-        // ADR-016 keeps both. The lineup names the players who contested one match; the
+        // ADR-017 keeps both. The lineup names the players who contested one match; the
         // organisation is a Team with a name and a history, and knows nothing of who played tonight.
         val lineup = Competitor.Team("riverside-a", listOf("sam", "jo", "ade", "kim"))
         val organisation = Team("riverside-a", "Riverside A")

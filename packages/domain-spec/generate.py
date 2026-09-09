@@ -19,7 +19,7 @@ import json, os, sys, itertools, hashlib
 from pathlib import Path
 
 OUT = Path(__file__).parent
-SPEC_VERSION = "1.2.0"
+SPEC_VERSION = "1.3.0"
 
 # ---------------------------------------------------------------- the dartboard
 SINGLES  = set(range(1, 21))
@@ -33,6 +33,9 @@ DOUBLE_SEGMENTS = DOUBLES | {BULL}
 # Master-out admits a double or a treble.
 MASTER_SEGMENTS = DOUBLE_SEGMENTS | TREBLES
 FINISHERS = {"double": DOUBLE_SEGMENTS, "master": MASTER_SEGMENTS, "straight": SEGMENTS - {0}}
+# What may OPEN a leg, by in-rule. The same segment sets as the finishers, and for the same reason:
+# the bull is a double, and master admits a treble. Straight-in opens on anything that scores.
+OPENERS = {"double": DOUBLE_SEGMENTS, "master": MASTER_SEGMENTS, "straight": SEGMENTS - {0}}
 
 def achievable_totals(n_darts):
     """Every total reachable with exactly n darts (a miss scores 0, so fewer darts is a subset)."""
@@ -58,6 +61,142 @@ def checkout_set(out_rule, max_darts=3):
 
 CHECKOUTS = {r: checkout_set(r) for r in FINISHERS}
 ONE_DART  = {r: sorted(v for v in finishes_in(1, r) if v > 0) for r in FINISHERS}
+
+# ---------------------------------------------------------------- checkout routes (PD-013)
+#
+# THRØ shows one route to a finish. That is a POSITION, not a fact: most finishes have several legal
+# routes and players disagree about which is best, so the founder decided (PD-013) that the app takes
+# a position rather than staying silent. What follows is that position, written as a rule so that
+# every route is derivable and checkable rather than a table somebody typed.
+#
+# The rule, in full:
+#   1. Fewest darts.
+#   2. On the LAST dart, prefer the finishing double by the order below.
+#   3. On every dart BEFORE it, prefer a treble (highest first), then a single (highest first).
+#      A double, the outer bull or the bull is used as a scoring dart only when nothing else reaches.
+#   4. On a three-dart finish, choose the first dart by (3) among those that leave a two-dart finish,
+#      then apply (2) and (3) to what is left.
+#
+# The order in (2) puts 32 and 40 first because they are the two doubles the game is taught around,
+# then the rest of the even doubles, then the odd ones — a missed odd double leaves an odd number —
+# and the bull last, because it is the smallest target on the board. Where this differs from a chart
+# somebody has seen, both routes are legal. This one is derived, so it can be checked.
+DOUBLE_ORDER = [16, 20, 12, 18, 10, 8, 14, 6, 4, 2] + list(range(19, 0, -2))
+
+def named(kind, n):
+    """The name a player would say: T20, D16, 20, 25, Bull."""
+    return {"S": str(n), "D": "D%d" % n, "T": "T%d" % n}[kind] if kind != "B" else ("Bull" if n == 50 else "25")
+
+THROW_SCORE = {}
+for _n in range(1, 21):
+    THROW_SCORE[named("S", _n)] = _n
+    THROW_SCORE[named("D", _n)] = 2 * _n
+    THROW_SCORE[named("T", _n)] = 3 * _n
+THROW_SCORE["25"] = OUTER_BULL
+THROW_SCORE["Bull"] = BULL
+
+# Scoring darts, best first: by score, and where a single and a treble score the same, the SINGLE —
+# nobody aiming for nine aims at treble three. Then, only as a fallback, everything else: a route
+# that needs a double to score is still a route, and is better than no route.
+SCORING_FIRST = [t for _, _, t in sorted(
+    [(-n, 0, named("S", n)) for n in range(1, 21)] + [(-3 * n, 1, named("T", n)) for n in range(1, 21)])]
+SCORING_LAST   = [named("D", n) for n in range(20, 0, -1)] + ["Bull", "25"]
+
+def finisher_names(out_rule):
+    """Legal finishing throws, in the order THRØ prefers them."""
+    order = []
+    if out_rule == "straight":
+        # A straight-out finish of 17 is thrown at 17, not at a double that happens to equal it.
+        order += [named("S", n) for n in range(1, 21)]
+    order += [named("D", n) for n in DOUBLE_ORDER]
+    order += ["Bull"]
+    if out_rule in ("master", "straight"):
+        order += [named("T", n) for n in range(20, 0, -1)]
+    if out_rule == "straight":
+        order += ["25"]
+    legal = FINISHERS[out_rule]
+    seen, out = set(), []
+    for t in order:
+        if THROW_SCORE[t] in legal and t not in seen:
+            seen.add(t); out.append(t)
+    return out
+
+def scoring_for(value):
+    """The throw THRØ would aim at to score exactly `value`, or None."""
+    for t in SCORING_FIRST:
+        if THROW_SCORE[t] == value: return t
+    for t in SCORING_LAST:
+        if THROW_SCORE[t] == value: return t
+    return None
+
+def route_of_length(remaining, out_rule, darts):
+    if darts == 1:
+        for f in finisher_names(out_rule):
+            if THROW_SCORE[f] == remaining: return [f]
+        return None
+    if darts == 2:
+        # Two passes: a scoring dart THRØ would actually aim at, and then anything that reaches.
+        for pool in (SCORING_FIRST, SCORING_FIRST + SCORING_LAST):
+            for f in finisher_names(out_rule):
+                need = remaining - THROW_SCORE[f]
+                if need <= 0: continue
+                for t in pool:
+                    if THROW_SCORE[t] == need: return [t, f]
+        return None
+    for t in SCORING_FIRST + SCORING_LAST:
+        need = remaining - THROW_SCORE[t]
+        if need <= 0: continue
+        rest = route_of_length(need, out_rule, darts - 1)
+        if rest: return [t] + rest
+    return None
+
+def route(remaining, out_rule):
+    for d in (1, 2, 3):
+        r = route_of_length(remaining, out_rule, d)
+        if r: return r
+    return None
+
+def routes(out_rule):
+    return {v: route(v, out_rule) for v in sorted(CHECKOUTS[out_rule])}
+
+def encode_routes(table):
+    """One string per rule: `170=T20,T20,D20|167=T20,T19,Bull|…`.
+
+    A map literal of 170 entries is a lot of generated code and, in Kotlin, a lot of bytecode in one
+    initialiser. A string parsed once is smaller, and the parse is five lines that a test can hold.
+    """
+    return "|".join("%d=%s" % (v, ",".join(r)) for v, r in sorted(table.items()) if r)
+
+def opening_totals(in_rule):
+    """Every counted total a visit can record while the player has not yet opened.
+
+    This is the rule that makes double-in scorable at visit granularity, and it is the whole of
+    PD-008. The engine scores a visit, not a dart; under double-in the darts before the opening one
+    score nothing, so what the scorer records — and what they call at the oche — is the score FROM
+    the opening dart onward. Zero means the player did not open.
+
+    So an opening total is a legal opening segment plus up to two free darts after it: the player
+    may open on the first dart and throw two more, on the second and throw one, or on the third and
+    throw none. Everything before the opener contributes nothing and is not recorded, which loses no
+    statistic this repository computes, because a visit is three darts either way.
+
+    Enumerated, never listed: under double-in the largest is D20+T20+T20 = 160, and 41 — which no
+    sequence beginning with a double can make — is not in the set."""
+    out = set()
+    for f in OPENERS[in_rule]:
+        for rest in achievable_totals(2):
+            t = f + rest
+            if 0 < t <= 180:
+                out.add(t)
+    return out
+
+OPENING = {r: opening_totals(r) for r in OPENERS}
+
+def unopenable(in_rule):
+    """Totals three darts CAN make but no sequence beginning with a legal opener can. Under
+    straight-in this is empty by construction; under double-in it is the list that makes the
+    rejection meaningful."""
+    return sorted(v for v in ACHIEVABLE_3 if v > 0 and v not in OPENING[in_rule])
 
 def bogeys(out_rule):
     """Unfinishable values at or below the maximum checkout — the classic trap list."""
@@ -116,13 +255,24 @@ def rule_tables():
         "doubleSegments": sorted(DOUBLE_SEGMENTS),
         "impossibleVisitTotals": IMPOSSIBLE_3,
         "maxVisitTotal": max(ACHIEVABLE_3),
+        "inRules": {
+            r: {
+                "openingSegments": sorted(OPENERS[r]),
+                "maxOpeningTotal": max(OPENING[r]),
+                "unopenableTotals": unopenable(r),
+            } for r in ("double", "master", "straight")
+        },
         "outRules": {
             r: {
+                "minCheckout": min(CHECKOUTS[r]),
                 "maxCheckout": max(CHECKOUTS[r]),
                 "bogeyNumbers": bogeys(r),
                 "oneDartFinishes": ONE_DART[r],
                 "bustOnExactScore": bust_on_exact(r),
                 "minDartsToFinish": {str(s): min_darts(s, r) for s in (301, 501, 701)},
+                # PD-013: one route per finish, derived by the stated rule above. A position, not
+                # a fact — see the comment on DOUBLE_ORDER.
+                "routes": encode_routes(routes(r)),
             } for r in ("double", "master", "straight")
         },
         "invariants": {
@@ -132,12 +282,19 @@ def rule_tables():
     }
 
 # ---------------------------------------------------------------- vectors
-def fmt(out_rule="double", start=501, first_to=5, sets=False):
+def fmt(out_rule="double", start=501, first_to=5, sets=None, legs_per_set=None,
+        alternate="perLeg"):
+    """A match format. `sets` promotes it to set play: `first_to` then means legs per set.
+
+    The shape was here from the beginning and no vector used it, which is how set play came to be
+    implemented in two engines and exercised by nothing at all.
+    """
     f = {"game": "X01", "startingScore": start, "inRule": "straight", "outRule": out_rule,
          "structure": {"kind": "legs", "firstTo": first_to},
-         "throwFirst": "A", "alternateStart": "perLeg"}
+         "throwFirst": "A", "alternateStart": alternate}
     if sets:
-        f["structure"] = {"kind": "sets", "firstTo": 3, "legsPerSet": {"firstTo": 3}}
+        f["structure"] = {"kind": "sets", "firstTo": sets,
+                          "legsPerSet": {"firstTo": legs_per_set or first_to}}
     return f
 
 def case(cid, desc, commands, expect, format_=None):
@@ -159,7 +316,26 @@ def simulate(commands, format_):
     rem = {"A": start, "B": start}; legs = {"A": 0, "B": 0}
     thrower, outcomes, winner = format_["throwFirst"], [], None
     leg_starter, leg_no = format_["throwFirst"], 1
-    target = format_["structure"].get("firstTo", 5)
+    structure = format_["structure"]
+
+    # Set play, stated as the rule rather than read off an implementation:
+    #
+    #   * a **set** is won by the player who first wins the required number of legs IN THAT SET;
+    #   * the **match** is won by the player who first wins the required number of sets;
+    #   * a new set starts both counters again, and its legs are numbered from 1 — because a set is
+    #     a match within a match, and "leg 3 of set 2" is what a scorer calls;
+    #   * the right to throw first in a **set** alternates; under `perSet` alternation the set's
+    #     starter also opens every leg within it, and under `perLeg` it changes hands every leg.
+    #
+    # With no set structure the legs unit decides the match, which is what every other family uses.
+    playing_sets = structure.get("kind") == "sets"
+    target = (structure["legsPerSet"]["firstTo"] if playing_sets
+              else structure.get("firstTo", 5))
+    sets_target = structure.get("firstTo", 1) if playing_sets else None
+    legs_in_set = {"A": 0, "B": 0}
+    sets_won = {"A": 0, "B": 0}
+    set_no, set_starter = 1, format_["throwFirst"]
+    per_set = format_.get("alternateStart") == "perSet"
     for c in commands:
         if winner:
             outcomes.append({"seq": c["seq"], "result": "rejected", "reason": "MATCH_COMPLETE"}); continue
@@ -187,25 +363,44 @@ def simulate(commands, format_):
         rem[p] = new
         if eff == "leg_won":
             legs[p] += 1
-            # A leg that decides the match is reported as such: the effect a client renders differs,
-            # and a corpus that blurred them would let an engine confuse the two.
-            if legs[p] >= target:
+            legs_in_set[p] += 1
+            took_leg_unit = (legs_in_set[p] if playing_sets else legs[p]) >= target
+            if not took_leg_unit:
+                leg_no += 1
+                leg_starter = set_starter if per_set else ("B" if leg_starter == "A" else "A")
+                thrower = leg_starter
+                rem = {"A": start, "B": start}
+            elif not playing_sets:
+                # A leg that decides the match is reported as such: the effect a client renders
+                # differs, and a corpus that blurred them would let an engine confuse the two.
                 winner = p
                 eff = "match_won"
             else:
-                leg_no += 1
-                leg_starter = "B" if leg_starter == "A" else "A"
-                thrower = leg_starter
-                rem = {"A": start, "B": start}
+                sets_won[p] += 1
+                if sets_won[p] >= sets_target:
+                    winner = p
+                    eff = "match_won"
+                else:
+                    eff = "set_won"
+                    set_no += 1
+                    leg_no = 1
+                    legs_in_set = {"A": 0, "B": 0}
+                    set_starter = "B" if set_starter == "A" else "A"
+                    leg_starter = set_starter
+                    thrower = set_starter
+                    rem = {"A": start, "B": start}
         else:
             thrower = "B" if p == "A" else "A"
         o = {"seq": c["seq"], "result": "accepted", "effect": eff}
         if reason: o["reason"] = reason
         outcomes.append(o)
-    return {"outcomes": outcomes,
-            "state": {"matchState": "complete" if winner else "in_progress",
-                      "currentLeg": leg_no, "throwerId": None if winner else thrower,
-                      "remaining": rem, "legsWon": legs, "winnerId": winner}}
+    state = {"matchState": "complete" if winner else "in_progress",
+             "currentLeg": leg_no, "throwerId": None if winner else thrower,
+             "remaining": rem, "legsWon": legs, "winnerId": winner}
+    if playing_sets:
+        state["setsWon"] = sets_won
+        state["currentSet"] = set_no
+    return {"outcomes": outcomes, "state": state}
 
 
 def path_to(target, start=501):
@@ -343,6 +538,107 @@ def build_match_vectors():
                           cmds, simulate(cmds, f), f))
     return cases
 
+def build_sets_vectors():
+    """Set play — implemented in two engines and, until this family, exercised by nothing.
+
+    `Effect.SET_WON` was mapped in both conformance runners and produced by no vector;
+    `Alternation.PER_SET` was parsed by both and reached by no vector. A format real competitions
+    use constantly was carried by the type system and checked by nobody.
+
+    The rule these expectations are derived from, stated before any of them:
+
+      * a **set** is won by the player who first wins the required number of legs IN THAT SET;
+      * the **match** is won by the player who first wins the required number of sets;
+      * a new set starts its leg count again and numbers its legs from 1, because a set is a match
+        within a match and "leg 3 of set 2" is what a scorer calls;
+      * the right to open a **set** alternates; under `perSet` alternation that player also opens
+        every leg inside it, and under `perLeg` the opening changes hands every leg.
+
+    Four cases, each isolating one thing a set format does that a leg format does not.
+    """
+    cases = []
+
+    def leg_won_by_opener(seq, opener):
+        """One leg, opened and won by `opener` in three visits: 180 + 180 + 141 = 501."""
+        other = "B" if opener == "A" else "A"
+        return ([visit(seq, opener, 180, 3), visit(seq + 1, other, 60, 3),
+                 visit(seq + 2, opener, 180, 3), visit(seq + 3, other, 60, 3),
+                 visit(seq + 4, opener, 141, 3)], seq + 5)
+
+    def leg_won_against_the_opener(seq, opener):
+        """One leg opened by `opener` and won by the other player, who needs a fourth turn."""
+        winner = "B" if opener == "A" else "A"
+        return ([visit(seq, opener, 60, 3), visit(seq + 1, winner, 180, 3),
+                 visit(seq + 2, opener, 60, 3), visit(seq + 3, winner, 180, 3),
+                 visit(seq + 4, opener, 60, 3), visit(seq + 5, winner, 141, 3)], seq + 6)
+
+    def run(f, winners):
+        """`winners` names who takes each leg; who OPENS it is derived, never asserted.
+
+        Written this way after getting it wrong by hand: naming the opener as well let a case claim
+        a leg was opened by the player whose turn it was not, and the whole rest of that case
+        desynchronised into rejections and busts that still produced a plausible-looking vector.
+        The opener follows from the rule — the set's opener alternates, and inside a set the
+        opening either stays with them (`perSet`) or changes hands every leg (`perLeg`).
+        """
+        per_set = f.get("alternateStart") == "perSet"
+        legs_target = f["structure"]["legsPerSet"]["firstTo"]
+        cmds, seq = [], 1
+        opener = set_opener = f["throwFirst"]
+        in_set = {"A": 0, "B": 0}
+        for winner in winners:
+            block, seq = (leg_won_by_opener(seq, opener) if opener == winner
+                          else leg_won_against_the_opener(seq, opener))
+            cmds += block
+            in_set[winner] += 1
+            if in_set[winner] >= legs_target:
+                in_set = {"A": 0, "B": 0}
+                set_opener = "B" if set_opener == "A" else "A"
+                opener = set_opener
+            else:
+                opener = set_opener if per_set else ("B" if opener == "A" else "A")
+        return cmds, seq
+
+    # 1. A set is taken and the match goes on. Legs first-to-2 inside sets first-to-2, per-leg
+    #    alternation: A takes leg 1, B opens leg 2 and takes it, A opens leg 3 and takes the set —
+    #    so the third leg reports `set_won` rather than `match_won`, which is the distinction this
+    #    whole family exists for.
+    f = fmt(sets=2, legs_per_set=2)
+    cmds, _ = run(f, ["A", "B", "A"])
+    cases.append(case("sets.first-set-taken-match-continues",
+                      "Legs first to 2 inside sets first to 2: taking the second leg of a set "
+                      "reports set_won, not match_won, and the match continues with the leg count "
+                      "back at 1.",
+                      cmds, simulate(cmds, f), f))
+
+    # 2. A set can be LOST and the match continue. B takes set 1, A takes set 2, and the set
+    #    counter reads 1-1 — which a counter that only ever tracked the leader would get wrong.
+    cmds, _ = run(f, ["B", "B", "A", "A"])
+    cases.append(case("sets.a-set-lost-and-the-match-continues",
+                      "B takes the first set, A takes the second: the set counter reads one each "
+                      "and the match is still in progress.",
+                      cmds, simulate(cmds, f), f))
+
+    # 3. `perSet` alternation: the set's opener opens EVERY leg in it, so A throws first in both
+    #    legs of set 1 — exactly where per-leg and per-set formats diverge, and a divergence a
+    #    wrong implementation gets wrong silently, because the scores still add up either way.
+    f2 = fmt(sets=2, legs_per_set=2, alternate="perSet")
+    cmds2, _ = run(f2, ["A", "A", "B"])
+    cases.append(case("sets.per-set-alternation-keeps-one-starter",
+                      "Under perSet alternation the set's opener opens every leg in it, and the "
+                      "right to open alternates between sets rather than between legs.",
+                      cmds2, simulate(cmds2, f2), f2))
+
+    # 4. The match ends on the SETS unit, not the legs one. A wins four legs and two sets; the
+    #    deciding leg reports `match_won` and a visit after it is refused.
+    cmds3, seq3 = run(f2, ["A", "A", "A", "A"])
+    cmds3.append(visit(seq3, "A", 60, 3))
+    cases.append(case("sets.match-ends-on-the-sets-unit",
+                      "Two sets of two legs each: the deciding leg reports match_won, and a "
+                      "further visit is rejected as the match is complete.",
+                      cmds3, simulate(cmds3, f2), f2))
+    return cases
+
 def build_double_attempt_vectors():
     """Darts thrown at a double, recorded on EVERY visit that began on a finish — not only on one
     that finished. A player on 40 who throws a single 20 and misses has attempted a double, and
@@ -431,13 +727,42 @@ def emit_kotlin(tables, path):
     L.append("")
     for name, t in (("DOUBLE", d), ("MASTER", m), ("STRAIGHT", st)):
         L.append("    private val BOGEYS_%s: IntArray = intArrayOf(%s)" % (name, ints(t["bogeyNumbers"])))
+        L.append("    private const val MIN_%s: Int = %d" % (name, t["minCheckout"]))
         L.append("    private const val MAX_%s: Int = %d" % (name, t["maxCheckout"]))
     L.append("")
     L.append("    public val ONE_DART_FINISHES_DOUBLE: Set<Int> = setOf(%s)" % ints(d["oneDartFinishes"]))
     L.append("")
-    L.append("    private val CHECKOUTS_DOUBLE: Set<Int> = build(MAX_DOUBLE, BOGEYS_DOUBLE)")
-    L.append("    private val CHECKOUTS_MASTER: Set<Int> = build(MAX_MASTER, BOGEYS_MASTER)")
-    L.append("    private val CHECKOUTS_STRAIGHT: Set<Int> = build(MAX_STRAIGHT, BOGEYS_STRAIGHT)")
+    L.append("    /**")
+    L.append("     * One route to each finish (PD-013). A POSITION, not a fact: most finishes have")
+    L.append("     * several legal routes and players disagree about which is best. The founder decided")
+    L.append("     * the app shows one rather than staying silent, and these are derived by a stated")
+    L.append("     * rule in the generator so every route is checkable rather than typed.")
+    L.append("     *")
+    L.append("     * Encoded as one string per rule and parsed once: a map literal of %d entries is a" % len(d["routes"].split("|")))
+    L.append("     * lot of bytecode in one initialiser, and the parse is five lines a test can hold.")
+    L.append("     */")
+    for name, t in (("DOUBLE", d), ("MASTER", m), ("STRAIGHT", st)):
+        L.append('    private const val ROUTES_%s: String = "%s"' % (name, t["routes"]))
+    L.append("")
+    L.append("    private fun parseRoutes(encoded: String): Map<Int, List<String>> =")
+    L.append("        encoded.split('|').associate { entry ->")
+    L.append("            val eq = entry.indexOf('=')")
+    L.append("            entry.substring(0, eq).toInt() to entry.substring(eq + 1).split(',')")
+    L.append("        }")
+    L.append("")
+    L.append("    private val ROUTE_TABLES: Map<OutRule, Map<Int, List<String>>> = mapOf(")
+    L.append("        OutRule.DOUBLE to parseRoutes(ROUTES_DOUBLE),")
+    L.append("        OutRule.MASTER to parseRoutes(ROUTES_MASTER),")
+    L.append("        OutRule.STRAIGHT to parseRoutes(ROUTES_STRAIGHT),")
+    L.append("    )")
+    L.append("")
+    L.append("    /** The route THRØ shows for `remaining`, or null when there is no finish. */")
+    L.append("    public fun route(remaining: Int, outRule: OutRule): List<String>? =")
+    L.append("        ROUTE_TABLES.getValue(outRule)[remaining]")
+    L.append("")
+    L.append("    private val CHECKOUTS_DOUBLE: Set<Int> = build(MIN_DOUBLE, MAX_DOUBLE, BOGEYS_DOUBLE)")
+    L.append("    private val CHECKOUTS_MASTER: Set<Int> = build(MIN_MASTER, MAX_MASTER, BOGEYS_MASTER)")
+    L.append("    private val CHECKOUTS_STRAIGHT: Set<Int> = build(MIN_STRAIGHT, MAX_STRAIGHT, BOGEYS_STRAIGHT)")
     L.append("")
     L.append("    public fun checkouts(outRule: OutRule): Set<Int> = when (outRule) {")
     L.append("        OutRule.DOUBLE -> CHECKOUTS_DOUBLE")
@@ -445,10 +770,40 @@ def emit_kotlin(tables, path):
     L.append("        OutRule.STRAIGHT -> CHECKOUTS_STRAIGHT")
     L.append("    }")
     L.append("")
-    L.append("    private fun build(max: Int, bogeys: IntArray): Set<Int> {")
+    L.append("    /**")
+    L.append("     * Counted totals a visit can record while the player has not yet opened (PD-008).")
+    L.append("     *")
+    L.append("     * A legal opening segment plus up to two free darts after it. Under double-in the")
+    L.append("     * bull opens, so the largest is D25+T20+T20 = %d; the totals three darts can make" % tables["inRules"]["double"]["maxOpeningTotal"])
+    L.append("     * but no opening sequence can are %s." % ints(tables["inRules"]["double"]["unopenableTotals"]))
+    L.append("     */")
+    for name in ("DOUBLE", "MASTER", "STRAIGHT"):
+        t = tables["inRules"][name.lower()]
+        L.append("    private val UNOPENABLE_%s: IntArray = intArrayOf(%s)" % (name, ints(t["unopenableTotals"])))
+        L.append("    private const val MAX_OPENING_%s: Int = %d" % (name, t["maxOpeningTotal"]))
+    L.append("")
+    L.append("    private val OPENING_DOUBLE: Set<Int> = opening(MAX_OPENING_DOUBLE, UNOPENABLE_DOUBLE)")
+    L.append("    private val OPENING_MASTER: Set<Int> = opening(MAX_OPENING_MASTER, UNOPENABLE_MASTER)")
+    L.append("    private val OPENING_STRAIGHT: Set<Int> = opening(MAX_OPENING_STRAIGHT, UNOPENABLE_STRAIGHT)")
+    L.append("")
+    L.append("    public fun openingTotals(inRule: InRule): Set<Int> = when (inRule) {")
+    L.append("        InRule.DOUBLE -> OPENING_DOUBLE")
+    L.append("        InRule.MASTER -> OPENING_MASTER")
+    L.append("        InRule.STRAIGHT -> OPENING_STRAIGHT")
+    L.append("    }")
+    L.append("")
+    L.append("    private fun opening(max: Int, unopenable: IntArray): Set<Int> {")
+    L.append("        val bad = unopenable.toHashSet()")
+    L.append("        val out = HashSet<Int>(max)")
+    L.append("        for (v in 1..max) if (v !in bad && v !in IMPOSSIBLE_VISIT_TOTALS) out.add(v)")
+    L.append("        return out")
+    L.append("    }")
+    L.append("")
+    L.append("    /** The floor is the rule's own: under straight-out a single 1 finishes. */")
+    L.append("    private fun build(min: Int, max: Int, bogeys: IntArray): Set<Int> {")
     L.append("        val bad = bogeys.toHashSet()")
     L.append("        val out = HashSet<Int>(max)")
-    L.append("        for (v in 2..max) if (v !in bad) out.add(v)")
+    L.append("        for (v in min..max) if (v !in bad) out.add(v)")
     L.append("        return out")
     L.append("    }")
     L.append("}")
@@ -482,13 +837,46 @@ def emit_swift(tables, path):
     L.append("")
     for name, t in (("double", d), ("master", m), ("straight", st)):
         L.append("    private static let bogeys%s: Set<Int> = [%s]" % (name.capitalize(), ints(t["bogeyNumbers"])))
+        L.append("    private static let min%s = %d" % (name.capitalize(), t["minCheckout"]))
         L.append("    private static let max%s = %d" % (name.capitalize(), t["maxCheckout"]))
     L.append("")
     L.append("    public static let oneDartFinishesDouble: Set<Int> = [%s]" % ints(d["oneDartFinishes"]))
     L.append("")
-    L.append("    private static let checkoutsDouble = build(maxDouble, bogeysDouble)")
-    L.append("    private static let checkoutsMaster = build(maxMaster, bogeysMaster)")
-    L.append("    private static let checkoutsStraight = build(maxStraight, bogeysStraight)")
+    L.append("    /// One route to each finish (PD-013). A POSITION, not a fact: most finishes have")
+    L.append("    /// several legal routes and players disagree about which is best. The founder decided")
+    L.append("    /// the app shows one rather than staying silent, and these are derived by a stated rule")
+    L.append("    /// in the generator, so every route is checkable rather than typed.")
+    L.append("    ///")
+    L.append("    /// Encoded as one string per rule and parsed once, for the reason the Kotlin gives.")
+    for name, t in (("double", d), ("master", m), ("straight", st)):
+        L.append('    private static let routes%s = "%s"' % (name.capitalize(), t["routes"]))
+    L.append("")
+    L.append("    private static func parseRoutes(_ encoded: String) -> [Int: [String]] {")
+    L.append("        var out: [Int: [String]] = [:]")
+    L.append("        for entry in encoded.split(separator: \"|\") {")
+    L.append("            let parts = entry.split(separator: \"=\")")
+    L.append("            guard parts.count == 2, let n = Int(parts[0]) else { continue }")
+    L.append("            out[n] = parts[1].split(separator: \",\").map(String.init)")
+    L.append("        }")
+    L.append("        return out")
+    L.append("    }")
+    L.append("")
+    L.append("    private static let routeTableDouble = parseRoutes(routesDouble)")
+    L.append("    private static let routeTableMaster = parseRoutes(routesMaster)")
+    L.append("    private static let routeTableStraight = parseRoutes(routesStraight)")
+    L.append("")
+    L.append("    /// The route THRØ shows for `remaining`, or nil when there is no finish.")
+    L.append("    public static func route(_ remaining: Int, _ outRule: OutRule) -> [String]? {")
+    L.append("        switch outRule {")
+    L.append("        case .double: return routeTableDouble[remaining]")
+    L.append("        case .master: return routeTableMaster[remaining]")
+    L.append("        case .straight: return routeTableStraight[remaining]")
+    L.append("        }")
+    L.append("    }")
+    L.append("")
+    L.append("    private static let checkoutsDouble = build(minDouble, maxDouble, bogeysDouble)")
+    L.append("    private static let checkoutsMaster = build(minMaster, maxMaster, bogeysMaster)")
+    L.append("    private static let checkoutsStraight = build(minStraight, maxStraight, bogeysStraight)")
     L.append("")
     L.append("    public static func checkouts(_ outRule: OutRule) -> Set<Int> {")
     L.append("        switch outRule {")
@@ -498,9 +886,38 @@ def emit_swift(tables, path):
     L.append("        }")
     L.append("    }")
     L.append("")
-    L.append("    private static func build(_ max: Int, _ bogeys: Set<Int>) -> Set<Int> {")
+    L.append("    /// Counted totals a visit can record while the player has not yet opened (PD-008):")
+    L.append("    /// a legal opening segment plus up to two free darts after it. Under double-in the")
+    L.append("    /// bull opens, so the largest is D25+T20+T20 = %d." % tables["inRules"]["double"]["maxOpeningTotal"])
+    for name in ("double", "master", "straight"):
+        t = tables["inRules"][name]
+        L.append("    private static let unopenable%s: Set<Int> = [%s]" % (name.capitalize(), ints(t["unopenableTotals"])))
+        L.append("    private static let maxOpening%s = %d" % (name.capitalize(), t["maxOpeningTotal"]))
+    L.append("")
+    L.append("    private static let openingDouble = opening(maxOpeningDouble, unopenableDouble)")
+    L.append("    private static let openingMaster = opening(maxOpeningMaster, unopenableMaster)")
+    L.append("    private static let openingStraight = opening(maxOpeningStraight, unopenableStraight)")
+    L.append("")
+    L.append("    public static func openingTotals(_ inRule: InRule) -> Set<Int> {")
+    L.append("        switch inRule {")
+    L.append("        case .double: return openingDouble")
+    L.append("        case .master: return openingMaster")
+    L.append("        case .straight: return openingStraight")
+    L.append("        }")
+    L.append("    }")
+    L.append("")
+    L.append("    private static func opening(_ max: Int, _ unopenable: Set<Int>) -> Set<Int> {")
     L.append("        var out = Set<Int>(minimumCapacity: max)")
-    L.append("        for v in 2...max where !bogeys.contains(v) { out.insert(v) }")
+    L.append("        for v in 1...max where !unopenable.contains(v) && !impossibleVisitTotals.contains(v) {")
+    L.append("            out.insert(v)")
+    L.append("        }")
+    L.append("        return out")
+    L.append("    }")
+    L.append("")
+    L.append("    /// The floor is the rule's own: under straight-out a single 1 finishes.")
+    L.append("    private static func build(_ min: Int, _ max: Int, _ bogeys: Set<Int>) -> Set<Int> {")
+    L.append("        var out = Set<Int>(minimumCapacity: max)")
+    L.append("        for v in min...max where !bogeys.contains(v) { out.insert(v) }")
     L.append("        return out")
     L.append("    }")
     L.append("}")
@@ -527,6 +944,7 @@ def main():
                         ("checkouts.jsonl", build_checkout_vectors()),
                         ("leg-rotation.jsonl", build_rotation_vectors()),
                         ("match-completion.jsonl", build_match_vectors()),
+                        ("sets-and-legs.jsonl", build_sets_vectors()),
                         ("double-attempts.jsonl", build_double_attempt_vectors()),
                         ("adversarial.jsonl", build_adversarial_vectors())):
         p, n = write_jsonl(name, cases); total += n
@@ -537,12 +955,18 @@ def main():
         p = OUT / "vectors" / "core-transitions.jsonl"
         n = 0
         with open(p, "w") as fh:
-            for rem in range(2, 502):
-                for vt in sorted(ACHIEVABLE_3):
-                    eff, reason, new = classify(rem, vt, "double")
-                    fh.write(json.dumps({"remaining": rem, "visitTotal": vt, "outRule": "double",
-                                         "effect": eff, "reason": reason, "newRemaining": new},
-                                        separators=(",", ":")) + "\n"); n += 1
+            # Every out-rule, and from a remaining of 1. It covered double-out from 2 only, so two
+            # rules in three were never exhausted and the one transition where the engines disagreed
+            # with this spec — finishing from 1 under straight-out, which a single 1 does — was
+            # outside the table entirely. A gap in an exhaustive check is worse than no check,
+            # because the number in the README reads as if it covered everything.
+            for out_rule in ("double", "master", "straight"):
+                for rem in range(1, 502):
+                    for vt in sorted(ACHIEVABLE_3):
+                        eff, reason, new = classify(rem, vt, out_rule)
+                        fh.write(json.dumps({"remaining": rem, "visitTotal": vt, "outRule": out_rule,
+                                             "effect": eff, "reason": reason, "newRemaining": new},
+                                            separators=(",", ":")) + "\n"); n += 1
         # Deliberately excluded from the manifest and the total: it is regenerated in CI rather
         # than committed (8.6 MB), so counting it would make the committed manifest churn on every
         # full run and turn the staleness gate into noise.

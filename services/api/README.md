@@ -84,7 +84,7 @@ gradle test        # skips cleanly, rather than passing silently, when no databa
 
 V014 adds Team, Venue, League, League season, Division, Tournament, Series and the dated
 relationships between them, renames the bracket tie that was called `fixture`, and types every
-entry (ADR-016). `Organisations` is the store-side API; `OrganisationTest` asserts against a real
+entry (ADR-017). `Organisations` is the store-side API; `OrganisationTest` asserts against a real
 PostgreSQL that a team keeps its identity across a venue move, that one venue hosts several teams,
 that a player may belong to several teams, that membership and registration are independent, that
 closed relationships are frozen and undeletable, that a league season is not a league and a

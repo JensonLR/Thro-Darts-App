@@ -14,7 +14,19 @@ for the hard one.
 | Survives if data reached | The kernel | **The NAND itself** |
 | Would pass on `synchronous=NORMAL` | **Yes** | No |
 | Automatable | Yes | No — needs hands |
-| Status | **Automated and passing** | **Outstanding** — force-restart tried, does not discriminate |
+| Status | **Automated and passing, in two places** — see below | **Outstanding** — force-restart tried, does not discriminate |
+
+The kill test now runs in **two** places, and only one of them needs a person:
+
+| | On a phone (iOS) | On a build server (Linux) |
+|---|---|---|
+| What is killed | the app, on a real iPhone | a forked JVM, on every push |
+| Journal | `ThroJournal`, Swift | `packages/journal`, Kotlin |
+| Needs | a phone, a Mac, a cable, a person | nothing |
+| Runs | when somebody runs it | **every push**, in the `journal` job |
+| Proves | the transaction discipline on the device that ships | the transaction discipline, continuously |
+
+Neither is a durability test. Both are in the left-hand column of the table above.
 
 The row that matters is the fourth. A green kill test says almost nothing about the pragma this
 whole exercise is about, because `fullfsync` exists to push data past the drive's write cache and
@@ -22,7 +34,39 @@ process death never threatens that cache. Do not let a passing kill test be repo
 
 ---
 
-## Part 1 — The kill test (automated)
+## Part 0 — The kill test on a build server (Kotlin, every push)
+
+```bash
+cd packages/journal && gradle test
+```
+
+`KillTest.nothingAcknowledgedIsLostWhenTheWriterIsKilled` forks a JVM, lets it write visits through
+the journal's own transaction discipline until it has acknowledged forty of them, sends **SIGKILL**
+with `destroyForcibly`, then reopens the file and adjudicates it with `Kill.verdict` — the same rule
+`KillProbe.verdict` applies on iOS, ported so both platforms are judged the same way.
+
+`destroyForcibly`, not a polite stop, and a forked **process** rather than a thread: a thread cannot
+be killed, and stopping one politely tests the happy path. The acknowledgement is printed and
+flushed only after the commit returns, so an acknowledgement is a claim that the row is on disk —
+which is the claim under test.
+
+A run by hand on this machine, 2026-09-07: **207 acknowledgements (414 visits), SIGKILL,
+`integrity_check` ok, 414 rows, max sequence 414, no holes.** Nothing acknowledged was lost. To
+reproduce one:
+
+```bash
+cd packages/journal
+CP=$(gradle -q printTestClasspath)
+java -cp "$CP" thro.journal.KillWriterKt /tmp/j.sqlite &   # writes until it is shot
+sleep 2 && kill -9 %1
+```
+
+**Read the caveat before quoting the result.** The kernel, the filesystem and the drive all keep
+running through a `SIGKILL`. A journal that only ever reached the OS page cache passes this and
+would still lose data to a pulled battery — which is the fourth row of the table above, and the
+whole reason Part 2 exists.
+
+## Part 1 — The kill test on a phone (automated, needs hands)
 
 ```bash
 cd ~/Documents/Thro-Darts-App

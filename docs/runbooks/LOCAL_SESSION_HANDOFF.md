@@ -1,5 +1,50 @@
 # Handoff to a local Claude Code session on macOS
 
+> **Superseded on 2026-09-07.** This page was written when nothing had run on a phone. Since then the
+> iOS client has been built and **run on the founder's phone three times** (2026-09-05 and 06, setup to
+> result), each run's findings fixed and confirmed on the next. CI is green on 75 package tests on
+> macOS — 20 design, 15 journal, 27 scoring session, 13 opening — plus an `xcodebuild` of the app for
+> the iOS simulator on every push that touches it.
+>
+> **Read [`CLIENT_IOS.md`](CLIENT_IOS.md) instead**: it is the current runbook, it says where the
+> clone is (`~/Thro-Darts-App`, not the older second clone this page points at), and it says what to
+> look at on each screen. What is still outstanding is named there and in
+> [`DURABILITY_KILL_TEST.md`](DURABILITY_KILL_TEST.md): an SE-class device, an Android device, and the
+> power-cut test.
+>
+> Kept for the rules below, which still stand — the "What NOT to do" rule against building the client
+> is the one exception, and it is void.
+
+## Now: run the app
+
+```
+The iOS client has been built on the remote branch and is green on CI: 40 package tests on macOS
+(design, journal, scoring session) and an xcodebuild of the app for the iOS simulator, on every push.
+Nobody has run it on a phone. Do that, then record what you saw.
+
+1. git pull. Read docs/runbooks/CLIENT_IOS.md end to end — it says what should appear on each screen.
+2. open apps/ios/ThroDarts.xcodeproj. Set the team under Signing & Capabilities; change the bundle
+   identifier from app.thro.darts if Xcode reports a collision. Plug the phone in, select it, Run.
+   Prefer `xcodebuild -allowProvisioningUpdates -destination 'id=<device udid>'` if the GUI fights you;
+   `xcrun devicectl list devices` shows whether the phone is visible.
+3. Play a full best-of-3 between two names. Deliberately: type 179 (must be refused), bust from a
+   finish (must ask darts at a double first, then restore the score), finish a leg (must ask darts
+   used, then darts at a double), press Not sure once (the result's checkout % must then be a range or
+   unavailable, never a point value), kill the app mid-match from the app switcher and reopen it (Home
+   must list the match as In progress and resume it at the same score).
+4. Screenshot Home, setup, scoring (standard, checkout, bust, a PD-001 question) and the result. Put
+   them in docs/runbooks/screenshots/ and reference them from CLIENT_IOS.md.
+5. Where the phone disagrees with CLIENT_IOS.md, the phone is right: fix the document, and fix the
+   code where the behaviour is wrong. Anything the design does not specify goes in the runbook's
+   table, not into an invented decision.
+6. Commit and push to claude/thro-production-build-je2mkf with the device model and iOS version in
+   the message.
+
+The fonts are embedded under the SIL Open Font License (PD-006); add no faces beyond the ten listed.
+Do not add sync, attestation, a rating, or sign-in — none of those decisions have been taken. Do not
+rename the product.
+```
+
 > **Resolved on 2026-09-04.** The measurement this handoff exists to obtain has been taken:
 > `iPhone15,3` (iPhone 14 Pro Max), iOS 26.1, two consecutive runs, recorded in the "Measurement
 > status" section of `docs/adr/ADR-006-offline-sync.md`. The deciding row measured P95 1.64 / 1.60 ms
@@ -107,8 +152,8 @@ claude/thro-production-build-je2mkf.
 
 ## What NOT to do
 
-- Do NOT start building the iOS client application. ADR-006 forbids fixing the client architecture
-  until this measurement exists. Getting the measurement is the whole job.
+- ~~Do NOT start building the iOS client application.~~ Void since 2026-09-05: the measurement
+  exists, the founder directed the build, and the client is in `packages/client-ios`.
 - Do NOT start new feature work. The build is at a deliberate stopping point: everything specified
   in the ADRs that does not need a founder decision or a mobile toolchain is built and green.
 - Five decisions are blocked on the founder and must not be invented: B3 (design commissions), B4

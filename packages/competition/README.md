@@ -1,7 +1,7 @@
 # THRØ competition
 
 Competitors, brackets, byes, standings, and the organisational vocabulary — Team, Venue, League,
-Tournament, Series and the dated relationships between them (ADR-016). Pure domain, no dependencies.
+Tournament, Series and the dated relationships between them (ADR-017). Pure domain, no dependencies.
 
 ```bash
 gradle test
@@ -59,7 +59,7 @@ identifiers and nothing a league has.
 `Period` is half-open, `[from, until)`, and `closedAt` is the only change it permits — once.
 
 The match-time `Competitor.Team` is the **lineup** a team fields in one match, not the organisation.
-Both exist on purpose (ADR-012, ADR-016).
+Both exist on purpose (ADR-012, ADR-017).
 
 ## The Secretary's pure rules (`Secretary.kt`)
 

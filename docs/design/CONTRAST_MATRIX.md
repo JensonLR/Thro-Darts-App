@@ -105,6 +105,66 @@ semantic pair in **both** themes. Regenerate rather than edit.
 
 ---
 
+## The board (SLATE)
+
+Three grounds and three inks, and every ink is measured against **every** ground rather than
+against the one a component happens to sit on. The board is one radial gradient, so a figure can
+land anywhere in it; the board law — nothing drawn on a board is lighter than `board-lit` or darker
+than `board-sunken`, except ink and status ink — is what makes those three the complete set of
+grounds and this the whole matrix rather than a sample of it.
+
+These are semantic tokens and they flip, but **both values are dark green**: a board is a board in
+either appearance, and what changes between traits is which dark green and which chalk.
+
+`mark-on-board` replaces `border-default` as the boundary on the board side. `border-default`
+carries four recorded exceptions reading "decorative rule" at 1.26–1.42:1, which is an accurate
+description of a boundary nobody can see.
+
+### Light
+
+| Ink | Ground | Ratio | Needs | Verdict |
+|---|---|---:|---:|---|
+| `text-on-board` #F7F6F2 | `board-lit` #174F3C | 8.75:1 | 4.5 | PASS |
+| `text-on-board` #F7F6F2 | `board-field` #0F3D2E | 11.24:1 | 4.5 | PASS |
+| `text-on-board` #F7F6F2 | `board-sunken` #0A2A20 | 14.23:1 | 4.5 | PASS |
+| `text-on-board-secondary` #ADB9B3 | `board-lit` #174F3C | 4.67:1 | 4.5 | PASS |
+| `text-on-board-secondary` #ADB9B3 | `board-field` #0F3D2E | 6.00:1 | 4.5 | PASS |
+| `text-on-board-secondary` #ADB9B3 | `board-sunken` #0A2A20 | 7.60:1 | 4.5 | PASS |
+| `mark-on-board` #8FB3A4 | `board-lit` #174F3C | 4.12:1 | 3.0 | PASS |
+| `mark-on-board` #8FB3A4 | `board-field` #0F3D2E | 5.30:1 | 3.0 | PASS |
+| `mark-on-board` #8FB3A4 | `board-sunken` #0A2A20 | 6.71:1 | 3.0 | PASS |
+
+### Dark
+
+| Ink | Ground | Ratio | Needs | Verdict |
+|---|---|---:|---:|---|
+| `text-on-board` #EFEDE7 | `board-lit` #123A2C | 10.76:1 | 4.5 | PASS |
+| `text-on-board` #EFEDE7 | `board-field` #0A2C21 | 12.86:1 | 4.5 | PASS |
+| `text-on-board` #EFEDE7 | `board-sunken` #071F18 | 14.72:1 | 4.5 | PASS |
+| `text-on-board-secondary` #A8BDB2 | `board-lit` #123A2C | 6.35:1 | 4.5 | PASS |
+| `text-on-board-secondary` #A8BDB2 | `board-field` #0A2C21 | 7.59:1 | 4.5 | PASS |
+| `text-on-board-secondary` #A8BDB2 | `board-sunken` #071F18 | 8.69:1 | 4.5 | PASS |
+| `mark-on-board` #7FA695 | `board-lit` #123A2C | 4.67:1 | 3.0 | PASS |
+| `mark-on-board` #7FA695 | `board-field` #0A2C21 | 5.58:1 | 3.0 | PASS |
+| `mark-on-board` #7FA695 | `board-sunken` #071F18 | 6.40:1 | 3.0 | PASS |
+
+**No new failures, and no new exceptions.** The worst case on the board is `text-on-board` at 8.75:1, `text-on-board-secondary` at 4.67:1, `mark-on-board` at 4.12:1 — every one at the
+centre of the lamp, which is the brightest ground and therefore the hardest.
+
+What this replaces on the scoring keypad, measured on the build before it:
+
+| | Before | After |
+|---|---:|---:|
+| A key's boundary | 1.37:1 light / 1.26:1 dark | 5.30:1 / 5.58:1 |
+| The resting Enter key's label | 2.20:1 / 2.92:1 | 7.60:1 / 8.69:1 |
+| The ready Enter key's label | 11.24:1 / 8.75:1 | 8.75:1 / 10.76:1 |
+
+The ready Enter key's label moves *down* in light, from chalk on `surface-brand` to chalk
+on `board-lit`, and up in dark. Both are far above the floor; the change is that ready and
+resting are now two grounds rather than one ground and an opacity.
+
+---
+
 ## Failures — the authoritative list
 
 - **Light** — text-tertiary on bg-secondary: **4.21:1**

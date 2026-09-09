@@ -18,7 +18,7 @@ tests at three levels (pure, database, migration-over-populated-database).
 
 ## Global constraints
 
-- `Club` is not an entity (founder instruction PD-003). Team is the organisation; Venue is the place.
+- `Club` is not an entity (founder instruction PD-028). Team is the organisation; Venue is the place.
 - No history is deleted: dated relationships are closed once and frozen; no app role holds DELETE.
 - Migrations are forward-only and lose nothing; `MigrationTest` proves it over populated V013 data.
 - No personal data outside `identity` (ADR-005); `competition.player` carries no free text.
@@ -34,11 +34,11 @@ tests at three levels (pure, database, migration-over-populated-database).
 ### Task 2: Hostile review before implementation
 - [x] Dispatch a read-only critic over plan §3/§4 with the founder's constraints.
 - [x] Accept: claim table instead of FK update; policy exclusion + typed authority + freeze; append-only fixture outcomes; `league_fixture` naming; composite FK entry typing + generated competitor id; drop the `season` alias; revoked-not-deleted relations; frozen closed rows; non-overlapping home tenures; team name history; consent basis.
-- [x] Defer with written reasons: names in `evidence.match` (OD-015); player merge alias (Phase B).
+- [x] Defer with written reasons: names in `evidence.match` (OD-024); player merge alias (Phase B).
 
-### Task 3: ADR-016 and decision registers
-- [x] Write `docs/adr/ADR-016-organisational-vocabulary.md`; index it in `docs/adr/README.md`.
-- [x] Record PD-003 and PD-004 in `docs/product/DECISIONS.md`; OD-015 in `OPEN_DECISIONS.md`.
+### Task 3: ADR-017 and decision registers
+- [x] Write `docs/adr/ADR-017-organisational-vocabulary.md`; index it in `docs/adr/README.md`.
+- [x] Record PD-028 and PD-029 in `docs/product/DECISIONS.md`; OD-024 in `OPEN_DECISIONS.md`.
 
 ### Task 4: Migration V014
 **Files:** `services/api/migrations/V014__organisations.sql`

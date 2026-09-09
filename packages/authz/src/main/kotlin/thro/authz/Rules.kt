@@ -161,7 +161,7 @@ public object Rules {
 
         "event.manage" to Rule.AnyOf(listOf(Rule.Direct("organiser"), Rule.Inherited("organiser"))),
 
-        // Team OS (ADR-016, ADR-017). A team is run by its admins and its captain; the design shows
+        // Team OS (ADR-017, ADR-018). A team is run by its admins and its captain; the design shows
         // one person being both, and a captain who is not an admin still selects the side.
         "team.manage" to Rule.AnyOf(listOf(Rule.Direct("admin"), Rule.Direct("captain"))),
 

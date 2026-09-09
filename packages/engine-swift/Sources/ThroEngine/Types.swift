@@ -9,26 +9,37 @@
 // that a reader comparing the two files can see they agree, which is the only practical defence
 // against the divergence ADR-002 is worried about.
 
-public struct PlayerId: Hashable, CustomStringConvertible {
+public struct PlayerId: Hashable, CustomStringConvertible, Sendable {
     public let value: String
     public init(_ value: String) { self.value = value }
     public var description: String { value }
 }
 
-public enum OutRule: String { case double, master, straight }
+public enum OutRule: String, Sendable { case double, master, straight }
 
-public enum InRule: String { case straight, double, master }
+public enum InRule: String, Sendable {
+    case straight, double, master
+
+    /// Whether a player must open before anything scores.
+    ///
+    /// The engine scores a visit, not a dart, so this needed a capture rule before it could be
+    /// scored honestly at all. PD-008 settled it: what a visit records while the player has not
+    /// opened is the score FROM the opening dart onward, and zero means they did not open. That is
+    /// what the scorer calls at the oche, it costs no statistic — a visit is three darts either way
+    /// — and a non-zero total no opening sequence can make is refused.
+    public var requiresOpening: Bool { self != .straight }
+}
 
 /// Whether the right to start alternates every leg, or only between sets. Real competitions differ.
-public enum Alternation { case perLeg, perSet }
+public enum Alternation: Sendable { case perLeg, perSet }
 
-public enum StructureMode { case bestOf, firstTo }
+public enum StructureMode: Sendable { case bestOf, firstTo }
 
 /// - Parameters:
 ///   - clearBy: legs a competitor must lead by to take the unit. 1 for most formats, 2 for
 ///     two-clear-legs competitions.
 ///   - cap: an upper bound where a two-clear format would otherwise run indefinitely.
-public struct Structure {
+public struct Structure: Sendable {
     public let mode: StructureMode
     public let target: Int
     public let clearBy: Int
@@ -52,7 +63,7 @@ public struct Structure {
     }
 }
 
-public struct MatchFormat {
+public struct MatchFormat: Sendable {
     public let startingScore: Int
     public let inRule: InRule
     public let outRule: OutRule
@@ -82,7 +93,7 @@ public struct MatchFormat {
     }
 }
 
-public enum Command {
+public enum Command: Sendable {
     /// - Parameters:
     ///   - dartsUsed: how many darts the visit consumed. Only ever ambiguous on a visit that wins a
     ///     leg, so it may be nil (unknown) or 3 on any other visit. Nil means *unknown* — never
@@ -106,26 +117,31 @@ public enum Command {
     }
 }
 
-public enum RejectionReason: String {
+public enum RejectionReason: String, Sendable {
     case IMPOSSIBLE_VISIT_TOTAL
     case VISIT_TOTAL_OUT_OF_RANGE
     case DARTS_USED_INVALID
     case DARTS_AT_DOUBLE_INVALID
     case NOT_YOUR_TURN
     case MATCH_COMPLETE
+    /// A non-zero total recorded by a player who has not opened, that no sequence beginning with a
+    /// legal opening segment can make. Distinct from IMPOSSIBLE_VISIT_TOTAL because the total is
+    /// perfectly possible for an opened player: 180 is three trebles, and three trebles cannot open
+    /// a double-in leg.
+    case IMPOSSIBLE_OPENING_TOTAL
 }
 
-public enum BustReason: String { case BELOW_ZERO, REMAINDER_ONE, NOT_CHECKOUT_POSSIBLE }
+public enum BustReason: String, Sendable { case BELOW_ZERO, REMAINDER_ONE, NOT_CHECKOUT_POSSIBLE }
 
-public enum Effect: String { case scored, bust, leg_won, set_won, match_won }
+public enum Effect: String, Sendable { case scored, bust, leg_won, set_won, match_won }
 
-public enum Outcome {
+public enum Outcome: Sendable {
     case accepted(state: MatchState, effect: Effect, bustReason: BustReason?)
     /// A rejection is part of the contract, not an error: the UI renders it.
     case rejected(reason: RejectionReason)
 }
 
-public struct MatchState {
+public struct MatchState: Sendable {
     public let format: MatchFormat
     public let home: PlayerId
     public let away: PlayerId
@@ -141,6 +157,9 @@ public struct MatchState {
     public var thrower: PlayerId?
     public var winner: PlayerId?
     public var visitsInLeg: Int
+    /// Who has opened in the current leg (PD-008). Under straight-in both are open from the first
+    /// dart; this resets with every leg and every set, because opening is a fact about a leg.
+    public var opened: [PlayerId: Bool]
 
     public var isComplete: Bool { winner != nil }
 
@@ -166,7 +185,8 @@ public struct MatchState {
             setStarter: format.throwFirst,
             thrower: format.throwFirst,
             winner: nil,
-            visitsInLeg: 0
+            visitsInLeg: 0,
+            opened: [home: !format.inRule.requiresOpening, away: !format.inRule.requiresOpening]
         )
     }
 }

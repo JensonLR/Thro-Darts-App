@@ -1,4 +1,4 @@
-# ADR-017 — Organisational state: server-authoritative versioned rows beside the evidence log
+# ADR-018 — Organisational state: server-authoritative versioned rows beside the evidence log
 
 **Status:** Accepted · **Date:** 2026-09-09
 

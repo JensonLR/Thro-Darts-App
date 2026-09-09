@@ -16,7 +16,7 @@ import thro.authz.ObjectRef
 import thro.authz.ObjectType
 
 /**
- * ADR-017's rule, under attack: two admins, two devices, one row.
+ * ADR-018's rule, under attack: two admins, two devices, one row.
  *
  * The conflict test is not two calls in sequence on one connection — that proves the trigger and
  * nothing about concurrency. It is two connections, both holding the same expected version, both

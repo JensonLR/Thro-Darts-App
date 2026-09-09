@@ -73,8 +73,6 @@ internal fun playtestFormat(home: PlayerId): MatchFormat = MatchFormat(
 
 public class CommandHandler(private val connection: Connection) {
 
-    private fun formatFor(home: PlayerId): MatchFormat = playtestFormat(home)
-
     /**
      * @param home ignored except as a fallback for a match that predates the aggregate. The
      *   participant set comes from the store; see [handle].

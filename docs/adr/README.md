@@ -21,12 +21,16 @@ a guess wearing a suit.
 | [013](ADR-013-migrations.md) | Migrations and schema evolution | Accepted |
 | [014](ADR-014-configuration-and-policy.md) | Configuration and policy versioning | Accepted |
 | [015](ADR-015-notifications.md) | Notifications | Accepted |
-| [016](ADR-016-organisational-vocabulary.md) | Organisational vocabulary: Team, Venue, League, Tournament, Series — Club is not an entity | Accepted |
-| [017](ADR-017-organisational-state.md) | Organisational state: server-authoritative versioned rows beside the evidence log; refused, never overwritten | Accepted |
+| [016](ADR-016-local-history-and-the-claim.md) | A local history, and how it is claimed by an account later | Accepted |
+| [017](ADR-017-organisational-vocabulary.md) | Organisational vocabulary: Team, Venue, League, Tournament, Series — Club is not an entity (founder, 2026-09-09) | Accepted |
+| [018](ADR-018-organisational-state.md) | Organisational state: server-authoritative versioned rows beside the evidence log; refused, never overwritten | Accepted |
 
 ## Standing constraint on all of them
 
 Founder decisions **B1** (which statistics THRØ shows, and whether `dartsUsed` is captured) and
-**B2** (whether a unilateral self-report moves rating) are open. Every decision here is required to
+**B2** (whether a unilateral self-report moves rating) have both since been **decided** — see PD-001
+and PD-002 in [`../product/DECISIONS.md`](../product/DECISIONS.md). **B3** (the participant
+attestation and error surfaces) and **B4** (the authentication surface) remain open, and are design
+commissions rather than decisions engineering may take. Every decision here is required to
 keep **both answers reachable without a data migration**. Where that costs something, the cost is
 stated in the record.

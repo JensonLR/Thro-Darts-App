@@ -23,13 +23,18 @@ mistakes this snapshot for the live design project.
 - `extracted/tokens.css` — the complete token layer: brand + semantic colour for **both**
   light and dark themes, typography scale, spacing, radius, borders, elevation, motion
   (including reduced-motion overrides).
-- `extracted/components/` — **61 components** in 11 families: core, data, development,
+- `extracted/components/` — **61 components** in 10 families: core, data, development,
   forms, identity, navigation, organiser, rating, scoring, state.
 - `extracted/ui_kits/thro-app/` — **33 participant screens** in 9 groups
   (Start 2, Home 3, Play 6, Live 4, Tournament 4, Shadow 4, Discover 2, You 4, Account 4)
   plus the navigation model (`app.jsx`).
 - `extracted/ui_kits/thro-organiser/` — **9 organiser screens** (control, boards, queue,
   entries, draw, disputes, verification, league, venue) plus the organiser shell.
+- **Not in the snapshot:** the brand assets the Splash screen references (`assets/mark-chalk.svg`,
+  `assets/logo-chalk.svg`) and the font binaries. The founder supplied the mark and the wordmark as
+  images on 2026-09-06; `docs/design/brand/` holds a geometric reconstruction of the mark and says how
+  to replace it with the master. The fonts were taken from their publishers' repositories under the
+  SIL Open Font License (PD-006).
 
 ## Important limitations — read before relying on this
 
