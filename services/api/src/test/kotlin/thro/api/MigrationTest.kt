@@ -78,18 +78,30 @@ class MigrationTest {
             VALUES (?, ?, ?, 'Sam Wilson', 'Jo Bloggs', 501, 'straight', 'double', 'first_to', 5, ?)
             """.trimIndent(),
         ).use { ps -> ps.setObject(1, named); ps.setObject(2, players[0]); ps.setObject(3, players[1]); ps.setObject(4, players[0]); ps.executeUpdate() }
-        for ((seq, who) in listOf(1 to "Sam Wilson", 2 to "Jo Bloggs", 3 to "Sam Wilson")) {
+        fun visit(match: UUID, seq: Int, type: String, who: String) {
             c.prepareStatement(
                 """
                 INSERT INTO evidence.event (event_id, match_id, device_id, device_seq, event_type, schema_version, correlation_id, actor_id, actor_role, occurred_at, occurred_tz, payload)
-                VALUES (?, ?, ?, ?, 'VisitRecorded', 1, ?, ?, 'participant', now(), 'Europe/London', ?::jsonb)
+                VALUES (?, ?, ?, ?, ?, 1, ?, ?, 'participant', now(), 'Europe/London', ?::jsonb)
                 """.trimIndent(),
             ).use { ps ->
-                ps.setObject(1, UUID.randomUUID()); ps.setObject(2, named); ps.setObject(3, device); ps.setLong(4, seq.toLong())
-                ps.setObject(5, UUID.randomUUID()); ps.setObject(6, players[0])
-                ps.setString(7, """{"player":"$who","visitTotal":60,"remainingAfter":441}"""); ps.executeUpdate()
+                ps.setObject(1, UUID.randomUUID()); ps.setObject(2, match); ps.setObject(3, device); ps.setLong(4, seq.toLong())
+                ps.setString(5, type); ps.setObject(6, UUID.randomUUID()); ps.setObject(7, players[0])
+                ps.setString(8, """{"player":"$who","visitTotal":60,"remainingAfter":441}"""); ps.executeUpdate()
             }
         }
+        visit(named, 1, "VisitRecorded", "Sam Wilson"); visit(named, 2, "VisitRecorded", "Jo Bloggs")
+        visit(named, 3, "VisitRecorded", "Sam Wilson"); visit(named, 4, "VisitCorrected", "Jo Bloggs")
+        // A second match in which a Sam Wilson — the same string, whoever it is — sits AWAY. The
+        // rewrite must read each match's own names, or this visit would land on the wrong seat.
+        val shared = UUID.randomUUID()
+        c.prepareStatement(
+            """
+            INSERT INTO evidence.match (match_id, home_id, away_id, home_name, away_name, starting_score, in_rule, out_rule, legs_mode, legs_target, throw_first)
+            VALUES (?, ?, ?, 'Alex Brown', 'Sam Wilson', 501, 'straight', 'double', 'first_to', 5, ?)
+            """.trimIndent(),
+        ).use { ps -> ps.setObject(1, shared); ps.setObject(2, players[2]); ps.setObject(3, players[3]); ps.setObject(4, players[2]); ps.executeUpdate() }
+        visit(shared, 1, "VisitRecorded", "Sam Wilson")
 
         // --- V014 ------------------------------------------------------------------------------------
         TestDatabase.apply(c, after = 13)
@@ -147,12 +159,18 @@ class MigrationTest {
         val cols = one("SELECT count(*) FROM information_schema.columns WHERE table_schema = 'evidence' AND table_name = 'match' AND column_name IN ('home_name','away_name')")
         check("the aggregate no longer has name columns", (cols[0] as Number).toInt() == 0)
         val seats = one("SELECT array_agg(payload->>'player' ORDER BY device_seq), array_agg((payload->>'remainingAfter')::int ORDER BY device_seq), count(*) FROM evidence.event WHERE match_id = ?", named)
-        check("every visit payload now names its seat, in order, with the rest of the payload intact",
-            (seats[0] as java.sql.Array).array.let { (it as Array<*>).toList() } == listOf("home", "away", "home") &&
-                (seats[1] as java.sql.Array).array.let { (it as Array<*>).map { v -> (v as Number).toInt() } } == listOf(441, 441, 441) &&
-                (seats[2] as Number).toInt() == 3)
-        val noNames = one("SELECT count(*) FROM evidence.event WHERE payload::text LIKE '%Sam Wilson%' OR payload::text LIKE '%Jo Bloggs%'")
+        check("every visit payload — recorded or corrected — now names its seat, in order, with the rest of the payload intact",
+            (seats[0] as java.sql.Array).array.let { (it as Array<*>).toList() } == listOf("home", "away", "home", "away") &&
+                (seats[1] as java.sql.Array).array.let { (it as Array<*>).map { v -> (v as Number).toInt() } } == listOf(441, 441, 441, 441) &&
+                (seats[2] as Number).toInt() == 4)
+        val other = one("SELECT payload->>'player' FROM evidence.event WHERE match_id = ?", shared)
+        check("a name shared across matches maps by each match's own seats: Sam Wilson is away here", other[0] == "away")
+        val noNames = one("SELECT count(*) FROM evidence.event WHERE payload::text LIKE '%Sam Wilson%' OR payload::text LIKE '%Jo Bloggs%' OR payload::text LIKE '%Alex Brown%'")
         check("no display name survives anywhere in the evidence log", (noNames[0] as Number).toInt() == 0)
+        val nameRefused = try {
+            visit(named, 9, "VisitRecorded", "Sam Wilson"); false
+        } catch (e: org.postgresql.util.PSQLException) { e.message!!.contains("visit_names_a_seat") }
+        check("and from now on the database refuses a visit whose player is not a seat", nameRefused)
         val aggregate = Matches(c).load(named)
         check("the aggregate still binds the seats to the same two competitors and the same thrower",
             aggregate != null && aggregate.homeId == players[0] && aggregate.awayId == players[1] && aggregate.format.throwFirst == Seat.home)
@@ -169,6 +187,59 @@ class MigrationTest {
         check("no application role holds DELETE or TRUNCATE on any competition table", (del[0] as Number).toInt() == 0)
 
         println("  $passed migration properties held")
-        assertEquals(18, passed)
+        assertEquals(20, passed)
+    }
+
+    /**
+     * V018 is a pseudonymisation, and a pseudonymisation that leaves one name behind is not one.
+     * A payload naming neither of its match's two names, or a match whose two names are the same,
+     * is resolved by a person; the migration refuses rather than guesses, and leaves the database
+     * as it found it.
+     */
+    @Test
+    fun `V018 refuses to guess, and leaves the database untouched when it does`() {
+        if (!TestDatabase.configured) {
+            println("no database configured (set PGHOST) — migration test skipped")
+            return
+        }
+        fun v13WithMatch(home: String, away: String, visitBy: String): Connection {
+            val c = TestDatabase.migratedUpTo(13)
+            val match = UUID.randomUUID(); val a = UUID.randomUUID(); val b = UUID.randomUUID()
+            c.prepareStatement(
+                """
+                INSERT INTO evidence.match (match_id, home_id, away_id, home_name, away_name, starting_score, in_rule, out_rule, legs_mode, legs_target, throw_first)
+                VALUES (?, ?, ?, ?, ?, 501, 'straight', 'double', 'first_to', 5, ?)
+                """.trimIndent(),
+            ).use { ps -> ps.setObject(1, match); ps.setObject(2, a); ps.setObject(3, b); ps.setString(4, home); ps.setString(5, away); ps.setObject(6, a); ps.executeUpdate() }
+            c.prepareStatement(
+                """
+                INSERT INTO evidence.event (event_id, match_id, device_id, device_seq, event_type, schema_version, correlation_id, actor_id, actor_role, occurred_at, occurred_tz, payload)
+                VALUES (?, ?, ?, 1, 'VisitRecorded', 1, ?, ?, 'participant', now(), 'Europe/London', ?::jsonb)
+                """.trimIndent(),
+            ).use { ps ->
+                ps.setObject(1, UUID.randomUUID()); ps.setObject(2, match); ps.setObject(3, UUID.randomUUID()); ps.setObject(4, UUID.randomUUID()); ps.setObject(5, a)
+                ps.setString(6, """{"player":"$visitBy","visitTotal":60}"""); ps.executeUpdate()
+            }
+            return c
+        }
+        fun refusal(c: Connection): String = try {
+            TestDatabase.apply(c, after = 13); "applied"
+        } catch (e: IllegalStateException) { e.message!! }
+        fun stillNamed(c: Connection): Boolean = c.createStatement().use { st ->
+            st.executeQuery("SELECT count(*) FROM information_schema.columns WHERE table_schema = 'evidence' AND table_name = 'match' AND column_name = 'home_name'")
+                .use { rs -> rs.next(); rs.getInt(1) == 1 }
+        }
+
+        val variant = v13WithMatch("Sam Wilson", "Jo Bloggs", visitBy = "S. Wilson")
+        val r1 = refusal(variant)
+        assertTrue(r1.contains("neither seat"), "a spelling variant must be refused, got: $r1")
+        assertTrue(stillNamed(variant), "a refused V018 must leave the name columns in place")
+        println("  PASS  a payload naming neither seat is refused, and the database is left as it was")
+
+        val twins = v13WithMatch("Sam", "Sam", visitBy = "Sam")
+        val r2 = refusal(twins)
+        assertTrue(r2.contains("identical names"), "identical names with visits must be refused, got: $r2")
+        assertTrue(stillNamed(twins))
+        println("  PASS  a match whose two seats share a name is refused rather than mapped to home")
     }
 }

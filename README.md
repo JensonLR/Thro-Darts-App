@@ -51,7 +51,7 @@ database.
 | **A** | **Connected competitive graph** | **Closed** — Team, Venue, League season, Tournament, Series, membership, registration, policy; hostile-reviewed before the migration was cut (`docs/product/CONNECTED_PLATFORM_EXECUTION_PLAN.md`) |
 | B | Network identity and sync | Organisational commands with a two-writer conflict test closed (ADR-018); accounts and the HTTP surface wait on founder decision FB-1 (execution plan §9) |
 | **D** | **THRØ Secretary** | **Closed at domain and store level** — tasks derived from facts and approved policy, submissions that move only with evidence, and a database that will not let THRØ or a team say the league accepted anything |
-| E | Tournament discovery | Read model closed: every card explains why it appears, and nothing is called eligible that THRØ cannot check; the consumer surface waits on the client |
+| E | Tournament discovery | Read model closed: every card explains why it appears, and nothing is called eligible that THRØ cannot check — a gated event is called eligible only when the organiser stated its requirement in the five terms THRØ can check (V019) and the store says the player meets every group of it, and otherwise the card names the rule in the way or that none was stated; the consumer surface waits on the client |
 
 **What is verified, and how:**
 
@@ -63,9 +63,9 @@ database.
 | Trust and eligibility | 30 tests — a label can never disagree with the provenance under it |
 | Authorization | 21 tests — the conflict-of-interest rule, and age as a dimension |
 | Rating projection | 14 tests — reproducible from a watermark pair; OD-001 stays open |
-| Competition structure | 24 tests — bracket identities exhaustive for every field size to 1024, and the organisational vocabulary as pure types |
+| Competition structure | 31 tests — bracket identities exhaustive for every field size to 1024, standings that justify themselves, the Secretary's pure rules, and the organisational vocabulary as pure types including an event's entry requirement (alternatives within a group, conjunction across, silence is never yes) |
 | Clubs, leagues and tournaments (`packages/organisation`, pre-ADR-017 vocabulary — see PD-028) | 11 tests — the whole authority table rather than examples of it; that a member recorded as a minor is listed to an admin and to nobody else; that no accent a club can pick makes the app unreadable, proved by sweeping the colour cube; that an announcement reaches nobody whose age is minor **or unknown** until OD-010 is answered; that a fixture may be moved but never asserts a result; and three on images (PD-014) — **nobody under 18, or of unestablished age, has a picture at all**, every gate an image must pass is named when it fails, and deletion stops it being served at once while the bytes go within thirty days |
-| Schema and privileges | 78 property assertions against a real PostgreSQL |
+| Schema and privileges | 86 property assertions against a real PostgreSQL — the count excludes the migration apply lines, which are a precondition and not a property |
 | Command path, organisations, Secretary, discovery | 14 integration suites against a real PostgreSQL, including V014 applied over a populated V013 database with nothing lost, two concurrent writers on one row, and 62 Secretary properties |
 | Design tokens | 82 contrast pairs, and `tools/check_tokens_exist.py` holding every token reference in the client to the generated file **and refusing a raw pigment painted as a surface** on a screen — the pigments do not flip with the appearance, which is how Home's masthead came to be 1.08:1. Absolute thresholds, 0 unrecorded breaches; every recorded exception carries the measured ratio it was raised at and fails if it worsens |
 | Design components | 61 components audited mechanically against a baseline ratchet |
@@ -150,6 +150,13 @@ bash services/api/test/schema_properties.sh
 gradle -p services/api test
 ```
 
+Migrations are forward-only and keep a ledger, `thro.schema_migration`, written by the runner
+(`Migrations.kt`, and the same logic in the schema script): each file is applied in its own
+transaction with its ledger row and content digest. A database that has THRØ's schemas but no
+ledger, a recorded file whose content has changed, or a recorded version this checkout has no file
+for is refused with the reason, never patched around. The Kotlin suites rebuild the database on
+every run; the script applies whatever the ledger does not hold.
+
 The database-backed checks skip cleanly and say so when `PGHOST` is unset, rather than
 passing silently.
 
@@ -233,6 +240,7 @@ is removed.
 | Evidence is never edited or deleted | Append-only grants, including on tables added by later migrations |
 | Evidence exists only for a real match | Foreign key to the match aggregate |
 | Who is playing cannot be rewritten | No application role holds `UPDATE` on `evidence.match` |
+| An event's entry requirement is stated, never guessed | `competition.event_eligibility` holds it in five checkable terms; an open event refuses one; a stated row is withdrawn with a reason, never rewritten or deleted; `player_satisfies_event` answers null when nothing is stated |
 | Evidence names a seat, never a person | `evidence.match` binds the seats `home` and `away` to competitor ids and holds no name column; a visit payload names the seat; a display name is joined at render (V018, OD-024) |
 | A module appends only to streams it owns | Trigger mapping each event type to its owning role |
 | Authority is recorded, never used to destroy evidence | `authority` column; a revoked scorer's visit still writes |

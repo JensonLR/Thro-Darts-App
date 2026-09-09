@@ -210,6 +210,15 @@ invitational, qualified, restricted, member-only). Nothing in an Event reference
 **Entry** — a typed entrant in an Event: exactly one of a Player, a **Pair** or a Team, and its kind
 is its Event's kind. The database refuses anything else.
 
+**Entry requirement** — what a gated Event (`member_only`, `qualified`, `restricted`,
+`invitational`) requires of an entrant, stated by the organiser in the five terms THRØ can check
+against its own records: a live Team membership, a live League-season registration, a live entry to
+a named qualifier Event, the claimed account's age band, or an invitation by name. Rows in one group
+are alternatives; every group must hold. An Event that states none has not stated its requirement,
+and discovery says so — it never calls the player eligible. A requirement is withdrawn with a
+reason, never rewritten or deleted, so an entrant can be shown the rule as it stood when they were
+told (V019).
+
 **Series** — a linked collection of Tournaments. **Series season** — a dated occurrence, linking
 specific Events in order at any number of Venues. A Series holds Events and nothing a League has;
 series points and standings are projections, never rows beside the competition tables.

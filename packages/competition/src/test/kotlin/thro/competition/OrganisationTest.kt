@@ -176,4 +176,24 @@ class OrganisationTest {
         assertEquals(organisation.id, lineup.id)
         assertEquals(4, lineup.players.size)
     }
+
+    @Test
+    fun `an event's requirement is alternatives within a group and conjunction across, and silence is not yes`() {
+        val member = Requirement.TeamMember("riverside-a")
+        val reserve = Requirement.TeamMember("riverside-b")
+        val adult = Requirement.AgeBand("adult")
+        val either = listOf(Stated(1, member), Stated(1, reserve))
+        val both = listOf(Stated(1, member), Stated(2, adult))
+        assertNull(Eligibility.satisfies(emptyList()) { true })
+        assertEquals(true, Eligibility.satisfies(either) { it == reserve })
+        assertEquals(false, Eligibility.satisfies(either) { false })
+        assertEquals(false, Eligibility.satisfies(both) { it == member })
+        assertEquals(true, Eligibility.satisfies(both) { it == member || it == adult })
+    }
+
+    @Test
+    fun `unknown is never an age band an event may require, and a group is numbered from one`() {
+        assertFailsWith<IllegalArgumentException> { Requirement.AgeBand("unknown") }
+        assertFailsWith<IllegalArgumentException> { Stated(0, Requirement.Invited("sam")) }
+    }
 }

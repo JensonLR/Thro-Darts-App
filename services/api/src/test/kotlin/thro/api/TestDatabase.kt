@@ -1,6 +1,5 @@
 package thro.api
 
-import java.io.File
 import java.sql.Connection
 import java.sql.DriverManager
 
@@ -34,7 +33,7 @@ public object TestDatabase {
         }
 
     /** Every schema the migrations create. Dropping them all is what makes a run repeatable. */
-    private val schemas = listOf("evidence", "trust", "rating", "read", "audit", "authz", "identity", "competition")
+    private val schemas = listOf("evidence", "trust", "rating", "read", "audit", "authz", "identity", "competition", "thro")
 
     private val roles = listOf("thro_owner", "app_match", "app_trust", "app_rating", "app_read", "app_competition")
 
@@ -58,26 +57,17 @@ public object TestDatabase {
             for (s in schemas) st.execute("DROP SCHEMA IF EXISTS $s CASCADE")
             for (r in roles) st.execute("DROP ROLE IF EXISTS $r")
         }
-        migrations().filter { versionOf(it) <= upTo }.forEach { f ->
-            c.createStatement().use { it.execute(f.readText()) }
-        }
+        Migrations.apply(c, upTo)
         return c
     }
 
-    /** Applies every migration after [after], in order, on an existing connection. */
+    /**
+     * Applies every migration the ledger does not yet hold, on an existing connection. [after] is
+     * documentation of where the caller believes the database stands; the ledger is the authority,
+     * and a mismatch is an error in the test rather than something to paper over.
+     */
     public fun apply(c: Connection, after: Int) {
-        migrations().filter { versionOf(it) > after }.forEach { f ->
-            c.createStatement().use { it.execute(f.readText()) }
-        }
+        check(Migrations.currentVersion(c) == after) { "the database is at V${Migrations.currentVersion(c)}, not V$after" }
+        Migrations.apply(c)
     }
-
-    private fun migrations(): List<File> =
-        migrationsDir().listFiles { f -> f.extension == "sql" }?.sortedBy { it.name }.orEmpty()
-
-    private fun versionOf(f: File): Int = f.name.removePrefix("V").substringBefore("__").toInt()
-
-    private fun migrationsDir(): File =
-        generateSequence(File(".").absoluteFile) { it.parentFile }
-            .map { File(it, "services/api/migrations") }
-            .firstOrNull { it.isDirectory } ?: File("migrations")
 }

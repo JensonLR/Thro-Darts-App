@@ -11,14 +11,17 @@ import thro.competition.Entrant
 import thro.competition.EntrantKind
 import thro.competition.EventAccess
 import thro.competition.MembershipRole
+import thro.competition.Requirement
 
 /**
  * "Show me darts I can play" — and why each card is there.
  *
  * The properties are about honesty rather than ranking: an event appears with reasons that are
- * facts; a restricted event is never called eligible; a capacity the organiser did not state is
- * "not stated", never "unlimited"; an event the player has entered is not offered again; and a
- * series the player already plays in surfaces its other legs.
+ * facts; a gated event is called eligible only when its organiser stated the requirement in terms
+ * THRØ can check and the store says the player meets it, and otherwise says which rule stands in
+ * the way or that none was stated; a capacity the organiser did not state is "not stated", never
+ * "unlimited"; an event the player has entered is not offered again; and a series the player
+ * already plays in surfaces its other legs.
  *
  * Skipped cleanly when no database is configured, rather than passing silently.
  */
@@ -70,6 +73,26 @@ class DiscoveryTest {
         comp.enter(tourLeg1, sam); comp.enter(entered, sam)
         comp.enter(full, orgs.createPlayer())   // the one place is taken
 
+        // V019: what the gated events require, in terms THRØ can check.
+        val organiser = UUID.randomUUID()
+        val grange = orgs.createTeam("Grange B", "Stockton")
+        val othersOnly = event("Grange Members' Night", Instant.parse("2026-09-27T18:00:00Z"), stockton, access = EventAccess.MEMBER_ONLY)
+        val qualified = event("Tour Finals", Instant.parse("2026-11-07T11:00:00Z"), durham, access = EventAccess.QUALIFIED)
+        val adultsOnly = event("Late Licence Open", Instant.parse("2026-10-03T20:00:00Z"), stockton, access = EventAccess.RESTRICTED)
+        val unstated = event("Committee Cup", Instant.parse("2026-10-17T11:00:00Z"), stockton, access = EventAccess.RESTRICTED)
+        val invitedTo = event("Captains' Invitational", Instant.parse("2026-10-31T11:00:00Z"), stockton, access = EventAccess.INVITATIONAL)
+        val memberAndAdult = event("Members' Late Night", Instant.parse("2026-10-04T20:00:00Z"), stockton, access = EventAccess.RESTRICTED)
+        orgs.requireForEntry(memberOnly, 1, Requirement.TeamMember(riverside.toString()), organiser)
+        orgs.requireForEntry(memberOnly, 1, Requirement.TeamMember(grange.toString()), organiser)         // A side or B side
+        val wrongTeam = orgs.requireForEntry(othersOnly, 1, Requirement.TeamMember(grange.toString()), organiser)
+        orgs.requireForEntry(qualified, 1, Requirement.EnteredEvent(tourLeg1.toString()), organiser)
+        orgs.requireForEntry(adultsOnly, 1, Requirement.AgeBand("adult"), organiser)
+        orgs.requireForEntry(invitedTo, 1, Requirement.Invited(sam.toString()), organiser)
+        orgs.requireForEntry(memberAndAdult, 1, Requirement.TeamMember(riverside.toString()), organiser)
+        orgs.requireForEntry(memberAndAdult, 2, Requirement.AgeBand("adult"), organiser)
+        val openRefused = try { orgs.requireForEntry(weekendOpen, 1, Requirement.Invited(sam.toString()), organiser); false }
+            catch (e: org.postgresql.util.PSQLException) { e.message!!.contains("open event states no eligibility requirement") }
+
         val d = Discovery(c).forPlayer(sam, from = now, to = now.plus(60, ChronoUnit.DAYS), homeLocality = "Stockton")
         val all = d[Discovery.Section.ALL].orEmpty()
         fun card(id: UUID) = all.single { it.eventId == id }
@@ -81,11 +104,28 @@ class DiscoveryTest {
         check("near you is the locality where the team plays, from venues, not from the person", ids(Discovery.Section.NEAR_YOU).containsAll(setOf(weekendOpen, invitational, pairs)) && durhamNextMonth !in ids(Discovery.Section.NEAR_YOU))
         check("closing soon is a stated closing date within a week", ids(Discovery.Section.CLOSING_SOON) == setOf(weekendOpen))
         check("an unstated closing date is said to be unstated", card(durhamNextMonth).reasons.contains("closing date not stated by the organiser"))
-        check("eligible means open, singles, still open to entries, with a place if a capacity was stated",
-            ids(Discovery.Section.YOU_ARE_ELIGIBLE) == setOf(weekendOpen, durhamNextMonth, tourLeg2))
-        check("an invitational is never called eligible", invitational !in ids(Discovery.Section.YOU_ARE_ELIGIBLE) && card(invitational).reasons.contains("by invitation"))
-        check("a member-only event says THRØ cannot yet check eligibility, and does not claim it",
-            memberOnly !in ids(Discovery.Section.YOU_ARE_ELIGIBLE) && card(memberOnly).reasons.any { it.contains("not yet checkable") })
+        check("eligible means open entry or a stated requirement met, singles, still open to entries, with a place if a capacity was stated",
+            ids(Discovery.Section.YOU_ARE_ELIGIBLE) == setOf(weekendOpen, durhamNextMonth, tourLeg2, memberOnly, qualified, invitedTo))
+        check("an invitational with no invitation stated is never called eligible, and says so",
+            invitational !in ids(Discovery.Section.YOU_ARE_ELIGIBLE) && card(invitational).reasons.contains("by invitation — requirement not stated in terms THRØ can check"))
+        check("an invitation by name is a requirement THRØ can check", card(invitedTo).reasons.contains("by invitation — you qualify: invited by name"))
+        check("a member-only event names the membership that was met — either side of the club",
+            card(memberOnly).reasons.contains("member_only entry — you qualify: member of Riverside A"))
+        check("a member-only event for another team names the membership that is missing, and is not called eligible",
+            othersOnly !in ids(Discovery.Section.YOU_ARE_ELIGIBLE) && card(othersOnly).reasons.contains("member_only entry — requires membership of Grange B"))
+        check("a qualifier entered is a qualification THRØ can check", card(qualified).reasons.contains("qualified entry — you qualify: entered Tour Leg 1"))
+        check("an unclaimed player's age band is unknown, and unknown satisfies no age requirement",
+            adultsOnly !in ids(Discovery.Section.YOU_ARE_ELIGIBLE) && card(adultsOnly).reasons.contains("restricted entry — requires a claimed account whose age band is adult"))
+        check("a restricted event whose organiser stated nothing THRØ can check is said to be so, never eligible",
+            unstated !in ids(Discovery.Section.YOU_ARE_ELIGIBLE) && card(unstated).reasons.contains("restricted entry — requirement not stated in terms THRØ can check"))
+        check("every group must hold: a member who cannot show an age band is not eligible, and the card names the unmet group",
+            memberAndAdult !in ids(Discovery.Section.YOU_ARE_ELIGIBLE) && card(memberAndAdult).reasons.contains("restricted entry — requires a claimed account whose age band is adult"))
+        check("an open event refuses a requirement: open means open", openRefused)
+        check("the store's own answer agrees with the card", orgs.satisfiesEvent(sam, memberOnly, now) == true && orgs.satisfiesEvent(sam, othersOnly, now) == false && orgs.satisfiesEvent(sam, unstated, now) == null)
+        orgs.withdrawRequirement(wrongTeam, organiser, "stated on the wrong team")
+        val after = Discovery(c).forPlayer(sam, from = now, to = now.plus(60, ChronoUnit.DAYS), homeLocality = "Stockton")[Discovery.Section.ALL].orEmpty().single { it.eventId == othersOnly }
+        check("a withdrawn requirement leaves the event with none stated — not with the player eligible",
+            after.reasons.contains("member_only entry — requirement not stated in terms THRØ can check") && !after.qualifies)
         check("a pairs event is not offered as something a player enters alone", pairs !in ids(Discovery.Section.YOU_ARE_ELIGIBLE) && card(pairs).reasons.contains("pairs"))
         check("a full event is not called eligible, and says it has no places", full !in ids(Discovery.Section.YOU_ARE_ELIGIBLE) && card(full).spotsRemaining == 0)
         check("an unstated capacity is null — not stated, never unlimited", card(invitational).spotsRemaining == null && card(invitational).reasons.contains("capacity not stated by the organiser"))
@@ -97,6 +137,6 @@ class DiscoveryTest {
         check("nothing about the player's location was read: the locality came from the team's venue", card(weekendOpen).reasons.contains("in Stockton, where your team plays"))
 
         println("  $passed discovery properties held")
-        assertEquals(16, passed)
+        assertEquals(25, passed)
     }
 }

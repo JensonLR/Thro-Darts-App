@@ -8,6 +8,7 @@ import java.util.UUID
 import thro.competition.EntrantKind
 import thro.competition.MembershipRole
 import thro.competition.RegistrationKind
+import thro.competition.Requirement
 import thro.competition.TenureKind
 
 /**
@@ -505,4 +506,53 @@ public class Organisations(private val connection: Connection) {
         }
         return id
     }
+
+    // --- what an event requires of an entrant (V019) -----------------------------------------------
+
+    /**
+     * States one requirement of [eventId] in [group]. Rows in one group are alternatives; every
+     * group must hold. Refused by the store on an open event, because "open" means open.
+     */
+    public fun requireForEntry(eventId: UUID, group: Int, requirement: Requirement, by: UUID): UUID {
+        val id = UUID.randomUUID()
+        val (kind, team, season, qualifier, band, player) = when (requirement) {
+            is Requirement.TeamMember -> Sextuple("team_member", UUID.fromString(requirement.teamId), null, null, null, null)
+            is Requirement.LeagueRegistered -> Sextuple("league_registered", null, UUID.fromString(requirement.leagueSeasonId), null, null, null)
+            is Requirement.EnteredEvent -> Sextuple("entered_event", null, null, UUID.fromString(requirement.qualifierEventId), null, null)
+            is Requirement.AgeBand -> Sextuple("age_band", null, null, null, requirement.band, null)
+            is Requirement.Invited -> Sextuple("invited", null, null, null, null, UUID.fromString(requirement.playerId))
+        }
+        connection.prepareStatement(
+            """
+            INSERT INTO competition.event_eligibility
+              (requirement_id, event_id, requirement_group, kind, team_id, league_season_id, qualifier_event_id, age_band, player_id, stated_by)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """.trimIndent(),
+        ).use { ps ->
+            ps.setObject(1, id); ps.setObject(2, eventId); ps.setInt(3, group); ps.setString(4, kind)
+            ps.setObject(5, team); ps.setObject(6, season); ps.setObject(7, qualifier); ps.setString(8, band); ps.setObject(9, player)
+            ps.setObject(10, by)
+            ps.executeUpdate()
+        }
+        return id
+    }
+
+    /** Withdraws a stated requirement with a reason. The row stays; it is what the entrant was told. */
+    public fun withdrawRequirement(requirementId: UUID, by: UUID, reason: String) {
+        connection.prepareStatement(
+            "UPDATE competition.event_eligibility SET withdrawn_at = clock_timestamp(), withdrawn_by = ?, withdrawn_reason = ? WHERE requirement_id = ?",
+        ).use { ps -> ps.setObject(1, by); ps.setString(2, reason); ps.setObject(3, requirementId); ps.executeUpdate() }
+    }
+
+    /**
+     * The store's answer: does the player satisfy every live group of the event's requirement at
+     * [at]? `null` when the event states none, and the caller must not read that as yes.
+     */
+    public fun satisfiesEvent(playerId: UUID, eventId: UUID, at: Instant): Boolean? =
+        connection.prepareStatement("SELECT competition.player_satisfies_event(?, ?, ?)").use { ps ->
+            ps.setObject(1, playerId); ps.setObject(2, eventId); ps.setObject(3, Timestamp.from(at))
+            ps.executeQuery().use { rs -> rs.next(); val b = rs.getBoolean(1); if (rs.wasNull()) null else b }
+        }
+
+    private data class Sextuple<A, B, C, D, E, F>(val a: A, val b: B, val c: C, val d: D, val e: E, val f: F)
 }

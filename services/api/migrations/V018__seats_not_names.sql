@@ -23,6 +23,21 @@
 
 SET ROLE thro_owner;
 
+-- 0. Refuse to guess. A match whose two names are the same cannot say which seat a name meant;
+--    if such a match has visits, a person resolves it before this runs. (The handler never
+--    accepted one — the engine refuses two equal labels — so this guards rows written some other way.)
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM evidence.match m
+     WHERE m.home_name = m.away_name
+       AND EXISTS (SELECT 1 FROM evidence.event e WHERE e.match_id = m.match_id
+                    AND e.event_type IN ('VisitRecorded','VisitCorrected'))
+  ) THEN
+    RAISE EXCEPTION 'V018: a match has identical names for both seats and has visits; the seat each name meant cannot be derived. Resolve it by hand before migrating.';
+  END IF;
+END $$;
+
 -- 1. Payloads: the name that labelled a seat becomes the seat. Matched per match against that
 --    match's own two names, never by a global lookup, so a name shared by two people in two
 --    matches cannot cross between them.
@@ -35,8 +50,29 @@ UPDATE evidence.event e
    AND e.payload ? 'player'
    AND e.payload->>'player' IN (m.home_name, m.away_name);
 
--- 2. The columns go. What they held is now derivable from nothing in this schema, which is the point.
+-- 2. Refuse to leave a name behind. A payload whose player is not one of its match's two names —
+--    a spelling variant, a name from before the aggregate check, anything — is exactly the personal
+--    data this migration exists to remove, and quietly keeping it would make the header above a lie.
+DO $$
+DECLARE n int;
+BEGIN
+  SELECT count(*) INTO n FROM evidence.event
+   WHERE event_type IN ('VisitRecorded','VisitCorrected') AND payload ? 'player'
+     AND (jsonb_typeof(payload->'player') <> 'string' OR payload->>'player' NOT IN ('home','away'));
+  IF n > 0 THEN
+    RAISE EXCEPTION 'V018: % visit payload(s) name something that is neither seat of their match; they must be resolved by hand before the names can go', n;
+  END IF;
+END $$;
+
+-- 3. The columns go. What they held is now derivable from nothing in this schema, which is the point.
 ALTER TABLE evidence.match DROP COLUMN home_name, DROP COLUMN away_name;
+
+-- 4. And the database keeps it so: from here on a visit's player field, when present, is a seat.
+ALTER TABLE evidence.event ADD CONSTRAINT visit_names_a_seat CHECK (
+  event_type NOT IN ('VisitRecorded','VisitCorrected')
+  OR NOT (payload ? 'player')
+  OR payload->>'player' IN ('home','away')
+);
 
 COMMENT ON TABLE evidence.match IS
   'The authoritative participant set and ruleset for a match, fixed when it opens. The home seat is '

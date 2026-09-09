@@ -343,7 +343,7 @@ local and CI work is not blocked.
 | B4 | Push delivery record; media storage contract | B1 | FB-2 for staging only |
 | C | Team OS slice end to end | B1–B3 | FB-1 |
 | D | Secretary: registration, then result submission and rearrangement (**delivered at the domain and store level**: V016, `Secretary`, 62 properties; the HTTP and client surfaces wait on B1/B3) | A, B2 | nothing further |
-| E | Tournament editions, series, discovery (**store-level read delivered**: V017, `Discovery`, 16 properties — every card explains itself, nothing is called eligible that THRØ cannot check; the consumer surface waits on the client) | A, B1 | client for the surface |
+| E | Tournament editions, series, discovery (**store-level read delivered**: V017 + V019, `Discovery`, 25 properties — every card explains itself, nothing is called eligible that THRØ cannot check; the consumer surface waits on the client) | A, B1 | client for the surface |
 | F | Map (MapKit on iOS, when the client exists); friendly request loop | C, E, iOS client | Gate 5 (device journal) for the client |
 
 The iOS client itself is a separate stream gated by ADR-006's outstanding SE-class and Android
@@ -387,7 +387,7 @@ against PostgreSQL 16 locally; CI runs the same suites.
 | 10 | V014 over a populated V013 database preserves every event, entry, check-in, grant, tie and tuple, the venue label, the seeds and the draw | `MigrationTest` (14 properties) |
 | 11 | Existing suites remain green, including the 74-entrant draw against `bracket_tie` and a pairs event refusing a singles entry | `CompetitionTest` (16) and every other suite |
 | 12 | An approved policy cannot change body, date or be un-approved; two approved versions cannot overlap; a superseded one may be followed; a policy cannot cite a season that does not exist | API test |
-| 13 | No DELETE or TRUNCATE on any competition table for any app role, including a table added later; `authz.relation` is revoked not deleted; `season` is gone | `schema_properties.sh` (78 properties) |
+| 13 | No DELETE or TRUNCATE on any competition table for any app role, including a table added later; `authz.relation` is revoked not deleted; `season` is gone | `schema_properties.sh` (86 properties) |
 | 14 | A fixture's venue is frozen at scheduling; a stale rearrangement is refused; the original date survives in the change log; teams cannot be switched; an award must go to one of the two teams; a second outcome must supersede; outcomes are not editable | API test |
 | 15 | A player row carries no free text; a claim is one live per player and per account, fixed when made, revocable; an organiser confirmation names the organiser | API test + `schema_properties.sh` |
 | 16 | A team rename keeps the old name with its period | API test |
@@ -430,12 +430,26 @@ league decision with a reason, not a payment flag (OD-009).
 
 ## 12c. Acceptance criteria — Phase E read model, delivered
 
-`DiscoveryTest`, 16 properties, green 2026-09-09. A past event is not offered; every card carries
+`DiscoveryTest`, 25 properties, green 2026-09-09. A past event is not offered; every card carries
 a date, a kind and an access reason; THIS WEEKEND is Saturday and Sunday; NEAR YOU is the locality
 of the team's venue, never the person's location; CLOSING SOON is a stated closing date within a
 week and an unstated one is said to be unstated; YOU ARE ELIGIBLE means open, singles, still open
-to entries, with a place if a capacity was stated — an invitational, a member-only event, a pairs
-event and a full event are never called eligible; an unstated capacity is null, never unlimited;
-places are counted from live entries; a series the player already plays in surfaces its other legs
-and says why; an entered event appears only as entered. Eligibility policies for `qualified`,
-`restricted` and `member_only` events are not yet modelled and the card says so.
+to entries, with a place if a capacity was stated — a pairs event and a full event are never called
+eligible; an unstated capacity is null, never unlimited; places are counted from live entries; a
+series the player already plays in surfaces its other legs and says why; an entered event appears
+only as entered.
+
+**Gated events (V019, `competition.event_eligibility`).** An organiser states what a `member_only`,
+`qualified`, `restricted` or `invitational` event requires in the five terms THRØ can check against
+its own records — a live team membership, a live league-season registration, a live entry to a named
+qualifier, the claimed account's age band, or an invitation by name. Rows in one group are
+alternatives (the A side or the B side); every group must hold (a member *and* an adult). The store
+answers through one predicate, `requirement_holds_for`, so the card and `player_satisfies_event`
+cannot disagree. Held by test: an event with no stated requirement says "requirement not stated in
+terms THRØ can check" and is never eligible; a met requirement is named on the card ("you qualify:
+member of Riverside A"); an unmet one names the missing group ("requires membership of Grange B");
+an unclaimed player's age band is unknown and unknown satisfies neither `adult` nor `minor`; an open
+event refuses a requirement; a withdrawn requirement leaves the event unstated, not the player
+eligible; the application role may withdraw a row and change nothing else in it, and the owner
+cannot rewrite one either. What THRØ cannot check — qualification by result, residence, anything
+outside the five — is not a row, and stays unsaid.

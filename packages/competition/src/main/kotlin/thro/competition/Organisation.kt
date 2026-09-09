@@ -218,6 +218,26 @@ public object TeamHistory {
 }
 
 /**
+ * What an event requires of an entrant, in the five terms THRØ can check against its own records.
+ * Anything an organiser requires that is not one of these is not a requirement THRØ knows, and
+ * discovery says so rather than guessing.
+ */
+public sealed interface Requirement {
+    public data class TeamMember(val teamId: String) : Requirement
+    public data class LeagueRegistered(val leagueSeasonId: String) : Requirement
+    public data class EnteredEvent(val qualifierEventId: String) : Requirement
+    public data class AgeBand(val band: String) : Requirement {
+        init { require(band == "minor" || band == "adult") { "an age band requirement names minor or adult; unknown is never required" } }
+    }
+    public data class Invited(val playerId: String) : Requirement
+}
+
+/** A requirement row: which group it belongs to and what it asks. */
+public data class Stated(val group: Int, val requirement: Requirement) {
+    init { require(group > 0) { "requirement groups are numbered from one" } }
+}
+
+/**
  * The one question the registration model exists to answer honestly: is this player registered
  * for this season at this instant? Membership is not an input. Neither is payment.
  */
@@ -227,4 +247,15 @@ public object Eligibility {
             it.playerId == playerId && it.leagueSeasonId == leagueSeasonId &&
                 it.status == RegistrationStatus.REGISTERED && it.period.contains(at)
         }
+
+    /**
+     * Whether a player satisfies an event's stated requirement. Rows in one group are
+     * alternatives; every group must hold. `null` when nothing is stated — which the caller must
+     * never read as yes. This is the same rule `competition.player_satisfies_event` applies in
+     * the store; the two are held to each other by test.
+     */
+    public fun satisfies(stated: List<Stated>, holds: (Requirement) -> Boolean): Boolean? {
+        if (stated.isEmpty()) return null
+        return stated.groupBy { it.group }.values.all { group -> group.any { holds(it.requirement) } }
+    }
 }

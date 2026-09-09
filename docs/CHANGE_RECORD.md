@@ -2174,3 +2174,55 @@ to a table with no name columns were corrected. That brought the count back to a
 run rather than remembered: **78**, not the 85 the plan had said or the 93 the README had, neither
 of which this script has ever printed. The plan, README, glossary (a *Seat* entry), ADR-017's
 deferred list and OD-024 itself now say what V018 does.
+
+## What an event requires, stated in terms THRØ can check; and a ledger for the migrations
+
+Discovery's read model had one honest gap it named on every card: a `member_only`, `qualified`,
+`restricted` or `invitational` event appeared with *"eligibility not yet checkable by THRØ"*,
+because the requirement lived in the organiser's head. V019 gives it a home,
+`competition.event_eligibility`, in the five terms THRØ can check against its own records — a live
+team membership, a live league-season registration, a live entry to a named qualifier, the claimed
+account's age band, or an invitation by name. Rows in one group are alternatives, so a club's A side
+or its B side; every group must hold, so a member *and* an adult. Nothing outside the five is a row.
+Qualification by result, residence, "known to the committee" — THRØ cannot read those, so it does
+not pretend to, and the card says *"requirement not stated in terms THRØ can check"* and never says
+eligible. An unclaimed player's age band is unknown, and unknown satisfies neither `adult` nor
+`minor`, in keeping with ADR-005: a guess in either direction is the one that lists a child.
+
+The store answers through one predicate, `requirement_holds_for`, which both the whole-event
+function and the card's per-row explanation call, so *"you qualify: member of Riverside A"* and
+*"requires membership of Grange B"* are the same computation the eligibility section keys on. An
+open event refuses a requirement, because open means open. A stated row is withdrawn with a reason,
+never rewritten — the application role may fill the three withdrawal columns and nothing else, and
+the owner cannot rewrite one either — so an entrant can be shown the rule as it stood when they were
+told. The pure `Requirement` and `Eligibility.satisfies` in the competition package carry the same
+rule for the client to share, and are held to the store's semantics by test. Twenty-five discovery
+properties now, nine more schema properties, two more on the pure types.
+
+**The hostile review of V018 found two traps, and both are closed.** First: every runner applied
+migrations only when the `evidence` schema was absent, so a database migrated by an earlier checkout
+sat silently behind the code — after V018 such a database still had `home_name NOT NULL` and could
+not open a match at all, and thirty downstream properties would have failed for the wrong reason.
+There is now a ledger, `thro.schema_migration`, kept by `Migrations.kt` and by the same logic in the
+schema script: each file the ledger does not hold is applied in its own transaction with its row and
+content digest; a database with THRØ's schemas and no ledger is refused as unknowable; a recorded
+file whose content has changed is refused, because migrations are forward-only; a recorded version
+this checkout has no file for is refused, because the database is ahead of the code. The test
+harness rebuilds from nothing every run and asserts the ledger stands where each test believes it
+does. Second: V018's rewrite matched a payload's name against its match's two names and quietly left
+anything else — a spelling variant, a name from before the aggregate check — as personal data in the
+one place it can never be removed from, which would have made the migration's own header a lie. V018
+now refuses to run if any visit payload would be left naming something that is neither seat, refuses
+a match whose two names are identical and has visits, and after the columns go adds
+`visit_names_a_seat` so the database keeps what the glossary claims. `MigrationTest` now also writes
+a `VisitCorrected`, a second match in which the same name sits on the other side, and two databases
+the migration must refuse and leave untouched. The playtest scorer's attestation path, which had
+keyed on the typed name and defaulted to away, now maps a name or a seat word and refuses anything
+else — the same rule as recording a visit.
+
+The reviewer's fifth finding was about the number. The schema script had counted its migration
+apply lines and its "already present" line among the passes, so the figure the README carried
+depended on whether the database was fresh, and the *78* the previous entry called "run rather than
+remembered" was seventy-seven properties and one skip line. Applying is a precondition of the
+properties and is no longer counted; the number is **86**, and it is the same number on a fresh
+database and a current one.

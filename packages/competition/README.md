@@ -54,7 +54,11 @@ player; `Eligibility.isRegistered` takes no membership as input. **LeagueSeason*
 the two arms of a sealed `Competition`, so a `when` must name both. **Entrant** is sealed over
 player, pair and team, and an `Entry` refuses an entrant of the wrong kind for its event at
 construction — the database refuses it again with a foreign key. A **SeriesSeason** holds event
-identifiers and nothing a league has.
+identifiers and nothing a league has. **Requirement** is sealed over the five things an organiser
+may ask of an entrant that THRØ can check; `Eligibility.satisfies` reads a list of `Stated` rows as
+alternatives within a group and conjunction across, and answers `null` for an event that states
+nothing — the same rule the store's `player_satisfies_event` applies, so a card and the database
+cannot disagree.
 
 `Period` is half-open, `[from, until)`, and `closedAt` is the only change it permits — once.
 

@@ -13,28 +13,43 @@ bad()  { FAIL=$((FAIL+1)); printf '  \033[31mFAIL\033[0m  %s — %s\n' "$1" "$2"
 check(){ if [ "$2" = "$3" ]; then ok "$1"; else bad "$1" "expected [$3] got [$2]"; fi; }
 
 echo "== migrations =="
-already=$($PSQL -c "SELECT count(*) FROM information_schema.schemata WHERE schema_name='evidence';")
-if [ "$already" = "0" ]; then
-  for f in "$(dirname "$0")"/../migrations/V*.sql; do
-    out=$($PSQL -f "$f" 2>&1); rc=$?
-    if [ $rc -eq 0 ] && ! echo "$out" | grep -qi '^ERROR'; then ok "applied $(basename "$f")"
-    else bad "applied $(basename "$f")" "$(echo "$out" | grep -i ERROR | head -1)"; fi
-  done
-else
-  # The schema exists, so the migrations are not re-applied — but a database migrated by an EARLIER
-  # checkout is behind this one, and every property of a newer table would then fail for the wrong
-  # reason. The newest table is the sentinel; a database without it must be rebuilt, not tested.
-  latest=$(ls "$(dirname "$0")"/../migrations/V*.sql | sort | tail -1)
-  sentinel=$($PSQL -c "SELECT count(*) FROM information_schema.tables
-    WHERE table_schema='competition' AND table_name='league_fixture';")
-  if [ "$sentinel" = "1" ]; then
-    ok "schema already present and current through $(basename "$latest") — migrations skipped"
+# The same ledger the Kotlin runner keeps (Migrations.kt): every file the ledger does not hold is
+# applied in its own transaction and recorded with its digest. A database with THRØ's schemas and no
+# ledger predates it and is rebuilt, not guessed at; a recorded file whose content changed is refused.
+# Applying is a precondition of the properties below, not one of them, so it is not counted.
+DIR="$(dirname "$0")/../migrations"
+$PSQL -c "CREATE SCHEMA IF NOT EXISTS thro; CREATE TABLE IF NOT EXISTS thro.schema_migration (
+  version int PRIMARY KEY, filename text NOT NULL, sha256 text NOT NULL,
+  applied_at timestamptz NOT NULL DEFAULT clock_timestamp());" >/dev/null 2>&1
+recorded=$($PSQL -c "SELECT count(*) FROM thro.schema_migration;")
+present=$($PSQL -c "SELECT count(*) FROM information_schema.schemata WHERE schema_name='evidence';")
+if [ "$recorded" = "0" ] && [ "$present" != "0" ]; then
+  bad "migration ledger" "this database has THRØ's schemas but no ledger; its version cannot be known — drop the schemas (as the test harness does) and rerun"
+  echo "  $PASS passed, $FAIL failed"; exit 1
+fi
+for f in "$DIR"/V*.sql; do
+  name=$(basename "$f"); v=$(echo "$name" | sed -E 's/^V0*([0-9]+)__.*/\1/')
+  sum=$(shasum -a 256 "$f" | cut -d' ' -f1)
+  have=$($PSQL -c "SELECT sha256 FROM thro.schema_migration WHERE version=$v;")
+  if [ -n "$have" ]; then
+    if [ "$have" != "$sum" ]; then
+      bad "applied $name" "was applied from different content; migrations are forward-only — rebuild the database"
+      echo "  $PASS passed, $FAIL failed"; exit 1
+    fi
+    continue
+  fi
+  out=$(psql -v ON_ERROR_STOP=1 -X -q -1 -f "$f" 2>&1); rc=$?
+  if [ $rc -eq 0 ]; then
+    $PSQL -c "INSERT INTO thro.schema_migration (version, filename, sha256) VALUES ($v, '$name', '$sum');" >/dev/null
+    printf '  applied  %s\n' "$name"
   else
-    bad "schema already present" "but behind $(basename "$latest"); drop the schemas (as the test harness does) and rerun"
+    bad "applied $name" "$(echo "$out" | grep -i ERROR | head -1)"
     echo "  $PASS passed, $FAIL failed"; exit 1
   fi
-fi
+done
+printf '  schema at %s\n' "$($PSQL -c "SELECT 'V' || lpad(max(version)::text, 3, '0') FROM thro.schema_migration;")"
 
+echo
 # Fresh identifiers per run, so the suite is idempotent. CI always gets a clean database, but a
 # test that only passes on a clean database is a test that stops being run locally.
 M=$($PSQL -c "SELECT gen_random_uuid();")
@@ -56,6 +71,7 @@ ins() { # match, device, seq
 }
 
 echo
+
 echo "== the two-device corroboration case =="
 ins $M $DA 1 >/dev/null; ins $M $DA 2 >/dev/null
 r=$(ins $M $DB 1)
@@ -474,6 +490,44 @@ else bad "'season' is no longer an authorization object type" "it was accepted";
 r=$($PSQL -c "SET ROLE app_competition; DELETE FROM authz.relation;" 2>&1)
 if echo "$r" | grep -qi 'permission denied'; then ok "an authorization relation is revoked, never deleted"
 else bad "an authorization relation is revoked, never deleted" "${r:-deletion was permitted}"; fi
+
+# What an event requires of an entrant is stated, appended and withdrawn — never guessed, never rewritten (V019).
+EV=$($PSQL -c "SELECT gen_random_uuid();"); REQ=$($PSQL -c "SELECT gen_random_uuid();"); WHO=$($PSQL -c "SELECT gen_random_uuid();")
+$PSQL -c "SET ROLE app_competition; INSERT INTO competition.event (event_id, name, starts_at, session_ends_at, access)
+  VALUES ('$EV','Open Night', now() + interval '7 days', now() + interval '7 days 6 hours', 'open');" >/dev/null 2>&1
+r=$($PSQL -c "SET ROLE app_competition; INSERT INTO competition.event_eligibility
+  (requirement_id, event_id, requirement_group, kind, team_id, stated_by) VALUES ('$REQ','$EV',1,'team_member','$TEAM','$WHO');" 2>&1)
+if echo "$r" | grep -qi 'open event states no eligibility requirement'; then ok "an open event states no requirement: open means open"
+else bad "an open event states no requirement: open means open" "${r:-a requirement was accepted on an open event}"; fi
+$PSQL -c "SET ROLE app_competition; UPDATE competition.event SET access='member_only' WHERE event_id='$EV';
+  INSERT INTO competition.event_eligibility (requirement_id, event_id, requirement_group, kind, team_id, stated_by)
+    VALUES ('$REQ','$EV',1,'team_member','$TEAM','$WHO');" >/dev/null 2>&1
+r=$($PSQL -c "SET ROLE app_competition; INSERT INTO competition.event_eligibility
+  (requirement_id, event_id, requirement_group, kind, team_id, age_band, stated_by) VALUES (gen_random_uuid(),'$EV',1,'team_member','$TEAM','adult','$WHO');" 2>&1)
+if echo "$r" | grep -qi 'violates check constraint'; then ok "a requirement names exactly the subject its kind needs"
+else bad "a requirement names exactly the subject its kind needs" "${r:-a team_member row carrying an age band was accepted}"; fi
+r=$($PSQL -c "SET ROLE app_competition; INSERT INTO competition.event_eligibility
+  (requirement_id, event_id, requirement_group, kind, age_band, stated_by) VALUES (gen_random_uuid(),'$EV',2,'age_band','unknown','$WHO');" 2>&1)
+if echo "$r" | grep -qi 'violates check constraint'; then ok "'unknown' is not an age band an event may require"
+else bad "'unknown' is not an age band an event may require" "${r:-it was accepted}"; fi
+r=$($PSQL -c "SET ROLE app_competition; UPDATE competition.event_eligibility SET requirement_group = 2 WHERE requirement_id='$REQ';" 2>&1)
+if echo "$r" | grep -qi 'permission denied'; then ok "the application may withdraw a requirement and change nothing else in it"
+else bad "the application may withdraw a requirement and change nothing else in it" "${r:-the group was changed}"; fi
+r=$($PSQL -c "SET ROLE thro_owner; UPDATE competition.event_eligibility SET requirement_group = 2 WHERE requirement_id='$REQ';" 2>&1)
+if echo "$r" | grep -qi 'cannot be rewritten'; then ok "a stated requirement cannot be rewritten, even by the owner"
+else bad "a stated requirement cannot be rewritten, even by the owner" "${r:-the group was changed}"; fi
+n=$($PSQL -c "SELECT competition.player_satisfies_event(gen_random_uuid(), '$EV');")
+check "a stranger does not satisfy a stated requirement" "$n" "f"
+n=$($PSQL -c "SELECT coalesce(competition.player_satisfies_event(gen_random_uuid(), gen_random_uuid())::text, 'null');")
+check "an event that states nothing answers null — never yes" "$n" "null"
+$PSQL -c "SET ROLE app_competition; UPDATE competition.event_eligibility
+  SET withdrawn_at = now(), withdrawn_by = '$WHO', withdrawn_reason = 'stated on the wrong team' WHERE requirement_id='$REQ';" >/dev/null 2>&1
+r=$($PSQL -c "SET ROLE app_competition; UPDATE competition.event_eligibility SET withdrawn_reason = 'changed my mind' WHERE requirement_id='$REQ';" 2>&1)
+if echo "$r" | grep -qi 'history and cannot change'; then ok "a withdrawn requirement is history"
+else bad "a withdrawn requirement is history" "${r:-the withdrawal was edited}"; fi
+r=$($PSQL -c "SET ROLE app_competition; DELETE FROM competition.event_eligibility WHERE requirement_id='$REQ';" 2>&1)
+if echo "$r" | grep -qi 'permission denied'; then ok "a requirement is withdrawn, never deleted"
+else bad "a requirement is withdrawn, never deleted" "${r:-deletion was permitted}"; fi
 
 echo "== the Secretary: a submission's state is the transitions', and nothing else's (V016) =="
 n=$($PSQL -c "SELECT count(*) FROM information_schema.role_table_grants

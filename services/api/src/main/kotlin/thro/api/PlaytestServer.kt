@@ -63,21 +63,11 @@ public object PlaytestServer {
         return DriverManager.getConnection("jdbc:postgresql://$host:$port/$db", user, "")
     }
 
+    /** Brings the database to this checkout's version, or refuses with the reason (see [Migrations]). */
     private fun migrate(c: Connection) {
-        val dir = generateSequence(java.io.File(".").absoluteFile) { it.parentFile }
-            .map { java.io.File(it, "services/api/migrations") }
-            .firstOrNull { it.isDirectory } ?: java.io.File("migrations")
-        c.createStatement().use { st ->
-            val exists = st.executeQuery(
-                "SELECT count(*) FROM information_schema.schemata WHERE schema_name='evidence'",
-            ).use { rs -> rs.next(); rs.getInt(1) > 0 }
-            if (!exists) {
-                dir.listFiles { f -> f.extension == "sql" }?.sortedBy { it.name }?.forEach { f ->
-                    st.execute(f.readText())
-                }
-                println("migrations applied")
-            }
-        }
+        val applied = Migrations.apply(c)
+        if (applied.isEmpty()) println("schema current at V${Migrations.currentVersion(c)}")
+        else println("migrations applied: " + applied.joinToString { it.file })
     }
 
     private fun serveIndex(ex: HttpExchange) {
@@ -182,7 +172,13 @@ public object PlaytestServer {
         val leg = field(body, "leg")?.toIntOrNull() ?: throw IllegalArgumentException("leg required")
         val who = field(body, "player") ?: throw IllegalArgumentException("player required")
         val attested = field(body, "attested") != "false"
-        val participant = if (who == reg.home) reg.homeId else reg.awayId
+        // The same mapping recordVisit uses: a typed name or a seat word, and nothing else. A label
+        // that is neither must not quietly become the away player's attestation.
+        val participant = when (who) {
+            reg.home, Seat.HOME -> reg.homeId
+            reg.away, Seat.AWAY -> reg.awayId
+            else -> throw IllegalArgumentException("that is not a seat in this match")
+        }
         // A separate device id per attesting player: the confirming participant is not the scorer,
         // and merging their streams would lose exactly the corroboration this exists to create.
         val device = UUID.nameUUIDFromBytes("attest:$matchId:$who".toByteArray())
