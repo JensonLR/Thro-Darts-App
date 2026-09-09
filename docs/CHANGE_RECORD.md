@@ -1282,3 +1282,61 @@ back. One type for both would be an invitation to feed a struck visit to a stati
 `check_journal_parity.py` still passes unchanged: no stored column, trigger or row kind moved.
 
 9 tests. All 18 `tools/check_*.py` green.
+
+## Per-dart entry: the vocabulary, and what it is actually worth
+
+The founder, relaying a player in a local league: the app should take each of the three darts as
+well as the total of three.
+
+**The engine is not changing.** `ThroEngine/Types.swift:26` says it in as many words — *the engine
+scores a visit, not a dart* — PD-008 settled the double-in rule on that basis, and ADR-002 keeps the
+Swift and Kotlin engines structurally parallel against exactly this kind of drift. So the three
+darts are captured as **evidence attached to the visit**: their sum *is* the visit total, the
+`recordVisit` command is byte-identical, and every existing figure and replay is untouched.
+
+### What it buys beyond the asking
+
+- **Two modal questions disappear from every checkout.** PD-001 stops the player and asks *"Darts
+  used to check out?"* and *"Darts thrown at a double?"*, because the app has no way to know.
+  `dartsUsed` and `dartsAtDouble` are therefore **nil on every visit** unless a player is
+  interrupted at the most pressured moment in a leg and asked to remember. A player who entered
+  their darts has already answered both, with what they did.
+- **A mis-key cannot reach the board.** Every entry's total is, by construction, a total three darts
+  can make.
+- **The engine's impossible-total table stops being unheld.** `RuleTables.impossibleVisitTotals` is
+  a literal `[163, 166, 169, 172, 173, 175, 176, 178, 179]` — the correct set, and the single
+  most-missed validation in X01 implementations. `ThroDartEntry.reachableTotals` derives the same
+  fact from the 63 things a dart can do, and a test holds the two against each other. A table nobody
+  re-derives is one that can rot without anything noticing.
+
+### Where the line is drawn
+
+`ThroDart` and `ThroDartEntry` live in `ThroDesign` and hold **no darts rules** — the keypad has to
+know what a dart is to draw one, and `ThroDesign` must not depend on the engine, exactly as
+`StatItem.Confidence` restates a basis without depending on the statistics package. `DartVisit` in
+`ThroPlay` is where the two meet, in the one layer that may know both.
+
+**The definition of "at a double", and its limit, stated rather than assumed.** The ring a dart
+landed in does not tell you what it was aimed at: a player on 32 who throws a single 16 and then a
+double 8 threw two darts at a double and landed one. So a dart counts when it was *thrown from a
+checkable number* — the definition a scorer uses, observable from the entry, and read off the
+match's own out rule rather than assuming double-out.
+
+### Three assertions of mine that were wrong, and how
+
+I wrote the darts facts in these tests from memory. All three were wrong:
+
+| I asserted | It is | Why |
+|---|---|---|
+| 141 → 81 → 24 has one dart at a double | **three** | 170 is the largest checkout; 141, 81 and 24 are all finishes |
+| 180 → 120 → 60 has one | **two** | 120 is a checkout (`T20, 20, D20`) |
+| 51 is a master-out finish only | **both** | `51 = 19, D16` under double-out |
+
+Every darts assertion in `DartVisitTests` is now computed from the engine's own tables before being
+written down, and the out-rule test uses **159** — a master-out finish and a double-out bogey — with
+a companion assertion that fails if 159 ever stops being one, so the test cannot quietly start
+measuring nothing.
+
+27 tests. All 18 `tools/check_*.py` green. The keypad's dart mode and the storage of the individual
+darts are the next two slices; this one is the vocabulary and the evidence, and it is complete and
+held on its own.
