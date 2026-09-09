@@ -158,6 +158,43 @@ Everything below is what the tests assert; the phone is the first place anyone w
   has not left the phone. **Done** returns Home, where the match is listed with its legs.
 - The back chevron leaves scoring at any point; nothing is lost.
 
+#### Entering the three darts instead of the total
+
+The rail at the top of the scoring screen says **TOTAL**. Tap it; it says **DARTS** and the keypad
+changes. (The same choice is in **Settings → Scoring**, with a sentence under it saying what each
+notation costs. Whatever is showing when a visit is part-entered is cleared by the switch — three
+darts have a total, but a total does not have three darts.)
+
+- **A normal visit.** The keypad is a row of **SINGLE · DOUBLE · TREBLE**, then the twenty sectors
+  **in the board's own order** — 20 is top-left, between 1 and 5, where it is on a real board — then
+  **25 · BULL · MISS · ENTER**. Tap **TREBLE**, then **20**: the key says *T20* before you commit to
+  it, the dart appears under the score on the board, and the ring drops back to SINGLE. Do it three
+  times for a 180.
+- **Take one back.** Tap the middle dart on the board. It and the one after it go; the first stays.
+  The undo key does the same one dart at a time.
+- **Enter says how many are left.** With two darts entered it reads *One more dart* and is out of
+  the light, because a two-dart visit that neither finishes nor busts is one the engine refuses.
+- **A checkout asks nothing.** Bring a player to 141 and enter **T20**, **T19**, **D12**. The leg is
+  won and **neither PD-001 question appears** — the darts already answered both. That is what this
+  notation buys.
+- **A dart that cannot end the leg.** On 60, enter **T20**. The board says *That reaches zero on
+  T20, and this leg has to end on a double. Take that dart back.* — which is true, and is a bust
+  THRØ cannot yet record, because the engine scores a visit rather than three darts (**OD-023**).
+- **On an iPhone SE**, in this notation and on a finish, the checkout card is **not** drawn and the
+  ledger goes: the board has 161 points and its head, the three darts and the smallest number come
+  to more than that. Everything else on the screen is unchanged, and the number never shrinks below
+  the ladder. Deliberate, and asserted over 1,056 device-orientation-text-size combinations.
+
+#### A player's own page
+
+Open **Discover → a club → a member**, or a person from Home. The picture (a club member's, when
+they have one and are recorded as an adult) is 96 pt at the top, the name under it, and then the
+one figure a player opens their own page for — **Recent form** at 56 pt, with the window it covers
+and *Not a rating* under it. The rest of the figures are below it in the same grid every other
+screen uses, so a **range** is marked as a range here exactly as it is on a result. A person on this
+phone has no picture and the page says which rule and why: that is PD-023, and it is a decision
+rather than a gap.
+
 ### 5. Everything else this build added, in the order to try it
 
 **If anything on the readiness screen says *Blocked* — or if a row says *Working* and you cannot
