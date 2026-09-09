@@ -1923,3 +1923,38 @@ comments:
 That is two comment-versus-code mismatches in the same screen, both found in ten minutes by reading
 what I had written and asking whether the next line does it. Neither was reachable by any test here,
 and neither would have been found by CI.
+
+## Round eight on the backup flag, and this time the mechanism rather than a workaround
+
+Rounds 10, 13 and 15 of twenty failed, and the message is the whole diagnosis:
+
+```
+round 10: the file carries no exclusion at all and BackupPolicy claimed one —
+          attribute present, 61 bytes: bplist00_…com.apple.backupd…
+```
+
+The shape was read, found **absent**, and `BackupPolicy.read` — microseconds later — found it
+**present**. Not a stale cache, not a wrong comparison, not the fixture failing to take: on this
+runner `com.apple.backupd` writes its own exclusion onto folders under `/var/folders`
+**continuously**, so two reads of this one file milliseconds apart can honestly disagree.
+
+Every previous version of this test asserted *across a pair of reads*. That is not a bug with a fix;
+it is a structure with a failure **rate**, which is exactly why this flag has now taken eight rounds
+and why each round's fix looked reasonable and then went red somewhere else.
+
+`readWhileStill` closes it by construction: observe the file, ask `BackupPolicy`, observe the file
+again, and return **nothing at all** if those two observations differ. Only a window the file
+provably did not move in is asserted on. A round that could not see a still file says nothing about
+this type, is counted, and three floors fail the test if the host ate all of them:
+
+- not one round saw our own flag on a still file;
+- not one round saw the file still and clear;
+- not one round saw a still file after `include`.
+
+Each failure message now carries how many rounds the host moved the file under, so the next red run
+says which of the two things happened without needing another round to find out.
+
+What `including` is held to also got sharper, because two of its four old assertions were about the
+daemon rather than about it: the removal must not **fail**, and this test's own byte must be **gone**
+afterwards. Whether the daemon has since written its own is not `including`'s business.
+

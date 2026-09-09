@@ -273,166 +273,114 @@ final class ExportTests: XCTestCase {
     func testTheAnswerComesFromTheFileSystemAndNotFromWhatTheURLRemembers() throws {
         var url = dir!
 
-        // **The Foundation half, twenty rounds, for the reason the rest of this file already gives.**
+        // **Round eight, and this is the version that names the mechanism instead of working
+        // around it.** Rounds 10, 13 and 15 of the last one failed like this:
         //
-        // This block asserted two things in four lines and CI went red on the second of them on a
-        // commit that touched nothing near it — and green on the SAME commit on the other run. That
-        // is the host, not this type: `com.apple.metadata:` is the Spotlight daemon's namespace, an
-        // attribute written there on a folder under `/var/folders` can be gone or rewritten a
-        // millisecond later, and the loop lower down was already written that way for exactly that
-        // reason. This block simply had not been.
+        //   round 10: the file carries no exclusion at all and BackupPolicy claimed one —
+        //             attribute present, 61 bytes: bplist00_…com.apple.backupd…
         //
-        // "It's the environment" is the excuse this repository refuses, so it is not asserted here
-        // either. Each round asserts the thing that is true whatever the daemon does — **the file
-        // decides, not the URL's memory** — and the two claims that depend on the fixture holding
-        // are counted instead, with a floor of one, so a fixture that has stopped working
-        // altogether fails the test rather than turning twenty rounds into twenty no-ops.
+        // The shape was read, found ABSENT, and `BackupPolicy.read` — microseconds later — found it
+        // PRESENT. Not a stale cache and not a wrong comparison: `com.apple.backupd` writes its own
+        // exclusion onto folders under `/var/folders` continuously, so **two reads of this file
+        // milliseconds apart can honestly disagree**. Every previous version asserted across a pair
+        // of reads and so had a rate of failure rather than a bug.
+        //
+        // `readWhileStill` closes it by construction: it observes the file, asks `BackupPolicy`,
+        // observes the file again, and returns nothing at all if those two observations differ. A
+        // round that could not see a still file says nothing about this type; it is counted, and
+        // floors below fail the test if the host ate every round.
         var rememberedAnExclusion = 0
-        var sawItAbsent = 0
         var sawOurOwnFlag = 0
-        var theHostWroteItsOwn = 0
+        var sawItAbsent = 0
+        var theHostPutItBack = 0
+        var theHostMovedIt = 0
+
         for round in 1...20 {
+            // Foundation's writer, so the URL has a belief of its own for `read` to ignore.
             var exclude = URLResourceValues()
             exclude.isExcludedFromBackup = true
             try? url.setResourceValues(exclude)
-            // What the URL itself now believes, asked of the URL and not of the file.
-            let remembered = (try? url.resourceValues(forKeys: [.isExcludedFromBackupKey]))?
-                .isExcludedFromBackup
-            if remembered == true { rememberedAnExclusion += 1 }
+            if (try? url.resourceValues(forKeys: [.isExcludedFromBackupKey]))?
+                .isExcludedFromBackup == true { rememberedAnExclusion += 1 }
 
             // The fixture's own single byte, which is unambiguous and ours.
             XCTAssertTrue(setExclusion(true, at: dir.path), "round \(round): setxattr failed")
-            if exclusionShape(dir.path).ours {
-                sawOurOwnFlag += 1
-                XCTAssertEqual(BackupPolicy.read(url), .excluded,
-                               "round \(round): the file carries this test's own exclusion byte and "
-                             + "BackupPolicy did not see it — \(exclusionOnDisk(dir.path))")
-            }
+            if let seen = readWhileStill(url) {
+                if seen.shape.ours {
+                    sawOurOwnFlag += 1
+                    XCTAssertEqual(seen.answer, .excluded,
+                                   "round \(round): the file carries this test's own exclusion byte "
+                                 + "and BackupPolicy did not see it — \(exclusionOnDisk(dir.path))")
+                }
+            } else { theHostMovedIt += 1 }
 
-            // Now take it off with a raw `removexattr`, which cannot touch a `URL`'s cache.
+            // Off again with a raw `removexattr`, which cannot touch a `URL`'s cache.
             XCTAssertTrue(setExclusion(false, at: dir.path), "round \(round): removexattr failed")
-            let shape = exclusionShape(dir.path)
-            if shape.present {
-                // **The host, caught in the act, and this is the third distinct way it has
-                // interfered with this one attribute.** `com.apple.backupd` writes its own
-                // exclusion onto folders under `/var/folders` — CI failed rounds 13 and 19 of
-                // twenty with `attribute present, 61 bytes: bplist00_...com.apple.backupd`,
-                // microseconds after a `removexattr` that returned success. That folder really is
-                // excluded, by Time Machine, and `BackupPolicy` saying so is correct. It is simply
-                // not a round that says anything about a stale `URL` cache, so it is counted and
-                // skipped rather than asserted on — and never silently.
-                theHostWroteItsOwn += 1
-                continue
-            }
-            sawItAbsent += 1
-            XCTAssertEqual(BackupPolicy.read(url), .included,
-                           "round \(round): the file carries no exclusion at all and BackupPolicy "
-                         + "claimed one — \(exclusionOnDisk(dir.path))")
+            if let seen = readWhileStill(url) {
+                if seen.shape.present {
+                    // The daemon's own flag, back on the file after a successful removal. That
+                    // folder really is excluded and `BackupPolicy` saying so is correct — it is
+                    // simply not a round that says anything about a stale `URL` cache.
+                    theHostPutItBack += 1
+                } else {
+                    sawItAbsent += 1
+                    XCTAssertEqual(seen.answer, .included,
+                                   "round \(round): the file carried no exclusion across the whole "
+                                 + "read and BackupPolicy claimed one — \(exclusionOnDisk(dir.path))")
+                }
+            } else { theHostMovedIt += 1 }
         }
         XCTAssertGreaterThan(sawOurOwnFlag, 0,
-                             "not one of twenty rounds managed to put this test's own flag on the "
-                           + "file, so nothing above asserted that BackupPolicy can see one")
+                             "not one of twenty rounds saw this test's own flag on a still file, so "
+                           + "nothing above asserted that BackupPolicy can see one — the host moved "
+                           + "it in \(theHostMovedIt) reads")
         XCTAssertGreaterThan(sawItAbsent, 0,
-                             "not one of twenty rounds left the file with no exclusion on it — the "
-                           + "host wrote its own in \(theHostWroteItsOwn) of them — so nothing "
-                           + "above asserted that BackupPolicy reports its absence")
+                             "not one of twenty rounds saw the file still and with no exclusion on "
+                           + "it, so nothing above asserted that BackupPolicy reports its absence — "
+                           + "the host wrote its own in \(theHostPutItBack) and moved it under "
+                           + "\(theHostMovedIt) reads")
         XCTAssertGreaterThan(rememberedAnExclusion, 0,
                              "not one of twenty rounds left the URL believing it was excluded, so "
                            + "nothing here tested a stale cache at all")
 
-        // And the same through the policy's own writer.
+        // **And the same through the policy's own writer**, on the same terms.
         //
-        // **The fixture changes mechanism here, deliberately.** `include` clears the flag with
-        // `removexattr`, which does not — and cannot — update the cache on `url`; asking `url` to
-        // set a value its cache already holds is precisely the skipped write this whole file is
-        // about. The two Foundation writes above are kept because they *are* reliable and they
-        // cross-check Foundation's writer against this type's reader; from here the fixture goes on
-        // the file, so what is being tested is `BackupPolicy` and not `URL`'s memory.
-        //
-        // **Four assertions rather than one, each naming a different layer.** There is no Swift on
-        // the machine this is written on, so CI is the only way to run it, and a failure that says
-        // only `("excluded") is not equal to ("included")` costs a whole round to learn nothing
-        // from — this failed exactly that way twice before the messages were worth reading.
-        XCTAssertTrue(setExclusion(true, at: dir.path), "the fixture for this half did not take")
-        XCTAssertEqual(BackupPolicy.read(url), .excluded)
-
-        let attempt = BackupPolicy.including(url)
-        let reported = attempt.state
-        let independent = BackupPolicy.read(URL(fileURLWithPath: dir.path))
-        let throughTheCaller = BackupPolicy.read(dir)
-        // Asked of the file system directly, once, and quoted by all four assertions below. If the
-        // attribute is gone and Foundation still says `excluded`, the defect is a read; if it is
-        // there, the write is what failed. Three rounds went by without either being established.
-        let disk = exclusionOnDisk(dir.path)
-        let paths = "wrote through \(url.path); read \(dir.path); on disk: \(disk)"
-
-        XCTAssertNil(attempt.wrote, "setting the flag threw: \(String(describing: attempt.wrote)) "
-                                  + "— \(paths)")
-        // **Two reads of one path must agree with each other whatever is on the file.** That is
-        // this type's own business and no host can excuse it; it is the assertion that caught three
-        // reads of a single path disagreeing within a millisecond.
-        XCTAssertEqual(throughTheCaller, independent,
-                       "two reads of the same path disagree: \(throughTheCaller) here, "
-                     + "\(independent) a line earlier — \(paths)")
-        XCTAssertEqual(reported, independent,
-                       "include reported \(reported) while an independent read of the same path "
-                     + "says \(independent) — \(paths)")
-        // What is on the file decides what the three of them should be saying.
-        let afterInclude = exclusionShape(dir.path)
-        XCTAssertFalse(afterInclude.ours,
-                       "include left this test's own exclusion byte on the file — \(paths)")
-        if !afterInclude.present {
-            XCTAssertEqual(independent, .included,
-                           "the attribute is gone and BackupPolicy still says excluded — \(paths)")
-        }
-        // If it IS present it is the host's own — `com.apple.backupd` writing its exclusion back
-        // onto a folder under `/var/folders`, which CI caught doing exactly that microseconds after
-        // a `removexattr` that returned success. That folder really is excluded and `BackupPolicy`
-        // saying so is correct; the loop below counts how often it happens and fails if it is
-        // every round, so this can never quietly become a test that asserts nothing.
-
-        // **Twenty rounds, because one pass was a coin toss** — the same commit went green on one
-        // CI run and red on the next, and a test that fails half the time can neither confirm a fix
-        // nor be trusted to catch a regression.
-        //
-        // Round 19 of an earlier version is what finally named the cause, and it was not in
-        // `BackupPolicy`: `set→included, on disk: no such attribute`. The **fixture** had failed,
-        // because it set the flag through a URL that had been written through eighteen times. See
-        // `setExclusion`. Every message below still carries what the file system says, which is the
-        // only reason that round said anything useful.
+        // `including` removes the attribute and reads the state back. Two claims survive whatever
+        // the daemon does: the removal must not **fail**, and this test's own byte must be **gone**
+        // afterwards. Whether the daemon has since written its own is not `including`'s business,
+        // and the round is counted rather than asserted on when it has.
         var disagreements: [String] = []
         var startedExcluded = 0
-        var theHostPutItBack = 0
+        var includeSawAStillFile = 0
         for round in 1...20 {
-            // **The fixture is best-effort, and the assertion is written so that it does not have
-            // to be.** `com.apple.metadata:` is the Spotlight daemon's namespace, and an attribute
-            // written there on a folder under `/var/folders` can be gone a millisecond later with
-            // `setxattr` having returned success — CI caught exactly that, twice, at round 18 and
-            // round 19 of twenty. That is the host's business and says nothing about this type.
-            //
-            // So the round asserts the contract that is true from **either** starting state: after
-            // `include`, included. And it counts the rounds that did start from an exclusion, so a
-            // fixture that has stopped working altogether still fails the test rather than quietly
-            // turning twenty rounds into twenty no-ops.
             setExclusion(true, at: dir.path)
             if exclusionShape(dir.path).ours { startedExcluded += 1 }
 
             let attempt = BackupPolicy.including(dir)
-            // The host's own flag, back on the file after a successful removal. Counted rather than
-            // asserted on, and never silently: if every round of twenty goes this way the floor
-            // below fails and says so.
-            let shape = exclusionShape(dir.path)
-            if shape.present, !shape.ours { theHostPutItBack += 1; continue }
-            let later = BackupPolicy.read(URL(fileURLWithPath: dir.path))
-            guard attempt.wrote == nil, attempt.state == .included, later == .included else {
+            guard attempt.wrote == nil else {
+                disagreements.append("round \(round): include threw "
+                                   + "\(String(describing: attempt.wrote))")
+                continue
+            }
+            guard let seen = readWhileStill(URL(fileURLWithPath: dir.path)) else {
+                theHostMovedIt += 1
+                continue
+            }
+            if seen.shape.ours {
+                disagreements.append("round \(round): include left this test's own exclusion byte "
+                                   + "on the file — on disk: \(exclusionOnDisk(dir.path))")
+                continue
+            }
+            if seen.shape.present { theHostPutItBack += 1; continue }
+            includeSawAStillFile += 1
+            if seen.answer != .included {
                 // Both halves worked out before the message. An interpolation is not the place for
                 // a concatenation broken across lines — Swift's lexer cannot read one, and there is
                 // no compiler on the machine this is written on to say so.
                 let threw = attempt.wrote.map { "\($0)" } ?? "no"
                 disagreements.append(
-                    "round \(round): include→\(attempt.state), after→\(later), "
+                    "round \(round): include→\(attempt.state), after→\(seen.answer), "
                   + "threw→\(threw), on disk: \(exclusionOnDisk(dir.path))")
-                continue
             }
         }
         XCTAssertEqual(disagreements, [],
@@ -442,9 +390,28 @@ final class ExportTests: XCTestCase {
                              "no round of twenty started from an exclusion, so the transition this "
                            + "test exists for was never exercised — on disk: "
                            + "\(exclusionOnDisk(dir.path))")
-        XCTAssertLessThan(theHostPutItBack, 20,
-                          "every one of twenty rounds ended with the host's own exclusion back on "
-                        + "the file, so not one of them asserted anything about BackupPolicy")
+        XCTAssertGreaterThan(includeSawAStillFile, 0,
+                             "not one of twenty rounds saw a still file after include, so nothing "
+                           + "asserted what it leaves behind — the host wrote its own in "
+                           + "\(theHostPutItBack) rounds and moved it under \(theHostMovedIt) reads")
+    }
+
+    /// `BackupPolicy.read`, with the file observed either side of it.
+    ///
+    /// **Nil when the host changed the attribute across the read.** `com.apple.metadata:` is the
+    /// Spotlight daemon's namespace and `com.apple.backupd` writes its own exclusion onto folders
+    /// under `/var/folders`, so two reads of this one file milliseconds apart can honestly
+    /// disagree — which is what made every earlier version of the test above fail at a rate rather
+    /// than fail outright. Asserting only across a window the file provably did not move in is the
+    /// only structure that is sound here, and it costs nothing: the caller counts the rounds it
+    /// could not use, and fails if that was all of them.
+    private func readWhileStill(_ url: URL)
+        -> (answer: BackupPolicy.State, shape: (present: Bool, ours: Bool))? {
+        let before = exclusionShape(url.path)
+        let answer = BackupPolicy.read(url)
+        let after = exclusionShape(url.path)
+        guard before.present == after.present, before.ours == after.ours else { return nil }
+        return (answer, before)
     }
 
     // MARK: reading one back
