@@ -1801,3 +1801,30 @@ is for. The guard's job is the class of failure the compiler only finds on a run
 away.
 
 571 tests. 19 guards green.
+
+## A test of mine that described a design this app does not have
+
+571 tests ran, everything compiled, and exactly one failed — mine:
+
+```
+ProfileTests.testEveryConfidenceHasADistinctDrawnForm:
+XCTAssertNotEqual failed: ("NamedColor(name: "colorTextPrimary", …)")
+                is equal to ("NamedColor(name: "colorTextPrimary", …)")
+```
+
+I asserted that the three confidences get three distinct value colours. They do not, on purpose:
+`StatGrid.valueColour` gives `.exact` and `.range` the same one, and the range is marked by a `Tag`
+instead — because colouring the confident case as well would make every figure on the screen look
+qualified. The comment saying so has been in `StatGrid` since PD-015 shipped, three lines from the
+function I was asserting about.
+
+The claim underneath was right and the test was measuring the wrong thing. **Two states a reader
+cannot tell apart are one state** — carried by `basis(for:)`, which is three distinct shapes, and by
+`spokenValue`, which is three distinct sayings. It asserts those now, plus the part that is actually
+interesting about the colours: the two neutrals **swap** between the value and its reason, so the
+loudest thing in a cell is always the thing carrying the meaning — a number when there is one, the
+reason when there is not.
+
+Worth writing down because of the shape of it: a test that fails is not always a defect in the code.
+This one was a defect in my description of the code, and it went in during a rebuild of that very
+screen — the moment I was most likely to assume I already knew how it drew.

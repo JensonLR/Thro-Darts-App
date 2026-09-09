@@ -35,12 +35,30 @@ final class ProfileTests: XCTestCase {
         XCTAssertEqual(line.item.note, "No visit recorded how many darts were thrown at a double.")
     }
 
-    func testEveryConfidenceHasADistinctDrawnForm() {
-        // Two states a reader cannot tell apart are one state. The grid colours them and only a
-        // range is tagged, so the three must not collapse into one colour.
-        XCTAssertNotEqual(StatGrid.valueColour(.exact), StatGrid.valueColour(.range))
-        XCTAssertNotEqual(StatGrid.valueColour(.range), StatGrid.valueColour(.unavailable))
+    func testNoTwoConfidencesAreDrawnOrSpokenTheSameWay() {
+        // **What the first version of this asserted, and why CI was right to refuse it.** It
+        // demanded three distinct value colours. `valueColour` gives `.exact` and `.range` the
+        // same one deliberately: only a range is marked, and it is marked with a `Tag`, because
+        // colouring the confident case as well would make every figure on the screen look
+        // qualified. My assertion described a design this app does not have and never did.
+        //
+        // The claim that matters — two states a reader cannot tell apart are one state — is
+        // carried by the basis and by the speech, and those are three ways each.
+        let bases = StatItem.Confidence.allCases.map(StatGrid.basis(for:))
+        XCTAssertEqual(Set(bases).count, StatItem.Confidence.allCases.count)
+        let items: [StatItem] = [.exact("Checkout %", "31%"),
+                                 .range("Checkout %", "31–44%", why: "Two visits did not record."),
+                                 .unavailable("Checkout %", why: "No visit recorded.")]
+        XCTAssertEqual(Set(items.map(StatGrid.spokenValue)).count, items.count)
+
+        // And the two neutrals **swap** between the value and its reason, so the loudest thing in
+        // a cell is always the thing carrying the meaning: a number when there is one, the reason
+        // when there is not.
+        XCTAssertEqual(StatGrid.valueColour(.exact), StatGrid.valueColour(.range))
         XCTAssertNotEqual(StatGrid.valueColour(.exact), StatGrid.valueColour(.unavailable))
+        XCTAssertEqual(StatGrid.valueColour(.unavailable), StatGrid.noteColour(.exact))
+        XCTAssertEqual(StatGrid.noteColour(.unavailable), StatGrid.valueColour(.exact))
+
         XCTAssertEqual(StatItem.Confidence.allCases.count, 3,
                        "a fourth basis was added and nothing here walks it")
     }
