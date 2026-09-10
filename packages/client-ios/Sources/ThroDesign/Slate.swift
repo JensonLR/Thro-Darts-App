@@ -163,8 +163,10 @@ public struct ThroFixtureSlate: View {
         Text(text)
             .thro((expanded ? ThroTypography.display : ThroTypography.heading1).family(.sport).weight(.bold).tracking(em: 0))
             .foregroundStyle(ThroColor.colorTextOnBoard)
-            .lineLimit(2)
-            .minimumScaleFactor(0.6)
+            // One line each side, shrinking to fit: a name that wrapped against one that did not
+            // read as two different sizes of person.
+            .lineLimit(1)
+            .minimumScaleFactor(0.5)
             .multilineTextAlignment(alignment == .trailing ? .trailing : .leading)
             .frame(maxWidth: .infinity, alignment: alignment)
     }
