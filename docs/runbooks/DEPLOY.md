@@ -1,126 +1,122 @@
-# Runbook — deploying to Fly.io (PD-031)
+# Runbook — deploying THRØ (PD-031, amended 2026-09-10)
 
-One image, London, migrations as the release step. You have installed `fly` and signed in as the
-account owner; everything below runs from the repository root on this Mac. Nothing in the
-repository holds a secret.
+One image, a managed Postgres in London with point-in-time recovery, migrations as a deploy step
+before the image serves. Two paths share everything but the compute host:
+
+| | Path A — staging without a card | Path B — Fly.io (production, or staging if you add a card) |
+|---|---|---|
+| Database | **Neon**, London (`aws-eu-west-2`), free plan | **Neon**, London, pay-as-you-go (7-day restore) |
+| Compute | **Render** free web service, Frankfurt | **Fly.io** `shared-cpu-1x`, London (`lhr`) |
+| Card needed | no | yes (Fly requires one for every organisation) |
+| Migrations run | from your Mac: `gradle -p services/api migrate` | by Fly's release command, from the image |
+| Cost | £0 | about $3.50 a month for the machine |
+| Public host | `thro-api-staging.onrender.com` | `thro-api-staging.fly.dev` / your domain |
+
+Nothing in the repository holds a secret. Everything below runs from the repository root.
 
 ## Names, fixed here so nothing has to be renamed
 
-| Thing | Staging | Production (when you get there) |
-|---|---|---|
-| Fly app | `thro-api-staging` | `thro-api` |
-| Public host | `thro-api-staging.fly.dev` | your own domain, chosen before the first real passkey (see below) |
-| Fly Postgres app (staging only) | `thro-db-staging` | a PITR-capable managed Postgres in London — see below |
-| Database name (what `attach` creates) | `thro_api_staging` | — |
-| Passkey relying party (`THRO_RP_ID`) | `thro-api-staging.fly.dev` (the default) | the production host |
-| Apple app id for passkeys | `2XM324WPD5.app.thro.darts` | the same |
-| Fly organisation | `personal` | `personal` |
-
-`fly.toml` already says `app = "thro-api-staging"`. If `fly apps create thro-api-staging` says the
-name is taken, add a short suffix (for example `thro-api-staging-jl`), change that one line in
-`fly.toml` to match, and use the new name everywhere below.
+| Thing | Value |
+|---|---|
+| Neon project | `thro` (one project; a branch per environment: `staging`, later `production`) |
+| Neon database | `thro` |
+| Neon roles | `thro_deploy` (runs migrations; Neon's default owner role, renamed or kept as `neondb_owner`) and `thro_app` (the API connects as this; it holds only the application roles) |
+| Render service / Fly app | `thro-api-staging` (production: `thro-api`) |
+| Apple app id for passkeys | `2XM324WPD5.app.thro.darts` |
+| Passkey relying party | the public host of the environment — see the warning below |
 
 **Passkeys are bound to the host.** A passkey is created for a relying party id and cannot move:
-change the host and every passkey registered against the old one stops working. Staging on
-`thro-api-staging.fly.dev` is fine because staging holds no real people. For production, choose
-the final host — your own domain — **before** any real person registers a passkey, and set
-`THRO_RP_ID` to it from the first production deploy. ADR-011 prefers permanent identifiers
-without the product name; a Fly app name is not permanent — your own domain will front it — so
-these are chosen for clarity.
+change the host and every passkey registered against the old one stops working. Staging on a
+provider hostname is fine because staging holds no real people. For production, choose the final
+host — your own domain — **before** any real person registers a passkey, and set `THRO_RP_ID` to it
+from the first production deploy.
 
-## Staging, step by step
+## Path A — Neon + Render, no card
 
-**1. The app.**
+**A1. The database (Neon).** At <https://console.neon.tech>: create a project named `thro`, region
+**Europe (London)**, Postgres 16 or 17, database name `thro`. Neon gives you an owner role (its
+name is shown; it can create roles, which the first migration needs). Then, in the project's
+**Roles** page, add a second role `thro_app` and keep its password. Copy two connection strings
+from the **Connect** panel, both with `?sslmode=require`:
+
+- the owner role's → this is `MIGRATE_DATABASE_URL`
+- `thro_app`'s → this is `DATABASE_URL`
+
+**A2. Migrate from your Mac.** The migrations create the owner and application roles, every
+schema, and grant `thro_app` exactly the application roles (nothing else). The ledger records what
+was applied; running it again applies only what is new.
 ```bash
-fly apps create thro-api-staging --org personal
+export MIGRATE_DATABASE_URL='postgres://<owner role>:<password>@<host>/thro?sslmode=require'
+export APP_DB_USER='thro_app'
+gradle -p services/api migrate
 ```
+Expected: `migrated V--- -> V026: V001__... V002__... ...` then `application roles granted to
+thro_app`. Run it again and it says `schema already at V026; nothing applied`.
 
-**2. The database.** Fly Postgres is fine for staging (synthetic data only, ADR-011):
+**A3. The web service (Render).** At <https://dashboard.render.com>: **New → Blueprint**, connect
+the GitHub repository `JensonLR/Thro-Darts-App`, branch `claude/thro-production-build-je2mkf`. Render
+reads `render.yaml` and creates `thro-api-staging` (free instance, Frankfurt, built from the
+Dockerfile). It will ask for the two values marked `sync: false`:
+
+- `DATABASE_URL` — `thro_app`'s connection string from A1
+- `THRO_GOOGLE_CLIENT_ID` — leave empty until you have it (Sign in with Google answers 503 until then)
+
+Deploy. The first build takes several minutes (it compiles the Kotlin packages). `THRO_DEV_AUTH` is
+never set here; the server refuses it against a remote database anyway.
+
+**A4. Check it.**
 ```bash
-fly postgres create --name thro-db-staging --org personal --region lhr \
-  --initial-cluster-size 1 --vm-size shared-cpu-1x --volume-size 3
+curl -s https://thro-api-staging.onrender.com/healthz
+curl -s https://thro-api-staging.onrender.com/openapi.json | head -c 300
+curl -s https://thro-api-staging.onrender.com/.well-known/apple-app-site-association
 ```
-It prints a `postgres` superuser password once. Copy it; you need it in step 4.
+Expected: `{"database":"ok","schemaVersion":"V026"}` (or later), the contract, and
+`{"webcredentials":{"apps":["2XM324WPD5.app.thro.darts"]}}`. The first request after fifteen quiet
+minutes takes about a minute while the free instance wakes; that is the free tier, not a fault.
 
-**3. Attach the database to the app.** This creates the database `thro_api_staging`, a user
-`thro_api_staging`, and sets the app's `DATABASE_URL` secret. `--superuser=false` matters: the
-default makes the app's user a superuser, which would let it bypass every grant the migrations
-set up, and the release step gives it exactly the application roles instead.
-```bash
-fly postgres attach thro-db-staging --app thro-api-staging --superuser=false
-```
+**A5. Point the iOS app at it.** In Xcode, the app's **Associated Domains** entitlement gains
+`webcredentials:thro-api-staging.onrender.com`, and the app's API base URL is
+`https://thro-api-staging.onrender.com`. Sign in with Apple needs the capability on the app id in
+the Apple Developer portal; the ID token's audience is the bundle id, which `render.yaml` sets.
 
-**4. Secrets.** The release step migrates as the superuser and then grants the app's user the
-application roles; the server runs as the app's user through `DATABASE_URL` from step 3.
+**Every later deploy on path A:** push to the branch, run A2 if there are new migrations (the
+ledger makes it safe to run every time), then **Manual Deploy → Deploy latest commit** in Render.
+Migrate first, deploy second: a migration must be compatible with the image that is still running.
+
+## Path B — Neon + Fly.io
+
+When a card is on file. The database is the same Neon project (use the `production` branch for
+production); the difference is where the image runs and that Fly runs the migration for you.
+
 ```bash
+fly apps create thro-api-staging --org personal          # fly.toml already names this app
 fly secrets set --app thro-api-staging \
-  MIGRATE_DATABASE_URL='postgres://postgres:<password from step 2>@thro-db-staging.flycast:5432/thro_api_staging?sslmode=disable' \
-  THRO_APPLE_CLIENT_ID='app.thro.darts' \
-  THRO_APPLE_APP_IDS='2XM324WPD5.app.thro.darts' \
-  THRO_GOOGLE_CLIENT_ID='<your Google iOS OAuth client id>.apps.googleusercontent.com'
-```
-The Google id comes from Google Cloud Console → APIs & Services → Credentials → Create
-credentials → OAuth client ID → type **iOS**, bundle `app.thro.darts`. If you do not have it yet,
-leave that line out: Sign in with Google answers 503 until it is set, and everything else works.
-`THRO_DEV_AUTH` is never set on Fly; the server refuses it against a remote database anyway.
-
-**5. Deploy.** From the repository root (the Dockerfile builds the API with the packages beside it):
-```bash
+  DATABASE_URL='<thro_app connection string>?sslmode=require' \
+  MIGRATE_DATABASE_URL='<owner role connection string>?sslmode=require' \
+  APP_DB_USER='thro_app' \
+  THRO_APPLE_CLIENT_ID='app.thro.darts' THRO_APPLE_APP_IDS='2XM324WPD5.app.thro.darts'
 fly deploy --app thro-api-staging
-```
-`fly deploy` builds the image, runs the release command — the same image with `migrate`, which
-brings the database to the image's version through the ledger (ADR-013), refuses a database it
-cannot reason about, and grants the app's user the application roles — and only then starts the
-machine. A failed migration stops the deploy before the new image serves a request.
-
-**6. Check it.**
-```bash
-fly status --app thro-api-staging
-fly logs --app thro-api-staging
 curl -s https://thro-api-staging.fly.dev/healthz
-curl -s https://thro-api-staging.fly.dev/openapi.json | head -c 300
-curl -s https://thro-api-staging.fly.dev/.well-known/apple-app-site-association
 ```
-Expected: `{"database":"ok","schemaVersion":"V025"}` (or later), the contract, and
-`{"webcredentials":{"apps":["2XM324WPD5.app.thro.darts"]}}`. The log's first lines say which
-authenticator is on ("passkeys: relying party thro-api-staging.fly.dev …", no development warning).
-
-**7. Point the iOS app at it.** In Xcode, the app's **Associated Domains** entitlement gains
-`webcredentials:thro-api-staging.fly.dev`, and the app's API base URL is
-`https://thro-api-staging.fly.dev`. Sign in with Apple needs the capability on the app id in the
-Apple Developer portal; the ID token's audience is the bundle id, which is what step 4 set.
-
-## Every later deploy
-
-```bash
-fly deploy --app thro-api-staging
-```
-Then the same checks. Migrations that are new run in the release step; the ledger refuses an edited
-applied migration, which is the intended cost of editing one (ADR-013).
-
-## Production, when staging has earned it
-
-Production is the same image against a database with **point-in-time recovery** in London (ADR-011,
-PD-031). Fly Postgres as created above does not promise PITR, so production's database is either
-Fly's Managed Postgres in `lhr` if your account offers it, or a managed provider with a London
-region such as Neon (`eu-west-2`). When you choose, this section gains its exact commands; the
-app-side steps are identical to staging with `thro-api` in place of `thro-api-staging`, the
-production host as the relying party, and `DATABASE_URL` / `MIGRATE_DATABASE_URL` set by hand
-from the provider's connection strings instead of `fly postgres attach`.
+`fly deploy` builds the image, runs the release command (the same image with `migrate`, which
+brings the database to the image's version through the ledger and grants `thro_app` the
+application roles) and only then starts the machine. For production, copy `fly.toml` to a file
+with `app = "thro-api"` and `THRO_RP_ID` set to your domain in `[env]`, and deploy with
+`--config` and `--app thro-api`.
 
 ## Rolling back
 
-Migrations are forward-only (ADR-013); the image rolls back, the schema does not. `fly releases
---app <name>` lists images; `fly deploy --image <previous image> --app <name>` returns to one.
+Migrations are forward-only (ADR-013); the image rolls back, the schema does not. On Render, redeploy
+an earlier commit from the dashboard; on Fly, `fly releases` then `fly deploy --image <previous>`.
 Because every migration must be compatible with the previous image, this is safe by construction.
+Neon's restore window (six hours free, seven days paid) covers the database itself.
 
 ## Not done yet, and said so
 
 - Nothing is deployed until you run the steps above; CI builds the image (`image` workflow) but
   never deploys.
-- The API connects as one database user holding the union of the application roles (granted by
-  the release step). ADR-011's per-module connections are a follow-up before production traffic.
+- The API connects as one database role, `thro_app`, holding the union of the application roles.
+  ADR-011's per-module connections are a follow-up before production traffic.
 - Rate limiting on the sign-in routes, object storage (media), push (APNs) and the scheduled
   restore drill are not configured.
-- Production's `fly deploy --app thro-api` will need its own copy of `fly.toml` (`app = "thro-api"`,
-  the production relying party in `[env]`) — written when production is provisioned.
+- Production needs a card wherever it runs, and a domain before the first real passkey.

@@ -10,6 +10,18 @@ CREATE ROLE app_trust  NOLOGIN;                 -- attestations, disputes, quara
 CREATE ROLE app_rating NOLOGIN;                 -- rating projections; downstream only
 CREATE ROLE app_read   NOLOGIN;                 -- read models
 
+-- The deploy user must be able to act as the owner. A superuser always can; a managed provider's
+-- role (Neon, RDS) is not one, and PostgreSQL 16 no longer gives a role's creator the SET and
+-- INHERIT options on the role it created. So the creator grants itself membership here, using the
+-- ADMIN OPTION creation does confer, and every later `SET ROLE thro_owner` and
+-- `AUTHORIZATION thro_owner` works on any PostgreSQL 16 the deploy user can create roles on.
+DO $$
+BEGIN
+  IF NOT (SELECT rolsuper FROM pg_roles WHERE rolname = current_user) THEN
+    EXECUTE format('GRANT thro_owner TO %I WITH SET TRUE, INHERIT TRUE', current_user);
+  END IF;
+END $$;
+
 CREATE SCHEMA evidence AUTHORIZATION thro_owner;   -- append-only competitive truth
 CREATE SCHEMA trust     AUTHORIZATION thro_owner;
 CREATE SCHEMA rating    AUTHORIZATION thro_owner;

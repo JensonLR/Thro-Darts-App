@@ -2501,3 +2501,34 @@ The runbook had a step that would have made the app's database user a superuser:
 attach` defaults to it. It now says `--superuser=false` and why, `fly.toml` carries the staging
 app name, and the runbook says in bold what the review said in plain terms — a passkey is bound to
 its host, so production's domain is chosen before any real person registers one.
+
+## A database that needs no card, and a first migration that did not run without one
+
+Fly.io requires a card on file for every organisation, and the founder asked whether there was a
+better database option — Neon was named — or a design that leaned on iCloud and Android's
+equivalents instead of a server. The second question has a short answer that is in the plan and the
+ADRs already: iCloud syncs one person's own data between that person's Apple devices, Android has
+no equivalent that iOS can read, and THRØ's product is the shared world — a league's fixtures, a
+team's roster, another person's result, the Secretary's tasks — which needs one authority that both
+phones talk to. The on-device journal already is the iCloud-shaped part: a person's own matches
+live on their phone and travel in its backup. Rebuilding the shared world on Firestore or CloudKit
+would throw away the foundations the brief said not to, and CloudKit could not include a Pixel.
+
+The first question had a better answer than the runbook gave. PD-031 said "Fly.io and a managed
+Postgres with point-in-time recovery in London" and the runbook had reached for Fly Postgres, which
+promises no PITR and needs the card. Neon is the managed Postgres the decision described: a London
+region, a free plan with a six-hour restore window that needs no card, seven days on the plan below
+that, and plain PostgreSQL out. PD-031 is amended to name it, and to split compute: Render's free
+web service in Frankfurt for staging (no card; it sleeps after fifteen idle minutes and wakes in a
+minute, which staging can bear), Fly in London for production, where a card is unavoidable because
+always-on costs money. `render.yaml` is the blueprint; `gradle -p services/api migrate` is the
+deploy step for a host with no release hook; the runbook has both paths with the names in them.
+
+Testing the Neon path found a bug that was not Neon's. On a managed database the deploy user is
+not a superuser, and PostgreSQL 16 no longer gives a role's creator the right to act as the role it
+created: V001 created `thro_owner` and then could not `SET ROLE` to it, so the first migration
+failed at its first schema. V001 now has the creator grant itself membership with SET and INHERIT
+when it is not a superuser — using the ADMIN OPTION creation does confer — and the whole chain,
+V001 to V026, was run as a plain role with CREATEROLE on a fresh cluster and passed. Every earlier
+run had been as a superuser, which is exactly the condition ADR-013 says a migration must not be
+tested only under. The edit changes V001's digest, so a database migrated before it is rebuilt.

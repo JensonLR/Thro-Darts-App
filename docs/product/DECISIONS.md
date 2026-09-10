@@ -1626,6 +1626,29 @@ It unblocks staging and the two-device sync release check. Local and CI work nev
 Low: one image and one database dump move to any of the alternatives considered (Render, Railway,
 AWS App Runner with RDS).
 
+### Amendment, 2026-09-10 — the database is Neon; staging without a card
+
+Fly requires a card on file for every organisation, and the founder does not wish to add one yet.
+The decision's substance stands — one container, London, a managed Postgres with point-in-time
+recovery — and its parts are now named separately:
+
+- **Database: Neon, region London (`aws-eu-west-2`).** It is the managed Postgres with PITR the
+  record asked for, it has a London region, and its free plan (0.5 GB, a six-hour restore window,
+  autosuspend after five idle minutes) needs no card and is enough for staging. Before real players,
+  the project moves to the pay-as-you-go plan for a seven-day restore window; nothing else changes.
+  Every migration was run against a database where the deploy user is *not* a superuser, which is
+  Neon's model, and V001 now grants that user membership of the owner role so that it can.
+- **Compute, staging: Render's free web service** (Frankfurt, no card; spins down after fifteen
+  idle minutes and wakes in about a minute). Staging holds synthetic data, so EU rather than UK is
+  within ADR-011, and the wake-up delay is a staging cost, not a product one. `render.yaml` is the
+  blueprint. Migrations run from a developer's machine (`gradle -p services/api migrate`) because the
+  free tier has no release hook — still a deploy step, still before the image serves.
+- **Compute, production: Fly.io in London** as decided (about $3.50 a month for the smallest
+  machine), or a paid Render instance; both need a card, which is unavoidable for a host that is
+  always on. The image, the migrations and the runbook are the same either way.
+
+**Reversal:** low, unchanged — one image, one database dump; Neon exports as plain PostgreSQL.
+
 ## PD-032 — Recovery for the passkey path is a second way in
 
 **Taken on delegated authority, 2026-09-10.** Reversible by adding a channel.

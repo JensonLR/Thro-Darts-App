@@ -1,0 +1,34 @@
+# Render Blueprint — the no-card staging path (docs/runbooks/DEPLOY.md, path A).
+#
+# One web service built from the repository's Dockerfile, on Render's free instance type, in
+# Frankfurt (EU; ADR-011 allows UK/EU, and staging holds synthetic data only). The database is
+# not here: it is a Neon project in London, whose connection string is pasted into DATABASE_URL
+# in the Render dashboard. Migrations are a deploy step run from a developer's machine with
+# `gradle -p services/api migrate` against MIGRATE_DATABASE_URL (ADR-013), because the free
+# instance type has no pre-deploy hook.
+#
+# A free instance spins down after fifteen idle minutes and takes about a minute to wake, so the
+# first request after a quiet spell is slow and a live stream (ADR-007, not built yet) would drop.
+# That is acceptable for staging and not for production; production is Fly or a paid Render
+# instance, both of which need a card.
+services:
+  - type: web
+    name: thro-api-staging
+    runtime: docker
+    region: frankfurt
+    plan: free
+    dockerfilePath: ./Dockerfile
+    dockerCommand: serve
+    healthCheckPath: /healthz
+    autoDeploy: false
+    envVars:
+      - key: DATABASE_URL
+        sync: false            # the Neon connection string for the app's role, pasted in the dashboard
+      - key: THRO_RP_ID
+        value: thro-api-staging.onrender.com
+      - key: THRO_APPLE_CLIENT_ID
+        value: app.thro.darts
+      - key: THRO_APPLE_APP_IDS
+        value: 2XM324WPD5.app.thro.darts
+      - key: THRO_GOOGLE_CLIENT_ID
+        sync: false            # optional until the Google OAuth iOS client exists

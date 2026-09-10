@@ -46,6 +46,20 @@ tasks.named<JavaExec>("run") {
     }
 }
 
+// `gradle -p services/api migrate` brings a database to this checkout's version (ADR-013's deploy
+// step) — the one the environment names: MIGRATE_DATABASE_URL, else DATABASE_URL, else PG*. Used
+// from a developer's machine for hosts with no release hook (Render's free tier), and by the image's
+// release command elsewhere.
+tasks.register<JavaExec>("migrate") {
+    group = "application"
+    description = "Apply unapplied migrations to the database the environment names"
+    classpath = sourceSets["main"].runtimeClasspath
+    mainClass.set("thro.api.MigrateKt")
+    for (v in listOf("PGHOST", "PGPORT", "PGUSER", "PGDATABASE", "PGPASSWORD", "PGSSLMODE", "DATABASE_URL", "MIGRATE_DATABASE_URL", "APP_DB_USER")) {
+        System.getenv(v)?.let { environment(v, it) }
+    }
+}
+
 // `gradle -p services/api serve` starts the HTTP API. It refuses to start without an authenticator;
 // the only one that exists is the development one, enabled by THRO_DEV_AUTH=1 and nothing else.
 tasks.register<JavaExec>("serve") {
