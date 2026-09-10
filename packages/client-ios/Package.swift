@@ -8,8 +8,8 @@ import PackageDescription
 // no compile-time dependency on the network layer, checked in CI via the module dependency graph."
 // The network target is ThroNet, and nothing the scoring path depends on may depend on it:
 // ThroJournal reaches only the engine and SQLite; ThroPlay reaches the journal, the engine, the
-// statistics and the design system; ThroNet reaches Foundation and nothing of ours. Only ThroApp
-// reaches ThroNet. `tools/check_absence_claims.py` holds the direction.
+// statistics and the design system; ThroNet reaches Foundation and nothing of ours.
+// Only ThroApp reaches ThroNet. `tools/check_absence_claims.py` holds the direction.
 //
 // Apple platforms only, because SwiftUI and the asset catalogue are. The engine and the statistics
 // are separate packages precisely so that the parts which CAN build on Linux are verified there on
