@@ -76,7 +76,7 @@
 	<key>THROAPIBaseURL</key>
 	<string>https://thro-api-staging.onrender.com</string>
 	<key>THROGoogleClientID</key>
-	<string></string>
+	<string>582675551910-rvvhkvlm6rebbf4cclaomauog24sth8m.apps.googleusercontent.com</string>
 	<key>CFBundleURLTypes</key>
 	<array>
 		<dict>
