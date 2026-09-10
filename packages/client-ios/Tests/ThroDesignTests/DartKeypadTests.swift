@@ -62,15 +62,18 @@ final class DartKeypadTests: XCTestCase {
         for row in DartKeypad.rows { XCTAssertEqual(row.count, 5) }
     }
 
-    func testTheSectorsAreInTheBoardsOrderAndNotCountingOrder() {
-        XCTAssertEqual(DartKeypad.rows.flatMap { $0 }, ThroDart.sectors)
-        XCTAssertNotEqual(DartKeypad.rows.flatMap { $0 }, Array(1...20),
-                          "counting order is a keypad you read; board order is one you find")
+    func testTheSectorsCountUpAndNotInTheBoardsOrder() {
+        // PD-034: zero learning. The first version was the board's clockwise order, which put 20
+        // in the top corner. If this fails, somebody has put the board back on the keypad.
+        XCTAssertEqual(DartKeypad.rows.flatMap { $0 }, Array(1...20))
+        XCTAssertNotEqual(DartKeypad.rows.flatMap { $0 }, ThroDart.sectors)
     }
 
-    func testTwentyIsOnTheFirstSectorRowBetweenOneAndFive() {
-        // Where a player's eye goes first. If the order ever changes, this is the thing that broke.
-        XCTAssertEqual(DartKeypad.rows.first?.first, 20)
+    func testTheBigFiveAreOnTheBottomSectorRowNearestTheThumb() {
+        // 16 to 20 are what most visits are made of; they sit on the last sector row, directly
+        // above 25 · BULL · MISS · ENTER, so a scoring thumb rarely leaves the bottom of the tray.
+        XCTAssertEqual(DartKeypad.rows.last, [16, 17, 18, 19, 20])
+        XCTAssertEqual(DartKeypad.rows.first, [1, 2, 3, 4, 5])
     }
 
     // MARK: - the bottom row

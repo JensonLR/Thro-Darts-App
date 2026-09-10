@@ -190,11 +190,9 @@ notation costs. Whatever is showing when a visit is part-entered is cleared by t
 darts have a total, but a total does not have three darts.)
 
 - **A normal visit.** The keypad is a row of **SINGLE · DOUBLE · TREBLE**, then the twenty sectors
-  **in the board's own order**, read clockwise from the top and wrapped into four rows of five —
-  `20 1 18 4 13` / `6 10 15 2 17` / `3 19 7 16 8` / `11 14 9 12 5` — then **25 · BULL · MISS ·
-  ENTER**. It is the board's *sequence*, which is how a player remembers where a number is; it is
-  not the ring's geometry, so 5 ends up at the far corner from 20 rather than beside it. Both beat
-  1-to-20 in rows, which is a keypad you have to read rather than one you can find. Tap **TREBLE**, then **20**: the key says *T20* before you commit to
+  **counting 1 to 20, ascending down the tray** (PD-034), so `16 17 18 19 20` is the bottom sector row, nearest the thumb — then **25 · BULL · MISS ·
+  ENTER**. Counting order needs no learning, and running it downwards puts the numbers most
+  visits are made of where a thumb reaches best. Tap **TREBLE**, then **20**: the key says *T20* before you commit to
   it, the dart appears **under the two scores** — beside the number it is about to change — and the
   ring drops back to SINGLE. Do it three times for a 180.
 - **Take one back.** Tap the middle dart on the board. It and the one after it go; the first stays.

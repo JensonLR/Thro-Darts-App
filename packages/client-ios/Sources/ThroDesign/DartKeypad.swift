@@ -10,7 +10,7 @@ import ThroTokens
 // be tapped:
 //
 //   1     SINGLE · DOUBLE · TREBLE        the ring, held
-//   2–5   the twenty sectors, five a row, in the board's own order
+//   2–5   the twenty sectors, five a row, 1 to 20, ascending down the tray
 //   6     25 · BULL · MISS · ENTER        the darts that have no sector, and the commit
 //
 // and **the darts entered so far are drawn on the board**, under the head, where the chalk is —
@@ -18,11 +18,15 @@ import ThroTokens
 //
 // Two orderings are deliberate.
 //
-// **The sectors are in the board's order, not 1-to-20** — read clockwise from the top and wrapped
-// into four rows of five, so the first row is `20 1 18 4 13`. That is the board's *sequence*, which
-// is how a player remembers where a number is; it is deliberately **not** the ring's geometry, and
-// the wrap costs one adjacency — 5 sits at the far corner from 20 rather than beside it. Both are
-// better than counting order, which is a keypad you have to read instead of one you can find.
+// **The sectors count 1 to 20, top to bottom** (PD-034). The first version laid them out in the
+// board's clockwise order, `20 1 18 4 13` first, on the argument that a player finds a number by
+// where it sits on the board. On a phone that put 20 — the most-hit number in the game — in the top
+// corner, the one place a thumb reaches worst, and split four board neighbours across row ends
+// anyway. Counting order needs no learning at all (every numeric grid people already use runs 1
+// at the top), and ascending DOWN the tray puts 16, 17, 18, 19 and 20 — the numbers most visits are
+// made of — on the bottom sector row, nearest the thumb, right above the bull and Enter. A right
+// thumb gets 20 closest, a left thumb 16; board order favoured neither. The cost is that 20's board
+// neighbours 1 and 5 are no longer beside it, which matters only after a bad dart.
 //
 // **MISS sits between BULL and ENTER.** Enter is the one control in this app that commits evidence,
 // so the key next to it should be the one that costs nothing when it is hit by mistake. A fat-thumb
@@ -55,12 +59,11 @@ public struct DartKeypad: View {
     /// The ring row, in the order a player says them.
     public static let rings: [ThroDart.Ring] = [.single, .double, .treble]
 
-    /// The sectors as the keypad lays them out: four rows of five, in the board's order.
+    /// The sectors as the keypad lays them out: four rows of five, counting up, so the bottom row
+    /// is 16 to 20 (PD-034).
     ///
-    /// `[[20, 1, 18, 4, 13], [6, 10, 15, 2, 17], [3, 19, 7, 16, 8], [11, 14, 9, 12, 5]]`.
-    public static let rows: [[Int]] = stride(from: 0, to: ThroDart.sectors.count, by: 5).map {
-        Array(ThroDart.sectors[$0..<min($0 + 5, ThroDart.sectors.count)])
-    }
+    /// `[[1, 2, 3, 4, 5], [6, 7, 8, 9, 10], [11, 12, 13, 14, 15], [16, 17, 18, 19, 20]]`.
+    public static let rows: [[Int]] = stride(from: 1, through: 20, by: 5).map { Array($0..<($0 + 5)) }
 
     /// The three darts on the bottom row that have no sector of their own.
     public static let centres: [ThroDart] = [.outerBull, .bull, .miss]

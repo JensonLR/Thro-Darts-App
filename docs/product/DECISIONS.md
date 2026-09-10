@@ -1707,3 +1707,23 @@ on a map.
 Whether to pay for LeagueRepublic's Gold plan (its JSON web services, including fixtures and
 results) or to ask each league's secretary for a data-sharing agreement. The honest route to
 fixtures and results is the secretary: the seed carries names only until one exists.
+
+## PD-034 — Both keypads read the way every keypad reads
+
+**Taken by the founder, 2026-09-10** ("zero learning layout for both per dart & total score layouts;
+keep the big scores"). Reversible: a layout constant.
+
+### Decided
+
+The **visit keypad** keeps its six quick totals — 180, 140, 100, 60, 45, 26 — above a phone-dialler
+grid (1 2 3 / 4 5 6 / 7 8 9 / Miss 0 Undo / Enter); it already read that way and does not change.
+The **per-dart keypad**'s twenty sectors now count 1 to 20 in four rows of five, ascending down the
+tray, so 16 to 20 are the bottom sector row, nearest the thumb and directly above 25 · BULL · MISS ·
+ENTER. The board's clockwise order — `20 1 18 4 13` first — is withdrawn: it had to be learned, it
+put 20 in the worst corner for a thumb, and it split four board neighbours across row ends anyway.
+
+### Why
+
+Ergonomics for the majority: most visits are 20s and 19s and the doubles beside them; a thumb reaches
+the bottom of a phone easily and the top corners worst; and a grid that runs 1 at the top is the one
+grid nobody has to be taught.
