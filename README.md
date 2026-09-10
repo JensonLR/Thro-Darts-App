@@ -149,6 +149,9 @@ export PGHOST=localhost
 bash services/api/test/schema_properties.sh
 gradle -p services/api test
 
+# or everything above and the Swift client in one go, with the toolchain checked first
+bash scripts/dev.sh                                  # see docs/runbooks/LOCAL_DEV.md
+
 # the HTTP API, development authenticator only — it trusts an X-Thro-Dev-Subject header and says so
 THRO_DEV_AUTH=1 gradle -p services/api serve
 ```
