@@ -325,8 +325,7 @@ public struct MatchReadyScreen: View {
             // under one button. The legs so far sit on the slate when there are any.
             VStack(spacing: ThroSpacing.spacing4) {
                 ThroFixtureSlate(home: session.name(.home), away: session.name(.away),
-                                 tags: tags, footnote: footnote)
-                    .frame(maxHeight: .infinity)
+                                 tags: tags, footnote: footnote, expanded: true)
                 if !session.visits.isEmpty {
                     HStack {
                         Text("Legs so far").thro(ThroTypography.label).foregroundStyle(ThroColor.colorTextSecondary)

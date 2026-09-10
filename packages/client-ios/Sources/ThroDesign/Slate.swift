@@ -60,22 +60,26 @@ public struct ThroFixtureSlate: View {
     private let away: String
     private let tags: [String]
     private let footnote: String?
+    /// Whether the slate takes all the height it is offered and writes the names at display size:
+    /// the ready screen, where the fixture IS the screen. Off, it takes the height of its lines.
+    private let expanded: Bool
 
-    public init(home: String, away: String, tags: [String] = [], footnote: String? = nil) {
+    public init(home: String, away: String, tags: [String] = [], footnote: String? = nil, expanded: Bool = false) {
         self.home = home
         self.away = away
         self.tags = tags
         self.footnote = footnote
+        self.expanded = expanded
     }
 
     public var body: some View {
         ThroSlate {
-            VStack(spacing: ThroSpacing.spacing5) {
+            VStack(spacing: expanded ? ThroSpacing.spacing6 : ThroSpacing.spacing5) {
                 HStack(alignment: .center, spacing: ThroSpacing.spacing4) {
                     name(home, alignment: .trailing)
                     ThroMark()
                         .fill(ThroColor.colorMarkOnBoard)
-                        .frame(width: 36, height: 36)
+                        .frame(width: expanded ? 56 : 36, height: expanded ? 56 : 36)
                         .accessibilityHidden(true)
                     name(away, alignment: .leading)
                 }
@@ -101,6 +105,7 @@ public struct ThroFixtureSlate: View {
             }
             .padding(.vertical, ThroSpacing.spacing7)
             .padding(.horizontal, ThroSpacing.spacing5)
+            .frame(maxWidth: .infinity, maxHeight: expanded ? .infinity : nil)
         }
         .accessibilityElement(children: .combine)
         .accessibilityLabel("\(home) versus \(away)" + (tags.isEmpty ? "" : ", " + tags.joined(separator: ", ")))
@@ -108,7 +113,7 @@ public struct ThroFixtureSlate: View {
 
     private func name(_ text: String, alignment: Alignment) -> some View {
         Text(text)
-            .thro(ThroTypography.heading1.family(.sport).weight(.bold).tracking(em: 0))
+            .thro((expanded ? ThroTypography.display : ThroTypography.heading1).family(.sport).weight(.bold).tracking(em: 0))
             .foregroundStyle(ThroColor.colorTextOnBoard)
             .lineLimit(2)
             .minimumScaleFactor(0.6)
