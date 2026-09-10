@@ -2658,3 +2658,21 @@ team with a member, a league with two sides and a fixture, clears them, and read
 the person. What replaces the cleared data is the next slice: teams that live on the server, made
 by the people who run them, and a map that shows official venues — from a source the founder names,
 never invented here.
+
+## The scoring screen, seen
+
+The founder reported the game screen "ugly and cropped". Reproduced in the simulator, it was three
+defects in the design layer, none of them the data's. **The board bled the safe area with its
+content**: `ThroBoard` ignored the safe area for the whole stack, so the rail sat under the Dynamic
+Island and its captions were cut in half; now only the surface — lamp, field, dust — runs edge to
+edge, and the content stays inside. **Every numeral was cut in half**: `ThroFigure` positioned a
+digit inside its clipped cap box by a hand-computed trim that assumed a 0.22 em descender, and the
+sport face's is 0.275, so the top of every digit fell outside the box; the digit's baseline is now
+declared as the cell's bottom alignment guide and the font is asked, not estimated. **The away
+register ran off the right edge**: `ThroStage` chose the hero rung as if the head were two registers
+and nothing else, and the legs column between them — "0–0", "BEST OF 5" — took width the arithmetic
+never subtracted; the column is now a named, fixed 76 points, the format label shrinks rather than
+widens it, and the rung is the largest whose two registers fit beside it. On the smallest phone that
+is the third rung and not the first, which the tests had asserted; the first had only ever "fit" by
+overflowing the screen, and the assertion now checks the sum against the width. Screenshots before
+and after are in the session, not the repository; 600 client tests hold.

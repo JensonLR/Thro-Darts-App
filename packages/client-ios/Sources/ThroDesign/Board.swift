@@ -73,18 +73,24 @@ public struct ThroBoard<Content: View>: View {
     }
 
     public var body: some View {
-        GeometryReader { proxy in
-            let side = max(proxy.size.width, proxy.size.height)
-            ZStack {
-                RadialGradient(gradient: Gradient(stops: ThroBoard.stops),
-                               center: lamp, startRadius: 0, endRadius: ThroBoard.reach * side)
-                ChalkField(seed: grainSeed)
-                content
+        // The surface — lamp, field and dust — runs edge to edge under the status bar and the home
+        // indicator; the content does not. It used to: the whole stack ignored the safe area, so the
+        // rail sat under the Dynamic Island and its captions were cut in half. Only the surface bleeds.
+        content
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .background {
+                GeometryReader { proxy in
+                    let side = max(proxy.size.width, proxy.size.height)
+                    ZStack {
+                        RadialGradient(gradient: Gradient(stops: ThroBoard.stops),
+                                       center: lamp, startRadius: 0, endRadius: ThroBoard.reach * side)
+                        ChalkField(seed: grainSeed)
+                    }
+                    .frame(width: proxy.size.width, height: proxy.size.height)
+                }
+                .ignoresSafeArea()
             }
-            .frame(width: proxy.size.width, height: proxy.size.height)
-        }
-        .ignoresSafeArea()
-        .environment(\.throLamp, lamp)
+            .environment(\.throLamp, lamp)
     }
 }
 

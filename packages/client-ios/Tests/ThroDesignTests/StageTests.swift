@@ -183,13 +183,15 @@ final class StageTests: XCTestCase {
         XCTAssertTrue(stage.keysFit(in: safe))
 
         // The same phone typing totals keeps the route, so nothing above is a general regression.
-        // Its hero is 72 rather than 96, and that is the checkout row's own cost and predates this:
-        // the SE upright fits the top rung only when nobody is on a finish.
+        // Its hero is the third rung either way: 320 points across hold two three-cell registers
+        // and the legs column between them at 56 and not at 72. Until 2026-09-10 the arithmetic
+        // ignored the legs column and answered 96, and the away register ran off the screen — the
+        // number was "biggest" on paper and cut in half on the phone.
         let totals = ThroStage.choose(width: se.width, height: safe, onAFinish: true)
         XCTAssertTrue(totals.checkout)
-        XCTAssertEqual(totals.hero, 72)
-        XCTAssertEqual(ThroStage.choose(width: se.width, height: safe).hero, 96,
-                       "and off a finish it is still the biggest number on the ladder")
+        XCTAssertEqual(totals.hero, 56)
+        XCTAssertEqual(ThroStage.choose(width: se.width, height: safe).hero, 56,
+                       "and off a finish it is the same rung: width, not the route, is what bounds it here")
     }
 
     func testTheNotationOnlyChangesTheBoardWhereTheBoardCannotHoldTheRow() {
@@ -313,7 +315,9 @@ final class StageTests: XCTestCase {
         let d = StageTests.devices[0]
         let se = ThroStage.choose(width: d.width,
                                   height: d.height - d.portraitInsets.top - d.portraitInsets.bottom)
-        XCTAssertEqual(se.hero, 96, "the smallest phone still gets the biggest number")
+        XCTAssertEqual(se.hero, 56, "the smallest phone gets the largest rung its width honestly holds beside the legs column")
+        XCTAssertLessThanOrEqual(2 * 3 * (ThroFigure.cellRatio * se.hero).rounded() + 2 * ThroStage.columnGap + ThroStage.legsColumn + 2 * ThroStage.gutter, d.width,
+                                 "both registers, the legs column, the gaps and the gutters fit across the phone")
         XCTAssertEqual(se.keyHeight, ThroSpacing.touchTargetScoring)
         XCTAssertEqual(se.ledger, .tally, "and it is the ledger that gives way, not the score")
     }

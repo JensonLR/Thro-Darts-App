@@ -68,8 +68,11 @@ public struct ThroBoardHead: View {
                         .thro(ThroTypography.eyebrow)
                         .foregroundStyle(ThroColor.colorTextOnBoardSecondary)
                         .multilineTextAlignment(.center)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.8)
                 }
             }
+            .frame(width: ThroStage.legsColumn)
             .accessibilityElement(children: .combine)
             column(away, alignment: .trailing)
         }

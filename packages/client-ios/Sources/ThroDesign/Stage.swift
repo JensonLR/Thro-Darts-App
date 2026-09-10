@@ -97,6 +97,13 @@ public struct ThroStage: Equatable, Sendable {
     /// The gutter each side, and the gap between the two score columns.
     public static let gutter: CGFloat = ThroSpacing.spaceScreenGutter
     public static let columnGap: CGFloat = ThroSpacing.spacing4
+    /// The middle column of the head — the legs score and the format under it ("0–0", "BEST OF 5").
+    /// It sits between the two registers and takes width the registers cannot have. The rung was
+    /// chosen as if it were not there, and on a phone the away register ran off the right edge; the
+    /// founder saw a 501 with its last digit missing. 76 points holds "BEST OF 5" at the eyebrow
+    /// role; the head lets a wider format label ("BEST OF 11") shrink to fit rather than widen
+    /// the column, because the number is the product and the label is furniture.
+    public static let legsColumn: CGFloat = 76
 
     /// A screen is laid out beside its keys once it is this much wider than it is tall. Phone
     /// landscape (844 × 390) is 2.16 and a landscape tablet (1180 × 820) is 1.44; a tablet held
@@ -164,7 +171,7 @@ public struct ThroStage: Equatable, Sendable {
 
         // The largest rung whose two registers fit across the board AND whose head fits down it,
         // with the ledger's floor still standing. Largest first, so the first that fits wins.
-        let usable = boardWidth - 2 * gutter - columnGap
+        let usable = boardWidth - 2 * gutter - 2 * columnGap - legsColumn
         let hero = ladderRung(usable: usable, boardHeight: boardHeight,
                               headFixed: headFixed, textScale: textScale)
         let opponent = ThroTypography.ladder.first { $0 < hero } ?? hero

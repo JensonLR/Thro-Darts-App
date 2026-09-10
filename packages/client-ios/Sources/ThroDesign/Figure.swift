@@ -76,7 +76,6 @@ public struct ThroFigure: View {
 
     public var body: some View {
         let box = ThroTypography.capBox(role)
-        let trim = ThroTypography.capTrim(role)
         let width = cellWidth
         return VStack(spacing: ThroSpacing.spacing1) {
             HStack(spacing: 0) {
@@ -89,8 +88,13 @@ public struct ThroFigure: View {
                         .thro(role.tracking(em: 0))
                         .foregroundStyle(ink)
                         .fixedSize()
+                        // The digit's baseline IS the cell's bottom edge. Declared as an alignment
+                        // guide rather than computed from font metrics: the previous `capTrim`
+                        // estimated the sport face's descender at 0.22 em when it is 0.275, and the
+                        // difference put the top of every numeral outside the clipped box — the
+                        // half-cut 501 the founder saw on the phone. A guide asks the font.
+                        .alignmentGuide(.bottom) { d in d[.firstTextBaseline] }
                         .frame(width: width, height: box, alignment: .bottom)
-                        .offset(y: trim)
                         .clipped(antialiased: true)
                         // Per-cell identity. Without it SwiftUI treats the row as one changing view
                         // and there is no "the digit that changed" for anything to animate.
