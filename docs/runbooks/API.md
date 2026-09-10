@@ -25,7 +25,12 @@ A client posts the provider's ID token to `POST /v1/auth/apple` or `/v1/auth/goo
 device id and receives THRØ's own session: an opaque access token (15 minutes, sent as
 `Authorization: Bearer …`) and a single-use refresh token (30 days) for `POST /v1/auth/refresh`.
 Presenting a used refresh token revokes the whole family — that is how a stolen copy gives itself
-away — and `POST /v1/auth/logout` revokes it on purpose. Only the SHA-256 of any token is stored.
+away — and `POST /v1/auth/logout` revokes it on purpose. A family lives ninety days at most, however
+often it rotates; then the person signs in again. Only the SHA-256 of any token is stored, and no
+row is ever deleted: `identity.access_token` grows by one row per quarter-hour of use per person,
+which is an audit trail today and a partitioning-and-retention decision before real load. Clients
+generate a nonce per sign-in, hand it to the provider SDK, and send it with the token; a token that
+carries a nonce is refused without it.
 
 For local work there is also the **development**
 authenticator, which trusts an `X-Thro-Dev-Subject: <uuid>` header — that is, it trusts anyone who

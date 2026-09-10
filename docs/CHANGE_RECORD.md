@@ -2419,3 +2419,35 @@ an access token at all. `Main` starts the bearer authenticator when a provider c
 configured and refuses to start with none unless the development door is explicitly opened.
 Twenty-five properties. Passkeys — the fallback, with recovery — are the next slice and are not
 claimed.
+
+## The fourth hostile review, of the lock itself
+
+The security review of the sign-in code found nothing that let a forged token through — the
+algorithm is pinned before any key is used, the key id is only a map key, the token is never
+stored — and eleven things around it, of which three were races and two were ways to make the
+server hurt itself. All are closed.
+
+**A stream of invented key ids made THRØ call Apple once per request.** The key source honoured its
+cache only for a known `kid` and refetched for any other; it now refetches at most once a minute per
+provider, keeps the last good set through a failed fetch, caps the response at a megabyte, checks
+the status, and surfaces "no keys at all" as a 503 rather than a 500 — held by a test that counts
+the fetches for fifty invented ids. **Two first sign-ins with one subject at once** — the double tap
+every mobile flow produces — raced to the unique index and the loser got a 500; they now take an
+advisory lock on the subject and the loser finds the account the winner made. **Two refreshes with
+one token at once** both read the token as unused and the loser hit the trigger; the row is now
+locked for update, so the loser is answered as reuse. Both races are run as races in the test, on
+two connections behind a latch. **A family lived for ever**, refreshing itself indefinitely; V024
+gives it ninety days, after which the person signs in again, and the runbook says what the
+append-only access-token table means for retention. **The sign-in bodies were read before they were
+measured**; every non-GET route now refuses a missing Content-Length with 411 and a declared length
+over 64 KiB with 413 before a byte is read, and every route opens one connection per request — the
+authenticator uses the request's own instead of a second. The ID token gains what ADR-008's
+threat model implied and the code had not said: a per-sign-in nonce, required whenever the token
+carries one, matched raw or as its SHA-256; sixty seconds of clock leeway on expiry; a token issued
+in the future refused. An account whose claim was revoked still signs in and is nobody to every
+route until re-claimed, with no 500 on the way; a deleted account is 403; a display name is trimmed
+before it is measured, counted in code points, and refuses control and formatting characters. V011's
+whole-row UPDATE grant on the account, which let the application rewrite the two columns V016 keeps
+honest by trigger, is now the four columns it legitimately writes. The plan's acceptance row that
+had said "rate-limit-ready" now says rate limiting is not built and not claimed. Thirty-eight
+properties, and one more without a database. The test for control characters in a name found one more: the hand-rolled JSON parser had never decoded `\uXXXX` escapes, so a name sent that way would have been stored as backslash text; it decodes every escape now.

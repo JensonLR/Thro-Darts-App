@@ -852,7 +852,15 @@ internal object Json {
             require(s[i] == '"'); i++
             val b = StringBuilder()
             while (s[i] != '"') {
-                if (s[i] == '\\') { i++; b.append(when (s[i]) { 'n' -> '\n'; 't' -> '\t'; else -> s[i] }) } else b.append(s[i])
+                if (s[i] == '\\') {
+                    i++
+                    when (s[i]) {
+                        'n' -> b.append('\n'); 't' -> b.append('\t'); 'r' -> b.append('\r'); 'b' -> b.append('\b'); 'f' -> b.append('\u000c')
+                        // \uXXXX — a surrogate pair arrives as two escapes and reassembles itself.
+                        'u' -> { b.append(s.substring(i + 1, i + 5).toInt(16).toChar()); i += 4 }
+                        else -> b.append(s[i])   // \" \\ \/
+                    }
+                } else b.append(s[i])
                 i++
             }
             i++; return b.toString()

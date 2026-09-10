@@ -52,7 +52,7 @@ public object Contract {
     )
 
     private val signIn = Schema(
-        """{"type":"object","required":["idToken","deviceId"],"properties":{"idToken":{"type":"string","description":"The provider's ID token (JWT) as the platform SDK returned it."},"deviceId":{"type":"string","format":"uuid","description":"This device's stable id; the session family is bound to it."}}}""",
+        """{"type":"object","required":["idToken","deviceId"],"properties":{"idToken":{"type":"string","description":"The provider's ID token (JWT) as the platform SDK returned it."},"deviceId":{"type":"string","format":"uuid","description":"This device's stable id; the session family is bound to it."},"nonce":{"type":"string","description":"The nonce the client generated for this sign-in and gave the provider SDK. Required when the token carries one; Apple's token carries its SHA-256, Google's the value."}}}""",
     )
     private val sessionResponse = "a session: accountId, playerId, accessToken (opaque, 15 minutes), refreshToken (single-use, 30 days), accessExpiresAt, created"
 

@@ -17,20 +17,21 @@ public data class Principal(val subject: UUID, val accountId: UUID? = null)
  * not exist. The server refuses to start without one; the only one that exists is [Dev].
  */
 public fun interface Authenticator {
-    public fun authenticate(header: (String) -> String?): Principal?
+    /** [connection] is the request's own; an authenticator that needs the store opens nothing else. */
+    public fun authenticate(header: (String) -> String?, connection: () -> Connection): Principal?
 
     /**
      * The production authenticator (PD-030): `Authorization: Bearer <access token>`. The token is
      * opaque and looked up server-side; it names an account whose live claim is the principal.
      * Unknown, expired and revoked tokens are simply nobody.
      */
-    public class Bearer(private val connect: () -> Connection, private val now: () -> java.time.Instant = { java.time.Instant.now() }) : Authenticator {
-        override fun authenticate(header: (String) -> String?): Principal? {
+    public class Bearer(private val now: () -> java.time.Instant = { java.time.Instant.now() }) : Authenticator {
+        override fun authenticate(header: (String) -> String?, connection: () -> Connection): Principal? {
             val raw = header("Authorization")?.trim() ?: return null
             if (!raw.startsWith("Bearer ", ignoreCase = true)) return null
             val token = raw.substring(7).trim()
             if (token.isEmpty() || token.length > 128) return null
-            return connect().use { c -> Accounts(c, now).resolve(token)?.let { (account, player) -> Principal(player, account) } }
+            return Accounts(connection(), now).resolve(token)?.let { (account, player) -> Principal(player, account) }
         }
     }
 
@@ -42,7 +43,7 @@ public fun interface Authenticator {
      * not so that a server can be run without deciding it.
      */
     public class Dev internal constructor() : Authenticator {
-        override fun authenticate(header: (String) -> String?): Principal? =
+        override fun authenticate(header: (String) -> String?, connection: () -> Connection): Principal? =
             header(HEADER)?.let { runCatching { UUID.fromString(it.trim()) }.getOrNull() }?.let { Principal(it) }
 
         public companion object {

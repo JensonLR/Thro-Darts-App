@@ -31,7 +31,7 @@ public fun main() {
             System.err.println("WARNING: development authenticator enabled — any caller naming a UUID in ${Authenticator.Dev.HEADER} is that person. Never in a deployment.")
             dev
         }
-        providers.isNotEmpty() -> Authenticator.Bearer(connect)
+        providers.isNotEmpty() -> Authenticator.Bearer()
         else -> error(
             "no authenticator: set THRO_APPLE_CLIENT_ID and/or THRO_GOOGLE_CLIENT_ID for Sign in with Apple/Google (PD-030), " +
                 "or, for development only, ${Authenticator.Dev.VARIABLE}=1 to trust the ${Authenticator.Dev.HEADER} header.",

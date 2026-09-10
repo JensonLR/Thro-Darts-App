@@ -25,7 +25,11 @@ public class Accounts(
     private val now: () -> Instant = { Instant.now() },
     private val random: SecureRandom = SecureRandom(),
 ) {
-    public data class Session(val accountId: UUID, val playerId: UUID, val accessToken: String, val refreshToken: String, val accessExpiresAt: Instant, val created: Boolean)
+    /** [playerId] is null when the account's claim has been revoked: authenticated, but no THRØ ID until it is re-claimed. */
+    public data class Session(val accountId: UUID, val playerId: UUID?, val accessToken: String, val refreshToken: String, val accessExpiresAt: Instant, val created: Boolean)
+
+    /** The account behind this credential was deleted; there is nothing to sign in to. */
+    public class AccountDeleted : IllegalStateException("this account was deleted")
 
     public sealed interface Refreshed {
         public data class Rotated(val session: Session) : Refreshed
@@ -47,11 +51,23 @@ public class Accounts(
     /** Signs in the holder of a verified provider subject on [deviceId]; creates the account on first sight. */
     public fun signIn(kind: String, subject: String, deviceId: UUID): Session = transaction {
         var created = false
+        // Two first sign-ins with one subject at once — the double tap every mobile flow produces —
+        // take turns here, so the second finds the account the first created instead of failing on
+        // the unique index.
+        connection.prepareStatement("SELECT pg_advisory_xact_lock(hashtext(?))").use { ps -> ps.setString(1, "$kind:$subject"); ps.executeQuery().close() }
         var (credentialId, accountId) = connection.prepareStatement(
-            "SELECT credential_id, account_id FROM identity.credential WHERE kind = ? AND subject = ? AND revoked_at IS NULL",
+            """
+            SELECT c.credential_id, c.account_id, a.deleted_at FROM identity.credential c JOIN identity.account a ON a.account_id = c.account_id
+             WHERE c.kind = ? AND c.subject = ? AND c.revoked_at IS NULL
+            """.trimIndent(),
         ).use { ps ->
             ps.setString(1, kind); ps.setString(2, subject)
-            ps.executeQuery().use { rs -> if (rs.next()) (rs.getObject(1) as UUID) to (rs.getObject(2) as UUID) else null to null }
+            ps.executeQuery().use { rs ->
+                if (rs.next()) {
+                    if (rs.getTimestamp(3) != null) throw AccountDeleted()
+                    (rs.getObject(1) as UUID) to (rs.getObject(2) as UUID)
+                } else null to null
+            }
         }
         if (accountId == null) {
             created = true
@@ -76,21 +92,25 @@ public class Accounts(
 
     public fun refresh(refreshToken: String): Refreshed = transaction {
         val hash = sha256(refreshToken)
+        // FOR UPDATE: two refreshes racing with one token serialise here, so the second sees the
+        // first's used_at and is answered as reuse rather than failing on the trigger.
         val row = connection.prepareStatement(
             """
-            SELECT r.family_id, r.expires_at, r.used_at, f.account_id, f.revoked_at
+            SELECT r.family_id, r.expires_at, r.used_at, f.account_id, f.revoked_at, f.expires_at
               FROM identity.refresh_token r JOIN identity.session_family f ON f.family_id = r.family_id
-             WHERE r.token_hash = ?
+             WHERE r.token_hash = ? FOR UPDATE OF r
             """.trimIndent(),
         ).use { ps ->
             ps.setBytes(1, hash)
             ps.executeQuery().use { rs ->
                 if (!rs.next()) return@transaction Refreshed.Unknown
-                listOf(rs.getObject(1), rs.getTimestamp(2).toInstant(), rs.getTimestamp(3)?.toInstant(), rs.getObject(4), rs.getTimestamp(5)?.toInstant())
+                listOf(rs.getObject(1), rs.getTimestamp(2).toInstant(), rs.getTimestamp(3)?.toInstant(), rs.getObject(4), rs.getTimestamp(5)?.toInstant(), rs.getTimestamp(6).toInstant())
             }
         }
         val familyId = row[0] as UUID; val expires = row[1] as Instant; val used = row[2] as Instant?; val accountId = row[3] as UUID; val revoked = row[4] as Instant?
+        val familyExpires = row[5] as Instant
         if (revoked != null) return@transaction Refreshed.Unknown
+        if (familyExpires.isBefore(now())) return@transaction Refreshed.Expired
         if (used != null) {
             // Reuse. Somebody holds a copy of a token that was already spent; nobody in this family
             // can be trusted, and the family goes — including whichever of the two is the thief.
@@ -120,11 +140,13 @@ public class Accounts(
             SELECT t.account_id, c.player_id
               FROM identity.access_token t
               JOIN identity.session_family f ON f.family_id = t.family_id
+              JOIN identity.account a ON a.account_id = t.account_id AND a.deleted_at IS NULL
               LEFT JOIN identity.player_claim c ON c.account_id = t.account_id AND c.revoked_at IS NULL
-             WHERE t.token_hash = ? AND t.expires_at > ? AND f.revoked_at IS NULL
+             WHERE t.token_hash = ? AND t.expires_at > ? AND f.revoked_at IS NULL AND f.expires_at > ?
             """.trimIndent(),
         ).use { ps ->
-            ps.setBytes(1, sha256(accessToken)); ps.setObject(2, Timestamp.from(now()))
+            ps.setBytes(1, sha256(accessToken)); ps.setObject(2, Timestamp.from(now())); ps.setObject(3, Timestamp.from(now()))
+            // An account whose claim was revoked is a real account with no THRØ ID: nobody, until re-claimed.
             ps.executeQuery().use { rs -> if (rs.next()) (rs.getObject(1) as UUID) to (rs.getObject(2) as UUID? ?: return null) else null }
         }
 
@@ -141,9 +163,12 @@ public class Accounts(
         }
 
     public fun setDisplayName(accountId: UUID, name: String) {
-        require(name.isNotBlank() && name.length <= 60) { "a display name is 1 to 60 characters" }
-        connection.prepareStatement("UPDATE identity.account SET display_name = ? WHERE account_id = ?")
-            .use { ps -> ps.setString(1, name.trim()); ps.setObject(2, accountId); ps.executeUpdate() }
+        val trimmed = name.trim()
+        require(trimmed.isNotEmpty() && trimmed.codePointCount(0, trimmed.length) <= 60) { "a display name is 1 to 60 characters" }
+        require(trimmed.none { it.isISOControl() || it.category == CharCategory.FORMAT }) { "a display name has no control or formatting characters" }
+        val n = connection.prepareStatement("UPDATE identity.account SET display_name = ? WHERE account_id = ? AND deleted_at IS NULL")
+            .use { ps -> ps.setString(1, trimmed); ps.setObject(2, accountId); ps.executeUpdate() }
+        require(n == 1) { "no such account" }
     }
 
     // --- internals ------------------------------------------------------------------------------
@@ -156,7 +181,7 @@ public class Accounts(
         connection.prepareStatement("INSERT INTO identity.refresh_token (token_hash, family_id, issued_at, expires_at) VALUES (?, ?, ?, ?)")
             .use { ps -> ps.setBytes(1, sha256(refresh)); ps.setObject(2, familyId); ps.setObject(3, Timestamp.from(now())); ps.setObject(4, Timestamp.from(now().plus(REFRESH_TTL))); ps.executeUpdate() }
         val playerId = connection.prepareStatement("SELECT player_id FROM identity.player_claim WHERE account_id = ? AND revoked_at IS NULL")
-            .use { ps -> ps.setObject(1, accountId); ps.executeQuery().use { rs -> rs.next(); rs.getObject(1) as UUID } }
+            .use { ps -> ps.setObject(1, accountId); ps.executeQuery().use { rs -> if (rs.next()) rs.getObject(1) as UUID else null } }
         return Session(accountId, playerId, access, refresh, accessExpires, created)
     }
 

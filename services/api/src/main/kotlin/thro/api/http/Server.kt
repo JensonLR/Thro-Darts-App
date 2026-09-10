@@ -58,30 +58,33 @@ public class Deps(
 
 private class Http(val status: Int, val body: String)
 
+/** One request: its call, the principal the authenticator found, its bounded body, and one lazily opened connection. */
+private class Req(val call: ApplicationCall, val body: String, private val deps: Deps) {
+    var principal: Principal? = null
+    private var conn: Connection? = null
+    fun connection(): Connection = conn ?: deps.connect().also { conn = it }
+    fun close() { conn?.close() }
+}
+
 public fun Application.thro(deps: Deps) {
     val verifier = IdTokenVerifier(deps.keys, deps.now)
-    val handlers: Map<String, suspend (ApplicationCall, Principal?) -> Http> = mapOf(
-        "auth.apple" to { call, _ -> signIn(deps, verifier, Provider.APPLE, call.receiveText()) },
-        "auth.google" to { call, _ -> signIn(deps, verifier, Provider.GOOGLE, call.receiveText()) },
-        "auth.refresh" to { call, _ -> refresh(deps, call.receiveText()) },
-        "auth.logout" to { call, _ -> withConnection(deps) { c -> Http(200, """{"revoked":${Accounts(c, deps.now).logout(bearer(call) ?: "")}}""") } },
-        "me" to { _, p -> withConnection(deps) { c -> profile(c, deps, p!!) } },
-        "me.profile" to { call, p -> withConnection(deps) { c -> Accounts(c, deps.now).setDisplayName(p!!.accountId ?: return@withConnection Http(403, """{"error":"the development principal has no account"}"""), str(Json.parseObject(call.receiveText()), "displayName")); profile(c, deps, p) } },
-        "health" to { _, _ -> health(deps) },
-        "openapi" to { _, _ -> Http(200, Contract.openApi()) },
-        "commands" to { call, p ->
-            // The body is bounded and read before a connection is held for it.
-            val declared = call.request.headers["Content-Length"]?.toLongOrNull()
-            if (declared != null && declared > MAX_BODY) Http(413, """{"error":"body over 64 KiB"}""")
-            else {
-                val body = call.receiveText()
-                if (body.length > MAX_BODY) Http(413, """{"error":"body over 64 KiB"}""")
-                else withConnection(deps) { c -> command(c, p!!, call.request.headers["X-Thro-Device"], body) }
-            }
+    val handlers: Map<String, (Req) -> Http> = mapOf(
+        "auth.apple" to { r -> signIn(r.connection(), deps, verifier, Provider.APPLE, r.body) },
+        "auth.google" to { r -> signIn(r.connection(), deps, verifier, Provider.GOOGLE, r.body) },
+        "auth.refresh" to { r -> refresh(r.connection(), deps, r.body) },
+        "auth.logout" to { r -> Http(200, """{"revoked":${Accounts(r.connection(), deps.now).logout(bearer(r.call) ?: "")}}""") },
+        "me" to { r -> profile(r.connection(), deps, r.principal!!) },
+        "me.profile" to { r ->
+            val account = r.principal!!.accountId
+            if (account == null) Http(403, """{"error":"the development principal has no account"}""")
+            else { Accounts(r.connection(), deps.now).setDisplayName(account, str(Json.parseObject(r.body), "displayName")); profile(r.connection(), deps, r.principal!!) }
         },
-        "me.inbox" to { _, p -> withConnection(deps) { c -> Http(200, inboxJson(Secretary(c).inboxForPlayer(p!!.subject, deps.now()))) } },
-        "team.inbox" to { call, p -> withConnection(deps) { c -> teamInbox(c, p!!, call.parameters["teamId"], deps.now()) } },
-        "me.discovery" to { call, p -> withConnection(deps) { c -> discovery(c, p!!, call.request.queryParameters["from"], call.request.queryParameters["to"], call.request.queryParameters["locality"], deps.now()) } },
+        "health" to { _ -> health(deps) },
+        "openapi" to { _ -> Http(200, Contract.openApi()) },
+        "commands" to { r -> command(r.connection(), r.principal!!, r.call.request.headers["X-Thro-Device"], r.body) },
+        "me.inbox" to { r -> Http(200, inboxJson(Secretary(r.connection()).inboxForPlayer(r.principal!!.subject, deps.now()))) },
+        "team.inbox" to { r -> teamInbox(r.connection(), r.principal!!, r.call.parameters["teamId"], deps.now()) },
+        "me.discovery" to { r -> discovery(r.connection(), r.principal!!, r.call.request.queryParameters["from"], r.call.request.queryParameters["to"], r.call.request.queryParameters["locality"], deps.now()) },
     )
     // The registry and the handlers are held to each other at start, not discovered at first call.
     val missing = Contract.endpoints.map { it.id }.filter { it !in handlers }
@@ -91,19 +94,41 @@ public fun Application.thro(deps: Deps) {
     routing {
         for (e in Contract.endpoints) {
             val handle: suspend (ApplicationCall) -> Unit = { call ->
-                val principal = deps.authenticator.authenticate { name -> call.request.headers[name] }
-                val out = if (e.authenticated && principal == null) {
-                    Http(401, """{"error":"no principal"}""")
-                } else {
+                // The body is bounded before it is read, and read before any connection is held:
+                // a declared length over the cap is 413, no declared length is 411, and what
+                // arrives is measured again.
+                val out: Http = run {
+                    val body = if (e.method == "GET") "" else {
+                        val declared = call.request.headers["Content-Length"]?.toLongOrNull()
+                        when {
+                            declared == null -> return@run Http(411, """{"error":"Content-Length is required"}""")
+                            declared > MAX_BODY -> return@run Http(413, """{"error":"body over 64 KiB"}""")
+                        }
+                        val text = call.receiveText()
+                        if (text.length > MAX_BODY) return@run Http(413, """{"error":"body over 64 KiB"}""")
+                        text
+                    }
+                    val req = Req(call, body, deps)
                     try {
-                        handlers.getValue(e.id)(call, principal)
+                        req.principal = deps.authenticator.authenticate({ name -> call.request.headers[name] }, req::connection)
+                        if (e.authenticated && req.principal == null) Http(401, """{"error":"no principal"}""")
+                        else handlers.getValue(e.id)(req)
                     } catch (x: IllegalArgumentException) {
                         Http(400, """{"error":${Contract.q(x.message ?: "malformed")}}""")
                     } catch (x: ClassCastException) {
                         Http(400, """{"error":"a field has the wrong type"}""")
+                    } catch (x: IndexOutOfBoundsException) {
+                        Http(400, """{"error":"the body is not complete JSON"}""")
                     } catch (x: java.time.DateTimeException) {
                         // A date the caller could not write is the caller's error, not the server's.
                         Http(400, """{"error":${Contract.q("a date-time must be ISO-8601: " + (x.message ?: "unparseable"))}}""")
+                    } catch (x: IdTokenVerifier.KeysUnavailable) {
+                        System.err.println("sign-in: ${x.message}")
+                        Http(503, """{"error":"the sign-in provider's keys are unavailable; try again shortly"}""")
+                    } catch (x: Accounts.AccountDeleted) {
+                        Http(403, """{"error":"this account was deleted"}""")
+                    } finally {
+                        req.close()
                     }
                 }
                 call.respondText(out.body, ContentType.Application.Json, HttpStatusCode.fromValue(out.status))
@@ -120,8 +145,6 @@ public fun Application.thro(deps: Deps) {
 
 private const val MAX_BODY: Long = 64 * 1024
 private const val MAX_LINEUP: Int = 32
-
-private inline fun withConnection(deps: Deps, block: (Connection) -> Http): Http = deps.connect().use(block)
 
 private fun health(deps: Deps): Http = try {
     deps.connect().use { c ->
@@ -141,34 +164,31 @@ private fun health(deps: Deps): Http = try {
 private fun bearer(call: ApplicationCall): String? =
     call.request.headers["Authorization"]?.trim()?.takeIf { it.startsWith("Bearer ", ignoreCase = true) }?.substring(7)?.trim()
 
-private fun signIn(deps: Deps, verifier: IdTokenVerifier, provider: Provider, body: String): Http {
-    if (body.length > MAX_BODY) return Http(413, """{"error":"body over 64 KiB"}""")
+private fun signIn(c: Connection, deps: Deps, verifier: IdTokenVerifier, provider: Provider, body: String): Http {
     val clientId = deps.providers[provider] ?: return Http(503, """{"error":${Contract.q("Sign in with ${provider.name.lowercase().replaceFirstChar { it.uppercase() }} is not configured on this server")}}""")
     val m = try { Json.parseObject(body) } catch (e: Exception) { return Http(400, """{"error":"body is not a JSON object"}""") }
     val token = str(m, "idToken")
     val device = try { UUID.fromString(str(m, "deviceId")) } catch (e: IllegalArgumentException) { throw IllegalArgumentException("deviceId must be a UUID") }
-    return when (val v = verifier.verify(token, provider, clientId)) {
+    val nonce = m["nonce"] as? String
+    return when (val v = verifier.verify(token, provider, clientId, nonce)) {
         is IdTokenVerifier.Result.Rejected -> Http(401, """{"error":${Contract.q("the ID token was not accepted: " + v.why)}}""")
-        is IdTokenVerifier.Result.Verified -> withConnection(deps) { c -> Http(200, sessionJson(Accounts(c, deps.now).signIn(provider.name.lowercase(), v.claims.subject, device))) }
+        is IdTokenVerifier.Result.Verified -> Http(200, sessionJson(Accounts(c, deps.now).signIn(provider.name.lowercase(), v.claims.subject, device)))
     }
 }
 
-private fun refresh(deps: Deps, body: String): Http {
-    if (body.length > MAX_BODY) return Http(413, """{"error":"body over 64 KiB"}""")
+private fun refresh(c: Connection, deps: Deps, body: String): Http {
     val m = try { Json.parseObject(body) } catch (e: Exception) { return Http(400, """{"error":"body is not a JSON object"}""") }
     val token = str(m, "refreshToken")
-    return withConnection(deps) { c ->
-        when (val r = Accounts(c, deps.now).refresh(token)) {
-            is Accounts.Refreshed.Rotated -> Http(200, sessionJson(r.session))
-            Accounts.Refreshed.Reused -> Http(401, """{"error":"that refresh token had already been used; the session family is revoked — sign in again"}""")
-            Accounts.Refreshed.Expired -> Http(401, """{"error":"the refresh token has expired; sign in again"}""")
-            Accounts.Refreshed.Unknown -> Http(401, """{"error":"unknown refresh token"}""")
-        }
+    return when (val r = Accounts(c, deps.now).refresh(token)) {
+        is Accounts.Refreshed.Rotated -> Http(200, sessionJson(r.session))
+        Accounts.Refreshed.Reused -> Http(401, """{"error":"that refresh token had already been used; the session family is revoked — sign in again"}""")
+        Accounts.Refreshed.Expired -> Http(401, """{"error":"the session has expired; sign in again"}""")
+        Accounts.Refreshed.Unknown -> Http(401, """{"error":"unknown refresh token"}""")
     }
 }
 
 private fun sessionJson(s: Accounts.Session): String =
-    """{"accountId":"${s.accountId}","playerId":"${s.playerId}","accessToken":${Contract.q(s.accessToken)},"refreshToken":${Contract.q(s.refreshToken)},"accessExpiresAt":${Contract.q(s.accessExpiresAt.toString())},"created":${s.created}}"""
+    """{"accountId":"${s.accountId}","playerId":${s.playerId?.let { "\"$it\"" } ?: "null"},"accessToken":${Contract.q(s.accessToken)},"refreshToken":${Contract.q(s.refreshToken)},"accessExpiresAt":${Contract.q(s.accessExpiresAt.toString())},"created":${s.created}}"""
 
 private fun profile(c: Connection, deps: Deps, p: Principal): Http {
     val account = p.accountId ?: return Http(200, """{"accountId":null,"playerId":"${p.subject}","displayName":null,"named":false,"ageBand":"unknown","note":"development principal: no account"}""")
