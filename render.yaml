@@ -18,7 +18,8 @@ services:
     region: frankfurt
     plan: free
     dockerfilePath: ./Dockerfile
-    dockerCommand: serve
+    # No dockerCommand: Render's would replace the image's ENTRYPOINT as well as its CMD, and the
+    # first deploy died with status 128 trying to run a bare `serve`. The image's default is serve.
     healthCheckPath: /healthz
     autoDeploy: false
     envVars:
