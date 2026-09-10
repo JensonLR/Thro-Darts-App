@@ -675,12 +675,15 @@ public struct ProfileScreen: View {
     /// Nil unless this viewer may set it. Absent rather than disabled, as everywhere else here.
     private let onEditPicture: (() -> Void)?
     private let onBack: () -> Void
+    /// Takes this person off the phone. Offered at the foot of the page, as a quiet destructive
+    /// action, and only where the caller can do it.
+    private let onRemove: (() -> Void)?
 
     public init(name: String, meta: String, heading: String = "Last 20 legs",
                 headline: Headline? = nil,
                 figures: [StatItem], clubs: [Club], picture: Image? = nil,
                 pictureNote: String? = nil, onEditPicture: (() -> Void)? = nil,
-                onBack: @escaping () -> Void = {}) {
+                onBack: @escaping () -> Void = {}, onRemove: (() -> Void)? = nil) {
         self.name = name
         self.meta = meta
         self.heading = heading
@@ -691,6 +694,7 @@ public struct ProfileScreen: View {
         self.pictureNote = pictureNote
         self.onEditPicture = onEditPicture
         self.onBack = onBack
+        self.onRemove = onRemove
     }
 
     /// How big the mark is on a profile.
@@ -728,6 +732,10 @@ public struct ProfileScreen: View {
                                             accent: c.accentHex.flatMap { Color.thro(hex: $0) })
                             ThroDivider()
                         }
+                    }
+                    if let onRemove {
+                        ThroButton("Remove from this phone", variant: .destructive, size: .medium, action: onRemove)
+                            .padding(.top, ThroSpacing.spaceSectionGap)
                     }
                 }
                 .padding(.horizontal, ThroSpacing.spaceScreenGutter)

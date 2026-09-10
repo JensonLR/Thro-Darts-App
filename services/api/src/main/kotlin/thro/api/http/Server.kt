@@ -21,6 +21,7 @@ import thro.api.CommandHandler
 import thro.api.CommandResult
 import thro.api.Discovery
 import thro.api.Events
+import thro.api.Friends
 import thro.api.Leagues
 import thro.api.Grants
 import thro.api.IdTokenVerifier
@@ -114,8 +115,17 @@ public fun Application.thro(deps: Deps) {
         "me.profile" to { r ->
             val account = r.principal!!.accountId
             if (account == null) Http(403, """{"error":"the development principal has no account"}""")
-            else { Accounts(r.connection(), deps.now).setDisplayName(account, str(Json.parseObject(r.body), "displayName")); profile(r.connection(), deps, r.principal!!) }
+            else {
+                val m = Json.parseObject(r.body)
+                (m["displayName"] as? String)?.let { Accounts(r.connection(), deps.now).setDisplayName(account, it) }
+                (m["ageBand"] as? String)?.let { Friends(r.connection(), deps.now).declareAge(account, it) }
+                if (m["displayName"] == null && m["ageBand"] == null) Http(400, """{"error":"displayName or ageBand"}""") else profile(r.connection(), deps, r.principal!!)
+            }
         },
+        "friends" to { r -> withAccount(r) { a -> Friends(r.connection(), deps.now).let { Http(200, it.json(it.friends(a))) } } },
+        "friends.invite" to { r -> withAccount(r) { a -> friendly { Friends(r.connection(), deps.now).invite(a).let { Http(200, """{"code":"${it.code}","expiresAt":"${it.expiresAt}"}""") } } } },
+        "friends.accept" to { r -> withAccount(r) { a -> friendly(codeProblem = 409) { Friends(r.connection(), deps.now).accept(a, str(Json.parseObject(r.body), "code")).let { Http(200, """{"friend":{"accountId":"${it.accountId}","displayName":${Contract.q(it.displayName)},"since":"${it.since}"}}""") } } } },
+        "friends.remove" to { r -> withAccount(r) { a -> Http(200, """{"removed":${Friends(r.connection(), deps.now).remove(a, UUID.fromString(r.call.parameters["accountId"]))}}""") } },
         "health" to { _ -> health(deps) },
         "openapi" to { _ -> Http(200, Contract.openApi()) },
         "commands" to { r ->
@@ -320,6 +330,18 @@ private fun refresh(c: Connection, deps: Deps, body: String): Http {
 
 private fun sessionJson(s: Accounts.Session): String =
     """{"accountId":"${s.accountId}","playerId":${s.playerId?.let { "\"$it\"" } ?: "null"},"accessToken":${Contract.q(s.accessToken)},"refreshToken":${Contract.q(s.refreshToken)},"accessExpiresAt":${Contract.q(s.accessExpiresAt.toString())},"created":${s.created}}"""
+
+/** A route that needs an account behind the principal: the development principal has none, and says so. */
+private fun withAccount(r: Req, block: (UUID) -> Http): Http {
+    val account = r.principal!!.accountId ?: return Http(403, """{"error":"the development principal has no account"}""")
+    return block(account)
+}
+
+/** A friends refusal is an answer: the sentence the phone shows, with the status that says which kind. */
+private fun friendly(codeProblem: Int = 403, block: () -> Http): Http = try { block() } catch (e: Friends.Refused) {
+    val status = if (e.why.startsWith("Friends on THRØ are for adults") || e.why.startsWith("Say you are 18")) 403 else codeProblem
+    Http(status, """{"error":${Contract.q(e.why)}}""")
+}
 
 private fun profile(c: Connection, deps: Deps, p: Principal): Http {
     val account = p.accountId ?: return Http(200, """{"accountId":null,"playerId":"${p.subject}","displayName":null,"named":false,"ageBand":"unknown","note":"development principal: no account"}""")

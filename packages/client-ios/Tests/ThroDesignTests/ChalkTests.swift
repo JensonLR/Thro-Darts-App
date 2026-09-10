@@ -238,3 +238,25 @@ final class ChalkTests: XCTestCase {
         XCTAssertEqual(ScoreKeypad.keyInk(disabled: true), ThroColor.colorTextOnBoardSecondary)
     }
 }
+
+// MARK: - the mark, one solid thing
+
+extension ChalkTests {
+    func testTheMarkFillsSolidWhereTheDartCrossesTheRing() {
+        // The founder saw two darker bites where the bar met the ring: ring and bar wound opposite
+        // ways, so the non-zero fill left the crossing empty. One path, one winding, no bite.
+        let geometry = MarkGeometry(unit: 100)
+        let centre = CGPoint(x: 200, y: 200)
+        let mark = geometry.mark(at: centre)
+        for sign in [CGFloat(1), CGFloat(-1)] {
+            let crossing = geometry.onAxis(centre, sign * geometry.ringCentreRadius)
+            XCTAssertTrue(mark.contains(crossing, eoFill: false), "the crossing at \(crossing) is a hole")
+        }
+        // and still a mark: the ring's far side, the dart's tip, and the empty middle
+        XCTAssertTrue(mark.contains(geometry.onRing(centre, degrees: 45), eoFill: false))
+        XCTAssertTrue(mark.contains(geometry.onAxis(centre, geometry.tip * 0.98), eoFill: false))
+        XCTAssertFalse(mark.contains(geometry.onRing(centre, degrees: 45, radiusScale: 0.5), eoFill: false))
+        XCTAssertTrue(ThroMark().path(in: CGRect(x: 0, y: 0, width: 100, height: 100))
+                        .contains(MarkGeometry(tipToTip: 100).onAxis(CGPoint(x: 50, y: 50), MarkGeometry(tipToTip: 100).ringCentreRadius), eoFill: false))
+    }
+}

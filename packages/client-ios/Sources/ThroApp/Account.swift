@@ -114,6 +114,45 @@ public final class AccountStore: ObservableObject {
         state = .busy("Signing out")
         await api.signOut()
         state = .signedOut
+        friends = nil; invite = nil; friendsNote = nil
+    }
+
+    // MARK: friends (V028)
+
+    /// Nil until read; empty when read and none.
+    @Published public private(set) var friends: [Friend]?
+    @Published public private(set) var invite: FriendInvite?
+    /// The last thing the server said about friends — a refusal's own sentence, or an error.
+    @Published public private(set) var friendsNote: String?
+
+    public func declareAdult() async {
+        let before = state
+        state = .busy("Saving")
+        do { state = .signedIn(try await api.declareAge(adult: true)) } catch { state = failure(error, before: before) }
+    }
+
+    public func loadFriends() async {
+        do { friends = try await api.friends(); friendsNote = nil } catch { friendsNote = ThroAPI.refusal(error) ?? "Your friends could not be read just now." }
+    }
+
+    public func makeInvite() async {
+        do { invite = try await api.inviteFriend(); friendsNote = nil } catch { friendsNote = ThroAPI.refusal(error) ?? "A code could not be made just now." }
+    }
+
+    /// True when the code was accepted; the note says why when it was not.
+    @discardableResult
+    public func acceptCode(_ code: String) async -> Bool {
+        do {
+            let friend = try await api.acceptFriend(code: code)
+            friends = [friend] + (friends ?? []).filter { $0.accountId != friend.accountId }
+            friendsNote = nil
+            return true
+        } catch { friendsNote = ThroAPI.refusal(error) ?? "The code could not be used just now."; return false }
+    }
+
+    public func removeFriend(_ friend: Friend) async {
+        do { try await api.removeFriend(friend.accountId); friends = (friends ?? []).filter { $0.accountId != friend.accountId } }
+        catch { friendsNote = ThroAPI.refusal(error) ?? "That could not be done just now." }
     }
 
     public func dismissFailure() {

@@ -2753,3 +2753,23 @@ press state and a tap target (`check_controls_react` found four that did not, in
 
 **Per-dart keypad** runs 20 down to 1 as the founder set it (PD-034 amended; 1-to-20 with the big
 five nearest the thumb was recommended and not taken).
+
+## The mark made solid, the wordmark on Home, players you can remove, friends by code
+
+The founder saw two darker bites in the mark where the dart met the ring on Match setup and Match
+ready. Ring and bar were wound opposite ways, so a path made of both summed to zero winding at the
+crossing and the non-zero fill left a hole. `MarkGeometry.mark(at:)` now winds the bar the same way
+as the ring (its corners reversed when their signed area disagrees) and every mark — the slate,
+the pins, the flights in the opening — is one solid thing; a test holds the crossing filled.
+`ThroWordmark` draws THR in Archivo ExtraBold and the Ø as the mark at the wordmark's measured
+ratios, live, and Home's masthead is the logo rather than a font's Ø.
+
+**People** on a phone can be removed: the person's page ends in *Remove from this phone*, with a
+dialog that says what it does — the name comes off the list; the matches stay, because they
+happened; the next time the name is typed it starts a new history.
+
+**Friends** (PD-035, V028): a code given in person, adults only, ended never deleted; routes
+`/v1/friends`, `/invite`, `/accept`, `/{id}/remove`; `PUT /v1/me/profile` takes `ageBand`. The
+account screen asks *I am 18 or over* once and offers Friends; the Friends screen shows the code on
+a slate big enough to read across a table, shares it, takes one, lists who you have, and shows the
+server's own sentence for every refusal. Tests: FriendsTest (2), HTTP 31 properties, 618 client.

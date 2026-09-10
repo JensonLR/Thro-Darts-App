@@ -1728,3 +1728,23 @@ Zero learning: a counted grid is the one grid nobody has to be taught, and readi
 the numbers a scorer says most on the first row in the order they are said. The alternative — 1 to
 20 ascending, so the big five sit on the bottom row nearest the thumb — was recommended on reach and
 not taken; it is one constant if the thumb argument wins on the phone.
+
+## PD-035 — Friends start with a code given in person, and only between adults for now
+
+**Taken on delegated authority, 2026-09-10**, from the founder's "actual profiles able to add friends".
+Reversible: a guardian-confirmed path for under-18s can be added without changing what exists.
+
+### Decided
+
+There is **no directory and no search**: a search is how a stranger finds a child. A friendship starts
+with an eight-character code one person makes and says or shows to the other, who enters it. A code
+lasts seven days and is spent by one use. Only an account that has **said it is an adult** may make or
+use a code; an account whose age is unknown is refused with the sentence that says what to do, never
+guessed at; a minor's friends are a guardian's business (OD-010) and are refused for now with a
+sentence that says so. Both rules are enforced by trigger in the database (V028) as well as in the
+service, so no route can forget them. A friendship ends from either side and is recorded as ended,
+never deleted. What a friend sees today is your display name and that you are friends; anything more
+is a further decision and the screen says so.
+
+The account's age band becomes something a person can say about themselves: *I am 18 or over* under
+Account and profile sets `adult, self_declared`; under 18 may be said too. Never back to unknown.

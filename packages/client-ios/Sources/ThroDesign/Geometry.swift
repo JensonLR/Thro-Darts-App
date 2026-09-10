@@ -162,12 +162,42 @@ public struct MarkGeometry: Equatable, Sendable {
 
     /// The mark's own dart: the plain bar with a point at each end.
     public func bar(at c: CGPoint) -> Path {
-        let L = tip, R = ringOuter, w = halfWidth
         var p = Path()
-        p.move(to: onAxis(c, L)); p.addLine(to: onAxis(c, R, w)); p.addLine(to: onAxis(c, -R, w))
-        p.addLine(to: onAxis(c, -L)); p.addLine(to: onAxis(c, -R, -w)); p.addLine(to: onAxis(c, R, -w))
+        let pts = barPoints(at: c)
+        p.move(to: pts[0]); for pt in pts.dropFirst() { p.addLine(to: pt) }
         p.closeSubpath()
         return p
+    }
+
+    /// The bar's six corners, tip, shoulder, shoulder, tip, shoulder, shoulder.
+    public func barPoints(at c: CGPoint) -> [CGPoint] {
+        let L = tip, R = ringOuter, w = halfWidth
+        return [onAxis(c, L), onAxis(c, R, w), onAxis(c, -R, w), onAxis(c, -L), onAxis(c, -R, -w), onAxis(c, R, -w)]
+    }
+
+    /// The whole mark — ring and dart — as ONE path that fills solid under the non-zero rule.
+    ///
+    /// **Why this exists.** `ringShape` runs its outer edge one way round and `bar` runs the other,
+    /// so a path made by adding one to the other has opposite windings where the dart crosses the
+    /// ring, the winding sums to zero there, and the fill leaves a hole: the founder saw the mark
+    /// with two darker bites where the bar met the ring. Here the bar is wound the same way as the
+    /// ring (its corners reversed when their signed area disagrees), so the crossing is filled once
+    /// and the mark is one solid thing whatever colour it is drawn in.
+    public func mark(at c: CGPoint, roughness: CGFloat = 0) -> Path {
+        var path = ringShape(at: c, roughness: roughness)
+        let ringSign = Self.signedArea([onRing(c, degrees: 0), onRing(c, degrees: 90), onRing(c, degrees: 180), onRing(c, degrees: 270)])
+        var pts = barPoints(at: c)
+        if Self.signedArea(pts) * ringSign < 0 { pts.reverse() }
+        path.move(to: pts[0]); for pt in pts.dropFirst() { path.addLine(to: pt) }
+        path.closeSubpath()
+        return path
+    }
+
+    /// Shoelace, in whatever frame the points are in: the sign says which way round they run.
+    static func signedArea(_ pts: [CGPoint]) -> CGFloat {
+        var a: CGFloat = 0
+        for i in pts.indices { let j = (i + 1) % pts.count; a += pts[i].x * pts[j].y - pts[j].x * pts[i].y }
+        return a / 2
     }
 
     /// An arc as a polyline, from screen angle `from` sweeping `sweep` degrees clockwise on screen.

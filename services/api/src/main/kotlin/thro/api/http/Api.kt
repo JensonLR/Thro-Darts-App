@@ -131,9 +131,34 @@ public object Contract {
         Endpoint(
             id = "me.profile", method = "PUT", path = "/v1/me/profile", authenticated = true,
             summary = "Set my display name",
-            request = Schema("""{"type":"object","required":["displayName"],"properties":{"displayName":{"type":"string","maxLength":60}}}"""),
+            request = Schema("""{"type":"object","properties":{"displayName":{"type":"string","maxLength":60},"ageBand":{"type":"string","enum":["adult","minor"],"description":"Self-declared, once asked. Never back to unknown. What unlocks friends (V028) is adult."}}}"""),
             description = "A name is the person's to give; it is never taken from a provider's token on their behalf.",
             responses = mapOf(200 to "profile", 400 to "malformed", 401 to "no principal"),
+        ),
+        Endpoint(
+            id = "friends", method = "GET", path = "/v1/friends", authenticated = true,
+            summary = "The caller's friends",
+            description = "Display names only: a friend is somebody who told you their name across a table. Newest first.",
+            responses = mapOf(200 to "friends", 401 to "no principal", 403 to "the development principal has no account"),
+        ),
+        Endpoint(
+            id = "friends.invite", method = "POST", path = "/v1/friends/invite", authenticated = true,
+            summary = "A friend code for the caller to give somebody in person",
+            description = "Eight characters, seven days, one use. Only an account that has said it is an adult may make one; an unknown age is refused, not guessed (V028).",
+            responses = mapOf(200 to "code and expiresAt", 401 to "no principal", 403 to "not an adult account, with the sentence to show"),
+        ),
+        Endpoint(
+            id = "friends.accept", method = "POST", path = "/v1/friends/accept", authenticated = true,
+            summary = "Enter a friend code",
+            description = "Both become friends and the code is spent. Refusals say why: not a code, unknown, used, expired, your own, already friends.",
+            request = Schema("""{"type":"object","required":["code"],"properties":{"code":{"type":"string","description":"eight letters and numbers, case and spaces ignored"}}}"""),
+            responses = mapOf(200 to "the new friend", 401 to "no principal", 403 to "not an adult account", 409 to "the code cannot be used, with the sentence to show"),
+        ),
+        Endpoint(
+            id = "friends.remove", method = "POST", path = "/v1/friends/{accountId}/remove", authenticated = true,
+            summary = "End a friendship from this side",
+            description = "Recorded as ended, never deleted. Either side may.",
+            responses = mapOf(200 to "removed: whether there was one to end", 400 to "not a UUID", 401 to "no principal"),
         ),
         Endpoint(
             id = "health", method = "GET", path = "/healthz", authenticated = false,

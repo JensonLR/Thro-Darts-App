@@ -16,7 +16,7 @@ public struct AccountScreen: View {
     @State private var name = ""
     @State private var showing: Sub?
 
-    private enum Sub { case inbox, discovery }
+    private enum Sub { case inbox, discovery, friends }
 
     public init(account: AccountStore, onBack: @escaping () -> Void) {
         self.account = account
@@ -28,6 +28,8 @@ public struct AccountScreen: View {
             InboxScreen(account: account) { showing = nil }
         } else if showing == .discovery {
             DiscoveryScreen(account: account) { showing = nil }
+        } else if showing == .friends {
+            FriendsScreen(account: account) { showing = nil }
         } else {
             VStack(spacing: 0) {
                 TopBar("Account", onBack: onBack, large: true)
@@ -90,6 +92,12 @@ public struct AccountScreen: View {
                 ThroTextButton(profile.named ? "Change your name" : "Set your name") { name = profile.named ? (profile.displayName ?? "") : ""; editingName = true }
             }
             SettingsRow(icon: .shield, label: "Age band", value: ageBandCopy(profile.ageBand))
+            if profile.ageBand == "unknown" {
+                Note("THRØ does not guess ages. Say you are 18 or over and friends unlock; under 18 is welcome to play, and a guardian's confirmation for the rest is coming.")
+                ThroButton("I am 18 or over", variant: .secondary, size: .medium, icon: .check) { Task { await account.declareAdult() } }
+            }
+            SectionHeader("Friends")
+            LinkRow(icon: .users, label: "Friends", value: account.friends.map { $0.isEmpty ? "None yet" : "\($0.count)" } ?? "Codes, given in person") { showing = .friends }
             SectionHeader("Ways in")
             waysIn(profile.credentials ?? 1)
             ThroButton("Add a passkey", variant: .secondary, size: .medium, icon: .lock) { Task { await account.usePasskey() } }
@@ -303,5 +311,134 @@ enum DiscoveryOrder {
         if let venue = card.venue { parts.append(venue) } else if let locality = card.locality { parts.append(locality) }
         if let spots = card.spotsRemaining { parts.append(spots == 0 ? "full" : "\(spots) places left") } else { parts.append("places not stated") }
         return parts.joined(separator: " · ")
+    }
+}
+
+
+// MARK: - Friends (V028)
+
+/// Friends: a code given in person, entered by the other. No search, because a search is how a
+/// stranger finds a child. The screen shows the code big enough to read across a table and lets it
+/// be shared; a field takes one; the list is who you have. Every refusal is the server's own
+/// sentence, shown as it came.
+public struct FriendsScreen: View {
+    @ObservedObject private var account: AccountStore
+    private let onBack: () -> Void
+    @State private var code = ""
+    @State private var removing: Friend?
+
+    public init(account: AccountStore, onBack: @escaping () -> Void) {
+        self.account = account
+        self.onBack = onBack
+    }
+
+    public var body: some View {
+        VStack(spacing: 0) {
+            TopBar("Friends", eyebrow: "Account", onBack: onBack)
+            ScrollView {
+                VStack(alignment: .leading, spacing: ThroSpacing.spacing3) {
+                    inviteSlate
+                    SectionHeader("Enter a friend's code").padding(.top, ThroSpacing.spaceSectionGap)
+                    HStack(spacing: ThroSpacing.spacing3) {
+                        ThroTextField("Code", text: $code, placeholder: "ABCD EFGH")
+                            .autocorrectionDisabled()
+                        ThroButton("Add", variant: .primary, size: .large) {
+                            let entered = code
+                            Task { if await account.acceptCode(entered) { code = "" } }
+                        }
+                        .disabled(FriendsScreen.normalised(code).count != 8)
+                        .padding(.top, 22)
+                    }
+                    if let note = account.friendsNote {
+                        Snackbar(note, tone: .error)
+                    }
+                    SectionHeader("Your friends", meta: account.friends.map { "\($0.count)" }).padding(.top, ThroSpacing.spaceSectionGap)
+                    if let friends = account.friends {
+                        if friends.isEmpty {
+                            Text("Nobody yet. Give your code to somebody, or enter theirs.")
+                                .thro(ThroTypography.body).foregroundStyle(ThroColor.colorTextSecondary)
+                        } else {
+                            ThroDivider()
+                            ForEach(friends) { friend in
+                                HStack(spacing: ThroSpacing.spacing3) {
+                                    PlayerIdentity(PlayerRef(name: friend.displayName), size: .small)
+                                    Spacer(minLength: 0)
+                                    Text("since \(friend.since.formatted(.dateTime.day().month(.abbreviated)))")
+                                        .thro(ThroTypography.metadata).foregroundStyle(ThroColor.colorTextSecondary)
+                                    Button { removing = friend } label: { Icon(.x, size: 16).foregroundStyle(ThroColor.colorTextSecondary).throTapTarget() }
+                                        .buttonStyle(ThroPressStyle(radius: 22))
+                                        .accessibilityLabel("Remove \(friend.displayName)")
+                                }
+                                .padding(.vertical, ThroSpacing.spacing2)
+                                ThroDivider()
+                            }
+                        }
+                    } else {
+                        HStack { ProgressView(); Text("Reading").thro(ThroTypography.body).foregroundStyle(ThroColor.colorTextSecondary) }
+                    }
+                    Note("A friend sees your name and that you are friends. Nothing else is shared yet; what friends can do together comes next, and it will be said here when it does.")
+                        .padding(.top, ThroSpacing.spaceSectionGap)
+                }
+                .padding(.horizontal, ThroSpacing.spaceScreenGutter)
+                .padding(.vertical, ThroSpacing.spacing5)
+            }
+        }
+        .background(ThroColor.colorBackgroundPrimary.ignoresSafeArea())
+        .task { if account.friends == nil { await account.loadFriends() } }
+        .confirmationDialog("Remove this friend?", isPresented: Binding(get: { removing != nil }, set: { if !$0 { removing = nil } }), titleVisibility: .visible) {
+            if let friend = removing {
+                Button("Remove \(friend.displayName)", role: .destructive) { Task { await account.removeFriend(friend) }; removing = nil }
+            }
+            Button("Keep", role: .cancel) { removing = nil }
+        } message: { Text("They stop being your friend on THRØ, both ways. Either of you can start again with a new code.") }
+    }
+
+    private var inviteSlate: some View {
+        ThroSlate(seed: 33) {
+            VStack(alignment: .leading, spacing: ThroSpacing.spacing3) {
+                Eyebrow("Your code", color: ThroColor.colorTextOnBoardSecondary)
+                if let invite = account.invite {
+                    Text(invite.spoken)
+                        .thro(ThroTypography.display.family(.sport).weight(.bold).tracking(em: 0.08))
+                        .foregroundStyle(ThroColor.colorTextOnBoard)
+                        .minimumScaleFactor(0.6)
+                        .lineLimit(1)
+                        .accessibilityLabel("Your friend code, \(invite.code.map(String.init).joined(separator: " "))")
+                    Text("Say it or show it to a friend. Good until \(invite.expiresAt.formatted(.dateTime.day().month(.abbreviated))), and for one friend.")
+                        .thro(ThroTypography.metadata).foregroundStyle(ThroColor.colorTextOnBoardSecondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                    HStack(spacing: ThroSpacing.spacing3) {
+                        ShareLink(item: "My THRØ friend code is \(invite.spoken) — enter it under Account → Friends.") {
+                            Text("SHARE").thro(ThroTypography.labelStrong.uppercase(true).tracking(em: 0.06))
+                                .foregroundStyle(ThroColor.colorTextOnBoard).padding(.horizontal, ThroSpacing.spacing4)
+                        }
+                        .buttonStyle(ChalkKeyStyle(.lit, minHeight: ThroSpacing.touchTargetMinimum, seedAngle: 41))
+                        .fixedSize()
+                        Button { Task { await account.makeInvite() } } label: {
+                            Text("NEW CODE").thro(ThroTypography.labelStrong.uppercase(true).tracking(em: 0.06))
+                                .foregroundStyle(ThroColor.colorTextOnBoard).padding(.horizontal, ThroSpacing.spacing4)
+                        }
+                        .buttonStyle(ChalkKeyStyle(.field, minHeight: ThroSpacing.touchTargetMinimum, seedAngle: 97))
+                        .fixedSize()
+                    }
+                } else {
+                    Text("Make a code and give it to a friend in person. That is how friends start on THRØ: nobody is searched for.")
+                        .thro(ThroTypography.body).foregroundStyle(ThroColor.colorTextOnBoardSecondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                    Button { Task { await account.makeInvite() } } label: {
+                        Text("MAKE MY CODE").thro(ThroTypography.labelStrong.uppercase(true).tracking(em: 0.06))
+                            .foregroundStyle(ThroColor.colorTextOnBoard).padding(.horizontal, ThroSpacing.spacing4)
+                    }
+                    .buttonStyle(ChalkKeyStyle(.lit, minHeight: ThroSpacing.touchTargetMinimum, seedAngle: 41))
+                    .fixedSize()
+                }
+            }
+            .padding(ThroSpacing.spacing5)
+        }
+    }
+
+    /// Case, spaces and dashes are not part of a code.
+    static func normalised(_ raw: String) -> String {
+        raw.uppercased().filter { !$0.isWhitespace && $0 != "-" }
     }
 }

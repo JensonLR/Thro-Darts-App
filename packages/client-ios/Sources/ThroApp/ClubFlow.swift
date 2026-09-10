@@ -351,6 +351,13 @@ public final class ClubStore: ObservableObject {
     /// Returns nil only when the book could not be written, in which case the match is still played
     /// and still saved — it simply carries no player id, which is the same state every match written
     /// before ADR-016 is in, and is recoverable later.
+    /// Removes a person from this phone's list. True when it happened. Their matches are untouched.
+    @discardableResult
+    public func deletePerson(_ personId: String) -> Bool {
+        guard let book else { return false }
+        do { try book.deletePerson(personId); people = try book.people(); return true } catch { return false }
+    }
+
     public func person(named name: String) -> LocalPerson? {
         guard let book else { return nil }
         do {
@@ -1278,16 +1285,24 @@ public struct PersonScreen: View {
     private let journal: Journal?
     private let clubs: [Club]
     private let onBack: () -> Void
+    /// Removes this person from the phone's list. Nil where the screen is shown read-only.
+    private let onRemove: (() -> Void)?
     @State private var figures: [StatLine] = []
     @State private var problem: String?
+    @State private var confirmingRemoval = false
 
     public init(person: LocalPerson, journal: Journal?, clubs: [Club] = [],
-                onBack: @escaping () -> Void = {}) {
+                onBack: @escaping () -> Void = {}, onRemove: (() -> Void)? = nil) {
         self.person = person
         self.journal = journal
         self.clubs = clubs
         self.onBack = onBack
+        self.onRemove = onRemove
     }
+
+    /// What removing a person does and does not do, in the words the dialog uses.
+    static let removalTitle = "Remove from this phone?"
+    static let removalMessage = "Their name comes off the list of who plays here. The matches stay, because they happened; the next time the name is typed it starts a new history."
 
     public var body: some View {
         ProfileScreen(name: person.name,
@@ -1310,8 +1325,15 @@ public struct PersonScreen: View {
                       // the photograph answers for their own age rather than whoever is holding the
                       // phone answering for them. That is B4, and nothing here changes until it lands.
                       pictureNote: PicturePolicy.refusal(for: .unknown),
-                      onBack: onBack)
+                      onBack: onBack,
+                      onRemove: onRemove == nil ? nil : { confirmingRemoval = true })
             .task { load() }
+            .confirmationDialog(PersonScreen.removalTitle, isPresented: $confirmingRemoval, titleVisibility: .visible) {
+                Button("Remove \(person.name)", role: .destructive) { onRemove?() }
+                Button("Keep", role: .cancel) {}
+            } message: {
+                Text(PersonScreen.removalMessage)
+            }
     }
 
     private func load() {

@@ -73,6 +73,11 @@ routes are mounted from. In brief:
 | `GET /v1/teams/{teamId}/inbox` | principal with `team.manage` | The team's Secretary inbox; anyone else is 403 and the refusal is on the audit record |
 | `GET /v1/me/discovery?from&to&locality` | principal | Discovery cards with their reasons |
 | `GET /v1/leagues?locality` | anyone | The leagues' public front (PD-033): seasons, divisions, teams, home venues with coordinates, and the source and basis of each |
+| `GET /v1/friends` | principal | The caller's friends: display names and since when (PD-035) |
+| `POST /v1/friends/invite` | principal | A friend code to give in person: eight characters, seven days, one use; 403 with the sentence to show unless the account has said it is an adult |
+| `POST /v1/friends/accept` | principal | Enter a code; both become friends; 409 with the sentence to show when the code is unknown, used, expired, your own, or you are friends already |
+| `POST /v1/friends/{accountId}/remove` | principal | End a friendship from this side; recorded, never deleted |
+| `PUT /v1/me/profile` | principal | `displayName` and/or `ageBand` (adult or minor, self-declared, never back to unknown) |
 | `GET /v1/events?from` | anyone | Open-entry events that have not started, with their public venues: the notice on the pub door. Entry counts and eligibility stay on `/v1/me/discovery` |
 | `GET /v1/streams/match/{matchId}` | a participant, a grant holder, or an official of the event | `text/event-stream`: every event of the match in commit order, then each new one; `Last-Event-ID` resumes; a comment ping every 15 s; the client treats 45 quiet seconds as stale (ADR-007) |
 | `GET /healthz` | anyone | Liveness and the schema version |

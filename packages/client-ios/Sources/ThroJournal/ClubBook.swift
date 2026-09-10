@@ -958,6 +958,14 @@ public final class ClubBook {
         try run("UPDATE person SET name = ? WHERE person_id = ?;", [.text(clean), .text(personId)])
     }
 
+    /// Takes a person off this phone's list of who plays here. **Their matches stay.** A match is a
+    /// record of what happened between two names on a night (ADR-016); the person table is only
+    /// this phone's index of those names, and removing the index entry does not unhappen the darts.
+    /// The next time that name is typed at the oche it is a new person, with no history pooled.
+    public func deletePerson(_ personId: String) throws {
+        try run("DELETE FROM person WHERE person_id = ?;", [.text(personId)])
+    }
+
     /// How two names are compared when deciding whether they are the same person.
     static func fold(_ name: String) -> String {
         name.lowercased().split(whereSeparator: { $0 == " " || $0 == "\t" }).joined(separator: " ")

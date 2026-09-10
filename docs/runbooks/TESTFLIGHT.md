@@ -23,6 +23,12 @@ If it fails, the log says why, and the section at the end covers the likely reas
    *Certificates, Identifiers & Profiles* → *Identifiers* → *+* → *App IDs* → *App*, explicit,
    `app.thro.darts`, and tick **App Groups**; SKU `thro-darts`; full access.
 
+   **Tick three capabilities on the App ID: App Groups, Sign in with Apple and Associated Domains.**
+   The second and third arrived with accounts (PD-030): the entitlements file asks for both, and an
+   archive whose App ID lacks them fails to sign with *Provisioning profile doesn't support the
+   Sign in with Apple capability*. Automatic signing usually adds them itself; ticking them by hand
+   is the way to be sure.
+
    **The App Groups tick is new**, and it is what lets the Home Screen and Lock Screen widgets read
    anything at all: the app writes a small file into a shared container and the widget extension
    reads it. If you registered the identifier before this was added, go back to it and tick App
@@ -46,6 +52,18 @@ If it fails, the log says why, and the section at the end covers the likely reas
 5. **Yourself as a tester.** App Store Connect → the app → *TestFlight* → *Internal Testing* → *+* →
    a group called `Founders` → add your own Apple ID. Install **TestFlight** from the App Store on the
    phone and sign in with the same Apple ID.
+
+## Getting a build from the Mac tonight, without the workflow
+
+The workflow is the way that needs no Mac. With the Mac in front of you the archive takes five
+minutes: open `apps/ios/ThroDarts.xcodeproj`, choose the **ThroDarts** scheme and **Any iOS Device
+(arm64)** as the destination, check *Signing & Capabilities* shows the team `2XM324WPD5` with
+automatic signing for both targets, then **Product → Archive**. When the Organizer opens: **Distribute
+App → TestFlight & App Store → Upload**, accept the defaults (automatic signing, upload symbols),
+Upload. App Store Connect processes it for five to ten minutes, then TestFlight offers it to the
+*Founders* group. Every later upload needs a higher build number: bump `CURRENT_PROJECT_VERSION`
+in the project (both targets) before archiving again — the workflow does this for you with its
+run number; by hand it is yours to do.
 
 ## Getting a build
 

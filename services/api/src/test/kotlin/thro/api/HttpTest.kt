@@ -135,6 +135,9 @@ class HttpTest {
             // The leagues' public front needs no principal and answers the same shape empty or full.
             val leagues = get("/v1/leagues?locality=Stockton", subject = null)
             check("the leagues are public and answer without a principal", leagues.status.value == 200 && leagues.bodyAsText().startsWith("""{"leagues":["""))
+            check("friends need a principal, and the development principal has no account to be friends from",
+                get("/v1/friends", subject = null).status.value == 401 && get("/v1/friends", subject = home).status.value == 403
+                    && post("/v1/friends/invite", "{}", subject = home).status.value == 403)
             val events = get("/v1/events", subject = null)
             check("upcoming open events are public too, and a bad date is a 400", events.status.value == 200 && events.bodyAsText().startsWith("""{"events":[""") && get("/v1/events?from=soon", subject = null).status.value == 400)
 
@@ -152,6 +155,6 @@ class HttpTest {
                 bareUse.get() == 0 && roles.contains("app_match") && roles.contains("app_competition") && roles.contains("app_read") && roles.all { it in setOf("app_match", "app_competition", "app_read") })
         }
         println("  $passed HTTP properties held")
-        assertEquals(30, passed)
+        assertEquals(31, passed)
     }
 }

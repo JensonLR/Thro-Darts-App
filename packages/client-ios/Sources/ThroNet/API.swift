@@ -145,6 +145,23 @@ public struct PublicEvent: Decodable, Sendable, Equatable, Identifiable {
     public var id: UUID { eventId }
 }
 
+/// A friend: somebody who gave you their code, or took yours. Display name only.
+public struct Friend: Decodable, Sendable, Equatable, Identifiable {
+    public let accountId: UUID
+    public let displayName: String
+    public let since: Date
+    public var id: UUID { accountId }
+    public init(accountId: UUID, displayName: String, since: Date) { self.accountId = accountId; self.displayName = displayName; self.since = since }
+}
+
+public struct FriendInvite: Decodable, Sendable, Equatable {
+    public let code: String
+    public let expiresAt: Date
+    public init(code: String, expiresAt: Date) { self.code = code; self.expiresAt = expiresAt }
+    /// "ABCD EFGH": how a code is read out.
+    public var spoken: String { code.count == 8 ? String(code.prefix(4)) + " " + String(code.suffix(4)) : code }
+}
+
 public struct DiscoveryCard: Decodable, Sendable, Equatable, Identifiable {
     public let eventId: UUID
     public let name: String
@@ -352,6 +369,39 @@ public actor ThroAPI {
     public func setDisplayName(_ name: String) async throws -> Profile {
         let body = try JSONSerialization.data(withJSONObject: ["displayName": name])
         return try decode(await authorised("PUT", "/v1/me/profile", body: body))
+    }
+
+    /// The account says its own age band (adult or minor, self-declared). Adult is what unlocks friends.
+    public func declareAge(adult: Bool) async throws -> Profile {
+        let body = try JSONSerialization.data(withJSONObject: ["ageBand": adult ? "adult" : "minor"])
+        return try decode(await authorised("PUT", "/v1/me/profile", body: body))
+    }
+
+    public func friends() async throws -> [Friend] {
+        struct Envelope: Decodable { let friends: [Friend] }
+        return try (decode(await authorised("GET", "/v1/friends")) as Envelope).friends
+    }
+
+    /// A code to give somebody in person. A refusal (not an adult account) arrives as `.status(403, body)`.
+    public func inviteFriend() async throws -> FriendInvite { try decode(await authorised("POST", "/v1/friends/invite")) }
+
+    public func acceptFriend(code: String) async throws -> Friend {
+        struct Envelope: Decodable { let friend: Friend }
+        let body = try JSONSerialization.data(withJSONObject: ["code": code])
+        return try (decode(await authorised("POST", "/v1/friends/accept", body: body)) as Envelope).friend
+    }
+
+    public func removeFriend(_ accountId: UUID) async throws {
+        _ = try await authorised("POST", "/v1/friends/\(accountId.uuidString.lowercased())/remove")
+    }
+
+    /// The sentence inside a refusal's body, for the screen; the status text otherwise.
+    public static func refusal(_ error: Error) -> String? {
+        guard case APIError.status(_, let body) = error,
+              let data = body.data(using: .utf8),
+              let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let why = object["error"] as? String else { return nil }
+        return why
     }
 
     public func inbox() async throws -> [String: [InboxItem]] {

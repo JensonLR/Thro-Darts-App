@@ -486,7 +486,9 @@ public struct ThroRootView: View {
                 store.refresh()
             }
         } else if let person = viewing {
-            PersonScreen(person: person, journal: store.journal, clubs: clubs.clubs) { viewing = nil }
+            PersonScreen(person: person, journal: store.journal, clubs: clubs.clubs,
+                         onBack: { viewing = nil },
+                         onRemove: { if clubs.deletePerson(person.id) { viewing = nil } })
                 .throAppearance(Appearance(stored: appearanceRaw))
         } else if showingAccount, let account {
             AccountScreen(account: account) { showingAccount = false }
@@ -748,9 +750,9 @@ struct Masthead: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: ThroSpacing.spacing2) {
-            Text("THRØ")
-                .thro(ThroTypography.display.tracking(em: 0.02))
-                .foregroundStyle(ThroColor.throChalk)
+            // The logo, not a font's Ø: THR in the face and the mark as the Ø, drawn live at the
+            // display role's cap height.
+            ThroWordmark(capHeight: ThroTypography.display.capHeight, color: ThroColor.throChalk)
                 .accessibilityAddTraits(.isHeader)
             Text(line)
                 .thro(ThroTypography.label)

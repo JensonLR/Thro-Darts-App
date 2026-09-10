@@ -342,8 +342,7 @@ public struct DartAnatomy: Equatable, Sendable {
             let logo = MarkGeometry(unit: fh * nearScale * 0.34)
             for sign in [CGFloat(1), CGFloat(-1)] {
                 let c = CGPoint(x: fEnd + 0.40 * fl, y: sign * fh * nearScale * 0.55)
-                parts.logo.addPath(logo.ringShape(at: c))
-                parts.logo.addPath(logo.bar(at: c))
+                parts.logo.addPath(logo.mark(at: c))
             }
         }
         return parts
