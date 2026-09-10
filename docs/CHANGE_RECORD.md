@@ -2784,3 +2784,15 @@ scale gather into one marker with a count, and a tap zooms in until they come ap
 is deterministic so markers do not shuffle between frames. Tests: FriendsTests (7) drive the
 store against a scripted server and assert every refusal arrives as the server's sentence;
 clustering has its own; 626 client.
+
+## The Team OS reaches the phone: start a team, fill it by code, see the roster
+
+Plan §6's first rows over the wire (PD-036, V029): `POST /v1/teams`, `GET /v1/me/teams`,
+`GET /v1/teams/{id}`, `POST /v1/teams/{id}/invite`, `POST /v1/teams/join`, all through the domain's
+own factories (`Organisations`, `Relations`) so a team started from a phone is the same rows a
+test writes. A roster names a member only where `identity.player_may_be_disclosed` says so; the
+rest are counted. On the phone, Discover's *Your teams on THRØ* lists the connected teams above
+what the phone keeps on its own; a team's front is a slate with the code on it for whoever runs it,
+the seasons it plays in and its roster with a line explaining anyone unnamed; *Join or start* is
+one screen with two doors. Tests: TeamsTest (start, code, join, expiry, private, disclosure), HTTP
+34 properties.

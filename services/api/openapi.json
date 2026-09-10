@@ -85,11 +85,26 @@
   "/v1/me/profile":{
     "put":{"operationId":"me.profile","summary":"Set my display name","description":"A name is the person's to give; it is never taken from a provider's token on their behalf.","parameters":[],"security":[{"principal":[]}],"requestBody":{"required":true,"content":{"application/json":{"schema":{"type":"object","properties":{"displayName":{"type":"string","maxLength":60},"ageBand":{"type":"string","enum":["adult","minor"],"description":"Self-declared, once asked. Never back to unknown. What unlocks friends (V028) is adult."}}}}}},"responses":{"200":{"description":"profile"},"400":{"description":"malformed"},"401":{"description":"no principal"}}}
   },
+  "/v1/me/teams":{
+    "get":{"operationId":"teams.mine","summary":"The teams the caller is in","description":"Current memberships only, newest first, with the caller's role and the member count.","parameters":[],"security":[{"principal":[]}],"responses":{"200":{"description":"teams"},"401":{"description":"no principal"}}}
+  },
   "/v1/streams/match/{matchId}":{
     "get":{"operationId":"stream.match","summary":"A match's evidence, live (ADR-007)","description":"text/event-stream. Every event of the match in commit order, then each new one as it commits; the event id is `match:{matchId}:{commitXid}-{seq}` and a reconnect with Last-Event-ID replays from there. A comment ping every 15 seconds; a client that has seen nothing for 45 seconds treats the stream as stale. Open to the match's participants, holders of a scoring grant for it, and officials of its event — there is no spectator stream yet.","parameters":[{"name":"matchId","in":"path","required":true,"schema":{"type":"string","format":"uuid"}}],"security":[{"principal":[]}],"responses":{"200":{"description":"text/event-stream","content":{"text/event-stream":{}}},"401":{"description":"no principal"},"403":{"description":"not in this match"},"404":{"description":"no such match"}}}
   },
+  "/v1/teams":{
+    "post":{"operationId":"teams.create","summary":"Start a team","description":"The caller becomes its first member and admin (team#admin). Plan §6, row one.","parameters":[],"security":[{"principal":[]}],"requestBody":{"required":true,"content":{"application/json":{"schema":{"type":"object","required":["name"],"properties":{"name":{"type":"string","minLength":2,"maxLength":60},"locality":{"type":["string","null"]}}}}}},"responses":{"200":{"description":"the team, with your role"},"400":{"description":"a bad name"},"401":{"description":"no principal"}}}
+  },
+  "/v1/teams/join":{
+    "post":{"operationId":"teams.join","summary":"Enter a team code","description":"The caller becomes a member, as a player. Refusals say why: not a code, unknown, expired, full, already in.","parameters":[],"security":[{"principal":[]}],"requestBody":{"required":true,"content":{"application/json":{"schema":{"type":"object","required":["code"],"properties":{"code":{"type":"string"}}}}}},"responses":{"200":{"description":"the team, with your role"},"401":{"description":"no principal"},"409":{"description":"the code cannot be used, with the sentence to show"}}}
+  },
+  "/v1/teams/{teamId}":{
+    "get":{"operationId":"teams.front","summary":"A team's front","description":"Name, locality, home venue, the seasons it is in, and its roster — names only where identity.player_may_be_disclosed allows, everyone else counted and not named. A private team answers 404 to anyone not in it. With a bearer, yourRole says what you are in it.","parameters":[{"name":"teamId","in":"path","required":true,"schema":{"type":"string","format":"uuid"}}],"responses":{"200":{"description":"the front"},"400":{"description":"not a UUID"},"404":{"description":"no such team, or not yours to see"}}}
+  },
   "/v1/teams/{teamId}/inbox":{
     "get":{"operationId":"team.inbox","summary":"A team's Secretary inbox, for those who run it","description":"Requires team.manage on the team (admin or captain). Anyone else is 403, and the refusal is on the audit record.","parameters":[{"name":"teamId","in":"path","required":true,"schema":{"type":"string","format":"uuid"}}],"security":[{"principal":[]}],"responses":{"200":{"description":"sections of tasks"},"401":{"description":"no principal"},"403":{"description":"you do not run this team"}}}
+  },
+  "/v1/teams/{teamId}/invite":{
+    "post":{"operationId":"teams.invite","summary":"A team code to give the side","description":"Eight characters, thirty days, up to twenty people. Admin or captain only (V029).","parameters":[{"name":"teamId","in":"path","required":true,"schema":{"type":"string","format":"uuid"}}],"security":[{"principal":[]}],"responses":{"200":{"description":"code, expiresAt, maxUses"},"401":{"description":"no principal"},"403":{"description":"not the admin or captain, with the sentence to show"}}}
   }
 }
 }

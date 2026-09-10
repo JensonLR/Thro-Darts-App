@@ -14,6 +14,10 @@ import ThroTokens
 
 public struct DiscoverScreen: View {
     @ObservedObject private var nearby: Nearby
+    @ObservedObject private var teams: TeamsModel
+    private let signedIn: Bool
+    private let onServerTeam: (UUID) -> Void
+    private let onJoinOrStart: () -> Void
     private let clubs: [Club]
     private let badge: (Club) -> Image?
     private let onOpen: (Club) -> Void
@@ -22,11 +26,18 @@ public struct DiscoverScreen: View {
     private let onUseLocation: () -> Void
     private let onRetry: () -> Void
 
-    public init(nearby: Nearby, clubs: [Club], badge: @escaping (Club) -> Image? = { _ in nil },
+    public init(nearby: Nearby, teams: TeamsModel, signedIn: Bool = false, clubs: [Club],
+                badge: @escaping (Club) -> Image? = { _ in nil },
                 onOpen: @escaping (Club) -> Void = { _ in }, onCreate: @escaping () -> Void = {},
-                onLeague: @escaping (UUID?) -> Void = { _ in }, onUseLocation: @escaping () -> Void = {},
+                onLeague: @escaping (UUID?) -> Void = { _ in },
+                onServerTeam: @escaping (UUID) -> Void = { _ in }, onJoinOrStart: @escaping () -> Void = {},
+                onUseLocation: @escaping () -> Void = {},
                 onRetry: @escaping () -> Void = {}) {
         self.nearby = nearby
+        self.teams = teams
+        self.signedIn = signedIn
+        self.onServerTeam = onServerTeam
+        self.onJoinOrStart = onJoinOrStart
         self.clubs = clubs
         self.badge = badge
         self.onOpen = onOpen
@@ -198,15 +209,53 @@ public struct DiscoverScreen: View {
     // MARK: yours
 
     @ViewBuilder private var yours: some View {
-        SectionHeader("Yours", action: clubs.isEmpty ? nil : "Start another", onAction: onCreate)
+        // Teams on THRØ first — the connected ones — then what this phone keeps on its own.
+        SectionHeader("Your teams on THRØ", action: signedIn ? "Join or start" : nil, onAction: onJoinOrStart)
+            .padding(.top, ThroSpacing.spaceSectionGap)
+        if !signedIn {
+            Text("Sign in under You to join a team by its code or start one. A team on THRØ has a roster, a home venue and its place in a league.")
+                .thro(ThroTypography.body).foregroundStyle(ThroColor.colorTextSecondary)
+                .fixedSize(horizontal: false, vertical: true)
+                .padding(.top, ThroSpacing.spacing2)
+        } else {
+            switch teams.mine {
+            case .idle, .loading:
+                HStack { ProgressView(); Text("Reading your teams").thro(ThroTypography.body).foregroundStyle(ThroColor.colorTextSecondary) }
+                    .padding(.vertical, ThroSpacing.spacing3)
+            case .failed(let why):
+                Text(why).thro(ThroTypography.body).foregroundStyle(ThroColor.colorTextSecondary).padding(.vertical, ThroSpacing.spacing3)
+            case .loaded(let list):
+                if list.isEmpty {
+                    Text("None yet. Join one with your captain's code, or start one and become its admin.")
+                        .thro(ThroTypography.body).foregroundStyle(ThroColor.colorTextSecondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .padding(.top, ThroSpacing.spacing2)
+                    ThroButton("Join or start a team", variant: .primary, size: .large, fullWidth: true, action: onJoinOrStart)
+                        .padding(.top, ThroSpacing.spacing4)
+                } else {
+                    ThroDivider().padding(.top, ThroSpacing.spacing2)
+                    ForEach(list) { team in
+                        Button { onServerTeam(team.teamId) } label: {
+                            OrganisationRow(initials: DiscoverScreen.initials(team.name), name: team.name,
+                                            meta: [team.locality, team.members == 1 ? "1 member" : "\(team.members) members"].compactMap { $0 }.joined(separator: " · "),
+                                            accent: ThroColor.throGreen, trailing: TeamFrontScreen.roleLabel(team.role), image: nil)
+                                .throRowTapTarget()
+                        }
+                        .buttonStyle(ThroPressStyle(radius: ThroSpacing.radiusCard, pressedFill: ThroColor.colorSurfaceSecondary, scales: false))
+                        ThroDivider()
+                    }
+                }
+            }
+        }
+        SectionHeader("Kept on this phone", action: clubs.isEmpty ? nil : "Start another", onAction: onCreate)
             .padding(.top, ThroSpacing.spaceSectionGap)
         if clubs.isEmpty {
-            Text("Teams you start stay on this phone until you choose otherwise. A team or league's front page is public; what is inside it — members, results, announcements — is not.")
+            Text("A team, league or tournament kept on this phone alone: roster, fixtures and results, without an account. Nothing here leaves the phone.")
                 .thro(ThroTypography.body)
                 .foregroundStyle(ThroColor.colorTextSecondary)
                 .fixedSize(horizontal: false, vertical: true)
                 .padding(.top, ThroSpacing.spacing2)
-            ThroButton("Start a team", variant: .secondary, size: .large, fullWidth: true, action: onCreate)
+            ThroButton("Keep one on this phone", variant: .secondary, size: .large, fullWidth: true, action: onCreate)
                 .padding(.top, ThroSpacing.spacing4)
         } else {
             ThroDivider().padding(.top, ThroSpacing.spacing2)
@@ -222,7 +271,7 @@ public struct DiscoverScreen: View {
                 .buttonStyle(ThroPressStyle(radius: ThroSpacing.radiusCard, pressedFill: ThroColor.colorSurfaceSecondary, scales: false))
                 ThroDivider()
             }
-            Note("Joining somebody else's team needs an account, under Settings → Account and profile.")
+            Note("These stay on this phone. A team on THRØ, above, is the one your side shares.")
                 .padding(.top, ThroSpacing.spaceSectionGap)
         }
     }

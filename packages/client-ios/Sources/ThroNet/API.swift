@@ -145,6 +145,47 @@ public struct PublicEvent: Decodable, Sendable, Equatable, Identifiable {
     public var id: UUID { eventId }
 }
 
+/// A team the caller is in, as the server lists it.
+public struct TeamSummary: Decodable, Sendable, Equatable, Identifiable {
+    public let teamId: UUID
+    public let name: String
+    public let locality: String?
+    public let role: String
+    public let members: Int
+    public var id: UUID { teamId }
+    public init(teamId: UUID, name: String, locality: String?, role: String, members: Int) {
+        self.teamId = teamId; self.name = name; self.locality = locality; self.role = role; self.members = members
+    }
+}
+
+/// A team's front: what anyone may see, and, with a bearer, what you are in it.
+public struct TeamFront: Decodable, Sendable, Equatable {
+    public struct Member: Decodable, Sendable, Equatable {
+        /// Nil when the person may not be named (a minor, or consent not settled): counted, not shown.
+        public let name: String?
+        public let role: String
+    }
+    public struct SeasonLine: Decodable, Sendable, Equatable {
+        public let league: String
+        public let label: String
+        public let division: String?
+    }
+    public let teamId: UUID
+    public let name: String
+    public let locality: String?
+    public let venue: PublicLeague.Venue?
+    public let seasons: [SeasonLine]
+    public let roster: [Member]
+    public let yourRole: String?
+}
+
+public struct TeamInvite: Decodable, Sendable, Equatable {
+    public let code: String
+    public let expiresAt: Date
+    public let maxUses: Int
+    public var spoken: String { code.count == 8 ? String(code.prefix(4)) + " " + String(code.suffix(4)) : code }
+}
+
 /// A friend: somebody who gave you their code, or took yours. Display name only.
 public struct Friend: Decodable, Sendable, Equatable, Identifiable {
     public let accountId: UUID
@@ -433,6 +474,36 @@ public actor ThroAPI {
         let (data, http) = try await send("GET", "/v1/events", bearer: session?.accessToken)
         guard http.statusCode == 200 else { throw APIError.status(http.statusCode, String(decoding: data, as: UTF8.self)) }
         return try (decode(data) as Envelope).events
+    }
+
+    // MARK: teams (plan §6)
+
+    public func myTeams() async throws -> [TeamSummary] {
+        struct Envelope: Decodable { let teams: [TeamSummary] }
+        return try (decode(await authorised("GET", "/v1/me/teams")) as Envelope).teams
+    }
+
+    public func createTeam(name: String, locality: String?) async throws -> TeamSummary {
+        var object: [String: Any] = ["name": name]
+        if let locality { object["locality"] = locality }
+        let body = try JSONSerialization.data(withJSONObject: object)
+        return try decode(await authorised("POST", "/v1/teams", body: body))
+    }
+
+    /// A team's public front. Sends the bearer when there is one, so `yourRole` can be answered.
+    public func teamFront(_ teamId: UUID) async throws -> TeamFront {
+        let (data, http) = try await send("GET", "/v1/teams/\(teamId.uuidString.lowercased())", bearer: session?.accessToken)
+        guard http.statusCode == 200 else { throw APIError.status(http.statusCode, String(decoding: data, as: UTF8.self)) }
+        return try decode(data)
+    }
+
+    public func inviteToTeam(_ teamId: UUID) async throws -> TeamInvite {
+        try decode(await authorised("POST", "/v1/teams/\(teamId.uuidString.lowercased())/invite"))
+    }
+
+    public func joinTeam(code: String) async throws -> TeamSummary {
+        let body = try JSONSerialization.data(withJSONObject: ["code": code])
+        return try decode(await authorised("POST", "/v1/teams/join", body: body))
     }
 
     // MARK: plumbing

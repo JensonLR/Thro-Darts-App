@@ -136,6 +136,38 @@ public object Contract {
             responses = mapOf(200 to "profile", 400 to "malformed", 401 to "no principal"),
         ),
         Endpoint(
+            id = "teams.create", method = "POST", path = "/v1/teams", authenticated = true,
+            summary = "Start a team",
+            description = "The caller becomes its first member and admin (team#admin). Plan §6, row one.",
+            request = Schema("""{"type":"object","required":["name"],"properties":{"name":{"type":"string","minLength":2,"maxLength":60},"locality":{"type":["string","null"]}}}"""),
+            responses = mapOf(200 to "the team, with your role", 400 to "a bad name", 401 to "no principal"),
+        ),
+        Endpoint(
+            id = "teams.mine", method = "GET", path = "/v1/me/teams", authenticated = true,
+            summary = "The teams the caller is in",
+            description = "Current memberships only, newest first, with the caller's role and the member count.",
+            responses = mapOf(200 to "teams", 401 to "no principal"),
+        ),
+        Endpoint(
+            id = "teams.front", method = "GET", path = "/v1/teams/{teamId}", authenticated = false,
+            summary = "A team's front",
+            description = "Name, locality, home venue, the seasons it is in, and its roster — names only where identity.player_may_be_disclosed allows, everyone else counted and not named. A private team answers 404 to anyone not in it. With a bearer, yourRole says what you are in it.",
+            responses = mapOf(200 to "the front", 400 to "not a UUID", 404 to "no such team, or not yours to see"),
+        ),
+        Endpoint(
+            id = "teams.invite", method = "POST", path = "/v1/teams/{teamId}/invite", authenticated = true,
+            summary = "A team code to give the side",
+            description = "Eight characters, thirty days, up to twenty people. Admin or captain only (V029).",
+            responses = mapOf(200 to "code, expiresAt, maxUses", 401 to "no principal", 403 to "not the admin or captain, with the sentence to show"),
+        ),
+        Endpoint(
+            id = "teams.join", method = "POST", path = "/v1/teams/join", authenticated = true,
+            summary = "Enter a team code",
+            description = "The caller becomes a member, as a player. Refusals say why: not a code, unknown, expired, full, already in.",
+            request = Schema("""{"type":"object","required":["code"],"properties":{"code":{"type":"string"}}}"""),
+            responses = mapOf(200 to "the team, with your role", 401 to "no principal", 409 to "the code cannot be used, with the sentence to show"),
+        ),
+        Endpoint(
             id = "friends", method = "GET", path = "/v1/friends", authenticated = true,
             summary = "The caller's friends",
             description = "Display names only: a friend is somebody who told you their name across a table. Newest first.",

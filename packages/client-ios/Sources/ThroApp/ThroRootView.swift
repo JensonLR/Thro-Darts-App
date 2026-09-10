@@ -545,7 +545,7 @@ public struct ThroRootView: View {
                            store.tab = .discover
                            openClub = ClubLanding(club: club.id, wanted: .fixtures)
                        })
-        case .discover: ClubsFlow(store: clubs, open: $openClub, api: account?.api)
+        case .discover: ClubsFlow(store: clubs, open: $openClub, api: account?.api, signedIn: account?.isSignedIn ?? false)
         case .you: YouScreen(account: youAccount, clubs: clubs.clubs, people: clubs.people,
                              badge: { clubs.image($0.badgeAssetId) },
                              onSettings: { showingSettings = true },

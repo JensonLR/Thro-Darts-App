@@ -1748,3 +1748,19 @@ is a further decision and the screen says so.
 
 The account's age band becomes something a person can say about themselves: *I am 18 or over* under
 Account and profile sets `adult, self_declared`; under 18 may be said too. Never back to unknown.
+
+## PD-036 — A team on THRØ starts with one person and fills by a code the side is told
+
+**Taken on delegated authority, 2026-09-10**, from plan §6's first rows and the founder's "keep going".
+Reversible: invitations by name or by link can be added beside the code.
+
+### Decided
+
+Anyone signed in may **start a team** and is its first member and admin. Getting the side in is a
+**team code** — eight characters, thirty days, up to twenty people — made by the admin or captain and
+said across the bar, for the reasons friends work that way (PD-035): no directory, no search, consent
+from both sides. Joining makes a real membership (V014) as a player; roles beyond that are the
+admin's to give later. A team's **front is public** — name, town, home venue, seasons — and its
+roster is **named only where the disclosure rule allows** (`identity.player_may_be_disclosed`): an
+adult who has said so, or a guardian's consent. Everyone else is counted and not named, so a public
+front never shows a child. A private team is nobody's business but its members'.

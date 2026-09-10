@@ -73,6 +73,11 @@ routes are mounted from. In brief:
 | `GET /v1/teams/{teamId}/inbox` | principal with `team.manage` | The team's Secretary inbox; anyone else is 403 and the refusal is on the audit record |
 | `GET /v1/me/discovery?from&to&locality` | principal | Discovery cards with their reasons |
 | `GET /v1/leagues?locality` | anyone | The leagues' public front (PD-033): seasons, divisions, teams, home venues with coordinates, and the source and basis of each |
+| `POST /v1/teams` | principal | Start a team; the caller is its first member and admin (plan §6) |
+| `GET /v1/me/teams` | principal | The caller's current teams with their role and the member count |
+| `GET /v1/teams/{teamId}` | anyone | A team's front: name, town, home venue, seasons, roster — names only where `identity.player_may_be_disclosed` allows; private teams 404 to non-members; `yourRole` with a bearer |
+| `POST /v1/teams/{teamId}/invite` | principal | A team code: eight characters, thirty days, twenty people; admin or captain only (V029) |
+| `POST /v1/teams/join` | principal | Enter a team code and join as a player; 409 with the sentence when the code is unknown, expired, full or you are in already |
 | `GET /v1/friends` | principal | The caller's friends: display names and since when (PD-035) |
 | `POST /v1/friends/invite` | principal | A friend code to give in person: eight characters, seven days, one use; 403 with the sentence to show unless the account has said it is an adult |
 | `POST /v1/friends/accept` | principal | Enter a code; both become friends; 409 with the sentence to show when the code is unknown, used, expired, your own, or you are friends already |

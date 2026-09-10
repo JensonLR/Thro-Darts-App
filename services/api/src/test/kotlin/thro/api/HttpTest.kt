@@ -135,6 +135,20 @@ class HttpTest {
             // The leagues' public front needs no principal and answers the same shape empty or full.
             val leagues = get("/v1/leagues?locality=Stockton", subject = null)
             check("the leagues are public and answer without a principal", leagues.status.value == 200 && leagues.bodyAsText().startsWith("""{"leagues":["""))
+            val started = post("/v1/teams", """{"name":"The Sun Inn","locality":"Stockton-on-Tees"}""", subject = home)
+            check("a team is started over the wire and its starter is its admin",
+                started.status.value == 200 && started.bodyAsText().contains(""""role":"admin"""")
+                    && get("/v1/me/teams", subject = home).bodyAsText().contains(""""name":"The Sun Inn""""))
+            val teamId = Regex(""""teamId":"([0-9a-f-]+)"""").find(started.bodyAsText())!!.groupValues[1]
+            val front = get("/v1/teams/$teamId", subject = null)
+            check("its front is public without a principal, and names nobody whose disclosure is not settled",
+                front.status.value == 200 && front.bodyAsText().contains(""""roster":[{"name":null,"role":"admin"}]"""))
+            val code = Regex(""""code":"([A-Z2-9]{8})"""").find(post("/v1/teams/$teamId/invite", "{}", subject = home).bodyAsText())!!.groupValues[1]
+            check("a stranger cannot make the team's code, a member joins on it once, and a bad code says why",
+                post("/v1/teams/$teamId/invite", "{}", subject = away).status.value == 403
+                    && post("/v1/teams/join", """{"code":"$code"}""", subject = away).status.value == 200
+                    && post("/v1/teams/join", """{"code":"$code"}""", subject = away).status.value == 409
+                    && post("/v1/teams/join", """{"code":"nope"}""", subject = away).status.value == 409)
             check("friends need a principal, and the development principal has no account to be friends from",
                 get("/v1/friends", subject = null).status.value == 401 && get("/v1/friends", subject = home).status.value == 403
                     && post("/v1/friends/invite", "{}", subject = home).status.value == 403)
@@ -155,6 +169,6 @@ class HttpTest {
                 bareUse.get() == 0 && roles.contains("app_match") && roles.contains("app_competition") && roles.contains("app_read") && roles.all { it in setOf("app_match", "app_competition", "app_read") })
         }
         println("  $passed HTTP properties held")
-        assertEquals(31, passed)
+        assertEquals(34, passed)
     }
 }
