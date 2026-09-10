@@ -66,8 +66,7 @@ class AuthTest {
         testApplication {
             application {
                 thro(Deps(connect = { TestDatabase.connect() }, authenticator = Authenticator.Bearer(now = { clock }), now = { clock },
-                    providers = mapOf(Provider.APPLE to clientId), keys = keys))
-            }
+                    providers = mapOf(Provider.APPLE to clientId), keys = keys, limiter = thro.api.http.RateLimiter(now = { clock }))) }
             suspend fun post(path: String, body: String, token: String? = null): HttpResponse = client.post(path) { token?.let { header("Authorization", "Bearer $it") }; header("X-Thro-Device", device.toString()); setBody(body) }
             suspend fun get(path: String, token: String?): HttpResponse = client.get(path) { token?.let { header("Authorization", "Bearer $it") } }
             fun field(json: String, name: String): String? = Json.parseObject(json)[name]?.toString()
@@ -180,6 +179,13 @@ class AuthTest {
                 refreshRace.count { it is Accounts.Refreshed.Rotated } == 1 && refreshRace.count { it is Accounts.Refreshed.Reused } == 1)
             pool.shutdown()
 
+            // --- a stranger's allowance ------------------------------------------------------------------
+            clock = clock.plusSeconds(120)   // every bucket full again
+            val flood = (1..31).map { post("/v1/auth/refresh", """{"refreshToken":"nonsense-$it","deviceId":"${UUID.randomUUID()}"}""") }
+            check("thirty unauthenticated attempts a minute from one address are answered; the thirty-first is 429 with Retry-After",
+                flood.take(30).all { it.status.value == 401 } && flood[30].status.value == 429 && (flood[30].headers["Retry-After"]?.toIntOrNull() ?: 0) > 0)
+            clock = clock.plusSeconds(120)   // and full again for what follows
+
             // --- linking a provider is recovery (PD-032), and never a switch of person ------------------
             val linkBase = Accounts(c, { clock }).signIn("apple", "001234.linkbase", device)
             val linked = post("/v1/auth/apple", """{"idToken":${thro.api.http.Contract.q(jwt(apple.private, "apple-1", claims(sub = "001234.newsubject")))},"deviceId":"$device"}""", linkBase.accessToken)
@@ -201,7 +207,7 @@ class AuthTest {
                 post("/v1/auth/refresh", """{"refreshToken":${thro.api.http.Contract.q(race[0].refreshToken)}}""").status.value == 401)
         }
         println("  $passed auth properties held")
-        assertEquals(40, passed)
+        assertEquals(41, passed)
     }
 
     @Test

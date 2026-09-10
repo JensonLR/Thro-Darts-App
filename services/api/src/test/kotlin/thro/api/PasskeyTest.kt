@@ -108,7 +108,8 @@ class PasskeyTest {
         testApplication {
             application {
                 thro(Deps(connect = { TestDatabase.connect() }, authenticator = Authenticator.Bearer(now = { clock }), now = { clock },
-                    relyingParty = RelyingParty(rpId, setOf("https://$rpId")), appleAppIds = listOf("TEAMID.app.example")))
+                    relyingParty = RelyingParty(rpId, setOf("https://$rpId")), appleAppIds = listOf("TEAMID.app.example"),
+                    limiter = thro.api.http.RateLimiter(capacity = 10_000, refillPerMinute = 10_000, now = { clock })))
             }
             suspend fun post(path: String, body: String, token: String? = null): HttpResponse = client.post(path) { token?.let { header("Authorization", "Bearer $it") }; setBody(body) }
             fun field(json: String, vararg path: String): Any? { var v: Any? = Json.parseObject(json); for (p in path) v = (v as Map<*, *>)[p]; return v }

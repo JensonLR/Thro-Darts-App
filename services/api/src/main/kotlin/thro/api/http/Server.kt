@@ -61,6 +61,8 @@ public class Deps(
     public val relyingParty: RelyingParty? = null,
     /** Apple app ids (TEAMID.bundleid) served in webcredentials, so iOS offers passkeys for this host. */
     public val appleAppIds: List<String> = emptyList(),
+    /** The allowance for routes a stranger may call: thirty a minute per address and per device by default. */
+    public val limiter: RateLimiter = RateLimiter(),
 )
 
 private class Http(val status: Int, val body: String)
@@ -119,6 +121,18 @@ public fun Application.thro(deps: Deps) {
                         val text = call.receiveText()
                         if (text.length > MAX_BODY) return@run Http(413, """{"error":"body over 64 KiB"}""")
                         text
+                    }
+                    // Routes a stranger may call are rationed per address and per device before any
+                    // work is done for them; the answer says how long to wait.
+                    if (e.id.startsWith("auth.") || e.id.startsWith("passkey.")) {
+                        val address = call.request.headers["X-Forwarded-For"]?.substringBefore(",")?.trim()?.takeIf { it.isNotEmpty() }
+                            ?: call.request.local.remoteHost
+                        val device = Regex("\"deviceId\"\\s*:\\s*\"([0-9a-fA-F-]{36})\"").find(body)?.groupValues?.get(1)
+                        val wait = listOfNotNull(deps.limiter.take("a:$address"), device?.let { deps.limiter.take("d:$it") }).maxOrNull()
+                        if (wait != null) {
+                            call.response.headers.append("Retry-After", wait.toString())
+                            return@run Http(429, """{"error":"too many attempts; try again in $wait seconds"}""")
+                        }
                     }
                     val req = Req(call, body, deps)
                     try {

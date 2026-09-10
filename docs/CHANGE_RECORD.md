@@ -2561,3 +2561,14 @@ operations, the Apple association file names `2XM324WPD5.app.thro.darts`, an una
 command is 401, Sign in with Apple without a token is 400, Google is 503 until its client id is
 set, and a passkey challenge is issued for the relying party `thro-api-staging.onrender.com`. The
 runbook records the live state and keeps the set-up steps for the next environment.
+
+## Thirty a minute
+
+The sign-in, refresh and passkey routes are the only ones a stranger may call, and until now they
+could be called as fast as a connection allowed. A token bucket per client address and per device
+id now sits ahead of them — thirty attempts a minute, refilled continuously, the thirty-first a 429
+with `Retry-After` — and the test floods one address and reads the thirty-first answer and its
+header. It is honest about what it is: one instance's memory, the difference between a thousand
+token guesses a second and thirty a minute, not a flood defence, which is the host's business. The
+runbook gains the steps for creating the Google iOS client id, which is the one value Sign in with
+Google waits for.

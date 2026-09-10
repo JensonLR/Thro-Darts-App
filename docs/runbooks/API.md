@@ -86,6 +86,36 @@ THRO_WRITE_OPENAPI=1 gradle -p services/api test --tests 'thro.api.HttpTest'
 
 ## Not built
 
-SSE fan-out (ADR-007 streams and heartbeat), rate limiting on the sign-in routes, email recovery
-(PD-032 says why not yet), a client generated from the schema (ADR-001's acceptance condition,
-waiting on the organiser console).
+SSE fan-out (ADR-007 streams and heartbeat), email recovery (PD-032 says why not yet), a client
+generated from the schema (ADR-001's acceptance condition, waiting on the organiser console).
+
+## Rationing the routes a stranger may call
+
+`/v1/auth/*` and `/v1/auth/passkey/*` are rationed before any work is done for the caller:
+thirty attempts a minute per client address (the first hop of `X-Forwarded-For`, else the socket)
+and thirty per device id named in the body, refilled continuously. The thirty-first is a 429 with
+`Retry-After` in seconds. It is one instance's memory — the difference between a thousand token
+guesses a second and thirty a minute, not a flood defence; a flood is the host's business
+(Render and Fly both sit behind one).
+
+## Sign in with Google — creating the iOS client id
+
+The server needs one value, the OAuth client id Google issues for the iOS app; the app needs the
+same id and its reversed form as a URL scheme. In Google Cloud Console (<https://console.cloud.google.com>):
+
+1. **Project.** Create one named `THRO` (or use an existing one); the project's name is never
+   shown to players.
+2. **OAuth consent screen** (APIs & Services → OAuth consent screen): user type **External**, app
+   name `THRØ`, your support email, developer contact email; scopes `openid`, `email`, `profile`
+   only. While the app is in **Testing**, add your own Google account under *Test users*; publish
+   the consent screen when the app goes to TestFlight for other people.
+3. **Credentials** (APIs & Services → Credentials → Create credentials → **OAuth client ID**):
+   application type **iOS**, name `THRØ iOS`, bundle ID `app.thro.darts`, Team ID `2XM324WPD5`.
+   Create. Copy two values from the result: the **Client ID** (`…apps.googleusercontent.com`)
+   and the **iOS URL scheme** (`com.googleusercontent.apps.…`, the client id reversed).
+4. **Server.** In Render → `thro-api-staging` → Environment, set `THRO_GOOGLE_CLIENT_ID` to the
+   client id, save, and **Manual Deploy**. `POST /v1/auth/google` stops answering 503.
+5. **App.** The client id goes in the app's `Info.plist` under `THROGoogleClientID`, and the iOS
+   URL scheme is added under URL Types; the sign-in flow opens Google in a system web session,
+   receives the authorization code on that scheme, exchanges it for an ID token (an iOS client
+   has no secret), and posts the ID token to the server. Nothing else changes.
