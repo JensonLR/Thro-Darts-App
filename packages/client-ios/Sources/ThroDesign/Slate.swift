@@ -140,7 +140,7 @@ public struct ThroBottomAction<Content: View>: View {
 public struct ThroChoiceRow<Control: View>: View {
     private let label: String
     private let control: Control
-    /// The label column. Wide enough for "THROWS FIRST" on one line at the eyebrow's tracking;
+    /// The label column. Wide enough for "START ON" on one line at the eyebrow's tracking;
     /// fixed so four rows line up.
     public static var labelWidth: CGFloat { 108 }
 

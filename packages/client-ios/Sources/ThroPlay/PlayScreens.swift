@@ -220,7 +220,7 @@ public struct MatchSetupScreen: View {
                     ThroChoiceRow("Game") { SegmentedControl([(301, "301"), (501, "501"), (701, "701")], selection: $game) }
                     ThroChoiceRow("Legs") { SegmentedControl([(3, "Bo3"), (5, "Bo5"), (7, "Bo7"), (9, "Bo9")], selection: $length) }
                     ThroChoiceRow("Start on") { SegmentedControl([(InRule.straight, "Any"), (InRule.double, "Double in")], selection: $inRule) }
-                    ThroChoiceRow("Throws first") { SegmentedControl([(Seat.home, homeName), (Seat.away, awayName)], selection: $first) }
+                    ThroChoiceRow("Throws") { SegmentedControl([(Seat.home, homeName), (Seat.away, awayName)], selection: $first) }
                 }
     }
 
