@@ -77,6 +77,8 @@ routes are mounted from. In brief:
 | `GET /v1/me/teams` | principal | The caller's current teams with their role and the member count |
 | `GET /v1/teams/{teamId}` | anyone | A team's front: name, town, home venue, seasons, roster — names only where `identity.player_may_be_disclosed` allows; private teams 404 to non-members; `yourRole` with a bearer |
 | `POST /v1/teams/{teamId}/invite` | principal | A team code: eight characters, thirty days, twenty people; admin or captain only (V029) |
+| `GET /v1/venues?q&locality` | anyone | Public venues whose name contains q, at most twenty: for a captain choosing a home |
+| `POST /v1/teams/{teamId}/home` | principal | Set the home venue by id, or add one by name and town; a change closes the old tenure and opens the new (admin or captain) |
 | `POST /v1/teams/join` | principal | Enter a team code and join as a player; 409 with the sentence when the code is unknown, expired, full or you are in already |
 | `GET /v1/friends` | principal | The caller's friends: display names and since when (PD-035) |
 | `POST /v1/friends/invite` | principal | A friend code to give in person: eight characters, seven days, one use; 403 with the sentence to show unless the account has said it is an adult |

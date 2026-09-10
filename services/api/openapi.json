@@ -100,11 +100,17 @@
   "/v1/teams/{teamId}":{
     "get":{"operationId":"teams.front","summary":"A team's front","description":"Name, locality, home venue, the seasons it is in, and its roster — names only where identity.player_may_be_disclosed allows, everyone else counted and not named. A private team answers 404 to anyone not in it. With a bearer, yourRole says what you are in it.","parameters":[{"name":"teamId","in":"path","required":true,"schema":{"type":"string","format":"uuid"}}],"responses":{"200":{"description":"the front"},"400":{"description":"not a UUID"},"404":{"description":"no such team, or not yours to see"}}}
   },
+  "/v1/teams/{teamId}/home":{
+    "post":{"operationId":"teams.home","summary":"Set the team's home venue","description":"An existing public venue by venueId, or a new one by name and locality. Admin or captain only. A change closes the old tenure and opens the new; nothing is overwritten.","parameters":[{"name":"teamId","in":"path","required":true,"schema":{"type":"string","format":"uuid"}}],"security":[{"principal":[]}],"requestBody":{"required":true,"content":{"application/json":{"schema":{"type":"object","properties":{"venueId":{"type":["string","null"],"format":"uuid"},"name":{"type":["string","null"]},"locality":{"type":["string","null"]}}}}}},"responses":{"200":{"description":"the team's front"},"400":{"description":"neither a venue nor a name"},"401":{"description":"no principal"},"403":{"description":"not the admin or captain"}}}
+  },
   "/v1/teams/{teamId}/inbox":{
     "get":{"operationId":"team.inbox","summary":"A team's Secretary inbox, for those who run it","description":"Requires team.manage on the team (admin or captain). Anyone else is 403, and the refusal is on the audit record.","parameters":[{"name":"teamId","in":"path","required":true,"schema":{"type":"string","format":"uuid"}}],"security":[{"principal":[]}],"responses":{"200":{"description":"sections of tasks"},"401":{"description":"no principal"},"403":{"description":"you do not run this team"}}}
   },
   "/v1/teams/{teamId}/invite":{
     "post":{"operationId":"teams.invite","summary":"A team code to give the side","description":"Eight characters, thirty days, up to twenty people. Admin or captain only (V029).","parameters":[{"name":"teamId","in":"path","required":true,"schema":{"type":"string","format":"uuid"}}],"security":[{"principal":[]}],"responses":{"200":{"description":"code, expiresAt, maxUses"},"401":{"description":"no principal"},"403":{"description":"not the admin or captain, with the sentence to show"}}}
+  },
+  "/v1/venues":{
+    "get":{"operationId":"venues","summary":"Public venues by name","description":"For a captain choosing a home: name contains q, optionally in a locality; at most twenty.","parameters":[{"name":"q","in":"query","required":false,"description":"part of the venue's name, required","schema":{"type":"string"}},{"name":"locality","in":"query","required":false,"description":"part of the town, optional","schema":{"type":"string"}}],"responses":{"200":{"description":"venues"},"400":{"description":"q missing"}}}
   }
 }
 }

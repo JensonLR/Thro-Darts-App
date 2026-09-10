@@ -161,6 +161,20 @@ public object Contract {
             responses = mapOf(200 to "code, expiresAt, maxUses", 401 to "no principal", 403 to "not the admin or captain, with the sentence to show"),
         ),
         Endpoint(
+            id = "venues", method = "GET", path = "/v1/venues", authenticated = false,
+            summary = "Public venues by name",
+            description = "For a captain choosing a home: name contains q, optionally in a locality; at most twenty.",
+            query = listOf("q" to "part of the venue's name, required", "locality" to "part of the town, optional"),
+            responses = mapOf(200 to "venues", 400 to "q missing"),
+        ),
+        Endpoint(
+            id = "teams.home", method = "POST", path = "/v1/teams/{teamId}/home", authenticated = true,
+            summary = "Set the team's home venue",
+            description = "An existing public venue by venueId, or a new one by name and locality. Admin or captain only. A change closes the old tenure and opens the new; nothing is overwritten.",
+            request = Schema("""{"type":"object","properties":{"venueId":{"type":["string","null"],"format":"uuid"},"name":{"type":["string","null"]},"locality":{"type":["string","null"]}}}"""),
+            responses = mapOf(200 to "the team's front", 400 to "neither a venue nor a name", 401 to "no principal", 403 to "not the admin or captain"),
+        ),
+        Endpoint(
             id = "teams.join", method = "POST", path = "/v1/teams/join", authenticated = true,
             summary = "Enter a team code",
             description = "The caller becomes a member, as a player. Refusals say why: not a code, unknown, expired, full, already in.",

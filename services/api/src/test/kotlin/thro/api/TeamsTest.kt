@@ -52,6 +52,13 @@ class TeamsTest {
             assertNull(front.yourRole)
             assertEquals("player", teams.front(team.teamId, viewer = ethan)!!.yourRole)
 
+            // A home: a public venue found by name, then moved; the old tenure is closed, not lost.
+            Organisations(c).createVenue("The Sun Inn", "Stockton-on-Tees")
+            assertEquals(listOf("The Sun Inn"), teams.venues("sun").map { it.name })
+            assertEquals("Only the team's admin or captain sets its home.", assertFailsWith<Teams.Refused> { teams.setHome(ethan, team.teamId, teams.venues("sun")[0].venueId, null, null) }.why)
+            assertEquals("The Sun Inn", teams.setHome(jenson, team.teamId, teams.venues("sun")[0].venueId, null, null).venue?.name)
+            assertEquals("The Dolphin", teams.setHome(jenson, team.teamId, null, "The Dolphin", "Stockton-on-Tees").venue?.name)
+            c.createStatement().use { st -> st.executeQuery("SELECT count(*) FROM competition.team_venue_tenure WHERE team_id = '${team.teamId}'").use { rs -> rs.next(); assertEquals(2, rs.getInt(1), "two tenures, one closed") } }
             now = now.plus(Teams.INVITE_TTL).plusSeconds(1)
             assertEquals("That code has expired. Ask for a new one.", assertFailsWith<Teams.Refused> { teams.join(person(c, "Late", "adult"), code.code) }.why)
             assertEquals("A team name is 2 to 60 characters.", assertFailsWith<Teams.Refused> { teams.create(jenson, "X", null) }.why)

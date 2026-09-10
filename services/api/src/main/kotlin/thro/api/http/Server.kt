@@ -127,6 +127,8 @@ public fun Application.thro(deps: Deps) {
         "teams.mine" to { r -> Teams(r.connection(), deps.now).let { Http(200, it.json(it.mine(r.principal!!.subject))) } },
         "teams.front" to { r -> r.role = DbRole.READ; val id = UUID.fromString(r.call.parameters["teamId"]); Teams(r.connection(), deps.now).let { t -> t.front(id, r.principal?.subject)?.let { Http(200, t.json(it)) } ?: Http(404, """{"error":"no such team"}""") } },
         "teams.invite" to { r -> teamly(403) { Teams(r.connection(), deps.now).let { Http(200, it.json(it.invite(r.principal!!.subject, UUID.fromString(r.call.parameters["teamId"])))) } } },
+        "venues" to { r -> r.role = DbRole.READ; val q = r.call.request.queryParameters["q"]?.trim().orEmpty(); if (q.length < 2) Http(400, """{"error":"q: at least two characters"}""") else Teams(r.connection(), deps.now).let { Http(200, it.venuesJson(it.venues(q, r.call.request.queryParameters["locality"]))) } },
+        "teams.home" to { r -> teamly(403) { val m = Json.parseObject(r.body); Teams(r.connection(), deps.now).let { Http(200, it.json(it.setHome(r.principal!!.subject, UUID.fromString(r.call.parameters["teamId"]), (m["venueId"] as? String)?.let(UUID::fromString), m["name"] as? String, m["locality"] as? String))) } } },
         "teams.join" to { r -> teamly(409) { Teams(r.connection(), deps.now).let { Http(200, it.json(it.join(r.principal!!.subject, str(Json.parseObject(r.body), "code")))) } } },
         "friends" to { r -> withAccount(r) { a -> Friends(r.connection(), deps.now).let { Http(200, it.json(it.friends(a))) } } },
         "friends.invite" to { r -> withAccount(r) { a -> friendly { Friends(r.connection(), deps.now).invite(a).let { Http(200, """{"code":"${it.code}","expiresAt":"${it.expiresAt}"}""") } } } },

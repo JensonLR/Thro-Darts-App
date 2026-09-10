@@ -1913,10 +1913,9 @@ public struct LiveScreen: View {
                         .throEntrance(2)
                     }
                     block {
-                        Eyebrow("Not in this build")
-                        Note("**Watching somebody else's match needs THRØ's servers.** There is no "
-                             + "network code in this app at all, so nothing here has come from "
-                             + "anywhere but this phone.")
+                        Note("**Watching a match from another phone is next.** The server already "
+                             + "streams a match as it is scored; this build does not yet tune in. "
+                             + "Everything on this screen was scored on this phone.")
                     }
                     .throEntrance(3)
                 }

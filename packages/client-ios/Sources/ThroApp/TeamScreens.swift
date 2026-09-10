@@ -61,6 +61,22 @@ public final class TeamsModel: ObservableObject {
     }
 
     static func normalised(_ raw: String) -> String { raw.uppercased().filter { !$0.isWhitespace && $0 != "-" } }
+
+    // MARK: home venue
+
+    @Published public private(set) var venueMatches: [PublicLeague.Venue] = []
+
+    public func searchVenues(_ query: String, _ api: ThroAPI?) async {
+        guard let api, query.trimmingCharacters(in: .whitespaces).count >= 2 else { venueMatches = []; return }
+        do { venueMatches = try await api.venues(matching: query) } catch { venueMatches = [] }
+    }
+
+    /// Sets the home and shows the refreshed front. The note carries a refusal.
+    public func setHome(_ teamId: UUID, venueId: UUID?, name: String?, locality: String?, _ api: ThroAPI?) async {
+        guard let api else { return }
+        do { front = .loaded(try await api.setTeamHome(teamId, venueId: venueId, name: name, locality: locality)); note = nil; venueMatches = [] }
+        catch { note = ThroAPI.refusal(error) ?? "The home could not be set just now." }
+    }
 }
 
 /// A team's front: the slate, the seasons, the roster, and — for its admin or captain — the code.
@@ -70,6 +86,10 @@ public struct TeamFrontScreen: View {
     private let teamId: UUID
     private let api: ThroAPI?
     private let onBack: () -> Void
+    @State private var choosingHome = false
+    @State private var venueQuery = ""
+    @State private var newVenueName = ""
+    @State private var newVenueTown = ""
 
     public init(teams: TeamsModel, teamId: UUID, api: ThroAPI?, onBack: @escaping () -> Void) {
         self.teams = teams
@@ -144,6 +164,12 @@ public struct TeamFrontScreen: View {
                 }
                 .padding(.top, ThroSpacing.spacing4)
 
+                if TeamFrontScreen.runsIt(front.yourRole) {
+                    SectionHeader("Home venue", action: choosingHome ? "Done" : (front.venue == nil ? "Set" : "Change"),
+                                  onAction: { choosingHome.toggle() })
+                        .padding(.top, ThroSpacing.spaceSectionGap)
+                    if choosingHome { homePicker(front) }
+                }
                 SectionHeader("Playing in").padding(.top, ThroSpacing.spaceSectionGap)
                 if front.seasons.isEmpty {
                     Text("No league season yet. When a league accepts the team it appears here.")
@@ -179,6 +205,45 @@ public struct TeamFrontScreen: View {
             }
             .padding(.horizontal, ThroSpacing.spaceScreenGutter)
             .padding(.bottom, ThroSpacing.spacing6)
+        }
+    }
+
+    /// Choosing a home: the public venues THRØ knows, by name, or a new one by name and town.
+    private func homePicker(_ front: TeamFront) -> some View {
+        VStack(alignment: .leading, spacing: ThroSpacing.spacing3) {
+            ThroTextField("Find the pub or club", text: $venueQuery, placeholder: "Sun Inn")
+                .autocorrectionDisabled()
+                .onChange(of: venueQuery) { _, q in Task { await teams.searchVenues(q, api) } }
+            if !teams.venueMatches.isEmpty {
+                ThroDivider()
+                ForEach(teams.venueMatches, id: \.venueId) { v in
+                    Button { Task { await teams.setHome(front.teamId, venueId: v.venueId, name: nil, locality: nil, api); choosingHome = false } } label: {
+                        HStack {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(v.name).thro(ThroTypography.bodyLarge.weight(.semibold)).foregroundStyle(ThroColor.colorTextPrimary)
+                                Text([v.locality, v.postcode].compactMap { $0 }.joined(separator: " · ")).thro(ThroTypography.metadata).foregroundStyle(ThroColor.colorTextSecondary)
+                            }
+                            Spacer()
+                            Icon(.chevronRight, size: 16).foregroundStyle(ThroColor.colorTextSecondary)
+                        }
+                        .padding(.vertical, ThroSpacing.spacing2)
+                        .throRowTapTarget()
+                    }
+                    .buttonStyle(ThroPressStyle(radius: ThroSpacing.radiusCard, pressedFill: ThroColor.colorSurfaceSecondary, scales: false))
+                    ThroDivider()
+                }
+            } else if venueQuery.trimmingCharacters(in: .whitespaces).count >= 2 {
+                Text("Nothing by that name yet. Add it below and it becomes a venue others can pick.")
+                    .thro(ThroTypography.metadata).foregroundStyle(ThroColor.colorTextSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            Eyebrow("Or add a new venue").padding(.top, ThroSpacing.spacing2)
+            ThroTextField("Venue", text: $newVenueName, placeholder: "The Dolphin")
+            ThroTextField("Town", text: $newVenueTown, placeholder: "Stockton-on-Tees")
+            ThroButton("Set as home", variant: .secondary, size: .medium) {
+                Task { await teams.setHome(front.teamId, venueId: nil, name: newVenueName, locality: newVenueTown.isEmpty ? nil : newVenueTown, api); choosingHome = false }
+            }
+            .disabled(newVenueName.trimmingCharacters(in: .whitespaces).count < 2)
         }
     }
 

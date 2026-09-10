@@ -501,6 +501,26 @@ public actor ThroAPI {
         try decode(await authorised("POST", "/v1/teams/\(teamId.uuidString.lowercased())/invite"))
     }
 
+    /// Public venues whose name contains the query. No session needed.
+    public func venues(matching query: String, locality: String? = nil) async throws -> [PublicLeague.Venue] {
+        struct Envelope: Decodable { let venues: [PublicLeague.Venue] }
+        var path = "/v1/venues?q=" + (query.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? "")
+        if let locality, let l = locality.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) { path += "&locality=\(l)" }
+        let (data, http) = try await send("GET", path, bearer: session?.accessToken)
+        guard http.statusCode == 200 else { throw APIError.status(http.statusCode, String(decoding: data, as: UTF8.self)) }
+        return try (decode(data) as Envelope).venues
+    }
+
+    /// Sets a team's home: a venue by id, or a new one by name and town. Answers the team's front.
+    public func setTeamHome(_ teamId: UUID, venueId: UUID?, name: String?, locality: String?) async throws -> TeamFront {
+        var object: [String: Any] = [:]
+        if let venueId { object["venueId"] = venueId.uuidString.lowercased() }
+        if let name { object["name"] = name }
+        if let locality { object["locality"] = locality }
+        let body = try JSONSerialization.data(withJSONObject: object)
+        return try decode(await authorised("POST", "/v1/teams/\(teamId.uuidString.lowercased())/home", body: body))
+    }
+
     public func joinTeam(code: String) async throws -> TeamSummary {
         let body = try JSONSerialization.data(withJSONObject: ["code": code])
         return try decode(await authorised("POST", "/v1/teams/join", body: body))

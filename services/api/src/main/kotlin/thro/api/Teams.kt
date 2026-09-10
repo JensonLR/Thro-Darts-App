@@ -131,6 +131,52 @@ public class Teams(private val connection: Connection, private val now: () -> In
         return mine(player).first { it.teamId == teamId }
     }
 
+    /** Public venues whose name contains [query], for a captain choosing a home. At most twenty. */
+    public fun venues(query: String, locality: String? = null): List<Leagues.Venue> =
+        connection.prepareStatement(
+            """SELECT venue_id, name, locality, postcode, latitude, longitude FROM competition.venue
+                WHERE visibility = 'public' AND name ILIKE '%' || ? || '%' AND (? IS NULL OR locality ILIKE '%' || ? || '%')
+                ORDER BY name LIMIT 20""",
+        ).use { ps ->
+            ps.setString(1, query.trim()); ps.setString(2, locality); ps.setString(3, locality)
+            ps.executeQuery().use { rs -> generateSequence { if (rs.next()) Leagues.Venue(rs.getObject(1) as UUID, rs.getString(2), rs.getString(3), rs.getString(4), rs.getBigDecimal(5)?.toDouble(), rs.getBigDecimal(6)?.toDouble(), null) else null }.toList() }
+        }
+
+    /**
+     * Sets the team's home: an existing public venue by id, or a new one by name. The admin or
+     * captain only. A first home opens a tenure; a change closes the old one and opens the new,
+     * so "played at X until today, at Y since" is what the history reads.
+     */
+    public fun setHome(player: UUID, teamId: UUID, venueId: UUID?, name: String?, locality: String?): Front {
+        val role = roleOf(player, teamId)
+        if (role != "admin" && role != "captain") throw Refused("Only the team's admin or captain sets its home.")
+        val venue = venueId ?: run {
+            val clean = name?.trim().orEmpty()
+            if (clean.length !in 2..80) throw Refused("Name the venue: 2 to 80 characters.")
+            org.createVenue(clean, locality?.trim()?.takeIf { it.isNotEmpty() }, by = player)
+        }
+        val exists = connection.prepareStatement("SELECT 1 FROM competition.venue WHERE venue_id = ? AND visibility = 'public'")
+            .use { ps -> ps.setObject(1, venue); ps.executeQuery().use { it.next() } }
+        if (!exists) throw Refused("No venue like that.")
+        val at = now()
+        val current = org.homeVenueAt(teamId, at)
+        when {
+            current == null -> org.openTenure(teamId, venue, from = at, by = player)
+            current == venue -> Unit
+            else -> {
+                // A move closes the old tenure at `at` and opens the new one there; a tenure must
+                // last longer than nothing, so a change in the same second as the last one is
+                // recorded one second on rather than refused.
+                val openedAt = org.tenuresOf(teamId).filter { it.until == null }.maxOfOrNull { it.from } ?: at
+                org.moveHome(teamId, venue, at = maxOf(at, openedAt.plusSeconds(1)), by = player)
+            }
+        }
+        return front(teamId, player)!!
+    }
+
+    public fun venuesJson(venues: List<Leagues.Venue>): String =
+        "{\"venues\":[" + venues.joinToString(",") { v -> """{"venueId":"${v.venueId}","name":${q(v.name)},"locality":${q(v.locality)},"postcode":${q(v.postcode)},"latitude":${v.latitude ?: "null"},"longitude":${v.longitude ?: "null"}}""" } + "]}"
+
     private fun q(s: String?): String = s?.let { "\"" + it.replace("\\", "\\\\").replace("\"", "\\\"").replace("\n", "\\n") + "\"" } ?: "null"
 
     public fun json(s: Summary): String = """{"teamId":"${s.teamId}","name":${q(s.name)},"locality":${q(s.locality)},"role":${q(s.role)},"members":${s.members}}"""

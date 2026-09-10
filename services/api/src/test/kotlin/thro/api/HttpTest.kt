@@ -149,6 +149,11 @@ class HttpTest {
                     && post("/v1/teams/join", """{"code":"$code"}""", subject = away).status.value == 200
                     && post("/v1/teams/join", """{"code":"$code"}""", subject = away).status.value == 409
                     && post("/v1/teams/join", """{"code":"nope"}""", subject = away).status.value == 409)
+            check("a home venue is chosen by name from the public venues and set by whoever runs the team",
+                get("/v1/venues?q=xy", subject = null).status.value == 200
+                    && get("/v1/venues?q=", subject = null).status.value == 400
+                    && post("/v1/teams/$teamId/home", """{"name":"The Sun Inn","locality":"Stockton-on-Tees"}""", subject = away).status.value == 403
+                    && post("/v1/teams/$teamId/home", """{"name":"The Sun Inn","locality":"Stockton-on-Tees"}""", subject = home).bodyAsText().contains(""""venue":{"""))
             check("friends need a principal, and the development principal has no account to be friends from",
                 get("/v1/friends", subject = null).status.value == 401 && get("/v1/friends", subject = home).status.value == 403
                     && post("/v1/friends/invite", "{}", subject = home).status.value == 403)
@@ -169,6 +174,6 @@ class HttpTest {
                 bareUse.get() == 0 && roles.contains("app_match") && roles.contains("app_competition") && roles.contains("app_read") && roles.all { it in setOf("app_match", "app_competition", "app_read") })
         }
         println("  $passed HTTP properties held")
-        assertEquals(34, passed)
+        assertEquals(35, passed)
     }
 }

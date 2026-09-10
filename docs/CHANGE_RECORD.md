@@ -2796,3 +2796,13 @@ what the phone keeps on its own; a team's front is a slate with the code on it f
 the seasons it plays in and its roster with a line explaining anyone unnamed; *Join or start* is
 one screen with two doors. Tests: TeamsTest (start, code, join, expiry, private, disclosure), HTTP
 34 properties.
+
+## A home for the team, a slate for the result, an honest Live tab
+
+`GET /v1/venues` finds public venues by name; `POST /v1/teams/{id}/home` sets a team's home by id
+or adds a new venue by name and town, closing the old tenure and opening the new — one second on
+when the change lands in the same second as the last, because a tenure must last longer than
+nothing and the domain's check says so. The team front's admin sees *Home venue · Set/Change* with
+a search over THRØ's venues and a way to add one. The match result now lands on a slate — outcome,
+score, names — in place of the paper card. The Live tab's note no longer claims the app has no
+network code; it says the server streams a match and this build does not yet tune in. HTTP 35.

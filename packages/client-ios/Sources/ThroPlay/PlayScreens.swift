@@ -1036,13 +1036,28 @@ public struct MatchResultScreen: View {
                     // out by — and everything under it arrives in the order it is read. It used to
                     // be there, whole, on the first frame.
                     section {
-                        MatchSummary(
-                            headline: session.resultHeadline,
-                            won: session.winner != nil,
-                            score: "\(session.legsWon(.home))–\(session.legsWon(.away))",
-                            opponent: "\(session.name(.home)) v \(session.name(.away)) · \(session.formatLabel)"
-                        )
+                        // The result on a slate: the same board the match was scored on, with the
+                        // outcome written large. It lands (PD-027) as the one unveiling on the screen.
+                        ThroSlate(seed: 89) {
+                            VStack(alignment: .leading, spacing: ThroSpacing.spacing3) {
+                                Eyebrow(session.winner != nil ? "Result" : "No result", color: ThroColor.colorTextOnBoardSecondary)
+                                Text(session.resultHeadline)
+                                    .thro(ThroTypography.heading1.family(.sport).weight(.bold).tracking(em: 0))
+                                    .foregroundStyle(ThroColor.colorTextOnBoard)
+                                    .fixedSize(horizontal: false, vertical: true)
+                                Text("\(session.legsWon(.home))–\(session.legsWon(.away))")
+                                    .thro(ThroTypography.scoreHero.family(.sport).weight(.bold).tracking(em: 0))
+                                    .foregroundStyle(ThroColor.colorTextOnBoard)
+                                    .lineLimit(1).minimumScaleFactor(0.5)
+                                Text("\(session.name(.home)) v \(session.name(.away)) · \(session.formatLabel)")
+                                    .thro(ThroTypography.body)
+                                    .foregroundStyle(ThroColor.colorTextOnBoardSecondary)
+                                    .fixedSize(horizontal: false, vertical: true)
+                            }
+                            .padding(ThroSpacing.spacing5)
+                        }
                         .throLanding()
+                        .accessibilityElement(children: .combine)
                         if let detail = session.resultDetail {
                             Text(detail)
                                 .thro(ThroTypography.metadata)
