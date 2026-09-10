@@ -178,7 +178,7 @@ public struct ClubsScreen: View {
                         ThroDivider().padding(.top, ThroSpacing.spacing2)
                         Button(action: onLeagues) {
                             OrganisationRow(initials: "TS", name: "Local leagues",
-                                            meta: "Stockton, Thornaby and Redcar · teams and where they play",
+                                            meta: "Stockton, Thornaby, Redcar · who plays where",
                                             accent: ThroColor.throGreen, trailing: nil, image: nil)
                                 .throRowTapTarget()
                         }
