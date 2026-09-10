@@ -226,6 +226,13 @@ public final class ClubStore: ObservableObject {
         write { try $0.deleteClub(id: clubId) }
     }
 
+    /// Everything on the Discover tab, gone in one confirmed act: every team, league and
+    /// tournament with its roster, fixtures and results. Matches and people stay.
+    @discardableResult
+    public func deleteAllOrganisations() -> Bool {
+        write { _ = try $0.deleteAllOrganisations() }
+    }
+
     @discardableResult
     public func addMember(to clubId: String, name: String, role: OrgRole, ageBand: AgeBand) -> Bool {
         write { try $0.addMember(to: clubId, name: name, role: role.rawValue, ageBand: ageBand.rawValue) }

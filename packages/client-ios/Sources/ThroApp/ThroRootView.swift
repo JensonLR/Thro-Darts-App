@@ -496,6 +496,8 @@ public struct ThroRootView: View {
                            onReplayOpening: { showingSettings = false; opening = true },
                            onAccount: account == nil ? nil : { showingAccount = true },
                            accountValue: accountRowValue,
+                           organisationCount: { clubs.clubs.count },
+                           onClearOrganisations: { clubs.deleteAllOrganisations() },
                            backupState: { store.backupState },
                            makeExport: { try store.exportEverything(clubs: clubs.book) },
                            diagnosticsHeld: { store.diagnosticsHeld },
@@ -1305,6 +1307,9 @@ public struct SettingsScreen: View {
     private let onReplayOpening: (() -> Void)?
     private let onAccount: (() -> Void)?
     private let accountValue: String
+    private let organisationCount: () -> Int
+    private let onClearOrganisations: (() -> Void)?
+    @State private var confirmingClear = false
     /// PD-017. Where the file comes from and what the file system says about backups. Closures
     /// rather than the stores themselves, so Settings stays a screen and not a second owner of the
     /// device's data — and so a test can drive both without a journal on disk.
@@ -1327,6 +1332,7 @@ public struct SettingsScreen: View {
 
     public init(onBack: @escaping () -> Void, onReplayOpening: (() -> Void)? = nil,
                 onAccount: (() -> Void)? = nil, accountValue: String = "Not signed in",
+                organisationCount: @escaping () -> Int = { 0 }, onClearOrganisations: (() -> Void)? = nil,
                 backupState: @escaping () -> BackupPolicy.State = { .unknown("no data folder in this build") },
                 makeExport: (() throws -> URL)? = nil,
                 diagnosticsHeld: @escaping () -> ThroDiagnostics.Held = { .init(count: 0, bytes: 0, newest: nil) },
@@ -1337,6 +1343,8 @@ public struct SettingsScreen: View {
         self.onReplayOpening = onReplayOpening
         self.onAccount = onAccount
         self.accountValue = accountValue
+        self.organisationCount = organisationCount
+        self.onClearOrganisations = onClearOrganisations
         self.backupState = backupState
         self.makeExport = makeExport
         self.diagnosticsHeld = diagnosticsHeld
@@ -1539,6 +1547,21 @@ public struct SettingsScreen: View {
                                 .thro(ThroTypography.metadata)
                                 .foregroundStyle(ThroColor.colorTextSecondary)
                                 .fixedSize(horizontal: false, vertical: true)
+                        }
+                    }
+                    if let onClearOrganisations {
+                        group("Start the Discover tab again") {
+                            let n = organisationCount()
+                            Note("Removes every team, league and tournament on this phone, with their rosters, "
+                                 + "fixtures and results — \(n) organisation\(n == 1 ? "" : "s") right now. Your matches and "
+                                 + "the people you have played stay: they are history, not organisations.")
+                            ThroButton("Remove every team, league and tournament", variant: .destructive, size: .medium, disabled: n == 0) { confirmingClear = true }
+                                .confirmationDialog("Remove every organisation on this phone?", isPresented: $confirmingClear, titleVisibility: .visible) {
+                                    Button("Remove \(n) organisation\(n == 1 ? "" : "s")", role: .destructive) { onClearOrganisations(); confirmingClear = false }
+                                    Button("Keep them", role: .cancel) { confirmingClear = false }
+                                } message: {
+                                    Text("Rosters, fixtures and results on this phone go with them. Matches and people stay. This cannot be undone.")
+                                }
                         }
                     }
                     group("This build") {

@@ -2643,3 +2643,18 @@ and reads the body with the JDK's client as it arrives. And Ktor's SSE helper an
 the handler runs, which let a stranger through with an empty stream; the stream is served from a
 plain route that writes its own frames, so 401, 403 and 404 come first. Nine stream properties on
 the server; the parser and the staleness deadline on the phone.
+
+## Start the Discover tab again
+
+The founder's phone showed people listed as teams. The cause is the vocabulary migration of
+9 September doing exactly what it said: every side a league fielded became a team in its own right,
+and a singles league's sides are people. That is the right model for a league of teams and the
+wrong picture for the data this phone held. Rather than special-case a guess about which sides were
+people, Settings gains one confirmed act — *Remove every team, league and tournament* — that clears
+the Discover tab: every organisation with its roster, fixtures and results, counted before the
+button and named in the confirmation. Matches and the people book stay, because a person is who a
+match was attributed to and that is history, not an organisation. The club book's test creates a
+team with a member, a league with two sides and a fixture, clears them, and reads back nothing but
+the person. What replaces the cleared data is the next slice: teams that live on the server, made
+by the people who run them, and a map that shows official venues — from a source the founder names,
+never invented here.

@@ -453,6 +453,18 @@ public final class ClubBook {
         try run("DELETE FROM club WHERE club_id = ?;", [.text(id)])
     }
 
+    /// Removes every team, league and tournament on this phone, with their rosters, fixtures and
+    /// results — the whole Discover tab, in one act the person confirms. Matches are not touched:
+    /// they live in the journal, not here. The people book is not touched either: a person is who
+    /// a match was attributed to (ADR-016), and clearing organisations is not clearing history.
+    /// Returns how many organisations went.
+    @discardableResult
+    public func deleteAllOrganisations() throws -> Int {
+        let before = try clubs().count
+        try run("DELETE FROM club;", [])
+        return before
+    }
+
     public func clubs() throws -> [StoredClub] {
         var out: [StoredClub] = []
         try run("""

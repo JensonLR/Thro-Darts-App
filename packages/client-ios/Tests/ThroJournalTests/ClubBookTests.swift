@@ -294,4 +294,26 @@ extension ClubBookTests {
         XCTAssertTrue(ids.contains("standing"), "and the standing team is untouched")
         XCTAssertEqual(try reopened.clubs().filter { $0.name == "The Feathers" }.count, 2, "two teams, never merged on a name")
     }
+
+    /// Clearing the Discover tab takes every organisation and everything that hangs off one, and
+    /// nothing else: the people book is still there afterwards, because a person is who a match
+    /// was attributed to and that is history, not an organisation.
+    func testClearingEveryOrganisationTakesTheirRostersAndFixturesAndLeavesThePeople() throws {
+        let book = try open()
+        _ = try book.person(named: "Sam")
+        let team = try book.createClub(name: "Riverside A", kind: "team")
+        _ = try book.addMember(to: team.id, name: "Sam", role: "member", ageBand: "adult")
+        let league = try book.createClub(name: "Thursday League", kind: "league")
+        let a = try book.addTeam(to: league.id, name: "A side")
+        let b = try book.addTeam(to: league.id, name: "B side")
+        _ = try book.addFixture(to: league.id, title: "A side v B side", when: Date(timeIntervalSince1970: 1_800_000_000), venue: "The Feathers",
+                                homeTeam: a.id, awayTeam: b.id)
+        XCTAssertEqual(try book.clubs().count, 4, "the league's two sides are teams in their own right")
+        let gone = try book.deleteAllOrganisations()
+        XCTAssertEqual(gone, 4)
+        XCTAssertEqual(try book.clubs().count, 0)
+        XCTAssertEqual(try book.fixtures(of: league.id).count, 0)
+        XCTAssertEqual(try book.members(of: team.id).count, 0)
+        XCTAssertEqual(try book.people().map(\.name), ["Sam"], "people are not organisations")
+    }
 }
