@@ -1,13 +1,15 @@
 package thro.api.http
 
+import java.sql.Connection
 import java.util.UUID
+import thro.api.Accounts
 
 /**
  * Who is calling. A principal is a THRØ ID — the subject every authorization rule and every command
  * handler already speaks. When accounts arrive (FB-1) the authenticator that produces one resolves
  * an account to its live `identity.player_claim` here, and nothing below this line changes.
  */
-public data class Principal(val subject: UUID)
+public data class Principal(val subject: UUID, val accountId: UUID? = null)
 
 /**
  * Turns a request into a [Principal], or nothing. The production authenticator — passkeys,
@@ -16,6 +18,21 @@ public data class Principal(val subject: UUID)
  */
 public fun interface Authenticator {
     public fun authenticate(header: (String) -> String?): Principal?
+
+    /**
+     * The production authenticator (PD-030): `Authorization: Bearer <access token>`. The token is
+     * opaque and looked up server-side; it names an account whose live claim is the principal.
+     * Unknown, expired and revoked tokens are simply nobody.
+     */
+    public class Bearer(private val connect: () -> Connection, private val now: () -> java.time.Instant = { java.time.Instant.now() }) : Authenticator {
+        override fun authenticate(header: (String) -> String?): Principal? {
+            val raw = header("Authorization")?.trim() ?: return null
+            if (!raw.startsWith("Bearer ", ignoreCase = true)) return null
+            val token = raw.substring(7).trim()
+            if (token.isEmpty() || token.length > 128) return null
+            return connect().use { c -> Accounts(c, now).resolve(token)?.let { (account, player) -> Principal(player, account) } }
+        }
+    }
 
     /**
      * Development only. Trusts an `X-Thro-Dev-Subject` header carrying a UUID, which is to say it

@@ -1,13 +1,25 @@
 {
 "openapi":"3.1.0",
 "info":{"title":"THRØ API","version":"0.1.0","description":"Routes over the command handlers. One command endpoint (ADR-007); identity from the principal, never the body (ADR-008); every relationship decision recorded."},
-"components":{"securitySchemes":{"principal":{"type":"apiKey","in":"header","name":"X-Thro-Dev-Subject","description":"Development authenticator only (THRO_DEV_AUTH=1). The production scheme is founder decision FB-1 and replaces this entry."}}},
+"components":{"securitySchemes":{"principal":{"type":"http","scheme":"bearer","description":"An access token from /v1/auth/apple, /v1/auth/google or /v1/auth/refresh (PD-030). Opaque; looked up per request; names an account, never a permission. A development server started with THRO_DEV_AUTH=1 accepts X-Thro-Dev-Subject instead."}}},
 "paths":{
   "/healthz":{
     "get":{"operationId":"health","summary":"Liveness, and the schema version the database stands at","description":"Unauthenticated. Reports the migration ledger's current version; a database the code cannot serve is a 503.","parameters":[],"responses":{"200":{"description":"ok, with schemaVersion"},"503":{"description":"database unreachable or behind the code"}}}
   },
   "/openapi.json":{
     "get":{"operationId":"openapi","summary":"This document","description":"Rendered from the same registry the routes are mounted from.","parameters":[],"responses":{"200":{"description":"OpenAPI 3.1 document"}}}
+  },
+  "/v1/auth/apple":{
+    "post":{"operationId":"auth.apple","summary":"Sign in with Apple","description":"Verifies Apple's ID token against Apple's published keys, issuer, this app's client id and expiry; creates the account, its player and its claim on first sight (PD-030). The session is THRØ's own.","parameters":[],"requestBody":{"required":true,"content":{"application/json":{"schema":{"type":"object","required":["idToken","deviceId"],"properties":{"idToken":{"type":"string","description":"The provider's ID token (JWT) as the platform SDK returned it."},"deviceId":{"type":"string","format":"uuid","description":"This device's stable id; the session family is bound to it."}}}}}},"responses":{"200":{"description":"a session: accountId, playerId, accessToken (opaque, 15 minutes), refreshToken (single-use, 30 days), accessExpiresAt, created"},"400":{"description":"malformed"},"401":{"description":"the token does not verify, and why"},"503":{"description":"Sign in with Apple is not configured on this server"}}}
+  },
+  "/v1/auth/google":{
+    "post":{"operationId":"auth.google","summary":"Sign in with Google","description":"As for Apple, against Google's published keys and issuers.","parameters":[],"requestBody":{"required":true,"content":{"application/json":{"schema":{"type":"object","required":["idToken","deviceId"],"properties":{"idToken":{"type":"string","description":"The provider's ID token (JWT) as the platform SDK returned it."},"deviceId":{"type":"string","format":"uuid","description":"This device's stable id; the session family is bound to it."}}}}}},"responses":{"200":{"description":"a session: accountId, playerId, accessToken (opaque, 15 minutes), refreshToken (single-use, 30 days), accessExpiresAt, created"},"400":{"description":"malformed"},"401":{"description":"the token does not verify, and why"},"503":{"description":"Sign in with Google is not configured on this server"}}}
+  },
+  "/v1/auth/logout":{
+    "post":{"operationId":"auth.logout","summary":"End this session family","description":"Revokes the family the presented access token belongs to; its access and refresh tokens stop working.","parameters":[],"security":[{"principal":[]}],"responses":{"200":{"description":"revoked"},"401":{"description":"no principal"}}}
+  },
+  "/v1/auth/refresh":{
+    "post":{"operationId":"auth.refresh","summary":"Rotate a refresh token","description":"A refresh token is single-use: this marks it used and issues a new pair. Presenting a used token is reuse — a copy exists — and revokes the whole session family (ADR-008).","parameters":[],"requestBody":{"required":true,"content":{"application/json":{"schema":{"type":"object","required":["refreshToken"],"properties":{"refreshToken":{"type":"string"}}}}}},"responses":{"200":{"description":"a session: accountId, playerId, accessToken (opaque, 15 minutes), refreshToken (single-use, 30 days), accessExpiresAt, created"},"400":{"description":"malformed"},"401":{"description":"unknown, expired, or reused (the family is now revoked)"}}}
   },
   "/v1/commands":{
     "post":{"operationId":"commands","summary":"The one command endpoint (ADR-007)","description":"Every client-to-server state change, online or from a queue. Identity comes from the principal, the device from X-Thro-Device. Applied is 200; a replay returns what it returned; stale is 409 with the current row; a refusal is 422 in the store's words; a sequence gap is 409; a match the caller is not in is 404.","parameters":[],"security":[{"principal":[]}],"requestBody":{"required":true,"content":{"application/json":{"schema":{"type":"object","required":["type","commandId"],
@@ -28,11 +40,17 @@
    "expectedVersion":{"type":"integer","description":"The row version the author last saw; 0 when the row does not exist yet. A different current version is a 409 with the current row."}
  }}}}},"responses":{"200":{"description":"applied, or a replay of an earlier answer"},"400":{"description":"malformed"},"401":{"description":"no principal"},"404":{"description":"not this match, or not in it"},"409":{"description":"stale version, or sequence gap"},"413":{"description":"body over 64 KiB"},"422":{"description":"refused"}}}
   },
+  "/v1/me":{
+    "get":{"operationId":"me","summary":"Who am I","description":"The caller's account id, player id, display name (and whether they have set one), and age band.","parameters":[],"security":[{"principal":[]}],"responses":{"200":{"description":"profile"},"401":{"description":"no principal"}}}
+  },
   "/v1/me/discovery":{
     "get":{"operationId":"me.discovery","summary":"Darts the caller can play, and why each card is there","description":"The discovery read model for the caller between from and to. Every card carries its reasons; nothing is called eligible that THRØ cannot check.","parameters":[{"name":"from","in":"query","required":false,"description":"date-time, default now","schema":{"type":"string"}},{"name":"to","in":"query","required":false,"description":"date-time, default from + 60 days","schema":{"type":"string"}},{"name":"locality","in":"query","required":false,"description":"the caller's team's locality, optional","schema":{"type":"string"}}],"security":[{"principal":[]}],"responses":{"200":{"description":"sections of cards"},"400":{"description":"malformed dates"},"401":{"description":"no principal"}}}
   },
   "/v1/me/inbox":{
     "get":{"operationId":"me.inbox","summary":"The caller's own Secretary tasks, by section","description":"Tasks whose subject is the caller: consent, claims, anything the Secretary needs from them.","parameters":[],"security":[{"principal":[]}],"responses":{"200":{"description":"sections of tasks"},"401":{"description":"no principal"}}}
+  },
+  "/v1/me/profile":{
+    "put":{"operationId":"me.profile","summary":"Set my display name","description":"A name is the person's to give; it is never taken from a provider's token on their behalf.","parameters":[],"security":[{"principal":[]}],"requestBody":{"required":true,"content":{"application/json":{"schema":{"type":"object","required":["displayName"],"properties":{"displayName":{"type":"string","maxLength":60}}}}}},"responses":{"200":{"description":"profile"},"400":{"description":"malformed"},"401":{"description":"no principal"}}}
   },
   "/v1/teams/{teamId}/inbox":{
     "get":{"operationId":"team.inbox","summary":"A team's Secretary inbox, for those who run it","description":"Requires team.manage on the team (admin or captain). Anyone else is 403, and the refusal is on the audit record.","parameters":[{"name":"teamId","in":"path","required":true,"schema":{"type":"string","format":"uuid"}}],"security":[{"principal":[]}],"responses":{"200":{"description":"sections of tasks"},"401":{"description":"no principal"},"403":{"description":"you do not run this team"}}}

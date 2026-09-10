@@ -1562,3 +1562,66 @@ A policy flag refusing third-party creation. Existing records stay, with their p
 
 OD-010's research concludes that holding third-party-entered data about a possible minor, even
 privately and pending consent, is not permissible in the target jurisdictions.
+
+## PD-030 — Sign-in: Google and Apple first, self-hosted passkeys as the fallback
+
+**Founder decision, 2026-09-10.** Closes FB-1 (execution plan §9).
+
+### Decided
+
+THRØ accounts are created and signed into with **Sign in with Apple and Sign in with Google** as
+the primary methods, because that is what most players already have on the phone in their hand,
+and with **self-hosted passkeys** (WebAuthn in the Kotlin service) as the fallback for anyone who
+has neither or wants neither. There is no password anywhere. Email is not a sign-in method; it may
+be a recovery channel for the passkey path and is decided with that path.
+
+The provider proves who is holding the phone; THRØ decides everything else. A sign-in yields an
+`identity.credential` (provider, provider subject) bound to one live `identity.account`; the
+account holds a THRØ ID through a live `identity.player_claim`; every authorization decision is
+made per request against relationships, never carried in a token (ADR-008 stands). Sessions are
+THRØ's own — short-lived access tokens looked up server-side, refresh tokens rotated with reuse
+detection revoking the family — so a provider outage or a provider policy change cannot revoke a
+player's history, and leaving a provider is a credential re-binding, not a migration.
+
+### Why this ordering
+
+Adoption. A grassroots player asked to "create a passkey" at the oche abandons the flow; the same
+player taps the Apple or Google button without thinking. Passkeys remain the fallback because
+ADR-008's reasoning still holds — a competitive identity should not depend on a third party's
+account policy — and because a player without either provider must still be able to join.
+
+### What it amends
+
+ADR-008 named passkeys as primary with platform sign-in as bootstrap. The order is reversed; the
+rest of ADR-008 (identity in the token never permissions, per-request relation checks, device
+binding, the offline grant as the bounded exception) is unchanged. ADR-008 carries a dated note.
+
+### Reversal
+
+Low. Credentials are rows keyed by provider and subject; adding a provider or promoting passkeys to
+primary is a product setting and a screen, not a migration.
+
+## PD-031 — Hosting: Fly.io with managed PostgreSQL in London
+
+**Founder decision, 2026-09-10.** Closes FB-2 (execution plan §9).
+
+### Decided
+
+The single container (ADR-011) runs on **Fly.io** in the London region, against a **managed
+PostgreSQL with point-in-time recovery in London**. The topology ADR-011 fixed is unchanged: one
+image, one database, migrations as a deploy step run by the owner role (ADR-013), the application
+connecting as the module roles and never as the owner.
+
+### Why
+
+It is the cheapest option that meets every ADR-011 requirement — UK residency, PITR, HTTP/2 to
+origin for SSE — with the smallest infrastructure-as-code footprint for a one-person team.
+
+### What it blocks and does not
+
+It unblocks staging and the two-device sync release check. Local and CI work never depended on it.
+
+### Reversal
+
+Low: one image and one database dump move to any of the alternatives considered (Render, Railway,
+AWS App Runner with RDS).

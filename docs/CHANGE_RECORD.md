@@ -2389,3 +2389,33 @@ unauthenticated caller; the evidence's actor role is what the store knows about 
 than a hard-coded `participant`; and the development authenticator's constructor is internal, it
 honours `PGPASSWORD`, and it refuses to exist against a database that is not on this machine.
 Twenty-seven HTTP properties.
+
+## The founder decided, and the door has a real lock
+
+Two decisions arrived on 10 September and are recorded as PD-030 and PD-031: **Sign in with Apple
+and Google first, self-hosted passkeys as the fallback**, and **Fly.io with managed PostgreSQL in
+London**. The first reverses the order ADR-008 had named and nothing else in it, which ADR-008 now
+says in a dated note; the second is the vendor ADR-011's topology was waiting for.
+
+The account and session core followed, written to an acceptance table (§12d) put down before the
+code. The provider proves who is holding the phone and THRØ takes exactly one fact from its ID
+token — the subject — after checking the signature against the provider's published keys, the
+issuer, the audience and the expiry, each failure a 401 that says which and creates nothing; there
+is no library, because RS256 is a signature over two base64 strings and a JWKS is a modulus and an
+exponent, and the key source is an interface so the test holds the provider's private key and mints
+both the tokens that must verify and the ones that must not. A first sign-in creates the account,
+its player and the `self_created` claim in one transaction, with the person's own consent recorded
+by V016's trigger; a second sign-in with the same subject finds the account and creates nothing.
+The name is a placeholder until the person sets it, never the token's name claim.
+
+The session is THRØ's own. An access token is thirty-two random bytes, opaque, looked up per request,
+fifteen minutes; it names an account, and the account's live claim is the principal every route
+already spoke. A refresh token is single-use: using it issues the next pair and marks it used with
+its successor; using it again is reuse, the sign that a copy exists, and revokes the whole family —
+the test does exactly that and watches the family's live access token die with it. Logout revokes
+the family on purpose. Only the SHA-256 of any token is stored, held by reading the tables back, so
+a dump yields nothing a caller can present; the tables refuse to un-revoke, to re-use, or to change
+an access token at all. `Main` starts the bearer authenticator when a provider client id is
+configured and refuses to start with none unless the development door is explicitly opened.
+Twenty-five properties. Passkeys — the fallback, with recovery — are the next slice and are not
+claimed.

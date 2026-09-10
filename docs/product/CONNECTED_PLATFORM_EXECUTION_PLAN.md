@@ -1,6 +1,6 @@
 # THRØ — Connected Platform Execution Plan
 
-**Date:** 2026-09-09 · **Status:** Phases A, B2, D, E's read model, C's store (availability, lineups, the result-card gate) and the HTTP layer behind a development authenticator delivered; accounts (B3) and C's surface wait on FB-1, E's surface and F on the client · **Precedence:** rank 4 (product/domain
+**Date:** 2026-09-10 · **Status:** Phases A, B2, D, E's read model, C's store and the HTTP layer delivered; FB-1 and FB-2 decided (PD-030, PD-031); B3's account and session core in progress under §12d; passkeys, C's surface, E's surface and F follow · **Precedence:** rank 4 (product/domain
 specification), below the founder's instructions and the decision register, above the ADRs it cites.
 
 This plan reconciles the repository as it stands with the founder's product conclusions for the
@@ -328,6 +328,8 @@ an event, and no entry, check-in or bracket tie references a league season.
 
 Two are genuine. Two more are recorded as delegated decisions with reversal paths so work continues.
 
+**FB-1 — DECIDED 2026-09-10, PD-030: Sign in with Apple and Google first, self-hosted passkeys as the fallback; sessions are THRØ's own.** The text below is the decision pack as it was put.
+
 **FB-1 — Identity provider and the claim policy (extends B4).**
 *Why it matters:* an account is a competitive identity; recovery and claiming are account-takeover
 surfaces.
@@ -340,6 +342,8 @@ libraries on the JVM are mature; and identity data stays in the one `identity` s
 depends on for deletion and export. *Cost of reversing:* moderate — credential export from a
 managed provider is possible but recovery flows are rewritten. *Blocks:* Phase B's account surface,
 every authenticated route, the claim flow.
+
+**FB-2 — DECIDED 2026-09-10, PD-031: Fly.io with managed PostgreSQL (PITR) in London.** The text below is the decision pack as it was put.
 
 **FB-2 — Hosting vendor for the single container and managed Postgres.**
 *Why:* ADR-011 fixes the topology, not the vendor; point-in-time recovery, UK/EU residency and
@@ -365,7 +369,7 @@ local and CI work is not blocked.
 | A1–A6 | Audit, ADR-017, V014, Kotlin organisational domain, tests, docs | nothing | nothing |
 | B1 | Ktor HTTP layer over existing handlers; OpenAPI in CI | A | nothing |
 | B2 | Organisational command model with row versions (**delivered**: V015, `OrganisationCommands`, two-writer conflict test); local cache contract | A | nothing |
-| B3 | Accounts, sessions, passkeys, claim flow | B1 | **FB-1** |
+| B3 | Accounts, sessions, passkeys, claim flow | B1 | FB-1 decided (PD-030): Apple/Google sign-in and sessions built first (§12d), passkeys next |
 | B4 | Push delivery record; media storage contract | B1 | FB-2 for staging only |
 | C | Team OS slice end to end | B1–B3 | FB-1 |
 | D | Secretary: registration, then result submission and rearrangement (**delivered at the domain and store level**: V016, `Secretary`, 62 properties; the HTTP and client surfaces wait on B1/B3) | A, B2 | nothing further |
@@ -455,6 +459,21 @@ findings before implementation; the schema closes the four blockers in the datab
 Deferred, recorded: a payload gate for result submissions that carry lineups (no lineup exists
 until Phase C); a `transport_evidence_rule` table when the second adapter arrives; `lapsed` as a
 league decision with a reason, not a payment flag (OD-009).
+
+## 12d. Acceptance criteria — Phase B3, accounts and sessions (PD-030), written before the code; rows 1–9 delivered (V023, `AuthTest`, 25 properties)
+
+| # | Property | Held by |
+|---|---|---|
+| 1 | An Apple or Google ID token is accepted only when its signature verifies against the provider's published keys, its issuer is the provider's, its audience is THRØ's client id and it has not expired; each failure is a 401 that says which, and nothing is created | `AuthTest` |
+| 2 | A first sign-in creates an account, an unclaimed-no-more player and a `self_created` claim in one transaction; a second sign-in with the same provider subject finds the same account and creates nothing | `AuthTest` + `identity.credential` unique live (kind, subject) |
+| 3 | The access token is opaque, looked up server-side, short-lived, and names an account whose live claim is the principal every route already speaks; nothing about permissions travels in it | `AuthTest` (a fresh session's token works on `/v1/me` and `/v1/commands` as that player) |
+| 4 | Refresh rotates: the old refresh token is marked used and a new pair is issued; presenting a used refresh token revokes the whole family and the family's live access token stops working | `AuthTest` |
+| 5 | Logout revokes the family; a revoked family's access and refresh tokens are 401 | `AuthTest` |
+| 6 | Token secrets are never stored: only their SHA-256; a database dump yields no usable token | schema property + `AuthTest` reads the table |
+| 7 | The server refuses to start with neither the development authenticator nor a provider client id configured; with a provider configured, the bearer authenticator is the only one | `Main.kt`, held by review |
+| 8 | A sign-in route is unauthenticated and rate-limit-ready; every other new route requires a principal | `AuthTest` |
+| 9 | Display name is set by the person, never taken from the provider's token unless they say so; a new account's name is a placeholder until they set it | `AuthTest` |
+| 10 | Passkeys (WebAuthn) as the fallback: registration and assertion in the Kotlin service, recovery decided with it — **next slice**, not claimed here | — |
 
 ## 12c. Acceptance criteria — Phase E read model, delivered
 

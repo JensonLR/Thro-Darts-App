@@ -12,7 +12,22 @@ export PGHOST=localhost            # and PGPORT/PGUSER/PGDATABASE if not the def
 THRO_DEV_AUTH=1 gradle -p services/api serve
 ```
 
-It refuses to start without an authenticator. The only one that exists is the **development**
+It refuses to start without an authenticator. In a deployment that is the **bearer** authenticator,
+enabled by configuring at least one sign-in provider:
+
+```bash
+THRO_APPLE_CLIENT_ID=<your Apple Services ID or bundle id> \
+THRO_GOOGLE_CLIENT_ID=<your Google OAuth client id> \
+PGHOST=... PGPASSWORD=... gradle -p services/api serve
+```
+
+A client posts the provider's ID token to `POST /v1/auth/apple` or `/v1/auth/google` with its
+device id and receives THRØ's own session: an opaque access token (15 minutes, sent as
+`Authorization: Bearer …`) and a single-use refresh token (30 days) for `POST /v1/auth/refresh`.
+Presenting a used refresh token revokes the whole family — that is how a stolen copy gives itself
+away — and `POST /v1/auth/logout` revokes it on purpose. Only the SHA-256 of any token is stored.
+
+For local work there is also the **development**
 authenticator, which trusts an `X-Thro-Dev-Subject: <uuid>` header — that is, it trusts anyone who
 can reach the port — and cannot be constructed unless `THRO_DEV_AUTH=1` is set **and** `PGHOST` is
 this machine (`localhost`, `127.0.0.1`, `::1`): a development door on a remote database is a
@@ -30,6 +45,10 @@ routes are mounted from. In brief:
 
 | Route | Who | What |
 |---|---|---|
+| `POST /v1/auth/apple`, `/v1/auth/google` | anyone, with the provider's ID token | Sign in; creates the account, player and claim on first sight (PD-030) |
+| `POST /v1/auth/refresh` | anyone, with a refresh token | Rotates it; reuse revokes the family |
+| `POST /v1/auth/logout` | principal | Revokes the session family |
+| `GET /v1/me`, `PUT /v1/me/profile` | principal | Who am I; set my display name |
 | `POST /v1/commands` | principal + `X-Thro-Device` | The one command endpoint (ADR-007): `RecordVisit`, `RenameTeam`, `RearrangeFixture`, `SetAvailability`, `NameLineup`. Applied 200; replay returns what it returned; stale 409 with the current row; refused 422 in the store's words; sequence gap 409; not this match — or not in it — 404; body over 64 KiB 413 |
 | `GET /v1/me/inbox` | principal | The caller's own Secretary tasks by section |
 | `GET /v1/teams/{teamId}/inbox` | principal with `team.manage` | The team's Secretary inbox; anyone else is 403 and the refusal is on the audit record |
@@ -48,5 +67,6 @@ THRO_WRITE_OPENAPI=1 gradle -p services/api test --tests 'thro.api.HttpTest'
 
 ## Not built
 
-SSE fan-out (ADR-007 streams and heartbeat), accounts and sessions (FB-1), a client generated from
-the schema (ADR-001's acceptance condition, waiting on the organiser console).
+SSE fan-out (ADR-007 streams and heartbeat), passkeys as the fallback sign-in (PD-030's next
+slice, with recovery), rate limiting on the sign-in routes, a client generated from the schema
+(ADR-001's acceptance condition, waiting on the organiser console).

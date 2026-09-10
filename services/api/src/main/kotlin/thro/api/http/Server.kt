@@ -9,15 +9,20 @@ import io.ktor.server.request.receiveText
 import io.ktor.server.response.respondText
 import io.ktor.server.routing.get
 import io.ktor.server.routing.post
+import io.ktor.server.routing.put
 import io.ktor.server.routing.routing
 import java.sql.Connection
 import java.time.Instant
 import java.time.temporal.ChronoUnit
 import java.util.UUID
+import thro.api.Accounts
 import thro.api.CommandHandler
 import thro.api.CommandResult
 import thro.api.Discovery
 import thro.api.Grants
+import thro.api.IdTokenVerifier
+import thro.api.JwkSource
+import thro.api.Provider
 import thro.api.Matches
 import thro.api.Json
 import thro.api.Migrations
@@ -45,12 +50,23 @@ public class Deps(
     public val connect: () -> Connection,
     public val authenticator: Authenticator,
     public val now: () -> Instant = { Instant.now() },
+    /** Sign-in providers this server accepts, each with THRØ's client id at that provider. */
+    public val providers: Map<Provider, String> = emptyMap(),
+    /** Where the providers' keys come from; a test supplies its own. */
+    public val keys: JwkSource = JwkSource { _, _ -> null },
 )
 
 private class Http(val status: Int, val body: String)
 
 public fun Application.thro(deps: Deps) {
+    val verifier = IdTokenVerifier(deps.keys, deps.now)
     val handlers: Map<String, suspend (ApplicationCall, Principal?) -> Http> = mapOf(
+        "auth.apple" to { call, _ -> signIn(deps, verifier, Provider.APPLE, call.receiveText()) },
+        "auth.google" to { call, _ -> signIn(deps, verifier, Provider.GOOGLE, call.receiveText()) },
+        "auth.refresh" to { call, _ -> refresh(deps, call.receiveText()) },
+        "auth.logout" to { call, _ -> withConnection(deps) { c -> Http(200, """{"revoked":${Accounts(c, deps.now).logout(bearer(call) ?: "")}}""") } },
+        "me" to { _, p -> withConnection(deps) { c -> profile(c, deps, p!!) } },
+        "me.profile" to { call, p -> withConnection(deps) { c -> Accounts(c, deps.now).setDisplayName(p!!.accountId ?: return@withConnection Http(403, """{"error":"the development principal has no account"}"""), str(Json.parseObject(call.receiveText()), "displayName")); profile(c, deps, p) } },
         "health" to { _, _ -> health(deps) },
         "openapi" to { _, _ -> Http(200, Contract.openApi()) },
         "commands" to { call, p ->
@@ -95,6 +111,7 @@ public fun Application.thro(deps: Deps) {
             when (e.method) {
                 "GET" -> get(e.path) { handle(call) }
                 "POST" -> post(e.path) { handle(call) }
+                "PUT" -> put(e.path) { handle(call) }
                 else -> error("unsupported method ${e.method}")
             }
         }
@@ -117,6 +134,46 @@ private fun health(deps: Deps): Http = try {
     // The detail — host, user, the driver's words — is for the log, not for an unauthenticated caller.
     System.err.println("healthz: database unreachable: ${e.message}")
     Http(503, """{"database":"unreachable"}""")
+}
+
+// --- sign-in and sessions (PD-030) ---------------------------------------------------------------
+
+private fun bearer(call: ApplicationCall): String? =
+    call.request.headers["Authorization"]?.trim()?.takeIf { it.startsWith("Bearer ", ignoreCase = true) }?.substring(7)?.trim()
+
+private fun signIn(deps: Deps, verifier: IdTokenVerifier, provider: Provider, body: String): Http {
+    if (body.length > MAX_BODY) return Http(413, """{"error":"body over 64 KiB"}""")
+    val clientId = deps.providers[provider] ?: return Http(503, """{"error":${Contract.q("Sign in with ${provider.name.lowercase().replaceFirstChar { it.uppercase() }} is not configured on this server")}}""")
+    val m = try { Json.parseObject(body) } catch (e: Exception) { return Http(400, """{"error":"body is not a JSON object"}""") }
+    val token = str(m, "idToken")
+    val device = try { UUID.fromString(str(m, "deviceId")) } catch (e: IllegalArgumentException) { throw IllegalArgumentException("deviceId must be a UUID") }
+    return when (val v = verifier.verify(token, provider, clientId)) {
+        is IdTokenVerifier.Result.Rejected -> Http(401, """{"error":${Contract.q("the ID token was not accepted: " + v.why)}}""")
+        is IdTokenVerifier.Result.Verified -> withConnection(deps) { c -> Http(200, sessionJson(Accounts(c, deps.now).signIn(provider.name.lowercase(), v.claims.subject, device))) }
+    }
+}
+
+private fun refresh(deps: Deps, body: String): Http {
+    if (body.length > MAX_BODY) return Http(413, """{"error":"body over 64 KiB"}""")
+    val m = try { Json.parseObject(body) } catch (e: Exception) { return Http(400, """{"error":"body is not a JSON object"}""") }
+    val token = str(m, "refreshToken")
+    return withConnection(deps) { c ->
+        when (val r = Accounts(c, deps.now).refresh(token)) {
+            is Accounts.Refreshed.Rotated -> Http(200, sessionJson(r.session))
+            Accounts.Refreshed.Reused -> Http(401, """{"error":"that refresh token had already been used; the session family is revoked — sign in again"}""")
+            Accounts.Refreshed.Expired -> Http(401, """{"error":"the refresh token has expired; sign in again"}""")
+            Accounts.Refreshed.Unknown -> Http(401, """{"error":"unknown refresh token"}""")
+        }
+    }
+}
+
+private fun sessionJson(s: Accounts.Session): String =
+    """{"accountId":"${s.accountId}","playerId":"${s.playerId}","accessToken":${Contract.q(s.accessToken)},"refreshToken":${Contract.q(s.refreshToken)},"accessExpiresAt":${Contract.q(s.accessExpiresAt.toString())},"created":${s.created}}"""
+
+private fun profile(c: Connection, deps: Deps, p: Principal): Http {
+    val account = p.accountId ?: return Http(200, """{"accountId":null,"playerId":"${p.subject}","displayName":null,"named":false,"ageBand":"unknown","note":"development principal: no account"}""")
+    val pr = Accounts(c, deps.now).profile(account) ?: return Http(404, """{"error":"no such account"}""")
+    return Http(200, """{"accountId":"${pr.accountId}","playerId":${pr.playerId?.let { "\"$it\"" } ?: "null"},"displayName":${Contract.q(pr.displayName)},"named":${pr.named},"ageBand":${Contract.q(pr.ageBand)}}""")
 }
 
 // --- the one command endpoint -------------------------------------------------------------------

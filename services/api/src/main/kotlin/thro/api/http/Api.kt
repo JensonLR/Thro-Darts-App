@@ -51,7 +51,48 @@ public object Contract {
         """.trimIndent(),
     )
 
+    private val signIn = Schema(
+        """{"type":"object","required":["idToken","deviceId"],"properties":{"idToken":{"type":"string","description":"The provider's ID token (JWT) as the platform SDK returned it."},"deviceId":{"type":"string","format":"uuid","description":"This device's stable id; the session family is bound to it."}}}""",
+    )
+    private val sessionResponse = "a session: accountId, playerId, accessToken (opaque, 15 minutes), refreshToken (single-use, 30 days), accessExpiresAt, created"
+
     public val endpoints: List<Endpoint> = listOf(
+        Endpoint(
+            id = "auth.apple", method = "POST", path = "/v1/auth/apple", authenticated = false,
+            summary = "Sign in with Apple", request = signIn,
+            description = "Verifies Apple's ID token against Apple's published keys, issuer, this app's client id and expiry; creates the account, its player and its claim on first sight (PD-030). The session is THRØ's own.",
+            responses = mapOf(200 to sessionResponse, 400 to "malformed", 401 to "the token does not verify, and why", 503 to "Sign in with Apple is not configured on this server"),
+        ),
+        Endpoint(
+            id = "auth.google", method = "POST", path = "/v1/auth/google", authenticated = false,
+            summary = "Sign in with Google", request = signIn,
+            description = "As for Apple, against Google's published keys and issuers.",
+            responses = mapOf(200 to sessionResponse, 400 to "malformed", 401 to "the token does not verify, and why", 503 to "Sign in with Google is not configured on this server"),
+        ),
+        Endpoint(
+            id = "auth.refresh", method = "POST", path = "/v1/auth/refresh", authenticated = false,
+            summary = "Rotate a refresh token",
+            request = Schema("""{"type":"object","required":["refreshToken"],"properties":{"refreshToken":{"type":"string"}}}"""),
+            description = "A refresh token is single-use: this marks it used and issues a new pair. Presenting a used token is reuse — a copy exists — and revokes the whole session family (ADR-008).",
+            responses = mapOf(200 to sessionResponse, 400 to "malformed", 401 to "unknown, expired, or reused (the family is now revoked)"),
+        ),
+        Endpoint(
+            id = "auth.logout", method = "POST", path = "/v1/auth/logout", authenticated = true,
+            summary = "End this session family", description = "Revokes the family the presented access token belongs to; its access and refresh tokens stop working.",
+            responses = mapOf(200 to "revoked", 401 to "no principal"),
+        ),
+        Endpoint(
+            id = "me", method = "GET", path = "/v1/me", authenticated = true,
+            summary = "Who am I", description = "The caller's account id, player id, display name (and whether they have set one), and age band.",
+            responses = mapOf(200 to "profile", 401 to "no principal"),
+        ),
+        Endpoint(
+            id = "me.profile", method = "PUT", path = "/v1/me/profile", authenticated = true,
+            summary = "Set my display name",
+            request = Schema("""{"type":"object","required":["displayName"],"properties":{"displayName":{"type":"string","maxLength":60}}}"""),
+            description = "A name is the person's to give; it is never taken from a provider's token on their behalf.",
+            responses = mapOf(200 to "profile", 400 to "malformed", 401 to "no principal"),
+        ),
         Endpoint(
             id = "health", method = "GET", path = "/healthz", authenticated = false,
             summary = "Liveness, and the schema version the database stands at",
@@ -110,7 +151,7 @@ $ops
         return """{
 "openapi":"3.1.0",
 "info":{"title":"THRØ API","version":"$VERSION","description":"Routes over the command handlers. One command endpoint (ADR-007); identity from the principal, never the body (ADR-008); every relationship decision recorded."},
-"components":{"securitySchemes":{"principal":{"type":"apiKey","in":"header","name":"${Authenticator.Dev.HEADER}","description":"Development authenticator only (THRO_DEV_AUTH=1). The production scheme is founder decision FB-1 and replaces this entry."}}},
+"components":{"securitySchemes":{"principal":{"type":"http","scheme":"bearer","description":"An access token from /v1/auth/apple, /v1/auth/google or /v1/auth/refresh (PD-030). Opaque; looked up per request; names an account, never a permission. A development server started with THRO_DEV_AUTH=1 accepts ${Authenticator.Dev.HEADER} instead."}}},
 "paths":{
 $paths
 }

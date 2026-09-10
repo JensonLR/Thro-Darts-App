@@ -101,3 +101,15 @@ own retention and a restricted read path. When a fraud allegation arrives fourte
 
 B4 answered, which will settle enrolment, recovery, re-authentication and the identity-claim flow; or
 a second organisation type appearing that the relation vocabulary cannot express.
+
+## Note — 2026-09-10 (PD-030)
+
+The founder reversed the order of the two sign-in methods this record named: **Sign in with Apple
+and Sign in with Google are primary**, and self-hosted passkeys are the fallback, for adoption at
+the oche. Nothing else here changes. In particular the provider proves only who is holding the
+phone: the credential is a row bound to one live account, the session is THRØ's own (server-side
+access tokens, rotating refresh tokens with reuse detection revoking the family), permissions are
+never in any token, and every decision is made per request against relationships. B4's remaining
+questions — recovery for the passkey path, re-authentication for sensitive actions — are decided
+with the passkey slice.
+
