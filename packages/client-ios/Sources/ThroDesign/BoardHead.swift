@@ -236,7 +236,7 @@ public struct ThroLedger: View {
                 .overlay {
                     if row.struck {
                         // Chalk scraped off, in the board's own colour. The row stays where it is.
-                        ChalkStrike(figureWidth: 64, capHeight: 20)
+                        ChalkStrike(capHeight: ThroTypography.heading3.family(.sport).capHeight)
                             .fill(ThroColor.colorBoardField)
                     }
                 }
@@ -348,7 +348,7 @@ public struct ThroChalkMarkView: View {
         .overlay(ChalkBox().fill(ThroColor.colorMarkOnBoard))
         .overlay {
             if mark.kind == .bust {
-                ChalkStrike(figureWidth: 72, capHeight: 24).fill(ThroColor.colorBoardField)
+                ChalkStrike(capHeight: ThroTypography.heading1.family(.sport).capHeight).fill(ThroColor.colorBoardField)
             }
         }
         .transition(reduceMotion

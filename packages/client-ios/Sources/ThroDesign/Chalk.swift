@@ -113,9 +113,13 @@ public struct ChalkRule: Shape {
 /// engine makes, not a thing a hand makes — so `radiusCard` and `radiusKeypad` survive on the paper
 /// side of the app and nowhere else.
 ///
-/// The four rules overrun each other at the corners by `overrun`, which is the tell that it was
-/// drawn rather than stamped, and costs four extra points of path. Each side is given its own seed
-/// angle, so no two sides of one box wander identically.
+/// **Closed corners.** The first version ran each rule 3 pt past the corner as a "drawn, not
+/// stamped" tell. Thirty keys on one screen turned the tell into a hundred and twenty small crosses,
+/// and the founder called them what they were: clutter that is not the brand. The brand's forms —
+/// the ring and the dart — are clean geometry, so the box is now clean geometry too: the four rules
+/// meet square at the corners and stop there. `overrun` survives as a parameter defaulting to zero
+/// for anything that still wants the tell, and a test holds the default at zero. Each side keeps
+/// its own seed angle, so no two sides of one box wander identically.
 public struct ChalkBox: Shape {
     public var weight: CGFloat
     public var overrun: CGFloat
@@ -123,7 +127,7 @@ public struct ChalkBox: Shape {
     public var seedAngle: Double
 
     public init(weight: CGFloat = ThroSpacing.spaceChalkRuleWeight,
-                overrun: CGFloat = 3,
+                overrun: CGFloat = ChalkBox.defaultOverrun,
                 roughness: CGFloat = ChalkRule.roughness,
                 seedAngle: Double = 0) {
         self.weight = weight
@@ -131,6 +135,9 @@ public struct ChalkBox: Shape {
         self.roughness = roughness
         self.seedAngle = seedAngle
     }
+
+    /// How far a rule runs past the corner. Zero: the corners close.
+    public static let defaultOverrun: CGFloat = 0
 
     /// The weight animates, so a key can be pressed harder into the board. The ground under a key
     /// moves between two board stops that are 1.27:1 apart, which is a difference and not a signal;
@@ -142,12 +149,16 @@ public struct ChalkBox: Shape {
 
     public func path(in rect: CGRect) -> Path {
         var path = Path()
-        // Inset by the overrun so the tails land on the frame's edge instead of outside it. A box
-        // that overran its own bounds would be clipped by whatever view it decorates, and the tell
-        // would be invisible on exactly the four corners it exists for.
-        let box = rect.insetBy(dx: overrun + weight / 2, dy: overrun + weight / 2)
+        // Inset so nothing lands outside the frame: half the weight (the band sits either side of
+        // its centreline), the roughness's worst excursion, and any overrun. A box that drew outside
+        // its own bounds would be clipped by whatever view it decorates, and it would look correct
+        // in a preview, where nothing clips.
+        let reach = weight / 2 * (1 + roughness)
+        let box = rect.insetBy(dx: overrun + reach, dy: overrun + reach)
         guard box.width > 0, box.height > 0 else { return path }
-        let over = overrun
+        // Each rule runs to the far edge of the rule it meets, so the corner is a filled square and
+        // not a notch; anything beyond that is the overrun.
+        let over = overrun + reach
         let corners = [
             // top, running left to right, overrunning both ends
             (CGPoint(x: box.minX - over, y: box.minY), CGPoint(x: box.maxX + over, y: box.minY), 0.0),
@@ -177,18 +188,25 @@ public struct ChalkBox: Shape {
 /// what was written, which is the whole point — a retraction in the journal is an `INSERT` carrying
 /// `corrects_seq`, never a delete, and the screen now says the same thing the journal does.
 public struct ChalkStrike: Shape {
-    public var figureWidth: CGFloat
+    /// The width of what is struck. `nil` strikes whatever it is laid over: the shape takes the
+    /// width of the rect it is given, so a ledger row of `180 321` and one of `26 475` each get a
+    /// bar that clears their own ends, rather than a bar sized for a guessed width.
+    public var figureWidth: CGFloat?
     public var capHeight: CGFloat
 
-    public init(figureWidth: CGFloat, capHeight: CGFloat) {
+    public init(figureWidth: CGFloat? = nil, capHeight: CGFloat) {
         self.figureWidth = figureWidth
         self.capHeight = capHeight
     }
 
     /// How far past the figure the bar runs, as a fraction of the figure's width.
     public static let span: CGFloat = 1.35
-    /// The bar's thickness as a fraction of the cap height.
-    public static let thickness: CGFloat = 0.085
+    /// The bar's thickness as a fraction of the cap height: **0.130**, which is what the wordmark's
+    /// Ø measures — its dart's half-width is 0.065 of the cap (`MarkGeometry.Ratios.wordmark`,
+    /// read off Archivo ExtraBold's own Ø slash). The first version chose 0.085 by eye, which drew
+    /// a bar a third thinner than the Ø it claimed to be. A strike is the Ø's dart laid through a
+    /// figure, so it takes the Ø's weight against the same cap.
+    public static let thickness: CGFloat = 2 * MarkGeometry.Ratios.wordmark.halfWidth
 
     /// The geometry the strike is drawn from, at a given figure size. Separated from `path(in:)` so
     /// it can be measured in a test without a rendering context.
@@ -204,8 +222,9 @@ public struct ChalkStrike: Shape {
     }
 
     public func path(in rect: CGRect) -> Path {
-        guard figureWidth > 0, capHeight > 0 else { return Path() }
-        return ChalkStrike.geometry(figureWidth: figureWidth, capHeight: capHeight)
+        let width = figureWidth ?? rect.width
+        guard width > 0, capHeight > 0 else { return Path() }
+        return ChalkStrike.geometry(figureWidth: width, capHeight: capHeight)
             .bar(at: CGPoint(x: rect.midX, y: rect.midY))
     }
 }

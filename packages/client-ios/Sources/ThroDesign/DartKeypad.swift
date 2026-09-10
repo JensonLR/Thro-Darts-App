@@ -226,7 +226,10 @@ public struct ThroDartLine: View {
     }
 
     /// The three slots, filled and empty. An empty slot is drawn and not hidden, so the line does
-    /// not change width as darts land — the same reason a register keeps its leading cells.
+    /// not change width as darts land — the same reason a register keeps its leading cells. An empty
+    /// slot is an **empty box**, out of the light: the first version put a dot in it as a
+    /// placeholder, which read as three marks the app had made on the board before the player had
+    /// thrown anything. Empty means nothing written.
     static func slots(_ entry: ThroDartEntry) -> [ThroDart?] {
         entry.darts.map(Optional.init)
             + Array(repeating: nil, count: max(0, ThroDartEntry.perVisit - entry.darts.count))
@@ -236,12 +239,11 @@ public struct ThroDartLine: View {
         HStack(spacing: ThroSpacing.spacing2) {
             ForEach(Array(ThroDartLine.slots(entry).enumerated()), id: \.offset) { slot in
                 Button(action: { onTakeBackTo(slot.offset) }) {
-                    Text(slot.element?.written ?? "·")
+                    Text(ThroDartLine.slotLabel(slot.element))
                         .thro(ThroTypography.heading3.family(.sport).weight(.bold))
                         .lineLimit(1)
                         .minimumScaleFactor(0.7)
-                        .foregroundStyle(slot.element == nil ? ThroColor.colorTextOnBoardSecondary
-                                                             : ThroColor.colorTextOnBoard)
+                        .foregroundStyle(ThroColor.colorTextOnBoard)
                 }
                 .buttonStyle(ChalkKeyStyle(slot.element == nil ? .sunken : .field,
                                            minHeight: ThroSpacing.touchTargetMinimum,
@@ -253,4 +255,8 @@ public struct ThroDartLine: View {
         }
         .accessibilityElement(children: .contain)
     }
+
+    /// What a slot shows: the dart as written, or nothing at all. A space and not an empty string,
+    /// so the empty slot keeps the text's height and the three boxes stay level.
+    static func slotLabel(_ dart: ThroDart?) -> String { dart?.written ?? " " }
 }

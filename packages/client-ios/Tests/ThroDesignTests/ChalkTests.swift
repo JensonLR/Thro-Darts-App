@@ -88,6 +88,30 @@ final class ChalkTests: XCTestCase {
         XCTAssertGreaterThan(box.height, rect.height - 8)
     }
 
+    func testABoxClosesItsCornersInsteadOfRunningPastThem() {
+        // The founder's call: thirty keys of corner ticks were clutter, not the brand. The corners
+        // are filled squares — a point just inside each corner of the drawn extent is on the box —
+        // and nothing runs past them, so the drawn extent's corner is where the two rules meet.
+        XCTAssertEqual(ChalkBox.defaultOverrun, 0)
+        let rect = CGRect(x: 0, y: 0, width: 120, height: 64)
+        let box = ChalkBox()
+        let path = box.path(in: rect)
+        let extent = path.boundingRect
+        let inside = box.weight * 0.35
+        for corner in [CGPoint(x: extent.minX + inside, y: extent.minY + inside),
+                       CGPoint(x: extent.maxX - inside, y: extent.minY + inside),
+                       CGPoint(x: extent.minX + inside, y: extent.maxY - inside),
+                       CGPoint(x: extent.maxX - inside, y: extent.maxY - inside)] {
+            XCTAssertTrue(path.contains(corner, eoFill: false), "the corner at \(corner) is open")
+        }
+        // No tail: the box's drawn extent is exactly as far in from the frame on both axes, and a
+        // tick would poke the horizontal extent out past the vertical rule's outer edge.
+        let ticked = ChalkBox(overrun: 3).path(in: rect).boundingRect
+        XCTAssertEqual(extent.width, rect.width - 2 * (extent.minX - rect.minX), accuracy: 0.25)
+        XCTAssertLessThan(extent.minX - rect.minX, ticked.minX - rect.minX + 3.001,
+                          "the closed box is inset only by its own reach, the ticked one by its tails too")
+    }
+
     func testABoxThatIsSmallerThanItsOwnOverrunDrawsNothingRatherThanInsideOut() {
         XCTAssertTrue(ChalkBox().path(in: CGRect(x: 0, y: 0, width: 2, height: 2)).isEmpty)
     }
@@ -120,6 +144,35 @@ final class ChalkTests: XCTestCase {
         XCTAssertEqual(box.width, box.height, accuracy: 0.5)
         XCTAssertEqual(box.midX, rect.midX, accuracy: 0.5, "and it is struck through the figure")
         XCTAssertEqual(box.midY, rect.midY, accuracy: 0.5)
+    }
+
+    func testTheStrikeWeighsWhatTheWordmarksSlashWeighsAgainstTheSameCap() {
+        // The Ø's dart is 0.065 of the cap either side of its axis (`Ratios.wordmark.halfWidth`,
+        // measured off Archivo ExtraBold). A strike that claims to be the Ø's dart takes that
+        // weight, not one chosen by eye.
+        XCTAssertEqual(ChalkStrike.thickness, 0.13, accuracy: 0.0001)
+        XCTAssertEqual(ChalkStrike.thickness, 2 * MarkGeometry.Ratios.wordmark.halfWidth, accuracy: 1e-9)
+        let geometry = ChalkStrike.geometry(figureWidth: 60, capHeight: 20)
+        XCTAssertEqual(2 * geometry.halfWidth, 2.6, accuracy: 0.001, "2.6 pt through a 20 pt cap")
+    }
+
+    func testAStrikeWithNoWidthOfItsOwnStrikesWhatItIsLaidOver() {
+        // A ledger row's width is the row's, not a guess: the shape takes the rect it is given.
+        let rect = CGRect(x: 10, y: 0, width: 80, height: 30)
+        let laid = ChalkStrike(capHeight: 20).path(in: rect).boundingRect
+        let told = ChalkStrike(figureWidth: 80, capHeight: 20).path(in: rect).boundingRect
+        XCTAssertEqual(laid.width, told.width, accuracy: 0.001)
+        XCTAssertEqual(laid.midX, rect.midX, accuracy: 0.5)
+        XCTAssertTrue(ChalkStrike(capHeight: 20).path(in: CGRect(x: 0, y: 0, width: 0, height: 30)).isEmpty)
+    }
+
+    func testARoleKnowsItsOwnCapHeight() {
+        // The strike under a ledger row sizes itself from the row's role, so the role must say what
+        // its capitals measure, per family, at the user's text size.
+        let role = ThroTypography.heading3.family(.sport)
+        XCTAssertEqual(role.capHeight, ThroTypography.capRatio(.sport) * role.size, accuracy: 0.5)
+        XCTAssertGreaterThan(role.capHeight, 0)
+        XCTAssertLessThan(role.capHeight, role.size)
     }
 
     func testAStrikeWithNoFigureToStrikeDrawsNothing() {

@@ -161,6 +161,13 @@ public struct ThroTypeRole: Equatable, Sendable {
     }
 
     public var tracking: CGFloat { size * trackingEm }
+
+    /// The height of this role's capitals at the user's text size: the family's measured cap ratio
+    /// against the scaled point size. What a strike or a basis rule sizes itself from, because a bar
+    /// laid through a figure is proportioned to the figure and not to the line box round it.
+    public var capHeight: CGFloat {
+        ThroTypography.capRatio(family) * ThroFont.scaled(size, relativeTo: relativeTo)
+    }
     /// SwiftUI has no line-height; line spacing is the gap above the font's own height.
     public var lineSpacing: CGFloat { max(0, lineHeight - size) }
 
