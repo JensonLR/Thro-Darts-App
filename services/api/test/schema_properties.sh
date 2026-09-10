@@ -565,6 +565,26 @@ check "a self-created adult may be disclosed" "$($PSQL -c "SELECT identity.playe
 check "a minor with only their own consent may not" "$($PSQL -c "SELECT identity.player_may_be_disclosed('$PM');")" "f"
 check "an unclaimed player never may" "$($PSQL -c "SELECT identity.player_may_be_disclosed('$PU');")" "f"
 
+echo "== provenance for imported rows (V027, PD-033) =="
+SRC=$($PSQL -c "SELECT gen_random_uuid();"); VEN=$($PSQL -c "SELECT gen_random_uuid();")
+$PSQL -c "SET ROLE app_competition;
+  INSERT INTO competition.venue (venue_id, name, locality, postcode, latitude, longitude) VALUES ('$VEN','The Sun Inn','Stockton-on-Tees','TS18 1SU',54.5655947,-1.3118501);
+  INSERT INTO competition.source_record (source_record_id, subject_kind, subject_id, source, source_url, external_ref, retrieved_on, basis)
+    VALUES ('$SRC','venue','$VEN','OpenStreetMap','https://www.openstreetmap.org/way/99782298','way/99782298','2026-09-10','stated by the source');" >/dev/null 2>&1
+check "the application may record where a row came from" "$($PSQL -c "SELECT count(*) FROM competition.source_record WHERE source_record_id='$SRC';")" "1"
+r=$($PSQL -c "UPDATE competition.source_record SET basis='changed' WHERE source_record_id='$SRC';" 2>&1)
+if echo "$r" | grep -qi 'is kept'; then ok "a source record is kept, never edited"
+else bad "a source record is kept, never edited" "${r:-the record was edited}"; fi
+r=$($PSQL -c "SET ROLE app_competition; DELETE FROM competition.source_record WHERE source_record_id='$SRC';" 2>&1)
+if echo "$r" | grep -qi 'permission denied\|is kept'; then ok "and never deleted by the application"
+else bad "and never deleted by the application" "${r:-deletion was permitted}"; fi
+r=$($PSQL -c "SET ROLE app_competition; INSERT INTO competition.source_record (source_record_id, subject_kind, subject_id, source, retrieved_on, basis) VALUES (gen_random_uuid(),'player','$VEN','LeagueRepublic','2026-09-10','stated');" 2>&1)
+if echo "$r" | grep -qi 'check constraint'; then ok "a person has no source record, by construction"
+else bad "a person has no source record, by construction" "${r:-a player provenance row was accepted}"; fi
+r=$($PSQL -c "SET ROLE app_competition; UPDATE competition.venue SET postcode='not a postcode', row_version=row_version+1 WHERE venue_id='$VEN';" 2>&1)
+if echo "$r" | grep -qi 'check constraint'; then ok "a venue's postcode is a postcode"
+else bad "a venue's postcode is a postcode" "${r:-junk was accepted as a postcode}"; fi
+
 echo
 echo "-------------------------------------------"
 echo "  $PASS passed, $FAIL failed"

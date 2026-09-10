@@ -166,6 +166,13 @@ public object Contract {
             responses = mapOf(200 to "sections of tasks", 401 to "no principal", 403 to "you do not run this team"),
         ),
         Endpoint(
+            id = "leagues", method = "GET", path = "/v1/leagues", authenticated = false,
+            summary = "The public front of the leagues: seasons, divisions, teams and their home venues",
+            description = "Public rows only — no person is on any of them. Each league lists its sources and each venue the basis it was connected to its team on (a secretary's word, or an inference from the team's name), because imported data says where it came from (PD-033).",
+            query = listOf("locality" to "a town or district; case-insensitive substring of the league's locality, optional"),
+            responses = mapOf(200 to "leagues, newest season first"),
+        ),
+        Endpoint(
             id = "me.discovery", method = "GET", path = "/v1/me/discovery", authenticated = true,
             summary = "Darts the caller can play, and why each card is there",
             description = "The discovery read model for the caller between from and to. Every card carries its reasons; nothing is called eligible that THRØ cannot check.",

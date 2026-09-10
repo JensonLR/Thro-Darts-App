@@ -132,6 +132,9 @@ class HttpTest {
             val disc = get("/v1/me/discovery?locality=Stockton", subject = home)
             check("discovery answers for the caller", disc.status.value == 200 && disc.bodyAsText().startsWith("""{"sections":{"""))
             check("a malformed date is 400, not a 500", get("/v1/me/discovery?from=yesterday", subject = home).status.value == 400)
+            // The leagues' public front needs no principal and answers the same shape empty or full.
+            val leagues = get("/v1/leagues?locality=Stockton", subject = null)
+            check("the leagues are public and answer without a principal", leagues.status.value == 200 && leagues.bodyAsText().startsWith("""{"leagues":["""))
 
             // --- health and the contract ------------------------------------------------------------
             val health = get("/healthz", subject = null)
@@ -147,6 +150,6 @@ class HttpTest {
                 bareUse.get() == 0 && roles.contains("app_match") && roles.contains("app_competition") && roles.contains("app_read") && roles.all { it in setOf("app_match", "app_competition", "app_read") })
         }
         println("  $passed HTTP properties held")
-        assertEquals(28, passed)
+        assertEquals(29, passed)
     }
 }

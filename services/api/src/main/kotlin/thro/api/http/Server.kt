@@ -20,6 +20,7 @@ import thro.api.Accounts
 import thro.api.CommandHandler
 import thro.api.CommandResult
 import thro.api.Discovery
+import thro.api.Leagues
 import thro.api.Grants
 import thro.api.IdTokenVerifier
 import thro.api.JwkSource
@@ -123,6 +124,7 @@ public fun Application.thro(deps: Deps) {
         },
         "me.inbox" to { r -> Http(200, inboxJson(Secretary(r.connection()).inboxForPlayer(r.principal!!.subject, deps.now()))) },
         "team.inbox" to { r -> teamInbox(r.connection(), r.principal!!, r.call.parameters["teamId"], deps.now()) },
+        "leagues" to { r -> r.role = DbRole.READ; Http(200, Leagues(r.connection()).let { it.json(it.all(r.call.request.queryParameters["locality"]?.take(80), deps.now())) }) },
         "me.discovery" to { r -> discovery(r.connection(), r.principal!!, r.call.request.queryParameters["from"], r.call.request.queryParameters["to"], r.call.request.queryParameters["locality"], deps.now()) },
     )
     // The registry and the handlers are held to each other at start, not discovered at first call.

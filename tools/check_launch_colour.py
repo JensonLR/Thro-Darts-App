@@ -21,6 +21,8 @@ one would pass this and is what the eye catches in one launch, which is the divi
 repository keeps everywhere — the machine holds what a person cannot see, and the person holds what
 a machine cannot.
 """
+from __future__ import annotations
+
 import json
 import pathlib
 import plistlib

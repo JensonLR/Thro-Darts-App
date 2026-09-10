@@ -60,6 +60,20 @@ tasks.register<JavaExec>("migrate") {
     }
 }
 
+// `gradle -p services/api seed [file]` imports the league seed file (PD-033) into the database the
+// environment names, as the deploy user — the same connection `migrate` uses, run after it.
+tasks.register<JavaExec>("seed") {
+    group = "application"
+    description = "Import services/api/seed/leagues/*.json into the database the environment names"
+    classpath = sourceSets["main"].runtimeClasspath
+    mainClass.set("thro.api.SeedKt")
+    workingDir = projectDir
+    for (v in listOf("PGHOST", "PGPORT", "PGUSER", "PGDATABASE", "PGPASSWORD", "PGSSLMODE", "DATABASE_URL", "MIGRATE_DATABASE_URL")) {
+        System.getenv(v)?.let { environment(v, it) }
+    }
+    project.findProperty("seedFile")?.let { args(it.toString()) }
+}
+
 // `gradle -p services/api serve` starts the HTTP API. It refuses to start without an authenticator;
 // the only one that exists is the development one, enabled by THRO_DEV_AUTH=1 and nothing else.
 tasks.register<JavaExec>("serve") {

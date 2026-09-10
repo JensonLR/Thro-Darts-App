@@ -2676,3 +2676,44 @@ widens it, and the rung is the largest whose two registers fit beside it. On the
 is the third rung and not the first, which the tests had asserted; the first had only ever "fit" by
 overflowing the screen, and the assertion now checks the sum against the width. Screenshots before
 and after are in the session, not the repository; 600 client tests hold.
+
+## The corners, the dots and the strike
+
+The founder: the corners of the score buttons and "the dots" are ugly and not the brand; is the
+strike-through the logo's, and is it accurate. **The corners** were `ChalkBox`'s 3 pt overrun —
+each rule running past the corner as a "drawn, not stamped" tell, which on thirty keys is a hundred
+and twenty small crosses. The box now meets square at the corners (`defaultOverrun` 0; each rule
+runs to the far edge of the one it meets so the corner is filled, not notched) and stays inside its
+frame by its own reach including the roughness excursion, which the existing containment test now
+proves without the overrun's slack. **The dots** were the three empty per-dart slots, each showing
+a "·": three marks the app had made before a dart was thrown. An empty slot is an empty box.
+**The strike** was the mark's own bar (`MarkGeometry.bar`, pointed both ends, 45°), so its shape was
+right, but its weight was 0.085 of the cap, chosen by eye; the wordmark's Ø slash measures 0.130 of
+the cap (`Ratios.wordmark.halfWidth` 0.065, read off Archivo ExtraBold). `ChalkStrike.thickness` is
+now defined from that ratio rather than restated. The two struck-row call sites passed a guessed
+64 and 72 pt width; the shape now takes the width of the rect it is laid over, and the cap height
+from the text role (`ThroTypeRole.capHeight`, new — cap ratio × scaled size). 604 client tests.
+
+## The local leagues, in the app (PD-033)
+
+Three local leagues were found publishing on LeagueRepublic — Stockton and District Thursday Night
+(three seasons, 14/16/18 teams), Stockton & District Monday Night Mixed (8), Redcar and District
+(two divisions, 21) — and their JSON web services answer "upgrade to a Gold plan"; the public HTML
+is readable with a browser user agent. `tools/pull_leaguerepublic.py` reads the standings pages
+(team names, never the team pages that list players) and writes `services/api/seed/leagues/
+teesside.json`, with 18 venues curated by hand from OpenStreetMap by team name and each link marked
+as the inference it is. **V027** adds `competition.source_record` — append-only provenance for any
+organisational row, `UNIQUE NULLS NOT DISTINCT` so an inferred tenure with no page is still one
+record — a venue postcode with a check, and a league's night and short name. `Seed.kt` imports the
+file idempotently by natural key: the same organisation in two leagues is one team (Thornaby F.C
+has four affiliations), a secretary's existing team is adopted rather than duplicated, and a
+secretary's home tenure is never replaced. `GET /v1/leagues` is the public front, read as
+`app_read`; the Discover tab gains **Local leagues** — a map with one pin per venue and the teams
+under each league, every venue line saying "(by name)" where it was inferred and every league
+saying what it was read from and when. Hostile points found while writing it: the first idempotence
+run re-inserted 47 tenure records because NULL pages never conflicted; the first adoption rule
+could not find a secretary's hand-made team and invented a second Sun Inn. Both are tests now.
+Neon (staging) is migrated to V027 and seeded: 3 leagues, 5 seasons, 6 divisions, 44 teams, 18
+venues, 77 affiliations, 208 source records. 609 client tests; 92 schema properties; the HTTP suite
+holds 29 properties. Three `tools/check_*.py` scripts gained `from __future__ import annotations`
+so they run on the Mac's Python 3.9 as well as CI's.

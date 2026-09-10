@@ -24,6 +24,8 @@ So this compares what is written down:
 It does not compare the code. Two implementations of the same contract are allowed to differ, and
 this is the contract.
 """
+from __future__ import annotations
+
 import pathlib
 import re
 import sys

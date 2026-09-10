@@ -55,6 +55,9 @@
    "expectedVersion":{"type":"integer","description":"The row version the author last saw; 0 when the row does not exist yet. A different current version is a 409 with the current row."}
  }}}}},"responses":{"200":{"description":"applied, or a replay of an earlier answer"},"400":{"description":"malformed"},"401":{"description":"no principal"},"404":{"description":"not this match, or not in it"},"409":{"description":"stale version, or sequence gap"},"413":{"description":"body over 64 KiB"},"422":{"description":"refused"}}}
   },
+  "/v1/leagues":{
+    "get":{"operationId":"leagues","summary":"The public front of the leagues: seasons, divisions, teams and their home venues","description":"Public rows only — no person is on any of them. Each league lists its sources and each venue the basis it was connected to its team on (a secretary's word, or an inference from the team's name), because imported data says where it came from (PD-033).","parameters":[{"name":"locality","in":"query","required":false,"description":"a town or district; case-insensitive substring of the league's locality, optional","schema":{"type":"string"}}],"responses":{"200":{"description":"leagues, newest season first"}}}
+  },
   "/v1/me":{
     "get":{"operationId":"me","summary":"Who am I","description":"The caller's account id, player id, display name (and whether they have set one), and age band.","parameters":[],"security":[{"principal":[]}],"responses":{"200":{"description":"profile"},"401":{"description":"no principal"}}}
   },

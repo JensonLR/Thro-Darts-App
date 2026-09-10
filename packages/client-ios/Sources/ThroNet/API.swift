@@ -76,6 +76,60 @@ public struct InboxItem: Decodable, Sendable, Equatable, Identifiable {
     public var id: UUID { taskId }
 }
 
+/// A league as its public front shows it: seasons newest first, each with its divisions and teams,
+/// each team with its home venue where one is known and the BASIS that venue was connected on.
+/// Dates arrive as `yyyy-MM-dd` strings and stay strings: they are calendar days, not instants.
+public struct PublicLeague: Decodable, Sendable, Equatable, Identifiable {
+    public struct Source: Decodable, Sendable, Equatable {
+        public let source: String
+        public let url: String?
+        public let retrievedOn: String
+    }
+    public struct Venue: Decodable, Sendable, Equatable {
+        public let venueId: UUID
+        public let name: String
+        public let locality: String?
+        public let postcode: String?
+        public let latitude: Double?
+        public let longitude: Double?
+        /// "stated by the source", or "inferred from the team's name" — shown, never hidden.
+        public let basis: String?
+    }
+    public struct Team: Decodable, Sendable, Equatable, Identifiable {
+        public let teamId: UUID
+        public let name: String
+        public let venue: Venue?
+        public var id: UUID { teamId }
+    }
+    public struct Division: Decodable, Sendable, Equatable, Identifiable {
+        public let divisionId: UUID
+        public let name: String
+        public let ordinal: Int
+        public let teams: [Team]
+        public var id: UUID { divisionId }
+    }
+    public struct Season: Decodable, Sendable, Equatable, Identifiable {
+        public let leagueSeasonId: UUID
+        public let label: String
+        public let startsOn: String
+        public let endsOn: String
+        public let current: Bool
+        public let divisions: [Division]
+        public var id: UUID { leagueSeasonId }
+    }
+    public let leagueId: UUID
+    public let name: String
+    public let shortName: String?
+    public let playsOn: String?
+    public let locality: String?
+    public let sources: [Source]
+    public let seasons: [Season]
+    public var id: UUID { leagueId }
+
+    /// The season to show: the one running today, else the newest.
+    public var shownSeason: Season? { seasons.first(where: \.current) ?? seasons.first }
+}
+
 public struct DiscoveryCard: Decodable, Sendable, Equatable, Identifiable {
     public let eventId: UUID
     public let name: String
@@ -297,6 +351,17 @@ public actor ThroAPI {
         return try (decode(await authorised("GET", path)) as Envelope).sections
     }
 
+    /// The leagues' public front (PD-033): no session needed, so a phone that has never signed in
+    /// can still see who plays where. A locality narrows it to leagues in that town.
+    public func leagues(locality: String? = nil) async throws -> [PublicLeague] {
+        struct Envelope: Decodable { let leagues: [PublicLeague] }
+        var path = "/v1/leagues"
+        if let locality, let q = locality.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) { path += "?locality=\(q)" }
+        let (data, http) = try await send("GET", path, bearer: session?.accessToken)
+        guard http.statusCode == 200 else { throw APIError.status(http.statusCode, String(decoding: data, as: UTF8.self)) }
+        return try (decode(data) as Envelope).leagues
+    }
+
     // MARK: plumbing
 
     /// An authorised call: bearer, one refresh on a 401, and a session that stops being honoured
@@ -375,8 +440,8 @@ public enum Base64URL {
     }
 }
 
-enum Wire {
-    static let decoder: JSONDecoder = {
+public enum Wire {
+    public static let decoder: JSONDecoder = {
         let d = JSONDecoder()
         let withFraction = ISO8601DateFormatter(); withFraction.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
         let plain = ISO8601DateFormatter(); plain.formatOptions = [.withInternetDateTime]

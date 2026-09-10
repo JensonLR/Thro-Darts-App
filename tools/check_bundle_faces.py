@@ -23,6 +23,8 @@ every list, every plist entry and every test still agrees; the app just gets bol
 to. Its licence files are not fonts and are not counted — but their presence is checked, because a
 font shipped without the OFL text it requires is a licence problem rather than a rendering one.
 """
+from __future__ import annotations
+
 import pathlib
 import re
 import struct

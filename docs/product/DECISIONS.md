@@ -1674,3 +1674,36 @@ moment they decline a second credential.
 Adding an email magic-link as a recovery channel is a mail provider, a `recovery` credential kind
 and one route; nothing here forecloses it. It is a founder decision when it comes, because it
 lowers the bar the passkey set.
+
+## PD-033 — The local leagues come in from their own public pages, with their provenance on every row
+
+**Taken by the founder, 2026-09-10** ("you have permission to remove the current teams & players and
+autofill with correct data … start with the local area leagues"). Reversible: an imported row is
+marked as imported and can be replaced by a secretary's own record.
+
+### Decided
+
+THRØ imports the **organisational graph** of local pub leagues — league, season, division, team,
+home venue — from the leagues' own published pages (today: three LeagueRepublic sites — Stockton and
+District Thursday Night, Stockton & District Monday Night Mixed, Redcar and District) and places
+venues from OpenStreetMap. **Nothing about a person is imported.** The team pages list players by
+name and the import does not open them; a player is in THRØ because they chose to be (a claim, with
+consent, and with a minor's consent being a guardian's), never because a website listed them.
+
+Every imported row carries a **source record** (V027): the source, the page, the date it was read and
+the *basis* — "stated by the source", "inferred from the team's name" (a team called *Blue Bell*
+plays at *The Blue Bell*; a strong inference in pub darts and still an inference), or "approximate:
+read from the season label" (LeagueRepublic publishes no season dates on its free tier). The app
+shows the basis. A secretary's own record replaces an inferred one, and the import never overwrites
+a row a person has recorded: a team that already has a home keeps it.
+
+The import is `gradle -p services/api seed`, run after `migrate` as the deploy user, from the seed
+file `tools/pull_leaguerepublic.py` writes; it is idempotent by natural key. The public front is
+`GET /v1/leagues`, which needs no account, and the Discover tab's **Local leagues** screen draws it
+on a map.
+
+### Not decided
+
+Whether to pay for LeagueRepublic's Gold plan (its JSON web services, including fixtures and
+results) or to ask each league's secretary for a data-sharing agreement. The honest route to
+fixtures and results is the secretary: the seed carries names only until one exists.

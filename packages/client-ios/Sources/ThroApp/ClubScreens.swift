@@ -153,14 +153,18 @@ public struct ClubsScreen: View {
     private let badge: (Club) -> Image?
     private let onOpen: (Club) -> Void
     private let onCreate: () -> Void
+    /// Opens the real leagues around here (PD-033). Nil when the build names no server.
+    private let onLeagues: (() -> Void)?
 
     public init(clubs: [Club], badge: @escaping (Club) -> Image? = { _ in nil },
                 onOpen: @escaping (Club) -> Void = { _ in },
-                onCreate: @escaping () -> Void = {}) {
+                onCreate: @escaping () -> Void = {},
+                onLeagues: (() -> Void)? = nil) {
         self.clubs = clubs
         self.badge = badge
         self.onOpen = onOpen
         self.onCreate = onCreate
+        self.onLeagues = onLeagues
     }
 
     public var body: some View {
@@ -169,6 +173,21 @@ public struct ClubsScreen: View {
                    : [TopBar.Action(icon: .plus, label: "Start a team", action: onCreate)])
             ScrollView {
                 VStack(alignment: .leading, spacing: 0) {
+                    if let onLeagues {
+                        Eyebrow("Around here").padding(.top, ThroSpacing.spacing5)
+                        ThroDivider().padding(.top, ThroSpacing.spacing2)
+                        Button(action: onLeagues) {
+                            OrganisationRow(initials: "TS", name: "Local leagues",
+                                            meta: "Stockton, Thornaby and Redcar · teams and where they play",
+                                            accent: ThroColor.throGreen, trailing: nil, image: nil)
+                                .throRowTapTarget()
+                        }
+                        .buttonStyle(ThroPressStyle(radius: ThroSpacing.radiusCard,
+                                                    pressedFill: ThroColor.colorSurfaceSecondary,
+                                                    scales: false))
+                        .accessibilityLabel("Local leagues: the real leagues around here and where their teams play")
+                        ThroDivider()
+                    }
                     if clubs.isEmpty {
                         EmptyState(title: "No teams yet",
                                    message: "Start one and keep its roster and fixtures here. A team or league's front page is public; what is inside it — members, results, announcements — is not.",
@@ -203,7 +222,7 @@ public struct ClubsScreen: View {
                                    fullWidth: true, action: onCreate)
                             .padding(.top, ThroSpacing.spacing4)
                     }
-                    Note("Nothing here has left this phone. Joining somebody else's team needs an account and a connection, and this build has neither.")
+                    Note("Teams you start here stay on this phone until you choose otherwise. Joining somebody else's team needs an account, under Settings → Account and profile.")
                         .padding(.top, ThroSpacing.spaceSectionGap)
                 }
                 .padding(.horizontal, ThroSpacing.spaceScreenGutter)

@@ -1,5 +1,6 @@
 import Foundation
 import SwiftUI
+import ThroNet
 import ThroTokens
 import ThroDesign
 import ThroJournal
@@ -523,6 +524,8 @@ public enum ClubRoute: Equatable {
     case newTeam(String)
     /// Saying what happened in a fixture, and where that came from (PD-020).
     case result(club: String, fixture: String)
+    /// The real leagues around here, from the server's public front (PD-033): who plays where.
+    case leagues
 }
 
 /// The Clubs tab.
@@ -533,10 +536,14 @@ public struct ClubsFlow: View {
     /// moment it lands, so a player who then taps Back is not sent to the same place again by the
     /// next re-evaluation.
     @Binding private var open: ClubLanding?
+    /// The server, when the build names one. The local leagues screen reads its public front; with
+    /// no server the row is not offered, rather than offered and failing.
+    private let api: ThroAPI?
 
-    public init(store: ClubStore, open: Binding<ClubLanding?> = .constant(nil)) {
+    public init(store: ClubStore, open: Binding<ClubLanding?> = .constant(nil), api: ThroAPI? = nil) {
         self.store = store
         self._open = open
+        self.api = api
     }
 
     /// Opens what was asked for, and forgets the request.
@@ -611,8 +618,12 @@ public struct ClubsFlow: View {
                 ClubsScreen(clubs: store.clubs,
                             badge: { store.image($0.badgeAssetId) },
                             onOpen: { route = .club($0.id) },
-                            onCreate: { route = .newClub })
+                            onCreate: { route = .newClub },
+                            onLeagues: api == nil ? nil : { route = .leagues })
             }
+
+        case .leagues:
+            LeaguesScreen(api: api, onBack: { route = .list })
 
         case .newClub:
             NewClubScreen(onBack: { route = .list }) { name, kind, accent, shape, unit in
