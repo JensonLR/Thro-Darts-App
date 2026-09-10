@@ -2451,3 +2451,27 @@ whole-row UPDATE grant on the account, which let the application rewrite the two
 honest by trigger, is now the four columns it legitimately writes. The plan's acceptance row that
 had said "rate-limit-ready" now says rate limiting is not built and not claimed. Thirty-eight
 properties, and one more without a database. The test for control characters in a name found one more: the hand-rolled JSON parser had never decoded `\uXXXX` escapes, so a name sent that way would have been stored as backslash text; it decodes every escape now.
+
+## Passkeys, and a runbook with the names in it
+
+PD-030's fallback. `WebAuthn.kt` is the registration and assertion ceremonies with no library: a
+CBOR reader that accepts exactly what an attestation object and a COSE key need and refuses the
+rest, the client data checked for type, challenge and origin, the authenticator data for the
+relying-party hash, user presence, user verification, the credential and its key, and — for an
+assertion — the counter advancing and the signature over authenticator data and client-data hash.
+ES256 and RS256 are accepted; the attestation statement is deliberately not, because THRØ asks for
+`none` and which make of authenticator holds the key is not its business. A challenge (V025) is
+thirty-two stored random bytes, five minutes, spent once, bound to the device that asked; a
+registration challenge issued to an account cannot be finished by an anonymous caller. The test is
+the authenticator: it holds a P-256 key, builds every byte, signs, and then gets each thing wrong in
+turn — origin, verification flag, relying party, a stale counter, another key, a spent challenge, an
+old one — twenty properties.
+
+Recovery is decided with it, as PD-030 said it would be, and it is a second way in (PD-032): a
+second passkey or a provider added from a session, the profile reporting how many ways in the
+person has, and no email or SMS channel, because neither exists and a channel weaker than the
+credential it recovers is the surface passkeys were meant to remove. This host serves the Apple
+association file for its passkeys from the configured app ids, and the server reads `DATABASE_URL`
+as platforms set it, so `fly postgres attach` is enough; the release step migrates as the superuser
+and grants the app's own user the application roles. `docs/runbooks/DEPLOY.md` now names the apps,
+the database and every secret, and gives the seven staging steps in the order they run.

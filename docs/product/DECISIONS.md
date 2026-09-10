@@ -1625,3 +1625,29 @@ It unblocks staging and the two-device sync release check. Local and CI work nev
 
 Low: one image and one database dump move to any of the alternatives considered (Render, Railway,
 AWS App Runner with RDS).
+
+## PD-032 — Recovery for the passkey path is a second way in
+
+**Taken on delegated authority, 2026-09-10.** Reversible by adding a channel.
+
+### Decided
+
+A person who signed up with a passkey recovers access by having **more than one credential on the
+account**: a second passkey (which iCloud Keychain gives most people for free, across their devices),
+or Sign in with Apple or Google added to the same account. Adding is done from a signed-in session —
+`POST /v1/auth/passkey/register/options` with a bearer token adds a passkey to that account, and
+`POST /v1/auth/apple` or `/google` with a bearer token binds an unclaimed provider subject to it —
+and the profile reports how many ways in the person has, so the client can say "you have one way
+into this account" and offer a second before it is needed.
+
+There is **no email or SMS recovery**. Neither channel exists in the platform (no mail provider is
+chosen, phone is a poor sole factor per ADR-008), and a recovery channel weaker than the credential
+it recovers is the account-takeover surface passkeys were meant to remove. A person with a single
+passkey and no provider who loses every device has lost the account, and the client says so at the
+moment they decline a second credential.
+
+### Reversal
+
+Adding an email magic-link as a recovery channel is a mail provider, a `recovery` credential kind
+and one route; nothing here forecloses it. It is a founder decision when it comes, because it
+lowers the bar the passkey set.

@@ -3,9 +3,10 @@ package thro.api.http
 import io.ktor.server.cio.CIO
 import io.ktor.server.engine.embeddedServer
 import java.sql.Connection
-import java.sql.DriverManager
+import thro.api.Db
 import thro.api.HttpJwkSource
 import thro.api.Provider
+import thro.api.RelyingParty
 
 /**
  * `gradle -p services/api serve`. Refuses to start without an authenticator, and the only one that
@@ -14,12 +15,14 @@ import thro.api.Provider
  */
 public fun main() {
     val env: (String) -> String? = { System.getenv(it)?.takeIf { v -> v.isNotBlank() } }
-    val connect: () -> Connection = {
-        DriverManager.getConnection(
-            "jdbc:postgresql://${env("PGHOST") ?: "localhost"}:${env("PGPORT") ?: "5432"}/${env("PGDATABASE") ?: "postgres"}",
-            env("PGUSER") ?: "postgres", env("PGPASSWORD") ?: "",
-        )
-    }
+    val target = Db.target(env)
+    val connect: () -> Connection = { Db.connect(target) }
+    // Passkeys (PD-030's fallback): the relying party is this server's public host. On Fly that is
+    // <app>.fly.dev until a domain is attached; THRO_RP_ID overrides it, THRO_RP_ORIGINS lists the
+    // origins allowed to sign (default https://<rp id>).
+    val rpId = env("THRO_RP_ID") ?: env("FLY_APP_NAME")?.let { "$it.fly.dev" }
+    val rp = rpId?.let { RelyingParty(it, (env("THRO_RP_ORIGINS")?.split(",")?.map(String::trim)?.toSet() ?: setOf("https://$it"))) }
+    val appleAppIds = env("THRO_APPLE_APP_IDS")?.split(",")?.map(String::trim).orEmpty()
     // PD-030: Sign in with Apple and Google, each configured by THRØ's client id at that provider.
     val providers = buildMap {
         env("THRO_APPLE_CLIENT_ID")?.let { put(Provider.APPLE, it) }
@@ -37,7 +40,9 @@ public fun main() {
                 "or, for development only, ${Authenticator.Dev.VARIABLE}=1 to trust the ${Authenticator.Dev.HEADER} header.",
         )
     }
-    if (providers.isEmpty()) System.err.println("note: no sign-in provider configured; /v1/auth/* answer 503")
+    if (providers.isEmpty()) System.err.println("note: no sign-in provider configured; /v1/auth/apple and /v1/auth/google answer 503")
+    if (rp == null) System.err.println("note: no relying party (THRO_RP_ID or FLY_APP_NAME); passkey routes answer 503")
+    else System.err.println("passkeys: relying party ${rp.id}, origins ${rp.origins}")
     val port = env("PORT")?.toIntOrNull() ?: 8080
-    embeddedServer(CIO, port = port) { thro(Deps(connect, authenticator, providers = providers, keys = HttpJwkSource())) }.start(wait = true)
+    embeddedServer(CIO, port = port) { thro(Deps(connect, authenticator, providers = providers, keys = HttpJwkSource(), relyingParty = rp, appleAppIds = appleAppIds)) }.start(wait = true)
 }

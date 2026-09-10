@@ -23,6 +23,9 @@ import thro.api.Grants
 import thro.api.IdTokenVerifier
 import thro.api.JwkSource
 import thro.api.Provider
+import thro.api.RelyingParty
+import thro.api.WebAuthn
+import java.util.Base64
 import thro.api.Matches
 import thro.api.Json
 import thro.api.Migrations
@@ -54,6 +57,10 @@ public class Deps(
     public val providers: Map<Provider, String> = emptyMap(),
     /** Where the providers' keys come from; a test supplies its own. */
     public val keys: JwkSource = JwkSource { _, _ -> null },
+    /** Passkeys: this server's relying party, or null when passkeys are not configured. */
+    public val relyingParty: RelyingParty? = null,
+    /** Apple app ids (TEAMID.bundleid) served in webcredentials, so iOS offers passkeys for this host. */
+    public val appleAppIds: List<String> = emptyList(),
 )
 
 private class Http(val status: Int, val body: String)
@@ -69,9 +76,14 @@ private class Req(val call: ApplicationCall, val body: String, private val deps:
 public fun Application.thro(deps: Deps) {
     val verifier = IdTokenVerifier(deps.keys, deps.now)
     val handlers: Map<String, (Req) -> Http> = mapOf(
-        "auth.apple" to { r -> signIn(r.connection(), deps, verifier, Provider.APPLE, r.body) },
-        "auth.google" to { r -> signIn(r.connection(), deps, verifier, Provider.GOOGLE, r.body) },
+        "auth.apple" to { r -> signIn(r.connection(), deps, verifier, Provider.APPLE, r.body, r.principal) },
+        "auth.google" to { r -> signIn(r.connection(), deps, verifier, Provider.GOOGLE, r.body, r.principal) },
         "auth.refresh" to { r -> refresh(r.connection(), deps, r.body) },
+        "passkey.register.options" to { r -> passkeyRegisterOptions(r.connection(), deps, r.principal, r.body) },
+        "passkey.register" to { r -> passkeyRegister(r.connection(), deps, r.principal, r.body) },
+        "passkey.options" to { r -> passkeyOptions(r.connection(), deps, r.body) },
+        "passkey.assert" to { r -> passkeyAssert(r.connection(), deps, r.body) },
+        "aasa" to { _ -> if (deps.appleAppIds.isEmpty()) Http(404, """{"error":"no app ids configured"}""") else Http(200, """{"webcredentials":{"apps":[${deps.appleAppIds.joinToString(",") { Contract.q(it) }}]}}""") },
         "auth.logout" to { r -> Http(200, """{"revoked":${Accounts(r.connection(), deps.now).logout(bearer(r.call) ?: "")}}""") },
         "me" to { r -> profile(r.connection(), deps, r.principal!!) },
         "me.profile" to { r ->
@@ -164,7 +176,7 @@ private fun health(deps: Deps): Http = try {
 private fun bearer(call: ApplicationCall): String? =
     call.request.headers["Authorization"]?.trim()?.takeIf { it.startsWith("Bearer ", ignoreCase = true) }?.substring(7)?.trim()
 
-private fun signIn(c: Connection, deps: Deps, verifier: IdTokenVerifier, provider: Provider, body: String): Http {
+private fun signIn(c: Connection, deps: Deps, verifier: IdTokenVerifier, provider: Provider, body: String, principal: Principal?): Http {
     val clientId = deps.providers[provider] ?: return Http(503, """{"error":${Contract.q("Sign in with ${provider.name.lowercase().replaceFirstChar { it.uppercase() }} is not configured on this server")}}""")
     val m = try { Json.parseObject(body) } catch (e: Exception) { return Http(400, """{"error":"body is not a JSON object"}""") }
     val token = str(m, "idToken")
@@ -172,7 +184,68 @@ private fun signIn(c: Connection, deps: Deps, verifier: IdTokenVerifier, provide
     val nonce = m["nonce"] as? String
     return when (val v = verifier.verify(token, provider, clientId, nonce)) {
         is IdTokenVerifier.Result.Rejected -> Http(401, """{"error":${Contract.q("the ID token was not accepted: " + v.why)}}""")
-        is IdTokenVerifier.Result.Verified -> Http(200, sessionJson(Accounts(c, deps.now).signIn(provider.name.lowercase(), v.claims.subject, device)))
+        // With a bearer token, a subject nobody holds is added to the caller's account (PD-032:
+        // recovery is a second way in); a subject somebody else holds signs that person in as before.
+        is IdTokenVerifier.Result.Verified -> Http(200, sessionJson(Accounts(c, deps.now).signIn(provider.name.lowercase(), v.claims.subject, device, linkTo = principal?.accountId)))
+    }
+}
+
+// --- passkeys (PD-030's fallback, V025) ------------------------------------------------------------
+
+private fun b64u(s: String): ByteArray = try { Base64.getUrlDecoder().decode(s) } catch (e: IllegalArgumentException) { throw IllegalArgumentException("a WebAuthn field is not base64url") }
+private fun b64u(b: ByteArray): String = Base64.getUrlEncoder().withoutPadding().encodeToString(b)
+private fun noPasskeys(): Http = Http(503, """{"error":"passkeys are not configured on this server (no relying party)"}""")
+
+private fun passkeyRegisterOptions(c: Connection, deps: Deps, principal: Principal?, body: String): Http {
+    val rp = deps.relyingParty ?: return noPasskeys()
+    val m = Json.parseObject(body)
+    val device = UUID.fromString(str(m, "deviceId"))
+    val accounts = Accounts(c, deps.now)
+    val ch = accounts.newChallenge("register", device, principal?.accountId)
+    val userId = ch.userHandle ?: ch.accountId!!.let { id -> java.nio.ByteBuffer.allocate(16).putLong(id.mostSignificantBits).putLong(id.leastSignificantBits).array() }
+    val name = principal?.accountId?.let { accounts.profile(it)?.displayName } ?: Accounts.PLACEHOLDER_NAME
+    return Http(200, """{"challengeId":"${ch.id}","publicKey":{"rp":{"id":${Contract.q(rp.id)},"name":${Contract.q(rp.name)}},"user":{"id":${Contract.q(b64u(userId))},"name":${Contract.q(name)},"displayName":${Contract.q(name)}},"challenge":${Contract.q(b64u(ch.bytes))},"pubKeyCredParams":[{"type":"public-key","alg":-7},{"type":"public-key","alg":-257}],"authenticatorSelection":{"residentKey":"required","userVerification":"required"},"attestation":"none","timeout":300000}}""")
+}
+
+private fun passkeyRegister(c: Connection, deps: Deps, principal: Principal?, body: String): Http {
+    val rp = deps.relyingParty ?: return noPasskeys()
+    val m = Json.parseObject(body)
+    val device = UUID.fromString(str(m, "deviceId"))
+    val accounts = Accounts(c, deps.now)
+    val ch = accounts.takeChallenge(UUID.fromString(str(m, "challengeId")), "register", device)
+        ?: return Http(401, """{"error":"the registration was not accepted: unknown, expired or already used challenge"}""")
+    // The challenge decided whose passkey this is when it was issued; a bearer presented now does not change that.
+    if (ch.accountId != null && ch.accountId != principal?.accountId) return Http(401, """{"error":"the registration was not accepted: this challenge belongs to another account"}""")
+    val credentialId = b64u(str(m, "credentialId"))
+    return when (val r = WebAuthn.register(b64u(str(m, "clientDataJSON")), b64u(str(m, "attestationObject")), ch.bytes, rp)) {
+        is WebAuthn.Outcome.Bad -> Http(401, """{"error":${Contract.q("the registration was not accepted: " + r.why)}}""")
+        is WebAuthn.Outcome.Ok -> {
+            if (!r.value.credentialId.contentEquals(credentialId)) return Http(401, """{"error":"the registration was not accepted: credential id does not match the authenticator data"}""")
+            if (accounts.passkey(credentialId) != null) return Http(401, """{"error":"the registration was not accepted: this passkey is already registered"}""")
+            Http(200, sessionJson(accounts.registerPasskey(ch.accountId, r.value.credentialId, r.value.publicKeyCose, r.value.signCount, device)))
+        }
+    }
+}
+
+private fun passkeyOptions(c: Connection, deps: Deps, body: String): Http {
+    val rp = deps.relyingParty ?: return noPasskeys()
+    val device = UUID.fromString(str(Json.parseObject(body), "deviceId"))
+    val ch = Accounts(c, deps.now).newChallenge("assert", device)
+    return Http(200, """{"challengeId":"${ch.id}","publicKey":{"challenge":${Contract.q(b64u(ch.bytes))},"rpId":${Contract.q(rp.id)},"userVerification":"required","timeout":300000}}""")
+}
+
+private fun passkeyAssert(c: Connection, deps: Deps, body: String): Http {
+    val rp = deps.relyingParty ?: return noPasskeys()
+    val m = Json.parseObject(body)
+    val device = UUID.fromString(str(m, "deviceId"))
+    val accounts = Accounts(c, deps.now)
+    val ch = accounts.takeChallenge(UUID.fromString(str(m, "challengeId")), "assert", device)
+        ?: return Http(401, """{"error":"the sign-in was not accepted: unknown, expired or already used challenge"}""")
+    val passkey = accounts.passkey(b64u(str(m, "credentialId")))
+        ?: return Http(401, """{"error":"the sign-in was not accepted: unknown passkey"}""")
+    return when (val r = WebAuthn.assert(b64u(str(m, "clientDataJSON")), b64u(str(m, "authenticatorData")), b64u(str(m, "signature")), ch.bytes, rp, passkey.publicKeyCose, passkey.signCount)) {
+        is WebAuthn.Outcome.Bad -> Http(401, """{"error":${Contract.q("the sign-in was not accepted: " + r.why)}}""")
+        is WebAuthn.Outcome.Ok -> Http(200, sessionJson(accounts.signInWithPasskey(passkey, r.value, device)))
     }
 }
 
@@ -193,7 +266,7 @@ private fun sessionJson(s: Accounts.Session): String =
 private fun profile(c: Connection, deps: Deps, p: Principal): Http {
     val account = p.accountId ?: return Http(200, """{"accountId":null,"playerId":"${p.subject}","displayName":null,"named":false,"ageBand":"unknown","note":"development principal: no account"}""")
     val pr = Accounts(c, deps.now).profile(account) ?: return Http(404, """{"error":"no such account"}""")
-    return Http(200, """{"accountId":"${pr.accountId}","playerId":${pr.playerId?.let { "\"$it\"" } ?: "null"},"displayName":${Contract.q(pr.displayName)},"named":${pr.named},"ageBand":${Contract.q(pr.ageBand)}}""")
+    return Http(200, """{"accountId":"${pr.accountId}","playerId":${pr.playerId?.let { "\"$it\"" } ?: "null"},"displayName":${Contract.q(pr.displayName)},"named":${pr.named},"ageBand":${Contract.q(pr.ageBand)},"credentials":${pr.credentials}}""")
 }
 
 // --- the one command endpoint -------------------------------------------------------------------

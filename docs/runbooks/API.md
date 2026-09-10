@@ -32,6 +32,17 @@ which is an audit trail today and a partitioning-and-retention decision before r
 generate a nonce per sign-in, hand it to the provider SDK, and send it with the token; a token that
 carries a nonce is refused without it.
 
+**Passkeys** (the fallback, PD-030) need a relying party: the public host the app talks to.
+On Fly it is `<app>.fly.dev` by default (from `FLY_APP_NAME`); `THRO_RP_ID` overrides it and
+`THRO_RP_ORIGINS` lists the origins allowed to sign (default `https://<rp id>`). iOS offers a
+passkey for a host only when that host serves `/.well-known/apple-app-site-association` naming
+the app: set `THRO_APPLE_APP_IDS=<TEAMID>.<bundle id>` and the server serves it, and the app's
+Associated Domains entitlement carries `webcredentials:<rp id>`. The four routes are
+`/v1/auth/passkey/register/options` and `/register` (create; with a bearer token, add to that
+account), `/v1/auth/passkey/options` and `/v1/auth/passkey` (sign in). A challenge is spent once
+within five minutes by the device that asked. Recovery is a second way in (PD-032): the profile's
+`credentials` count tells the client whether to offer one.
+
 For local work there is also the **development**
 authenticator, which trusts an `X-Thro-Dev-Subject: <uuid>` header — that is, it trusts anyone who
 can reach the port — and cannot be constructed unless `THRO_DEV_AUTH=1` is set **and** `PGHOST` is
@@ -51,6 +62,9 @@ routes are mounted from. In brief:
 | Route | Who | What |
 |---|---|---|
 | `POST /v1/auth/apple`, `/v1/auth/google` | anyone, with the provider's ID token | Sign in; creates the account, player and claim on first sight (PD-030) |
+| `POST /v1/auth/passkey/register/options`, `/register` | anyone; with a bearer, the caller's account | Create a passkey (WebAuthn registration) |
+| `POST /v1/auth/passkey/options`, `/v1/auth/passkey` | anyone, with the passkey | Sign in with a passkey (WebAuthn assertion) |
+| `GET /.well-known/apple-app-site-association` | anyone | webcredentials for the configured app ids |
 | `POST /v1/auth/refresh` | anyone, with a refresh token | Rotates it; reuse revokes the family |
 | `POST /v1/auth/logout` | principal | Revokes the session family |
 | `GET /v1/me`, `PUT /v1/me/profile` | principal | Who am I; set my display name |
@@ -72,6 +86,6 @@ THRO_WRITE_OPENAPI=1 gradle -p services/api test --tests 'thro.api.HttpTest'
 
 ## Not built
 
-SSE fan-out (ADR-007 streams and heartbeat), passkeys as the fallback sign-in (PD-030's next
-slice, with recovery), rate limiting on the sign-in routes, a client generated from the schema
-(ADR-001's acceptance condition, waiting on the organiser console).
+SSE fan-out (ADR-007 streams and heartbeat), rate limiting on the sign-in routes, email recovery
+(PD-032 says why not yet), a client generated from the schema (ADR-001's acceptance condition,
+waiting on the organiser console).

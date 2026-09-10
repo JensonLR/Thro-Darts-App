@@ -1,6 +1,6 @@
 # THRØ — Connected Platform Execution Plan
 
-**Date:** 2026-09-10 · **Status:** Phases A, B2, D, E's read model, C's store and the HTTP layer delivered; FB-1 and FB-2 decided (PD-030, PD-031); B3's account and session core in progress under §12d; passkeys, C's surface, E's surface and F follow · **Precedence:** rank 4 (product/domain
+**Date:** 2026-09-10 · **Status:** Phases A, B2, D, E's read model, C's store and the HTTP layer delivered; FB-1 and FB-2 decided (PD-030, PD-031); B3 delivered under §12d (Apple/Google sign-in, sessions, passkeys); C's surface, E's surface and F follow · **Precedence:** rank 4 (product/domain
 specification), below the founder's instructions and the decision register, above the ADRs it cites.
 
 This plan reconciles the repository as it stands with the founder's product conclusions for the
@@ -460,7 +460,7 @@ Deferred, recorded: a payload gate for result submissions that carry lineups (no
 until Phase C); a `transport_evidence_rule` table when the second adapter arrives; `lapsed` as a
 league decision with a reason, not a payment flag (OD-009).
 
-## 12d. Acceptance criteria — Phase B3, accounts and sessions (PD-030), written before the code; rows 1–9 delivered (V023, V024, `AuthTest`, 38 + 1 properties)
+## 12d. Acceptance criteria — Phase B3, accounts and sessions (PD-030), written before the code; rows 1–10 delivered (V023–V025; `AuthTest` 38 + 1, `PasskeyTest` 20)
 
 | # | Property | Held by |
 |---|---|---|
@@ -473,7 +473,7 @@ league decision with a reason, not a payment flag (OD-009).
 | 7 | The server refuses to start with neither the development authenticator nor a provider client id configured; with a provider configured, the bearer authenticator is the only one | `Main.kt`, held by review |
 | 8 | A sign-in route is unauthenticated and its body is bounded before it is parsed; every other new route requires a principal (logout, profile and `/v1/me` are each held); an invented key id cannot make THRØ fetch the provider's keys more than once a minute; rate limiting is not built and not claimed | `AuthTest` |
 | 9 | Display name is set by the person, never taken from the provider's token unless they say so; a new account's name is a placeholder until they set it | `AuthTest` |
-| 10 | Passkeys (WebAuthn) as the fallback: registration and assertion in the Kotlin service, recovery decided with it — **next slice**, not claimed here | — |
+| 10 | Passkeys (WebAuthn) as the fallback: registration (client data type, challenge, origin; authenticator data relying-party hash, user presence and verification, credential and COSE key; ES256/RS256; attestation none) and assertion (all of that, sign count advancing, signature over authenticator data and client data hash) in the Kotlin service with no library; a challenge is 32 stored random bytes, five minutes, spent once, bound to the device that asked; a second passkey or a provider is added from a session, and a challenge issued to an account cannot be finished anonymously; recovery is a second way in (PD-032) — **delivered** (V025, `PasskeyTest`, 20 properties) | `PasskeyTest` |
 
 ## 12c. Acceptance criteria — Phase E read model, delivered
 

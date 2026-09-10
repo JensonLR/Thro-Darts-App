@@ -39,17 +39,22 @@ public class Accounts(
         public data object Expired : Refreshed
     }
 
-    public data class Profile(val accountId: UUID, val playerId: UUID?, val displayName: String, val ageBand: String, val named: Boolean)
+    public data class Profile(val accountId: UUID, val playerId: UUID?, val displayName: String, val ageBand: String, val named: Boolean, val credentials: Int)
 
     public companion object {
         public val ACCESS_TTL: Duration = Duration.ofMinutes(15)
         public val REFRESH_TTL: Duration = Duration.ofDays(30)
+        public val CHALLENGE_TTL: Duration = Duration.ofMinutes(5)
         /** What a new account is called until the person says otherwise (§12d #9). */
         public const val PLACEHOLDER_NAME: String = "New player"
     }
 
-    /** Signs in the holder of a verified provider subject on [deviceId]; creates the account on first sight. */
-    public fun signIn(kind: String, subject: String, deviceId: UUID): Session = transaction {
+    /**
+     * Signs in the holder of a verified provider subject on [deviceId]; creates the account on first
+     * sight. With [linkTo], a subject nobody holds is bound to that account instead — how a person
+     * who started with a passkey adds Apple or Google, which is the recovery path PD-032 decides.
+     */
+    public fun signIn(kind: String, subject: String, deviceId: UUID, linkTo: UUID? = null): Session = transaction {
         var created = false
         // Two first sign-ins with one subject at once — the double tap every mobile flow produces —
         // take turns here, so the second finds the account the first created instead of failing on
@@ -70,25 +75,103 @@ public class Accounts(
             }
         }
         if (accountId == null) {
-            created = true
-            accountId = UUID.randomUUID()
-            // created_via 'self' makes V016's trigger record the person's own consent at creation.
-            connection.prepareStatement("INSERT INTO identity.account (account_id, display_name, created_via) VALUES (?, ?, 'self')")
-                .use { ps -> ps.setObject(1, accountId); ps.setString(2, PLACEHOLDER_NAME); ps.executeUpdate() }
-            val orgs = Organisations(connection)
-            val playerId = orgs.createPlayer(source = "self", by = accountId)
-            orgs.claim(playerId, accountId, method = "self_created")
+            accountId = linkTo ?: newAccount().also { created = true }
             credentialId = UUID.randomUUID()
             connection.prepareStatement("INSERT INTO identity.credential (credential_id, account_id, kind, subject) VALUES (?, ?, ?, ?)")
                 .use { ps -> ps.setObject(1, credentialId); ps.setObject(2, accountId); ps.setString(3, kind); ps.setString(4, subject); ps.executeUpdate() }
         }
         connection.prepareStatement("UPDATE identity.credential SET last_used_at = ? WHERE credential_id = ?")
             .use { ps -> ps.setObject(1, Timestamp.from(now())); ps.setObject(2, credentialId); ps.executeUpdate() }
+        openFamily(credentialId!!, accountId!!, deviceId, created)
+    }
+
+    /** An account, its player and the claim binding them, in this transaction. */
+    private fun newAccount(): UUID {
+        val accountId = UUID.randomUUID()
+        // created_via 'self' makes V016's trigger record the person's own consent at creation.
+        connection.prepareStatement("INSERT INTO identity.account (account_id, display_name, created_via) VALUES (?, ?, 'self')")
+            .use { ps -> ps.setObject(1, accountId); ps.setString(2, PLACEHOLDER_NAME); ps.executeUpdate() }
+        val orgs = Organisations(connection)
+        val playerId = orgs.createPlayer(source = "self", by = accountId)
+        orgs.claim(playerId, accountId, method = "self_created")
+        return accountId
+    }
+
+    // --- passkeys (V025) -----------------------------------------------------------------------
+
+    public data class Challenge(val id: UUID, val bytes: ByteArray, val accountId: UUID?, val userHandle: ByteArray?)
+
+    /** A fresh ceremony: 32 random bytes, five minutes, once. [accountId] when a passkey is added to an account. */
+    public fun newChallenge(kind: String, deviceId: UUID, accountId: UUID? = null): Challenge {
+        val id = UUID.randomUUID()
+        val bytes = ByteArray(32).also(random::nextBytes)
+        val handle = if (kind == "register" && accountId == null) ByteArray(32).also(random::nextBytes) else null
+        connection.prepareStatement(
+            "INSERT INTO identity.webauthn_challenge (challenge_id, kind, challenge, account_id, user_handle, device_id, expires_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
+        ).use { ps ->
+            ps.setObject(1, id); ps.setString(2, kind); ps.setBytes(3, bytes); ps.setObject(4, accountId); ps.setBytes(5, handle)
+            ps.setObject(6, deviceId); ps.setObject(7, Timestamp.from(now().plus(CHALLENGE_TTL))); ps.executeUpdate()
+        }
+        return Challenge(id, bytes, accountId, handle)
+    }
+
+    /** Spends a challenge: null when it is unknown, of another kind, expired, already used, or another device's. */
+    public fun takeChallenge(id: UUID, kind: String, deviceId: UUID): Challenge? = transaction {
+        val row = connection.prepareStatement(
+            "SELECT challenge, account_id, user_handle, expires_at, used_at, device_id FROM identity.webauthn_challenge WHERE challenge_id = ? AND kind = ? FOR UPDATE",
+        ).use { ps ->
+            ps.setObject(1, id); ps.setString(2, kind)
+            ps.executeQuery().use { rs -> if (rs.next()) listOf(rs.getBytes(1), rs.getObject(2), rs.getBytes(3), rs.getTimestamp(4).toInstant(), rs.getTimestamp(5), rs.getObject(6)) else return@transaction null }
+        }
+        if (row[4] != null || (row[3] as Instant).isBefore(now()) || row[5] != deviceId) return@transaction null
+        connection.prepareStatement("UPDATE identity.webauthn_challenge SET used_at = ? WHERE challenge_id = ?")
+            .use { ps -> ps.setObject(1, Timestamp.from(now())); ps.setObject(2, id); ps.executeUpdate() }
+        Challenge(id, row[0] as ByteArray, row[1] as UUID?, row[2] as ByteArray?)
+    }
+
+    /** Stores a verified passkey — on [accountId], or on a new account — and opens a session. */
+    public fun registerPasskey(accountId: UUID?, credentialId: ByteArray, publicKeyCose: ByteArray, signCount: Long, deviceId: UUID): Session = transaction {
+        val subject = Base64.getUrlEncoder().withoutPadding().encodeToString(credentialId)
+        val account = accountId ?: newAccount()
+        val id = UUID.randomUUID()
+        connection.prepareStatement(
+            "INSERT INTO identity.credential (credential_id, account_id, kind, subject, public_key, sign_count) VALUES (?, ?, 'passkey', ?, ?, ?)",
+        ).use { ps -> ps.setObject(1, id); ps.setObject(2, account); ps.setString(3, subject); ps.setBytes(4, publicKeyCose); ps.setLong(5, signCount); ps.executeUpdate() }
+        openFamily(id, account, deviceId, created = accountId == null)
+    }
+
+    public data class Passkey(val credentialId: UUID, val accountId: UUID, val publicKeyCose: ByteArray, val signCount: Long)
+
+    public fun passkey(credentialId: ByteArray): Passkey? =
+        connection.prepareStatement(
+            """
+            SELECT c.credential_id, c.account_id, c.public_key, c.sign_count FROM identity.credential c
+              JOIN identity.account a ON a.account_id = c.account_id AND a.deleted_at IS NULL
+             WHERE c.kind = 'passkey' AND c.subject = ? AND c.revoked_at IS NULL
+            """.trimIndent(),
+        ).use { ps ->
+            ps.setString(1, Base64.getUrlEncoder().withoutPadding().encodeToString(credentialId))
+            ps.executeQuery().use { rs -> if (rs.next()) Passkey(rs.getObject(1) as UUID, rs.getObject(2) as UUID, rs.getBytes(3), rs.getLong(4)) else null }
+        }
+
+    /** A verified assertion: the counter moves on and a session opens. */
+    public fun signInWithPasskey(passkey: Passkey, newSignCount: Long, deviceId: UUID): Session = transaction {
+        connection.prepareStatement("UPDATE identity.credential SET sign_count = ?, last_used_at = ? WHERE credential_id = ?")
+            .use { ps -> ps.setLong(1, newSignCount); ps.setObject(2, Timestamp.from(now())); ps.setObject(3, passkey.credentialId); ps.executeUpdate() }
+        openFamily(passkey.credentialId, passkey.accountId, deviceId, created = false)
+    }
+
+    private fun openFamily(credentialId: UUID, accountId: UUID, deviceId: UUID, created: Boolean): Session {
         val familyId = UUID.randomUUID()
         connection.prepareStatement("INSERT INTO identity.session_family (family_id, account_id, credential_id, device_id) VALUES (?, ?, ?, ?)")
             .use { ps -> ps.setObject(1, familyId); ps.setObject(2, accountId); ps.setObject(3, credentialId); ps.setObject(4, deviceId); ps.executeUpdate() }
-        issue(familyId, accountId!!, created)
+        return issue(familyId, accountId, created)
     }
+
+    /** How many live credentials an account has — the recovery question PD-032 asks. */
+    public fun credentialCount(accountId: UUID): Int =
+        connection.prepareStatement("SELECT count(*) FROM identity.credential WHERE account_id = ? AND revoked_at IS NULL")
+            .use { ps -> ps.setObject(1, accountId); ps.executeQuery().use { rs -> rs.next(); rs.getInt(1) } }
 
     public fun refresh(refreshToken: String): Refreshed = transaction {
         val hash = sha256(refreshToken)
@@ -159,7 +242,7 @@ public class Accounts(
             """.trimIndent(),
         ).use { ps ->
             ps.setObject(1, accountId)
-            ps.executeQuery().use { rs -> if (rs.next()) Profile(accountId, rs.getObject(3) as UUID?, rs.getString(1), rs.getString(2), rs.getString(1) != PLACEHOLDER_NAME) else null }
+            ps.executeQuery().use { rs -> if (rs.next()) Profile(accountId, rs.getObject(3) as UUID?, rs.getString(1), rs.getString(2), rs.getString(1) != PLACEHOLDER_NAME, credentialCount(accountId)) else null }
         }
 
     public fun setDisplayName(accountId: UUID, name: String) {
