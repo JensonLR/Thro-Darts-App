@@ -1,3 +1,4 @@
+import CoreLocation
 import XCTest
 @testable import ThroApp
 import ThroNet
@@ -80,5 +81,25 @@ final class NearbyTests: XCTestCase {
         XCTAssertTrue(far?.hasPrefix("You are 2") == true && far!.contains("Showing Teesside"), far ?? "nil")
         XCTAssertNil(LeaguesPlot.farAway(place: .located(lat: 54.5645, lon: -1.3187), pins: LeaguesPlot.plotted([l])))
         XCTAssertNil(LeaguesPlot.farAway(place: .unknown, pins: LeaguesPlot.plotted([l])))
+    }
+}
+
+extension NearbyTests {
+    func testPinsATheThumbApartBecomeOneMarkerUntilYouZoomIn() {
+        func pin(_ name: String, _ lat: Double, _ lon: Double) -> PlottedVenue {
+            PlottedVenue(id: UUID(), name: name, postcode: nil, locality: nil, coordinate: CLLocationCoordinate2D(latitude: lat, longitude: lon), teams: [name], inferred: false)
+        }
+        // Three Portrack pubs within 400 m, one in Yarm 7 km away.
+        let pins = [pin("Hoptimist", 54.5617, -1.3145), pin("Thomas Sheraton", 54.5614, -1.3132), pin("Sun Inn", 54.5656, -1.3119), pin("Golden Jubilee", 54.4968, -1.3435)]
+        // Zoomed out: the whole borough across the phone.
+        let far = LeaguesPlot.clustered(pins, degreesPerPoint: 0.15 / 400)
+        XCTAssertEqual(far.map(\.count), [3, 1], "the three neighbours are one marker; Yarm stands alone")
+        XCTAssertEqual(far[0].pins.map(\.name), ["Hoptimist", "Thomas Sheraton", "Sun Inn"])
+        // Zoomed in on Portrack: they come apart.
+        let near = LeaguesPlot.clustered(pins, degreesPerPoint: 0.004 / 400)
+        XCTAssertEqual(near.count, 4)
+        // Order is stable, so markers do not shuffle between frames.
+        XCTAssertEqual(LeaguesPlot.clustered(pins, degreesPerPoint: 0.15 / 400).map(\.id), far.map(\.id))
+        XCTAssertEqual(LeaguesPlot.clustered(pins, degreesPerPoint: 0).count, 4, "no scale yet: every pin its own marker")
     }
 }

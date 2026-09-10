@@ -2773,3 +2773,14 @@ happened; the next time the name is typed it starts a new history.
 account screen asks *I am 18 or over* once and offers Friends; the Friends screen shows the code on
 a slate big enough to read across a table, shares it, takes one, lists who you have, and shows the
 server's own sentence for every refusal. Tests: FriendsTest (2), HTTP 31 properties, 618 client.
+
+## You as the profile, and pins that gather
+
+The You tab opens on a slate that is the account: who you are, your age band, how many friends,
+with FRIENDS and ACCOUNT on it — or, signed out, the door in. The old "not in this build" note that
+said the app had no network code came off; it had stopped being true. The account screen can be
+opened straight on Friends. On the leagues map, pins closer than a thumb's width at the current
+scale gather into one marker with a count, and a tap zooms in until they come apart; clustering
+is deterministic so markers do not shuffle between frames. Tests: FriendsTests (7) drive the
+store against a scripted server and assert every refusal arrives as the server's sentence;
+clustering has its own; 626 client.

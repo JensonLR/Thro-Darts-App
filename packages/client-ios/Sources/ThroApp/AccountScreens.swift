@@ -18,9 +18,13 @@ public struct AccountScreen: View {
 
     private enum Sub { case inbox, discovery, friends }
 
-    public init(account: AccountStore, onBack: @escaping () -> Void) {
+    /// Where the account screen may be asked to open: on its own front, or straight on Friends.
+    public enum Opening { case account, friends }
+
+    public init(account: AccountStore, opening: Opening = .account, onBack: @escaping () -> Void) {
         self.account = account
         self.onBack = onBack
+        self._showing = State(initialValue: opening == .friends ? .friends : nil)
     }
 
     public var body: some View {

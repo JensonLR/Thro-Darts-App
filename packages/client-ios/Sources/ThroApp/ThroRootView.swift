@@ -286,6 +286,8 @@ public struct ThroRootView: View {
     @AppStorage(Appearance.storageKey) private var appearanceRaw: String = Appearance.system.rawValue
     @State private var showingSettings = false
     @State private var showingAccount = false
+    /// The You tab's Friends button opens the account screen on Friends rather than on its front.
+    @State private var openingFriends = false
     @StateObject private var accountHolder = AccountHolder()
     /// The person whose page is open, if any. Their figures come from the journal, so this is the
     /// one screen in the app where a statistic is about a person rather than about a match.
@@ -491,7 +493,7 @@ public struct ThroRootView: View {
                          onRemove: { if clubs.deletePerson(person.id) { viewing = nil } })
                 .throAppearance(Appearance(stored: appearanceRaw))
         } else if showingAccount, let account {
-            AccountScreen(account: account) { showingAccount = false }
+            AccountScreen(account: account, opening: openingFriends ? .friends : .account) { showingAccount = false; openingFriends = false }
                 .throAppearance(Appearance(stored: appearanceRaw))
         } else if showingSettings {
             SettingsScreen(onBack: { showingSettings = false },
@@ -544,11 +546,14 @@ public struct ThroRootView: View {
                            openClub = ClubLanding(club: club.id, wanted: .fixtures)
                        })
         case .discover: ClubsFlow(store: clubs, open: $openClub, api: account?.api)
-        case .you: YouScreen(clubs: clubs.clubs, people: clubs.people,
+        case .you: YouScreen(account: youAccount, clubs: clubs.clubs, people: clubs.people,
                              badge: { clubs.image($0.badgeAssetId) },
                              onSettings: { showingSettings = true },
+                             onAccount: { showingAccount = true },
+                             onFriends: { openingFriends = true; showingAccount = true },
                              onClubs: { store.tab = .discover },
                              onPerson: { viewing = $0 })
+            .task { if let account, account.isSignedIn, account.friends == nil { await account.loadFriends() } }
         }
     }
 }
@@ -1195,23 +1200,53 @@ public struct PlayLandingScreen: View {
 /// person expects their own things to be — so it is listed here and one tap goes to it. The tab
 /// itself is not renamed: the tab set is the export's.
 public struct YouScreen: View {
+    /// What the You tab knows about the account, flattened so the screen needs no store.
+    public enum Account: Equatable {
+        /// The build names no server.
+        case none
+        case signedOut
+        case busy(String)
+        case signedIn(name: String?, ageBand: String, friends: Int?)
+    }
+
+    private let account: Account
     private let clubs: [Club]
     private let people: [LocalPerson]
     private let onSettings: () -> Void
+    private let onAccount: () -> Void
+    private let onFriends: () -> Void
     private let onClubs: () -> Void
     private let onPerson: (LocalPerson) -> Void
     private let badge: (Club) -> Image?
 
-    public init(clubs: [Club] = [], people: [LocalPerson] = [],
+    public init(account: Account = .none, clubs: [Club] = [], people: [LocalPerson] = [],
                 badge: @escaping (Club) -> Image? = { _ in nil },
                 onSettings: @escaping () -> Void,
+                onAccount: @escaping () -> Void = {}, onFriends: @escaping () -> Void = {},
                 onClubs: @escaping () -> Void = {}, onPerson: @escaping (LocalPerson) -> Void = { _ in }) {
+        self.account = account
         self.badge = badge
         self.clubs = clubs
         self.people = people
         self.onSettings = onSettings
+        self.onAccount = onAccount
+        self.onFriends = onFriends
         self.onClubs = onClubs
         self.onPerson = onPerson
+    }
+
+    /// The slate's words for each state of the account.
+    static func words(_ account: Account) -> (eyebrow: String, title: String, detail: String) {
+        switch account {
+        case .none: return ("You", "This phone", "This build names no server, so what you score stays here.")
+        case .signedOut: return ("You", "Sign in to carry your darts with you", "Your name, your friends and the leagues you join live on your account. Matches scored here stay here either way.")
+        case .busy(let what): return ("You", what, "One moment.")
+        case .signedIn(let name, let band, let friends):
+            let who = name ?? "No name yet"
+            let age = band == "adult" ? "18 or over" : band == "minor" ? "Under 18" : "Age not said yet"
+            let mates = friends.map { $0 == 1 ? "1 friend" : "\($0) friends" } ?? "Friends"
+            return ("You", who, "\(age) · \(mates)")
+        }
     }
 
     public var body: some View {
@@ -1219,11 +1254,7 @@ public struct YouScreen: View {
             TopBar("You", actions: [TopBar.Action(icon: .settings, label: "Settings", action: onSettings)], large: true)
             ScrollView {
                 VStack(alignment: .leading, spacing: 0) {
-                    // **What is here comes first, and what is not comes last.** This screen used to
-                    // open on "Profile not in this build" — a large empty state saying no, above two
-                    // lists of real things the person owns. The sentence is still here and still
-                    // says exactly the same thing; it is at the bottom, where an absence belongs,
-                    // rather than being the first thing a person sees about themselves.
+                    slate.padding(.top, ThroSpacing.spacing4)
                     if !people.isEmpty {
                         Eyebrow("Who plays on this phone").padding(.top, ThroSpacing.spacing6)
                         ThroDivider().padding(.top, ThroSpacing.spacing2)
@@ -1271,12 +1302,8 @@ public struct YouScreen: View {
                             ThroDivider()
                         }
                     }
-                    Eyebrow("Not in this build").padding(.top, ThroSpacing.spaceSectionGap)
-                    Note("**Your profile, your passport and your rating need THRØ's servers.** This "
-                         + "build scores matches and keeps them on the device; nothing else is "
-                         + "connected yet, and there is no network code in the app to connect it. "
-                         + "Settings are behind the gear above.")
-                        .padding(.top, ThroSpacing.spacing3)
+                    Note("Matches scored on this phone stay on it, whoever is signed in. A rating is not in this build: what you see are the figures the darts produced (PD-018).")
+                        .padding(.top, ThroSpacing.spaceSectionGap)
                 }
                 .padding(.horizontal, ThroSpacing.spaceScreenGutter)
                 .padding(.bottom, ThroSpacing.spacing6)
@@ -1284,6 +1311,50 @@ public struct YouScreen: View {
             }
         }
         .background(ThroColor.colorBackgroundPrimary.ignoresSafeArea())
+    }
+
+    /// The account on a slate: who you are here, or the door in.
+    private var slate: some View {
+        let w = YouScreen.words(account)
+        return ThroSlate(seed: 55) {
+            VStack(alignment: .leading, spacing: ThroSpacing.spacing3) {
+                HStack {
+                    Eyebrow(w.eyebrow, color: ThroColor.colorTextOnBoardSecondary)
+                    Spacer()
+                    ThroMark().fill(ThroColor.colorMarkOnBoard).frame(width: 22, height: 22).accessibilityHidden(true)
+                }
+                Text(w.title)
+                    .thro(ThroTypography.heading1.family(.sport).weight(.bold).tracking(em: 0))
+                    .foregroundStyle(ThroColor.colorTextOnBoard)
+                    .fixedSize(horizontal: false, vertical: true)
+                Text(w.detail)
+                    .thro(ThroTypography.body)
+                    .foregroundStyle(ThroColor.colorTextOnBoardSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                switch account {
+                case .signedOut:
+                    slateButton("SIGN IN", lit: true, seed: 11, action: onAccount)
+                case .signedIn:
+                    HStack(spacing: ThroSpacing.spacing3) {
+                        slateButton("FRIENDS", lit: true, seed: 13, action: onFriends)
+                        slateButton("ACCOUNT", lit: false, seed: 17, action: onAccount)
+                    }
+                case .none, .busy:
+                    EmptyView()
+                }
+            }
+            .padding(ThroSpacing.spacing5)
+        }
+    }
+
+    private func slateButton(_ label: String, lit: Bool, seed: Double, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Text(label).thro(ThroTypography.labelStrong.uppercase(true).tracking(em: 0.06))
+                .foregroundStyle(ThroColor.colorTextOnBoard).padding(.horizontal, ThroSpacing.spacing4)
+        }
+        .buttonStyle(ChalkKeyStyle(lit ? .lit : .field, minHeight: ThroSpacing.touchTargetMinimum, seedAngle: seed))
+        .fixedSize()
+        .padding(.top, ThroSpacing.spacing1)
     }
 }
 
@@ -1909,6 +1980,15 @@ final class AccountHolder: ObservableObject {
 
 extension ThroRootView {
     var account: AccountStore? { accountHolder.resolve(journalDeviceId: AppStore.deviceId()) }
+    /// What the You tab shows on its slate.
+    var youAccount: YouScreen.Account {
+        guard let account else { return .none }
+        switch account.state {
+        case .signedIn(let p): return .signedIn(name: p.named ? p.displayName : nil, ageBand: p.ageBand, friends: account.friends?.count)
+        case .busy(let what): return .busy(what)
+        case .failed, .signedOut: return .signedOut
+        }
+    }
     var accountRowValue: String {
         guard let account else { return "This build names no server" }
         switch account.state {

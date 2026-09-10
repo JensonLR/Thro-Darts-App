@@ -84,6 +84,40 @@ public enum LeaguesPlot {
         }
     }
 
+    /// Pins that would sit on top of each other at the map's current scale, gathered into one
+    /// marker with a count. Two pubs on one street are one marker until you zoom in.
+    public struct Cluster: Identifiable, Equatable {
+        public let id: UUID
+        public let coordinate: CLLocationCoordinate2D
+        public let pins: [PlottedVenue]
+        public var count: Int { pins.count }
+        public static func == (a: Cluster, b: Cluster) -> Bool { a.id == b.id && a.pins == b.pins }
+    }
+
+    /// Greedy clustering by screen distance: `degreesPerPoint` is how many degrees of longitude one
+    /// point of the map spans at the current camera; two pins closer than `radius` points join.
+    /// Deterministic for the same input order, so the markers do not shuffle between frames.
+    public static func clustered(_ pins: [PlottedVenue], degreesPerPoint: Double, radius: Double = 22) -> [Cluster] {
+        guard degreesPerPoint > 0 else { return pins.map { Cluster(id: $0.id, coordinate: $0.coordinate, pins: [$0]) } }
+        var out: [(centre: CLLocationCoordinate2D, pins: [PlottedVenue])] = []
+        for pin in pins {
+            let cosLat = max(0.2, cos(pin.coordinate.latitude * .pi / 180))
+            if let i = out.firstIndex(where: { c in
+                let dx = (c.centre.longitude - pin.coordinate.longitude) * cosLat / degreesPerPoint
+                let dy = (c.centre.latitude - pin.coordinate.latitude) / degreesPerPoint
+                return (dx * dx + dy * dy).squareRoot() < radius
+            }) {
+                out[i].pins.append(pin)
+                let n = Double(out[i].pins.count)
+                out[i].centre = CLLocationCoordinate2D(latitude: out[i].pins.map(\.coordinate.latitude).reduce(0, +) / n,
+                                                       longitude: out[i].pins.map(\.coordinate.longitude).reduce(0, +) / n)
+            } else {
+                out.append((pin.coordinate, [pin]))
+            }
+        }
+        return out.map { Cluster(id: $0.pins[0].id, coordinate: $0.centre, pins: $0.pins) }
+    }
+
     /// A region that holds every pin with a margin, or the Tees valley when there is nothing to hold.
     public static func region(_ pins: [PlottedVenue]) -> MKCoordinateRegion {
         guard let first = pins.first else {
@@ -152,6 +186,9 @@ public struct LeaguesScreen: View {
     @State private var selected: UUID?
     @State private var open: Set<UUID> = []
     @State private var framed = false
+    /// Degrees of longitude per point at the current camera, from the last camera change; the
+    /// clustering reads it. Starts at the Tees valley's framing width over a phone's width.
+    @State private var degreesPerPoint: Double = 0.5 / 360
 
     public init(nearby: Nearby, api: ThroAPI?, focus: UUID? = nil, onBack: @escaping () -> Void) {
         self.nearby = nearby
@@ -224,26 +261,59 @@ public struct LeaguesScreen: View {
     }
 
     private func map(_ pins: [PlottedVenue]) -> some View {
-        Map(position: $camera, selection: $selected) {
-            ForEach(pins) { pin in
-                Annotation(pin.name, coordinate: pin.coordinate, anchor: .center) {
-                    // A pin is a small board: the lit stop when chosen, the field otherwise, the
-                    // mark in chalk. Board tokens, so it is the same pin in both appearances.
-                    ZStack {
-                        Circle().fill(pin.id == selected ? ThroColor.colorBoardLit : ThroColor.colorBoardField)
-                        Circle().strokeBorder(ThroColor.colorMarkOnBoard, lineWidth: pin.id == selected ? 3 : 2)
-                        ThroMark().fill(ThroColor.colorMarkOnBoard).padding(pin.id == selected ? 7 : 8)
+        let clusters = LeaguesPlot.clustered(pins, degreesPerPoint: degreesPerPoint)
+        return Map(position: $camera, selection: $selected) {
+            ForEach(clusters) { cluster in
+                if cluster.count == 1, let pin = cluster.pins.first {
+                    Annotation(pin.name, coordinate: pin.coordinate, anchor: .center) {
+                        // A pin is a small board: the lit stop when chosen, the field otherwise, the
+                        // mark in chalk. Board tokens, so it is the same pin in both appearances.
+                        ZStack {
+                            Circle().fill(pin.id == selected ? ThroColor.colorBoardLit : ThroColor.colorBoardField)
+                            Circle().strokeBorder(ThroColor.colorMarkOnBoard, lineWidth: pin.id == selected ? 3 : 2)
+                            ThroMark().fill(ThroColor.colorMarkOnBoard).padding(pin.id == selected ? 7 : 8)
+                        }
+                        .frame(width: pin.id == selected ? 40 : 32, height: pin.id == selected ? 40 : 32)
+                        .accessibilityLabel("\(pin.name), \(pin.teams.count == 1 ? "one team" : "\(pin.teams.count) teams")")
                     }
-                    .frame(width: pin.id == selected ? 40 : 32, height: pin.id == selected ? 40 : 32)
-                    .accessibilityLabel("\(pin.name), \(pin.teams.count == 1 ? "one team" : "\(pin.teams.count) teams")")
+                    .tag(pin.id)
+                } else {
+                    // Several pubs within a thumb of each other: one marker, the count on it, and
+                    // a tap that zooms in until they come apart.
+                    Annotation("\(cluster.count) venues", coordinate: cluster.coordinate, anchor: .center) {
+                        Button { zoom(into: cluster) } label: {
+                            ZStack {
+                                Circle().fill(ThroColor.colorBoardField)
+                                Circle().strokeBorder(ThroColor.colorMarkOnBoard, lineWidth: 2)
+                                Text("\(cluster.count)")
+                                    .thro(ThroTypography.label.family(.sport).weight(.bold))
+                                    .foregroundStyle(ThroColor.colorTextOnBoard)
+                            }
+                            .frame(width: 36, height: 36)
+                            .throTapTarget()
+                        }
+                        .buttonStyle(ThroPressStyle(radius: 22))
+                        .accessibilityLabel("\(cluster.count) venues close together; zooms in")
+                    }
                 }
-                .tag(pin.id)
             }
             if case .located = nearby.place { UserAnnotation() }
         }
         .mapStyle(.standard(pointsOfInterest: .excludingAll))
+        .onMapCameraChange(frequency: .continuous) { context in
+            degreesPerPoint = max(1e-7, context.region.span.longitudeDelta / 400)
+        }
         .frame(height: 300)
         .accessibilityLabel("Map of \(pins.count) venues; tap a pin for its teams")
+    }
+
+    private func zoom(into cluster: LeaguesPlot.Cluster) {
+        let lats = cluster.pins.map(\.coordinate.latitude), lons = cluster.pins.map(\.coordinate.longitude)
+        let span = MKCoordinateSpan(latitudeDelta: max(0.004, ((lats.max() ?? 0) - (lats.min() ?? 0)) * 2.2),
+                                    longitudeDelta: max(0.006, ((lons.max() ?? 0) - (lons.min() ?? 0)) * 2.2))
+        withAnimation(.easeOut(duration: ThroMotion.motionDurationStandard)) {
+            camera = .region(MKCoordinateRegion(center: cluster.coordinate, span: span))
+        }
     }
 
     private func venueCard(_ pin: PlottedVenue) -> some View {
