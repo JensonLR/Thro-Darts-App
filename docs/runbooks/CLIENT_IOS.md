@@ -23,6 +23,18 @@
 
 ## Running it on the phone, step by step
 
+**On a free Apple team — a "Personal Team" in Xcode — the normal configuration will not sign.**
+Apple does not let a personal team use Sign in with Apple, Associated Domains or App Groups, and
+this app carries all three (the group since the Live Activity, the other two since sign-in). Until
+you are in the Apple Developer Program, build with the `Personal` configuration, which grants none
+of them: in Xcode, **Product → Scheme → Edit Scheme… → Run → Info → Build Configuration → Personal**,
+then run. What that costs on the phone: Sign in with Apple and passkeys refuse (they need the
+capabilities), the wall and the widgets have no shared container and show their empty state; **Sign
+in with Google works**, and so does everything else. Enrolling in the Developer Program
+(<https://developer.apple.com/programs/enroll/>) lifts all of it and is a precondition of
+TestFlight and the App Store in any case; afterwards switch the scheme back to `Debug`.
+
+
 Written for someone who has never used Xcode. The phone has already run the durability probe, so the
 Mac, the cable, the Apple ID and the phone's Developer Mode are all known to work; nothing below asks
 for anything new.

@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<!-- The `Personal` build configuration: a free Apple team cannot sign Sign in with Apple, Associated
+     Domains or App Groups, so this file grants none of them. What that costs on the phone: Sign in
+     with Apple and passkeys refuse (Google still works), and the Live Activity's shared container is
+     absent (ThroProjectionStore treats that as the normal case). Every shipping build uses
+     ThroDarts.entitlements and a team in the Apple Developer Program. -->
+<dict/>
+</plist>
