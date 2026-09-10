@@ -149,7 +149,53 @@ public struct MatchSetupScreen: View {
             // One screen. Everything a match needs fits above the fold on the smallest phone at
             // the default text size (MatchSetupLayout holds the arithmetic), so this scrolls only
             // when Dynamic Type makes it taller than the phone — never on its own account.
-            ScrollView {
+            // Two layouts, the first that fits: on a phone with room, the form and under it the
+            // fixture as it will be written, filling the rest of the screen and changing as the
+            // names are typed; on the smallest phone or at large text, the form alone, scrolling
+            // only if Dynamic Type makes it taller than the screen.
+            ViewThatFits(in: .vertical) {
+                VStack(alignment: .leading, spacing: ThroSpacing.spacing3) {
+                    form
+                    ThroFixtureSlate(home: homeName, away: awayName, tags: previewTags)
+                        .frame(maxHeight: .infinity)
+                        .padding(.top, ThroSpacing.spacing2)
+                        .accessibilityHidden(true)
+                }
+                .padding(.top, ThroSpacing.spacing5)
+                .padding(.bottom, ThroSpacing.spacing4)
+                .padding(.horizontal, ThroSpacing.spaceScreenGutter)
+                ScrollView {
+                    form
+                        .padding(.top, ThroSpacing.spacing5)
+                        .padding(.bottom, ThroSpacing.spacing4)
+                        .padding(.horizontal, ThroSpacing.spaceScreenGutter)
+                }
+                .scrollBounceBehavior(.basedOnSize)
+                .scrollDismissesKeyboard(.interactively)
+            }
+            ThroBottomAction {
+                ThroButton("Continue", variant: .primary, size: .large, fullWidth: true) {
+                    onStart(NewMatch(homeName: homeName, awayName: awayName, startingScore: game,
+                                     inRule: inRule, outRule: .double,
+                                     legsMode: .bestOf, legsTarget: length, throwFirst: first))
+                }
+            }
+        }
+        // The screen arrives (PD-027): one beat, on the design's own curve,
+        // withdrawn entirely under Reduce Motion.
+        .throEntrance(0)
+        .background(ThroColor.colorBackgroundPrimary.ignoresSafeArea())
+        .throAppearance(Appearance(stored: appearanceRaw))
+    }
+
+    /// What the slate under the form says: the format as chosen, in the words the ready screen uses.
+    private var previewTags: [String] {
+        var t = ["\(game)", "Best of \(length)", "Double out"]
+        if inRule == .double { t.append("Double in") }
+        return t
+    }
+
+    private var form: some View {
                 VStack(alignment: .leading, spacing: ThroSpacing.spacing3) {
                     if let problem {
                         Snackbar(problem, tone: .error)
@@ -174,27 +220,8 @@ public struct MatchSetupScreen: View {
                     ThroChoiceRow("Game") { SegmentedControl([(301, "301"), (501, "501"), (701, "701")], selection: $game) }
                     ThroChoiceRow("Legs") { SegmentedControl([(3, "Bo3"), (5, "Bo5"), (7, "Bo7"), (9, "Bo9")], selection: $length) }
                     ThroChoiceRow("Start on") { SegmentedControl([(InRule.straight, "Any"), (InRule.double, "Double in")], selection: $inRule) }
-                    ThroChoiceRow("First throw") { SegmentedControl([(Seat.home, homeName), (Seat.away, awayName)], selection: $first) }
+                    ThroChoiceRow("Throws first") { SegmentedControl([(Seat.home, homeName), (Seat.away, awayName)], selection: $first) }
                 }
-                .padding(.top, ThroSpacing.spacing5)
-                .padding(.bottom, ThroSpacing.spacing4)
-                .padding(.horizontal, ThroSpacing.spaceScreenGutter)
-            }
-            .scrollBounceBehavior(.basedOnSize)
-            .scrollDismissesKeyboard(.interactively)
-            ThroBottomAction {
-                ThroButton("Continue", variant: .primary, size: .large, fullWidth: true) {
-                    onStart(NewMatch(homeName: homeName, awayName: awayName, startingScore: game,
-                                     inRule: inRule, outRule: .double,
-                                     legsMode: .bestOf, legsTarget: length, throwFirst: first))
-                }
-            }
-        }
-        // The screen arrives (PD-027): one beat, on the design's own curve,
-        // withdrawn entirely under Reduce Motion.
-        .throEntrance(0)
-        .background(ThroColor.colorBackgroundPrimary.ignoresSafeArea())
-        .throAppearance(Appearance(stored: appearanceRaw))
     }
 
     /// The people not already in either seat. One row serves both fields: a tap fills the home

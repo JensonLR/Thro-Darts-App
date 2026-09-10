@@ -140,8 +140,9 @@ public struct ThroBottomAction<Content: View>: View {
 public struct ThroChoiceRow<Control: View>: View {
     private let label: String
     private let control: Control
-    /// The label column. Wide enough for "Throws first"; fixed so four rows line up.
-    public static var labelWidth: CGFloat { 92 }
+    /// The label column. Wide enough for "THROWS FIRST" on one line at the eyebrow's tracking;
+    /// fixed so four rows line up.
+    public static var labelWidth: CGFloat { 108 }
 
     public init(_ label: String, @ViewBuilder control: () -> Control) {
         self.label = label
