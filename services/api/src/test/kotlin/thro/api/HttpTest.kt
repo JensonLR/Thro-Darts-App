@@ -50,8 +50,29 @@ class HttpTest {
         val match = UUID.randomUUID()
         Matches(c).open(match, home, away, playtestFormat())
 
+        // Every connection a request opens is watched: the first statement on it must be SET ROLE,
+        // and the role must be a module's. ADR-011's per-module roles, held at the wire.
+        val roles = java.util.Collections.synchronizedList(mutableListOf<String>())
+        val bareUse = java.util.concurrent.atomic.AtomicInteger()
+        fun watched(): java.sql.Connection {
+            val real = TestDatabase.connect()
+            var narrowed = false
+            fun watchStatement(st: Any): Any = java.lang.reflect.Proxy.newProxyInstance(st.javaClass.classLoader, st.javaClass.interfaces) { _, m, args ->
+                val sql = args?.firstOrNull() as? String
+                if (sql != null && m.name in setOf("execute", "executeQuery", "executeUpdate")) {
+                    if (sql.startsWith("SET ROLE ")) { roles += sql.removePrefix("SET ROLE "); narrowed = true }
+                    else if (!narrowed) bareUse.incrementAndGet()
+                }
+                try { if (args == null) m.invoke(st) else m.invoke(st, *args) } catch (e: java.lang.reflect.InvocationTargetException) { throw e.targetException }
+            }
+            return java.lang.reflect.Proxy.newProxyInstance(real.javaClass.classLoader, arrayOf(java.sql.Connection::class.java)) { _, m, args ->
+                val out = try { if (args == null) m.invoke(real) else m.invoke(real, *args) } catch (e: java.lang.reflect.InvocationTargetException) { throw e.targetException }
+                if (m.name == "prepareStatement" && !narrowed) bareUse.incrementAndGet()
+                if (m.name == "createStatement") watchStatement(out!!) else out
+            } as java.sql.Connection
+        }
         testApplication {
-            application { thro(Deps(connect = { TestDatabase.connect() }, authenticator = Authenticator.Dev(), now = { Instant.parse("2026-09-11T18:00:00Z") })) }
+            application { thro(Deps(connect = { watched() }, authenticator = Authenticator.Dev(), now = { Instant.parse("2026-09-11T18:00:00Z") })) }
 
             suspend fun post(path: String, body: String, subject: UUID? = ade, device: UUID? = phone): HttpResponse = client.post(path) {
                 subject?.let { header(Authenticator.Dev.HEADER, it.toString()) }
@@ -122,8 +143,10 @@ class HttpTest {
             if (System.getenv("THRO_WRITE_OPENAPI") == "1") committed.writeText(served)
             check("the committed contract is the served one (regenerate with THRO_WRITE_OPENAPI=1 and review the diff)",
                 committed.exists() && committed.readText() == served)
+            check("every request narrowed its connection to a module role before touching a table: visits as app_match, organisational commands and reads as app_competition, health as app_read",
+                bareUse.get() == 0 && roles.contains("app_match") && roles.contains("app_competition") && roles.contains("app_read") && roles.all { it in setOf("app_match", "app_competition", "app_read") })
         }
         println("  $passed HTTP properties held")
-        assertEquals(27, passed)
+        assertEquals(28, passed)
     }
 }

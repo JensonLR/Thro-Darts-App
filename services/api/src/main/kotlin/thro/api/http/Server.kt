@@ -68,10 +68,27 @@ public class Deps(
 private class Http(val status: Int, val body: String)
 
 /** One request: its call, the principal the authenticator found, its bounded body, and one lazily opened connection. */
+/**
+ * The database roles a request may run under (ADR-011: per-module roles). The connection is
+ * opened as the deploy's one user, which holds all of them; every request narrows itself to the
+ * module it is for before it touches a table, so a handler that reaches past its module fails on
+ * a grant rather than succeeding by accident. The names are constants, never input.
+ */
+internal enum class DbRole(val sql: String) { COMPETITION("app_competition"), MATCH("app_match"), READ("app_read") }
+
 private class Req(val call: ApplicationCall, val body: String, private val deps: Deps) {
     var principal: Principal? = null
+    var role: DbRole = DbRole.COMPETITION
     private var conn: Connection? = null
-    fun connection(): Connection = conn ?: deps.connect().also { conn = it }
+    private var applied: DbRole? = null
+    fun connection(): Connection {
+        val c = conn ?: deps.connect().also { conn = it }
+        if (applied != role) {
+            c.createStatement().use { it.execute("SET ROLE " + role.sql) }
+            applied = role
+        }
+        return c
+    }
     fun close() { conn?.close() }
 }
 
@@ -95,7 +112,11 @@ public fun Application.thro(deps: Deps) {
         },
         "health" to { _ -> health(deps) },
         "openapi" to { _ -> Http(200, Contract.openApi()) },
-        "commands" to { r -> command(r.connection(), r.principal!!, r.call.request.headers["X-Thro-Device"], r.body) },
+        "commands" to { r ->
+            // A visit is the match module's; everything else on this endpoint is organisational.
+            if (r.body.contains("\"RecordVisit\"")) r.role = DbRole.MATCH
+            command(r.connection(), r.principal!!, r.call.request.headers["X-Thro-Device"], r.body)
+        },
         "me.inbox" to { r -> Http(200, inboxJson(Secretary(r.connection()).inboxForPlayer(r.principal!!.subject, deps.now()))) },
         "team.inbox" to { r -> teamInbox(r.connection(), r.principal!!, r.call.parameters["teamId"], deps.now()) },
         "me.discovery" to { r -> discovery(r.connection(), r.principal!!, r.call.request.queryParameters["from"], r.call.request.queryParameters["to"], r.call.request.queryParameters["locality"], deps.now()) },
@@ -176,6 +197,7 @@ private const val MAX_LINEUP: Int = 32
 
 private fun health(deps: Deps): Http = try {
     deps.connect().use { c ->
+        c.createStatement().use { it.execute("SET ROLE " + DbRole.READ.sql) }
         val v = Migrations.currentVersion(c)
         val latest = Migrations.files().maxOfOrNull { Migrations.versionOf(it) }
         if (v == null || (latest != null && v < latest)) Http(503, """{"database":"behind the code","schemaVersion":${v ?: "null"},"codeVersion":${latest ?: "null"}}""")

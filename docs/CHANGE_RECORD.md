@@ -2601,3 +2601,23 @@ deliberately absent, and the claim that guarded that is reshaped rather than dro
 sentence about the phone is rewritten to what is true: nothing on it is uploaded, and the only
 thing this build sends anywhere is a sign-in, if you choose to make one. Sixteen tests; 597 on
 the client.
+
+## Each request runs as its module
+
+ADR-011 wanted each module on its own database role and the runbook had carried it as a
+follow-up: the API connected as one user holding all five roles. It still connects as that user
+— a managed database issues one — but no request uses it as such any more: the connection a
+request opens narrows itself with `SET ROLE` before its first table, to `app_match` for a visit,
+`app_competition` for an organisational command, a sign-in or a Secretary read, and `app_read` for
+the health route. A handler that reaches past its module now fails on a grant rather than
+succeeding by accident, and the whole API suite — which runs as a superuser and would have hidden a
+missing grant forever — now runs every route under the narrowed role and passes, which is the
+first time the grants have been exercised from the wire. The HTTP test watches every connection
+the server opens and counts the statements that ran before the narrowing: zero.
+
+The same day the founder's Xcode refused to sign: a free "Personal" Apple team cannot carry Sign in
+with Apple, Associated Domains or App Groups, and the app has all three. A `Personal` build
+configuration now signs with none of them — Google sign-in works, Apple and passkeys refuse, the
+Live Activity has no shared container and shows its empty state — and `check_app_group` knows it
+as the one configuration allowed without the group, never Release. The Developer Program lifts all
+of it and is a precondition of TestFlight in any case; the runbook says so, and how to switch back.

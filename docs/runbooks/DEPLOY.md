@@ -139,8 +139,9 @@ Neon's restore window (six hours free, seven days paid) covers the database itse
 
 - Staging is deployed on path A; production is not. CI builds the image (`image` workflow) but
   never deploys, and Render redeploys only on **Manual Deploy** (`autoDeploy: false`).
-- The API connects as one database role, `thro_app`, holding the union of the application roles.
-  ADR-011's per-module connections are a follow-up before production traffic.
+- The API connects as one database user, `thro_app`, which holds the application roles and uses
+  none of them directly: every request runs `SET ROLE` to its module's role before touching a
+  table (ADR-011's per-module roles, at the request rather than the connection pool).
 - Rate limiting on the sign-in routes, object storage (media), push (APNs) and the scheduled
   restore drill are not configured.
 - Production needs a card wherever it runs, and a domain before the first real passkey.
