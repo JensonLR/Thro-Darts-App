@@ -20,6 +20,8 @@ public data class Endpoint(
     val request: Schema? = null,
     val responses: Map<Int, String>,
     val query: List<Pair<String, String>> = emptyList(),
+    /** A server-sent event stream rather than one answer: mounted with SSE, described as text/event-stream. */
+    val stream: Boolean = false,
 )
 
 /** A JSON schema fragment, written by hand and rendered verbatim. */
@@ -96,6 +98,12 @@ public object Contract {
             request = Schema("""{"type":"object","required":["challengeId","deviceId","credentialId","clientDataJSON","authenticatorData","signature"],"properties":{"challengeId":{"type":"string","format":"uuid"},"deviceId":{"type":"string","format":"uuid"},"credentialId":{"type":"string","description":"base64url"},"clientDataJSON":{"type":"string","description":"base64url"},"authenticatorData":{"type":"string","description":"base64url"},"signature":{"type":"string","description":"base64url"}}}"""),
             description = "Verifies the assertion — challenge, origin, relying party, user verification, sign count, signature over authenticator data and client data hash — and opens a session for the credential's account.",
             responses = mapOf(200 to sessionResponse, 400 to "malformed", 401 to "the assertion does not verify, and why", 503 to "passkeys are not configured on this server", 429 to "too many attempts from this address or device; Retry-After says when"),
+        ),
+        Endpoint(
+            id = "stream.match", method = "GET", path = "/v1/streams/match/{matchId}", authenticated = true, stream = true,
+            summary = "A match's evidence, live (ADR-007)",
+            description = "text/event-stream. Every event of the match in commit order, then each new one as it commits; the event id is `match:{matchId}:{commitXid}-{seq}` and a reconnect with Last-Event-ID replays from there. A comment ping every 15 seconds; a client that has seen nothing for 45 seconds treats the stream as stale. Open to the match's participants, holders of a scoring grant for it, and officials of its event — there is no spectator stream yet.",
+            responses = mapOf(200 to "text/event-stream", 401 to "no principal", 403 to "not in this match", 404 to "no such match"),
         ),
         Endpoint(
             id = "aasa", method = "GET", path = "/.well-known/apple-app-site-association", authenticated = false,
@@ -175,7 +183,9 @@ public object Contract {
                 } + e.query.map { (name, desc) -> """{"name":${q(name)},"in":"query","required":false,"description":${q(desc)},"schema":{"type":"string"}}""" }).toList()
                 val security = if (e.authenticated) ""","security":[{"principal":[]}]""" else ""
                 val body = e.request?.let { ""","requestBody":{"required":true,"content":{"application/json":{"schema":${it.json}}}}""" } ?: ""
-                val responses = e.responses.entries.sortedBy { it.key }.joinToString(",") { (code, desc) -> """"$code":{"description":${q(desc)}}""" }
+                val responses = e.responses.entries.sortedBy { it.key }.joinToString(",") { (code, desc) ->
+                    if (e.stream && code == 200) """"$code":{"description":${q(desc)},"content":{"text/event-stream":{}}}""" else """"$code":{"description":${q(desc)}}"""
+                }
                 """    "${e.method.lowercase()}":{"operationId":${q(e.id)},"summary":${q(e.summary)},"description":${q(e.description)},"parameters":[${params.joinToString(",")}]$security$body,"responses":{$responses}}"""
             }
             """  ${q(path)}:{

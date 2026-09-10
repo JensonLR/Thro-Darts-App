@@ -126,3 +126,27 @@ final class NetTests: XCTestCase {
         XCTAssertFalse(form.contains("client_secret"), "an iOS client has no secret to send")
     }
 }
+
+/// ADR-007 on the phone: the wire format parsed as the server writes it, the id kept for a resume.
+final class StreamParserTests: XCTestCase {
+    func testFramesAreAssembledAndCommentsAreNotEvents() {
+        var p = SSEParser()
+        XCTAssertNil(p.feed(": match abc; replaying from the start"))
+        XCTAssertNil(p.feed("retry: 3000"))
+        XCTAssertNil(p.feed(""))
+        XCTAssertNil(p.feed("id: match:m:5-9"))
+        XCTAssertNil(p.feed("event: VisitRecorded"))
+        XCTAssertNil(p.feed("data: {\"player\":\"home\","))
+        XCTAssertNil(p.feed("data: \"visitTotal\":60}"))
+        let e = p.feed("")
+        XCTAssertEqual(e, StreamEvent(id: "match:m:5-9", type: "VisitRecorded", data: "{\"player\":\"home\",\n\"visitTotal\":60}"))
+        XCTAssertEqual(p.lastEventId, "match:m:5-9", "the id is what a reconnect resumes from")
+        XCTAssertNil(p.feed(": ping"), "a heartbeat completes nothing")
+        XCTAssertNil(p.feed(""))
+        XCTAssertEqual(p.lastEventId, "match:m:5-9")
+    }
+
+    func testTheStalenessDeadlineIsThreeMissedHeartbeats() {
+        XCTAssertEqual(ThroAPI.staleAfter, 45)
+    }
+}

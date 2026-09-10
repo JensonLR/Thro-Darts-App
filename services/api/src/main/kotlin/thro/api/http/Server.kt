@@ -5,6 +5,7 @@ import io.ktor.http.HttpStatusCode
 import io.ktor.server.application.Application
 import io.ktor.server.application.ApplicationCall
 import io.ktor.server.application.call
+import io.ktor.server.application.install
 import io.ktor.server.request.receiveText
 import io.ktor.server.response.respondText
 import io.ktor.server.routing.get
@@ -63,6 +64,9 @@ public class Deps(
     public val appleAppIds: List<String> = emptyList(),
     /** The allowance for routes a stranger may call: thirty a minute per address and per device by default. */
     public val limiter: RateLimiter = RateLimiter(),
+    /** How often a stream re-reads the log, and how often it pings a quiet client (ADR-007: fifteen seconds). */
+    public val streamPoll: java.time.Duration = java.time.Duration.ofSeconds(1),
+    public val streamHeartbeat: java.time.Duration = java.time.Duration.ofSeconds(15),
 )
 
 private class Http(val status: Int, val body: String)
@@ -122,12 +126,13 @@ public fun Application.thro(deps: Deps) {
         "me.discovery" to { r -> discovery(r.connection(), r.principal!!, r.call.request.queryParameters["from"], r.call.request.queryParameters["to"], r.call.request.queryParameters["locality"], deps.now()) },
     )
     // The registry and the handlers are held to each other at start, not discovered at first call.
-    val missing = Contract.endpoints.map { it.id }.filter { it !in handlers }
+    val missing = Contract.endpoints.filter { !it.stream }.map { it.id }.filter { it !in handlers }
     val orphaned = handlers.keys.filter { id -> Contract.endpoints.none { it.id == id } }
     check(missing.isEmpty() && orphaned.isEmpty()) { "contract and handlers disagree: missing $missing, orphaned $orphaned" }
 
     routing {
         for (e in Contract.endpoints) {
+            if (e.stream) { matchStream(e.path, deps); continue }
             val handle: suspend (ApplicationCall) -> Unit = { call ->
                 // The body is bounded before it is read, and read before any connection is held:
                 // a declared length over the cap is 413, no declared length is 411, and what

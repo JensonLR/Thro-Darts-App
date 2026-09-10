@@ -2621,3 +2621,25 @@ configuration now signs with none of them — Google sign-in works, Apple and pa
 Live Activity has no shared container and shows its empty state — and `check_app_group` knows it
 as the one configuration allowed without the group, never Release. The Developer Program lifts all
 of it and is a precondition of TestFlight in any case; the runbook says so, and how to switch back.
+
+## A match, live
+
+ADR-007's first stream. `GET /v1/streams/match/{id}` sends every event of a match in commit order
+and then each new one as it commits, over server-sent events, with the id `match:{id}:{commitXid}-
+{seq}` so a reconnect with `Last-Event-ID` replays from the log rather than hoping. The order is
+the pair the schema has indexed since V002 — `(commit_xid, global_seq)`, never `global_seq` alone —
+and a row is served only once every transaction older than it has finished (its `commit_xid`
+below the snapshot's `xmin`), which is the watermark hazard the schema's own comment warned about,
+closed at the point of reading. A comment ping goes every fifteen seconds; the phone's parser
+keeps the id and its stream reconnects and treats forty-five quiet seconds as stale on its own
+clock. Participants, holders of a scoring grant and officials of the event may watch; there is no
+spectator stream yet, so nothing is filtered for a reader who may see less than they. Fan-out is a
+one-second poll of the log for now — the record's LISTEN/NOTIFY hint is a latency improvement over
+that, recorded as the follow-up, not a correctness one.
+
+Two things the test found. Ktor's test engine buffers a streaming response until the handler ends,
+and a stream's handler does not end; the stream test now runs a real engine on an ephemeral port
+and reads the body with the JDK's client as it arrives. And Ktor's SSE helper answers 200 before
+the handler runs, which let a stranger through with an empty stream; the stream is served from a
+plain route that writes its own frames, so 401, 403 and 404 come first. Nine stream properties on
+the server; the parser and the staleness deadline on the phone.

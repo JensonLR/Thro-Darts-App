@@ -72,6 +72,7 @@ routes are mounted from. In brief:
 | `GET /v1/me/inbox` | principal | The caller's own Secretary tasks by section |
 | `GET /v1/teams/{teamId}/inbox` | principal with `team.manage` | The team's Secretary inbox; anyone else is 403 and the refusal is on the audit record |
 | `GET /v1/me/discovery?from&to&locality` | principal | Discovery cards with their reasons |
+| `GET /v1/streams/match/{matchId}` | a participant, a grant holder, or an official of the event | `text/event-stream`: every event of the match in commit order, then each new one; `Last-Event-ID` resumes; a comment ping every 15 s; the client treats 45 quiet seconds as stale (ADR-007) |
 | `GET /healthz` | anyone | Liveness and the schema version |
 | `GET /openapi.json` | anyone | This contract |
 
@@ -86,8 +87,11 @@ THRO_WRITE_OPENAPI=1 gradle -p services/api test --tests 'thro.api.HttpTest'
 
 ## Not built
 
-SSE fan-out (ADR-007 streams and heartbeat), email recovery (PD-032 says why not yet), a client
-generated from the schema (ADR-001's acceptance condition, waiting on the organiser console).
+The other ADR-007 streams (`event:{id}:public`, `event:{id}:queue`, `event:{id}:organiser`,
+`player:{id}:inbox`) and its LISTEN/NOTIFY hint — the match stream polls the log once a second,
+which is a latency choice, not a correctness one; email recovery (PD-032 says why not yet); a
+client generated from the schema (ADR-001's acceptance condition, waiting on the organiser
+console).
 
 ## Rationing the routes a stranger may call
 

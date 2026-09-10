@@ -29,7 +29,7 @@ tasks.test {
     // Each is forwarded only when it has a value. Passing an empty string is not the same as passing
     // nothing: it defeats the `?: "5432"` fallbacks on the other side, and produced the unparseable
     // `jdbc:postgresql://host:/` for anyone who set PGHOST alone.
-    for (name in listOf("PGHOST", "PGPORT", "PGUSER", "PGDATABASE", "THRO_REQUIRE_DB", "THRO_WRITE_OPENAPI")) {
+    for (name in listOf("PGHOST", "PGPORT", "PGUSER", "PGDATABASE", "THRO_REQUIRE_DB", "THRO_WRITE_OPENAPI", "THRO_STREAM_DEBUG")) {
         System.getenv(name)?.takeIf { it.isNotBlank() }?.let { environment(name, it) }
     }
 }
