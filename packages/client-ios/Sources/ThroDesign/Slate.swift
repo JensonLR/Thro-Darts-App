@@ -22,8 +22,9 @@ public struct ThroMark: Shape {
 
 /// The wordmark: THR in Archivo ExtraBold and the Ø as the mark at the letters' own weight, drawn
 /// live from `MarkGeometry.Ratios.wordmark` — the same composition the opening settles into, so the
-/// name at the top of Home is the logo and not a font's Ø. Sized by cap height; the tips of the
-/// dart run a little above and below the caps, which the frame allows for.
+/// name at the top of Home is the logo and not a font's Ø. Sized by cap height. The letters lay
+/// themselves out as text; the Ø hangs off the R on the text's own baseline, its centre half a cap
+/// up, with the dart's tips running past the cap line as the artwork's do.
 public struct ThroWordmark: View {
     private let capHeight: CGFloat
     private let color: Color
@@ -37,36 +38,35 @@ public struct ThroWordmark: View {
     public static let capPerEm: CGFloat = 0.687
     /// The gap after the R, of the cap height (docs/design/brand/render_wordmark.py).
     public static let gap: CGFloat = 0.10
-    /// How far the dart's tip reaches above the cap line, of the cap height: tip 0.95 along the 45°
-    /// axis from a centre at half the cap, less the half cap.
-    public static var overshoot: CGFloat { MarkGeometry.Ratios.wordmark.tip * CGFloat(0.5).squareRoot() - 0.5 }
+    /// How far a tip reaches from the centre along each axis, of the cap height: tip 0.95 at 45°.
+    public static var reach: CGFloat { MarkGeometry.Ratios.wordmark.tip * CGFloat(0.5).squareRoot() }
 
-    /// The mark's centre and the whole width, given the measured width of THR.
-    public static func layout(capHeight cap: CGFloat, lettersWidth: CGFloat) -> (centreX: CGFloat, width: CGFloat) {
-        let r = MarkGeometry.Ratios.wordmark
-        let centreX = lettersWidth + gap * cap + r.ringOuter * cap
-        let width = centreX + r.tip * CGFloat(0.5).squareRoot() * cap
-        return (centreX, width)
+    /// The Ø, in a square of side 2 × reach × cap, centred.
+    struct O: Shape {
+        let cap: CGFloat
+        func path(in rect: CGRect) -> Path {
+            MarkGeometry(unit: cap, ratios: .wordmark).mark(at: CGPoint(x: rect.midX, y: rect.midY))
+        }
     }
 
     public var body: some View {
         let cap = capHeight
-        let over = Self.overshoot * cap
-        let fontSize = cap / Self.capPerEm
-        let text = Text("THR").font(.custom("Archivo-ExtraBold", fixedSize: fontSize))
-        Canvas { context, size in
-            let resolved = context.resolve(text)
-            let lettersWidth = resolved.measure(in: CGSize(width: 10_000, height: 10_000)).width
-            let ascent = fontSize * 0.878   // Archivo's ascender per em
-            let baseline = over + cap
-            let placed = Self.layout(capHeight: cap, lettersWidth: lettersWidth)
-            context.draw(resolved, at: CGPoint(x: 0, y: baseline - ascent), anchor: .topLeading)
-            let geometry = MarkGeometry(unit: cap, ratios: .wordmark)
-            context.fill(geometry.mark(at: CGPoint(x: placed.centreX, y: baseline - cap / 2)), with: .color(color))
-            _ = size
+        let side = 2 * Self.reach * cap
+        HStack(alignment: .firstTextBaseline, spacing: 0) {
+            Text("THR")
+                .font(.custom("Archivo-ExtraBold", fixedSize: cap / Self.capPerEm))
+                .foregroundStyle(color)
+            O(cap: cap)
+                .fill(color)
+                .frame(width: side, height: side)
+                // The ring's left edge sits one gap after the R; the lower-left tip pokes a little
+                // further left than the ring, as it does in the artwork.
+                .padding(.leading, (Self.gap - (Self.reach - MarkGeometry.Ratios.wordmark.ringOuter)) * cap)
+                // The baseline is half a cap below the mark's centre.
+                .alignmentGuide(.firstTextBaseline) { d in d[VerticalAlignment.center] + cap / 2 }
         }
-        .foregroundStyle(color)
-        .frame(width: Self.layout(capHeight: cap, lettersWidth: cap * 2.1).width, height: cap + 2 * over)
+        .fixedSize()
+        .accessibilityElement(children: .ignore)
         .accessibilityLabel("THRØ")
     }
 }
