@@ -368,7 +368,7 @@ public struct LeaguesScreen: View {
                 Spacer(minLength: ThroSpacing.spacing3)
                 Text(LeaguesPlot.venueLine(team.venue))
                     .thro(ThroTypography.body)
-                    .foregroundStyle(team.venue?.venueId == selected ? ThroColor.colorTextBrand : ThroColor.colorTextSecondary)
+                    .foregroundStyle(team.venue != nil && team.venue?.venueId == selected ? ThroColor.colorTextBrand : ThroColor.colorTextSecondary)
                     .multilineTextAlignment(.trailing)
             }
             .padding(.vertical, ThroSpacing.spacing3)
