@@ -81,16 +81,30 @@ def main() -> int:
             leaf = relative.split("apps/ios/", 1)[1]
             configurations = text.count(f"INFOPLIST_FILE = {plist};")
             granted = text.count(f"CODE_SIGN_ENTITLEMENTS = {leaf};")
+            # The one deliberate exception: the `Personal` configuration, for a free Apple team that
+            # cannot sign an App Group at all. It points at a *.personal.entitlements file that names
+            # no group, it is never Release, and there is exactly one of it per target.
+            personal_leaf = leaf.replace(".entitlements", ".personal.entitlements")
+            personal = text.count(f"CODE_SIGN_ENTITLEMENTS = {personal_leaf};")
+            personal_file = ROOT / "apps/ios" / personal_leaf
+            if personal and (not personal_file.exists() or "application-groups" in personal_file.read_text()):
+                problems.append(f"{personal_leaf} must exist and grant no App Group; it is the free-team build")
+            if personal > 1:
+                problems.append(f"{personal_leaf} is set in {personal} configurations; the Personal build is one configuration")
             if configurations == 0:
                 problems.append(f"the Xcode project has no build configuration using {plist}")
             elif granted == 0:
                 problems.append(f"nothing in the Xcode project sets CODE_SIGN_ENTITLEMENTS = {leaf}, "
                                 f"so {who} ships without it and reads an empty container")
-            elif granted < configurations:
+            elif granted + personal < configurations:
                 problems.append(
-                    f"{leaf} is set in {granted} of {who}'s {configurations} build configurations. "
-                    f"The one without it builds with no App Group — which, if it is Release, is a "
-                    f"widget that works in development and is empty on TestFlight")
+                    f"{leaf} is set in {granted} of {who}'s {configurations} build configurations "
+                    f"(plus {personal} Personal). The one without it builds with no App Group — which, if it is "
+                    f"Release, is a widget that works in development and is empty on TestFlight")
+            release_block = text[text.find("/* Begin XCBuildConfiguration section */"):]
+            for m in __import__("re").finditer(r"CODE_SIGN_ENTITLEMENTS = " + __import__("re").escape(personal_leaf) + r";.*?name = (\w+);", release_block, __import__("re").S):
+                if m.group(1) != "Personal":
+                    problems.append(f"{personal_leaf} is used by the {m.group(1)} configuration; only Personal may build without the group")
     else:
         problems.append(f"{PROJECT} is missing")
 
