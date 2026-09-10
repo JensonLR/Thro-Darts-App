@@ -1,0 +1,28 @@
+name: image
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: The container image builds
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      # ADR-011: one image. This proves the Dockerfile builds from the repository root with the
+      # composite Gradle builds; it pushes nothing. Deploying is `fly deploy` from a machine with
+      # the Fly token (docs/runbooks/DEPLOY.md).
+      - name: Build
+        run: docker build -t thro-api:ci .
+      - name: The image answers as expected without a database
+        run: |
+          set -e
+          out=$(docker run --rm thro-api:ci bogus 2>&1 || true)
+          echo "$out" | grep -q "unknown command"
+          out=$(docker run --rm -e THRO_DEV_AUTH=1 -e PGHOST=203.0.113.1 thro-api:ci serve 2>&1 || true)
+          echo "$out" | grep -q "development authenticator is refused against a database that is not on this machine"
