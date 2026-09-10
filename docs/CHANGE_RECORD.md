@@ -2532,3 +2532,19 @@ when it is not a superuser — using the ADMIN OPTION creation does confer — a
 V001 to V026, was run as a plain role with CREATEROLE on a fresh cluster and passed. Every earlier
 run had been as a superuser, which is exactly the condition ADR-013 says a migration must not be
 tested only under. The edit changes V001's digest, so a database migrated before it is rebuilt.
+
+## The London database exists
+
+The founder created the Neon project `THRØ` in London (PostgreSQL 18) and connected it; from
+this repository's `migrate` task all twenty-six migrations were applied as `neondb_owner`, an
+application role `thro_app` was created by SQL — not by the console, whose roles join
+`neon_superuser` and could write evidence — and granted exactly the five application roles, and
+a second run applied nothing. Verified as `thro_app`: it reads the ledger and the tables and is
+refused a delete on a competition table and an update on evidence. One thing the Neon run found
+that the local one could not: the health route reads the migration ledger through the
+application's connection, and the application could not see it; the runner now grants the read
+role usage on the ledger schema and select on its one table, and a schema property holds that
+this is all it may do. The runbook carries the real names and the one endpoint caveat — Neon's
+pooler host is PgBouncer and cannot carry a migration's role switches. Cloudflare, asked about the
+same day, is answered in the runbook: Workers cannot run a JVM, Containers need a card and will
+not say where they run, and ADR-011 needs to know.

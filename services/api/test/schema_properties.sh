@@ -535,6 +535,10 @@ r=$($PSQL -c "SET ROLE app_competition; DELETE FROM competition.event_eligibilit
 if echo "$r" | grep -qi 'permission denied'; then ok "a requirement is withdrawn, never deleted"
 else bad "a requirement is withdrawn, never deleted" "${r:-deletion was permitted}"; fi
 
+# The health route reads the ledger through the application's connection (app_read), and nothing else may touch it.
+n=$($PSQL -c "SELECT string_agg(privilege_type, ',' ORDER BY privilege_type) FROM information_schema.role_table_grants WHERE table_schema='thro' AND table_name='schema_migration' AND grantee LIKE 'app\_%';")
+check "the application may read the migration ledger and may not write it" "$n" "SELECT"
+
 echo "== the Secretary: a submission's state is the transitions', and nothing else's (V016) =="
 n=$($PSQL -c "SELECT count(*) FROM information_schema.role_table_grants
   WHERE table_schema='competition' AND table_name='submission' AND privilege_type='UPDATE' AND grantee LIKE 'app\\_%';")

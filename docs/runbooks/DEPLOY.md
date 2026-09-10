@@ -18,9 +18,10 @@ Nothing in the repository holds a secret. Everything below runs from the reposit
 
 | Thing | Value |
 |---|---|
-| Neon project | `thro` (one project; a branch per environment: `staging`, later `production`) |
-| Neon database | `thro` |
-| Neon roles | `thro_deploy` (runs migrations; Neon's default owner role, renamed or kept as `neondb_owner`) and `thro_app` (the API connects as this; it holds only the application roles) |
+| Neon project | **`THRØ`** (`round-darkness-99300686`), London, PostgreSQL 18 — created by the founder 2026-09-10; one branch, `production`, used for staging until real players arrive, when a `staging` branch is forked from it |
+| Neon database | `neondb` |
+| Neon roles | `neondb_owner` (runs migrations) and **`thro_app`** (the API connects as this; a plain role created by SQL — not by the console, whose roles are members of `neon_superuser` and could write evidence — holding only the application roles) |
+| Neon endpoint | `ep-small-mountain-zavde3ff.c-2.eu-west-2.aws.neon.tech` for the API and for migrations; the `-pooler` host Neon also offers is PgBouncer and cannot carry the migration's role switches or advisory lock |
 | Render service / Fly app | `thro-api-staging` (production: `thro-api`) |
 | Apple app id for passkeys | `2XM324WPD5.app.thro.darts` |
 | Passkey relying party | the public host of the environment — see the warning below |
@@ -33,25 +34,29 @@ from the first production deploy.
 
 ## Path A — Neon + Render, no card
 
-**A1. The database (Neon).** At <https://console.neon.tech>: create a project named `thro`, region
-**Europe (London)**, Postgres 16 or 17, database name `thro`. Neon gives you an owner role (its
-name is shown; it can create roles, which the first migration needs). Then, in the project's
-**Roles** page, add a second role `thro_app` and keep its password. Copy two connection strings
-from the **Connect** panel, both with `?sslmode=require`:
+**A1. The database (Neon) — done, 2026-09-10.** The project `THRØ` exists in London; `thro_app`
+was created by SQL as a plain role; all migrations through V026 were applied as `neondb_owner`
+from this repository's `migrate` task, `thro_app` was granted exactly the application roles, and a
+second run reported nothing to apply. Verified as `thro_app`: it reads the ledger (`/healthz`
+needs that) and the tables, and `DELETE` on a competition table and `UPDATE` on evidence are
+refused. The `thro_app` password was handed to the founder in the session that created it and is
+written nowhere in this repository; rotate it any time with `ALTER ROLE thro_app PASSWORD '…'` in
+Neon's SQL editor and update Render's `DATABASE_URL`.
 
-- the owner role's → this is `MIGRATE_DATABASE_URL`
-- `thro_app`'s → this is `DATABASE_URL`
+The two connection strings have this shape (passwords from the Neon console → Connect, or from
+the founder's notes):
+- `MIGRATE_DATABASE_URL` = `postgres://neondb_owner:<password>@ep-small-mountain-zavde3ff.c-2.eu-west-2.aws.neon.tech/neondb?sslmode=require`
+- `DATABASE_URL` = `postgres://thro_app:<password>@ep-small-mountain-zavde3ff.c-2.eu-west-2.aws.neon.tech/neondb?sslmode=require`
 
-**A2. Migrate from your Mac.** The migrations create the owner and application roles, every
-schema, and grant `thro_app` exactly the application roles (nothing else). The ledger records what
-was applied; running it again applies only what is new.
+**A2. Migrate from your Mac — whenever a new migration lands.** The ledger applies only what is
+new; running it with nothing new is harmless and says so.
 ```bash
-export MIGRATE_DATABASE_URL='postgres://<owner role>:<password>@<host>/thro?sslmode=require'
+export MIGRATE_DATABASE_URL='postgres://neondb_owner:<password>@ep-small-mountain-zavde3ff.c-2.eu-west-2.aws.neon.tech/neondb?sslmode=require'
 export APP_DB_USER='thro_app'
 gradle -p services/api migrate
 ```
-Expected: `migrated V--- -> V026: V001__... V002__... ...` then `application roles granted to
-thro_app`. Run it again and it says `schema already at V026; nothing applied`.
+Expected on a fresh migration: `migrated V026 -> V027: V027__...` then `application roles granted
+to thro_app`; otherwise `schema already at V026; nothing applied`.
 
 **A3. The web service (Render).** At <https://dashboard.render.com>: **New → Blueprint**, connect
 the GitHub repository `JensonLR/Thro-Darts-App`, branch `claude/thro-production-build-je2mkf`. Render
@@ -82,6 +87,20 @@ the Apple Developer portal; the ID token's audience is the bundle id, which `ren
 **Every later deploy on path A:** push to the branch, run A2 if there are new migrations (the
 ledger makes it safe to run every time), then **Manual Deploy → Deploy latest commit** in Render.
 Migrate first, deploy second: a migration must be compatible with the image that is still running.
+
+## Why not Cloudflare?
+
+Asked on 2026-09-10. Cloudflare has two ways to run code. **Workers** are a JavaScript and WASM
+edge runtime, free at small scale, and cannot run this server: THRØ's API is a Kotlin/JVM
+container, and moving it to Workers means rewriting the server in TypeScript — the foundations the
+brief said not to throw away. **Containers** (2025) do run a Docker image, but they need the $5 a
+month Workers Paid plan (a card), and Cloudflare chooses where an instance runs — "the nearest
+location with a pre-fetched image", which "could be routed to a different location" after a
+restart, with no region or jurisdiction setting. ADR-011 fixes the container to the UK/EU for
+personal data, and a host that will not say where it runs cannot meet that. So for THRØ's API,
+Cloudflare is neither the free option (Render is) nor the London one (Fly is). Where Cloudflare
+does fit later is in front of the API — its free DNS and proxy for the production domain, and
+`services/links` (the static association files) on Pages — none of which touches the data.
 
 ## Path B — Neon + Fly.io
 

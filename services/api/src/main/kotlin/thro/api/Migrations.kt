@@ -103,6 +103,22 @@ public object Migrations {
                 }
                 applied += Applied(v, f.name)
             }
+            // The server's health route reads the ledger through the application's connection, so
+            // the read role may see it: usage on the schema and select on the one table, nothing
+            // else. Granted after the run, once V001 has created the role; idempotent.
+            c.createStatement().use { st ->
+                st.execute(
+                    """
+                    DO $$ BEGIN
+                      IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'app_read') THEN
+                        GRANT USAGE ON SCHEMA thro TO app_read;
+                        GRANT SELECT ON thro.schema_migration TO app_read;
+                      END IF;
+                    END $$
+                    """.trimIndent(),
+                )
+            }
+            c.commit()
             return applied
         } finally {
             try { c.createStatement().use { it.execute("SELECT pg_advisory_unlock($LOCK)") } } catch (_: Exception) { }

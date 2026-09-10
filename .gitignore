@@ -21,3 +21,5 @@ xcuserdata/
 
 # A local tool's crawl cache; never part of the product.
 .claude-crawl/
+.neon
+.env.local
