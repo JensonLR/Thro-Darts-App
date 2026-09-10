@@ -12,7 +12,7 @@ a code change. This directory holds the one file that hosting needs.
   a path advertised here that the app cannot parse is a link that opens THRØ and then does nothing,
   which looks exactly like the app being broken.
 
-- **No `associated-domains` entitlement**, and that is the point at which this stops. Adding
+- **No `applinks` entry** in the Associated Domains entitlement, and that is the point at which this stops (the entitlement itself exists, for `webcredentials`, so passkeys work against the API's host). Adding
   `applinks:thro.app` for a domain nobody owns makes iOS ask Apple's CDN for a file that is not
   there; the app builds, installs, and silently never handles a link. There is nothing to gain from
   claiming a domain before it exists.

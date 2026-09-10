@@ -6,9 +6,10 @@ import PackageDescription
 //
 // The dependency graph is the point, not a detail. LATENCY_BUDGETS.md: "the scoring module must have
 // no compile-time dependency on the network layer, checked in CI via the module dependency graph."
-// There is no network target in this package for anything to depend on. ThroJournal reaches only
-// the engine and SQLite; ThroPlay reaches the journal, the engine, the statistics and the design
-// system. A future sync module depends on the journal — never the other way round.
+// The network target is ThroNet, and nothing the scoring path depends on may depend on it:
+// ThroJournal reaches only the engine and SQLite; ThroPlay reaches the journal, the engine, the
+// statistics and the design system; ThroNet reaches Foundation and nothing of ours. Only ThroApp
+// reaches ThroNet. `tools/check_absence_claims.py` holds the direction.
 //
 // Apple platforms only, because SwiftUI and the asset catalogue are. The engine and the statistics
 // are separate packages precisely so that the parts which CAN build on Linux are verified there on
@@ -39,6 +40,7 @@ let package = Package(
         .library(name: "ThroDesign", targets: ["ThroDesign"]),
         .library(name: "ThroLiveKit", targets: ["ThroLiveKit"]),
         .library(name: "ThroJournal", targets: ["ThroJournal"]),
+        .library(name: "ThroNet", targets: ["ThroNet"]),
         .library(name: "ThroPlay", targets: ["ThroPlay"]),
         .library(name: "ThroApp", targets: ["ThroApp"]),
     ],
@@ -108,15 +110,20 @@ let package = Package(
 
         // The app shell: Home, the tab bar, and the root view the Xcode app target mounts.
         .target(
+            name: "ThroNet",
+            path: "Sources/ThroNet"
+        ),
+        .target(
             name: "ThroApp",
             dependencies: [
+                "ThroNet",
                 "ThroDesign", "ThroJournal", "ThroPlay", "ThroLiveKit",
                 .product(name: "ThroTokens", package: "design-tokens"),
             ],
             path: "Sources/ThroApp"
         ),
         .testTarget(name: "ThroAppTests",
-                    dependencies: ["ThroApp", "ThroJournal", "ThroPlay", "ThroDesign",
+                    dependencies: ["ThroApp", "ThroJournal", "ThroPlay", "ThroDesign", "ThroNet",
                                    .product(name: "ThroEngine", package: "engine-swift"),
                                    .product(name: "ThroTokens", package: "design-tokens")],
                     path: "Tests/ThroAppTests"),

@@ -73,6 +73,10 @@
 	     requires every identifier to be ASCII, so the scheme is `thro` and not the product name.
 	     ThroRoute reads these paths and the same paths under https://, so adopting universal links
 	     later is a hosting decision rather than a code change. -->
+	<key>THROAPIBaseURL</key>
+	<string>https://thro-api-staging.onrender.com</string>
+	<key>THROGoogleClientID</key>
+	<string></string>
 	<key>CFBundleURLTypes</key>
 	<array>
 		<dict>

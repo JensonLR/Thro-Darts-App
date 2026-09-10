@@ -2572,3 +2572,32 @@ header. It is honest about what it is: one instance's memory, the difference bet
 token guesses a second and thirty a minute, not a flood defence, which is the host's business. The
 runbook gains the steps for creating the Google iOS client id, which is the one value Sign in with
 Google waits for.
+
+## The phone signs in
+
+Until today the client had a load-bearing absence: no network code, held by a check that failed on
+the first `URLSession`. It is retired deliberately, and what replaces it keeps the promise the
+absence was guarding. `ThroNet` is the one network target, reached only by `ThroApp` — the journal
+and the scoring session still cannot import it, and two new claims in `tools/check_absence_claims.py`
+hold that direction where the old one held the whole. It carries a sign-in and the session THRØ
+issues, refreshes that session once behind every authorised call and signs out rather than loops
+when the server stops honouring it, decodes the inbox and the discovery cards as the server sends
+them with every reason intact, and speaks base64url and PKCE the way the server and Google expect.
+The refresh token lives in the keychain, this device only, never in a backup that could restore it
+to another phone.
+
+The account store is the only thing the screens talk to, and the platform ceremonies behind it are
+injected, so every state — signed out, busy with a sentence, signed in, failed with words — is
+reached in a test with a scripted server and no device. The live services are Sign in with Apple,
+Sign in with Google through a system web session with a code exchange that sends no secret because
+an iOS client has none, and a passkey through the platform authenticator; a cancel puts the screen
+back where it was and is never shown as a failure. Settings' *Account and profile · Not built* is
+now a row that opens the Account screen: sign in three ways, or create an account with a passkey
+alone; set the name a league knows you by; see how many ways into the account you have and add
+another (PD-032); read your Secretary inbox and the darts you can play, each with the server's
+reasons; sign out. The app's Associated Domains entitlement exists now, carrying `webcredentials`
+for the staging host in developer mode so iOS offers passkeys for it; the `applinks` line is still
+deliberately absent, and the claim that guarded that is reshaped rather than dropped. The runbook's
+sentence about the phone is rewritten to what is true: nothing on it is uploaded, and the only
+thing this build sends anywhere is a sign-in, if you choose to make one. Sixteen tests; 597 on
+the client.

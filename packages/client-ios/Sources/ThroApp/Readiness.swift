@@ -454,7 +454,7 @@ public enum ThroReadiness {
 
     static func links(_ f: Facts) -> Surface {
         Surface(id: "links", name: "Links that open the app", state: .absent,
-                detail: "There is no thro.app domain yet, and the entitlement is deliberately left "
+                detail: "There is no thro.app domain yet, and the `applinks` entry is deliberately left "
                       + "out: claiming a domain nobody owns makes iOS fetch a file that is not "
                       + "there, after which the app silently never handles a link at all. The file "
                       + "a domain would serve is written and checked on every push, so this is a "

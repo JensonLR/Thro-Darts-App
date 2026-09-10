@@ -285,6 +285,8 @@ public struct ThroRootView: View {
     @StateObject private var clubs = ClubStore()
     @AppStorage(Appearance.storageKey) private var appearanceRaw: String = Appearance.system.rawValue
     @State private var showingSettings = false
+    @State private var showingAccount = false
+    @StateObject private var accountHolder = AccountHolder()
     /// The person whose page is open, if any. Their figures come from the journal, so this is the
     /// one screen in the app where a statistic is about a person rather than about a match.
     @State private var viewing: LocalPerson?
@@ -486,9 +488,14 @@ public struct ThroRootView: View {
         } else if let person = viewing {
             PersonScreen(person: person, journal: store.journal, clubs: clubs.clubs) { viewing = nil }
                 .throAppearance(Appearance(stored: appearanceRaw))
+        } else if showingAccount, let account {
+            AccountScreen(account: account) { showingAccount = false }
+                .throAppearance(Appearance(stored: appearanceRaw))
         } else if showingSettings {
             SettingsScreen(onBack: { showingSettings = false },
                            onReplayOpening: { showingSettings = false; opening = true },
+                           onAccount: account == nil ? nil : { showingAccount = true },
+                           accountValue: accountRowValue,
                            backupState: { store.backupState },
                            makeExport: { try store.exportEverything(clubs: clubs.book) },
                            diagnosticsHeld: { store.diagnosticsHeld },
@@ -1146,9 +1153,9 @@ public struct PlayLandingScreen: View {
                         Note("**Every visit is committed to this device before the screen changes.** "
                              + "A crash between two darts loses nothing, because the score you can "
                              + "see has already been written down.")
-                        Note("**Nothing leaves the phone.** There is no network code in this app at "
-                             + "all — not switched off, not present. Your matches are yours until "
-                             + "you export them.")
+                        Note("**Your matches stay on this phone.** Nothing here is uploaded. The only "
+                             + "thing this build sends anywhere is a sign-in, if you choose to make one "
+                             + "under Settings, and your matches are yours until you export them.")
                     }
                     .throEntrance(2)
                     if !store.matches.isEmpty {
@@ -1296,6 +1303,8 @@ public struct SettingsScreen: View {
     @AppStorage(ThroDiagnostics.enabledKey) private var diagnostics: Bool = false
     private let onBack: () -> Void
     private let onReplayOpening: (() -> Void)?
+    private let onAccount: (() -> Void)?
+    private let accountValue: String
     /// PD-017. Where the file comes from and what the file system says about backups. Closures
     /// rather than the stores themselves, so Settings stays a screen and not a second owner of the
     /// device's data — and so a test can drive both without a journal on disk.
@@ -1317,6 +1326,7 @@ public struct SettingsScreen: View {
     @State private var inspection: ExportInspection?
 
     public init(onBack: @escaping () -> Void, onReplayOpening: (() -> Void)? = nil,
+                onAccount: (() -> Void)? = nil, accountValue: String = "Not signed in",
                 backupState: @escaping () -> BackupPolicy.State = { .unknown("no data folder in this build") },
                 makeExport: (() throws -> URL)? = nil,
                 diagnosticsHeld: @escaping () -> ThroDiagnostics.Held = { .init(count: 0, bytes: 0, newest: nil) },
@@ -1325,6 +1335,8 @@ public struct SettingsScreen: View {
                 onGoReadiness: @escaping (ThroReadiness.Go) -> Void = { _ in }) {
         self.onBack = onBack
         self.onReplayOpening = onReplayOpening
+        self.onAccount = onAccount
+        self.accountValue = accountValue
         self.backupState = backupState
         self.makeExport = makeExport
         self.diagnosticsHeld = diagnosticsHeld
@@ -1534,7 +1546,11 @@ public struct SettingsScreen: View {
                         SettingsRow(icon: .info, label: "Matches", value: "Stay on this device")
                         SettingsRow(icon: .cloudOff, label: "Sending results to THRØ", value: "Not built")
                         SettingsRow(icon: .info, label: "Fonts", value: ThroFont.customFacesRegistered ? "Embedded" : "System face")
-                        SettingsRow(icon: .circleUser, label: "Account and profile", value: "Not built")
+                        if let onAccount {
+                            LinkRow(icon: .circleUser, label: "Account and profile", value: accountValue, action: onAccount)
+                        } else {
+                            SettingsRow(icon: .circleUser, label: "Account and profile", value: "This build names no server")
+                        }
                     }
                 }
             }
@@ -1852,6 +1868,30 @@ struct LiveFixtureRow: View {
         }
         .buttonStyle(ThroPressStyle(radius: ThroSpacing.radiusCard,
                                     pressedFill: ThroColor.colorSurfaceSecondary, scales: false))
+    }
+}
+
+/// The one account store for the app, made once the journal's device id is known; nil when the
+/// build names no server, and the Settings row says so.
+@MainActor
+final class AccountHolder: ObservableObject {
+    private(set) var store: AccountStore?
+    func resolve(journalDeviceId: String?) -> AccountStore? {
+        if store == nil { store = ThroServer.account(journalDeviceId: journalDeviceId) }
+        return store
+    }
+}
+
+extension ThroRootView {
+    var account: AccountStore? { accountHolder.resolve(journalDeviceId: AppStore.deviceId()) }
+    var accountRowValue: String {
+        guard let account else { return "This build names no server" }
+        switch account.state {
+        case .signedIn(let p): return p.named ? (p.displayName ?? "Signed in") : "Signed in, no name yet"
+        case .busy: return "Checking"
+        case .failed: return "Needs attention"
+        case .signedOut: return "Not signed in"
+        }
     }
 }
 

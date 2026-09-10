@@ -67,20 +67,6 @@ class Claim:
 
 CLAIMS = [
     Claim(
-        what="the iOS client has no network code",
-        why=("LATENCY_BUDGETS.md requires the scoring module to have no compile-time dependency on a "
-             "network layer, and the app tells the player *nothing leaves the phone*. A single "
-             "URLSession would make that sentence false while every test still passed."),
-        sentences=[
-            ("packages/client-ios/Sources/ThroApp/ThroRootView.swift",
-             r"There is no network code in this app"),
-            ("packages/client-ios/Package.swift",
-             r"There is no network target in this package for anything to depend on"),
-        ],
-        where=CLIENT,
-        forbidden=r"\b(URLSession|URLRequest|NWConnection|NWPathMonitor|CFSocket|Alamofire)\b",
-    ),
-    Claim(
         what="the app never supplies a rating value",
         why=("OD-001 is open, and its own refusal names the way it would be decided by accident: "
              "*shipping a placeholder rating to fill the UI*. `PlayerRef` carries the field because "
@@ -122,40 +108,44 @@ CLAIMS = [
         forbidden=r"\b(SyncState|OfflineState)\s*\(",
     ),
     Claim(
-        what="there is no account, sign-in or credential store in the client",
-        why=("B4 — the authentication and identity-claim surface — is a founder blocker and the "
-             "design for it does not exist. Settings says *Account and profile · Not built*. An "
-             "auth API appearing before that surface is designed is the shape B4 exists to prevent."),
-        sentences=[
-            ("packages/client-ios/Sources/ThroApp/ThroRootView.swift",
-             r'label: "Account and profile", value: "Not built"'),
-        ],
-        where=CLIENT,
-        forbidden=r"\b(AuthenticationServices|LocalAuthentication|ASAuthorization\w*|LAContext"
-                  r"|kSecClass|SecItemAdd|SecItemCopyMatching)\b",
-    ),
-    Claim(
-        what="the app claims no associated domain",
+        what="the app claims no applinks domain",
         why=("The link grammar is fixed, the association file is written and checked on every push, "
-             "and the entitlement is deliberately the one piece left out — because "
+             "and the `applinks` entry is deliberately the one piece left out — because "
              "`applinks:thro.app` for a domain nobody owns makes iOS fetch a file that is not there "
              "and the app then **silently never handles a link at all**, including the `thro://` "
-             "ones that work today. So the absence is load-bearing: adding it early is worse than "
-             "not adding it, and it is the sort of line somebody pastes in while wiring something "
-             "else. Three documents and one screen say it is not there."),
+             "ones that work today. The entitlement itself now exists, for `webcredentials` — "
+             "passkeys need the API's host to vouch for the app — and that is a different line: "
+             "iOS fetches that file from a host that serves it. Three documents and one screen say "
+             "the applinks line is not there."),
         sentences=[
-            ("services/links/README.md", r"\*\*No `associated-domains` entitlement\*\*"),
-            ("docs/runbooks/CLIENT_IOS.md", r"is the `associated-domains` entitlement"),
-            # The screen's sentence is split by the line limit, so the pattern is the half that
-            # lives on one line. A regex written across a break matches nothing, and a pattern that
-            # matches nothing is a claim that has quietly stopped being checked — which this guard
-            # treats as a failure, and which is how this line was found.
+            ("services/links/README.md", r"\*\*No `applinks` entry\*\*"),
+            ("docs/runbooks/CLIENT_IOS.md", r"is the `applinks` entry"),
             ("packages/client-ios/Sources/ThroApp/Readiness.swift",
-             r"the entitlement is deliberately left"),
+             r"the `applinks` entry is deliberately left"),
         ],
         where="apps/ios",
         glob=("*.entitlements", "*.pbxproj"),
-        forbidden=r"associated-domains|applinks:",
+        forbidden=r"applinks:",
+    ),
+    Claim(
+        what="the scoring session has no compile-time dependency on the network layer",
+        why=("LATENCY_BUDGETS.md: the scoring module must have no compile-time dependency on the "
+             "network layer. ThroNet exists now; this holds the direction for ThroPlay."),
+        sentences=[
+            ("packages/client-ios/Package.swift", r"Only ThroApp\s+reaches ThroNet"),
+        ],
+        where="packages/client-ios/Sources/ThroPlay",
+        forbidden=r"^\s*import\s+ThroNet\b",
+    ),
+    Claim(
+        what="the journal has no compile-time dependency on the network layer",
+        why=("ADR-006: the journal is the phone's own truth and writes it with no server present; "
+             "a journal that could reach the network is one step from waiting on it."),
+        sentences=[
+            ("packages/client-ios/Package.swift", r"ThroJournal reaches only\s+the engine and SQLite"),
+        ],
+        where="packages/client-ios/Sources/ThroJournal",
+        forbidden=r"^\s*import\s+ThroNet\b",
     ),
 ]
 
