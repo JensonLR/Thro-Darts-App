@@ -58,7 +58,12 @@ gradle -p services/api migrate
 Expected on a fresh migration: `migrated V026 -> V027: V027__...` then `application roles granted
 to thro_app`; otherwise `schema already at V026; nothing applied`.
 
-**A3. The web service (Render).** At <https://dashboard.render.com>: **New → Blueprint**, connect
+**A3. The web service (Render) — live since 2026-09-10** at <https://thro-api-staging.onrender.com>:
+`/healthz` reports the database ok at V026, `/openapi.json` is byte-for-byte the committed contract,
+the Apple association file names the app, and the sign-in routes refuse and 503 exactly as the
+tests say. The first deploy exited 128 because `render.yaml` carried a `dockerCommand`, which on
+Render replaces the entrypoint too; it is gone. What follows is how it was set up, for the next
+environment. At <https://dashboard.render.com>: **New → Blueprint**, connect
 the GitHub repository `JensonLR/Thro-Darts-App`, branch `claude/thro-production-build-je2mkf`. Render
 reads `render.yaml` and creates `thro-api-staging` (free instance, Frankfurt, built from the
 Dockerfile). It will ask for the two values marked `sync: false`:
@@ -132,8 +137,8 @@ Neon's restore window (six hours free, seven days paid) covers the database itse
 
 ## Not done yet, and said so
 
-- Nothing is deployed until you run the steps above; CI builds the image (`image` workflow) but
-  never deploys.
+- Staging is deployed on path A; production is not. CI builds the image (`image` workflow) but
+  never deploys, and Render redeploys only on **Manual Deploy** (`autoDeploy: false`).
 - The API connects as one database role, `thro_app`, holding the union of the application roles.
   ADR-011's per-module connections are a follow-up before production traffic.
 - Rate limiting on the sign-in routes, object storage (media), push (APNs) and the scheduled

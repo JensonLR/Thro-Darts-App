@@ -2548,3 +2548,16 @@ this is all it may do. The runbook carries the real names and the one endpoint c
 pooler host is PgBouncer and cannot carry a migration's role switches. Cloudflare, asked about the
 same day, is answered in the runbook: Workers cannot run a JVM, Containers need a card and will
 not say where they run, and ADR-011 needs to know.
+
+## Staging is live
+
+`https://thro-api-staging.onrender.com/healthz` answers `{"database":"ok","schemaVersion":"V026"}`
+against the Neon project in London, with no card on file anywhere. The first deploy died with
+status 128 before the JVM started: `render.yaml` had a `dockerCommand: serve`, and on Render that
+setting replaces the image's entrypoint as well as its command, so a bare `serve` was executed and
+found nowhere. The image's default already serves; the line is gone. Probed from outside after
+the redeploy: the served contract is byte-for-byte the committed `openapi.json` with its seventeen
+operations, the Apple association file names `2XM324WPD5.app.thro.darts`, an unauthenticated
+command is 401, Sign in with Apple without a token is 400, Google is 503 until its client id is
+set, and a passkey challenge is issued for the relying party `thro-api-staging.onrender.com`. The
+runbook records the live state and keeps the set-up steps for the next environment.

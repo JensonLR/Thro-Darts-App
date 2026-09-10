@@ -1,6 +1,6 @@
 # THRØ — Connected Platform Execution Plan
 
-**Date:** 2026-09-10 · **Status:** Phases A, B2, D, E's read model, C's store and the HTTP layer delivered; FB-1 and FB-2 decided (PD-030, PD-031); B3 delivered under §12d (Apple/Google sign-in, sessions, passkeys); C's surface, E's surface and F follow · **Precedence:** rank 4 (product/domain
+**Date:** 2026-09-10 · **Status:** Phases A, B2, D, E's read model, C's store and the HTTP layer delivered; FB-1 and FB-2 decided (PD-030, PD-031); B3 delivered under §12d (Apple/Google sign-in, sessions, passkeys) and **staging is live** on Neon London + Render (2026-09-10); C's surface, E's surface and F follow · **Precedence:** rank 4 (product/domain
 specification), below the founder's instructions and the decision register, above the ADRs it cites.
 
 This plan reconciles the repository as it stands with the founder's product conclusions for the
