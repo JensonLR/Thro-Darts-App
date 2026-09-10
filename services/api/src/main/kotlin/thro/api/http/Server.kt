@@ -139,6 +139,8 @@ public fun Application.thro(deps: Deps) {
                         Http(503, """{"error":"the sign-in provider's keys are unavailable; try again shortly"}""")
                     } catch (x: Accounts.AccountDeleted) {
                         Http(403, """{"error":"this account was deleted"}""")
+                    } catch (x: Accounts.SubjectHeldElsewhere) {
+                        Http(409, """{"error":"that sign-in already belongs to another account; nobody was signed in"}""")
                     } finally {
                         req.close()
                     }
@@ -202,9 +204,13 @@ private fun passkeyRegisterOptions(c: Connection, deps: Deps, principal: Princip
     val device = UUID.fromString(str(m, "deviceId"))
     val accounts = Accounts(c, deps.now)
     val ch = accounts.newChallenge("register", device, principal?.accountId)
-    val userId = ch.userHandle ?: ch.accountId!!.let { id -> java.nio.ByteBuffer.allocate(16).putLong(id.mostSignificantBits).putLong(id.leastSignificantBits).array() }
+    // The user id is the account's for life (V026), so a second passkey does not replace the first
+    // in the platform's keychain; the live ones are excluded so the platform offers nothing twice.
+    val identity = ch.accountId?.let { accounts.passkeyIdentity(it) }
+    val userId = identity?.userHandle ?: ch.userHandle!!
+    val exclude = identity?.credentialIds.orEmpty().joinToString(",") { """{"type":"public-key","id":${Contract.q(b64u(it))}}""" }
     val name = principal?.accountId?.let { accounts.profile(it)?.displayName } ?: Accounts.PLACEHOLDER_NAME
-    return Http(200, """{"challengeId":"${ch.id}","publicKey":{"rp":{"id":${Contract.q(rp.id)},"name":${Contract.q(rp.name)}},"user":{"id":${Contract.q(b64u(userId))},"name":${Contract.q(name)},"displayName":${Contract.q(name)}},"challenge":${Contract.q(b64u(ch.bytes))},"pubKeyCredParams":[{"type":"public-key","alg":-7},{"type":"public-key","alg":-257}],"authenticatorSelection":{"residentKey":"required","userVerification":"required"},"attestation":"none","timeout":300000}}""")
+    return Http(200, """{"challengeId":"${ch.id}","publicKey":{"rp":{"id":${Contract.q(rp.id)},"name":${Contract.q(rp.name)}},"user":{"id":${Contract.q(b64u(userId))},"name":${Contract.q(name)},"displayName":${Contract.q(name)}},"challenge":${Contract.q(b64u(ch.bytes))},"pubKeyCredParams":[{"type":"public-key","alg":-7},{"type":"public-key","alg":-257}],"excludeCredentials":[$exclude],"authenticatorSelection":{"residentKey":"required","userVerification":"required"},"attestation":"none","timeout":300000}}""")
 }
 
 private fun passkeyRegister(c: Connection, deps: Deps, principal: Principal?, body: String): Http {
@@ -214,15 +220,22 @@ private fun passkeyRegister(c: Connection, deps: Deps, principal: Principal?, bo
     val accounts = Accounts(c, deps.now)
     val ch = accounts.takeChallenge(UUID.fromString(str(m, "challengeId")), "register", device)
         ?: return Http(401, """{"error":"the registration was not accepted: unknown, expired or already used challenge"}""")
-    // The challenge decided whose passkey this is when it was issued; a bearer presented now does not change that.
+    // The challenge decided whose passkey this is when it was issued; a bearer presented now does not
+    // change that — and a signed-in caller finishing an anonymous challenge would land in a new account
+    // while believing they had added a passkey to theirs, so that is refused too.
     if (ch.accountId != null && ch.accountId != principal?.accountId) return Http(401, """{"error":"the registration was not accepted: this challenge belongs to another account"}""")
+    if (ch.accountId == null && principal?.accountId != null) return Http(409, """{"error":"this challenge was issued to nobody; to add a passkey to your account, ask for options while signed in"}""")
     val credentialId = b64u(str(m, "credentialId"))
     return when (val r = WebAuthn.register(b64u(str(m, "clientDataJSON")), b64u(str(m, "attestationObject")), ch.bytes, rp)) {
         is WebAuthn.Outcome.Bad -> Http(401, """{"error":${Contract.q("the registration was not accepted: " + r.why)}}""")
         is WebAuthn.Outcome.Ok -> {
             if (!r.value.credentialId.contentEquals(credentialId)) return Http(401, """{"error":"the registration was not accepted: credential id does not match the authenticator data"}""")
             if (accounts.passkey(credentialId) != null) return Http(401, """{"error":"the registration was not accepted: this passkey is already registered"}""")
-            Http(200, sessionJson(accounts.registerPasskey(ch.accountId, r.value.credentialId, r.value.publicKeyCose, r.value.signCount, device)))
+            try {
+                Http(200, sessionJson(accounts.registerPasskey(ch.accountId, ch.userHandle, r.value.credentialId, r.value.publicKeyCose, r.value.signCount, device)))
+            } catch (e: org.postgresql.util.PSQLException) {
+                if (e.sqlState == "23505") Http(401, """{"error":"the registration was not accepted: this passkey is already registered"}""") else throw e
+            }
         }
     }
 }

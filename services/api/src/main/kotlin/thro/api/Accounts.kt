@@ -31,6 +31,9 @@ public class Accounts(
     /** The account behind this credential was deleted; there is nothing to sign in to. */
     public class AccountDeleted : IllegalStateException("this account was deleted")
 
+    /** A link was asked for, but the subject is already another account's. Nobody is signed in. */
+    public class SubjectHeldElsewhere : IllegalStateException("that sign-in already belongs to another account")
+
     public sealed interface Refreshed {
         public data class Rotated(val session: Session) : Refreshed
         /** The token had been used before. The family is now revoked, and this says so. */
@@ -74,6 +77,7 @@ public class Accounts(
                 } else null to null
             }
         }
+        if (linkTo != null && accountId != null && accountId != linkTo) throw SubjectHeldElsewhere()
         if (accountId == null) {
             accountId = linkTo ?: newAccount().also { created = true }
             credentialId = UUID.randomUUID()
@@ -85,12 +89,17 @@ public class Accounts(
         openFamily(credentialId!!, accountId!!, deviceId, created)
     }
 
-    /** An account, its player and the claim binding them, in this transaction. */
-    private fun newAccount(): UUID {
+    /** An account, its player and the claim binding them, in this transaction. [userHandle] when a passkey chose it first. */
+    private fun newAccount(userHandle: ByteArray? = null): UUID {
         val accountId = UUID.randomUUID()
         // created_via 'self' makes V016's trigger record the person's own consent at creation.
-        connection.prepareStatement("INSERT INTO identity.account (account_id, display_name, created_via) VALUES (?, ?, 'self')")
-            .use { ps -> ps.setObject(1, accountId); ps.setString(2, PLACEHOLDER_NAME); ps.executeUpdate() }
+        if (userHandle == null) {
+            connection.prepareStatement("INSERT INTO identity.account (account_id, display_name, created_via) VALUES (?, ?, 'self')")
+                .use { ps -> ps.setObject(1, accountId); ps.setString(2, PLACEHOLDER_NAME); ps.executeUpdate() }
+        } else {
+            connection.prepareStatement("INSERT INTO identity.account (account_id, display_name, created_via, user_handle) VALUES (?, ?, 'self', ?)")
+                .use { ps -> ps.setObject(1, accountId); ps.setString(2, PLACEHOLDER_NAME); ps.setBytes(3, userHandle); ps.executeUpdate() }
+        }
         val orgs = Organisations(connection)
         val playerId = orgs.createPlayer(source = "self", by = accountId)
         orgs.claim(playerId, accountId, method = "self_created")
@@ -101,8 +110,12 @@ public class Accounts(
 
     public data class Challenge(val id: UUID, val bytes: ByteArray, val accountId: UUID?, val userHandle: ByteArray?)
 
-    /** A fresh ceremony: 32 random bytes, five minutes, once. [accountId] when a passkey is added to an account. */
+    /**
+     * A fresh ceremony: 32 random bytes, five minutes, once. [accountId] when a passkey is added to
+     * an account. The device id is bookkeeping — it is whatever the caller said — not a control.
+     */
     public fun newChallenge(kind: String, deviceId: UUID, accountId: UUID? = null): Challenge {
+        connection.prepareStatement("SELECT identity.sweep_challenges()").use { it.executeQuery().close() }
         val id = UUID.randomUUID()
         val bytes = ByteArray(32).also(random::nextBytes)
         val handle = if (kind == "register" && accountId == null) ByteArray(32).also(random::nextBytes) else null
@@ -129,10 +142,21 @@ public class Accounts(
         Challenge(id, row[0] as ByteArray, row[1] as UUID?, row[2] as ByteArray?)
     }
 
-    /** Stores a verified passkey — on [accountId], or on a new account — and opens a session. */
-    public fun registerPasskey(accountId: UUID?, credentialId: ByteArray, publicKeyCose: ByteArray, signCount: Long, deviceId: UUID): Session = transaction {
+    /** The WebAuthn user id for every passkey this account creates, and its live passkey ids to exclude. */
+    public data class PasskeyIdentity(val userHandle: ByteArray, val credentialIds: List<ByteArray>)
+
+    public fun passkeyIdentity(accountId: UUID): PasskeyIdentity? {
+        val handle = connection.prepareStatement("SELECT user_handle FROM identity.account WHERE account_id = ? AND deleted_at IS NULL")
+            .use { ps -> ps.setObject(1, accountId); ps.executeQuery().use { rs -> if (rs.next()) rs.getBytes(1) else null } } ?: return null
+        val ids = connection.prepareStatement("SELECT subject FROM identity.credential WHERE account_id = ? AND kind = 'passkey' AND revoked_at IS NULL")
+            .use { ps -> ps.setObject(1, accountId); ps.executeQuery().use { rs -> generateSequence { if (rs.next()) Base64.getUrlDecoder().decode(rs.getString(1)) else null }.toList() } }
+        return PasskeyIdentity(handle, ids)
+    }
+
+    /** Stores a verified passkey — on [accountId], or on a new account with [userHandle] — and opens a session. */
+    public fun registerPasskey(accountId: UUID?, userHandle: ByteArray?, credentialId: ByteArray, publicKeyCose: ByteArray, signCount: Long, deviceId: UUID): Session = transaction {
         val subject = Base64.getUrlEncoder().withoutPadding().encodeToString(credentialId)
-        val account = accountId ?: newAccount()
+        val account = accountId ?: newAccount(userHandle)
         val id = UUID.randomUUID()
         connection.prepareStatement(
             "INSERT INTO identity.credential (credential_id, account_id, kind, subject, public_key, sign_count) VALUES (?, ?, 'passkey', ?, ?, ?)",

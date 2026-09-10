@@ -145,6 +145,27 @@ class PasskeyTest {
             check("the COSE public key and the counter are stored", stored == (0L to cose.size))
             val (ch5, chal5) = registerOptions()
             check("the same passkey cannot be registered twice", register(ch5, clientData("webauthn.create", chal5), authData(rpId, UP_UV_AT, 0, credId, cose)).status.value == 401)
+            val (chB, chalB) = registerOptions()
+            val bomb = post("/v1/auth/passkey/register", """{"challengeId":"$chB","deviceId":"$device","credentialId":${Contract.q(b64.encodeToString(credId))},"clientDataJSON":${Contract.q(b64.encodeToString(clientData("webauthn.create", chalB)))},"attestationObject":${Contract.q(b64.encodeToString(byteArrayOf(0x9a.toByte(), 0x7f, 0xff.toByte(), 0xff.toByte(), 0xff.toByte())))}}""")
+            check("a CBOR array claiming two billion items is a 401 in constant memory, not an allocation", bomb.status.value == 401 && bomb.bodyAsText().contains("CBOR"))
+            val (chM, chalM) = registerOptions()
+            val mislabelled = cbor(linkedMapOf(1L to 2L, 3L to -257L, -1L to 1L, -2L to ByteArray(32) { 1 }, -3L to ByteArray(32) { 2 }))
+            val mis = register(chM, clientData("webauthn.create", chalM), authData(rpId, UP_UV_AT, 0, ByteArray(16) { 9 }, mislabelled), id = ByteArray(16) { 9 })
+            check("an EC key labelled RS256 is refused", mis.status.value == 401 && mis.bodyAsText().contains("ES256"))
+            // RS256: an RSA passkey registers and asserts too.
+            val rsa = KeyPairGenerator.getInstance("RSA").apply { initialize(2048) }.generateKeyPair()
+            val rsaPub = rsa.public as java.security.interfaces.RSAPublicKey
+            fun unsigned(b: java.math.BigInteger) = b.toByteArray().let { if (it[0] == 0.toByte()) it.copyOfRange(1, it.size) else it }
+            val rsaCose = cbor(linkedMapOf(1L to 3L, 3L to -257L, -1L to unsigned(rsaPub.modulus), -2L to unsigned(rsaPub.publicExponent)))
+            val rsaId = ByteArray(16) { 7 }
+            val (chR, chalR) = registerOptions()
+            val rsaReg = register(chR, clientData("webauthn.create", chalR), authData(rpId, UP_UV_AT, 0, rsaId, rsaCose), id = rsaId)
+            val (aR, acR) = assertOptions()
+            val cdR = clientData("webauthn.get", acR); val adR = authData(rpId, UP_UV, 0)
+            val rsaSig = Signature.getInstance("SHA256withRSA").run { initSign(rsa.private); update(adR + MessageDigest.getInstance("SHA-256").digest(cdR)); sign() }
+            val rsaIn = assert(aR, cdR, adR, rsaSig, id = rsaId)
+            check("an RS256 passkey registers and signs in, and a counter that stays at zero is accepted (synced passkeys report none)",
+                rsaReg.status.value == 200 && rsaIn.status.value == 200 && field(rsaIn.bodyAsText(), "accountId") == field(rsaReg.bodyAsText(), "accountId"))
 
             // --- assertion ------------------------------------------------------------------------------
             val (a1, ac1) = assertOptions()
@@ -187,6 +208,15 @@ class PasskeyTest {
                 second.status.value == 200 && field(second.bodyAsText(), "accountId").toString() == accountId.toString() && field(second.bodyAsText(), "created") == false)
             val me = client.get("/v1/me") { header("Authorization", "Bearer $access2") }.bodyAsText()
             check("the profile says how many ways in the person has", field(me, "credentials") == 2L)
+            val opts1 = post("/v1/auth/passkey/register/options", """{"deviceId":"$device"}""", access2).bodyAsText()
+            val opts2 = post("/v1/auth/passkey/register/options", """{"deviceId":"$device"}""", access2).bodyAsText()
+            check("an account's user id is the same for every passkey it creates, and its live passkeys are excluded so the keychain never replaces one",
+                field(opts1, "publicKey", "user", "id") == field(opts2, "publicKey", "user", "id") &&
+                    (field(opts1, "publicKey", "excludeCredentials") as List<*>).map { (it as Map<*, *>)["id"] }.toSet() == setOf(b64.encodeToString(credId), b64.encodeToString(cred2)))
+            val (chAnon, chalAnon) = registerOptions()
+            val kp3 = KeyPairGenerator.getInstance("EC").apply { initialize(256) }.generateKeyPair(); val cred3 = ByteArray(16) { 3 }
+            val confused = register(chAnon, clientData("webauthn.create", chalAnon), authData(rpId, UP_UV_AT, 0, cred3, coseKey(kp3)), id = cred3, token = access2)
+            check("a signed-in caller finishing an anonymous challenge is refused rather than landing in a new account", confused.status.value == 409)
             val (ch9, _) = registerOptions(token = access2)
             val stolen = register(ch9, clientData("webauthn.create", "x"), authData(rpId, UP_UV_AT, 0, cred2, coseKey(kp2)), id = cred2)
             check("a challenge issued to an account cannot be finished by an anonymous caller", stolen.status.value == 401 && stolen.bodyAsText().contains("another account"))
@@ -196,6 +226,6 @@ class PasskeyTest {
             check("this host tells iOS which app may use its passkeys", aasa.status.value == 200 && aasa.bodyAsText() == """{"webcredentials":{"apps":["TEAMID.app.example"]}}""")
         }
         println("  $passed passkey properties held")
-        assertEquals(20, passed)
+        assertEquals(25, passed)
     }
 }

@@ -3,7 +3,7 @@
 # Pick the app name at `fly launch`; ADR-011 asks that permanent identifiers avoid the product
 # name, so prefer something like "<company>-api-staging" / "<company>-api". Two apps — staging and
 # production — from this one file: `fly deploy --config fly.toml --app <name>`.
-app = "CHANGE-ME-api-staging"
+app = "thro-api-staging"
 primary_region = "lhr"
 
 [build]

@@ -2475,3 +2475,29 @@ association file for its passkeys from the configured app ids, and the server re
 as platforms set it, so `fly postgres attach` is enough; the release step migrates as the superuser
 and grants the app's own user the application roles. `docs/runbooks/DEPLOY.md` now names the apps,
 the database and every secret, and gives the seven staging steps in the order they run.
+
+## The fifth hostile review: a five-byte body
+
+The passkey review found the worst bug of the day in five bytes: a CBOR array header claiming two
+billion items made the reader allocate for them before reading one, and `OutOfMemoryError` is not
+an `Exception`. An unauthenticated caller could have taken a machine down with a handful of
+requests. A count is now a claim checked against the bytes that remain — every item costs at least
+one — and nothing is pre-sized; the test posts the five bytes and gets a 401 in constant memory.
+
+Two account-confusion paths are closed with 409s: a signed-in caller finishing a challenge that was
+issued to nobody would have landed in a new account while believing they had added a passkey to
+theirs; and a signed-in caller linking a provider subject that another account already holds would
+have been handed that other account's session, indistinguishable from success except by reading the
+id. Neither is a way in any more. A WebAuthn user id is now the account's for life (V026), because
+the platform keychain replaces a passkey created for the same relying party and user id, and the
+options exclude the account's live passkeys so nothing is offered twice; the second-passkey test
+reads both back. Expired challenges are swept by an owner-defined function the application may
+call, and the device id on a challenge is described as what it is — bookkeeping. An EC key labelled
+RS256 or an RSA key under 2048 bits is refused; an RS256 passkey registers and asserts, tested. The
+database URL's credentials are percent-decoded exactly once, so a password with a plus or a percent
+survives boot, held by a test with no database.
+
+The runbook had a step that would have made the app's database user a superuser: `fly postgres
+attach` defaults to it. It now says `--superuser=false` and why, `fly.toml` carries the staging
+app name, and the runbook says in bold what the review said in plain terms — a passkey is bound to
+its host, so production's domain is chosen before any real person registers one.

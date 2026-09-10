@@ -180,6 +180,13 @@ class AuthTest {
                 refreshRace.count { it is Accounts.Refreshed.Rotated } == 1 && refreshRace.count { it is Accounts.Refreshed.Reused } == 1)
             pool.shutdown()
 
+            // --- linking a provider is recovery (PD-032), and never a switch of person ------------------
+            val linkBase = Accounts(c, { clock }).signIn("apple", "001234.linkbase", device)
+            val linked = post("/v1/auth/apple", """{"idToken":${thro.api.http.Contract.q(jwt(apple.private, "apple-1", claims(sub = "001234.newsubject")))},"deviceId":"$device"}""", linkBase.accessToken)
+            check("with a session, an unheld subject is added to the caller's account", linked.status.value == 200 && field(linked.bodyAsText(), "accountId") == linkBase.accountId.toString() && field(linked.bodyAsText(), "created") == "false" && Accounts(c).credentialCount(linkBase.accountId) == 2)
+            val held = post("/v1/auth/apple", """{"idToken":${thro.api.http.Contract.q(jwt(apple.private, "apple-1", claims(sub = "001234.first")))},"deviceId":"$device"}""", linkBase.accessToken)
+            check("with a session, a subject another account holds is 409 and nobody is signed in — never a quiet switch of person", held.status.value == 409 && !held.bodyAsText().contains("accessToken"))
+
             // --- an account that is not whole ------------------------------------------------------------
             val claimed = Accounts(c, { clock }).signIn("apple", "001234.unclaimed", device)
             c.prepareStatement("UPDATE identity.player_claim SET revoked_at = clock_timestamp(), revoked_by = ?, revoked_reason = 'test' WHERE account_id = ? AND revoked_at IS NULL")
@@ -194,7 +201,7 @@ class AuthTest {
                 post("/v1/auth/refresh", """{"refreshToken":${thro.api.http.Contract.q(race[0].refreshToken)}}""").status.value == 401)
         }
         println("  $passed auth properties held")
-        assertEquals(38, passed)
+        assertEquals(40, passed)
     }
 
     @Test

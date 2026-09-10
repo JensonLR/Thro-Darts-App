@@ -9,15 +9,22 @@ repository holds a secret.
 | Thing | Staging | Production (when you get there) |
 |---|---|---|
 | Fly app | `thro-api-staging` | `thro-api` |
-| Public host | `thro-api-staging.fly.dev` | `thro-api.fly.dev`, later your own domain |
+| Public host | `thro-api-staging.fly.dev` | your own domain, chosen before the first real passkey (see below) |
 | Fly Postgres app (staging only) | `thro-db-staging` | a PITR-capable managed Postgres in London — see below |
 | Database name (what `attach` creates) | `thro_api_staging` | — |
 | Passkey relying party (`THRO_RP_ID`) | `thro-api-staging.fly.dev` (the default) | the production host |
 | Apple app id for passkeys | `2XM324WPD5.app.thro.darts` | the same |
 | Fly organisation | `personal` | `personal` |
 
-If `fly apps create thro-api-staging` says the name is taken, add a short suffix (for example
-`thro-api-staging-jl`) and use that name everywhere below. ADR-011 prefers permanent identifiers
+`fly.toml` already says `app = "thro-api-staging"`. If `fly apps create thro-api-staging` says the
+name is taken, add a short suffix (for example `thro-api-staging-jl`), change that one line in
+`fly.toml` to match, and use the new name everywhere below.
+
+**Passkeys are bound to the host.** A passkey is created for a relying party id and cannot move:
+change the host and every passkey registered against the old one stops working. Staging on
+`thro-api-staging.fly.dev` is fine because staging holds no real people. For production, choose
+the final host — your own domain — **before** any real person registers a passkey, and set
+`THRO_RP_ID` to it from the first production deploy. ADR-011 prefers permanent identifiers
 without the product name; a Fly app name is not permanent — your own domain will front it — so
 these are chosen for clarity.
 
@@ -36,9 +43,11 @@ fly postgres create --name thro-db-staging --org personal --region lhr \
 It prints a `postgres` superuser password once. Copy it; you need it in step 4.
 
 **3. Attach the database to the app.** This creates the database `thro_api_staging`, a user
-`thro_api_staging`, and sets the app's `DATABASE_URL` secret:
+`thro_api_staging`, and sets the app's `DATABASE_URL` secret. `--superuser=false` matters: the
+default makes the app's user a superuser, which would let it bypass every grant the migrations
+set up, and the release step gives it exactly the application roles instead.
 ```bash
-fly postgres attach thro-db-staging --app thro-api-staging
+fly postgres attach thro-db-staging --app thro-api-staging --superuser=false
 ```
 
 **4. Secrets.** The release step migrates as the superuser and then grants the app's user the
@@ -113,3 +122,5 @@ Because every migration must be compatible with the previous image, this is safe
   the release step). ADR-011's per-module connections are a follow-up before production traffic.
 - Rate limiting on the sign-in routes, object storage (media), push (APNs) and the scheduled
   restore drill are not configured.
+- Production's `fly deploy --app thro-api` will need its own copy of `fly.toml` (`app = "thro-api"`,
+  the production relying party in `[env]`) — written when production is provisioned.

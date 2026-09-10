@@ -114,8 +114,10 @@ public object WebAuthn {
     public fun publicKey(cose: ByteArray): Outcome<Pair<PublicKey, String>> {
         val m = try { Cbor.decode(cose) as? Map<*, *> } catch (e: Exception) { null } ?: return Outcome.Bad("public key is not a COSE map")
         return try {
+            val alg = m[3L]
             when (m[1L]) {
                 2L -> { // EC2
+                    if (alg != ES256) return Outcome.Bad("an EC key signs ES256, not $alg")
                     if (m[-1L] != 1L) return Outcome.Bad("only curve P-256 is accepted")
                     val x = m[-2L] as ByteArray; val y = m[-3L] as ByteArray
                     val params = AlgorithmParameters.getInstance("EC").apply { init(ECGenParameterSpec("secp256r1")) }.getParameterSpec(ECParameterSpec::class.java)
@@ -123,7 +125,9 @@ public object WebAuthn {
                     Outcome.Ok(key to "SHA256withECDSA")
                 }
                 3L -> { // RSA
+                    if (alg != RS256) return Outcome.Bad("an RSA key signs RS256, not $alg")
                     val n = m[-1L] as ByteArray; val e = m[-2L] as ByteArray
+                    if (n.size < 256) return Outcome.Bad("an RSA key is at least 2048 bits")
                     Outcome.Ok(KeyFactory.getInstance("RSA").generatePublic(RSAPublicKeySpec(BigInteger(1, n), BigInteger(1, e))) to "SHA256withRSA")
                 }
                 else -> Outcome.Bad("key type ${m[1L]} is not accepted")
@@ -158,14 +162,17 @@ public object Cbor {
                     1 -> -1L - arg(info).toLong()
                     2 -> bytes(arg(info))
                     3 -> String(bytes(arg(info)), Charsets.UTF_8)
-                    4 -> List(arg(info).toInt()) { item() }
-                    5 -> { val n = arg(info).toInt(); val m = LinkedHashMap<Any?, Any?>(n); repeat(n) { val k = item(); m[k] = item() }; m }
+                    // A count is a claim; every item costs at least one byte, so a count larger than
+                    // what remains is refused before anything is allocated for it.
+                    4 -> { val n = count(arg(info)); val l = ArrayList<Any?>(); repeat(n) { l.add(item()) }; l }
+                    5 -> { val n = count(arg(info)); val m = LinkedHashMap<Any?, Any?>(); repeat(n) { val k = item(); m[k] = item() }; m }
                     7 -> when (info) { 20 -> false; 21 -> true; 22 -> null; else -> throw IllegalArgumentException("simple value $info not accepted") }
                     else -> throw IllegalArgumentException("CBOR major type $major not accepted")
                 }
             } finally { depth-- }
         }
         fun next(): Int { require(pos < b.size) { "CBOR truncated" }; return b[pos++].toInt() and 0xFF }
+        fun count(n: Long): Int { require(n in 0..(b.size - pos).toLong()) { "CBOR count $n exceeds input" }; return n.toInt() }
         fun arg(info: Int): Long = when {
             info < 24 -> info.toLong()
             info == 24 -> next().toLong()
