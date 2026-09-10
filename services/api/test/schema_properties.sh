@@ -53,6 +53,10 @@ for f in "$DIR"/V*.sql; do
     echo "  $PASS passed, $FAIL failed"; exit 1
   fi
 done
+# As the Kotlin runner does after a run: the health route reads the ledger through the application's
+# connection, so the read role may see it and nothing more.
+$PSQL -c "DO \$\$ BEGIN IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname='app_read') THEN
+  GRANT USAGE ON SCHEMA thro TO app_read; GRANT SELECT ON thro.schema_migration TO app_read; END IF; END \$\$;" >/dev/null 2>&1
 printf '  schema at %s\n' "$($PSQL -c "SELECT 'V' || lpad(max(version)::text, 3, '0') FROM thro.schema_migration;")"
 
 echo
