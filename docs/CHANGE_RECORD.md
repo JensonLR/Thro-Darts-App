@@ -2717,3 +2717,39 @@ Neon (staging) is migrated to V027 and seeded: 3 leagues, 5 seasons, 6 divisions
 venues, 77 affiliations, 208 source records. 609 client tests; 92 schema properties; the HTTP suite
 holds 29 properties. Three `tools/check_*.py` scripts gained `from __future__ import annotations`
 so they run on the Mac's Python 3.9 as well as CI's.
+
+## Discover, rethought; the set-up screens made one screen; the brand on the paper side
+
+The founder's second pass on PD-033 and the Play flow: a map nobody could touch over a long static
+list; a set-up screen that scrolled and a ready screen that was one button in a field of paper;
+"around here" said to somebody in Brighton; and no recent pass had moved the brand identity.
+
+**The paper side gets the board's vocabulary** (`ThroDesign/Slate.swift`): `ThroSlate`, a
+board-coloured panel with the lamp's three stops and the chalk dust; `ThroMark`, the Ø drawn from
+its measured geometry; `ThroFixtureSlate`, two names either side of the mark with the format in
+chalk boxes; `ThroBottomAction`, a screen's one decision pinned on a hairline; `ThroChoiceRow`, a
+labelled choice on one line. `SegmentedControl` stops being the system pill with the numbers filed
+off: the chosen segment is a block of the brand green with chalk text on a paper trough, the same
+statement the primary button makes, and it changes on every screen that uses it at once.
+
+**Match setup** is one screen: the two seats side by side, one row of known names that fills the
+empty seat, four choice rows, Continue pinned. `MatchSetupLayout` holds the arithmetic and a test
+holds it under the iPhone SE's height at the default text size (it scrolls only when Dynamic Type
+makes it taller than the phone). **Match ready** is the fixture on a slate filling the screen, the
+legs so far under it when there are any, Start pinned.
+
+**Discover** opens on a slate that says what is around the player and how it knows. Location is
+asked for on that slate and nowhere else (`Nearby`, while-in-use, read once per grant, never sent
+to the server: distance is a subtraction done on the phone from the coordinates the server
+publishes). With a location the leagues are ranked nearest first with miles on the right; when
+the nearest is beyond 40 km the slate says "Nothing near you yet" and how far the nearest is; with
+location off it says so and offers the button, disabled rather than vanished. Under it: leagues,
+open tournaments (`GET /v1/events`, new: open access, public venues, no person), and the player's
+own teams. **Local leagues** is a map you can use: pins are small boards with the mark, tapping one
+opens the pub on a slate — postcode, distance, the sides that play there, a Directions button into
+Maps, and the line that says it was matched by name where it was; tapping a team in the list takes
+the map to its pub; the list folds by league, open on the one you came for. Every control has a
+press state and a tap target (`check_controls_react` found four that did not, in the first cut).
+
+**Per-dart keypad** runs 20 down to 1 as the founder set it (PD-034 amended; 1-to-20 with the big
+five nearest the thumb was recommended and not taken).

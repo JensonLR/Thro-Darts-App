@@ -173,6 +173,13 @@ public object Contract {
             responses = mapOf(200 to "leagues, newest season first"),
         ),
         Endpoint(
+            id = "events", method = "GET", path = "/v1/events", authenticated = false,
+            summary = "Open-entry events that have not started yet, with their venues",
+            description = "The notice on the pub door: open access only, public venues only, no person on any row. Eligibility, entry counts and whether the caller is in are on /v1/me/discovery.",
+            query = listOf("from" to "date-time, default now"),
+            responses = mapOf(200 to "events, soonest first, at most 100", 400 to "malformed date"),
+        ),
+        Endpoint(
             id = "me.discovery", method = "GET", path = "/v1/me/discovery", authenticated = true,
             summary = "Darts the caller can play, and why each card is there",
             description = "The discovery read model for the caller between from and to. Every card carries its reasons; nothing is called eligible that THRØ cannot check.",

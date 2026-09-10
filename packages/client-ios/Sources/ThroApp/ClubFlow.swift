@@ -524,8 +524,9 @@ public enum ClubRoute: Equatable {
     case newTeam(String)
     /// Saying what happened in a fixture, and where that came from (PD-020).
     case result(club: String, fixture: String)
-    /// The real leagues around here, from the server's public front (PD-033): who plays where.
-    case leagues
+    /// The real leagues around here, from the server's public front (PD-033): who plays where,
+    /// opened on one league or on all of them.
+    case leagues(UUID?)
 }
 
 /// The Clubs tab.
@@ -536,9 +537,12 @@ public struct ClubsFlow: View {
     /// moment it lands, so a player who then taps Back is not sent to the same place again by the
     /// next re-evaluation.
     @Binding private var open: ClubLanding?
-    /// The server, when the build names one. The local leagues screen reads its public front; with
-    /// no server the row is not offered, rather than offered and failing.
+    /// The server, when the build names one. Discover reads its public front; with no server the
+    /// leagues and tournaments say so rather than spin.
     private let api: ThroAPI?
+    /// What is around the player: the leagues, the open events, and the phone's location once
+    /// granted. One per tab, so the map and the list are reading the same knowledge.
+    @StateObject private var nearby = Nearby()
 
     public init(store: ClubStore, open: Binding<ClubLanding?> = .constant(nil), api: ThroAPI? = nil) {
         self.store = store
@@ -615,15 +619,18 @@ public struct ClubsFlow: View {
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
                     .background(ThroColor.colorBackgroundPrimary.ignoresSafeArea())
             } else {
-                ClubsScreen(clubs: store.clubs,
-                            badge: { store.image($0.badgeAssetId) },
-                            onOpen: { route = .club($0.id) },
-                            onCreate: { route = .newClub },
-                            onLeagues: api == nil ? nil : { route = .leagues })
+                DiscoverScreen(nearby: nearby, clubs: store.clubs,
+                               badge: { store.image($0.badgeAssetId) },
+                               onOpen: { route = .club($0.id) },
+                               onCreate: { route = .newClub },
+                               onLeague: { route = .leagues($0) },
+                               onUseLocation: { nearby.useMyLocation() },
+                               onRetry: { Task { await nearby.load(api, force: true) } })
+                    .task { await nearby.load(api) }
             }
 
-        case .leagues:
-            LeaguesScreen(api: api, onBack: { route = .list })
+        case .leagues(let focus):
+            LeaguesScreen(nearby: nearby, api: api, focus: focus, onBack: { route = .list })
 
         case .newClub:
             NewClubScreen(onBack: { route = .list }) { name, kind, accent, shape, unit in

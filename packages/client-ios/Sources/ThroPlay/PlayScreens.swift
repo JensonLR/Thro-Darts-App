@@ -140,66 +140,74 @@ public struct MatchSetupScreen: View {
     /// every time is what makes a person's matches theirs rather than three strangers'.
     private let people: [LocalPerson]
 
-    /// The people not already chosen for the other seat, so the same person cannot be both players.
-    private func suggestions(excluding taken: String) -> [LocalPerson] {
-        let takenKey = taken.trimmingCharacters(in: .whitespaces).lowercased()
-        return people.filter { $0.name.lowercased() != takenKey }
-    }
-
     private var homeName: String { home.trimmingCharacters(in: .whitespaces).isEmpty ? "Home" : home.trimmingCharacters(in: .whitespaces) }
     private var awayName: String { away.trimmingCharacters(in: .whitespaces).isEmpty ? "Away" : away.trimmingCharacters(in: .whitespaces) }
 
     public var body: some View {
         VStack(spacing: 0) {
             TopBar("Match setup", eyebrow: "Local match", onBack: onBack)
+            // One screen. Everything a match needs fits above the fold on the smallest phone at
+            // the default text size (MatchSetupLayout holds the arithmetic), so this scrolls only
+            // when Dynamic Type makes it taller than the phone — never on its own account.
             ScrollView {
-                VStack(alignment: .leading, spacing: ThroSpacing.spacing5) {
+                VStack(alignment: .leading, spacing: ThroSpacing.spacing3) {
                     if let problem {
                         Snackbar(problem, tone: .error)
                     }
-                    // Platform keyboard behaviour, not design: names capitalise as names, Next moves
-                    // to the away player, Done puts the keyboard away, and so does a drag.
-                    ThroTextField("Home player", text: $home, placeholder: "Name")
-                        .modifier(NameEntry())
-                        .focused($focused, equals: .home)
-                        .submitLabel(.next)
-                        .onSubmit { focused = .away }
-                    known(suggestions(excluding: away)) { home = $0.name }
-                    ThroTextField("Away player", text: $away, placeholder: "Name")
-                        .modifier(NameEntry())
-                        .focused($focused, equals: .away)
-                        .submitLabel(.done)
-                        .onSubmit { focused = nil }
-                    known(suggestions(excluding: home)) { away = $0.name }
-                    ThroDivider()
-                    choice("Game", SegmentedControl([(301, "301"), (501, "501"), (701, "701")], selection: $game))
-                    choice("Length", SegmentedControl([(3, "Bo3"), (5, "Bo5"), (7, "Bo7"), (9, "Bo9")], selection: $length))
-                    choice("Start on", SegmentedControl([(InRule.straight, "Any"), (InRule.double, "Double in")],
-                                                        selection: $inRule))
-                    choice("Throws first", SegmentedControl([(Seat.home, homeName), (Seat.away, awayName)], selection: $first))
-                    ThroDivider()
-                    HStack(alignment: .top, spacing: 10) {
-                        Icon(.info, size: 16).foregroundStyle(ThroColor.colorTextSecondary).padding(.top, 2)
-                        Text("Matches scored on this device are self-reported and are not rated. They stay on this phone; sending them to THRØ is not built yet.")
-                            .thro(ThroTypography.metadata)
-                            .foregroundStyle(ThroColor.colorTextSecondary)
+                    // The two seats side by side, the way a fixture is written. Platform keyboard
+                    // behaviour, not design: names capitalise as names, Next moves to the away
+                    // player, Done puts the keyboard away, and so does a drag.
+                    HStack(alignment: .top, spacing: ThroSpacing.spacing3) {
+                        ThroTextField("Home", text: $home, placeholder: "Name")
+                            .modifier(NameEntry())
+                            .focused($focused, equals: .home)
+                            .submitLabel(.next)
+                            .onSubmit { focused = .away }
+                        ThroTextField("Away", text: $away, placeholder: "Name")
+                            .modifier(NameEntry())
+                            .focused($focused, equals: .away)
+                            .submitLabel(.done)
+                            .onSubmit { focused = nil }
                     }
-                    ThroButton("Continue", variant: .primary, size: .large, fullWidth: true) {
-                        onStart(NewMatch(homeName: homeName, awayName: awayName, startingScore: game,
-                                         inRule: inRule, outRule: .double,
-                                         legsMode: .bestOf, legsTarget: length, throwFirst: first))
-                    }
+                    known(suggestions()) { pick($0) }
+                    ThroDivider().padding(.vertical, ThroSpacing.spacing1)
+                    ThroChoiceRow("Game") { SegmentedControl([(301, "301"), (501, "501"), (701, "701")], selection: $game) }
+                    ThroChoiceRow("Legs") { SegmentedControl([(3, "Bo3"), (5, "Bo5"), (7, "Bo7"), (9, "Bo9")], selection: $length) }
+                    ThroChoiceRow("Start on") { SegmentedControl([(InRule.straight, "Any"), (InRule.double, "Double in")], selection: $inRule) }
+                    ThroChoiceRow("First throw") { SegmentedControl([(Seat.home, homeName), (Seat.away, awayName)], selection: $first) }
                 }
-                .padding(.vertical, ThroSpacing.spacing6)
+                .padding(.top, ThroSpacing.spacing5)
+                .padding(.bottom, ThroSpacing.spacing4)
                 .padding(.horizontal, ThroSpacing.spaceScreenGutter)
             }
+            .scrollBounceBehavior(.basedOnSize)
             .scrollDismissesKeyboard(.interactively)
+            ThroBottomAction {
+                ThroButton("Continue", variant: .primary, size: .large, fullWidth: true) {
+                    onStart(NewMatch(homeName: homeName, awayName: awayName, startingScore: game,
+                                     inRule: inRule, outRule: .double,
+                                     legsMode: .bestOf, legsTarget: length, throwFirst: first))
+                }
+            }
         }
         // The screen arrives (PD-027): one beat, on the design's own curve,
         // withdrawn entirely under Reduce Motion.
         .throEntrance(0)
         .background(ThroColor.colorBackgroundPrimary.ignoresSafeArea())
         .throAppearance(Appearance(stored: appearanceRaw))
+    }
+
+    /// The people not already in either seat. One row serves both fields: a tap fills the home
+    /// seat if it is empty, else the away seat, which is the order a scorer fills them in anyway.
+    private func suggestions() -> [LocalPerson] {
+        let taken = Set([home, away].map { $0.trimmingCharacters(in: .whitespaces).lowercased() })
+        return people.filter { !taken.contains($0.name.lowercased()) }
+    }
+
+    private func pick(_ person: LocalPerson) {
+        if home.trimmingCharacters(in: .whitespaces).isEmpty { home = person.name }
+        else if away.trimmingCharacters(in: .whitespaces).isEmpty { away = person.name }
+        else if focused == .away { away = person.name } else { home = person.name }
     }
 
     /// The people this phone already knows, as a row of taps. Absent entirely when it knows nobody,
@@ -230,12 +238,30 @@ public struct MatchSetupScreen: View {
         }
     }
 
-    private func choice<Control: View>(_ label: String, _ control: Control) -> some View {
-        VStack(alignment: .leading, spacing: ThroSpacing.spacing3) {
-            Eyebrow(label)
-            control
-        }
+}
+
+/// The set-up screen's height at the default text size, so a test can hold that it fits the
+/// smallest phone without scrolling — the same discipline `ThroStage` applies to the board.
+public enum MatchSetupLayout {
+    /// Top bar, the two seats side by side (one field's height), the row of known names, the rule,
+    /// four choice rows and the gaps between them; then the pinned action. Measured off the
+    /// components' own constants.
+    public static func height(knownPeople: Bool) -> CGFloat {
+        let topBar: CGFloat = 60
+        let field: CGFloat = 18 + ThroSpacing.spacing2 + 52          // label, gap, field
+        let names: CGFloat = knownPeople ? ThroSpacing.touchTargetMinimum : 0
+        let rule: CGFloat = 1 + 2 * ThroSpacing.spacing1
+        let rows: CGFloat = 4 * ThroSpacing.touchTargetMinimum
+        let blocks: CGFloat = 1 + (knownPeople ? 1 : 0) + 1 + 4
+        let gaps: CGFloat = (blocks - 1) * ThroSpacing.spacing3
+        let padding: CGFloat = ThroSpacing.spacing5 + ThroSpacing.spacing4
+        let action: CGFloat = 1 + ThroSpacing.spacing4 + 56 + ThroSpacing.spacing3
+        return topBar + field + names + rule + rows + gaps + padding + action
     }
+
+    /// The smallest phone's usable height upright: the iPhone SE's 667 points less its status bar.
+    /// The Play flow covers the tab bar, so the tab bar is not subtracted.
+    public static let smallestUsableHeight: CGFloat = 667 - 20
 }
 
 /// A person's name is typed as one: each word capitalised. iOS only; the Mac has no such keyboard.
@@ -268,30 +294,29 @@ public struct MatchReadyScreen: View {
     public var body: some View {
         VStack(spacing: 0) {
             TopBar("Match ready", eyebrow: "Local match", onBack: onBack)
-            ScrollView {
-                VStack(spacing: ThroSpacing.spacing6) {
-                    PlayerComparison(
-                        home: PlayerRef(name: session.name(.home)),
-                        away: PlayerRef(name: session.name(.away)),
-                        rows: session.visits.isEmpty ? [] : [
-                            .init("Legs", home: "\(session.legsWon(.home))", away: "\(session.legsWon(.away))"),
-                        ]
-                    )
-                    HStack(spacing: ThroSpacing.spacing2) {
-                        Tag("\(session.record.startingScore)")
-                        Tag(session.lengthLabel)
-                        Tag(session.outRuleLabel)
-                        if let inRule = session.inRuleLabel { Tag(inRule) }
+            // The fixture, written on a slate, holding the screen: no scroll, no field of paper
+            // under one button. The legs so far sit on the slate when there are any.
+            VStack(spacing: ThroSpacing.spacing4) {
+                ThroFixtureSlate(home: session.name(.home), away: session.name(.away),
+                                 tags: tags, footnote: footnote)
+                    .frame(maxHeight: .infinity)
+                if !session.visits.isEmpty {
+                    HStack {
+                        Text("Legs so far").thro(ThroTypography.label).foregroundStyle(ThroColor.colorTextSecondary)
+                        Spacer()
+                        Text("\(session.legsWon(.home))–\(session.legsWon(.away))")
+                            .thro(ThroTypography.heading3.family(.sport).weight(.bold))
+                            .foregroundStyle(ThroColor.colorTextPrimary)
                     }
-                    ThroButton(session.visits.isEmpty ? "Start scoring" : "Continue scoring",
-                               variant: .primary, size: .large, fullWidth: true, action: onStart)
-                    Text("\(session.name(session.thrower ?? .home)) throws first. Scored on this device; self-reported and not rated.")
-                        .thro(ThroTypography.metadata)
-                        .foregroundStyle(ThroColor.colorTextSecondary)
-                        .multilineTextAlignment(.center)
+                    .accessibilityElement(children: .combine)
                 }
-                .padding(.vertical, 28)
-                .padding(.horizontal, ThroSpacing.spaceScreenGutter)
+            }
+            .padding(.top, ThroSpacing.spacing5)
+            .padding(.bottom, ThroSpacing.spacing4)
+            .padding(.horizontal, ThroSpacing.spaceScreenGutter)
+            ThroBottomAction {
+                ThroButton(session.visits.isEmpty ? "Start scoring" : "Continue scoring",
+                           variant: .primary, size: .large, fullWidth: true, action: onStart)
             }
         }
         // The screen arrives (PD-027): one beat, on the design's own curve,
@@ -299,6 +324,16 @@ public struct MatchReadyScreen: View {
         .throEntrance(0)
         .background(ThroColor.colorBackgroundPrimary.ignoresSafeArea())
         .throAppearance(Appearance(stored: appearanceRaw))
+    }
+
+    private var tags: [String] {
+        var t = ["\(session.record.startingScore)", session.lengthLabel, session.outRuleLabel]
+        if let inRule = session.inRuleLabel { t.append(inRule) }
+        return t
+    }
+
+    private var footnote: String {
+        "\(session.name(session.thrower ?? .home)) throws first · scored on this phone · self-reported, not rated"
     }
 }
 

@@ -130,6 +130,21 @@ public struct PublicLeague: Decodable, Sendable, Equatable, Identifiable {
     public var shownSeason: Season? { seasons.first(where: \.current) ?? seasons.first }
 }
 
+/// An open-entry event as its public notice shows it: what, where, when, how many places. Who is
+/// in it, and whether you may be, is the signed-in discovery model's business.
+public struct PublicEvent: Decodable, Sendable, Equatable, Identifiable {
+    public let eventId: UUID
+    public let name: String
+    public let tournament: String?
+    public let venue: PublicLeague.Venue?
+    public let venueLabel: String?
+    public let startsAt: Date
+    public let entriesCloseAt: Date?
+    public let entrantKind: String
+    public let capacity: Int?
+    public var id: UUID { eventId }
+}
+
 public struct DiscoveryCard: Decodable, Sendable, Equatable, Identifiable {
     public let eventId: UUID
     public let name: String
@@ -360,6 +375,14 @@ public actor ThroAPI {
         let (data, http) = try await send("GET", path, bearer: session?.accessToken)
         guard http.statusCode == 200 else { throw APIError.status(http.statusCode, String(decoding: data, as: UTF8.self)) }
         return try (decode(data) as Envelope).leagues
+    }
+
+    /// Open-entry events that have not started (the notice on the pub door). No session needed.
+    public func events() async throws -> [PublicEvent] {
+        struct Envelope: Decodable { let events: [PublicEvent] }
+        let (data, http) = try await send("GET", "/v1/events", bearer: session?.accessToken)
+        guard http.statusCode == 200 else { throw APIError.status(http.statusCode, String(decoding: data, as: UTF8.self)) }
+        return try (decode(data) as Envelope).events
     }
 
     // MARK: plumbing

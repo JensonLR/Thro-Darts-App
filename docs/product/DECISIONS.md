@@ -1717,13 +1717,14 @@ keep the big scores"). Reversible: a layout constant.
 
 The **visit keypad** keeps its six quick totals — 180, 140, 100, 60, 45, 26 — above a phone-dialler
 grid (1 2 3 / 4 5 6 / 7 8 9 / Miss 0 Undo / Enter); it already read that way and does not change.
-The **per-dart keypad**'s twenty sectors now count 1 to 20 in four rows of five, ascending down the
-tray, so 16 to 20 are the bottom sector row, nearest the thumb and directly above 25 · BULL · MISS ·
-ENTER. The board's clockwise order — `20 1 18 4 13` first — is withdrawn: it had to be learned, it
-put 20 in the worst corner for a thumb, and it split four board neighbours across row ends anyway.
+The **per-dart keypad**'s twenty sectors now count in four rows of five. The founder set the
+direction: **20 down to 1**, `20 19 18 17 16` first, `5 4 3 2 1` last, above 25 · BULL · MISS · ENTER.
+The board's clockwise order — `20 1 18 4 13` first — is withdrawn: it had to be learned and it split
+four board neighbours across row ends anyway.
 
 ### Why
 
-Ergonomics for the majority: most visits are 20s and 19s and the doubles beside them; a thumb reaches
-the bottom of a phone easily and the top corners worst; and a grid that runs 1 at the top is the one
-grid nobody has to be taught.
+Zero learning: a counted grid is the one grid nobody has to be taught, and reading down from 20 puts
+the numbers a scorer says most on the first row in the order they are said. The alternative — 1 to
+20 ascending, so the big five sit on the bottom row nearest the thumb — was recommended on reach and
+not taken; it is one constant if the thumb argument wins on the phone.

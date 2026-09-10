@@ -55,8 +55,15 @@ public struct ThroTextField: View {
     }
 }
 
-/// SegmentedControl.jsx. The export's segment is 40 high, below the 44 minimum the audit enforces
-/// (DESIGN_UNSPECIFIED, found mechanically); the segment here is the minimum, not the export's 40.
+/// SegmentedControl.jsx, in THRØ's own hand. The export's segment is 40 high, below the 44 minimum
+/// the audit enforces (DESIGN_UNSPECIFIED, found mechanically); the segment here is the minimum.
+///
+/// **Not the platform pill.** The first version was a grey trough with a raised white pill — the
+/// system's segmented control with the serial numbers filed off, on a product whose whole identity
+/// is green board and chalk. The chosen segment is now a block of the brand's green with chalk
+/// text, on a paper trough with a strong hairline, square-cornered at `radiusControl`. It is the
+/// same statement the primary button makes, so a screen of choices and its one decision read as
+/// one family.
 public struct SegmentedControl<ID: Hashable>: View {
     public struct Item: Identifiable {
         public let id: ID
@@ -81,29 +88,31 @@ public struct SegmentedControl<ID: Hashable>: View {
     }
 
     public var body: some View {
-        HStack(spacing: 2) {
-            ForEach(items) { item in
+        HStack(spacing: 0) {
+            ForEach(Array(items.enumerated()), id: \.element.id) { index, item in
                 let on = item.id == selection
                 Button { selection = item.id } label: {
                     Text(item.label)
-                        .thro(on ? ThroTypography.label.weight(.bold) : ThroTypography.label.weight(.medium))
-                        .foregroundStyle(on ? ThroColor.colorTextPrimary : ThroColor.colorTextSecondary)
+                        .thro(ThroTypography.label.weight(on ? .bold : .medium))
+                        .foregroundStyle(on ? ThroColor.throChalk : ThroColor.colorTextPrimary)
                         .lineLimit(1)
-                        .padding(.horizontal, ThroSpacing.spacing3)
+                        .minimumScaleFactor(0.8)
+                        .padding(.horizontal, ThroSpacing.spacing2)
                         .frame(maxWidth: .infinity, minHeight: ThroSpacing.touchTargetMinimum)
-                        .background(RoundedRectangle(cornerRadius: ThroSpacing.radiusStatus, style: .continuous)
-                            .fill(on ? ThroColor.colorBackgroundRaised : Color.clear))
+                        .background(on ? ThroColor.colorSurfaceBrand : Color.clear)
                         .contentShape(Rectangle())
                 }
-                .buttonStyle(ThroPressStyle(radius: ThroSpacing.radiusStatus,
-                                            pressedFill: ThroColor.colorBackgroundRaised,
-                                            scales: false))
+                .buttonStyle(ThroPressStyle(radius: 0, pressedFill: ThroColor.colorBackgroundSecondary, scales: false))
                 .accessibilityAddTraits(on ? [.isSelected] : [])
+                if index < items.count - 1 {
+                    Rectangle().fill(ThroColor.colorBorderStrong).frame(width: 1)
+                }
             }
         }
-        .padding(2)
-        .background(RoundedRectangle(cornerRadius: ThroSpacing.radiusStatus, style: .continuous).fill(ThroColor.colorSurfaceSecondary))
-        .overlay(RoundedRectangle(cornerRadius: ThroSpacing.radiusStatus, style: .continuous).strokeBorder(ThroColor.colorBorderDefault, lineWidth: 1))
+        .background(ThroColor.colorSurfacePrimary)
+        .clipShape(RoundedRectangle(cornerRadius: ThroSpacing.radiusControl, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: ThroSpacing.radiusControl, style: .continuous)
+            .strokeBorder(ThroColor.colorBorderStrong, lineWidth: 1))
     }
 }
 

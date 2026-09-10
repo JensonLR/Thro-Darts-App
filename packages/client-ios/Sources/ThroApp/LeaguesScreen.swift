@@ -4,17 +4,16 @@ import ThroDesign
 import ThroNet
 import ThroTokens
 
-// The real leagues around here (PD-033).
+// The real leagues around here (PD-033), second pass.
 //
-// What the founder asked for: the local leagues with their official teams, on a map. What the
-// screen is careful about: every row on it was READ from a league's public pages and from
-// OpenStreetMap, not entered by the people who run the league, and the screen says so — the
-// sources by name, the date they were read, and on each venue the basis it was connected to its
-// team on. "Blue Bell plays at The Blue Bell" is an inference from a name, and a good one, and a
-// player can see that it is one. No person appears anywhere on this screen, because none was read.
+// The first version was a map with pins nobody could touch over one long list. This one is a
+// map you can use — tap a pin and the pub, its postcode, the sides that play there and a way to
+// get there come up under it; tap a team in the list and the map goes to its pub — and a list
+// folded by league, open on the league you came for. Distances appear when the phone knows where
+// it is. Every row still says where it came from: the sources by name and date, and on each venue
+// the basis it was connected to its team on. No person appears anywhere here, because none was read.
 
-/// What the screen knows, loaded once per visit. Held apart from the view so it can be tested
-/// without a network: `LeaguesScreen.Model.plotted` is what the map draws.
+/// What the screen knows, loaded once per visit. Kept for the failure copy the Discover tab shares.
 @MainActor
 public final class LeaguesModel: ObservableObject {
     public enum State: Equatable {
@@ -34,15 +33,15 @@ public final class LeaguesModel: ObservableObject {
         }
     }
 
-    static func explain(_ error: Error) -> String {
+    static func explain(_ error: Error, what: String = "the leagues") -> String {
         if let e = error as? APIError {
             switch e {
-            case .unreachable: return "No connection to THRØ just now. The leagues are on the server, not on this phone yet."
-            case .status(let code, _): return "The server answered \(code) instead of the leagues."
+            case .unreachable: return "No connection to THRØ just now. \(what.prefix(1).uppercased() + what.dropFirst()) are on the server, not on this phone yet."
+            case .status(let code, _): return "The server answered \(code) instead of \(what)."
             default: break
             }
         }
-        return "The leagues could not be read: \(error.localizedDescription)"
+        return "\(what.prefix(1).uppercased() + what.dropFirst()) could not be read: \(error.localizedDescription)"
     }
 }
 
@@ -50,6 +49,8 @@ public final class LeaguesModel: ObservableObject {
 public struct PlottedVenue: Identifiable, Equatable, Sendable {
     public let id: UUID
     public let name: String
+    public let postcode: String?
+    public let locality: String?
     public let coordinate: CLLocationCoordinate2D
     public let teams: [String]
     public let inferred: Bool
@@ -77,7 +78,8 @@ public enum LeaguesPlot {
         }
         return order.compactMap { id in
             guard let (v, teams) = byVenue[id], let lat = v.latitude, let lon = v.longitude else { return nil }
-            return PlottedVenue(id: id, name: v.name, coordinate: CLLocationCoordinate2D(latitude: lat, longitude: lon),
+            return PlottedVenue(id: id, name: v.name, postcode: v.postcode, locality: v.locality,
+                                coordinate: CLLocationCoordinate2D(latitude: lat, longitude: lon),
                                 teams: teams, inferred: v.basis?.hasPrefix("inferred") ?? false)
         }
     }
@@ -96,6 +98,11 @@ public enum LeaguesPlot {
         return MKCoordinateRegion(center: CLLocationCoordinate2D(latitude: (minLat + maxLat) / 2, longitude: (minLon + maxLon) / 2),
                                   span: MKCoordinateSpan(latitudeDelta: max(0.02, (maxLat - minLat) * 1.4),
                                                          longitudeDelta: max(0.02, (maxLon - minLon) * 1.4)))
+    }
+
+    /// A close look at one pin.
+    public static func region(around pin: PlottedVenue) -> MKCoordinateRegion {
+        MKCoordinateRegion(center: pin.coordinate, span: MKCoordinateSpan(latitudeDelta: 0.012, longitudeDelta: 0.018))
     }
 
     /// The line under a league's name: its night and where it is.
@@ -118,6 +125,15 @@ public enum LeaguesPlot {
         return venue.name + postcode + inferred
     }
 
+    /// The banner over the map when the player is a long way from every pin, or nil when they are
+    /// among them (or unlocated).
+    public static func farAway(place: NearbyLogic.Place, pins: [PlottedVenue]) -> String? {
+        guard case .located(let lat, let lon) = place, !pins.isEmpty else { return nil }
+        let nearest = pins.map { NearbyLogic.distanceKm(fromLat: lat, lon: lon, toLat: $0.coordinate.latitude, lon: $0.coordinate.longitude) }.min() ?? 0
+        guard nearest > NearbyLogic.farKm else { return nil }
+        return "You are \(NearbyLogic.miles(nearest)) from the nearest venue THRØ knows. Showing Teesside, where it starts."
+    }
+
     static func day(_ iso: String) -> String {
         let parts = iso.split(separator: "-")
         guard parts.count == 3, let m = Int(parts[1]), let d = Int(parts[2]), (1...12).contains(m) else { return iso }
@@ -128,30 +144,33 @@ public enum LeaguesPlot {
 
 @MainActor
 public struct LeaguesScreen: View {
-    @StateObject private var model: LeaguesModel
+    @ObservedObject private var nearby: Nearby
     private let api: ThroAPI?
+    private let focus: UUID?
     private let onBack: () -> Void
+    @State private var camera: MapCameraPosition = .automatic
+    @State private var selected: UUID?
+    @State private var open: Set<UUID> = []
+    @State private var framed = false
 
-    public init(api: ThroAPI?, onBack: @escaping () -> Void, model: LeaguesModel? = nil) {
+    public init(nearby: Nearby, api: ThroAPI?, focus: UUID? = nil, onBack: @escaping () -> Void) {
+        self.nearby = nearby
         self.api = api
+        self.focus = focus
         self.onBack = onBack
-        // Made here and not as a default argument: a default argument is evaluated in the caller's
-        // context, which is not the main actor's, and the model is.
-        let made = model ?? LeaguesModel()
-        self._model = StateObject(wrappedValue: made)
     }
 
     public var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            TopBar("Local leagues", eyebrow: "Around here", onBack: onBack)
-            switch model.state {
+            TopBar("Local leagues", eyebrow: "Around you", onBack: onBack)
+            switch nearby.leagues {
             case .loading:
                 ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity)
             case .failed(let why):
                 ErrorState(title: "The leagues could not be read", what: why,
                            safe: "Nothing on this phone is affected.",
                            todo: "Try again with a connection.",
-                           actionLabel: "Try again", onAction: { Task { await model.load(api) } })
+                           actionLabel: "Try again", onAction: { Task { await nearby.load(api, force: true) } })
                     .padding(ThroSpacing.spaceScreenGutter)
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
             case .loaded(let leagues):
@@ -164,64 +183,31 @@ public struct LeaguesScreen: View {
             }
         }
         .background(ThroColor.colorBackgroundPrimary.ignoresSafeArea())
-        .task { if case .loading = model.state { await model.load(api) } }
+        .task {
+            if case .loading = nearby.leagues { await nearby.load(api) }
+            if let focus { open.insert(focus) } else if let first = nearby.leagueList?.first { open.insert(first.id) }
+        }
     }
 
     private func loaded(_ leagues: [PublicLeague]) -> some View {
         let pins = LeaguesPlot.plotted(leagues)
+        let selectedPin = pins.first { $0.id == selected }
         return ScrollView {
             VStack(alignment: .leading, spacing: 0) {
-                Map(initialPosition: .region(LeaguesPlot.region(pins))) {
-                    ForEach(pins) { pin in
-                        Marker(pin.name, systemImage: "target", coordinate: pin.coordinate)
-                            .tint(ThroColor.throGreen)
-                    }
+                map(pins)
+                if let far = LeaguesPlot.farAway(place: nearby.place, pins: pins) {
+                    Note(far, icon: .info)
+                        .padding(.horizontal, ThroSpacing.spaceScreenGutter)
+                        .padding(.top, ThroSpacing.spacing3)
                 }
-                .frame(height: 280)
-                .accessibilityLabel("Map of \(pins.count) venues")
+                if let pin = selectedPin {
+                    venueCard(pin)
+                        .padding(.horizontal, ThroSpacing.spaceScreenGutter)
+                        .padding(.top, ThroSpacing.spacing4)
+                        .transition(.opacity)
+                }
                 ForEach(leagues) { league in
-                    VStack(alignment: .leading, spacing: ThroSpacing.spacing1) {
-                        Text(league.name)
-                            .thro(ThroTypography.heading2)
-                            .foregroundStyle(ThroColor.colorTextPrimary)
-                        Text(LeaguesPlot.meta(league))
-                            .thro(ThroTypography.body)
-                            .foregroundStyle(ThroColor.colorTextSecondary)
-                        if let season = league.shownSeason {
-                            Text("\(season.label)\(season.current ? " · this season" : "")")
-                                .thro(ThroTypography.label.uppercase(true).tracking(em: 0.06))
-                                .foregroundStyle(ThroColor.colorTextSecondary)
-                                .padding(.top, ThroSpacing.spacing1)
-                            ForEach(season.divisions) { division in
-                                if season.divisions.count > 1 {
-                                    Eyebrow(division.name).padding(.top, ThroSpacing.spacing4)
-                                }
-                                ThroDivider().padding(.top, ThroSpacing.spacing2)
-                                ForEach(division.teams) { team in
-                                    HStack(alignment: .firstTextBaseline) {
-                                        Text(team.name)
-                                            .thro(ThroTypography.bodyLarge.weight(.semibold))
-                                            .foregroundStyle(ThroColor.colorTextPrimary)
-                                        Spacer(minLength: ThroSpacing.spacing3)
-                                        Text(LeaguesPlot.venueLine(team.venue))
-                                            .thro(ThroTypography.body)
-                                            .foregroundStyle(ThroColor.colorTextSecondary)
-                                            .multilineTextAlignment(.trailing)
-                                    }
-                                    .padding(.vertical, ThroSpacing.spacing3)
-                                    .accessibilityElement(children: .combine)
-                                    ThroDivider()
-                                }
-                            }
-                        }
-                        Text(LeaguesPlot.provenance(league))
-                            .thro(ThroTypography.metadata)
-                            .foregroundStyle(ThroColor.colorTextSecondary)
-                            .fixedSize(horizontal: false, vertical: true)
-                            .padding(.top, ThroSpacing.spacing3)
-                    }
-                    .padding(.horizontal, ThroSpacing.spaceScreenGutter)
-                    .padding(.top, ThroSpacing.spaceSectionGap)
+                    leagueSection(league)
                 }
                 Note("Season dates are read from the season's name where the league publishes none. Nothing here is a person: players join a team in THRØ by choosing to, never by being listed.")
                     .padding(.horizontal, ThroSpacing.spaceScreenGutter)
@@ -229,6 +215,168 @@ public struct LeaguesScreen: View {
                     .padding(.bottom, ThroSpacing.spacing6)
             }
         }
+        .animation(.easeOut(duration: ThroMotion.motionDurationFast), value: selected)
+        .onAppear {
+            guard !framed else { return }
+            framed = true
+            camera = .region(LeaguesPlot.region(pins))
+        }
     }
 
+    private func map(_ pins: [PlottedVenue]) -> some View {
+        Map(position: $camera, selection: $selected) {
+            ForEach(pins) { pin in
+                Annotation(pin.name, coordinate: pin.coordinate, anchor: .center) {
+                    // A pin is a small board: the lit stop when chosen, the field otherwise, the
+                    // mark in chalk. Board tokens, so it is the same pin in both appearances.
+                    ZStack {
+                        Circle().fill(pin.id == selected ? ThroColor.colorBoardLit : ThroColor.colorBoardField)
+                        Circle().strokeBorder(ThroColor.colorMarkOnBoard, lineWidth: pin.id == selected ? 3 : 2)
+                        ThroMark().fill(ThroColor.colorMarkOnBoard).padding(pin.id == selected ? 7 : 8)
+                    }
+                    .frame(width: pin.id == selected ? 40 : 32, height: pin.id == selected ? 40 : 32)
+                    .accessibilityLabel("\(pin.name), \(pin.teams.count == 1 ? "one team" : "\(pin.teams.count) teams")")
+                }
+                .tag(pin.id)
+            }
+            if case .located = nearby.place { UserAnnotation() }
+        }
+        .mapStyle(.standard(pointsOfInterest: .excludingAll))
+        .frame(height: 300)
+        .accessibilityLabel("Map of \(pins.count) venues; tap a pin for its teams")
+    }
+
+    private func venueCard(_ pin: PlottedVenue) -> some View {
+        ThroSlate(seed: UInt32(truncatingIfNeeded: pin.id.hashValue)) {
+            VStack(alignment: .leading, spacing: ThroSpacing.spacing2) {
+                HStack(alignment: .firstTextBaseline) {
+                    Text(pin.name)
+                        .thro(ThroTypography.heading2.family(.sport).weight(.bold).tracking(em: 0))
+                        .foregroundStyle(ThroColor.colorTextOnBoard)
+                    Spacer()
+                    Button { selected = nil } label: {
+                        Icon(.x, size: 18).foregroundStyle(ThroColor.colorTextOnBoardSecondary).throTapTarget()
+                    }
+                    .buttonStyle(ThroPressStyle(radius: 22, pressedFill: ThroColor.colorBoardSunken))
+                    .accessibilityLabel("Close")
+                }
+                Text([pin.locality, pin.postcode, distanceLine(pin)].compactMap { $0 }.joined(separator: " · "))
+                    .thro(ThroTypography.label)
+                    .foregroundStyle(ThroColor.colorTextOnBoardSecondary)
+                Text(pin.teams.joined(separator: " · "))
+                    .thro(ThroTypography.bodyLarge.weight(.semibold))
+                    .foregroundStyle(ThroColor.colorTextOnBoard)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.top, ThroSpacing.spacing1)
+                if pin.inferred {
+                    Text("Matched to the team by its name — tell THRØ if this is the wrong pub.")
+                        .thro(ThroTypography.metadata)
+                        .foregroundStyle(ThroColor.colorTextOnBoardSecondary)
+                }
+                Button { LeaguesScreen.directions(to: pin) } label: {
+                    Text("DIRECTIONS")
+                        .thro(ThroTypography.labelStrong.uppercase(true).tracking(em: 0.06))
+                        .foregroundStyle(ThroColor.colorTextOnBoard)
+                        .padding(.horizontal, ThroSpacing.spacing4)
+                }
+                .buttonStyle(ChalkKeyStyle(.lit, minHeight: ThroSpacing.touchTargetMinimum, seedAngle: 83))
+                .fixedSize()
+                .padding(.top, ThroSpacing.spacing2)
+            }
+            .padding(ThroSpacing.spacing5)
+        }
+    }
+
+    private func distanceLine(_ pin: PlottedVenue) -> String? {
+        guard case .located(let lat, let lon) = nearby.place else { return nil }
+        return NearbyLogic.miles(NearbyLogic.distanceKm(fromLat: lat, lon: lon, toLat: pin.coordinate.latitude, lon: pin.coordinate.longitude))
+    }
+
+    static func directions(to pin: PlottedVenue) {
+        let item = MKMapItem(placemark: MKPlacemark(coordinate: pin.coordinate))
+        item.name = pin.name
+        item.openInMaps(launchOptions: [MKLaunchOptionsDirectionsModeKey: MKLaunchOptionsDirectionsModeDriving])
+    }
+
+    private func leagueSection(_ league: PublicLeague) -> some View {
+        let isOpen = open.contains(league.id)
+        return VStack(alignment: .leading, spacing: 0) {
+            Button {
+                if isOpen { open.remove(league.id) } else { open.insert(league.id) }
+            } label: {
+                HStack(alignment: .firstTextBaseline, spacing: ThroSpacing.spacing3) {
+                    VStack(alignment: .leading, spacing: ThroSpacing.spacing1) {
+                        Text(league.name)
+                            .thro(ThroTypography.heading3)
+                            .foregroundStyle(ThroColor.colorTextPrimary)
+                            .multilineTextAlignment(.leading)
+                        Text(LeaguesScreen.seasonLine(league))
+                            .thro(ThroTypography.label)
+                            .foregroundStyle(ThroColor.colorTextSecondary)
+                    }
+                    Spacer()
+                    Icon(.chevronRight, size: 18).rotationEffect(.degrees(isOpen ? -90 : 90)).foregroundStyle(ThroColor.colorTextSecondary)
+                }
+                .padding(.vertical, ThroSpacing.spacing4)
+                .throRowTapTarget()
+            }
+            .buttonStyle(ThroPressStyle(radius: ThroSpacing.radiusCard, pressedFill: ThroColor.colorSurfaceSecondary, scales: false))
+            .accessibilityAddTraits(.isHeader)
+            .accessibilityHint(isOpen ? "Hides its teams" : "Shows its teams")
+            if isOpen, let season = league.shownSeason {
+                ForEach(season.divisions) { division in
+                    if season.divisions.count > 1 {
+                        Eyebrow(division.name).padding(.top, ThroSpacing.spacing2)
+                    }
+                    ThroDivider().padding(.top, ThroSpacing.spacing2)
+                    ForEach(division.teams) { team in
+                        teamRow(team)
+                        ThroDivider()
+                    }
+                }
+                Text(LeaguesPlot.provenance(league))
+                    .thro(ThroTypography.metadata)
+                    .foregroundStyle(ThroColor.colorTextSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.top, ThroSpacing.spacing3)
+            }
+        }
+        .padding(.horizontal, ThroSpacing.spaceScreenGutter)
+        .padding(.top, ThroSpacing.spacing3)
+    }
+
+    static func seasonLine(_ league: PublicLeague) -> String {
+        let meta = LeaguesPlot.meta(league)
+        guard let season = league.shownSeason else { return meta }
+        let teams = season.divisions.flatMap(\.teams).count
+        return "\(meta) · \(season.label)\(season.current ? " · this season" : "") · \(teams) teams"
+    }
+
+    private func teamRow(_ team: PublicLeague.Team) -> some View {
+        Button {
+            guard let v = team.venue, v.latitude != nil, v.longitude != nil else { return }
+            selected = v.venueId
+            if let lat = v.latitude, let lon = v.longitude {
+                camera = .region(MKCoordinateRegion(center: CLLocationCoordinate2D(latitude: lat, longitude: lon),
+                                                    span: MKCoordinateSpan(latitudeDelta: 0.012, longitudeDelta: 0.018)))
+            }
+        } label: {
+            HStack(alignment: .firstTextBaseline) {
+                Text(team.name)
+                    .thro(ThroTypography.bodyLarge.weight(.semibold))
+                    .foregroundStyle(ThroColor.colorTextPrimary)
+                Spacer(minLength: ThroSpacing.spacing3)
+                Text(LeaguesPlot.venueLine(team.venue))
+                    .thro(ThroTypography.body)
+                    .foregroundStyle(team.venue?.venueId == selected ? ThroColor.colorTextBrand : ThroColor.colorTextSecondary)
+                    .multilineTextAlignment(.trailing)
+            }
+            .padding(.vertical, ThroSpacing.spacing3)
+            .throRowTapTarget()
+        }
+        .buttonStyle(ThroPressStyle(radius: ThroSpacing.radiusCard, pressedFill: ThroColor.colorSurfaceSecondary, scales: false))
+        .disabled(team.venue?.latitude == nil)
+        .accessibilityElement(children: .combine)
+        .accessibilityHint(team.venue?.latitude == nil ? "" : "Shows its venue on the map")
+    }
 }
