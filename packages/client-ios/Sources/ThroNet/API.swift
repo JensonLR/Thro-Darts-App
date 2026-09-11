@@ -336,8 +336,17 @@ public actor ThroAPI {
 
     /// A provider's ID token becomes THRØ's session. With a session already held, an unheld
     /// subject is added to that account instead (PD-032: a second way in).
-    public func signIn(_ provider: Provider, idToken: String) async throws -> Session {
-        let body = try JSONSerialization.data(withJSONObject: ["idToken": idToken, "deviceId": deviceId.uuidString.lowercased()])
+    ///
+    /// **[nonce] is not optional in practice.** Both providers put the nonce the client gave them
+    /// into the token they hand back — Apple the SHA-256 of it, Google the value — and the server
+    /// refuses a token carrying a nonce it was given nothing to compare against, because a token
+    /// replayed from somewhere else carries a nonce too. Omitting it here is what made every
+    /// sign-in fail with *"the token carries a nonce and the request did not say which"*: the
+    /// ceremony generated a nonce, handed it to the provider, and then threw it away.
+    public func signIn(_ provider: Provider, idToken: String, nonce: String? = nil) async throws -> Session {
+        var fields: [String: Any] = ["idToken": idToken, "deviceId": deviceId.uuidString.lowercased()]
+        if let nonce { fields["nonce"] = nonce }
+        let body = try JSONSerialization.data(withJSONObject: fields)
         let (data, http) = try await send("POST", "/v1/auth/\(provider.rawValue)", body: body, bearer: session?.accessToken)
         guard http.statusCode == 200 else { throw APIError.status(http.statusCode, String(decoding: data, as: UTF8.self)) }
         return try adopt(data)

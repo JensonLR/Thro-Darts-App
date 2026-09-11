@@ -2883,3 +2883,44 @@ profiles on disk now carry `applesignin`, `associated-domains` and the app group
 capability cache refetched at 460 kB against the 25 kB stale one it had been answering from.
 
 Counts: client 640 (four on the welcome), every repository check, 92 schema properties.
+
+## Sign-in actually signs in: the nonce was never sent
+
+The welcome screen shipped and the founder used it, which is how three defects that had been in the
+build since accounts landed finally got seen. Every way in failed, each differently.
+
+**The nonce was generated, handed to the provider, and thrown away.** `AccountStore` made a fresh
+nonce for each ceremony and gave it to Apple and to Google; both put it in the token they returned —
+Apple the SHA-256 of it, Google the value. `ThroAPI.signIn` then posted `idToken` and `deviceId` and
+nothing else. The server's rule (`IdToken.verify`) refuses a token that carries a nonce when the
+request supplies none, because a token replayed from elsewhere carries one too, so **every Apple and
+Google sign-in was rejected** with *"the token carries a nonce and the request did not say which"*.
+`signIn` takes the nonce now and sends the raw value; the server accepts either it or its hash, so
+one field serves both providers. The route's own schema had documented this field from the start.
+
+**`?mode=developer` on the associated domain made passkeys impossible for anybody but a developer.**
+That flag tells the phone to fetch the association file straight from the domain rather than through
+Apple's CDN, and it is **ignored unless the phone has Settings → Developer → Associated Domains
+Development switched on** — which no TestFlight tester will have. Staging was serving
+`/.well-known/apple-app-site-association` correctly the whole time, with the right app id and content
+type; the phone simply never asked. The entitlement is the plain form now.
+
+**And the errors were domains and codes.** The screen showed *"The operation couldn't be completed.
+(com.apple.AuthenticationServices.AuthorizationError error 1000.)"* — no cause, no action, and an app
+admitting it has not thought about the case. `SignInProblem.words` turns each into a sentence that
+says what to do: an Apple failure names the Apple Account to check, a passkey on an unproven domain
+says Apple and Google still work rather than being a dead end, an offline phone is told it can still
+score, and the server's own sentence is passed through untouched because it is better than anything
+this layer could write. Four tests hold it, including that no bundle identifier and no error code can
+reach a player's screen.
+
+**The welcome was recomposed and given an entrance.** It centred one block and left a hole above and
+below it; a board is written top-down and the keys belong under the thumb, so the heading is chalked
+at the top and the choices sit at the bottom. The entrance is the app's own gesture rather than a
+borrowed effect: the wordmark appears, a line of chalk is **drawn** across the board under it
+(`ChalkRule.trim`, animated — the component was built for this and nothing had used it), and the
+heading and the keys arrive after it on their own beats. `throLanding` was deliberately not used;
+that one is the impact of a dart and belongs to the outcome of a match. Under Reduce Motion
+everything is simply there. A failure is now boxed in chalk rather than floating as loose red text.
+
+Counts: client 644, every repository check.

@@ -1,5 +1,6 @@
 import XCTest
 @testable import ThroApp
+import ThroNet
 
 /// The welcome after the opening: asked once, never a gate, and never claiming more than THRØ does.
 final class WelcomeTests: XCTestCase {
@@ -41,5 +42,41 @@ final class WelcomeTests: XCTestCase {
         XCTAssertFalse(Welcome.body.lowercased().contains("rating"), "OD-001: THRØ has no rating")
         XCTAssertFalse(Welcome.headline.isEmpty)
         XCTAssertLessThan(Welcome.headline.count, 30, "a headline, not a paragraph")
+    }
+}
+
+/// What a person is told when a way in does not work. The founder's phone showed
+/// "The operation couldn't be completed. (com.apple.AuthenticationServices.AuthorizationError
+/// error 1000.)" — a sentence with no cause and no action in it.
+final class SignInProblemTests: XCTestCase {
+
+    func testNoDomainAndNoCodeEverReachesTheScreen() {
+        let raw = NSError(domain: "com.apple.AuthenticationServices.AuthorizationError", code: 1000)
+        let words = SignInProblem.words(raw)
+        XCTAssertFalse(words.contains("com.apple"), words)
+        XCTAssertFalse(words.contains("1000"), words)
+        XCTAssertTrue(words.contains("Apple Account"), "it says the thing to go and check: \(words)")
+    }
+
+    func testAPasskeyOnAnUnprovenDomainSaysWhatStillWorks() {
+        let raw = NSError(domain: "WebAuthn", code: 1000, userInfo: [
+            NSLocalizedDescriptionKey:
+                "Application with identifier 2XM324WPD5.app.thro.darts is not associated with domain thro-api-staging.onrender.com",
+        ])
+        let words = SignInProblem.words(raw)
+        // A dead end is the one thing an error must never be: Apple and Google need no domain.
+        XCTAssertTrue(words.contains("Apple or Google"), words)
+        XCTAssertFalse(words.contains("2XM324WPD5"), "no identifiers on a player's screen: \(words)")
+    }
+
+    func testAPhoneWithNoNetworkIsToldItCanStillScore() {
+        let words = SignInProblem.words(URLError(.notConnectedToInternet))
+        XCTAssertTrue(words.contains("without signing in"), words)
+    }
+
+    func testTheServersOwnSentenceIsKeptWordForWord() {
+        // The server knows exactly what it refused and writes for a person; nothing here improves it.
+        let said = "the ID token was not accepted: the token carries a nonce and the request did not say which"
+        XCTAssertEqual(SignInProblem.words(APIError.status(401, #"{"error":"\#(said)"}"#)), said)
     }
 }

@@ -14,7 +14,14 @@
 	</array>
 	<key>com.apple.developer.associated-domains</key>
 	<array>
-		<string>webcredentials:thro-api-staging.onrender.com?mode=developer</string>
+		<!-- No `?mode=developer`. That flag makes the phone fetch the association file straight from
+		     the domain instead of Apple's CDN, and it is IGNORED unless the phone has Settings →
+		     Developer → Associated Domains Development switched on — which a TestFlight tester has
+		     no reason to have done. With it on this build, a passkey refused with "Application with
+		     identifier 2XM324WPD5.app.thro.darts is not associated with domain
+		     thro-api-staging.onrender.com" on a phone where the association file was being served
+		     correctly the whole time. Plain form: Apple's CDN fetches it, and it works for everyone. -->
+		<string>webcredentials:thro-api-staging.onrender.com</string>
 	</array>
 	<key>com.apple.security.application-groups</key>
 	<array>

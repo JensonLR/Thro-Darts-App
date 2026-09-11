@@ -59,6 +59,11 @@ public struct WelcomeScreen: View {
     @ObservedObject private var account: AccountStore
     private let onDone: () -> Void
     @AppStorage(Appearance.storageKey) private var appearanceRaw: String = Appearance.system.rawValue
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    /// The blocks have arrived.
+    @State private var arrived = false
+    /// How much of the rule under the wordmark has been drawn, 0 to 1.
+    @State private var chalk: CGFloat = 0
 
     public init(account: AccountStore, onDone: @escaping () -> Void) {
         self.account = account
@@ -66,50 +71,104 @@ public struct WelcomeScreen: View {
     }
 
     public var body: some View {
-        ThroBoard(lamp: UnitPoint(x: 0.5, y: 0.26), grainSeed: ThroBoardSeed.home) {
-            // Three groups and two flexible gaps: the name at the top, the ask in the middle, the
-            // way past it at the bottom. Five spacers made five gaps of equal weight, which is how
-            // a screen ends up with a hole in the middle of it.
+        ThroBoard(lamp: UnitPoint(x: 0.5, y: 0.18), grainSeed: ThroBoardSeed.home) {
+            // **Everything a hand touches is in the bottom half, everything it reads is in the top.**
+            // The first version centred one block and left a hole above and below it. A board is
+            // written top-down and the keys go where the thumb is, so the composition is the one a
+            // scoreboard already has: the heading chalked at the top, the choices at the bottom.
             VStack(spacing: 0) {
-                VStack(spacing: ThroSpacing.spacing4) {
-                    ThroWordmark(capHeight: ThroTypography.display.capHeight * 1.3, color: ThroColor.colorTextOnBoard)
-                        .accessibilityLabel("THRØ")
-                        .throEntrance(0)
-                    // The rule the wordmark sits on, drawn the way a board's own rules are.
-                    ChalkRule(weight: ThroSpacing.spaceChalkRuleWeight, seedAngle: 41)
-                        .fill(ThroColor.colorMarkOnBoard)
-                        .frame(height: ThroSpacing.spaceChalkRuleWeight * 2)
-                        .padding(.horizontal, ThroSpacing.spacing7)
-                        .throEntrance(1)
+                heading
+                Spacer(minLength: ThroSpacing.spacing6)
+                choices
+            }
+            .padding(.horizontal, ThroSpacing.spaceScreenGutter)
+        }
+        // No `.ignoresSafeArea()` here. `ThroBoard` already bleeds its lamp, dust and vignette to
+        // every edge while keeping its CONTENT inside the safe area — the distinction that exists
+        // because the scoring screen once put its rail under the Dynamic Island. Overriding it here
+        // cut the top off the wordmark.
+        .throAppearance(Appearance(stored: appearanceRaw))
+        .onAppear(perform: enter)
+        // Answered by signing in: the screen goes as soon as the account arrives, without a second
+        // tap to dismiss something the player has already finished with.
+        .onChange(of: account.isSignedIn) { _, signedIn in if signedIn { finish() } }
+        .accessibilityAddTraits(.isModal)
+    }
+
+    // MARK: - arriving
+    //
+    // **The rule is drawn, it does not fade in.** Every other screen in THRØ uses `throEntrance`,
+    // which rises and fades on a 45 ms stagger — right for a list of rows settling, wrong for the
+    // one screen that is a moment. Here the wordmark appears, a line of chalk is drawn across the
+    // board under it, and only then does the rest arrive. It is the app's own gesture — the same
+    // `ChalkRule.trim` the component was built with — rather than an effect borrowed from
+    // somewhere, and `throLanding` is deliberately NOT used: that one is the impact of a dart and
+    // belongs to the outcome of a match and nothing else.
+
+    /// The beat each block arrives on, in seconds after the screen appears.
+    enum Beat {
+        static let wordmark = 0.00
+        static let rule = 0.18
+        static let ruleDraw = 0.62
+        static let heading = 0.44
+        static let keys = 0.58
+        static let footer = 0.74
+    }
+
+    private func enter() {
+        guard !reduceMotion else { arrived = true; chalk = 1; return }
+        withAnimation(.throEnter(ThroMotion.motionDurationEmphasis)) { arrived = true }
+        // Drawn rather than eased to a stop: chalk leaves the board at the speed it was moving.
+        withAnimation(.easeOut(duration: Beat.ruleDraw).delay(Beat.rule)) { chalk = 1 }
+    }
+
+    private var shown: Bool { arrived || reduceMotion }
+
+    /// One block arriving on its own beat.
+    private func arriving<V: View>(_ after: Double, @ViewBuilder _ content: () -> V) -> some View {
+        content()
+            .opacity(shown ? 1 : 0)
+            .offset(y: shown ? 0 : ThroSpacing.motionTravelMedium)
+            .animation(reduceMotion ? nil : .throEnter(ThroMotion.motionDurationEmphasis).delay(after), value: arrived)
+    }
+
+    // MARK: - the heading
+
+    @ViewBuilder private var heading: some View {
+        VStack(spacing: ThroSpacing.spacing4) {
+            arriving(Beat.wordmark) {
+                ThroWordmark(capHeight: ThroTypography.display.capHeight * 1.35, color: ThroColor.colorTextOnBoard)
+                    .accessibilityLabel("THRØ")
+            }
+            ChalkRule(weight: ThroSpacing.spaceChalkRuleWeight, seedAngle: 41, trim: chalk)
+                .fill(ThroColor.colorMarkOnBoard)
+                .frame(height: ThroSpacing.spaceChalkRuleWeight * 2)
+                .accessibilityHidden(true)
+            arriving(Beat.heading) {
+                VStack(spacing: ThroSpacing.spacing3) {
+                    Text(Welcome.headline)
+                        .thro(ThroTypography.heading1.family(.sport).weight(.bold).tracking(em: 0))
+                        .foregroundStyle(ThroColor.colorTextOnBoard)
+                        .multilineTextAlignment(.center)
+                        .fixedSize(horizontal: false, vertical: true)
+                    Text(Welcome.body)
+                        .thro(ThroTypography.bodyLarge)
+                        .foregroundStyle(ThroColor.colorTextOnBoardSecondary)
+                        .multilineTextAlignment(.center)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
-                .padding(.top, ThroSpacing.spacing7)
+                .padding(.top, ThroSpacing.spacing2)
+            }
+        }
+        .padding(.top, ThroSpacing.spacing6)
+    }
 
-                Spacer(minLength: ThroSpacing.spacing5)
+    // MARK: - the choices
 
-                // The ask: the sentence and the ways in are ONE thing, so they hold together as a
-                // block in the middle of the board rather than drifting to opposite ends of it.
-                VStack(spacing: ThroSpacing.spacing6) {
-                    VStack(spacing: ThroSpacing.spacing3) {
-                        Text(Welcome.headline)
-                            .thro(ThroTypography.heading1.family(.sport).weight(.bold).tracking(em: 0))
-                            .foregroundStyle(ThroColor.colorTextOnBoard)
-                            .multilineTextAlignment(.center)
-                            .fixedSize(horizontal: false, vertical: true)
-                        Text(Welcome.body)
-                            .thro(ThroTypography.bodyLarge)
-                            .foregroundStyle(ThroColor.colorTextOnBoardSecondary)
-                            .multilineTextAlignment(.center)
-                            .fixedSize(horizontal: false, vertical: true)
-                            .padding(.horizontal, ThroSpacing.spacing3)
-                    }
-                    .throEntrance(2)
-                    waysIn
-                        .throEntrance(3)
-                }
-                .padding(.horizontal, ThroSpacing.spaceScreenGutter)
-
-                Spacer(minLength: ThroSpacing.spacing5)
-
+    @ViewBuilder private var choices: some View {
+        VStack(spacing: ThroSpacing.spacing5) {
+            arriving(Beat.keys) { waysIn }
+            arriving(Beat.footer) {
                 VStack(spacing: ThroSpacing.spacing3) {
                     Button(action: skip) {
                         Text(Welcome.skip)
@@ -124,21 +183,10 @@ public struct WelcomeScreen: View {
                         .foregroundStyle(ThroColor.colorTextOnBoardSecondary)
                         .multilineTextAlignment(.center)
                         .fixedSize(horizontal: false, vertical: true)
-                        .padding(.horizontal, ThroSpacing.spacing5)
                 }
-                .padding(.bottom, ThroSpacing.spacing5)
-                .throEntrance(4)
             }
         }
-        // No `.ignoresSafeArea()` here. `ThroBoard` already bleeds its lamp, dust and vignette to
-        // every edge while keeping its CONTENT inside the safe area — the distinction that exists
-        // because the scoring screen once put its rail under the Dynamic Island. Overriding it here
-        // cut the top off the wordmark.
-        .throAppearance(Appearance(stored: appearanceRaw))
-        // Answered by signing in: the screen goes as soon as the account arrives, without a second
-        // tap to dismiss something the player has already finished with.
-        .onChange(of: account.isSignedIn) { _, signedIn in if signedIn { finish() } }
-        .accessibilityAddTraits(.isModal)
+        .padding(.bottom, ThroSpacing.spacing5)
     }
 
     // MARK: - the ways in
@@ -163,14 +211,21 @@ public struct WelcomeScreen: View {
         default:
             VStack(spacing: ThroSpacing.spacing3) {
                 if case .failed(let why, _) = account.state {
-                    // The server's own sentence, on the board, in the board's error ink. Never
-                    // "something went wrong".
+                    // Boxed in chalk, the way anything that matters gets boxed on a board — rather
+                    // than a line of loose red text floating between the sentence and the keys.
+                    // The words are the server's own, or `SignInProblem`'s; never a domain and a code.
                     Text(why)
                         .thro(ThroTypography.label)
                         .foregroundStyle(ThroColor.colorStatusErrorOnBoard)
                         .multilineTextAlignment(.center)
                         .fixedSize(horizontal: false, vertical: true)
-                        .padding(.bottom, ThroSpacing.spacing1)
+                        .padding(.vertical, ThroSpacing.spacing3)
+                        .padding(.horizontal, ThroSpacing.spacing4)
+                        .frame(maxWidth: .infinity)
+                        .overlay(ChalkBox(weight: 2).fill(ThroColor.colorStatusErrorOnBoard))
+                        .padding(.bottom, ThroSpacing.spacing2)
+                        .transition(.opacity)
+                        .accessibilityAddTraits(.isStaticText)
                 }
                 wayIn("Continue with Apple", symbol: "apple.logo", lighting: .lit, seed: 11) {
                     Task { await account.signInWithApple() }

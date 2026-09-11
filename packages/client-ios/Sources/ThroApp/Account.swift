@@ -55,9 +55,11 @@ public final class AccountStore: ObservableObject {
 
     public func signInWithApple() async {
         await ceremony("Signing in with Apple") {
+            // The RAW nonce goes to the server. Apple's token carries its SHA-256, and the server
+            // accepts either the value or its hash — so one field serves both providers.
             let nonce = Nonce.fresh()
             guard let token = try await services.appleIdentityToken(nonce: nonce) else { return false }
-            _ = try await api.signIn(.apple, idToken: token)
+            _ = try await api.signIn(.apple, idToken: token, nonce: nonce)
             return true
         }
     }
@@ -67,8 +69,9 @@ public final class AccountStore: ObservableObject {
             state = .failed("Sign in with Google is not set up in this build yet.", wasSignedIn: isSignedIn); return
         }
         await ceremony("Signing in with Google") {
-            guard let token = try await services.googleIdentityToken(configuration: configuration, transport: transport, nonce: Nonce.fresh()) else { return false }
-            _ = try await api.signIn(.google, idToken: token)
+            let nonce = Nonce.fresh()
+            guard let token = try await services.googleIdentityToken(configuration: configuration, transport: transport, nonce: nonce) else { return false }
+            _ = try await api.signIn(.google, idToken: token, nonce: nonce)
             return true
         }
     }
@@ -179,9 +182,65 @@ public final class AccountStore: ObservableObject {
 
     private func failure(_ error: Error, before: State) -> State {
         let was: Bool = { if case .signedIn = before { return true } else { return false } }()
-        if let e = error as? APIError { return .failed(e.message, wasSignedIn: was) }
         if let e = error as? ASAuthorizationError, e.code == .canceled { return before }
-        return .failed(error.localizedDescription, wasSignedIn: was)
+        if let e = error as? ASWebAuthenticationSessionError, e.code == .canceledLogin { return before }
+        return .failed(SignInProblem.words(error), wasSignedIn: was)
+    }
+}
+
+/// What a person is told when a way in does not work.
+///
+/// **Never a domain and a code.** `error.localizedDescription` put
+/// *"The operation couldn't be completed. (com.apple.AuthenticationServices.AuthorizationError
+/// error 1000.)"* on the founder's phone, which names no cause, offers no action, and is the
+/// app admitting it has not thought about the case. Every sentence here says what happened and,
+/// where there is one, the thing to go and do.
+public enum SignInProblem {
+    public static func words(_ error: Error) -> String {
+        // The server's own sentence is already the best one available: it knows exactly what it
+        // refused and why, and it is written for a person.
+        if let e = error as? APIError { return e.message }
+
+        let raw = error.localizedDescription
+        // A passkey on a domain the phone could not tie to this app. The message names the domain,
+        // which is right, and then stops — so it gets the part that says what still works.
+        if raw.contains("is not associated with domain") {
+            return "This phone could not confirm that THRØ owns its sign-in domain, so a passkey "
+                + "cannot be used yet. Continue with Apple or Google instead — both work without it."
+        }
+        if let e = error as? ASAuthorizationError {
+            switch e.code {
+            case .unknown:
+                // 1000. Apple does not say why; being signed out of the Apple Account on the phone
+                // is far and away the most common reason, so that is what to check first.
+                return "Apple could not finish the sign-in. Check you are signed in to your Apple "
+                    + "Account in iPhone Settings, then try again."
+            case .invalidResponse, .notHandled:
+                return "Apple sent back a sign-in this build could not read. Try again."
+            case .failed:
+                return "Apple refused the sign-in. Try again, or use Google instead."
+            case .notInteractive:
+                return "The sign-in could not be shown. Bring THRØ to the front and try again."
+            default:
+                return "Sign in with Apple did not finish. Try again, or use Google instead."
+            }
+        }
+        if error is ASWebAuthenticationSessionError {
+            return "The sign-in window closed before it finished. Try again."
+        }
+        // A network that was not there. URLError's own sentences are decent English; the codes are
+        // the ones a phone in a pub actually hits.
+        if let e = error as? URLError {
+            switch e.code {
+            case .notConnectedToInternet, .networkConnectionLost:
+                return "This phone is not online, so THRØ could not reach the server. "
+                    + "You can still score a match without signing in."
+            case .timedOut:
+                return "THRØ did not answer in time. The free server sleeps; try once more."
+            default: return e.localizedDescription
+            }
+        }
+        return raw
     }
 }
 
