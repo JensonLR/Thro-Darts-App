@@ -80,6 +80,12 @@
   --color-mark-on-board: #8FB3A4;
   --color-status-error-on-board: #F2A096;
   --color-status-warning-on-board: #E7B65C;
+  --color-league-1-on-board: #F3D46E;
+  --color-league-2-on-board: #9DCCF2;
+  --color-league-3-on-board: #F3A6CB;
+  --color-league-4-on-board: #C8B4F4;
+  --color-league-5-on-board: #F6B48A;
+  --color-league-6-on-board: #A6E3C8;
   --space-chalk-rule-weight: 3px;
   --font-ui: "Archivo","Archivo Variable",system-ui,-apple-system,"Segoe UI",sans-serif;
   --font-sport: "IBM Plex Sans Condensed","Archivo",system-ui,sans-serif;
@@ -240,6 +246,12 @@
   --color-mark-on-board: #7FA695;
   --color-status-error-on-board: #EC9084;
   --color-status-warning-on-board: #DFAC50;
+  --color-league-1-on-board: #EACB63;
+  --color-league-2-on-board: #93C2E8;
+  --color-league-3-on-board: #EA9BC1;
+  --color-league-4-on-board: #BFA9EC;
+  --color-league-5-on-board: #EDA97F;
+  --color-league-6-on-board: #9BD9BD;
   --elevation-1: 0 1px 0 0 var(--color-border-default);
   --elevation-2: 0 2px 8px rgba(0,0,0,0.40);
   --elevation-3: 0 8px 24px rgba(0,0,0,0.55);

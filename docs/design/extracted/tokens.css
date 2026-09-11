@@ -158,6 +158,18 @@
    the two with a call site are here; the rest arrive with theirs. */
 --color-status-error-on-board:#F2A096;
 --color-status-warning-on-board:#E7B65C;
+/* League chalk ON A BOARD (PD-046). A pub's board is chalked in more than one colour, and so is the
+   leagues map: each league with teams on THRØ is drawn in a chalk of its own, round again after the
+   sixth, so two leagues side by side are never drawn alike. Identity and not status: none of these
+   means good or bad, which is why the status inks are not borrowed for it. Colour is never the only
+   thing that says which league, because the league's name is written wherever its chalk is. Each is
+   computed to clear 4.5:1 against its own trait's board-lit, the worst ground the board has. */
+--color-league-1-on-board:#F3D46E; /* yellow chalk */
+--color-league-2-on-board:#9DCCF2; /* blue chalk */
+--color-league-3-on-board:#F3A6CB; /* pink chalk */
+--color-league-4-on-board:#C8B4F4; /* lilac chalk */
+--color-league-5-on-board:#F6B48A; /* peach chalk */
+--color-league-6-on-board:#A6E3C8; /* mint chalk */
 --space-chalk-rule-weight:3px;
 }
 
@@ -215,6 +227,12 @@
 --color-mark-on-board:#7FA695;
 --color-status-error-on-board:#EC9084;
 --color-status-warning-on-board:#DFAC50;
+--color-league-1-on-board:#EACB63;
+--color-league-2-on-board:#93C2E8;
+--color-league-3-on-board:#EA9BC1;
+--color-league-4-on-board:#BFA9EC;
+--color-league-5-on-board:#EDA97F;
+--color-league-6-on-board:#9BD9BD;
 }
 
 :root{

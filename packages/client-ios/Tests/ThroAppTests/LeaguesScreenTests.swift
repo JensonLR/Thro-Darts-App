@@ -74,7 +74,8 @@ final class LeaguesScreenTests: XCTestCase {
         let l = try leagues()[0]
         XCTAssertEqual(LeaguesPlot.meta(l), "Thursday nights · Stockton-on-Tees")
         XCTAssertEqual(LeaguesPlot.provenance(l),
-                       "From LeagueRepublic (read 10 Sep 2026). Venues are matched from OpenStreetMap, most by the team's name; tell THRØ if one is wrong.")
+                       "From LeagueRepublic (read 10 Sep 2026). Venues are matched from OpenStreetMap (© OpenStreetMap contributors), most by the team's name; tell THRØ if one is wrong.",
+                       "OpenStreetMap's data is used under the ODbL, which asks for exactly this credit wherever it is shown")
         XCTAssertEqual(LeaguesPlot.venueLine(l.shownSeason?.divisions[0].teams[0].venue), "The Blue Bell · TS16 0JF (by name)")
         XCTAssertEqual(LeaguesPlot.venueLine(nil), "venue not known")
     }

@@ -44,6 +44,18 @@ public enum ThroColor {
     public static let colorChartSecondary = Color("colorChartSecondary", bundle: .module)
     /// light #174F3C   dark #57A385
     public static let colorFocusRing = Color("colorFocusRing", bundle: .module)
+    /// light #F3D46E   dark #EACB63
+    public static let colorLeague1OnBoard = Color("colorLeague1OnBoard", bundle: .module)
+    /// light #9DCCF2   dark #93C2E8
+    public static let colorLeague2OnBoard = Color("colorLeague2OnBoard", bundle: .module)
+    /// light #F3A6CB   dark #EA9BC1
+    public static let colorLeague3OnBoard = Color("colorLeague3OnBoard", bundle: .module)
+    /// light #C8B4F4   dark #BFA9EC
+    public static let colorLeague4OnBoard = Color("colorLeague4OnBoard", bundle: .module)
+    /// light #F6B48A   dark #EDA97F
+    public static let colorLeague5OnBoard = Color("colorLeague5OnBoard", bundle: .module)
+    /// light #A6E3C8   dark #9BD9BD
+    public static let colorLeague6OnBoard = Color("colorLeague6OnBoard", bundle: .module)
     /// light #8FB3A4   dark #7FA695
     public static let colorMarkOnBoard = Color("colorMarkOnBoard", bundle: .module)
     /// light rgba(16,18,17,0.48)   dark rgba(8,10,9,0.64)

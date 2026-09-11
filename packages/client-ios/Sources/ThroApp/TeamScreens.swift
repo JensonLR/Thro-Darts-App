@@ -223,7 +223,7 @@ public struct TeamFrontScreen: View {
                 ThroDivider().padding(.top, ThroSpacing.spacing2)
                 ForEach(Array(front.roster.enumerated()), id: \.offset) { _, member in
                     HStack(spacing: ThroSpacing.spacing3) {
-                        PlayerIdentity(PlayerRef(name: member.name ?? "A player"), size: .small)
+                        PlayerIdentity(PlayerRef(name: member.name ?? "A player", unnamed: member.name == nil), size: .small)
                         Spacer()
                         // The admin names the captain and vice-captain here (PD-045); everyone else reads the role.
                         if front.yourRole == "admin", let handle = member.memberId, member.role != "admin" {

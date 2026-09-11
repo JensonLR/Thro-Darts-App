@@ -199,6 +199,13 @@ public struct DiscoverScreen: View {
         return [league.playsOn.map { "\($0) nights" }, filled, league.locality].compactMap { $0 }.joined(separator: " · ")
     }
 
+    /// Under one of your teams: its league line where it is in a league THRØ lists, else its town;
+    /// then how many are on it. "Stockton Thursday · Division One · Thursday nights · 3 members" (PD-046).
+    static func teamMeta(_ team: TeamSummary, atlas: LeagueAtlas) -> String {
+        let place = atlas.entry(team.teamId).map(LeagueAtlas.line) ?? team.locality
+        return [place, team.members == 1 ? "1 member" : "\(team.members) members"].compactMap { $0 }.joined(separator: " · ")
+    }
+
     // MARK: tournaments
 
     @ViewBuilder private var tournaments: some View {
@@ -266,10 +273,11 @@ public struct DiscoverScreen: View {
                         .padding(.top, ThroSpacing.spacing4)
                 } else {
                     ThroDivider().padding(.top, ThroSpacing.spacing2)
+                    let atlas = LeagueAtlas(nearby.leagueList ?? [])
                     ForEach(list) { team in
                         Button { onServerTeam(team.teamId) } label: {
                             OrganisationRow(initials: DiscoverScreen.initials(team.name), name: team.name,
-                                            meta: [team.locality, team.members == 1 ? "1 member" : "\(team.members) members"].compactMap { $0 }.joined(separator: " · "),
+                                            meta: DiscoverScreen.teamMeta(team, atlas: atlas),
                                             accent: ThroColor.throGreen, trailing: TeamFrontScreen.roleLabel(team.role), image: nil)
                                 .throRowTapTarget()
                         }

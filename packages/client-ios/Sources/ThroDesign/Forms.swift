@@ -124,17 +124,24 @@ public struct PlayerRef: Equatable, Sendable {
     public let team: String?
     public let region: String?
     public let verified: Bool
+    /// Somebody THRØ may not name. The name is words standing in for one ("A player"), and a mark
+    /// made from those words' initials — "Ap" — drew a person who does not exist, so they are drawn
+    /// with the person glyph instead.
+    public let unnamed: Bool
 
-    public init(name: String, rating: Int? = nil, team: String? = nil, region: String? = nil, verified: Bool = false) {
+    public init(name: String, rating: Int? = nil, team: String? = nil, region: String? = nil, verified: Bool = false,
+                unnamed: Bool = false) {
         self.name = name
         self.rating = rating
         self.team = team
         self.region = region
         self.verified = verified
+        self.unnamed = unnamed
     }
 
+    /// Up to two initials, capitals whatever the name was typed in; empty for somebody unnamed.
     var initials: String {
-        name.split(separator: " ").prefix(2).compactMap { $0.first }.map(String.init).joined()
+        unnamed ? "" : name.split(separator: " ").prefix(2).compactMap { $0.first }.map(String.init).joined().uppercased()
     }
 }
 
@@ -239,6 +246,12 @@ public struct PersonMark: View {
                     .aspectRatio(contentMode: .fill)
                     .frame(width: size, height: size)
                     .clipShape(Circle())
+            } else if initials.isEmpty {
+                // Nobody to take initials from: the person glyph, on the same circle.
+                Icon(.user, size: (size * 0.5).rounded())
+                    .foregroundStyle(ThroColor.colorTextSecondary)
+                    .frame(width: size, height: size)
+                    .background(Circle().fill(ThroColor.colorSurfaceSecondary))
             } else {
                 Text(initials)
                     .thro(ThroTypeRole(family: .sport, size: (size * 0.38).rounded(),

@@ -8,8 +8,10 @@ import ThroNet
 /// shown to a signed-in person — the profile, friends, the delete screen — could be seen on the
 /// founder's phone and nowhere else, and was being designed blind. Launched with
 /// `-ThroScreenshotAccount`, a Debug build stands up an account store over a transport that answers
-/// from memory. No request leaves the phone and nothing is stored; a Release build does not contain
-/// this file at all.
+/// from memory. Nothing of the account leaves the phone and nothing is stored; a Release build does
+/// not contain this file at all. The one exception is the public front — the leagues, the events,
+/// the venues and other teams' fronts, which carry no account and need no session — passed through
+/// to the real server, because a map of the leagues is only worth looking at with the real leagues on it.
 ///
 ///     xcrun simctl launch <device> app.thro.darts -ThroScreenshotAccount adult
 ///
@@ -51,9 +53,32 @@ enum ScreenshotAccount {
             }
         }
 
+        /// The public front's reads, which the real server answers (see the note above): the leagues,
+        /// the events and the venues, and the front of any team but the staged one — a league's team
+        /// opened from the leagues board, read as nobody, exactly as a stranger would see it. Staging
+        /// every team as the account's own made the board say "You play for it" of a stranger's side.
+        static let passedThrough: Set<String> = ["/v1/leagues", "/v1/events", "/v1/venues"]
+        static let stagedTeam = "/v1/teams/5c4ee45e-0000-4000-8000-0000000000c1"
+
+        static func passesThrough(_ method: String, _ path: String) -> Bool {
+            guard method == "GET" else { return false }
+            return passedThrough.contains(path) || (path.hasPrefix("/v1/teams/") && path != stagedTeam)
+        }
+
         func send(_ request: URLRequest) async throws -> (Data, HTTPURLResponse) {
             let method = request.httpMethod ?? "GET"
             let path = request.url?.path ?? ""
+            if Stage.passesThrough(method, path), let real = ServerConfiguration.fromInfoPlist(),
+               var parts = request.url.flatMap({ URLComponents(url: $0, resolvingAgainstBaseURL: false) }) {
+                parts.scheme = real.baseURL.scheme
+                parts.host = real.baseURL.host
+                parts.port = real.baseURL.port
+                if let url = parts.url {
+                    var forwarded = URLRequest(url: url)
+                    forwarded.setValue("application/json", forHTTPHeaderField: "Accept")
+                    return try await URLSessionTransport().send(forwarded)
+                }
+            }
             let (code, body) = lock.withLock { answer(method, path, request.httpBody) }
             return (Data(body.utf8), HTTPURLResponse(url: request.url!, statusCode: code, httpVersion: nil, headerFields: nil)!)
         }

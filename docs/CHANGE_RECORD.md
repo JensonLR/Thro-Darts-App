@@ -3336,3 +3336,40 @@ ordering in the HTTP test mattered: the property that names a captain runs after
 player may not set the team's home — a captain may, so run first it would have made that property false.
 
 Counts: client 713, API 27 suites (60 tests), HTTP 46 properties, schema 106.
+
+## The leagues are a board over a map, in a chalk for each league (PD-046)
+
+The founder asked for the map to say which league a team is in when it is chosen. The screen is now the
+map, full-bleed, under a board that rises from the bottom (`ThroDrawer`, with round `ThroCoinButton`s for
+back and where-am-I). Each league with teams is drawn in its own chalk, from six new tokens that the
+contrast gate measures against the board's worst ground — 82 pairs became 94, and the README says so
+because the gate reads it. A pub's pin (`BoardPin`) is ringed in an arc of each league's chalk that plays
+there. Choosing a team writes its name and league over its pub, chalks its division from it as dotted
+lines on a dark band so they read on either map, and puts a card on the board: league and division in
+the league's chalk, where and when, whether anybody plays for it on THRØ (read off its front, which the
+server serves for a league's team — confirmed on staging), its division nearest first, its page, and
+joining by a code.
+
+What the board knows is `LeagueAtlas`: pure, built once per load, and tested — a team's league line, the
+teams at a pub across leagues, a division nearest pub first with the unplaced last, a search for teams and
+pubs whatever the case or accents, and leagues by name including those with no teams. Its sentences are
+`LeagueBoardWords`, tested beside it. `LeaguesPlot` stays as it was and gains `region(covering:)`, which the
+pin version now calls. `ThroDrawer`'s drag direction is `ThroDrawerDrag`, declared outside the drawer: a
+type nested in a generic is a different type for every content, so a handler naming
+`ThroDrawer<EmptyView>.Drag` pinned every drawer it was handed to `EmptyView`.
+
+Two defects: a roster entry THRØ may not name drew "Ap", the initials of "A player", and now draws the
+person glyph; and venues matched from OpenStreetMap now carry the credit its licence asks for, which a test
+holds. Discover's "Your teams" rows say a team's league when it is in one. The screenshot account passes the
+public front's reads — leagues, events, venues — through to the real server, so the board can be looked at
+with the real leagues on it.
+
+Looked at in the simulator against staging, and four things changed for it. The team card's page and
+directions come before its division, so neither is under the drawer's fold. A rival named for its pub —
+the Starting Gate, at the Starting Gate — says its town under its name rather than the same words twice.
+A season a league names with a sentence ("Redcar Darts League 2026") is left off the line beside the
+league's own name. And the board never reads a front that is not the chosen team's: the screenshot stage
+had answered every team as the account's own, so a stranger's side said "You play for it" — the stage now
+passes other teams' fronts through to the server, read as nobody, and the board checks the front's id.
+
+Counts: client 731, API 27 suites (60 tests), HTTP 46 properties, schema 106, contrast 94 pairs.

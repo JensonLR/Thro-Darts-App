@@ -2086,3 +2086,51 @@ somebody with. A public front and a member's front carry none.
 
 Handing a team to a new admin, a second admin, taking somebody off the team, and whether a captain has
 any say over the roster.
+
+## PD-046 — The leagues are a board over a map, and each league is drawn in its own chalk
+
+**Taken on delegated authority, 2026-09-11**, on the founder's word that the map should say which league a
+team is in when it is chosen, and that how players reach leagues and teams should be creative, unique and
+beautiful. Reversible: it is a screen and six colour tokens, and nothing on the server changed.
+
+### Decided
+
+**The map is the screen.** The leagues open full-bleed, with a board rising from the bottom — the lamp at
+its top edge, chalk dust, a chalk dash to take hold of — carrying a search for a team, a pub or a league,
+a chalk key for each league with teams, and a card for whatever is chosen.
+
+**A league is drawn in a chalk of its own.** Six league-chalk tokens (`--color-league-1-on-board` to `-6`:
+yellow, blue, pink, lilac, peach and mint chalk), dealt by a league's place and round again after the
+sixth. Identity and not status, so the status inks are not borrowed for it. Each clears 4.5:1 against its
+own trait's `board-lit`, and the contrast gate holds all twelve pairings. Colour is never the only thing
+that says which league: its name is written wherever its chalk is. A pub is ringed in the chalk of every
+league that plays there, one arc each.
+
+**A team chosen says its league, on the map and on the board.** The map writes the team and its league
+over its pub, chalks a line from its pub to every other pub in its division, and lights those pubs while
+the rest sink — the bottom stop and grey chalk, never faded. The board heads the team with its league and
+division in the league's chalk, says where and when it plays, whether anybody plays for it on THRØ, lists
+its division nearest first with the distance between pubs, and opens the team's page (which the server
+already serves for a league's team) and, for a signed-in player, joining by a code.
+
+**A pub chosen lists who plays there and in which league. A league chosen lights its pubs**, lays out its
+divisions' teams to touch, and says where it came from.
+
+**The map opens on the pubs of the leagues with teams** when the phone does not know where it is, not on
+every league pin in the country: 326 of the 329 leagues listed have no teams yet, and opening on the whole
+of Britain showed nothing to touch. Located, it opens around the player as before; sent from Discover for
+a league, on that league.
+
+**Your team on Discover says its league** when it is a team in a league THRØ lists.
+
+**OpenStreetMap is credited as its licence asks** — "© OpenStreetMap contributors" — wherever the source
+of a venue is said.
+
+**Somebody THRØ may not name is drawn with the person glyph** on a roster, never with initials made from
+the words standing in for a name ("A player" drew "Ap").
+
+### What this does not decide
+
+A player saying a listed team is theirs and running it on THRØ; reading more leagues' teams, which is
+PD-033's open question (a data agreement, LeagueRepublic's paid plan, or each league's secretary); and a
+"your team" mark on the map, which waits for the first of those.

@@ -648,7 +648,8 @@ public struct ClubsFlow: View {
             }
 
         case .leagues(let focus):
-            LeaguesScreen(nearby: nearby, api: api, focus: focus, onBack: { route = .list })
+            LeaguesScreen(nearby: nearby, teams: teams, api: api, signedIn: signedIn && api != nil, focus: focus,
+                          onBack: { route = .list })
 
         case .serverTeam(let id):
             TeamFrontScreen(teams: teams, teamId: id, api: api, onBack: { route = .list })

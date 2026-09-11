@@ -367,7 +367,15 @@ PAIRS_TEXT = [("--color-text-primary", "--color-background-primary"),
               # Status ink on a board, against the worst ground the board has. `status-error` itself
               # measures 1.52:1 there, which is why these exist at all.
               ("--color-status-error-on-board", "--color-board-lit"),
-              ("--color-status-warning-on-board", "--color-board-lit")]
+              ("--color-status-warning-on-board", "--color-board-lit"),
+              # League chalk (PD-046). A league's name is written in its chalk on the leagues board,
+              # so each is text, measured against the worst ground the board has.
+              ("--color-league-1-on-board", "--color-board-lit"),
+              ("--color-league-2-on-board", "--color-board-lit"),
+              ("--color-league-3-on-board", "--color-board-lit"),
+              ("--color-league-4-on-board", "--color-board-lit"),
+              ("--color-league-5-on-board", "--color-board-lit"),
+              ("--color-league-6-on-board", "--color-board-lit")]
 # Which surface each status colour is actually shown on, read off the export rather than assumed from
 # the token's name. Only five of the nine statuses have a surface of their own; the gate used to look for
 # `--color-status-<name>-surface` for all nine, so four of them silently resolved to nothing and were
