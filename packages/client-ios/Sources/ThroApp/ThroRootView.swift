@@ -310,9 +310,10 @@ public struct ThroRootView: View {
     @AppStorage(ThroDiagnostics.enabledKey) private var diagnostics: Bool = false
     /// PD-007: the opening plays once, at cold launch, over whatever the app shows first.
     @State private var opening = true
-    /// Asked once, ever: the welcome (and its ways in) after the opening. Answered by signing in
-    /// OR by "not now" — both are answers, and neither is asked twice.
-    @AppStorage(Welcome.seenKey) private var welcomeSeen: Bool = false
+    /// Answered for THIS run: the welcome after the opening. `@State` rather than `@AppStorage`
+    /// on purpose — a cold launch while signed out asks again, because signing in is the thing the
+    /// app needs and a person with no account has not done it. One tap is past it.
+    @State private var welcomeAnswered = false
     /// The opening withdraws its own motion under this setting; the handover has to withdraw too,
     /// or a person who asked for none would still be shown the app growing towards them.
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -331,9 +332,10 @@ public struct ThroRootView: View {
             // Between the opening and the product, once: the welcome, on the board the dart landed
             // in. It sits UNDER the opening and OVER the app, so the opening resolves into it
             // rather than cutting to it, and the tabs are never briefly visible behind it.
-            if let account, Welcome.shows(configured: true, signedIn: account.isSignedIn, seen: welcomeSeen) {
+            if let account, Welcome.shows(configured: true, settled: account.settled,
+                                          signedIn: account.isSignedIn, answeredThisLaunch: welcomeAnswered) {
                 WelcomeScreen(account: account) {
-                    withAnimation(.throExit(ThroMotion.motionDurationStandard)) { welcomeSeen = true }
+                    withAnimation(.throExit(ThroMotion.motionDurationStandard)) { welcomeAnswered = true }
                 }
                 .transition(.opacity)
                 .zIndex(0.5)
@@ -353,6 +355,9 @@ public struct ThroRootView: View {
         // the journal has opened. None of those is a moment to move the screen, so the router holds
         // it and this takes it when SwiftUI is next evaluating.
         .onOpenURL { router.open($0) }
+        // Look for a stored sign-in as the app starts, rather than waiting for somebody to open the
+        // account screen: the welcome cannot decide whether to appear until this has answered.
+        .task { await account?.start() }
         // A tapped Spotlight result arrives as a user activity rather than a URL, and is the one
         // place `onContinueUserActivity` is right — a universal link would arrive at `onOpenURL`,
         // which is the mistake a 2024-era mental model makes in SwiftUI.

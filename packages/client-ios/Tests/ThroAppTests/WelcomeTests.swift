@@ -5,15 +5,23 @@ import ThroNet
 /// The welcome after the opening: asked once, never a gate, and never claiming more than THRØ does.
 final class WelcomeTests: XCTestCase {
 
-    func testItIsAskedOnceAndOnlyWhenThereIsSomethingToAsk() {
-        XCTAssertTrue(Welcome.shows(configured: true, signedIn: false, seen: false))
-        // Answered by signing in.
-        XCTAssertFalse(Welcome.shows(configured: true, signedIn: true, seen: false))
-        // Answered by "not now" — the same answer as far as being asked again goes.
-        XCTAssertFalse(Welcome.shows(configured: true, signedIn: false, seen: true))
-        // A build with no server has nothing to sign in to, so it does not ask.
-        XCTAssertFalse(Welcome.shows(configured: false, signedIn: false, seen: false))
-        XCTAssertFalse(Welcome.shows(configured: false, signedIn: true, seen: true))
+    func testBeingSignedOutIsWhatMakesItAsk() {
+        // The rule that was wrong: it used to remember the answer for ever, so somebody who tapped
+        // "Not now" never saw the sign-in board again and the app looked like it had lost it.
+        XCTAssertTrue(Welcome.shows(configured: true, settled: true, signedIn: false, answeredThisLaunch: false))
+        // Signed in: nothing to ask.
+        XCTAssertFalse(Welcome.shows(configured: true, settled: true, signedIn: true, answeredThisLaunch: false))
+        // Answered this run, either way: not again until the app is started fresh.
+        XCTAssertFalse(Welcome.shows(configured: true, settled: true, signedIn: false, answeredThisLaunch: true))
+        // A build with no server has nothing to sign in to.
+        XCTAssertFalse(Welcome.shows(configured: false, settled: true, signedIn: false, answeredThisLaunch: false))
+    }
+
+    func testItWaitsUntilTheAppHasLookedForAStoredSignIn() {
+        // Before `AccountStore.start()` finishes, "signed out" means *not looked yet*. Asking then
+        // would flash the sign-in board at somebody who is already signed in, every single launch.
+        XCTAssertFalse(Welcome.shows(configured: true, settled: false, signedIn: false, answeredThisLaunch: false))
+        XCTAssertFalse(Welcome.shows(configured: true, settled: false, signedIn: true, answeredThisLaunch: false))
     }
 
     func testTheDoorOutIsPlainAndSaysWhatItCosts() {

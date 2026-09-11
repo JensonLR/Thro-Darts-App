@@ -2978,3 +2978,22 @@ restored from git with the new tests moved to `AccountProfileTests.swift`. The t
 different things and now have two different names.
 
 Counts: client 651, API 26 suites, HTTP 37 properties, schema 92.
+
+## Signed out means it asks
+
+The welcome asked once and remembered the answer for ever, so somebody who had tapped *Not now* —
+the founder, having just been shown three sign-in errors — never saw the sign-in board again, and
+the app looked like it had lost it. *"Log In doesn't appear when loading app when signed out!!!"*
+
+**The rule is now the obvious one: signed out means it asks.** It appears after the opening on every
+cold launch while there is no account, and one tap is past it. `answeredThisLaunch` is `@State`
+rather than `@AppStorage`, so nothing is written down and the next fresh start asks again — which is
+right, because signing in is the thing THRØ needs a person to have done and somebody with no account
+has not done it. It is still not a wall: everything works without it and it does not return for the
+rest of that run.
+
+One new guard came with it. `AccountStore.state` begins `signedOut` because nothing has looked yet,
+so the naive version would have flashed the sign-in board at an already-signed-in player on every
+single launch. `AccountStore.settled` says whether `start()` has finished, the root now calls
+`start()` as the app comes up rather than waiting for somebody to open the account screen, and
+`Welcome.shows` refuses to ask until the answer is actually known. A test holds both halves.

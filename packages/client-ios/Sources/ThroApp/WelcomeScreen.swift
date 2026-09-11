@@ -24,16 +24,24 @@ import ThroTokens
 
 /// The rules about when the welcome is shown, apart from any view so a test can state them.
 public enum Welcome {
-    /// Set once the screen has been answered, either way. A person is asked this question once.
-    public static let seenKey = "thro.welcome.seen"
-
-    /// Whether to show it at all.
+    /// Whether to show it.
+    ///
+    /// **Signed out means it asks.** The first version asked once ever and remembered the answer
+    /// in `UserDefaults`, so a person who tapped *Not now* never saw it again — which is what
+    /// happened to the founder, and made the app look like it had lost the screen. Signing in is
+    /// the thing THRØ needs somebody to have done, and a person with no account has not done it,
+    /// so the app asks each time it is started fresh.
+    ///
+    /// It is not a nag and it is not a wall: one tap is past it, everything works without it, and
+    /// it does not come back for the rest of that run.
     ///
     /// - `configured`: this build has a server to sign in to. Without one there is nothing to ask.
-    /// - `signedIn`: already answered, by having an account.
-    /// - `seen`: asked before, and answered either way.
-    public static func shows(configured: Bool, signedIn: Bool, seen: Bool) -> Bool {
-        configured && !signedIn && !seen
+    /// - `settled`: the account store has finished looking. Before it has, "signed out" only means
+    ///   *not looked yet*, and asking then would flash this board at somebody already signed in.
+    /// - `signedIn`: they have an account, so there is nothing to ask.
+    /// - `answeredThisLaunch`: they signed in or said not now since the app started.
+    public static func shows(configured: Bool, settled: Bool, signedIn: Bool, answeredThisLaunch: Bool) -> Bool {
+        configured && settled && !signedIn && !answeredThisLaunch
     }
 
     /// The headline. Short, and about the player rather than the product.
@@ -319,9 +327,8 @@ public struct WelcomeScreen: View {
     }
 
     private func finish() {
-        // Answering the question answers it however it was reached: somebody who signs in from the
-        // You tab is not asked again at the next launch.
-        UserDefaults.standard.set(true, forKey: Welcome.seenKey)
+        // Answered for this run. Nothing is written down: the next cold launch asks again if they
+        // are still signed out, which is the whole point of the change.
         onDone()
     }
 }

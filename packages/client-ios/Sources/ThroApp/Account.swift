@@ -47,7 +47,13 @@ public final class AccountStore: ObservableObject {
     public var isSignedIn: Bool { profile != nil }
 
     /// On launch: a held session is asked who it is; one the server no longer honours is dropped.
+    /// Whether `start()` has finished looking. Until it has, `signedOut` means *not looked yet*
+    /// rather than *not signed in* — and a screen that cannot tell those apart shows the sign-in
+    /// board for a moment to somebody who is already signed in.
+    @Published public private(set) var settled = false
+
     public func start() async {
+        defer { settled = true }
         guard await api.isSignedIn else { state = .signedOut; return }
         state = .busy("Checking your sign-in")
         await load()
