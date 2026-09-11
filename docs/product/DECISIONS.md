@@ -2168,3 +2168,35 @@ kept: it records who took the side on, and that does not change.
 Handing a team to somebody else, or giving it back; a league or a side disputing an adoption (today the
 answer is that the front says whose say it was); and whether a league that arrives on THRØ later inherits
 the teams its players took on.
+
+## PD-048 — Twenty more leagues' teams, read slowly and under THRØ's own name
+
+**The founder's decision, 2026-09-11**, on a recommendation: *"Yes — pilot 20 as described."* PD-033 allowed
+teams to be imported from the leagues' own published pages and PD-037 said a source must be public, place
+its leagues, and name no person. What neither settled is the question of scale, and it is now a live one:
+329 leagues are on the map and three have their teams.
+
+### Decided
+
+**Twenty leagues first, not three hundred.** The nearest twenty by their own point, read, reviewed as a
+diff, and seeded. What that pilot teaches — how many pubs match, how stale the seasons are, how many teams
+are really people — decides whether the rest follow.
+
+**Under THRØ's own name, slowly, and never past a block.** The importer identifies itself as THRØ, obeys
+`robots.txt` (which allows the standings pages and disallows the fixture and player ones), waits at least
+five seconds between requests, and stops the run if it is refused. It does not pose as a browser: the
+existing tool sends a Safari user agent, and that goes. If identifying honestly gets us blocked, that is an
+answer, and the answer is to ask rather than to disguise the asking.
+
+**No singles, pairs or online leagues.** Sixteen of the listed leagues run individuals, so their "teams"
+are people's names, and PD-033's rule that nothing about a person is imported decides it.
+
+**And we ask.** The founder writes to LeagueRepublic about a data agreement or their API in parallel,
+because it is the only sustainable route to all of them, and because their terms are behind a page that
+refuses automated readers — nobody has read them. A league or a secretary that asks to be removed is
+removed the same day.
+
+### What this does not decide
+
+The other 285 leagues; whether to pay for LeagueRepublic's plan; and whether league secretaries are written
+to before or after their league appears.
