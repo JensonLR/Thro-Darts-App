@@ -375,3 +375,65 @@ final class LaunchSequenceTests: XCTestCase {
         XCTAssertEqual(half.nearFlights.boundingRect.height, 0.105 * 200, accuracy: 2.0)
     }
 }
+
+/// The dart's material against the mark's chalk (the seam at the lower-left crossing).
+final class DartInkTests: XCTestCase {
+
+    func testEveryPartOfTheDartIsPureChalkByTheTimeItIsTheBar() {
+        // The property that stops the grey line through the Ø coming back: at the end of the morph
+        // nothing on the dart is a shade under chalk, so the bar and the ring are one colour and
+        // the crossings cannot show a join.
+        for under in [0.54, 0.9, 0.97] {
+            XCTAssertEqual(DartInk.chalked(under, morph: 1), 1, accuracy: 1e-9, "\(under) did not resolve")
+        }
+        // And nothing that is NOT chalk survives it: the green behind a far flight, a collar's hairline.
+        XCTAssertEqual(DartInk.material(1), 0, accuracy: 1e-9)
+    }
+
+    func testABarelyThrownDartStillLooksLikeAMetalDart() {
+        // The other half: before the morph the material is untouched, or the dart would arrive as a
+        // flat white lozenge and the whole point of drawing a dart would be lost.
+        XCTAssertEqual(DartInk.chalked(0.54, morph: 0), 0.54, accuracy: 1e-9)
+        XCTAssertEqual(DartInk.chalked(0.9, morph: 0), 0.9, accuracy: 1e-9)
+        XCTAssertEqual(DartInk.material(0), 1, accuracy: 1e-9)
+    }
+
+    func testItMovesOneWayAndNeverPastEitherEnd() {
+        var last = DartInk.chalked(0.54, morph: 0)
+        for step in 1...20 {
+            let now = DartInk.chalked(0.54, morph: Double(step) / 20)
+            XCTAssertGreaterThanOrEqual(now, last, "the material never gets darker again")
+            XCTAssertLessThanOrEqual(now, 1)
+            last = now
+        }
+        // Out of range is clamped rather than overshooting into an opacity above 1.
+        XCTAssertEqual(DartInk.chalked(0.9, morph: 1.4), 1, accuracy: 1e-9)
+        XCTAssertEqual(DartInk.chalked(0.9, morph: -0.3), 0.9, accuracy: 1e-9)
+    }
+}
+
+/// Which of the two things resolves the dart into chalk, and when.
+extension DartInkTests {
+
+    func testTheRingClosingChalksTheDartBeforeTheWordmarkEverStarts() {
+        // The beat the seam lived in: the ring is whole and the wordmark has not begun, so a dart
+        // still made of metal lay across a band of pure chalk.
+        XCTAssertEqual(DartInk.morph(wordmark: 0, ring: 1), 1, accuracy: 1e-9)
+        XCTAssertEqual(DartInk.chalked(0.9, morph: DartInk.morph(wordmark: 0, ring: 1)), 1, accuracy: 1e-9)
+    }
+
+    func testItKeepsItsMetalForAllOfTheRingAnybodyWatches() {
+        // Three quarters of the ring being drawn is the part with the two fronts racing round it.
+        // Chalking the dart there would throw away the reason it is drawn as a dart at all.
+        XCTAssertEqual(DartInk.morph(wordmark: 0, ring: 0.0), 0, accuracy: 1e-9)
+        XCTAssertEqual(DartInk.morph(wordmark: 0, ring: 0.75), 0, accuracy: 1e-9)
+        XCTAssertEqual(DartInk.morph(wordmark: 0, ring: 0.875), 0.5, accuracy: 1e-9)
+    }
+
+    func testWhicheverIsFurtherAlongWins() {
+        // The wordmark can be ahead when the opening is replayed or scrubbed; neither may undo the other.
+        XCTAssertEqual(DartInk.morph(wordmark: 1, ring: 0), 1, accuracy: 1e-9)
+        XCTAssertEqual(DartInk.morph(wordmark: 0.4, ring: 0.8), 0.4, accuracy: 1e-9)
+        XCTAssertEqual(DartInk.morph(wordmark: 0.1, ring: 0.95), 0.8, accuracy: 1e-9)
+    }
+}

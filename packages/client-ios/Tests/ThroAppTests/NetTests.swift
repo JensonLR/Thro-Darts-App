@@ -27,6 +27,45 @@ final class NetTests: XCTestCase {
         """
     }
 
+    // MARK: - erasing an account (V031)
+
+    func testErasingRefreshesAStaleTokenInsteadOfGivingUp() async throws {
+        // **The defect this exists for.** The first version of `eraseAccount` called `send` with the
+        // bearer directly instead of `authorised`, so it never refreshed. Access tokens are short:
+        // deleting worked right after signing in and answered 401 an hour later, and the 401 was
+        // read as "already gone" — which signed the phone out and left the account standing. The
+        // founder's report was "doesn't work every time", which is exactly what that looks like.
+        let store = MemorySessionStore(Session(accountId: UUID(), playerId: nil, accessToken: "stale",
+                                               refreshToken: "ref-0", accessExpiresAt: .distantPast, created: false))
+        let script = Script([(401, #"{"error":"expired"}"#),
+                             (200, session("acc-2", refresh: "ref-2")),
+                             (200, #"{"erased":true,"credentials":2,"sessions":1,"devices":1,"friendships":0,"claims":1,"consents":1}"#)])
+        let api = ThroAPI(configuration: config, deviceId: device, store: store, transport: script)
+        let gone = try await api.eraseAccount()
+        XCTAssertEqual(gone.credentials, 2)
+        XCTAssertEqual(script.seen.map { $0.url!.path }, ["/v1/me", "/v1/auth/refresh", "/v1/me"],
+                       "it refreshed and tried again rather than reporting a failure")
+        XCTAssertEqual(script.seen.first?.httpMethod, "DELETE")
+        // A bodyless DELETE was answered 411 by the deployed server, so a body goes with it.
+        XCTAssertEqual(script.seen.first?.httpBody, Data("{}".utf8))
+        XCTAssertNil(store.load(), "and the session is forgotten once the account really is gone")
+    }
+
+    func testAFailedErasureLeavesTheSessionAloneSoTheFailureCanBeSeen() async throws {
+        // Signing out on any failure took the screen showing the error off the screen with it, so a
+        // failure was indistinguishable from a success — with the account still there.
+        let store = MemorySessionStore(Session(accountId: UUID(), playerId: nil, accessToken: "acc-1",
+                                               refreshToken: "ref-1", accessExpiresAt: .distantFuture, created: false))
+        let script = Script([(411, #"{"error":"Content-Length is required"}"#)])
+        let api = ThroAPI(configuration: config, deviceId: device, store: store, transport: script)
+        do {
+            _ = try await api.eraseAccount()
+            XCTFail("a 411 is not a successful erasure")
+        } catch {
+            XCTAssertNotNil(store.load(), "still signed in, because the account is still there")
+        }
+    }
+
     func testSignInSendsTheDeviceAndKeepsTheSession() async throws {
         let script = Script([(200, session())])
         let store = MemorySessionStore()

@@ -181,6 +181,38 @@ public enum Throw {
 /// shaft with a ring where the flights seat, and standard flights carrying the mark. Lengths and half-widths
 /// are fractions of the whole, which is the mark's bar tip to tip, so the landed dart lies exactly where the
 /// bar will be. Point 0.24, barrel 0.30, shaft 0.22, flights 0.24.
+/// How the dart's material resolves into the mark's chalk.
+///
+/// A dart is drawn as a dart: a shaded far flight, a shaft a shade under full chalk, a hairline
+/// collar, grooves in the barrel. All of that is right against the board and **wrong over the
+/// ring** — the mark's band is pure chalk, and anything darker laid across it shows as a grey line
+/// through the Ø, which is what could be seen at the lower-left crossing. The material belongs to
+/// the dart, so it resolves with the dart: by the time `morph` is 1 the whole silhouette is the
+/// same chalk as the ring, and two shapes of one colour cannot show a join between them.
+public enum DartInk {
+    /// An opacity under full chalk, brought up to full as the morph completes.
+    public static func chalked(_ under: Double, morph: Double) -> Double {
+        let m = min(1, max(0, morph))
+        return under + (1 - under) * m
+    }
+
+    /// How chalked the dart is, from the two things that can make it so.
+    ///
+    /// The wordmark morph is one. **The ring closing round it is the other, and it comes first**:
+    /// the ring is whole a beat before the wordmark begins, and for that beat a dart still made of
+    /// metal was laid across a band of pure chalk — which is the grey line through the Ø. The dart
+    /// keeps its material through three quarters of the ring being drawn, which is all of the part
+    /// anybody watches, and resolves over the last quarter as the two fronts meet.
+    public static func morph(wordmark: Double, ring: Double) -> Double {
+        let closing = min(1, max(0, (ring - 0.75) / 0.25))
+        return max(min(1, max(0, wordmark)), closing)
+    }
+
+    /// What is left of a colour that is NOT chalk — the green behind a far flight, the hairline of
+    /// a collar — which is nothing once the dart has become the bar.
+    public static func material(_ morph: Double) -> Double { 1 - min(1, max(0, morph)) }
+}
+
 public struct DartAnatomy: Equatable, Sendable {
     public static let point: CGFloat = 0.24
     public static let barrel: CGFloat = 0.30
@@ -780,23 +812,33 @@ struct LaunchFrame: View {
                 shaft.translateBy(x: anatomy.barrelEnd, y: 0); shaft.rotate(by: .radians(bendShaft)); shaft.translateBy(x: -anatomy.barrelEnd, y: 0)
                 var flights = shaft
                 flights.translateBy(x: anatomy.shaftEnd, y: 0); flights.rotate(by: .radians(bendFlights)); flights.translateBy(x: -anatomy.shaftEnd, y: 0)
-                // the far pair is the shaded side of an opaque flight, not a see-through one: the field's
-                // deep green with chalk over it, which at full strength is exactly 0.54 chalk to 0.46 green
-                flights.fill(parts.farFlights, with: .color(ThroColor.throGreenDeep.opacity(alpha)))
-                flights.fill(parts.farFlights, with: .color(chalk.opacity(0.54 * alpha)))
-                shaft.fill(parts.shaft, with: .color(chalk.opacity(0.9 * alpha)))
-                shaft.fill(parts.collar, with: .color(ThroColor.throChalkHairline.opacity(alpha)))
+                // **Every part resolves to pure chalk as the morph completes.** A dart is drawn as a
+                // dart — a shaded far flight, a shaft a shade under full chalk, a hairline collar —
+                // and that is right against the board and WRONG over the ring: the mark's band is
+                // pure chalk, so anything darker laid across it shows as a grey line through the Ø.
+                // That is the seam the founder saw at the lower-left crossing. The material is part
+                // of the dart, so it resolves with the dart: at `morph` 1 the whole silhouette is
+                // the same chalk as the ring, and two shapes of one colour cannot show a join.
+                let m = DartInk.morph(wordmark: Double(morph), ring: Double(pRing))
+                func chalked(_ under: Double) -> Double { DartInk.chalked(under, morph: m) }
+                flights.fill(parts.farFlights, with: .color(ThroColor.throGreenDeep.opacity(alpha * DartInk.material(m))))
+                flights.fill(parts.farFlights, with: .color(chalk.opacity(chalked(0.54) * alpha)))
+                shaft.fill(parts.shaft, with: .color(chalk.opacity(chalked(0.9) * alpha)))
+                shaft.fill(parts.collar, with: .color(ThroColor.throChalkHairline.opacity(alpha * DartInk.material(m))))
+                shaft.fill(parts.collar, with: .color(chalk.opacity(alpha * m)))
                 d.fill(parts.barrel, with: .color(chalk.opacity(alpha)))
                 d.fill(parts.point, with: .color(chalk.opacity(alpha)))
                 if shaded {
-                    let solid = alpha * Double(1 - morph)
+                    // `m` rather than `morph`: the grooves and the knurl are the darkest things on
+                    // the dart, so they are the first that must not be over the ring.
+                    let solid = alpha * (1 - m)
                     d.fill(parts.shade, with: .color(ThroColor.throChalkHairline.opacity(0.95 * solid)))
                     d.stroke(parts.highlight, with: .color(ThroColor.throChalkRaised.opacity(0.9 * solid)), style: StrokeStyle(lineWidth: fine, lineCap: .round))
                     d.stroke(parts.pointCore, with: .color(ThroColor.throChalkRaised.opacity(0.9 * solid)), style: StrokeStyle(lineWidth: fine, lineCap: .round))
                     d.stroke(parts.knurl, with: .color(ThroColor.throGreen.opacity(0.42 * solid)), lineWidth: max(0.7, geo.unit * 0.0035))
                     d.stroke(parts.grooves, with: .color(ThroColor.throInk.opacity(0.28 * solid)), lineWidth: groove)
                 }
-                flights.fill(parts.nearFlights, with: .color(chalk.opacity(0.97 * alpha)))
+                flights.fill(parts.nearFlights, with: .color(chalk.opacity(chalked(0.97) * alpha)))
                 if shaded {
                     flights.fill(parts.logo, with: .color(ThroColor.throGreen.opacity(0.38 * alpha * Double(parts.nearScale))))
                 }

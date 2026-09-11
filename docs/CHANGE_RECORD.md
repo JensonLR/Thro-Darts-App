@@ -3018,3 +3018,27 @@ forgets the session only on 401 and 409, which are the two answers that mean it 
 **The journey.** Reaching your own name ran You → Settings → a long scroll → *Account and profile* →
 *Your profile*: five steps, on the tab called You. The slate's second button says **PROFILE** and
 opens the profile. Two taps to your name, your picture and the way out.
+
+## Erasing worked only while the token was fresh, and the dart was metal over chalk
+
+**"Doesn't work every time" was a missing refresh.** `eraseAccount` reached for `send` with the
+bearer directly instead of `authorised`, which is the one call on this client that refreshes an
+access token and tries again. Access tokens are short, so erasing worked immediately after signing
+in and answered 401 an hour later — and that 401 was then read as *already gone*, which signed the
+phone out and left the account standing. It goes through `authorised` now, so a stale token is
+renewed and the delete goes through; a 401 that survives the refresh really is a dead session.
+`NetTests` scripts the whole sequence (401, refresh, retry) and asserts the three paths in order,
+and a second test asserts a failed erasure leaves the session alone so the error stays on screen.
+
+**The grey line through the Ø.** At the lower-left crossing the mark showed a seam. It was not the
+ring: it was the dart. A dart is drawn as a dart — a far flight shaded green under chalk, a shaft a
+shade under full chalk, a hairline collar, knurl and grooves in the barrel — and all of that is
+right against the board and wrong across the mark's band, which is pure chalk. Anything darker laid
+over it reads as a line through the Ø.
+
+The material now resolves with the dart, and **the ring closing is what resolves it**, not only the
+wordmark morph: the ring is whole a beat before the wordmark begins, and that beat is where the seam
+lived. The dart keeps its metal through three quarters of the ring being drawn — all of the part
+anybody watches, the two fronts racing round — and becomes chalk over the last quarter as they meet.
+By the time the bar and the ring are one shape they are one colour, and two shapes of one colour
+cannot show a join. `DartInk` holds the rule and six tests hold `DartInk`.

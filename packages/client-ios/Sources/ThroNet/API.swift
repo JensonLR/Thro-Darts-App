@@ -370,21 +370,26 @@ public actor ThroAPI {
     /// including when the answer is an error, because the one outcome worse than a failed erasure
     /// is a phone that carries on acting signed in to an account that has gone.
     public func eraseAccount() async throws -> Erasure {
-        guard let bearer = session?.accessToken else { throw APIError.signedOut }
         do {
-            // An empty JSON object rather than no body at all. The server used to demand a
-            // Content-Length on every non-GET and answered a bodyless DELETE with 411; that is
-            // fixed, but a phone in somebody's pocket meets whatever is deployed, and two bytes
-            // cost nothing.
-            let (data, http) = try await send("DELETE", "/v1/me", body: Data("{}".utf8), bearer: bearer)
-            guard http.statusCode == 200 else { throw APIError.status(http.statusCode, String(decoding: data, as: UTF8.self)) }
+            // **`authorised`, like every other call on this account.** The first version reached
+            // for `send` with the bearer directly, which skipped the one thing `authorised` is for:
+            // a refresh when the access token has aged out. Access tokens are short, so erasing
+            // worked immediately after signing in and answered 401 an hour later — and the 401 was
+            // then read as "already gone", which signed the phone out and left the account standing.
+            // That is the whole of "doesn't work every time".
+            //
+            // The body is `{}` rather than nothing: the server used to demand a Content-Length on
+            // every non-GET and answered a bodyless DELETE with 411. That is fixed, but a phone in
+            // somebody's pocket meets whatever is deployed, and two bytes cost nothing.
+            let data = try await authorised("DELETE", "/v1/me", body: Data("{}".utf8))
             session = nil
             store.clear()
             return try Wire.decoder.decode(Erasure.self, from: data)
         } catch {
-            // Only when the account really is gone, or the session is. **Not on any other failure**:
-            // clearing the session on, say, a 411 signed the phone out while the account was still
-            // there, so the erasure looked like it had happened and had not.
+            // A 401 that survived `authorised` means the refresh failed too, so the session really
+            // is dead; a 409 means the account is already gone. **Nothing else clears the session**:
+            // doing that on, say, a 411 signed the phone out while the account was still there, so
+            // the erasure looked like it had happened and had not.
             if case APIError.status(let code, _) = error, code == 401 || code == 409 {
                 session = nil
                 store.clear()
