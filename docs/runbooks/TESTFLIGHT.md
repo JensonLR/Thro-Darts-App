@@ -53,67 +53,66 @@ If it fails, the log says why, and the section at the end covers the likely reas
    a group called `Founders` → add your own Apple ID. Install **TestFlight** from the App Store on the
    phone and sign in with the same Apple ID.
 
-## Getting a build from the Mac tonight, without the workflow
+## Getting a build from the Mac, without the workflow
 
-The workflow is the way that needs no Mac. With the Mac in front of you the archive takes ten
-minutes, and every step below is a place to click. Two archives run from this repository so far
-both stopped at the first step, with Xcode saying *No Accounts: Add a new account in Accounts
-settings* — nothing else can happen until that one is done, and only you can do it, because it is
-your Apple ID and password.
+**The whole thing runs from a terminal. No clicking in Xcode at all.** Three archives were tried by
+hand before this section was rewritten, and none of the Xcode-clicking directions in the earlier
+version were worth following — two of them described screens that are not in Xcode 26.
 
-**1. Tell Xcode who you are.** Open Xcode. In the menu bar at the very top of the screen, click the
-word **Xcode** (left of *File*) → **Settings…** (or press ⌘ and the comma key). A window opens with
-icons along its top; click **Accounts**. Bottom-left of that window is a small **+** button; click
-it → **Apple Account** → **Continue** → sign in with the Apple ID that holds the Developer Program
-(the one that shows *Apple Developer Program* at developer.apple.com/account). When it is in, the
-left column lists your Apple ID and, selected, the right side shows a team called by your name
-with the role *Agent* or *Admin* and the ID **2XM324WPD5**. Close the window.
+```bash
+cd ~/Documents/Thro-Darts-App
+xcodebuild -project apps/ios/ThroDarts.xcodeproj -scheme ThroDarts \
+  -destination 'generic/platform=iOS' -archivePath /tmp/ThroDarts.xcarchive \
+  -allowProvisioningUpdates archive
+xcodebuild -exportArchive -archivePath /tmp/ThroDarts.xcarchive \
+  -exportOptionsPlist apps/ios/Support/ExportOptions.plist \
+  -exportPath /tmp/ThroDartsExport -allowProvisioningUpdates
+```
 
-**2. Open the project and choose what to build.** In Xcode: **File → Open…**, pick
-`apps/ios/ThroDarts.xcodeproj` inside the repository, **Open**. Across the top of the window is a
-toolbar; in its middle it says **ThroDarts** and, after a **›**, a device name. Click the device
-name and choose **Any iOS Device (arm64)** — near the top of that list, above the simulators. An
-archive cannot be made for a simulator.
+The second command **uploads** — `ExportOptions.plist` says `destination: upload` — so when it ends
+there is a build in App Store Connect. It also creates the Apple Distribution certificate and the App
+Store profile the first time, which is what `-allowProvisioningUpdates` is for.
 
-**3. Check the signing, both targets.** In the left-hand column (the *navigator*), click the very
-top row, the blue icon named **ThroDarts**. The middle of the window changes to the project editor;
-its left edge lists **PROJECT › ThroDarts** and, under it, **TARGETS › ThroDarts** and **ThroLive**.
-Click the target **ThroDarts**, then the tab **Signing & Capabilities** along the top of the editor.
-Tick **Automatically manage signing** if it is not ticked. Set **Team** to your team (the one ending
-*2XM324WPD5*), not *None* and not a *Personal Team*. Below that, Xcode lists the capabilities the
-project asks for — **App Groups** (with `group.app.thro.darts` ticked), **Sign in with Apple** and
-**Associated Domains** — and, now that it has an account, registers them on the App ID itself; a
-red line under any of them means it could not, and the text says why. Then click the target
-**ThroLive** and do the same: Automatically manage signing, your team, **App Groups** with the same
-group ticked. If Xcode asks to *Register* or *Enable* something, say yes.
+Every later upload needs a higher build number: raise `CURRENT_PROJECT_VERSION` in
+`apps/ios/ThroDarts.xcodeproj/project.pbxproj` (it appears twice, once per target) and archive again.
 
-**4. Archive.** Menu bar → **Product → Archive**. Xcode builds for a few minutes (the progress is in
-the top toolbar). If it fails, the red items in the left column say why — the usual one is a
-signing line from step 3. When it succeeds the **Organizer** window opens on its own with the new
-archive selected. (If it does not, **Window → Organizer**, then **Archives** on the left.)
+### What actually stopped it the first three times
 
-**5. Upload.** In the Organizer, with the archive selected, click **Distribute App** (blue, on the
-right) → **TestFlight & App Store** → **Distribute**. Xcode uploads, taking the defaults; it may
-ask once to *Upload your app's symbols* — yes. It says *Upload Successful* when done. Nothing else
-on the Mac is needed after this.
+Worth reading before believing any error Xcode prints, because two of the three messages pointed at
+the wrong thing.
 
-**6. Let TestFlight hand it to your phone.** On [appstoreconnect.apple.com](https://appstoreconnect.apple.com)
-→ **Apps** → **THRØ** (create it first if step 2 of *What you need* has not been done) → the
-**TestFlight** tab. The build appears under *iOS Builds* as *Processing* for five to ten minutes,
-then goes *Ready to Test*; the first time it may ask two export-compliance questions (**No** to
-using encryption beyond what iOS provides). On the left under **Internal Testing** click **+**,
-name the group *Founders*, tick your own Apple ID, save. Install **TestFlight** from the App Store
-on the phone, sign in with the same Apple ID, and THRØ is there with an **Install** button.
+1. **The App ID's capabilities were not ticked, and Xcode could not tick them.** At
+   [developer.apple.com/account/resources/identifiers](https://developer.apple.com/account/resources/identifiers)
+   → **XC app thro darts** (`app.thro.darts`), the boxes for **App Groups**, **Associated Domains**
+   and **Sign In with Apple** were all clear. Tick all three; on the App Groups row press
+   **Configure**, tick `group.app.thro.darts`, **Continue**; then **Save** and **Confirm**. The
+   sibling identifier `app.thro.darts.live` needs App Groups only, and already had it. Automatic
+   signing is *supposed* to register these itself and did not, so check them by hand whenever a
+   profile is said to be missing a capability.
+2. **Xcode's cached list of what capabilities exist was stale.** The symptom is the strange one:
+   *"The capability associated with ASSOCIATED_DOMAINS could not be determined. Please file a bug
+   report."* That is not a bug to report. Delete the cache and the archive works:
+   ```bash
+   rm ~/Library/Developer/Xcode/UserData/Capabilities/capabilities-*-2XM324WPD5-bundle.json
+   rm ~/Library/Developer/Xcode/UserData/Provisioning\ Profiles/*.mobileprovision
+   ```
+   Both are caches. Xcode fetches them again on the next build; nothing is lost.
+3. **`error: No Accounts: Add a new account in Accounts settings` is often a lie.** The account was
+   already there. Xcode says this when its saved Apple ID session has gone stale — and it raises a
+   *Sign in to your Apple Account* sheet to fix it. **That sheet wants the email address**
+   (`jensonlewis0@gmail.com`), not the Team ID. `2XM324WPD5` typed into it gives *Your Apple Account
+   or password is incorrect*, which reads like a wrong password and is not one. Xcode → Settings →
+   Apple Accounts shows whether the account is in: it should list the account with a team under it
+   whose role is Agent or Admin.
 
-**Every later upload needs a higher build number**: in step 3's editor, tab **General**, raise
-**Build** by one on both targets (it is `CURRENT_PROJECT_VERSION`, 1 today), then steps 4 and 5
-again. The workflow does that by itself with its run number; by hand it is yours to do.
+### The App Store Connect side
 
-**If the archive says the profile lacks a capability** after step 3 was done: at
-[developer.apple.com/account/resources/identifiers](https://developer.apple.com/account/resources/identifiers)
-open **app.thro.darts**, tick **App Groups**, **Sign in with Apple** and **Associated Domains**,
-**Save**; back in Xcode, on the Signing & Capabilities tab, click the small **↻** by *Provisioning
-Profile* (or untick and retick *Automatically manage signing*), then archive again.
+The app record already exists — **THRØ**, Apple ID `6810830374`, bundle `app.thro.darts` — so nothing
+needs creating. After an upload, [appstoreconnect.apple.com](https://appstoreconnect.apple.com) →
+**Apps** → **THRØ** → **TestFlight**: the build shows as *Processing* for five to ten minutes, then
+*Ready to Test*. Under **Internal Testing** on the left, **+** makes a group; add yourself by Apple
+ID; install **TestFlight** on the phone and sign in with the same Apple ID. `ITSAppUsesNonExemptEncryption`
+is already `false` in `apps/ios/Support/Info.plist`, so the export-compliance question is never asked.
 
 ## Getting a build
 
