@@ -278,6 +278,41 @@ public class Accounts(
         require(n == 1) { "no such account" }
     }
 
+    /**
+     * What an erasure destroyed. Counts only — nothing here names anybody, which is the point.
+     */
+    public data class Erasure(
+        val credentials: Int, val sessions: Int, val devices: Int,
+        val friendships: Int, val claims: Int, val consents: Int,
+    )
+
+    /**
+     * Take a person out of THRØ (V031).
+     *
+     * Everything that identifies them is destroyed: the name, the Apple or Google subject, every
+     * passkey, every session on every device, the device labels, the live friendships, the claim on
+     * their competitor row and the consent that let anything about them leave. What stays is what
+     * belongs to other people — the matches they played, and the league and tournament rows those
+     * results hold up — and after this those carry a competitor id that resolves to no person.
+     *
+     * The work is one `SECURITY DEFINER` function rather than statements here, because blanking a
+     * credential's subject needs privileges this service must not hold the rest of the time.
+     *
+     * Refuses an account that is already erased, so a repeated tap cannot write a second erasure
+     * row over the first one's counts.
+     */
+    public fun erase(accountId: UUID): Erasure = transaction {
+        connection.prepareStatement(
+            "SELECT credentials, sessions, devices, friendships, claims, consents FROM identity.erase_account(?)",
+        ).use { ps ->
+            ps.setObject(1, accountId)
+            ps.executeQuery().use { rs ->
+                check(rs.next()) { "erase_account returned nothing" }
+                Erasure(rs.getInt(1), rs.getInt(2), rs.getInt(3), rs.getInt(4), rs.getInt(5), rs.getInt(6))
+            }
+        }
+    }
+
     // --- internals ------------------------------------------------------------------------------
 
     private fun issue(familyId: UUID, accountId: UUID, created: Boolean): Session {

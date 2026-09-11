@@ -95,9 +95,14 @@ public struct WelcomeScreen: View {
             // The first version centred one block and left a hole above and below it. A board is
             // written top-down and the keys go where the thumb is, so the composition is the one a
             // scoreboard already has: the heading chalked at the top, the choices at the bottom.
+            // Masthead, ask, choices — with the slack SHARED between the first two gaps rather than
+            // all of it dumped below the sentence. One spacer left a hole in the middle of the
+            // screen with the writing pinned above it and the keys pinned below.
             VStack(spacing: 0) {
-                heading
-                Spacer(minLength: ThroSpacing.spacing6)
+                masthead
+                Spacer(minLength: ThroSpacing.spacing5)
+                pitch
+                Spacer(minLength: ThroSpacing.spacing5)
                 choices
             }
             .padding(.horizontal, ThroSpacing.spaceScreenGutter)
@@ -153,7 +158,7 @@ public struct WelcomeScreen: View {
 
     // MARK: - the heading
 
-    @ViewBuilder private var heading: some View {
+    @ViewBuilder private var masthead: some View {
         VStack(spacing: ThroSpacing.spacing4) {
             arriving(Beat.wordmark) {
                 ThroWordmark(capHeight: ThroTypography.display.capHeight * 1.35, color: ThroColor.colorTextOnBoard)
@@ -163,23 +168,25 @@ public struct WelcomeScreen: View {
                 .fill(ThroColor.colorMarkOnBoard)
                 .frame(height: ThroSpacing.spaceChalkRuleWeight * 2)
                 .accessibilityHidden(true)
-            arriving(Beat.heading) {
-                VStack(spacing: ThroSpacing.spacing3) {
-                    Text(Welcome.headline)
-                        .thro(ThroTypography.heading1.family(.sport).weight(.bold).tracking(em: 0))
-                        .foregroundStyle(ThroColor.colorTextOnBoard)
-                        .multilineTextAlignment(.center)
-                        .fixedSize(horizontal: false, vertical: true)
-                    Text(Welcome.body)
-                        .thro(ThroTypography.bodyLarge)
-                        .foregroundStyle(ThroColor.colorTextOnBoardSecondary)
-                        .multilineTextAlignment(.center)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-                .padding(.top, ThroSpacing.spacing2)
-            }
         }
         .padding(.top, ThroSpacing.spacing6)
+    }
+
+    @ViewBuilder private var pitch: some View {
+        arriving(Beat.heading) {
+            VStack(spacing: ThroSpacing.spacing3) {
+                Text(Welcome.headline)
+                    .thro(ThroTypography.heading1.family(.sport).weight(.bold).tracking(em: 0))
+                    .foregroundStyle(ThroColor.colorTextOnBoard)
+                    .multilineTextAlignment(.center)
+                    .fixedSize(horizontal: false, vertical: true)
+                Text(Welcome.body)
+                    .thro(ThroTypography.bodyLarge)
+                    .foregroundStyle(ThroColor.colorTextOnBoardSecondary)
+                    .multilineTextAlignment(.center)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
     }
 
     // MARK: - the choices
@@ -189,6 +196,16 @@ public struct WelcomeScreen: View {
             arriving(Beat.keys) { waysIn }
             arriving(Beat.footer) {
                 VStack(spacing: ThroSpacing.spacing3) {
+                    // The rule that closes the board. A scoreboard is ruled top and bottom, and the
+                    // screen had one line at the top and an open bottom, which is what left it
+                    // feeling like a page rather than a board. It is drawn from the RIGHT, so the
+                    // two rules meet the composition from opposite ends.
+                    ChalkRule(weight: ThroSpacing.spaceChalkRuleWeight, seedAngle: 113, trim: chalk)
+                        .fill(ThroColor.colorMarkOnBoard)
+                        .frame(height: ThroSpacing.spaceChalkRuleWeight * 2)
+                        .scaleEffect(x: -1, y: 1, anchor: .center)
+                        .padding(.bottom, ThroSpacing.spacing2)
+                        .accessibilityHidden(true)
                     Button(action: skip) {
                         Text(Welcome.skip(ask))
                             .thro(ThroTypography.labelStrong)
@@ -246,6 +263,11 @@ public struct WelcomeScreen: View {
                         .transition(.opacity)
                         .accessibilityAddTraits(.isStaticText)
                 }
+                // **Two keys, not three.** Three identical boxes had no hierarchy in them and read
+                // as a list of equally likely choices, which is not true: almost everybody arrives
+                // with an Apple or a Google account, and a passkey is PD-030's fallback for the few
+                // who have neither. So the two real ways in are keys and the third is a quiet line,
+                // which is also what takes the screen from three rectangles down to two.
                 wayIn("Continue with Apple", symbol: "apple.logo", lighting: .lit, seed: 11) {
                     Task { await account.signInWithApple() }
                 }
@@ -254,9 +276,18 @@ public struct WelcomeScreen: View {
                         Task { await account.signInWithGoogle() }
                     }
                 }
-                wayIn("Use a passkey", symbol: nil, icon: .lock, lighting: .field, seed: 97) {
-                    Task { await account.usePasskey() }
+                Button { Task { await account.usePasskey() } } label: {
+                    HStack(spacing: ThroSpacing.spacing2) {
+                        Icon(.lock, size: 15)
+                        Text("Use a passkey instead")
+                            .thro(ThroTypography.label)
+                    }
+                    .foregroundStyle(ThroColor.colorTextOnBoardSecondary)
+                    .frame(maxWidth: .infinity)
+                    .throTapTarget()
                 }
+                .buttonStyle(ThroPressStyle(radius: ThroSpacing.radiusControl, pressedFill: ThroColor.colorBoardSunken))
+                .padding(.top, ThroSpacing.spacing1)
             }
         }
     }

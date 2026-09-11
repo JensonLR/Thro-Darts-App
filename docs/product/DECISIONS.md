@@ -1832,3 +1832,46 @@ no network and no permission, and that is the product rather than a trial. So th
 text, plainly placed, and says what staying out costs, which is nothing. Encouraging is not
 cornering. Nor does it decide anything about a *second* ask later; a player who says not now is not
 asked again by this screen.
+
+## PD-039 — A person can take themselves out of THRØ, and what is left names nobody
+
+**Taken on delegated authority, 2026-09-11**, from the founder: *"need option to delete account &
+account data etc that matches legal standards we dont want to be sued when live."* Not reversible in
+the sense that matters: an erasure cannot be undone, which is the point of it.
+
+### Decided
+
+**Deleting an account is in the app, two taps from the profile, and needs nobody's permission.** It
+destroys everything that identifies the person: the display name, the age band, every Apple, Google
+and passkey credential, every session on every device, the device labels, live friendships and any
+friend code given out, the claim on their competitor row, and the consent that let anything about
+them be shown. It **keeps the matches they played**, because a leg is the other player's record too
+and a league's table stands on it — and after the erasure those rows carry a competitor id that
+resolves to no person, which is the shape V018 already established when it took the names out of
+match evidence and left the seats.
+
+The screen says both halves before it asks, names the finality (signing in again makes a brand new
+account), and asks a second time in a dialog that repeats the consequence rather than saying *Are
+you sure?*.
+
+### Why it is redaction rather than DELETE
+
+Every application role has DELETE revoked (ADR-013). That is not an obstacle to erasure, it is why
+erasure can be trusted: a row the running service can remove is a row a bug can remove, and one
+person cannot be allowed to silently rewrite another's leg. So V031 does the work in one
+`SECURITY DEFINER` function owned by `thro_owner` — the service may erase an account and may do
+nothing else to those columns — and a test asserts that the service still cannot reach them any
+other way. After it runs, no text column anywhere in the identity schema holds that person's name or
+provider subject; a test sweeps every one of them, so a column added later is covered without
+anybody remembering this decision.
+
+### Why this is also an App Store requirement
+
+Guideline 5.1.1(v): an app that lets an account be created must let it be deleted from inside the
+app. THRØ would have been rejected without it.
+
+### What this does not decide
+
+Whether an erasure should be offered a grace period, and what a league secretary is told when a
+registered player erases themselves. Neither is needed for a person to exercise the right today.
+Nothing here is legal advice, and the privacy policy still wants a lawyer's eye before launch.

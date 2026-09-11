@@ -8,6 +8,7 @@ import io.ktor.server.application.call
 import io.ktor.server.application.install
 import io.ktor.server.request.receiveText
 import io.ktor.server.response.respondText
+import io.ktor.server.routing.delete
 import io.ktor.server.routing.get
 import io.ktor.server.routing.post
 import io.ktor.server.routing.put
@@ -113,6 +114,7 @@ public fun Application.thro(deps: Deps) {
         "aasa" to { _ -> if (deps.appleAppIds.isEmpty()) Http(404, """{"error":"no app ids configured"}""") else Http(200, """{"webcredentials":{"apps":[${deps.appleAppIds.joinToString(",") { Contract.q(it) }}]}}""") },
         "auth.logout" to { r -> Http(200, """{"revoked":${Accounts(r.connection(), deps.now).logout(bearer(r.call) ?: "")}}""") },
         "me" to { r -> profile(r.connection(), deps, r.principal!!) },
+        "me.erase" to { r -> erase(r.connection(), deps, r.principal!!) },
         "me.profile" to { r ->
             val account = r.principal!!.accountId
             if (account == null) Http(403, """{"error":"the development principal has no account"}""")
@@ -213,6 +215,9 @@ public fun Application.thro(deps: Deps) {
                 "GET" -> get(e.path) { handle(call) }
                 "POST" -> post(e.path) { handle(call) }
                 "PUT" -> put(e.path) { handle(call) }
+                // DELETE arrived with erasure (V031) and is the right verb for it: the caller is
+                // asking for the thing to stop existing, not for a flag to be set on it.
+                "DELETE" -> delete(e.path) { handle(call) }
                 else -> error("unsupported method ${e.method}")
             }
         }
@@ -358,6 +363,26 @@ private fun profile(c: Connection, deps: Deps, p: Principal): Http {
     val account = p.accountId ?: return Http(200, """{"accountId":null,"playerId":"${p.subject}","displayName":null,"named":false,"ageBand":"unknown","note":"development principal: no account"}""")
     val pr = Accounts(c, deps.now).profile(account) ?: return Http(404, """{"error":"no such account"}""")
     return Http(200, """{"accountId":"${pr.accountId}","playerId":${pr.playerId?.let { "\"$it\"" } ?: "null"},"displayName":${Contract.q(pr.displayName)},"named":${pr.named},"ageBand":${Contract.q(pr.ageBand)},"credentials":${pr.credentials}}""")
+}
+
+/**
+ * Erasure (V031). A development principal has no account and so has nothing to erase; saying so is
+ * better than a 500 from a null.
+ */
+private fun erase(c: Connection, deps: Deps, p: Principal): Http {
+    val account = p.accountId ?: return Http(400, """{"error":"this principal has no account to erase"}""")
+    return try {
+        val e = Accounts(c, deps.now).erase(account)
+        Http(200, """{"erased":true,"credentials":${e.credentials},"sessions":${e.sessions},"devices":${e.devices},""" +
+            """"friendships":${e.friendships},"claims":${e.claims},"consents":${e.consents}}""")
+    } catch (ex: Exception) {
+        // The function raises for an account that is already gone or was never there. Neither is a
+        // fault in the caller's request beyond its timing, and neither should read as a crash.
+        val why = ex.message ?: "the account could not be erased"
+        if (why.contains("already erased")) Http(409, """{"error":"this account was already erased"}""")
+        else if (why.contains("no such account")) Http(404, """{"error":"no such account"}""")
+        else throw ex
+    }
 }
 
 // --- the one command endpoint -------------------------------------------------------------------

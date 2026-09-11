@@ -2940,3 +2940,41 @@ create-an-account-with-a-passkey path that the board deliberately does not carry
 **the one-line command that builds and installs onto the phone over Wi-Fi**, which is how every
 build in the last hour got there. The phone is paired and reports `transportType: localNetwork`, so
 no cable is involved and neither is App Store Connect.
+
+## Your profile, a picture, and the door out (PD-039, V031)
+
+**Deleting an account.** THRØ had no way out, which is a legal problem and an App Store one
+(guideline 5.1.1(v) rejects an app that can make an account and not delete one). V031 adds
+`identity.erase_account`, a `SECURITY DEFINER` function that destroys the name, the age band, every
+Apple, Google and passkey credential, every session on every device, the device labels, the live
+friendships and any unspent friend code, the claim on the competitor row and the consent record —
+and keeps the matches, because a leg is the other player's record too and after the erasure it
+carries a competitor id that resolves to nobody. Redaction rather than DELETE, because DELETE is
+revoked from every app role by ADR-013 and that is the reason the guarantee is worth anything.
+`DELETE /v1/me` is the route; four tests hold it, including a **sweep of every text column in the
+identity schema** for the person's name and provider subject, and one that the service still cannot
+reach a credential's subject any other way — the argument the narrow function was chosen on. The app
+lists what goes and what stays before it asks, and asks again with the consequence rather than *Are
+you sure?*.
+
+**Your profile.** Setting a name was You, SIGN IN, scroll, a row, a text link, a field, Save: seven
+steps for two words, and no picture at all. It is one screen now — the mark at 96 pt, the name in
+the sport face directly under it on a chalk rule, both edited where they are read, and the name
+committing when the field is left rather than under a Save button. A picture uses the store the club
+badges already use and the rule they already obey: adults only (PD-014), with the two refusals
+written as the two different facts they are, one of which the person can change. It is kept **on
+this phone** — THRØ's server stores no image of anybody — and the screen does not pretend otherwise.
+
+**The welcome, again.** Still boring, and it was three identical rectangles above a hole. Two keys
+now, because almost everybody arrives with Apple or Google and a passkey is PD-030's fallback, so
+the third became a quiet line. A second chalk rule closes the board at the bottom, drawn from the
+right as the top one is drawn from the left, so the composition is ruled the way a scoreboard is.
+The slack is shared between the two gaps instead of being dumped below the sentence.
+
+**A defect of mine, found and undone.** Writing the new tests to `ProfileTests.swift` overwrote a
+file of that name that already existed and held eleven tests on a club member's page. The count
+check caught it — the total went DOWN by four after seven tests were added — and the file was
+restored from git with the new tests moved to `AccountProfileTests.swift`. The two profiles are two
+different things and now have two different names.
+
+Counts: client 651, API 26 suites, HTTP 37 properties, schema 92.

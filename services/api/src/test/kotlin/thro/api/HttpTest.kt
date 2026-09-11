@@ -1,5 +1,6 @@
 package thro.api
 
+import io.ktor.client.request.delete
 import io.ktor.client.request.get
 import io.ktor.client.request.header
 import io.ktor.client.request.post
@@ -80,6 +81,7 @@ class HttpTest {
                 setBody(body)
             }
             suspend fun get(path: String, subject: UUID? = ade): HttpResponse = client.get(path) { subject?.let { header(Authenticator.Dev.HEADER, it.toString()) } }
+            suspend fun del(path: String, subject: UUID? = ade): HttpResponse = client.delete(path) { subject?.let { header(Authenticator.Dev.HEADER, it.toString()) } }
 
             // --- who is calling -------------------------------------------------------------------
             check("no principal is 401 on a command", post("/v1/commands", "{}", subject = null).status.value == 401)
@@ -135,6 +137,15 @@ class HttpTest {
             // The leagues' public front needs no principal and answers the same shape empty or full.
             val leagues = get("/v1/leagues?locality=Stockton", subject = null)
             check("the leagues are public and answer without a principal", leagues.status.value == 200 && leagues.bodyAsText().startsWith("""{"leagues":["""))
+
+            // --- erasure (V031) -------------------------------------------------------------------
+            // The route exists, is authenticated, and answers a principal with no account to erase
+            // with a sentence rather than a 500 from a null. What erasure DOES is ErasureTest's; this
+            // holds that DELETE is routed at all, which no other endpoint in the contract exercises.
+            check("erasing an account needs a principal", del("/v1/me", subject = null).status.value == 401)
+            val noAccount = del("/v1/me")
+            check("a development principal has no account to erase, and is told so",
+                  noAccount.status.value == 400 && noAccount.bodyAsText().contains("no account to erase"))
             val started = post("/v1/teams", """{"name":"The Sun Inn","locality":"Stockton-on-Tees"}""", subject = home)
             check("a team is started over the wire and its starter is its admin",
                 started.status.value == 200 && started.bodyAsText().contains(""""role":"admin"""")
@@ -174,6 +185,6 @@ class HttpTest {
                 bareUse.get() == 0 && roles.contains("app_match") && roles.contains("app_competition") && roles.contains("app_read") && roles.all { it in setOf("app_match", "app_competition", "app_read") })
         }
         println("  $passed HTTP properties held")
-        assertEquals(35, passed)
+        assertEquals(37, passed)
     }
 }

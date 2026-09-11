@@ -120,6 +120,25 @@ public final class AccountStore: ObservableObject {
         friends = nil; invite = nil; friendsNote = nil
     }
 
+    /// Erase the account (V031). Signed out here whatever the server says, for the reason
+    /// `ThroAPI.eraseAccount` gives: a phone still acting signed in to an account that has gone is
+    /// worse than a failure the person can see.
+    ///
+    /// Returns the sentence to show when it did not work, and nil when it did.
+    @discardableResult
+    public func eraseAccount() async -> String? {
+        state = .busy("Erasing your account")
+        defer { friends = nil; invite = nil; friendsNote = nil }
+        do {
+            _ = try await api.eraseAccount()
+            state = .signedOut
+            return nil
+        } catch {
+            state = .signedOut
+            return SignInProblem.words(error)
+        }
+    }
+
     // MARK: friends (V028)
 
     /// Nil until read; empty when read and none.

@@ -1,5 +1,6 @@
 import SwiftUI
 import ThroDesign
+import ThroJournal
 import ThroNet
 import ThroTokens
 
@@ -16,13 +17,22 @@ public struct AccountScreen: View {
     @State private var name = ""
     @State private var showing: Sub?
 
-    private enum Sub { case inbox, discovery, friends }
+    private enum Sub { case inbox, discovery, friends, profile }
 
     /// Where the account screen may be asked to open: on its own front, or straight on Friends.
     public enum Opening { case account, friends }
 
-    public init(account: AccountStore, opening: Opening = .account, onBack: @escaping () -> Void) {
+    /// The local picture store and the reader for it, so the profile page can carry a face. Both
+    /// optional: a build with no image store shows initials, which is a mark rather than a fault.
+    private let images: ImageStore?
+    private let picture: (String?) -> Image?
+
+    public init(account: AccountStore, opening: Opening = .account,
+                images: ImageStore? = nil, picture: @escaping (String?) -> Image? = { _ in nil },
+                onBack: @escaping () -> Void) {
         self.account = account
+        self.images = images
+        self.picture = picture
         self.onBack = onBack
         self._showing = State(initialValue: opening == .friends ? .friends : nil)
     }
@@ -34,6 +44,9 @@ public struct AccountScreen: View {
             DiscoveryScreen(account: account) { showing = nil }
         } else if showing == .friends {
             FriendsScreen(account: account) { showing = nil }
+        } else if showing == .profile, case .signedIn(let profile) = account.state, let id = profile.accountId {
+            YourProfileScreen(account: account, profile: profile, accountId: id,
+                              images: images, picture: picture) { showing = nil }
         } else {
             VStack(spacing: 0) {
                 TopBar("Account", onBack: onBack, large: true)
@@ -84,22 +97,12 @@ public struct AccountScreen: View {
     private func signedIn(_ profile: Profile) -> some View {
         VStack(alignment: .leading, spacing: ThroSpacing.spacing3) {
             SectionHeader("You")
-            if editingName {
-                ThroTextField("Your name", text: $name, placeholder: "How your league knows you",
-                              helper: "Shown to the teams and leagues you are part of. Change it any time.")
-                HStack(spacing: ThroSpacing.spacing3) {
-                    ThroButton("Save", variant: .primary, size: .medium) { editingName = false; Task { await account.setDisplayName(name) } }
-                    ThroButton("Cancel", variant: .ghost, size: .medium) { editingName = false }
-                }
-            } else {
-                SettingsRow(icon: .circleUser, label: "Name", value: profile.named ? (profile.displayName ?? "") : "Not set yet")
-                ThroTextButton(profile.named ? "Change your name" : "Set your name") { name = profile.named ? (profile.displayName ?? "") : ""; editingName = true }
-            }
+            // One row to the page where a name and a picture are typed and tapped, rather than the
+            // name, the age and their two controls spread across this list. The founder had to go
+            // through seven steps to type two words; this is one.
+            LinkRow(icon: .circleUser, label: "Your profile",
+                    value: profile.named ? (profile.displayName ?? "") : "Name yourself, add a picture") { showing = .profile }
             SettingsRow(icon: .shield, label: "Age band", value: ageBandCopy(profile.ageBand))
-            if profile.ageBand == "unknown" {
-                Note("THRØ does not guess ages. Say you are 18 or over and friends unlock; under 18 is welcome to play, and a guardian's confirmation for the rest is coming.")
-                ThroButton("I am 18 or over", variant: .secondary, size: .medium, icon: .check) { Task { await account.declareAdult() } }
-            }
             SectionHeader("Friends")
             LinkRow(icon: .users, label: "Friends", value: account.friends.map { $0.isEmpty ? "None yet" : "\($0.count)" } ?? "Codes, given in person") { showing = .friends }
             SectionHeader("Ways in")

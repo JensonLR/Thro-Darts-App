@@ -516,7 +516,8 @@ public struct ThroRootView: View {
                     // The welcome sets its own appearance and draws its own board edge to edge.
                     WelcomeScreen(account: account, ask: .fromYou) { showingAccount = false }
                 } else {
-                    AccountScreen(account: account, opening: openingFriends ? .friends : .account) { showingAccount = false; openingFriends = false }
+                    AccountScreen(account: account, opening: openingFriends ? .friends : .account,
+                                  images: clubs.images, picture: { clubs.image($0) }) { showingAccount = false; openingFriends = false }
                         .throAppearance(Appearance(stored: appearanceRaw))
                 }
             }

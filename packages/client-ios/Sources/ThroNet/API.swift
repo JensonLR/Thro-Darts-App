@@ -354,6 +354,39 @@ public actor ThroAPI {
 
     /// Revokes the session's family on the server and forgets it here whatever the server says:
     /// a sign-out that could fail would leave a person holding a token they asked to drop.
+    /// What an erasure destroyed. Counts, because there is nothing else left to report.
+    public struct Erasure: Decodable, Sendable, Equatable {
+        public let credentials: Int
+        public let sessions: Int
+        public let devices: Int
+        public let friendships: Int
+        public let claims: Int
+        public let consents: Int
+    }
+
+    /// Erase this account and everything that identifies its owner (V031).
+    ///
+    /// The session is dead on the server the instant this returns, so it is forgotten here too —
+    /// including when the answer is an error, because the one outcome worse than a failed erasure
+    /// is a phone that carries on acting signed in to an account that has gone.
+    public func eraseAccount() async throws -> Erasure {
+        guard let bearer = session?.accessToken else { throw APIError.signedOut }
+        do {
+            let (data, http) = try await send("DELETE", "/v1/me", body: nil, bearer: bearer)
+            guard http.statusCode == 200 else { throw APIError.status(http.statusCode, String(decoding: data, as: UTF8.self)) }
+            session = nil
+            store.clear()
+            return try Wire.decoder.decode(Erasure.self, from: data)
+        } catch {
+            if case APIError.status(let code, _) = error, code == 401 || code == 409 {
+                // Gone already, or the session was: either way this phone is not signed in.
+                session = nil
+                store.clear()
+            }
+            throw error
+        }
+    }
+
     public func signOut() async {
         if let s = session {
             _ = try? await send("POST", "/v1/auth/logout", body: Data("{}".utf8), bearer: s.accessToken)

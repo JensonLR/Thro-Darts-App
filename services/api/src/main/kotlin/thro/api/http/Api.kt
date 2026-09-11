@@ -136,6 +136,17 @@ public object Contract {
             responses = mapOf(200 to "profile", 400 to "malformed", 401 to "no principal"),
         ),
         Endpoint(
+            id = "me.erase", method = "DELETE", path = "/v1/me", authenticated = true,
+            summary = "Erase my account and everything that identifies me",
+            description = "Destroys the display name, every Apple, Google and passkey credential, every session on "
+                + "every device, the device labels, live friendships, the claim on the competitor row and the consent "
+                + "record. Keeps the matches played, because a match is the other player's record too and a league's "
+                + "table stands on it — and after this those rows carry a competitor id that resolves to no person "
+                + "(V031, the shape V018 set). Cannot be undone; signing in again makes a new account. The caller's "
+                + "session is dead the moment this returns.",
+            responses = mapOf(200 to "what was destroyed, as counts", 401 to "no principal", 409 to "already erased"),
+        ),
+        Endpoint(
             id = "teams.create", method = "POST", path = "/v1/teams", authenticated = true,
             summary = "Start a team",
             description = "The caller becomes its first member and admin (team#admin). Plan §6, row one.",
