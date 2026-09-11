@@ -2134,3 +2134,37 @@ the words standing in for a name ("A player" drew "Ap").
 A player saying a listed team is theirs and running it on THRØ; reading more leagues' teams, which is
 PD-033's open question (a data agreement, LeagueRepublic's paid plan, or each league's secretary); and a
 "your team" mark on the map, which waits for the first of those.
+
+## PD-047 — A player says a listed team is theirs, and runs it on THRØ
+
+**The founder's decision, 2026-09-11**, asked as the leagues board left it open: *"Yes — adults only, own
+say."* The board (PD-046) shows a player their own side and then offers nothing, because a team read out
+of a league's pages has no members: nobody runs it, so there is no code to give the side and no roster to
+fill. This is the door between the two, and it is the one thing a player can do about their own team today.
+
+### Decided
+
+**A player takes on a team nobody runs, and becomes its admin.** Only a team THRØ read from a league's
+pages — a row with provenance (V027) — and only one with nobody on it. The first to say it takes it; a
+second is refused in words and told to ask for that person's code. A team started on THRØ is never taken
+on: it is joined with its code (PD-036).
+
+**By their own say, and the team's page says so.** Nobody has told THRØ that this person plays for this
+side; they have said it themselves. So the front carries "run on THRØ by one of its own players, by their
+own say. Nobody appointed them", and the board says the same where it says who is on a team. The claim is
+recorded as what it is — an adoption, by a player, on a date, with that basis and no other.
+
+**Adults only, and an age nobody has said is not adult.** A minor and an unclaimed player are both
+refused, by a function that answers false unless an account behind the player says adult. The competition
+role may ask that one question and nothing else about a person; nothing that reads a team may ask it at all.
+
+**Eight teams to a player.** A club secretary runs several sides and a script should not run fifty.
+
+**Nothing is rewritten.** The team keeps the name and the pub the league published, and the adoption is
+kept: it records who took the side on, and that does not change.
+
+### What this does not decide
+
+Handing a team to somebody else, or giving it back; a league or a side disputing an adoption (today the
+answer is that the front says whose say it was); and whether a league that arrives on THRØ later inherits
+the teams its players took on.

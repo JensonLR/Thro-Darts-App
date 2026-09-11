@@ -121,4 +121,57 @@ class TeamsTest {
             assertEquals("captain", again.roster.first { it.name == "Ethan T." }.role)
         }
     }
+
+    /** A team read out of a league's pages, with the provenance row that says so (V027, PD-033). */
+    private fun listedTeam(c: Connection, name: String): UUID {
+        val team = Organisations(c).createTeam(name, "Redcar")
+        c.createStatement().use { st ->
+            st.execute(
+                "INSERT INTO competition.source_record (source_record_id, subject_kind, subject_id, source, source_url, " +
+                    "external_ref, retrieved_on, basis) VALUES (gen_random_uuid(), 'team', '$team', 'LeagueRepublic', " +
+                    "'https://example.invalid/fg/1', 'team/$name', '2026-09-10', 'stated by the source')",
+            )
+        }
+        return team
+    }
+
+    @Test
+    fun `a player takes on a listed team nobody runs, and only an adult may`() {
+        if (!configured) return
+        migrated().use { c ->
+            val at = Instant.parse("2026-09-11T20:00:00Z")
+            val teams = Teams(c) { at }
+            val jenson = person(c, "Jenson R.", "adult")
+            val kid = person(c, "Young", "minor")
+            val quiet = person(c, "Sam", "unknown")
+            val ethan = person(c, "Ethan T.", "adult")
+            val cleveland = listedTeam(c, "Cleveland Bay")
+
+            assertEquals("Running a team on THRØ is for adults. Say you are 18 or over on your profile first.",
+                         assertFailsWith<Teams.Refused> { teams.adopt(kid, cleveland) }.why)
+            assertEquals(403, assertFailsWith<Teams.Refused> { teams.adopt(quiet, cleveland) }.status,
+                         "an age nobody has said is not an adult")
+            val own = teams.create(jenson, "The Sun Inn", "Stockton-on-Tees")
+            assertEquals("That team was started on THRØ, not read from a league. Ask whoever runs it for its code.",
+                         assertFailsWith<Teams.Refused> { teams.adopt(jenson, own.teamId) }.why)
+            assertEquals(404, assertFailsWith<Teams.Refused> { teams.adopt(jenson, UUID.randomUUID()) }.status)
+
+            val took = teams.adopt(jenson, cleveland)
+            assertEquals("admin", took.role); assertEquals("Cleveland Bay", took.name); assertEquals(1, took.members)
+            val front = teams.front(cleveland, jenson)!!
+            assertTrue(front.adopted, "the front says one of its own players took it on")
+            assertEquals("admin", front.yourRole)
+            assertTrue(teams.mine(jenson).any { it.teamId == cleveland })
+            assertEquals(20, teams.invite(jenson, cleveland).maxUses, "and can give the side a code")
+            assertTrue(!teams.front(own.teamId, jenson)!!.adopted, "a team started on THRØ was not taken on from a league")
+
+            assertEquals("Somebody already runs Cleveland Bay on THRØ. Ask them for its code.",
+                         assertFailsWith<Teams.Refused> { teams.adopt(ethan, cleveland) }.why)
+
+            // A club secretary may run several sides; a script may not run fifty.
+            repeat(7) { i -> teams.adopt(jenson, listedTeam(c, "Corus $i")) }
+            assertEquals("You have taken on 8 teams already. Tell THRØ if you run more than that.",
+                         assertFailsWith<Teams.Refused> { teams.adopt(jenson, listedTeam(c, "One too many")) }.why)
+        }
+    }
 }

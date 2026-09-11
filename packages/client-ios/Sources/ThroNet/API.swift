@@ -188,6 +188,9 @@ public struct TeamFront: Decodable, Sendable, Equatable {
     public let seasons: [SeasonLine]
     public let roster: [Member]
     public let yourRole: String?
+    /// True when one of the team's own players took it on (PD-047) rather than anybody appointing them,
+    /// which the front says in those words. Optional: a server from before V038 does not send it.
+    public let adopted: Bool?
 }
 
 public struct TeamInvite: Decodable, Sendable, Equatable {
@@ -753,6 +756,13 @@ public actor ThroAPI {
         if let locality { object["locality"] = locality }
         let body = try JSONSerialization.data(withJSONObject: object)
         return try decode(await authorised("POST", "/v1/teams/\(teamId.uuidString.lowercased())/home", body: body))
+    }
+
+    /// Takes on a listed league team nobody runs (PD-047): the caller becomes its admin, by their own
+    /// say. A refusal arrives as `.status(403 or 409, body)` — adults only, only a team read from a
+    /// league's pages, and only one nobody else runs.
+    public func adoptTeam(_ teamId: UUID) async throws -> TeamSummary {
+        try decode(await authorised("POST", "/v1/teams/\(teamId.uuidString.lowercased())/adopt", body: Data("{}".utf8)))
     }
 
     public func joinTeam(code: String) async throws -> TeamSummary {

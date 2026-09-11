@@ -703,6 +703,47 @@ if echo "$r" | grep -qi 'check constraint'; then ok "a venue's postcode is a pos
 else bad "a venue's postcode is a postcode" "${r:-junk was accepted as a postcode}"; fi
 
 echo
+echo "== a player takes on a listed team, by their own say (V038, PD-047) =="
+# Fixtures: an adult, a player whose age nobody has said, and two teams read out of a league's pages.
+AD=$($PSQL -c "SELECT gen_random_uuid();"); UN=$($PSQL -c "SELECT gen_random_uuid();")
+PAD=$($PSQL -c "SELECT gen_random_uuid();"); PUN=$($PSQL -c "SELECT gen_random_uuid();")
+TL=$($PSQL -c "SELECT gen_random_uuid();"); TL2=$($PSQL -c "SELECT gen_random_uuid();")
+$PSQL -c "INSERT INTO competition.player (player_id) VALUES ('$PAD'), ('$PUN');
+  INSERT INTO identity.account (account_id, display_name, age_band, age_assurance) VALUES ('$AD','An Adult','adult','self_declared');
+  INSERT INTO identity.account (account_id, display_name, age_band, age_assurance) VALUES ('$UN','Nobody Said','unknown','none');
+  INSERT INTO identity.player_claim (claim_id, player_id, account_id, method) VALUES (gen_random_uuid(),'$PAD','$AD','self_created');
+  INSERT INTO identity.player_claim (claim_id, player_id, account_id, method) VALUES (gen_random_uuid(),'$PUN','$UN','self_created');
+  INSERT INTO competition.team (team_id, name) VALUES ('$TL','Cleveland Bay'), ('$TL2','Zetland A');
+  SET ROLE app_competition;
+  INSERT INTO competition.team_adoption (team_id, player_id) VALUES ('$TL','$PAD');" >/dev/null 2>&1
+
+check "the application may record that a player took a team on" "$($PSQL -c "SELECT count(*) FROM competition.team_adoption WHERE team_id='$TL';")" "1"
+
+r=$($PSQL -c "SET ROLE app_competition; INSERT INTO competition.team_adoption (team_id, player_id) VALUES ('$TL','$PUN');" 2>&1)
+if echo "$r" | grep -qi 'duplicate key'; then ok "a team is taken on once, whoever says it second"
+else bad "a team is taken on once, whoever says it second" "${r:-a second adoption of one team was accepted}"; fi
+
+r=$($PSQL -c "UPDATE competition.team_adoption SET player_id='$PUN' WHERE team_id='$TL';" 2>&1)
+if echo "$r" | grep -qi 'is kept'; then ok "an adoption is kept, even from the owner"
+else bad "an adoption is kept, even from the owner" "${r:-an adoption was rewritten}"; fi
+
+r=$($PSQL -c "SET ROLE app_competition; DELETE FROM competition.team_adoption WHERE team_id='$TL';" 2>&1)
+if echo "$r" | grep -qi 'permission denied\|is kept'; then ok "and the application cannot delete one"
+else bad "and the application cannot delete one" "${r:-an adoption was deleted}"; fi
+
+r=$($PSQL -c "SET ROLE app_competition; INSERT INTO competition.team_adoption (team_id, player_id, basis) VALUES ('$TL2','$PAD','the league said so');" 2>&1)
+if echo "$r" | grep -qi 'check constraint'; then ok "and it says the only thing it can: they said so themselves"
+else bad "and it says the only thing it can: they said so themselves" "${r:-another basis was accepted}"; fi
+
+check "the competition role can ask whether a player is an adult" "$($PSQL -c "SET ROLE app_competition; SELECT competition.player_is_adult('$PAD');")" "t"
+check "an age nobody has said is not an adult" "$($PSQL -c "SET ROLE app_competition; SELECT competition.player_is_adult('$PUN');")" "f"
+check "nor is a player no account claims" "$($PSQL -c "SET ROLE app_competition; SELECT competition.player_is_adult(gen_random_uuid());")" "f"
+
+r=$($PSQL -c "SET ROLE app_read; SELECT competition.player_is_adult('$PAD');" 2>&1)
+if echo "$r" | grep -qi 'permission denied'; then ok "and nothing that reads a team may ask a person's age"
+else bad "and nothing that reads a team may ask a person's age" "${r:-the read role asked whether somebody is an adult}"; fi
+
+echo
 echo "-------------------------------------------"
 echo "  $PASS passed, $FAIL failed"
 [ "$FAIL" -eq 0 ] || exit 1

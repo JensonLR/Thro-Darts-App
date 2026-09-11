@@ -59,7 +59,11 @@ enum LeagueBoardWords {
         guard let front else { return nil }
         if front.yourRole != nil { return "You play for it on THRØ." }
         let n = front.roster.count
-        return n == 0 ? "Nobody plays for it on THRØ yet." : "\(n) of its players \(n == 1 ? "is" : "are") on THRØ."
+        if n == 0 { return "Nobody plays for it on THRØ yet." }
+        let who = "\(n) of its players \(n == 1 ? "is" : "are") on THRØ"
+        // And on whose say-so it is run: a listed team is taken on by one of its own players (PD-047),
+        // never appointed by the league, and the board says which it is.
+        return front.adopted == true ? "\(who), run by one of them, by their own say." : "\(who)."
     }
 
     /// Under a league's name: "Thursday nights · Stockton-on-Tees · 18 teams in 1 division · 3.2 mi".
@@ -255,6 +259,8 @@ struct LeagueTeamCard: View {
     let onPage: () -> Void
     let onDirections: (() -> Void)?
     let onJoin: (() -> Void)?
+    /// Offered only for a listed team nobody runs, to somebody signed in (PD-047).
+    let onAdopt: (() -> Void)?
     let onClose: () -> Void
 
     var body: some View {
@@ -264,6 +270,13 @@ struct LeagueTeamCard: View {
                        line: LeagueBoardWords.teamWhere(entry, distance: distance), onClose: onClose)
             if let onThro {
                 Text(onThro).thro(ThroTypography.labelStrong).foregroundStyle(ThroColor.colorTextOnBoard)
+            }
+            if let onAdopt {
+                DrawerKey(title: "It's my team — I'll run it", lit: true, seed: 53, action: onAdopt)
+                Text("You become its admin and can give the side a code. The team's page will say it is run by one of its players, by their own say.")
+                    .thro(ThroTypography.metadata)
+                    .foregroundStyle(ThroColor.colorTextOnBoardSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
             }
             // The two things to do come before the division, so neither is below the drawer's fold.
             HStack(spacing: ThroSpacing.spacing3) {

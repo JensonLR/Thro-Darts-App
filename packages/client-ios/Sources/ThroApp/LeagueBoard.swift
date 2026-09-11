@@ -307,7 +307,11 @@ public struct LeaguesScreen: View {
                                distance: miles(to: e.venue), allRivals: $allRivals, onRival: { choose(.team($0), b) },
                                onPage: { sheet = .team(id) },
                                onDirections: e.placed ? { if let v = e.venue { Self.directions(to: v) } } : nil,
-                               onJoin: signedIn ? { sheet = .join } : nil, onClose: close)
+                               onJoin: signedIn ? { sheet = .join } : nil,
+                               // Only a team nobody runs, and only once its front has been read (PD-047).
+                               onAdopt: (signedIn && front(of: id).map { $0.roster.isEmpty && $0.yourRole == nil } == true)
+                                   ? { Task { await teams.adopt(id, api) } } : nil,
+                               onClose: close)
             } else { browse(b) }
         case .bare(let id):
             if let league = b.leagues.first(where: { $0.id == id }) {

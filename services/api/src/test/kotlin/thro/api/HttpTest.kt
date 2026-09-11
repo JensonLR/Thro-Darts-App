@@ -199,6 +199,11 @@ class HttpTest {
             // Roles (PD-045): the admin's front carries each entry's handle, and names a captain with it.
             // After the home check, not before it: a captain may set the home, and that check holds that
             // a player may not.
+            // PD-047: the route is reachable, and a team somebody started on THRØ is not a league's to
+            // take on — the refusal is the sentence the phone shows.
+            val cannotAdopt = post("/v1/teams/$teamId/adopt", "{}", subject = away)
+            check("a team started on THRØ cannot be taken on as a listed one, and the refusal says why",
+                cannotAdopt.status.value == 409 && cannotAdopt.bodyAsText().contains("not read from a league"))
             val adminFront = get("/v1/teams/$teamId", subject = home).bodyAsText()
             val playerHandle = Regex(""""role":"player","memberId":"([0-9a-f-]+)"""").find(adminFront)?.groupValues?.get(1)
             check("the admin names a captain from the roster, nobody else may, and a public front carries no handles",
@@ -226,6 +231,6 @@ class HttpTest {
                     && roles.all { it in setOf("app_match", "app_competition", "app_read", "app_trust") })
         }
         println("  $passed HTTP properties held")
-        assertEquals(46, passed)
+        assertEquals(47, passed)
     }
 }

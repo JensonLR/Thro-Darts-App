@@ -186,6 +186,8 @@ public fun Application.thro(deps: Deps) {
                 Teams(r.connection(), deps.now).let { Http(200, it.json(it.assign(r.principal!!.subject, UUID.fromString(r.call.parameters["teamId"]), member, str(m, "role")))) }
             }
         },
+        // PD-047: a player takes on a listed league team nobody runs. A refusal is the sentence to show.
+        "teams.adopt" to { r -> teamly(409) { Teams(r.connection(), deps.now).let { Http(200, it.json(it.adopt(r.principal!!.subject, UUID.fromString(r.call.parameters["teamId"])))) } } },
         "friends" to { r -> withAccount(r) { a -> Friends(r.connection(), deps.now).let { Http(200, it.json(it.friends(a))) } } },
         "friends.invite" to { r -> withAccount(r) { a -> friendly { Friends(r.connection(), deps.now).invite(a).let { Http(200, """{"code":"${it.code}","expiresAt":"${it.expiresAt}"}""") } } } },
         "friends.accept" to { r -> withAccount(r) { a -> friendly(codeProblem = 409) { Friends(r.connection(), deps.now).accept(a, str(Json.parseObject(r.body), "code")).let { Http(200, """{"friend":{"accountId":"${it.accountId}","displayName":${Contract.q(it.displayName)},"since":"${it.since}"}}""") } } } },

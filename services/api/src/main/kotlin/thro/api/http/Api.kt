@@ -194,6 +194,15 @@ public object Contract {
                               429 to "too many codes tried from this address or device; Retry-After says when"),
         ),
         Endpoint(
+            id = "teams.adopt", method = "POST", path = "/v1/teams/{teamId}/adopt", authenticated = true,
+            summary = "Say a listed league team is yours, and run it on THRØ (PD-047)",
+            description = "For a team read out of a league's pages that nobody on THRØ runs. The caller becomes its admin by their "
+                + "own say, and the team's front says that is what happened. Adults only, and an age nobody has said is not adult. "
+                + "A team somebody already runs is joined with their code instead.",
+            responses = mapOf(200 to "the team, with your role", 401 to "no principal",
+                              409 to "it cannot be taken on, with the sentence to show"),
+        ),
+        Endpoint(
             id = "teams.role", method = "POST", path = "/v1/teams/{teamId}/roles", authenticated = true,
             summary = "Name the captain or vice-captain, or make somebody a player again (PD-045)",
             description = "Admin only. One captain and one vice-captain at a time: naming one when there is one makes the old one "

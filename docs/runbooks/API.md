@@ -79,6 +79,7 @@ routes are mounted from. In brief:
 | `POST /v1/teams/{teamId}/invite` | principal | A team code: eight characters, thirty days, twenty people; admin or captain only (V029) |
 | `GET /v1/venues?q&locality` | anyone | Public venues whose name contains q, at most twenty: for a captain choosing a home |
 | `POST /v1/teams/{teamId}/home` | principal | Set the home venue by id, or add one by name and town; a change closes the old tenure and opens the new (admin or captain) |
+| `POST /v1/teams/{teamId}/adopt` | principal | Say a listed league team is yours and run it (PD-047, V038): only a team read from a league's pages that nobody runs, adults only, and the caller becomes its admin. 409 with the sentence when it is a THRØ team, already run, or you have taken on eight; 403 when the age band is not adult |
 | `POST /v1/teams/join` | principal | Enter a team code and join as a player; 409 with the sentence when the code is unknown, expired, full or you are in already |
 | `POST /v1/teams/{teamId}/roles` | the team's admin | Name the captain or vice-captain, or make somebody a player again (PD-045): one of each at a time; a change ends the membership row and opens another, and the captain's `team.manage` is granted and revoked with it; `memberId` is the roster entry's handle, on the admin's front only |
 | `GET /v1/friends` | principal | The caller's friends: display names and since when (PD-035) |

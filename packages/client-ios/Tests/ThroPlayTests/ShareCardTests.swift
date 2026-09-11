@@ -227,6 +227,30 @@ final class ShareCardTests: XCTestCase {
         XCTAssertEqual(copy.caveat?.contains("retired"), true, copy.caveat ?? "no caveat")
     }
 
+    /// The tag over the provenance sentence says the same kind of evidence — decided by the same
+    /// branches, so a confirmed tag can never sit over a self-reported sentence — and the legs drawn
+    /// under the names exist exactly where a score does.
+    func testTheTagSaysWhatTheSentenceSaysAndTheLegsGoWhereTheScoreDoes() throws {
+        let won = try annWon()
+        XCTAssertEqual(ThroShareCard.copy(for: won).standing, .selfReported)
+        XCTAssertEqual(ThroShareCard.copy(for: won).legs, ThroShareCard.Legs(home: 1, away: 0))
+        won.attest(.home, agrees: true)
+        won.attest(.away, agrees: true)
+        XCTAssertEqual(ThroShareCard.copy(for: won).standing, .confirmed)
+
+        let disputed = try annWon()
+        disputed.attest(.home, agrees: true)
+        disputed.attest(.away, agrees: false)
+        XCTAssertEqual(ThroShareCard.copy(for: disputed).standing, .disputed)
+
+        let record = try match(legs: 3)
+        try journal.append(.visit(Seat.home.playerId, 180), to: record.id)
+        try journal.end(record.id, as: .abandoned)
+        let abandoned = ThroShareCard.copy(for: try MatchSession.open(record.id, in: journal))
+        XCTAssertEqual(abandoned.standing, .noResult)
+        XCTAssertNil(abandoned.legs, "no legs are drawn where there is no score")
+    }
+
     // MARK: the rest of the card
 
     /// The format is spelled out rather than abbreviated: a card is read by people who were not
@@ -265,5 +289,34 @@ final class ShareCardTests: XCTestCase {
         }
         XCTAssertEqual(image.width, Int(ThroShareCard.size.width * ThroShareCard.scale))
         XCTAssertEqual(image.height, Int(ThroShareCard.size.height * ThroShareCard.scale))
+    }
+
+    /// **And the picture is of something.** A blank rectangle has the right size too: the card's
+    /// colours are an asset catalogue, and a build that has not compiled one resolves every colour to
+    /// nothing — four preview renders came out white before anybody noticed, because the only thing
+    /// held about the drawing was its frame. Where the catalogue is not compiled this cannot be told
+    /// from a card drawn wrong, so it skips rather than passing on a picture it cannot see.
+    @MainActor func testTheCardIsAPictureOfSomething() throws {
+        let renderer = ImageRenderer(content: ThroShareCardView(copy: ThroShareCard.copy(for: try annWon())))
+        renderer.scale = 1
+        let image = try XCTUnwrap(renderer.cgImage, "the share card drew nothing")
+        let width = image.width, height = image.height
+        var pixels = [UInt8](repeating: 0, count: width * height * 4)
+        pixels.withUnsafeMutableBytes { raw in
+            guard let context = CGContext(data: raw.baseAddress, width: width, height: height, bitsPerComponent: 8,
+                                          bytesPerRow: width * 4, space: CGColorSpaceCreateDeviceRGB(),
+                                          bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue) else { return }
+            context.draw(image, in: CGRect(x: 0, y: 0, width: width, height: height))
+        }
+        let middle = ((height / 2) * width + width / 2) * 4
+        try XCTSkipIf(pixels[middle + 3] < 200,
+                      "no colour catalogue in this build: every colour resolved to nothing, so nothing here is readable")
+
+        var seen = Set<UInt32>()
+        for i in stride(from: 0, to: pixels.count, by: 4) where seen.count <= 8 {
+            seen.insert(UInt32(pixels[i]) << 24 | UInt32(pixels[i + 1]) << 16 | UInt32(pixels[i + 2]) << 8 | UInt32(pixels[i + 3]))
+        }
+        XCTAssertGreaterThan(seen.count, 8, "the card is one flat colour: it drew a blank rectangle")
+        XCTAssertLessThan(pixels[middle], pixels[middle + 1], "the board is greener than it is red")
     }
 }

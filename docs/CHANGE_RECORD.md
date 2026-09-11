@@ -3373,3 +3373,54 @@ had answered every team as the account's own, so a stranger's side said "You pla
 passes other teams' fronts through to the server, read as nobody, and the board checks the front's id.
 
 Counts: client 731, API 27 suites (60 tests), HTTP 46 properties, schema 106, contrast 94 pairs.
+
+## The card that leaves the phone is a board with the result chalked on it
+
+The founder, with a card from their own phone: *"this can be massively improved. For a start it doesn't
+even have the actual logo in top left it's using text symbol instead of actual."* It did: the card set
+"THRØ" in a font and letterspaced it, where every other surface draws the wordmark from the mark's own
+geometry. It carries `ThroWordmark` now, and the mark again as the stamp in its corner.
+
+The rest of the card was a flat green panel. It is the app's board: the lamp, the field and the chalk
+dust — but drawn in brand pigments, because the board's own tokens flip with the phone's appearance and
+a card must be one picture whoever drew it. The result is a scoreboard rather than a sentence with a
+number after it: each name stands over its own legs, the winner's in chalk and underlined in a stroke of
+chalk, the loser's rubbed back, and the names are no longer said twice. The figures sit in a chalk box
+whose label can no longer be cut short — "3-DART AVER…" was the label squeezed between two flexible
+columns, and it keeps its own width now. How the result is verified is a tag an eye lands on, in the
+chalk of what it says, with the sentence that says it in full underneath: the tag is decided by the same
+branches as the sentence, so a confirmed tag can never sit over a self-reported one.
+
+Every rule the card already kept, it keeps: the verification sentence, the sample in visits and legs, a
+figure only where both players have one, and no scoreline for a match nobody won. `Copy` gained the legs
+as numbers, so the view no longer has to read them out of "3–0".
+
+One test was watching the wrong thing. It held that the card renders at the size it claims — which a
+blank rectangle also does. The card's colours are an asset catalogue, and a build that has not compiled
+one resolves every colour to nothing: four preview renders of the new card came out white before that was
+noticed. The card is now held to being a picture of something — distinct colours, an opaque ground, and a
+ground greener than it is red — and it skips where no catalogue is compiled rather than passing on a
+picture it cannot see.
+
+Counts: client 733, API 27 suites (60 tests), HTTP 46 properties, schema 106, contrast 94 pairs.
+
+## A player says a listed team is theirs, and runs it on THRØ (PD-047, V038)
+
+The board shows a player their own side and then offered nothing: a team read out of a league's pages has
+no members, so there is no code to give the side and no roster to fill. Now the team card offers *It's my
+team — I'll run it*, and the player becomes its admin.
+
+Only a team THRØ read from a league's pages — a row with provenance (V027) — and only one nobody runs.
+The first to say it takes it; the second is refused and told to ask that person for the code. Adults only,
+through `competition.player_is_adult`, a SECURITY DEFINER function in the shape V037 set for `seat_of`: the
+competition role may ask that one question about a person, nothing that reads a team may ask it at all, and
+an age nobody has said answers false, as does a player no live account claims. Eight teams to a player,
+because a club secretary runs several sides and a script should not run fifty.
+
+The adoption is a row of its own — who, when, and the only basis there is, *said so themselves* — kept and
+never rewritten, keyed by the team so two people saying it in the same moment end with one adopter and one
+refusal without a lock held over the team. Nothing about the team is rewritten: it keeps the name and the
+pub the league published. The front carries `adopted`, and both the team's page and the leagues board say
+it in those words: run on THRØ by one of its own players, by their own say, nobody appointed them.
+
+Counts: client 733, API 27 suites (61 tests), HTTP 47 properties, schema 115, contrast 94 pairs.

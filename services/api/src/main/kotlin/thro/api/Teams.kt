@@ -29,8 +29,10 @@ public class Teams(private val connection: Connection, private val now: () -> In
      */
     public data class Member(val name: String?, val role: String, val memberId: UUID? = null)
     public data class SeasonLine(val league: String, val label: String, val division: String?)
+    /** [adopted] is true when one of the team's own players took it on (PD-047), which the front says. */
     public data class Front(val teamId: UUID, val name: String, val locality: String?, val venue: Leagues.Venue?,
-                            val seasons: List<SeasonLine>, val roster: List<Member>, val yourRole: String?)
+                            val seasons: List<SeasonLine>, val roster: List<Member>, val yourRole: String?,
+                            val adopted: Boolean = false)
     public data class Invite(val code: String, val expiresAt: Instant, val maxUses: Int)
     /** A refusal in words, and — where the route should not choose it — the status it carries. */
     public class Refused(public val why: String, public val status: Int? = null) : Exception(why)
@@ -104,7 +106,11 @@ public class Teams(private val connection: Connection, private val now: () -> In
                 WHERE m.team_id = ? AND m.valid_until IS NULL AND m.status = 'active'
                 ORDER BY CASE m.role WHEN 'admin' THEN 0 WHEN 'captain' THEN 1 WHEN 'vice_captain' THEN 2 ELSE 3 END, a.display_name NULLS LAST""",
         ).use { ps -> ps.setObject(1, teamId); ps.executeQuery().use { rs -> generateSequence { if (rs.next()) Member(rs.getString(1), rs.getString(2), if (handles) rs.getObject(3) as UUID else null) else null }.toList() } }
-        return Front(teamId, head.first, head.second, venue, seasons, roster, yourRole)
+        // Whether one of its own players took the team on (PD-047). The front says so in those words:
+        // nobody appointed them, and a reader is owed that distinction.
+        val adopted = connection.prepareStatement("SELECT 1 FROM competition.team_adoption WHERE team_id = ?")
+            .use { ps -> ps.setObject(1, teamId); ps.executeQuery().use { it.next() } }
+        return Front(teamId, head.first, head.second, venue, seasons, roster, yourRole, adopted)
     }
 
     /** A code for the side. Made by an admin or a captain; thirty days; up to twenty people. */
@@ -185,6 +191,47 @@ public class Teams(private val connection: Connection, private val now: () -> In
         if (role == "captain") Relations(connection).grant(m.playerId, "captain", team, by = by)
     }
 
+    /** How many listed teams one player may take on. A club secretary runs several sides; a script
+     *  should not run fifty. */
+    private val adoptionLimit = 8
+
+    /**
+     * A player says a listed league team is theirs, and takes it on (PD-047).
+     *
+     * The team has to be one THRØ read from a league's pages — a row with provenance (V027) — and one
+     * nobody runs: the first person to say it becomes its admin, and a second is refused rather than
+     * added over their head. Adults only, and an age nobody has said is not adult.
+     *
+     * The adoption row goes in first, and its key is the team: two people saying it in the same moment
+     * end with one adopter and one refusal, without holding a lock over the team itself.
+     */
+    public fun adopt(player: UUID, teamId: UUID): Summary {
+        val head = connection.prepareStatement("SELECT name, locality FROM competition.team WHERE team_id = ? AND dissolved_at IS NULL")
+            .use { ps -> ps.setObject(1, teamId); ps.executeQuery().use { rs -> if (rs.next()) rs.getString(1) to rs.getString(2) else null } }
+            ?: throw Refused("No team like that.", 404)
+        val listed = connection.prepareStatement("SELECT 1 FROM competition.source_record WHERE subject_kind = 'team' AND subject_id = ?")
+            .use { ps -> ps.setObject(1, teamId); ps.executeQuery().use { it.next() } }
+        if (!listed) throw Refused("That team was started on THRØ, not read from a league. Ask whoever runs it for its code.")
+        val adult = connection.prepareStatement("SELECT competition.player_is_adult(?)")
+            .use { ps -> ps.setObject(1, player); ps.executeQuery().use { rs -> rs.next() && rs.getBoolean(1) } }
+        if (!adult) throw Refused("Running a team on THRØ is for adults. Say you are 18 or over on your profile first.", 403)
+        val runners = connection.prepareStatement(
+            "SELECT count(*) FROM competition.team_membership WHERE team_id = ? AND valid_until IS NULL AND status = 'active'",
+        ).use { ps -> ps.setObject(1, teamId); ps.executeQuery().use { rs -> rs.next(); rs.getInt(1) } }
+        if (runners > 0) throw Refused("Somebody already runs ${head.first} on THRØ. Ask them for its code.")
+        val taken = connection.prepareStatement("SELECT count(*) FROM competition.team_adoption WHERE player_id = ?")
+            .use { ps -> ps.setObject(1, player); ps.executeQuery().use { rs -> rs.next(); rs.getInt(1) } }
+        if (taken >= adoptionLimit) throw Refused("You have taken on $adoptionLimit teams already. Tell THRØ if you run more than that.")
+        val at = now()
+        val wrote = connection.prepareStatement(
+            "INSERT INTO competition.team_adoption (team_id, player_id, adopted_at) VALUES (?, ?, ?) ON CONFLICT (team_id) DO NOTHING",
+        ).use { ps -> ps.setObject(1, teamId); ps.setObject(2, player); ps.setTimestamp(3, Timestamp.from(at)); ps.executeUpdate() }
+        if (wrote == 0) throw Refused("Somebody already runs ${head.first} on THRØ. Ask them for its code.")
+        org.addMember(teamId, player, MembershipRole.ADMIN, from = at, by = player)
+        Relations(connection).grant(player, "admin", ObjectRef(ObjectType.TEAM, teamId.toString()), by = player)
+        return Summary(teamId, head.first, head.second, "admin", 1)
+    }
+
     /** Enters a team code: the player becomes a member, as a player. */
     public fun join(player: UUID, rawCode: String): Summary {
         val code = normalise(rawCode)
@@ -258,6 +305,7 @@ public class Teams(private val connection: Connection, private val now: () -> In
         """{"teamId":"${f.teamId}","name":${q(f.name)},"locality":${q(f.locality)},"venue":""" + (f.venue?.let { v ->
             """{"venueId":"${v.venueId}","name":${q(v.name)},"locality":${q(v.locality)},"postcode":${q(v.postcode)},"latitude":${v.latitude ?: "null"},"longitude":${v.longitude ?: "null"}}"""
         } ?: "null") + ""","seasons":[${f.seasons.joinToString(",") { """{"league":${q(it.league)},"label":${q(it.label)},"division":${q(it.division)}}""" }}],""" +
-            """"roster":[${f.roster.joinToString(",") { """{"name":${q(it.name)},"role":${q(it.role)}${it.memberId?.let { id -> ""","memberId":"$id"""" } ?: ""}}""" }}],"yourRole":${q(f.yourRole)}}"""
+            """"roster":[${f.roster.joinToString(",") { """{"name":${q(it.name)},"role":${q(it.role)}${it.memberId?.let { id -> ""","memberId":"$id"""" } ?: ""}}""" }}],""" +
+            """"yourRole":${q(f.yourRole)},"adopted":${f.adopted}}"""
     public fun json(i: Invite): String = """{"code":"${i.code}","expiresAt":"${i.expiresAt}","maxUses":${i.maxUses}}"""
 }

@@ -39,9 +39,9 @@ final class LeagueBoardTests: XCTestCase {
     }
 
     func testTheBoardSaysWhetherAnybodyPlaysForTheTeamOnTHRO() throws {
-        func front(_ roster: String, you: String?) throws -> TeamFront {
+        func front(_ roster: String, you: String?, adopted: Bool = false) throws -> TeamFront {
             let role = you.map { "\"\($0)\"" } ?? "null"
-            let json = #"{"teamId":"44444444-4444-4444-4444-444444444443","name":"Sheraton B","locality":null,"venue":null,"seasons":[],"roster":[\#(roster)],"yourRole":\#(role)}"#
+            let json = #"{"teamId":"44444444-4444-4444-4444-444444444443","name":"Sheraton B","locality":null,"venue":null,"seasons":[],"roster":[\#(roster)],"yourRole":\#(role),"adopted":\#(adopted)}"#
             return try Wire.decoder.decode(TeamFront.self, from: Data(json.utf8))
         }
         XCTAssertNil(LeagueBoardWords.onThro(nil), "nothing is said while the front is still being read")
@@ -49,6 +49,9 @@ final class LeagueBoardTests: XCTestCase {
         XCTAssertEqual(LeagueBoardWords.onThro(try front(#"{"name":null,"role":"admin"}"#, you: nil)), "1 of its players is on THRØ.")
         XCTAssertEqual(LeagueBoardWords.onThro(try front(#"{"name":"Ethan T.","role":"admin"},{"name":null,"role":"player"}"#, you: "player")),
                        "You play for it on THRØ.")
+        XCTAssertEqual(LeagueBoardWords.onThro(try front(#"{"name":"Ethan T.","role":"admin"}"#, you: nil, adopted: true)),
+                       "1 of its players is on THRØ, run by one of them, by their own say.",
+                       "a listed team is taken on by one of its own players, never appointed (PD-047)")
     }
 
     func testALeagueSaysItsNightItsPlaceAndItsSpread() throws {

@@ -80,6 +80,20 @@ public final class TeamsModel: ObservableObject {
         } catch { note = ThroAPI.refusal(error) ?? "That could not be changed just now." }
     }
 
+    /// Takes on a listed league team nobody runs (PD-047): the caller becomes its admin, by their own
+    /// say. The front is read again after, because it now carries their role and a code to give the side.
+    @discardableResult
+    public func adopt(_ teamId: UUID, _ api: ThroAPI?) async -> TeamSummary? {
+        guard let api else { note = "This build names no server."; return nil }
+        do {
+            let took = try await api.adoptTeam(teamId)
+            mine = .loaded([took] + (list ?? []).filter { $0.teamId != took.teamId })
+            note = nil
+            await open(teamId, api)
+            return took
+        } catch { note = ThroAPI.refusal(error) ?? "That team could not be taken on just now."; return nil }
+    }
+
     @discardableResult
     public func join(code: String, _ api: ThroAPI?) async -> TeamSummary? {
         guard let api else { note = "This build names no server."; return nil }
@@ -166,6 +180,12 @@ public struct TeamFrontScreen: View {
                         Text(TeamFrontScreen.placeLine(front))
                             .thro(ThroTypography.body).foregroundStyle(ThroColor.colorTextOnBoardSecondary)
                             .fixedSize(horizontal: false, vertical: true)
+                        if front.adopted == true {
+                            // How this team came to be run is on its front, in the words it happened in.
+                            Text("Run on THRØ by one of its own players, by their own say. Nobody appointed them.")
+                                .thro(ThroTypography.metadata).foregroundStyle(ThroColor.colorTextOnBoardSecondary)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
                         if let invite = teams.invite {
                             Text(invite.spoken)
                                 .thro(ThroTypography.heading1.family(.sport).weight(.bold).tracking(em: 0.08))
