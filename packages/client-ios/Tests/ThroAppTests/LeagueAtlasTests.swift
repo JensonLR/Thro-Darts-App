@@ -131,6 +131,37 @@ final class LeagueAtlasTests: XCTestCase {
         XCTAssertTrue(LeagueAtlas.leaguesNamed("d", in: all).isEmpty)
     }
 
+    /// PD-049: a team's own say puts it on its league's board without entering a division — and a league
+    /// with nothing but says is on the board at all, which is the whole point of it.
+    func testATeamsOwnSaySitsBesideALeaguesListingAndNeverInsideIt() throws {
+        let bare = #"""
+        {"leagueId":"11111111-1111-1111-1111-111111111114","name":"Hartlepool Sunday Darts League","shortName":null,
+         "playsOn":"Sunday","locality":"Hartlepool","sources":[],"seasons":[],
+         "saidTeams":[{"teamId":"44444444-4444-4444-4444-44444444444a","name":"The Causeway",
+           "venue":{"venueId":"55555555-5555-5555-5555-555555555555","name":"The Causeway","locality":"Hartlepool",
+                    "postcode":null,"latitude":54.6892,"longitude":-1.2110,"basis":"stated by the source"}}]}
+        """#
+        let hartlepool = try Wire.decoder.decode(PublicLeague.self, from: Data(bare.utf8))
+        let a = LeagueAtlas(try leagues() + [hartlepool])
+
+        let league = try XCTUnwrap(a.leagues.first { $0.name == "Hartlepool Sunday Darts League" })
+        XCTAssertEqual(league.teams, 0, "the league published nothing")
+        XCTAssertEqual(league.said, 1)
+        XCTAssertEqual(league.all, 1, "and the board has one team to draw for it")
+
+        let causeway = try XCTUnwrap(a.entry(UUID(uuidString: "44444444-4444-4444-4444-44444444444a")!))
+        XCTAssertTrue(causeway.said)
+        XCTAssertEqual(LeagueAtlas.line(causeway), "Hartlepool Sunday Darts League · said by its players · Sunday nights")
+        XCTAssertTrue(a.divisions(of: league.id).isEmpty, "a say is not a division")
+        XCTAssertEqual(a.said(in: league.id).map(\.team.name), ["The Causeway"])
+        XCTAssertEqual(a.chalks(at: causeway.venue!.venueId), [causeway.chalk], "and its pub is drawn in that league's chalk")
+        XCTAssertTrue(a.rivals(of: causeway.id).isEmpty, "nobody else has said it yet")
+
+        let sheratonB = try XCTUnwrap(a.entry(id(3)))
+        XCTAssertFalse(sheratonB.said, "a team a league published is not a say")
+        XCTAssertEqual(a.divisions(of: sheratonB.leagueId).map(\.name), ["Premier", "Division One"])
+    }
+
     func testNoPersonIsInTheAtlas() throws {
         let entry = try XCTUnwrap(try atlas().entry(id(1)))
         let labels = Set(Mirror(reflecting: entry.team).children.compactMap(\.label))

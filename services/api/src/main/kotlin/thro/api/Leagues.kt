@@ -32,7 +32,13 @@ public class Leagues(private val connection: Connection) {
                              val locality: String?,
                              /** Where the league says it is (V030): the map's pin until its venues are placed. */
                              val latitude: Double?, val longitude: Double?, val website: String?,
-                             val sources: List<Source>, val seasons: List<Season>)
+                             val sources: List<Source>, val seasons: List<Season>,
+                             /**
+                              * Teams whose own admin or captain says they play in this league (PD-049). Beside
+                              * the seasons and never inside them: a division is what the league published, and
+                              * this is what a team said about itself. The app says which is which.
+                              */
+                             val saidTeams: List<Team> = emptyList())
 
     private val london = ZoneId.of("Europe/London")
 
@@ -95,10 +101,40 @@ public class Leagues(private val connection: Connection) {
                 }
             }
         }
+        // What teams say about themselves (PD-049), gathered beside what the leagues published and never
+        // folded into it: a division is the league's listing, and this is a team's own word.
+        val said = HashMap<UUID, MutableList<Team>>()
+        connection.prepareStatement(
+            """
+            SELECT tlc.league_id, t.team_id, t.name,
+                   v.venue_id, v.name, v.locality, v.postcode, v.latitude, v.longitude,
+                   (SELECT sr.basis FROM competition.source_record sr
+                     WHERE sr.subject_kind = 'team_venue_tenure' AND sr.subject_id = tv.tenure_id
+                     ORDER BY sr.retrieved_on DESC, sr.recorded_at DESC LIMIT 1)
+              FROM competition.team_league_claim tlc
+              JOIN competition.team t ON t.team_id = tlc.team_id AND t.visibility = 'public' AND t.dissolved_at IS NULL
+              LEFT JOIN competition.team_venue_tenure tv ON tv.team_id = t.team_id AND tv.kind = 'home' AND tv.valid_until IS NULL
+              LEFT JOIN competition.venue v ON v.venue_id = tv.venue_id AND v.visibility = 'public'
+             WHERE tlc.withdrawn_at IS NULL
+             ORDER BY t.name
+            """.trimIndent(),
+        ).use { ps ->
+            ps.executeQuery().use { rs ->
+                while (rs.next()) {
+                    val leagueId = rs.getObject(1) as UUID
+                    if (!leagues.containsKey(leagueId)) continue
+                    val venue = (rs.getObject(4) as UUID?)?.let { vid ->
+                        Venue(vid, rs.getString(5), rs.getString(6), rs.getString(7),
+                              rs.getBigDecimal(8)?.toDouble(), rs.getBigDecimal(9)?.toDouble(), rs.getString(10))
+                    }
+                    said.getOrPut(leagueId) { mutableListOf() } += Team(rs.getObject(2) as UUID, rs.getString(3), venue)
+                }
+            }
+        }
         return leagues.values.map { l ->
             l.copy(seasons = seasons[l.leagueId].orEmpty().map { s ->
                 s.copy(divisions = divisions[s.leagueSeasonId].orEmpty().map { d -> d.copy(teams = teams[d.divisionId].orEmpty()) })
-            })
+            }, saidTeams = said[l.leagueId].orEmpty())
         }
     }
 
@@ -128,6 +164,12 @@ public class Leagues(private val connection: Connection) {
                                 } ?: "null") + "}"
                             }}]}"""
                         }}]}"""
+                }}],""" +
+                // Beside the seasons, never inside them: what teams say of themselves (PD-049).
+                """"saidTeams":[${l.saidTeams.joinToString(",") { t ->
+                    """{"teamId":"${t.teamId}","name":${q(t.name)},"venue":""" + (t.venue?.let { v ->
+                        """{"venueId":"${v.venueId}","name":${q(v.name)},"locality":${q(v.locality)},"postcode":${q(v.postcode)},"latitude":${v.latitude ?: "null"},"longitude":${v.longitude ?: "null"},"basis":${q(v.basis)}}"""
+                    } ?: "null") + "}"
                 }}]}"""
         } + "]}"
     }

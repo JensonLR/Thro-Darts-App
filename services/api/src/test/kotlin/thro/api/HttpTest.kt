@@ -199,6 +199,16 @@ class HttpTest {
             // Roles (PD-045): the admin's front carries each entry's handle, and names a captain with it.
             // After the home check, not before it: a captain may set the home, and that check holds that
             // a player may not.
+            // PD-049: the team's admin says which league it plays in, a stranger cannot, and the public
+            // front carries it as the team's own say rather than as one of the league's own teams.
+            // Both routes are reachable and guarded. This database has no league in it, so what the front
+            // says once a team has said it is held in TeamsTest, and what the public map says in SeedTest,
+            // both against real leagues.
+            val unknown = post("/v1/teams/$teamId/league", """{"leagueId":"${UUID.randomUUID()}"}""", subject = home)
+            check("a team may only say it plays in a league THRØ lists, and only whoever runs it may say it",
+                unknown.status.value == 404
+                    && post("/v1/teams/$teamId/league", """{"leagueId":"${UUID.randomUUID()}"}""", subject = away).status.value == 403
+                    && del("/v1/teams/$teamId/league/${UUID.randomUUID()}", subject = away).status.value == 403)
             // PD-047: the route is reachable, and a team somebody started on THRØ is not a league's to
             // take on — the refusal is the sentence the phone shows.
             val cannotAdopt = post("/v1/teams/$teamId/adopt", "{}", subject = away)
@@ -231,6 +241,6 @@ class HttpTest {
                     && roles.all { it in setOf("app_match", "app_competition", "app_read", "app_trust") })
         }
         println("  $passed HTTP properties held")
-        assertEquals(47, passed)
+        assertEquals(48, passed)
     }
 }

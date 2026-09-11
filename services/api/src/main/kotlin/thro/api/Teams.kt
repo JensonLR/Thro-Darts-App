@@ -29,10 +29,16 @@ public class Teams(private val connection: Connection, private val now: () -> In
      */
     public data class Member(val name: String?, val role: String, val memberId: UUID? = null)
     public data class SeasonLine(val league: String, val label: String, val division: String?)
-    /** [adopted] is true when one of the team's own players took it on (PD-047), which the front says. */
+    /** A league the team's own admin or captain says it plays in (PD-049): their say, not the league's. */
+    public data class LeagueSaid(val leagueId: UUID, val name: String)
+    /**
+     * [adopted] is true when one of the team's own players took it on (PD-047), which the front says.
+     * [saysItPlaysIn] is what the team says about itself; [seasons] is what a league published. They are
+     * different kinds of fact and the front keeps them apart.
+     */
     public data class Front(val teamId: UUID, val name: String, val locality: String?, val venue: Leagues.Venue?,
                             val seasons: List<SeasonLine>, val roster: List<Member>, val yourRole: String?,
-                            val adopted: Boolean = false)
+                            val adopted: Boolean = false, val saysItPlaysIn: List<LeagueSaid> = emptyList())
     public data class Invite(val code: String, val expiresAt: Instant, val maxUses: Int)
     /** A refusal in words, and — where the route should not choose it — the status it carries. */
     public class Refused(public val why: String, public val status: Int? = null) : Exception(why)
@@ -110,7 +116,17 @@ public class Teams(private val connection: Connection, private val now: () -> In
         // nobody appointed them, and a reader is owed that distinction.
         val adopted = connection.prepareStatement("SELECT 1 FROM competition.team_adoption WHERE team_id = ?")
             .use { ps -> ps.setObject(1, teamId); ps.executeQuery().use { it.next() } }
-        return Front(teamId, head.first, head.second, venue, seasons, roster, yourRole, adopted)
+        // And which leagues the team says it plays in (PD-049) — its own say, kept apart from the seasons
+        // above, which are what a league published about it.
+        val saysItPlaysIn = connection.prepareStatement(
+            """SELECT l.league_id, l.name FROM competition.team_league_claim tlc
+                 JOIN competition.league l ON l.league_id = tlc.league_id
+                WHERE tlc.team_id = ? AND tlc.withdrawn_at IS NULL ORDER BY l.name""",
+        ).use { ps ->
+            ps.setObject(1, teamId)
+            ps.executeQuery().use { rs -> generateSequence { if (rs.next()) LeagueSaid(rs.getObject(1) as UUID, rs.getString(2)) else null }.toList() }
+        }
+        return Front(teamId, head.first, head.second, venue, seasons, roster, yourRole, adopted, saysItPlaysIn)
     }
 
     /** A code for the side. Made by an admin or a captain; thirty days; up to twenty people. */
@@ -232,6 +248,47 @@ public class Teams(private val connection: Connection, private val now: () -> In
         return Summary(teamId, head.first, head.second, "admin", 1)
     }
 
+    /**
+     * The team says which league it plays in (PD-049).
+     *
+     * A league THRØ lists, said by whoever runs the team. It is their say and it is carried as their say:
+     * a league's divisions are filled from the league's own published pages (PD-033) and from nothing else,
+     * so this never puts a team in a division. Saying it twice is saying it once.
+     */
+    public fun saysItPlaysIn(player: UUID, teamId: UUID, leagueId: UUID): Front {
+        runsTheTeam(player, teamId, "says which league it plays in")
+        connection.prepareStatement("SELECT 1 FROM competition.league WHERE league_id = ?")
+            .use { ps -> ps.setObject(1, leagueId); ps.executeQuery().use { it.next() } }
+            .let { if (!it) throw Refused("THRØ does not list a league like that.", 404) }
+        connection.prepareStatement(
+            """INSERT INTO competition.team_league_claim (team_id, league_id, said_by, said_at)
+               VALUES (?, ?, ?, ?) ON CONFLICT DO NOTHING""",
+        ).use { ps ->
+            ps.setObject(1, teamId); ps.setObject(2, leagueId); ps.setObject(3, player)
+            ps.setTimestamp(4, Timestamp.from(now())); ps.executeUpdate()
+        }
+        return front(teamId, player)!!
+    }
+
+    /** The team stops saying it. The row is marked withdrawn and kept: it was said, and it was said then. */
+    public fun stopsSayingItPlaysIn(player: UUID, teamId: UUID, leagueId: UUID): Front {
+        runsTheTeam(player, teamId, "changes which league it plays in")
+        val at = now()
+        connection.prepareStatement(
+            """UPDATE competition.team_league_claim SET withdrawn_at = ?, withdrawn_by = ?
+                WHERE team_id = ? AND league_id = ? AND withdrawn_at IS NULL AND ? > said_at""",
+        ).use { ps ->
+            ps.setTimestamp(1, Timestamp.from(at)); ps.setObject(2, player)
+            ps.setObject(3, teamId); ps.setObject(4, leagueId); ps.setTimestamp(5, Timestamp.from(at)); ps.executeUpdate()
+        }
+        return front(teamId, player)!!
+    }
+
+    private fun runsTheTeam(player: UUID, teamId: UUID, what: String) {
+        val role = roleOf(player, teamId)
+        if (role != "admin" && role != "captain") throw Refused("Only the team's admin or captain $what.", 403)
+    }
+
     /** Enters a team code: the player becomes a member, as a player. */
     public fun join(player: UUID, rawCode: String): Summary {
         val code = normalise(rawCode)
@@ -306,6 +363,7 @@ public class Teams(private val connection: Connection, private val now: () -> In
             """{"venueId":"${v.venueId}","name":${q(v.name)},"locality":${q(v.locality)},"postcode":${q(v.postcode)},"latitude":${v.latitude ?: "null"},"longitude":${v.longitude ?: "null"}}"""
         } ?: "null") + ""","seasons":[${f.seasons.joinToString(",") { """{"league":${q(it.league)},"label":${q(it.label)},"division":${q(it.division)}}""" }}],""" +
             """"roster":[${f.roster.joinToString(",") { """{"name":${q(it.name)},"role":${q(it.role)}${it.memberId?.let { id -> ""","memberId":"$id"""" } ?: ""}}""" }}],""" +
-            """"yourRole":${q(f.yourRole)},"adopted":${f.adopted}}"""
+            """"yourRole":${q(f.yourRole)},"adopted":${f.adopted},""" +
+            """"saysItPlaysIn":[${f.saysItPlaysIn.joinToString(",") { """{"leagueId":"${it.leagueId}","name":${q(it.name)}}""" }}]}"""
     public fun json(i: Invite): String = """{"code":"${i.code}","expiresAt":"${i.expiresAt}","maxUses":${i.maxUses}}"""
 }

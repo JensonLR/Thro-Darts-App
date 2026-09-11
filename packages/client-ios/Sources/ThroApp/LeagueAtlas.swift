@@ -5,6 +5,11 @@ import ThroNet
 // division and how far their pubs are, which teams play at a pub, and which team or pub a name
 // means. Built once per load from what the server lists, and pure, so it is tested rather than
 // looked at. Nothing here is a person: the wire carries teams and pubs, and so does this.
+//
+// Two kinds of fact live here side by side and never merge (PD-049). A league PUBLISHED its divisions
+// and the teams in them; a team SAID it plays in a league. A say has no division, is marked wherever it
+// is drawn, and is still enough to put a pub on the map in that league's chalk — which is how a league
+// whose pages THRØ cannot read gets teams at all.
 
 public struct LeagueAtlas: Sendable {
     /// One team, with everything the map says about it when it is chosen.
@@ -14,6 +19,8 @@ public struct LeagueAtlas: Sendable {
         /// The league's short name where it has one: this is a line on a phone, not a letterhead.
         public let league: String
         public let playsOn: String?
+        /// The shown season's label, where the league published one; empty for a team that said it plays
+        /// in a league with no season listed.
         public let season: String
         public let divisionId: UUID
         public let division: String
@@ -22,6 +29,9 @@ public struct LeagueAtlas: Sendable {
         public let divided: Bool
         /// The league's place in the atlas, and so the chalk it is drawn in.
         public let leagueIndex: Int
+        /// True when the team's own admin or captain said it plays in this league (PD-049), rather than
+        /// the league having published it. Drawn the same and said differently: a say is not a listing.
+        public let said: Bool
         public var id: UUID { team.teamId }
         public var venue: PublicLeague.Venue? { team.venue }
         public var chalk: Int { leagueIndex % LeagueAtlas.chalks }
@@ -29,13 +39,18 @@ public struct LeagueAtlas: Sendable {
         public var placed: Bool { team.venue?.latitude != nil && team.venue?.longitude != nil }
     }
 
-    /// A league in the atlas's order, with its chalk and how many teams it lists.
+    /// A league in the atlas's order, with its chalk, how many teams it lists, and how many said so.
     public struct League: Identifiable, Equatable, Sendable {
         public let id: UUID
         public let name: String
         public let index: Int
+        /// Teams the league published.
         public let teams: Int
+        /// Teams that said they play in it (PD-049).
+        public let said: Int
         public var chalk: Int { index % LeagueAtlas.chalks }
+        /// Everything the board draws for this league, published and said.
+        public var all: Int { teams + said }
     }
 
     /// Another team in the same division, and how far its pub is from this one's.
@@ -83,25 +98,37 @@ public struct LeagueAtlas: Sendable {
     private let byVenue: [UUID: [Int]]
     private let byDivision: [UUID: [Int]]
 
-    /// Every team of every league's shown season — the running one, else the newest (PD-033). A
-    /// league with no teams listed is a pin on the map and not a line here.
+    /// Every team of every league's shown season — the running one, else the newest (PD-033) — and every
+    /// team that says it plays in a league (PD-049). A league with neither is a pin on the map and not a
+    /// line here; a league with only says is on the board because its own players put it there.
     public init(_ leagues: [PublicLeague]) {
         var entries: [Entry] = []
         var keys: [League] = []
         for league in leagues {
-            guard let season = league.shownSeason else { continue }
-            let count = season.divisions.reduce(0) { $0 + $1.teams.count }
-            guard count > 0 else { continue }
+            let season = league.shownSeason
+            let listed = season?.divisions.reduce(0) { $0 + $1.teams.count } ?? 0
+            let said = league.saidTeams ?? []
+            guard listed > 0 || !said.isEmpty else { continue }
             let index = keys.count
             let name = league.shortName ?? league.name
-            keys.append(League(id: league.leagueId, name: name, index: index, teams: count))
-            let divided = season.divisions.count > 1
-            for division in season.divisions {
-                for team in division.teams {
-                    entries.append(Entry(team: team, leagueId: league.leagueId, league: name, playsOn: league.playsOn,
-                                         season: season.label, divisionId: division.divisionId, division: division.name,
-                                         divisionOrdinal: division.ordinal, divided: divided, leagueIndex: index))
+            keys.append(League(id: league.leagueId, name: name, index: index, teams: listed, said: said.count))
+            let divided = (season?.divisions.count ?? 0) > 1
+            if let season {
+                for division in season.divisions {
+                    for team in division.teams {
+                        entries.append(Entry(team: team, leagueId: league.leagueId, league: name, playsOn: league.playsOn,
+                                             season: season.label, divisionId: division.divisionId, division: division.name,
+                                             divisionOrdinal: division.ordinal, divided: divided, leagueIndex: index, said: false))
+                    }
                 }
+            }
+            // A say has no division, so it takes the league's own id for one: the teams that said they
+            // play in a league are one another's company, and never inside a division the league published.
+            let published = Set(season?.divisions.flatMap(\.teams).map(\.teamId) ?? [])
+            for team in said where !published.contains(team.teamId) {
+                entries.append(Entry(team: team, leagueId: league.leagueId, league: name, playsOn: league.playsOn,
+                                     season: season?.label ?? "", divisionId: league.leagueId, division: "",
+                                     divisionOrdinal: Int.max, divided: divided, leagueIndex: index, said: true))
             }
         }
         var byTeam: [UUID: Int] = [:], byVenue: [UUID: [Int]] = [:], byDivision: [UUID: [Int]] = [:]
@@ -147,11 +174,12 @@ public struct LeagueAtlas: Sendable {
         teams(at: venueId).reduce(into: [Int]()) { seen, e in if !seen.contains(e.chalk) { seen.append(e.chalk) } }
     }
 
-    /// A league's divisions in the order it runs them, each with its teams by name.
+    /// A league's divisions in the order it runs them, each with its teams by name. What a team said
+    /// about itself is not in a division and is not here.
     public func divisions(of leagueId: UUID) -> [Division] {
         var order: [UUID] = []
         var byId: [UUID: (name: String, ordinal: Int, teams: [Entry])] = [:]
-        for e in entries where e.leagueId == leagueId {
+        for e in entries where e.leagueId == leagueId && !e.said {
             if byId[e.divisionId] == nil { order.append(e.divisionId); byId[e.divisionId] = (e.division, e.divisionOrdinal, []) }
             byId[e.divisionId]?.teams.append(e)
         }
@@ -159,6 +187,11 @@ public struct LeagueAtlas: Sendable {
             .compactMap { id in byId[id].map { (ordinal: $0.ordinal, division: Division(id: id, name: $0.name, teams: $0.teams.sorted { $0.team.name < $1.team.name })) } }
             .sorted { $0.ordinal < $1.ordinal }
             .map(\.division)
+    }
+
+    /// The teams that said they play in a league (PD-049), by name.
+    public func said(in leagueId: UUID) -> [Entry] {
+        entries.filter { $0.leagueId == leagueId && $0.said }.sorted { $0.team.name < $1.team.name }
     }
 
     /// Teams and pubs whose names hold [query], case and accents aside, those that begin with it
@@ -184,10 +217,13 @@ public struct LeagueAtlas: Sendable {
         return ranked.prefix(limit).map(\.element)
     }
 
-    /// What a chosen team's line says: its league, its division where the league has more than one,
-    /// and its night. "Stockton Thursday · Division One · Thursday nights".
+    /// What a chosen team's line says: its league, its division where the league has more than one, and
+    /// its night — or, where the team said it plays there itself, that it said so rather than a division
+    /// it is not in. "Stockton Thursday · Division One · Thursday nights".
     public static func line(_ e: Entry) -> String {
-        [e.league, e.divided ? e.division : nil, e.playsOn.map { "\($0) nights" }].compactMap { $0 }.joined(separator: " · ")
+        [e.league,
+         e.said ? "said by its players" : (e.divided ? e.division : nil),
+         e.playsOn.map { "\($0) nights" }].compactMap { $0 }.joined(separator: " · ")
     }
 
     /// What a pub says under its name in a list: how many teams play there, and in which leagues.

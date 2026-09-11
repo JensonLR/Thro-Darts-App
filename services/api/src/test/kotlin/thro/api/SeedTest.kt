@@ -144,6 +144,40 @@ class SeedTest {
         }
     }
 
+    /**
+     * A team's own say (PD-049) reaches the public map beside the league's listing and never inside it: a
+     * division is what the league published, and saying "we play in this league" gives it no season, no
+     * division and no affiliation.
+     */
+    @Test
+    fun `a team's own say sits beside a league's listing, not inside it`() {
+        if (!configured) return
+        migrated().use { c ->
+            Seed(c, Instant.parse("2026-09-10T12:00:00Z")).importFile(seedFile)
+            val team = c.createStatement().use { st ->
+                st.executeQuery("SELECT team_id FROM competition.team WHERE name = 'Blue Bell'").use { rs -> rs.next(); rs.getObject(1) as UUID }
+            }
+            val league = Organisations(c).createLeague("Hartlepool Sunday Darts League", "Hartlepool")
+            val player = UUID.randomUUID()
+            c.createStatement().use { st ->
+                st.execute("INSERT INTO competition.player (player_id) VALUES ('$player')")
+                st.execute("INSERT INTO competition.team_league_claim (team_id, league_id, said_by) VALUES ('$team', '$league', '$player')")
+            }
+
+            val hartlepool = Leagues(c).all().first { it.leagueId == league }
+            assertEquals(listOf("Blue Bell"), hartlepool.saidTeams.map { it.name }, "the team said it plays there")
+            assertNotNull(hartlepool.saidTeams.first().venue, "and it brings its pub, so the map can draw it")
+            assertTrue(hartlepool.seasons.isEmpty(), "saying it gives the league no season, division or affiliation")
+            assertEquals(0, count(c, "SELECT count(*) FROM competition.team_affiliation ta " +
+                                     "JOIN competition.league_season ls ON ls.league_season_id = ta.league_season_id WHERE ls.league_id = '$league'"))
+
+            val stockton = Leagues(c).all().first { it.name.startsWith("Stockton and District Thursday") }
+            assertTrue(stockton.saidTeams.isEmpty(), "and a league nobody has said anything about carries none")
+            assertTrue(stockton.seasons.flatMap { it.divisions }.flatMap { it.teams }.any { it.name == "Blue Bell" },
+                       "while the league that published the team still lists it in its division")
+        }
+    }
+
     @Test
     fun `what a secretary has recorded is not overwritten by an import`() {
         if (!configured) return

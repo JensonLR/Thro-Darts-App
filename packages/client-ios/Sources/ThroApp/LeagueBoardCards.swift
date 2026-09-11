@@ -49,10 +49,16 @@ enum LeagueBoardWords {
         return label
     }
 
-    /// Over the rivals: "Division One · 5 teams", or "The league · 18 teams" where it is not divided.
+    /// Over the rivals: "Division One · 5 teams", or "The league · 18 teams" where it is not divided —
+    /// and, for a team that said it plays there (PD-049), the others who said the same, which is a
+    /// different thing from a division and is named as one.
     static func division(_ e: LeagueAtlas.Entry, teams: Int) -> String {
-        "\(e.divided ? e.division : "The league") · \(count(teams, "team"))"
+        let what = e.said ? "Said by their players" : (e.divided ? e.division : "The league")
+        return "\(what) · \(count(teams, "team"))"
     }
+
+    /// A season's label where it reads as a date and there is one at all.
+    static func seasonLabel(_ label: String) -> String? { season(label.isEmpty ? nil : label) }
 
     /// Whether anybody plays for the team on THRØ, read off its front. Nil while it is being read.
     static func onThro(_ front: TeamFront?) -> String? {
@@ -322,6 +328,8 @@ struct LeagueSummaryCard: View {
     let league: PublicLeague
     let chalk: Int
     let divisions: [LeagueAtlas.Division]
+    /// Teams that said they play here (PD-049), under their own heading and never in a division.
+    var said: [LeagueAtlas.Entry] = []
     let distance: String?
     let onTeam: (UUID) -> Void
     let onClose: () -> Void
@@ -345,9 +353,26 @@ struct LeagueSummaryCard: View {
                     .scrollClipDisabled()
                 }
             }
+            if !said.isEmpty {
+                VStack(alignment: .leading, spacing: ThroSpacing.spacing2) {
+                    Eyebrow("Said by their players", color: ThroColor.colorTextOnBoardSecondary)
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        HStack(spacing: ThroSpacing.spacing2) {
+                            ForEach(said) { e in teamChip(e) }
+                        }
+                        .padding(.vertical, 2)
+                    }
+                    .scrollClipDisabled()
+                }
+            }
             Text(LeaguesPlot.provenance(league))
                 .thro(ThroTypography.metadata).foregroundStyle(ThroColor.colorTextOnBoardSecondary)
                 .fixedSize(horizontal: false, vertical: true)
+            if !said.isEmpty {
+                Text("The teams under *said by their players* put themselves there. The league did not list them.")
+                    .thro(ThroTypography.metadata).foregroundStyle(ThroColor.colorTextOnBoardSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
         }
     }
 

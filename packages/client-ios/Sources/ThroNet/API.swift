@@ -131,7 +131,11 @@ public struct PublicLeague: Decodable, Sendable, Equatable, Identifiable {
     /// The league's own pages, for the fixtures and tables THRØ does not hold.
     public let website: String?
     public let sources: [Source]
+    /// What the league published about itself.
     public let seasons: [Season]
+    /// Teams whose own admin or captain says they play in this league (PD-049): their say, beside the
+    /// seasons and never inside them. Optional: a server from before V039 does not send it.
+    public let saidTeams: [Team]?
     public var id: UUID { leagueId }
 
     /// The season to show: the one running today, else the newest.
@@ -181,13 +185,22 @@ public struct TeamFront: Decodable, Sendable, Equatable {
         public let label: String
         public let division: String?
     }
+    /// A league the team's own admin or captain says it plays in (PD-049): its say, not the league's.
+    public struct LeagueSaid: Decodable, Sendable, Equatable, Identifiable {
+        public let leagueId: UUID
+        public let name: String
+        public var id: UUID { leagueId }
+    }
     public let teamId: UUID
     public let name: String
     public let locality: String?
     public let venue: PublicLeague.Venue?
+    /// What a league published about the team.
     public let seasons: [SeasonLine]
     public let roster: [Member]
     public let yourRole: String?
+    /// What the team says about itself. Optional: a server from before V039 does not send it.
+    public let saysItPlaysIn: [LeagueSaid]?
     /// True when one of the team's own players took it on (PD-047) rather than anybody appointing them,
     /// which the front says in those words. Optional: a server from before V038 does not send it.
     public let adopted: Bool?
@@ -763,6 +776,18 @@ public actor ThroAPI {
     /// league's pages, and only one nobody else runs.
     public func adoptTeam(_ teamId: UUID) async throws -> TeamSummary {
         try decode(await authorised("POST", "/v1/teams/\(teamId.uuidString.lowercased())/adopt", body: Data("{}".utf8)))
+    }
+
+    /// The team says which league it plays in (PD-049). Answers the team's front, carrying the say; a
+    /// refusal arrives as `.status(403 or 404, body)` — only the admin or captain, only a league THRØ lists.
+    public func sayLeague(_ teamId: UUID, leagueId: UUID) async throws -> TeamFront {
+        let body = try JSONSerialization.data(withJSONObject: ["leagueId": leagueId.uuidString.lowercased()])
+        return try decode(await authorised("POST", "/v1/teams/\(teamId.uuidString.lowercased())/league", body: body))
+    }
+
+    /// And stops saying it. The claim is kept on the server, marked withdrawn.
+    public func stopSayingLeague(_ teamId: UUID, leagueId: UUID) async throws -> TeamFront {
+        try decode(await authorised("DELETE", "/v1/teams/\(teamId.uuidString.lowercased())/league/\(leagueId.uuidString.lowercased())"))
     }
 
     public func joinTeam(code: String) async throws -> TeamSummary {

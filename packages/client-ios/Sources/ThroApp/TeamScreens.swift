@@ -94,6 +94,27 @@ public final class TeamsModel: ObservableObject {
         } catch { note = ThroAPI.refusal(error) ?? "That team could not be taken on just now."; return nil }
     }
 
+    /// The team says which league it plays in (PD-049). The front comes back carrying it, so the screen
+    /// reads the server's answer rather than assuming its own.
+    public func saysItPlaysIn(_ teamId: UUID, league: UUID, _ api: ThroAPI?) async {
+        guard let api else { note = "This build names no server."; return }
+        do {
+            front = .loaded(try await api.sayLeague(teamId, leagueId: league))
+            frontFor = teamId
+            note = nil
+        } catch { note = ThroAPI.refusal(error) ?? "That could not be said just now." }
+    }
+
+    /// And stops saying it. The claim is kept on the server, marked withdrawn; the front stops showing it.
+    public func stopsSayingItPlaysIn(_ teamId: UUID, league: UUID, _ api: ThroAPI?) async {
+        guard let api else { note = "This build names no server."; return }
+        do {
+            front = .loaded(try await api.stopSayingLeague(teamId, leagueId: league))
+            frontFor = teamId
+            note = nil
+        } catch { note = ThroAPI.refusal(error) ?? "That could not be changed just now." }
+    }
+
     @discardableResult
     public func join(code: String, _ api: ThroAPI?) async -> TeamSummary? {
         guard let api else { note = "This build names no server."; return nil }
@@ -239,6 +260,8 @@ public struct TeamFrontScreen: View {
                     }
                 }
 
+                // What the team says of itself, under what the league published about it (PD-049).
+                TeamLeagueSay(teams: teams, front: front, api: api)
                 SectionHeader("Roster", meta: "\(front.roster.count)").padding(.top, ThroSpacing.spaceSectionGap)
                 ThroDivider().padding(.top, ThroSpacing.spacing2)
                 ForEach(Array(front.roster.enumerated()), id: \.offset) { _, member in

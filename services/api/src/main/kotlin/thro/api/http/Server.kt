@@ -186,6 +186,22 @@ public fun Application.thro(deps: Deps) {
                 Teams(r.connection(), deps.now).let { Http(200, it.json(it.assign(r.principal!!.subject, UUID.fromString(r.call.parameters["teamId"]), member, str(m, "role")))) }
             }
         },
+        // PD-049: the team's own admin or captain says which league it plays in, and stops saying it.
+        "teams.league.say" to { r ->
+            teamly(403) {
+                val m = Json.parseObject(r.body)
+                val league = try { UUID.fromString(str(m, "leagueId")) } catch (e: IllegalArgumentException) { throw IllegalArgumentException("leagueId must be a UUID") }
+                Teams(r.connection(), deps.now).let { Http(200, it.json(it.saysItPlaysIn(r.principal!!.subject, UUID.fromString(r.call.parameters["teamId"]), league))) }
+            }
+        },
+        "teams.league.withdraw" to { r ->
+            teamly(403) {
+                Teams(r.connection(), deps.now).let {
+                    Http(200, it.json(it.stopsSayingItPlaysIn(r.principal!!.subject, UUID.fromString(r.call.parameters["teamId"]),
+                                                              UUID.fromString(r.call.parameters["leagueId"]))))
+                }
+            }
+        },
         // PD-047: a player takes on a listed league team nobody runs. A refusal is the sentence to show.
         "teams.adopt" to { r -> teamly(409) { Teams(r.connection(), deps.now).let { Http(200, it.json(it.adopt(r.principal!!.subject, UUID.fromString(r.call.parameters["teamId"])))) } } },
         "friends" to { r -> withAccount(r) { a -> Friends(r.connection(), deps.now).let { Http(200, it.json(it.friends(a))) } } },

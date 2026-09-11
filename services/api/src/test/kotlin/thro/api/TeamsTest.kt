@@ -122,6 +122,37 @@ class TeamsTest {
         }
     }
 
+    @Test
+    fun `a team says which league it plays in, and stops saying it`() {
+        if (!configured) return
+        migrated().use { c ->
+            val at = Instant.parse("2026-09-11T21:00:00Z")
+            val teams = Teams(c) { at }
+            val jenson = person(c, "Jenson R.", "adult")
+            val ethan = person(c, "Ethan T.", "adult")
+            val team = teams.create(jenson, "The Sun Inn", "Stockton-on-Tees")
+            val league = Organisations(c).createLeague("Stockton and District Thursday Night Darts League", "Stockton-on-Tees")
+
+            assertEquals(403, assertFailsWith<Teams.Refused> { teams.saysItPlaysIn(ethan, team.teamId, league) }.status,
+                         "somebody who does not run the team does not speak for it")
+            assertEquals(404, assertFailsWith<Teams.Refused> { teams.saysItPlaysIn(jenson, team.teamId, UUID.randomUUID()) }.status)
+
+            val said = teams.saysItPlaysIn(jenson, team.teamId, league)
+            assertEquals(listOf("Stockton and District Thursday Night Darts League"), said.saysItPlaysIn.map { it.name })
+            assertTrue(said.seasons.isEmpty(), "saying it is not an affiliation: the league's own divisions are untouched")
+            assertEquals(1, teams.saysItPlaysIn(jenson, team.teamId, league).saysItPlaysIn.size, "saying it twice is saying it once")
+
+            val later = Teams(c) { at.plusSeconds(60) }
+            assertTrue(later.stopsSayingItPlaysIn(jenson, team.teamId, league).saysItPlaysIn.isEmpty())
+            c.createStatement().use { st ->
+                st.executeQuery("SELECT count(*), count(withdrawn_at) FROM competition.team_league_claim WHERE team_id = '${team.teamId}'")
+                    .use { rs -> rs.next(); assertEquals(1, rs.getInt(1), "the claim is kept"); assertEquals(1, rs.getInt(2), "and marked withdrawn") }
+            }
+            assertEquals(1, Teams(c) { at.plusSeconds(120) }.saysItPlaysIn(jenson, team.teamId, league).saysItPlaysIn.size,
+                         "and a team that says it again says it afresh")
+        }
+    }
+
     /** A team read out of a league's pages, with the provenance row that says so (V027, PD-033). */
     private fun listedTeam(c: Connection, name: String): UUID {
         val team = Organisations(c).createTeam(name, "Redcar")

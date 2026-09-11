@@ -3447,3 +3447,27 @@ holds two same-named teams apart across two leagues. And a league was found by n
 the address is the league, two leagues can share a name, and the order is now the other way round.
 
 Counts: client 733, API 27 suites (62 tests), HTTP 47 properties, schema 115, contrast 94 pairs.
+
+## A team says which league it plays in (PD-049, V039)
+
+The map lists 329 leagues and three of them have teams, because teams come from a league's own published
+pages and those pages are shut to a reader that gives its own name (PD-048). So the other direction, which
+needs nobody's permission but the team's own: on the team's page, its admin or captain says which league it
+plays in, picked from the leagues THRØ already lists, and the league's board fills from the people who play
+in it.
+
+It is carried as a say from end to end. `competition.team_league_claim` sits beside `team_affiliation`, not
+in it: saying it gives the league no season, no division and no affiliation, and a test holds that. The
+public front carries `saidTeams` beside `seasons` and never inside them; the team's page carries
+`saysItPlaysIn` beside what the league published about it; the atlas marks the entry `said`, so a chosen
+team's line reads *"Hartlepool Sunday Darts League · said by its players · Sunday nights"* and the league's
+card puts them under their own heading with the sentence that says the league did not list them. A pub a
+said team plays at is drawn in that league's chalk, which is how a league whose pages we cannot read gets
+onto the map at all.
+
+Withdrawable and kept: a team moves leagues and a captain mistypes, so a claim is marked withdrawn rather
+than deleted — who said their team played there in September is still true of September — and saying it
+again afterwards is a new claim with its own date. One live claim per team and league; a side may say it
+plays in two, because sides do.
+
+Counts: client 734, API 27 suites (64 tests), HTTP 48 properties, schema 124, contrast 94 pairs.

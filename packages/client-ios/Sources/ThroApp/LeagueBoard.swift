@@ -293,7 +293,8 @@ public struct LeaguesScreen: View {
         case .league(let id):
             if let league = b.leagues.first(where: { $0.id == id }), let key = b.atlas.leagues.first(where: { $0.id == id }) {
                 LeagueSummaryCard(league: league, chalk: key.chalk, divisions: b.atlas.divisions(of: id),
-                                  distance: miles(to: league), onTeam: { choose(.team($0), b) }, onClose: close)
+                                  said: b.atlas.said(in: id), distance: miles(to: league),
+                                  onTeam: { choose(.team($0), b) }, onClose: close)
             } else { browse(b) }
         case .pub(let id):
             let here = b.atlas.teams(at: id)

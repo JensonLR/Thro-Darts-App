@@ -2213,4 +2213,33 @@ because it called itself Safari.
 That is the answer this decision said it would take: the importer is not given a browser's name, no league
 page was read, and nothing was seeded. The email to LeagueRepublic is now the whole of the plan — with one
 question added, which is whether they will allow-list an identified THRØ agent at the CDN. Teams reach the
-map by the players who play in them (PD-047) until they answer.
+map by the players who play in them (PD-047, PD-049) until they answer.
+
+## PD-049 — A team says which league it plays in
+
+**Taken on delegated authority, 2026-09-11**, the same night PD-048 was refused at a CDN. THRØ lists 329
+leagues and three of them have teams, because teams come from a league's own published pages and those
+pages are closed to a reader that gives its own name. So the other direction, which needs nobody's
+permission but the team's own: the people who play in a league put their team on it.
+
+### Decided
+
+**The team's admin or captain says it, and it is carried as their say.** A league THRØ already lists, no
+new league invented, and one live claim per team and league — a side may say it plays in two, because sides
+do. Saying it twice is saying it once.
+
+**Never inside the league's listing.** A division is what a league published (PD-033) and is filled from
+the league's own pages and nothing else; a claim is what a team said about itself. They sit apart
+everywhere: `team_league_claim` beside `team_affiliation` in the database, `saidTeams` beside `seasons` on
+the public front, and separate words in the app. Saying it gives the league no season, no division and no
+affiliation.
+
+**Withdrawable, and kept.** A team moves leagues and a captain mistypes, so a claim can be withdrawn —
+marked, never deleted, because who said their team played there in September is still true of September.
+Saying it again afterwards is a new claim with its own date.
+
+### What this does not decide
+
+Whether a league can confirm or refuse what a team says about it (a league arriving on THRØ is its own
+decision); whether a claimed team shows in a league's standings, which it does not and should not; and
+whether two teams claiming the same name in one league is worth resolving.

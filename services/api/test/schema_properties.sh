@@ -744,6 +744,49 @@ if echo "$r" | grep -qi 'permission denied'; then ok "and nothing that reads a t
 else bad "and nothing that reads a team may ask a person's age" "${r:-the read role asked whether somebody is an adult}"; fi
 
 echo
+echo "== a team says which league it plays in (V039, PD-049) =="
+# Fixtures: a team, a league THRØ lists, and the player who runs the team.
+TC=$($PSQL -c "SELECT gen_random_uuid();"); LC=$($PSQL -c "SELECT gen_random_uuid();")
+$PSQL -c "INSERT INTO competition.team (team_id, name) VALUES ('$TC','The Sun Inn');
+  INSERT INTO competition.league (league_id, name) VALUES ('$LC','Stockton and District Thursday Night Darts League');
+  SET ROLE app_competition;
+  INSERT INTO competition.team_league_claim (team_id, league_id, said_by) VALUES ('$TC','$LC','$PAD');" >/dev/null 2>&1
+
+check "the application may record that a team says which league it plays in" "$($PSQL -c "SELECT count(*) FROM competition.team_league_claim WHERE team_id='$TC';")" "1"
+
+r=$($PSQL -c "SET ROLE app_competition; INSERT INTO competition.team_league_claim (team_id, league_id, said_by) VALUES ('$TC','$LC','$PUN');" 2>&1)
+if echo "$r" | grep -qi 'duplicate key'; then ok "and says it once at a time"
+else bad "and says it once at a time" "${r:-a second live claim on one league was accepted}"; fi
+
+r=$($PSQL -c "SET ROLE app_competition; INSERT INTO competition.team_league_claim (team_id, league_id, said_by, basis) VALUES ('$TC','$LC','$PAD','the league said so');" 2>&1)
+if echo "$r" | grep -qi 'check constraint\|duplicate key'; then ok "and only in the words it can: they said so themselves"
+else bad "and only in the words it can: they said so themselves" "${r:-another basis was accepted}"; fi
+
+r=$($PSQL -c "SET ROLE app_competition; UPDATE competition.team_league_claim SET withdrawn_at = now() WHERE team_id='$TC';" 2>&1)
+if echo "$r" | grep -qi 'a_withdrawal_says_who\|check constraint'; then ok "a withdrawal says who withdrew it"
+else bad "a withdrawal says who withdrew it" "${r:-a withdrawal by nobody was accepted}"; fi
+
+r=$($PSQL -c "UPDATE competition.team_league_claim SET league_id = gen_random_uuid() WHERE team_id='$TC';" 2>&1)
+if echo "$r" | grep -qi 'not rewritten'; then ok "a claim is not rewritten, even by the owner"
+else bad "a claim is not rewritten, even by the owner" "${r:-a claim was pointed at another league}"; fi
+
+r=$($PSQL -c "SET ROLE app_competition; DELETE FROM competition.team_league_claim WHERE team_id='$TC';" 2>&1)
+if echo "$r" | grep -qi 'permission denied\|is kept'; then ok "and the application cannot delete one"
+else bad "and the application cannot delete one" "${r:-a claim was deleted}"; fi
+
+$PSQL -c "SET ROLE app_competition; UPDATE competition.team_league_claim SET withdrawn_at = now(), withdrawn_by = '$PAD' WHERE team_id='$TC';" >/dev/null 2>&1
+check "a claim is withdrawn rather than removed" "$($PSQL -c "SELECT count(*) FROM competition.team_league_claim WHERE team_id='$TC' AND withdrawn_at IS NOT NULL;")" "1"
+
+r=$($PSQL -c "SET ROLE app_competition; UPDATE competition.team_league_claim SET withdrawn_at = now(), withdrawn_by = '$PUN' WHERE team_id='$TC';" 2>&1)
+if echo "$r" | grep -qi 'finished'; then ok "and a withdrawn claim is finished, not reopened"
+else bad "and a withdrawn claim is finished, not reopened" "${r:-a withdrawn claim was withdrawn again}"; fi
+
+r=$($PSQL -c "SET ROLE app_competition; INSERT INTO competition.team_league_claim (team_id, league_id, said_by) VALUES ('$TC','$LC','$PAD');" 2>&1)
+if echo "$r" | grep -qiv 'duplicate key' && [ "$($PSQL -c "SELECT count(*) FROM competition.team_league_claim WHERE team_id='$TC';")" = "2" ]; then
+  ok "saying it again after withdrawing is a new claim of its own"
+else bad "saying it again after withdrawing is a new claim of its own" "${r:-the team could not say it again}"; fi
+
+echo
 echo "-------------------------------------------"
 echo "  $PASS passed, $FAIL failed"
 [ "$FAIL" -eq 0 ] || exit 1

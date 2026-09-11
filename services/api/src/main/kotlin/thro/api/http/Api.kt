@@ -194,6 +194,22 @@ public object Contract {
                               429 to "too many codes tried from this address or device; Retry-After says when"),
         ),
         Endpoint(
+            id = "teams.league.say", method = "POST", path = "/v1/teams/{teamId}/league", authenticated = true,
+            summary = "Say which league the team plays in (PD-049)",
+            description = "The team's admin or captain says the team plays in a league THRØ lists. It is carried as their "
+                + "say and never as the league's listing: a league's divisions are filled from the league's own published "
+                + "pages and from nothing else. Saying it twice is saying it once.",
+            request = Schema("""{"type":"object","required":["leagueId"],"properties":{"leagueId":{"type":"string","format":"uuid"}}}"""),
+            responses = mapOf(200 to "the team's front", 401 to "no principal", 403 to "not the team's admin or captain",
+                              404 to "THRØ lists no league like that"),
+        ),
+        Endpoint(
+            id = "teams.league.withdraw", method = "DELETE", path = "/v1/teams/{teamId}/league/{leagueId}", authenticated = true,
+            summary = "Stop saying the team plays in that league (PD-049)",
+            description = "Marked withdrawn and kept, never deleted: who said their team played there, and when, stays readable.",
+            responses = mapOf(200 to "the team's front", 401 to "no principal", 403 to "not the team's admin or captain"),
+        ),
+        Endpoint(
             id = "teams.adopt", method = "POST", path = "/v1/teams/{teamId}/adopt", authenticated = true,
             summary = "Say a listed league team is yours, and run it on THRØ (PD-047)",
             description = "For a team read out of a league's pages that nobody on THRØ runs. The caller becomes its admin by their "
