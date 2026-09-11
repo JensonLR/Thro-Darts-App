@@ -103,7 +103,11 @@ there is a build in App Store Connect. It also creates the Apple Distribution ce
 Store profile the first time, which is what `-allowProvisioningUpdates` is for.
 
 Every later upload needs a higher build number: raise `CURRENT_PROJECT_VERSION` in
-`apps/ios/ThroDarts.xcodeproj/project.pbxproj` (it appears twice, once per target) and archive again.
+`apps/ios/ThroDarts.xcodeproj/project.pbxproj` and archive again. It appears **six** times — Debug,
+Release and Personal for each of the two targets, the app and its Live Activity extension — and all six
+move together, so the app and its extension always carry the same build number. (This line said
+"twice" until the Personal configuration and the extension were counted; build 2 was the first to find
+out.)
 
 ### What actually stopped it the first three times
 
