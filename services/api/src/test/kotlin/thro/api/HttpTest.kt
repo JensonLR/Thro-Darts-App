@@ -142,6 +142,14 @@ class HttpTest {
             // The route exists, is authenticated, and answers a principal with no account to erase
             // with a sentence rather than a 500 from a null. What erasure DOES is ErasureTest's; this
             // holds that DELETE is routed at all, which no other endpoint in the contract exercises.
+            // Sending a match (PD-040). What an upload DOES is UploadTest's; this holds that the
+            // route is reachable, authenticated, and answers a bad journal in words rather than 500.
+            check("sending a match needs a principal", post("/v1/matches", "{}", subject = null).status.value == 401)
+            val emptyMatch = post("/v1/matches", """{"matchId":"${UUID.randomUUID()}","deviceId":"$phone","seat":"home","format":{"startingScore":501,"inRule":"straight","outRule":"double","legsMode":"first_to","legsTarget":3,"throwFirst":"home"},"rows":[]}""", subject = home)
+            check("a match with nothing in it is refused in words", emptyMatch.status.value == 422 && emptyMatch.bodyAsText().contains("nothing in it"))
+            val oneVisit = post("/v1/matches", """{"matchId":"${UUID.randomUUID()}","deviceId":"$phone","seat":"home","format":{"startingScore":501,"inRule":"straight","outRule":"double","legsMode":"first_to","legsTarget":3,"throwFirst":"home"},"rows":[{"deviceSeq":1,"kind":"visit","seat":"home","visitTotal":60,"occurredAt":"2026-09-11T19:30:00Z","occurredTz":"Europe/London"}]}""", subject = home)
+            check("a match this phone scored is stored, self-reported", oneVisit.status.value == 200 && oneVisit.bodyAsText().contains("\"selfReported\":true"))
+
             check("erasing an account needs a principal", del("/v1/me", subject = null).status.value == 401)
             // A DELETE carries no body, so it declares no length. Demanding one answered every
             // correct caller with 411 and made erasure look broken on the phone.
@@ -188,6 +196,6 @@ class HttpTest {
                 bareUse.get() == 0 && roles.contains("app_match") && roles.contains("app_competition") && roles.contains("app_read") && roles.all { it in setOf("app_match", "app_competition", "app_read") })
         }
         println("  $passed HTTP properties held")
-        assertEquals(38, passed)
+        assertEquals(41, passed)
     }
 }

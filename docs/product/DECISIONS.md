@@ -1875,3 +1875,49 @@ app. THRØ would have been rejected without it.
 Whether an erasure should be offered a grace period, and what a league secretary is told when a
 registered player erases themselves. Neither is needed for a person to exercise the right today.
 Nothing here is legal advice, and the privacy policy still wants a lawyer's eye before launch.
+
+## PD-040 — A match is sent to THRØ as the journal wrote it, and arrives self-reported
+
+**Taken on delegated authority, 2026-09-11**, from the standing brief and the Play tab's own note,
+which has said *"sending results to THRØ is not built"* since the app shipped. Reversible in the
+sense that matters: nothing uploaded can be edited, only added to.
+
+### Decided
+
+**The phone sends its journal, not a summary.** One call, `POST /v1/matches`, carrying the match's
+format, the two seats, and every row the device wrote in `deviceSeq` order — visits *and the
+retractions that struck them*. The server appends them to `evidence.event` in that order, a
+retraction as a `VisitRetracted` event whose `corrects_event_id` names the visit it undid. Sending a
+replayed total instead would be the app deciding what happened and throwing away the record PD-004
+exists to keep; a screen that shows a struck row and a server that never heard of it are two
+different accounts of one night.
+
+**It is idempotent and resumable by construction.** `evidence.event` is unique on
+`(match_id, device_id, device_seq)`, so the same upload twice is the same rows; a phone that lost
+signal half way sends the lot again and the second half lands. Nothing is last-write-wins because
+nothing is ever written twice.
+
+**The opponent is a competitor with no name.** On a phone the other player is usually a local name
+and nothing more — no account, no consent. THRØ mints an unclaimed `competition.player` for that
+seat and stores **no name for them at all**, because a name is the person's to give (PD-009,
+PD-014). They can claim that competitor later by a code, which is machinery V014 already has. Until
+they do, the match names one person and one seat.
+
+**So it arrives self-reported, and says so.** PD-011 wants both players to confirm a result. An
+upload from one phone is one player's word, so it is recorded as exactly that — the same sentence
+the app has always shown at the oche — and it is not evidence of anything more until the other side
+confirms. Nothing about an uploaded match is attested, rated or ranked.
+
+### Why not a command per row
+
+The command path (`POST /v1/commands`) takes one visit at a time with a gapless per-device sequence,
+which is right for a live match being scored against the server. A match already played is a
+finished record, and sending it row by row means a hundred round trips, a hundred chances to stop
+half way, and a match that exists on the server in a state the phone never had. One call that either
+applies the whole journal or none of it is the honest shape for a thing that already happened.
+
+### What this does not decide
+
+Watching a live match from another phone (the server already streams; the client does not tune in),
+and what a league does with a self-reported result. Neither is needed for a person to get the match
+they played off their phone and onto their account.

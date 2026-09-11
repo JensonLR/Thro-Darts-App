@@ -1,5 +1,19 @@
 package thro.api.http
 
+import thro.api.Uploads
+
+import thro.engine.PlayerId
+
+import thro.engine.StructureMode
+
+import thro.engine.Structure
+
+import thro.engine.OutRule
+
+import thro.engine.InRule
+
+import thro.engine.MatchFormat
+
 import io.ktor.http.ContentType
 import io.ktor.http.HttpStatusCode
 import io.ktor.server.application.Application
@@ -113,6 +127,7 @@ public fun Application.thro(deps: Deps) {
         "passkey.assert" to { r -> passkeyAssert(r.connection(), deps, r.body) },
         "aasa" to { _ -> if (deps.appleAppIds.isEmpty()) Http(404, """{"error":"no app ids configured"}""") else Http(200, """{"webcredentials":{"apps":[${deps.appleAppIds.joinToString(",") { Contract.q(it) }}]}}""") },
         "auth.logout" to { r -> Http(200, """{"revoked":${Accounts(r.connection(), deps.now).logout(bearer(r.call) ?: "")}}""") },
+        "matches.upload" to { r -> r.role = DbRole.MATCH; upload(r.connection(), deps, r.principal!!, r.body) },
         "me" to { r -> profile(r.connection(), deps, r.principal!!) },
         "me.erase" to { r -> erase(r.connection(), deps, r.principal!!) },
         "me.profile" to { r ->
@@ -387,6 +402,49 @@ private fun erase(c: Connection, deps: Deps, p: Principal): Http {
         if (why.contains("already erased")) Http(409, """{"error":"this account was already erased"}""")
         else if (why.contains("no such account")) Http(404, """{"error":"no such account"}""")
         else throw ex
+    }
+}
+
+/**
+ * Sending a match (PD-040). The caller is one seat; the other is minted. Every refusal is a sentence,
+ * because a phone holding a match it cannot send needs to know whether to try again or to stop.
+ */
+private fun upload(c: Connection, deps: Deps, p: Principal, body: String): Http {
+    val m = try { Json.parseObject(body) } catch (e: Exception) { return Http(400, """{"error":"body is not a JSON object"}""") }
+    fun uuid(k: String): UUID = try { UUID.fromString(str(m, k)) } catch (e: IllegalArgumentException) { throw IllegalArgumentException("$k must be a UUID") }
+    val f = m["format"] as? Map<*, *> ?: return Http(400, """{"error":"format is required"}""")
+    fun fstr(k: String) = f[k] as? String ?: throw IllegalArgumentException("format.$k is required")
+    fun fint(k: String) = (f[k] as? Number)?.toInt() ?: throw IllegalArgumentException("format.$k is required")
+
+    val format = try {
+        MatchFormat(
+            startingScore = fint("startingScore"),
+            inRule = InRule.valueOf(fstr("inRule").uppercase()),
+            outRule = OutRule.valueOf(fstr("outRule").uppercase()),
+            legs = Structure(StructureMode.valueOf(fstr("legsMode").uppercase()), fint("legsTarget")),
+            throwFirst = PlayerId(fstr("throwFirst")),
+        )
+    } catch (e: Exception) {
+        return Http(400, """{"error":${Contract.q("that match format is not one THRØ can read: " + (e.message ?: "unreadable"))}}""")
+    }
+
+    val rows: List<Uploads.Row> = (m["rows"] as? List<*>)?.map { raw ->
+        val r = raw as? Map<*, *> ?: throw IllegalArgumentException("every row is an object")
+        Uploads.Row(
+            deviceSeq = (r["deviceSeq"] as? Number)?.toLong() ?: throw IllegalArgumentException("deviceSeq must be an integer"),
+            kind = r["kind"] as? String ?: throw IllegalArgumentException("kind must be visit or retraction"),
+            seat = r["seat"] as? String ?: throw IllegalArgumentException("seat must be home or away"),
+            visitTotal = (r["visitTotal"] as? Number)?.toInt(),
+            correctsSeq = (r["correctsSeq"] as? Number)?.toLong(),
+            occurredAt = try { Instant.parse(r["occurredAt"] as? String ?: "") } catch (e: Exception) { throw IllegalArgumentException("occurredAt must be an instant") },
+            occurredTz = r["occurredTz"] as? String ?: "Europe/London",
+        )
+    } ?: return Http(400, """{"error":"rows is required"}""")
+
+    return when (val out = Uploads(c, deps.now).receive(p.subject, uuid("deviceId"), uuid("matchId"), str(m, "seat"), format, rows)) {
+        is Uploads.Result.Refused -> Http(422, """{"error":${Contract.q(out.why)}}""")
+        is Uploads.Result.Stored -> Http(200, """{"matchId":"${out.matchId}","opponentId":"${out.opponentId}","visits":${out.visits},""" +
+            """"retractions":${out.retractions},"alreadyHeld":${out.alreadyHeld},"opened":${out.opened},"selfReported":true}""")
     }
 }
 

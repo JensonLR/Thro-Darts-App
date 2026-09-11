@@ -65,6 +65,8 @@ public class Matches(private val connection: Connection) {
         awayId: UUID,
         format: MatchFormat,
         eventId: UUID? = null,
+        /** One player's word, sent from their phone, until the other confirms it (PD-040, PD-011). */
+        selfReported: Boolean = false,
     ) {
         require(format.throwFirst.value == Seat.HOME || format.throwFirst.value == Seat.AWAY) {
             "throwFirst names a seat, ${Seat.HOME} or ${Seat.AWAY}, never a person"
@@ -73,8 +75,8 @@ public class Matches(private val connection: Connection) {
             """
             INSERT INTO evidence.match
               (match_id, event_id, home_id, away_id, starting_score,
-               in_rule, out_rule, legs_mode, legs_target, throw_first)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+               in_rule, out_rule, legs_mode, legs_target, throw_first, self_reported)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """.trimIndent(),
         ).use { ps ->
             ps.setObject(1, matchId)
@@ -87,6 +89,9 @@ public class Matches(private val connection: Connection) {
             ps.setString(8, format.legs.mode.name.lowercase())
             ps.setInt(9, format.legs.target)
             ps.setObject(10, if (format.throwFirst.value == Seat.HOME) homeId else awayId)
+            // Set here rather than by a later UPDATE: `app_match` may append to the evidence schema
+            // and may not rewrite it, which is the rule that makes the schema worth trusting.
+            ps.setBoolean(11, selfReported)
             ps.executeUpdate()
         }
     }

@@ -3042,3 +3042,38 @@ lived. The dart keeps its metal through three quarters of the ring being drawn �
 anybody watches, the two fronts racing round — and becomes chalk over the last quarter as they meet.
 By the time the bar and the ring are one shape they are one colour, and two shapes of one colour
 cannot show a join. `DartInk` holds the rule and six tests hold `DartInk`.
+
+## The server can receive a match (PD-040, V032)
+
+The Play tab has said *"sending results to THRØ is not built"* since the app shipped. The server side
+of it is built now.
+
+**`POST /v1/matches` takes the journal, not a summary.** Every row the device wrote, in `deviceSeq`
+order, visits and the retractions that struck them. A retraction becomes a `VisitRetracted` event
+whose `corrects_event_id` names the visit it undid — a new word for the stream-ownership trigger and
+nothing else, because `event_type` carries no CHECK and `corrects_event_id` has named a superseded
+event since V006. It is a different act from `VisitCorrected`, which is an official's correction by
+somebody not playing, and giving one the other's name would make an audit read as though an official
+had been standing in a pub.
+
+**Idempotent by construction rather than by cleverness.** `evidence.event` is unique on
+`(match_id, device_id, device_seq)`, so the same upload twice is the same rows and a phone that lost
+signal half way sends the lot again and only the missing half lands. A test sends two thirds, then
+all of it, then all of it again, and counts the rows each time.
+
+**The other seat is a competitor nobody has named.** On a phone the opponent is usually a local name
+and nothing more, so THRØ mints an unclaimed `competition.player` and stores no name for them at all
+— through `competition.mint_competitor`, a `SECURITY DEFINER` function, because `app_match` owns the
+evidence schema and handing it standing INSERT on `player` would let the thing that writes visits
+invent people whenever it liked. The same reasoning that gave erasure its own function in V031.
+
+**And it arrives self-reported.** One player's word until the other confirms it (PD-011), recorded
+on the match rather than on each visit, and set in the INSERT rather than by a later UPDATE because
+`app_match` may append to evidence and may not rewrite it.
+
+Six tests hold it, including that **nothing lands at all when one row is impossible** — half a match
+is a record of something that did not happen — and that somebody else's match is not yours to add to.
+HTTP 41 properties, API 26 suites, schema 92.
+
+Still to come on the phone: reading the journal into that shape, the control that sends it, and the
+Live tab tuning in to the stream the server already publishes.

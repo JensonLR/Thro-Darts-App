@@ -236,6 +236,19 @@ public object Contract {
             responses = mapOf(200 to "applied, or a replay of an earlier answer", 400 to "malformed", 401 to "no principal", 404 to "not this match, or not in it", 409 to "stale version, or sequence gap", 413 to "body over 64 KiB", 422 to "refused"),
         ),
         Endpoint(
+            id = "matches.upload", method = "POST", path = "/v1/matches", authenticated = true,
+            summary = "Send a match this phone scored to THRØ (PD-040)",
+            description = "The device's journal as it wrote it — every visit and every retraction, in deviceSeq order — "
+                + "rather than a replayed total, because a screen that shows a struck row and a server that never heard "
+                + "of it are two accounts of one night. Idempotent by (match, device, deviceSeq): the same upload twice "
+                + "is the same rows, and a phone that lost signal half way sends the lot again. The other seat becomes a "
+                + "competitor THRØ holds no name for, claimable later by a code. The match is recorded self-reported: "
+                + "one player's word until the other confirms it (PD-011).",
+            request = Schema("""{"type":"object","required":["matchId","deviceId","seat","format","rows"],"properties":{"matchId":{"type":"string","format":"uuid"},"deviceId":{"type":"string","format":"uuid"},"seat":{"type":"string","enum":["home","away"],"description":"Which seat the caller sat in. The other is minted."},"format":{"type":"object","required":["startingScore","inRule","outRule","legsMode","legsTarget","throwFirst"],"properties":{"startingScore":{"type":"integer"},"inRule":{"type":"string"},"outRule":{"type":"string"},"legsMode":{"type":"string"},"legsTarget":{"type":"integer"},"throwFirst":{"type":"string","enum":["home","away"]}}},"rows":{"type":"array","items":{"type":"object","required":["deviceSeq","kind","seat","occurredAt"],"properties":{"deviceSeq":{"type":"integer"},"kind":{"type":"string","enum":["visit","retraction"]},"seat":{"type":"string","enum":["home","away"]},"visitTotal":{"type":["integer","null"]},"correctsSeq":{"type":["integer","null"]},"occurredAt":{"type":"string"},"occurredTz":{"type":"string"}}}}}}"""),
+            responses = mapOf(200 to "what was stored, and what was already held", 400 to "malformed",
+                              401 to "no principal", 413 to "body over 64 KiB", 422 to "refused, in words"),
+        ),
+        Endpoint(
             id = "me.inbox", method = "GET", path = "/v1/me/inbox", authenticated = true,
             summary = "The caller's own Secretary tasks, by section",
             description = "Tasks whose subject is the caller: consent, claims, anything the Secretary needs from them.",
