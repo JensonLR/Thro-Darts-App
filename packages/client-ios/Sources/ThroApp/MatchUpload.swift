@@ -1,4 +1,5 @@
 import Foundation
+import ThroEngine
 import ThroJournal
 import ThroNet
 
@@ -90,6 +91,35 @@ public enum MatchUpload {
         if let ending = sent.ending { parts.append(ending == "retired" ? "the retirement" : "the abandonment") }
         let added = parts.isEmpty ? "THRØ already had all of it." : "Sent " + sentence(parts) + "."
         return added + " It is recorded as your word for the match until the other player confirms it."
+    }
+
+    /// The format, in the server's words.
+    ///
+    /// **Spelled out, not described.** The first version wrote `String(describing: legsMode).lowercased()`,
+    /// which for the engine's `.bestOf` is `bestof` — and the server reads `best_of` — so every match a
+    /// phone sent came back *"that match format is not one THRØ can read"*. It was found reading this code
+    /// to share a match live, not by a send: the upload's tests built their own wire. The rules are the
+    /// engine's raw values, which are the server's words already.
+    public static func format(for record: MatchRecord) -> ThroAPI.UploadFormat {
+        ThroAPI.UploadFormat(
+            startingScore: record.startingScore,
+            inRule: record.inRule.rawValue,
+            outRule: record.outRule.rawValue,
+            legsMode: record.legsMode == .bestOf ? "best_of" : "first_to",
+            legsTarget: record.legsTarget,
+            throwFirst: record.throwFirst == .home ? "home" : "away")
+    }
+
+    /// Which seat is the signed-in person's: the one whose name, typed at the oche, is the name on
+    /// their profile — compared as a person would, case and surrounding spaces aside. Nil when neither
+    /// is, because a match filed under the wrong player is worse than one not filed at all.
+    public static func seat(of mine: String, home: String, away: String) -> String? {
+        func same(_ a: String, _ b: String) -> Bool {
+            a.trimmingCharacters(in: .whitespaces).caseInsensitiveCompare(b.trimmingCharacters(in: .whitespaces)) == .orderedSame
+        }
+        if same(home, mine) { return "home" }
+        if same(away, mine) { return "away" }
+        return nil
     }
 
     /// "a", "a and b", "a, b and c".

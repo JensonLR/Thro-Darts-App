@@ -386,7 +386,7 @@ public class MatchRecords(private val connection: Connection, private val now: (
         val seats = s.seats.joinToString(",") { """{"seat":"${it.seat}","you":${it.you},"name":${q(it.name)},"claimable":${it.claimable}}""" }
         return """{"matchId":"${s.matchId}","openedAt":"${s.openedAt}",""" +
             """"format":{"startingScore":${f.startingScore},"inRule":"${f.inRule.name.lowercase()}","outRule":"${f.outRule.name.lowercase()}",""" +
-            """"legsMode":"${f.legs.mode.name.lowercase()}","legsTarget":${f.legs.target}},""" +
+            """"legsMode":"${f.legs.mode.name.lowercase()}","legsTarget":${f.legs.target},"throwFirst":"${f.throwFirst.value}"},""" +
             """"selfReported":${s.selfReported},"seats":[$seats],"legs":{"home":${s.legs[Seat.HOME]},"away":${s.legs[Seat.AWAY]}},""" +
             """"visits":${s.visits},"ending":${q(s.ending)},"retired":${q(s.retired)},"winner":${q(s.winner)},"sentBy":${q(s.sentBy)},""" +
             """"answers":{"home":${q(s.answers[Seat.HOME])},"away":${q(s.answers[Seat.AWAY])}},"standing":"${s.standing}"}"""

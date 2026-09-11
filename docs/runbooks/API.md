@@ -91,7 +91,7 @@ routes are mounted from. In brief:
 | `POST /v1/matches/claim` | principal | Enter a match code: the seat becomes the caller's (`competition.seat_claim`) and nothing under the match is rewritten; 422 with the sentence when the code is unknown, used, expired, your own, or the seat is taken; rationed |
 | `GET /v1/matches/{matchId}`, `GET /v1/me/matches` | a player in the match | The match as its log reads now: both seats (names only where `identity.player_may_be_disclosed` allows), legs replayed by the engine with struck visits left out, the ending, the winner, which seat sent it, each seat's answer where it still stands, and its standing — self-reported, confirmed, disputed, or recorded; anyone else 404 |
 | `POST /v1/matches/{matchId}/answer` | the other player, with `X-Thro-Device` | `{"agree": true}` confirms and `false` contests: `ResultConfirmed` or `ResultContested` on the trust stream, written as `app_trust`; the latest answer stands, and only for the record it answered; the sender cannot answer, and nobody answers for an abandoned match |
-| `GET /v1/streams/match/{matchId}` | a participant, the holder of a grant in force, or an official of the event | `text/event-stream`: every event of the match in commit order, then each new one — woken by the database the moment one commits (V036), and still polling once a second beneath that; `Last-Event-ID` resumes; a comment ping every 15 s; the client treats 45 quiet seconds as stale; who may watch is asked again every minute, so a revoked grant or an ended session closes the stream (ADR-007) |
+| `GET /v1/streams/match/{matchId}` | a participant — including a player who took their seat with a code (PD-043) — the holder of a grant in force, or an official of the event | `text/event-stream`: every event of the match in commit order, each carrying its own `eventId` so a correction names a row the reader holds, then each new one — woken by the database the moment one commits (V036), and still polling once a second beneath that; `Last-Event-ID` resumes; a comment ping every 15 s; the client treats 45 quiet seconds as stale; who may watch is asked again every minute, so a revoked grant or an ended session closes the stream (ADR-007) |
 | `GET /healthz` | anyone | Liveness and the schema version |
 | `GET /openapi.json` | anyone | This contract |
 
@@ -109,9 +109,9 @@ THRO_WRITE_OPENAPI=1 gradle -p services/api test --tests 'thro.api.HttpTest'
 The other ADR-007 streams (`event:{id}:public`, `event:{id}:queue`, `event:{id}:organiser`,
 `player:{id}:inbox`) — the match stream is the only one, woken by LISTEN/NOTIFY since V036; email
 recovery (PD-032 says why not yet); a client generated from the schema (ADR-001's acceptance
-condition, waiting on the organiser console). The match stream's door reads a match's two
-competitors and its grants, so a player who took their seat with a code (PD-043) is not yet let in;
-watching is the next piece, and that door changes with it.
+condition, waiting on the organiser console). Watching by anybody but a match's two players, its
+grant holders and its officials (PD-044): the spectator stream, filtered for such a reader, is
+ADR-007's and not built.
 
 ## Rationing the routes a stranger may call
 

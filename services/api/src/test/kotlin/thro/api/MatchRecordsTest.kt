@@ -238,6 +238,7 @@ class MatchRecordsTest {
             assertEquals(listOf(false, false), records.summary(match, me)!!.seats.map { it.claimable })
             assertTrue(records.mine(stranger).isEmpty())
             assertTrue(records.json(mine).contains(""""standing":"self-reported""""))
+            assertTrue(records.json(mine).contains(""""throwFirst":"home""""), "a phone replaying the match needs to know who threw first")
         }
     }
 

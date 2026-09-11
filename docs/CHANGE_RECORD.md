@@ -3287,3 +3287,34 @@ uploaded, and its Settings line saying sending is not built, which the screen st
 and `render.yaml`'s *not built yet*.
 
 Counts: client 699, API 27 suites (58 tests), HTTP 45 properties, schema 106.
+
+## The other player follows the match as it is scored — and two things that had never worked (PD-044)
+
+**Live, for the two players.** On the Live tab, under a match still being scored, *Share it live on
+THRØ*: while it is on, the phone sends the match's journal as it grows — PD-040's upload, whole and
+idempotent, every three seconds while there is something new — and it stops itself once the match is
+over and all of it is up. The other player, having taken their seat with a code (PD-043), opens the
+match under On THRØ, and its page is the board: what each side needs, their legs, who is throwing and
+the last visit, replayed on their phone through the same engine from the stream's events, with
+*Connecting*, *Live*, *Reconnecting* or *Not following* as the stream is. The stream's door now asks for
+a seat claim as well as the two competitors, the grants and the officials; every event carries its own
+`eventId`, so a retraction's `correctsEventId` names a visit the watcher holds; and the summary's format
+says who threw first, which a replay needs. Nobody else can watch: no spectators, no friends (PD-035).
+
+**Two things found on the way had never worked, because nothing had run them end to end.**
+
+**No phone had ever sent a match THRØ would take.** The Live tab's send wrote the legs mode as
+`String(describing: legsMode).lowercased()` — `bestof` or `firstto` for the engine's two cases — and the
+server parses `best_of` and `first_to`, so every send since PD-040 came back *"that match format is not
+one THRØ can read"*. The upload's own tests built their wire by hand, and the HTTP test posted
+`first_to` itself, so none of them could see it. `MatchUpload.format(for:)` spells the server's words
+out, the send and the live share both use it, and a test holds both modes.
+
+**The phone's match stream could never have delivered an event.** It read `URLSession.AsyncBytes.lines`,
+and that sequence drops empty lines — fed a wire holding three, it yielded none — while an empty line is
+what ends a server-sent event. It was found by feeding the sequence a wire in a script before building the
+screen on it. `SSELineSplitter` keeps them, with a test; the same client now reports its health, which
+its doc had always promised and it never did, and renews an expired access token once rather than ending
+a watch at the first 401.
+
+Counts: client 712, API 27 suites (59 tests), HTTP 45 properties, schema 106.

@@ -119,6 +119,8 @@ let package = Package(
                 "ThroNet",
                 "ThroDesign", "ThroJournal", "ThroPlay", "ThroLiveKit",
                 .product(name: "ThroTokens", package: "design-tokens"),
+                // Named, not reached through ThroJournal: a watched match is replayed here (PD-044).
+                .product(name: "ThroEngine", package: "engine-swift"),
             ],
             path: "Sources/ThroApp"
         ),

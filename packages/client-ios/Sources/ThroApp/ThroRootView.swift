@@ -298,6 +298,8 @@ public struct ThroRootView: View {
     @StateObject private var accountHolder = AccountHolder()
     /// The matches this person has on THRØ (PD-043), for the Live tab.
     @StateObject private var throMatches = ThroMatchesModel()
+    /// The matches this phone is sharing live as they are scored (PD-044).
+    @StateObject private var liveShare = LiveShare()
     /// The person whose page is open, if any. Their figures come from the journal, so this is the
     /// one screen in the app where a statistic is about a person rather than about a match.
     @State private var viewing: LocalPerson?
@@ -375,6 +377,8 @@ public struct ThroRootView: View {
         // Look for a stored sign-in as the app starts, rather than waiting for somebody to open the
         // account screen: the welcome cannot decide whether to appear until this has answered.
         .task { await account?.start() }
+        // Matches shared live go up as they are scored (PD-044); idle while nothing is shared.
+        .task { await shareLoop() }
         // A tapped Spotlight result arrives as a user activity rather than a URL, and is the one
         // place `onContinueUserActivity` is right — a universal link would arrive at `onOpenURL`,
         // which is the mistake a 2024-era mental model makes in SwiftUI.
@@ -601,7 +605,8 @@ public struct ThroRootView: View {
                        // What THRØ holds of this person's matches (PD-043): read again whenever the
                        // tab is, and after every send.
                        records: account == nil ? nil : throMatches, api: account?.api,
-                       signedIn: account?.isSignedIn ?? false)
+                       signedIn: account?.isSignedIn ?? false,
+                       liveShare: account == nil ? nil : liveShare)
         case .discover: ClubsFlow(store: clubs, open: $openClub, api: account?.api, signedIn: account?.isSignedIn ?? false)
         case .you: YouScreen(account: youAccount, picture: accountPicture, clubs: clubs.clubs, people: clubs.people,
                              badge: { clubs.image($0.badgeAssetId) },
@@ -1536,6 +1541,8 @@ public struct LiveScreen: View {
     private let records: ThroMatchesModel?
     private let api: ThroAPI?
     private let signedIn: Bool
+    /// Sharing a match live as it is scored (PD-044). Nil when this build names no server.
+    private let liveShare: LiveShare?
     /// Which page of a sent match is open over this tab.
     @State private var sheet: ThroMatchSheet?
 
@@ -1543,7 +1550,8 @@ public struct LiveScreen: View {
                 onRecord: ((Club, Fixture) -> Void)? = nil,
                 onFixtures: ((Club) -> Void)? = nil,
                 onSend: ((AppStore.HomeMatch) -> Void)? = nil, sendNote: String? = nil,
-                records: ThroMatchesModel? = nil, api: ThroAPI? = nil, signedIn: Bool = false) {
+                records: ThroMatchesModel? = nil, api: ThroAPI? = nil, signedIn: Bool = false,
+                liveShare: LiveShare? = nil) {
         self.store = store
         self.clubs = clubs
         self.onClubs = onClubs
@@ -1554,6 +1562,7 @@ public struct LiveScreen: View {
         self.records = records
         self.api = api
         self.signedIn = signedIn
+        self.liveShare = liveShare
     }
 
     /// The name typed on this phone for the other seat, when this phone scored the match — this
@@ -1597,6 +1606,10 @@ public struct LiveScreen: View {
                             SectionHeader("On this phone", meta: inProgress.count == 1 ? "1 match" : "\(inProgress.count) matches")
                             ForEach(inProgress) { match in
                                 ContinueCard(match: match) { store.flow = .resume(match.id) }
+                                // Shared live (PD-044): the other player follows it on their own phone.
+                                if let liveShare, signedIn {
+                                    LiveShareRow(share: liveShare, match: match)
+                                }
                             }
                         }
                         .throEntrance(0)
@@ -1683,9 +1696,16 @@ public struct LiveScreen: View {
                         }
                         .throEntrance(4)
                     }
+                    // It said "watching is next" until PD-044 built it; now it says how, and to whom.
                     block {
-                        Note("**Watching a match from another phone is next.** The server already "
-                             + "streams a match as it is scored; this build does not yet tune in.")
+                        if liveShare != nil && signedIn {
+                            Note("**The other player can follow a match as you score it.** Switch on *Share it "
+                                 + "live* under its card and give them the code from On THRØ; they open it there. "
+                                 + "Nobody else can watch it: there are no spectators yet.")
+                        } else {
+                            Note("**A match can be followed from the other player's phone** once you are signed "
+                                 + "in: it is shared live from its card here, and only with them.")
+                        }
                     }
                     .throEntrance(5)
                 }
@@ -1803,13 +1823,7 @@ extension ThroRootView {
             return
         }
         let record = match.record
-        func same(_ a: String, _ b: String) -> Bool {
-            a.trimmingCharacters(in: .whitespaces).caseInsensitiveCompare(b.trimmingCharacters(in: .whitespaces)) == .orderedSame
-        }
-        let seat: String
-        if same(record.homeName, mine) { seat = "home" }
-        else if same(record.awayName, mine) { seat = "away" }
-        else {
+        guard let seat = MatchUpload.seat(of: mine, home: record.homeName, away: record.awayName) else {
             sendNote = "THRØ cannot tell which player you were in \(record.homeName) v \(record.awayName). "
                 + "Your profile says \(mine). Score under the name on your profile and it will know."
             return
@@ -1824,13 +1838,9 @@ extension ThroRootView {
             if case .notYet(let reason) = MatchUpload.rows(from: entries) { sendNote = reason }
             return
         }
-        let format = ThroAPI.UploadFormat(
-            startingScore: record.startingScore,
-            inRule: String(describing: record.inRule).lowercased(),
-            outRule: String(describing: record.outRule).lowercased(),
-            legsMode: String(describing: record.legsMode).lowercased(),
-            legsTarget: record.legsTarget,
-            throwFirst: record.throwFirst == .home ? "home" : "away")
+        // The server's words for the format, spelled out (see `MatchUpload.format`): described, the legs
+        // mode came out `bestof`, and no match a phone sent was ever taken.
+        let format = MatchUpload.format(for: record)
         sendNote = "Sending…"
         Task {
             do {
@@ -1845,6 +1855,20 @@ extension ThroRootView {
             }
         }
     }
+    /// Sharing matches live (PD-044): every three seconds, the new rows of the shared matches go up.
+    /// Runs for the life of the root view, and does nothing while nothing is shared.
+    func shareLoop() async {
+        while !Task.isCancelled {
+            try? await Task.sleep(nanoseconds: 3_000_000_000)
+            guard let account, account.isSignedIn, !liveShare.sharing.isEmpty else { continue }
+            let name = account.profile.flatMap { $0.named ? $0.displayName : nil }
+            // A match on THRØ for the first time has a seat for the other player to take: show it there.
+            if await liveShare.tick(store: store, api: account.api, profileName: name) {
+                await throMatches.load(account.api, signedIn: true)
+            }
+        }
+    }
+
     /// What the You tab shows on its slate.
     var youAccount: YouScreen.Account {
         guard let account else { return .none }

@@ -179,6 +179,51 @@ class StreamTest {
     }
 
     @Test
+    fun `a player who took their seat with a code follows the match, and every event names itself`() {
+        if (!TestDatabase.configured) return
+        val c = TestDatabase.migrated()
+        fun player(): UUID = UUID.randomUUID().also { id ->
+            c.createStatement().use { it.execute("INSERT INTO competition.player (player_id, source) VALUES ('$id', 'self')") }
+        }
+        val sender = player(); val taker = player(); val stranger = player()
+        val match = UUID.randomUUID(); val at = Instant.parse("2026-09-11T19:30:00Z")
+        val sent = Uploads(c) { at }.receive(sender, UUID.randomUUID(), match, "home", playtestFormat(), listOf(
+            Uploads.Row(1, "visit", "home", 60, null, at, "Europe/London"),
+            Uploads.Row(2, "visit", "away", 45, null, at.plusSeconds(20), "Europe/London")))
+        assertTrue(sent is Uploads.Result.Stored, "the match is sent: $sent")
+        val records = MatchRecords(c) { at }
+        records.claim(taker, records.codeFor(sender, match).code)
+
+        val server = embeddedServer(CIO, port = 0) {
+            thro(Deps(connect = { TestDatabase.connect() }, authenticator = Authenticator.Dev(), now = { at },
+                      streamPoll = Duration.ofMillis(50), streamHeartbeat = Duration.ofSeconds(5)))
+        }.start(wait = false)
+        val pool = Executors.newSingleThreadExecutor()
+        try {
+            val port = runBlocking { server.engine.resolvedConnectors().first().port }
+            fun open(who: UUID): HttpResponse<java.io.InputStream> = HttpClient.newHttpClient().send(
+                HttpRequest.newBuilder(URI("http://127.0.0.1:$port/v1/streams/match/$match"))
+                    .header("Accept", "text/event-stream").header(Authenticator.Dev.HEADER, who.toString()).build(),
+                HttpResponse.BodyHandlers.ofInputStream())
+            val refused = open(stranger)
+            refused.body().close()
+            assertEquals(403, refused.statusCode(), "a stranger is still refused")
+            // The match names the minted competitor for the away seat; the door has to ask the claim.
+            val response = open(taker)
+            assertEquals(200, response.statusCode(), "the player who took the away seat is let in")
+            val reader = BufferedReader(response.body().reader())
+            val first = pool.submit<String?> { generateSequence { reader.readLine() }.firstOrNull { it.startsWith("data:") } }
+                .get(10, TimeUnit.SECONDS)
+            response.body().close()
+            assertTrue(first.orEmpty().replace(" ", "").contains("\"eventId\":\""),
+                "an event carries its own id, so a retraction's correctsEventId names a row the watcher holds: $first")
+        } finally {
+            pool.shutdownNow()
+            server.stop(100, 500)
+        }
+    }
+
+    @Test
     fun `a commit made the moment a watch begins is announced, however new the listener`() {
         if (!TestDatabase.configured) return
         TestDatabase.migrated().close()

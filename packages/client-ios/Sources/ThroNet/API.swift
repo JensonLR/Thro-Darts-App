@@ -245,9 +245,13 @@ public struct MatchOnRecord: Decodable, Sendable, Equatable, Identifiable {
         public let outRule: String
         public let legsMode: String
         public let legsTarget: Int
-        public init(startingScore: Int, inRule: String, outRule: String, legsMode: String, legsTarget: Int) {
+        /// Who threw first, which a replay of the match needs. Optional, so a server from before it
+        /// was sent still decodes; a match that cannot be replayed is shown without its board.
+        public let throwFirst: String?
+        public init(startingScore: Int, inRule: String, outRule: String, legsMode: String, legsTarget: Int,
+                    throwFirst: String? = nil) {
             self.startingScore = startingScore; self.inRule = inRule; self.outRule = outRule
-            self.legsMode = legsMode; self.legsTarget = legsTarget
+            self.legsMode = legsMode; self.legsTarget = legsTarget; self.throwFirst = throwFirst
         }
     }
 
@@ -803,7 +807,8 @@ public actor ThroAPI {
 
     /// Rotates the refresh token. A refusal means the family is gone — reused, expired, or
     /// revoked — and the session is dropped so the person is told rather than retried.
-    private func refresh() async throws {
+    /// Internal rather than private: a match stream outlives an access token, and renews it here.
+    func refresh() async throws {
         guard let current = session else { throw APIError.signedOut }
         let body = try JSONSerialization.data(withJSONObject: ["refreshToken": current.refreshToken, "deviceId": deviceId.uuidString.lowercased()])
         let (data, http) = try await send("POST", "/v1/auth/refresh", body: body, bearer: nil)

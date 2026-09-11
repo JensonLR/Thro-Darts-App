@@ -111,7 +111,9 @@ public enum ThroMatchWords {
     public static func label(_ badge: Badge) -> String {
         switch badge {
         case .yourWord: return "Your word"
-        case .needsYourAnswer: return "Needs your answer"
+        // Short enough to sit whole beside a row's words: "Needs your answer" was cut to
+        // "NEEDS YOUR AN…" in the list, which is a status nobody can read.
+        case .needsYourAnswer: return "To answer"
         case .theirWord: return "Their word"
         case .confirmed: return "Confirmed"
         case .disputed: return "Disputed"
@@ -290,7 +292,10 @@ struct ThroMatchRow: View {
                         .lineLimit(1)
                 }
                 Spacer(minLength: ThroSpacing.spacing2)
+                // The status is never the thing that gives way: the row's words truncate first.
                 Tag(ThroMatchWords.label(badge), tone: Self.tone(badge))
+                    .fixedSize()
+                    .layoutPriority(1)
                 Icon(.chevronRight, size: 16).foregroundStyle(ThroColor.colorTextTertiary)
             }
             .padding(.vertical, ThroSpacing.spacing3)
@@ -323,6 +328,11 @@ struct ThroMatchScreen: View {
     let typed: String?
     let onClose: () -> Void
     @State private var contesting = false
+    /// The board, followed live while the match is still going (PD-044).
+    @StateObject private var watch = MatchWatchModel()
+
+    /// Nobody has won it and it has not ended short: there is still something to follow.
+    static func stillGoing(_ r: MatchOnRecord) -> Bool { r.winner == nil && r.ending == nil }
 
     var body: some View {
         let record = model.record(matchId)
@@ -332,7 +342,13 @@ struct ThroMatchScreen: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: ThroSpacing.spaceSectionGap) {
                     if let record {
-                        score(record)
+                        // Still going: the board, live off the stream. Finished: the score.
+                        if ThroMatchScreen.stillGoing(record) {
+                            LiveBoardSlate(watch: watch, them: ThroMatchWords.name(record, typed: typed) ?? "Them",
+                                           format: ThroMatchWords.format(record.format))
+                        } else {
+                            score(record)
+                        }
                         standing(record)
                         if record.canGiveCode { codeSlate(record) }
                         if record.canAnswer { answering(record) }
@@ -351,6 +367,13 @@ struct ThroMatchScreen: View {
         .background(ThroColor.colorBackgroundPrimary.ignoresSafeArea())
         .throEntrance(0)
         .onAppear { model.dismissNote() }
+        .task(id: matchId) {
+            if let r = model.record(matchId), ThroMatchScreen.stillGoing(r) { await watch.follow(api, r) }
+        }
+        // A match that finishes while it is watched is read again, so its page says where it stands.
+        .onChange(of: LiveBoardWords.finished(watch.board)) { _, finished in
+            if finished { Task { await model.load(api, signedIn: true) } }
+        }
         .confirmationDialog("Contest this result?", isPresented: $contesting, titleVisibility: .visible) {
             Button("Contest it", role: .destructive) { Task { await model.answer(matchId, agree: false, api) } }
             Button("Keep it", role: .cancel) {}

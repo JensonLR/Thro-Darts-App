@@ -13,6 +13,7 @@ import java.util.UUID
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withTimeoutOrNull
 import thro.api.Grants
+import thro.api.MatchRecords
 import thro.api.Matches
 import thro.api.Relations
 import thro.authz.ObjectRef
@@ -34,7 +35,11 @@ import thro.authz.ObjectType
  *    [MatchNotifier]) and still polls the log, because the notification is a hint to re-read and
  *    never the transport of truth.
  *
- * Who may watch: the match's participants, the holder of a scoring grant IN FORCE for it, and
+ * Every event carries its own `eventId`, so a correction's `correctsEventId` names a row the reader
+ * already holds — without it, a watcher could not tell which visit a retraction struck.
+ *
+ * Who may watch: the match's participants — including a player who took their seat with a code
+ * (PD-043) — the holder of a scoring grant IN FORCE for it, and
  * officials of its event — asked again once a minute while the stream is open, so a grant revoked or
  * a session ended closes the door on a watcher already inside (ADR-007: re-authorise). There is no
  * spectator stream yet, so nothing here is filtered for a least-privileged reader.
@@ -65,7 +70,7 @@ internal object MatchStream {
         c.prepareStatement(
             """
             SELECT commit_xid::text::bigint, global_seq, event_type,
-                   jsonb_build_object('deviceId', device_id, 'deviceSeq', device_seq, 'type', event_type,
+                   jsonb_build_object('eventId', event_id, 'deviceId', device_id, 'deviceSeq', device_seq, 'type', event_type,
                                       'occurredAt', occurred_at, 'actorRole', actor_role, 'correctsEventId', corrects_event_id,
                                       'payload', payload)::text
               FROM evidence.event
@@ -90,6 +95,9 @@ internal object MatchStream {
     fun mayWatch(c: Connection, principal: Principal, matchId: UUID, deviceId: UUID?): Boolean {
         val match = Matches(c).load(matchId) ?: return false
         if (principal.subject in match.participants) return true
+        // A player who took their seat with a code (PD-043) is one of the two, and follows the match
+        // as one: the match still names the competitor it was sent with, so the claim is asked too.
+        if (MatchRecords(c).seatOf(matchId, principal.subject) != null) return true
         if (deviceId != null && Grants(c).liveRoleFor(principal.subject, deviceId, matchId) != null) return true
         return Relations(c).decide(principal.subject, "match.adjudicate", ObjectRef(ObjectType.MATCH, matchId.toString())).allowed
     }

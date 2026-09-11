@@ -2026,3 +2026,34 @@ What happens to a disputed match next — who looks at it, and whether a league 
 adjudication, OD-013). Whether a claimed seat ever merges the minted competitor into the claimer's own,
 which would be a whole-person identity event and stays deferred. Whether a confirmed friendly counts
 towards a rating (OD-013).
+
+## PD-044 — The other player can follow a match live, when the player scoring it shares it
+
+**Taken on delegated authority, 2026-09-11**, for the Live tab the founder asked for. The server has
+streamed a match as it is scored since ADR-007, woken on commit since V036, and nothing on a phone
+tuned in. Reversible: sharing is off unless switched on, one match at a time, and switching it off
+stops it.
+
+### Decided
+
+**Sharing is the player's choice, one match at a time.** On the Live tab, under a match still being
+scored: *Share it live on THRØ*. While it is on, the phone sends the match's journal as it grows —
+PD-040's upload, the whole journal each time and idempotent — so a send that fails is made good by the
+next. It stops itself once the match is over and all of it is on THRØ.
+
+**Only the two players follow it.** The one who sent it, and the one who took the other seat with a code
+(PD-043): the stream's door now asks for a seat claim as well as the two competitors, the grants and the
+officials it asked before. No spectators and no friends — PD-035 said nothing else is shared with a
+friend yet, and this does not change that.
+
+**The page of a match still going is its board.** What each side needs, their legs, who is throwing and
+the last visit, replayed on the watching phone through the same engine the scoring phone used, from the
+stream's events — each of which now carries its own id, so a retraction names the visit it struck. It
+says *Connecting*, *Live*, *Reconnecting* or *Not following* as the stream is, and never calls a frozen
+feed live (ADR-007's forty-five seconds).
+
+### What this does not decide
+
+Watching by anybody but the two players — friends, a team, a screen in the pub — which needs its own
+decision about who may see a match as it happens, and the stream filtered for such a reader that ADR-007
+names and nobody has built. A notification when a shared match starts.
