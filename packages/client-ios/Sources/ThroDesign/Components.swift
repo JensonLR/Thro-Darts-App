@@ -165,7 +165,9 @@ public struct ThroButtonFace: View {
     public var body: some View {
         HStack(spacing: ThroSpacing.spacing2) {
             if let icon { Icon(icon, size: 18) }
-            Text(title).thro(role).lineLimit(1)
+            // Call sites interpolate names into labels — "Add to <club>", "Send to 12 members", "Delete this
+            // league" — so a long one shrinks before the whole label truncates (PD-052).
+            Text(title).thro(role).lineLimit(1).minimumScaleFactor(0.75)
             if let iconAfter { Icon(iconAfter, size: 18) }
         }
         .padding(.horizontal, paddingX)

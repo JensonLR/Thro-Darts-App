@@ -131,10 +131,15 @@ public struct OrganisationRow: View {
                     .thro(ThroTypography.label.weight(.bold))
                     .foregroundStyle(ThroColor.colorTextPrimary)
                     .lineLimit(1)
+                    .minimumScaleFactor(0.85)
+                // The meta is a three-part join — "Thursday nights · 18 teams · Stockton-on-Tees" — which
+                // does not fit one line of a phone, and this row is the backbone of Discover, You and a
+                // club's page. So it wraps: two readable lines beat one line of type too small to read
+                // (PD-052).
                 Text(meta)
                     .thro(ThroTypography.metadata)
                     .foregroundStyle(ThroColor.colorTextSecondary)
-                    .lineLimit(1)
+                    .lineLimit(2)
             }
             Spacer(minLength: ThroSpacing.spacing2)
             if let trailing { Tag(trailing) }

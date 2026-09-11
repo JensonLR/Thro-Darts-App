@@ -3581,4 +3581,19 @@ readable measure its own pages already had, and `Stage.swift`'s header stopped c
 iPhone-portrait-only — it has built for iPad and landscape for some time, and that comment is a fair part of
 why thirty-three screens were written as though nobody would see them on a tablet.
 
+And the audit's highest-leverage findings went in with it. **Five shared components truncated long names with
+no scale factor**, which is dozens of screens from five files: an organisation row (the backbone of Discover,
+You and every club page), a top bar whose eyebrow is a club or league name on a dozen screens, a player's
+name on every roster, a button label that call sites interpolate club names into, and the league table's team
+column. Each shrinks a little before it gives up now. The organisation row's meta — "Thursday nights · 18
+teams · Stockton-on-Tees" — never fitted one line of a phone at all, so it wraps instead of shrinking to
+unreadable.
+
+**The league table's number columns were literals.** Seven of them, 212 points in total, which crowds an
+iPhone SE and, worse, did not grow when the reader's text did — so a numeral at an accessibility size
+overflowed a cell that had not moved. They scale with the text now. Adding the environment value to read that
+size needed an explicit initialiser, because the file's own comment warned that a stored property would drag
+the synthesised memberwise one private and break the two views that build the table — a trap already sprung
+once, and documented, which is the only reason it did not spring twice.
+
 Counts: client 737, API 29 suites (79 tests), HTTP 50 properties, schema 141, contrast 94 pairs.

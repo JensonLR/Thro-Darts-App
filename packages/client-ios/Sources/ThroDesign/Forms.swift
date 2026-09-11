@@ -185,6 +185,10 @@ public struct PlayerIdentity: View {
                         .thro(nameRole.weight(.bold).tracking(em: -0.005))
                         .foregroundStyle(ThroColor.colorTextPrimary)
                         .lineLimit(1)
+                        // A person's name is the last thing that should be cut short (PD-052): rosters,
+                        // friends and the hand-over screen all draw it, and a name shortened to "Christoph…"
+                        // is a worse row than one a size smaller.
+                        .minimumScaleFactor(0.75)
                         .truncationMode(.tail)
                     if player.verified {
                         Icon(.circleCheck, size: 14)

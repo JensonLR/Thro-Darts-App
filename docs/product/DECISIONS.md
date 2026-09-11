@@ -2326,11 +2326,20 @@ by looking at it on the device rather than by asserting it in prose.
 
 ### Where this stands
 
-Ten call sites of forty-three screens, as of tonight's audit: Home, Archive, Play, Live, the Settings pages,
-Discover, the Welcome, your own profile, and the scoring stage which owns its own width. **Thirty-three screens
-still stretch**, the league table is broken at both ends (eight fixed columns totalling 212 points, which
-crowds an iPhone SE and does not grow with Dynamic Type), and five shared components truncate long names with
-no scale factor. Those are recorded rather than quietly carried, and they are the next work.
+Twelve call sites of forty-three screens: Home, Archive, Play, Live, You, the Settings index and its pages,
+Discover, the Welcome, your own profile, and the scoring stage, which owns its own width. **Thirty-one screens
+still stretch**, and they are the next work.
+
+Fixed the same night, because each of these was worth more than the one screen it sat on: the five shared
+components that truncated long names now shrink them first — an organisation row, a top bar's eyebrow and
+title, a player's name, a button's label, and the league table's team column — which reaches dozens of screens
+from five edits. The organisation row's meta is a three-part join that never fitted one line of a phone, so it
+wraps rather than shrinking to nothing. And the league table's seven number columns now scale with the
+reader's text size, where they were literals that stayed put while the numerals inside them grew.
+
+**Not fixed, and deliberately not guessed at**: the 400-point brand band behind Home, You and your own profile
+is 60% of an iPhone SE's height and covers a phone in landscape entirely. It is a visual constant, and the
+right number for it comes from looking at it on a device — not from arithmetic in a commit message.
 
 ### What this does not decide
 

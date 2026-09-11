@@ -113,6 +113,26 @@ struct LeagueTableView: View {
     /// asked — and the table says so rather than labelling every figure with a word nobody chose.
     var unit: ResultUnit?
 
+    /// The reader's text size, so the number columns grow with it (PD-052). Their widths were literals,
+    /// which meant a numeral at an accessibility size overflowed a cell that had not moved.
+    ///
+    /// **This is a stored property, which is why there is an explicit initialiser below**: an
+    /// `@Environment` makes the synthesised memberwise initialiser private, and the two views that build
+    /// this one would stop compiling — the same trap the `static` on `columns` was put there to avoid.
+    @Environment(\.dynamicTypeSize) private var typeSize
+
+    init(rows: [TableRow], pointsForWin: Int, pointsForDraw: Int, unit: ResultUnit? = nil) {
+        self.rows = rows
+        self.pointsForWin = pointsForWin
+        self.pointsForDraw = pointsForDraw
+        self.unit = unit
+    }
+
+    /// A column width at the reader's text size. The ratio is `ThroDynamicType`'s, which is read off
+    /// largeTitle's ramp and so overestimates a little at the top — the safe direction here, because a
+    /// cell slightly too wide still shows its number and one slightly too narrow clips it.
+    private func width(_ base: CGFloat) -> CGFloat { base * ThroDynamicType.scale(at: typeSize) }
+
     /// `static`, so it is not a stored property: a private stored property would drag the
     /// synthesised memberwise initialiser private with it, and this view is built by two others.
     private static let columns: [(String, String)] = [("P", "played"), ("W", "won"), ("D", "drawn"),
@@ -155,13 +175,13 @@ struct LeagueTableView: View {
 
     private var header: some View {
         HStack(spacing: 0) {
-            Text("#").thro(ThroTypography.metadata).frame(width: 22, alignment: .leading)
+            Text("#").thro(ThroTypography.metadata).frame(width: width(22), alignment: .leading)
             Text("Team").thro(ThroTypography.metadata)
             Spacer(minLength: ThroSpacing.spacing2)
             ForEach(LeagueTableView.columns, id: \.0) { column in
                 Text(column.0)
                     .thro(ThroTypography.metadata)
-                    .frame(width: column.0 == "+/−" ? 34 : 26, alignment: .trailing)
+                    .frame(width: width(column.0 == "+/−" ? 34 : 26), alignment: .trailing)
                     .accessibilityLabel(unitised(column.1))
             }
         }
@@ -174,27 +194,31 @@ struct LeagueTableView: View {
             Text("\(position)")
                 .thro(ThroTypography.metadata.family(.sport))
                 .foregroundStyle(ThroColor.colorTextSecondary)
-                .frame(width: 22, alignment: .leading)
+                .frame(width: width(22), alignment: .leading)
             Text(row.team.name)
                 .thro(ThroTypography.label.weight(.semibold))
                 .foregroundStyle(ThroColor.colorTextPrimary)
                 .lineLimit(1)
+                // Seven numbers and a position take a fixed 212 points of this row, which on an iPhone SE
+                // leaves about 110 for the name — so the name shrinks rather than disappearing into an
+                // ellipsis (PD-052). The columns themselves still need to scale with Dynamic Type.
+                .minimumScaleFactor(0.7)
             Spacer(minLength: ThroSpacing.spacing2)
             figure("\(row.played)")
             figure("\(row.won)")
             figure("\(row.drawn)")
             figure("\(row.lost)")
-            figure(row.difference > 0 ? "+\(row.difference)" : "\(row.difference)", width: 34)
+            figure(row.difference > 0 ? "+\(row.difference)" : "\(row.difference)", base: 34)
             // The one column that is about trust rather than about darts.
             Text("\(row.evidenced)")
                 .thro(ThroTypography.metadata.family(.sport))
                 .foregroundStyle(row.evidenced == 0 ? ThroColor.colorTextTertiary
                                  : ThroColor.colorStatusVerified)
-                .frame(width: 26, alignment: .trailing)
+                .frame(width: width(26), alignment: .trailing)
             Text("\(row.points)")
                 .thro(ThroTypography.label.family(.sport).weight(.bold))
                 .foregroundStyle(ThroColor.colorTextPrimary)
-                .frame(width: 26, alignment: .trailing)
+                .frame(width: width(26), alignment: .trailing)
         }
         .padding(.vertical, ThroSpacing.spacing3)
         .accessibilityElement(children: .combine)
@@ -209,11 +233,11 @@ struct LeagueTableView: View {
         return "\(unit.rawValue.dropLast()) difference"
     }
 
-    private func figure(_ text: String, width: CGFloat = 26) -> some View {
+    private func figure(_ text: String, base: CGFloat = 26) -> some View {
         Text(text)
             .thro(ThroTypography.metadata.family(.sport))
             .foregroundStyle(ThroColor.colorTextSecondary)
-            .frame(width: width, alignment: .trailing)
+            .frame(width: width(base), alignment: .trailing)
     }
 }
 

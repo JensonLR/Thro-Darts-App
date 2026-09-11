@@ -51,11 +51,14 @@ public struct TopBar: View {
                     Spacer(minLength: 0)
                 } else {
                     VStack(alignment: .leading, spacing: 0) {
-                        if let eyebrow { Eyebrow(eyebrow).lineLimit(1) }
+                        // A bar cannot grow, and its eyebrow carries a club or league name on a dozen
+                        // screens, so both shrink a little before they give up and truncate (PD-052).
+                        if let eyebrow { Eyebrow(eyebrow).lineLimit(1).minimumScaleFactor(0.8) }
                         Text(title)
                             .thro(ThroTypography.heading3)
                             .foregroundStyle(ThroColor.colorTextPrimary)
                             .lineLimit(1)
+                            .minimumScaleFactor(0.8)
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
                 }
