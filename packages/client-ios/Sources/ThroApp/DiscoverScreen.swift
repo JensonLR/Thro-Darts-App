@@ -58,6 +58,8 @@ public struct DiscoverScreen: View {
                     yours
                 }
                 .padding(.horizontal, ThroSpacing.spaceScreenGutter)
+                // On a tablet the gutter alone leaves a line of text a foot wide (PD-052).
+                .throReadable()
                 .padding(.bottom, ThroSpacing.spacing6)
             }
         }

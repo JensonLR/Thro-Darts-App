@@ -3,6 +3,7 @@ package thro.api.http
 import io.ktor.server.cio.CIO
 import io.ktor.server.engine.embeddedServer
 import java.sql.Connection
+import java.util.UUID
 import thro.api.Db
 import thro.api.HttpJwkSource
 import thro.api.Provider
@@ -43,6 +44,13 @@ public fun main() {
     if (providers.isEmpty()) System.err.println("note: no sign-in provider configured; /v1/auth/apple and /v1/auth/google answer 503")
     if (rp == null) System.err.println("note: no relying party (THRO_RP_ID or FLY_APP_NAME); passkey routes answer 503")
     else System.err.println("passkeys: relying party ${rp.id}, origins ${rp.origins}")
+    // PD-050: the people who answer the moderation queue, named here as a comma-separated list of account
+    // ids. Not a table: THRØ has no staff role, and a list in the database is a list a session could grow.
+    // A name that is not a uuid is dropped rather than guessed at, and said so below.
+    val named = env("THRO_MODERATORS")?.split(",")?.map(String::trim)?.filter { it.isNotEmpty() }.orEmpty()
+    val moderators = named.mapNotNull { runCatching { UUID.fromString(it) }.getOrNull() }.toSet()
+    if (moderators.size != named.size) System.err.println("WARNING: ${named.size - moderators.size} entry in THRO_MODERATORS is not an account id and was ignored.")
+    if (moderators.isEmpty()) System.err.println("note: no moderators (THRO_MODERATORS); /v1/reports answers 403 to everyone, so nobody can answer a report on this server.")
     val port = env("PORT")?.toIntOrNull() ?: 8080
-    embeddedServer(CIO, port = port) { thro(Deps(connect, authenticator, providers = providers, keys = HttpJwkSource(), relyingParty = rp, appleAppIds = appleAppIds)) }.start(wait = true)
+    embeddedServer(CIO, port = port) { thro(Deps(connect, authenticator, providers = providers, keys = HttpJwkSource(), relyingParty = rp, appleAppIds = appleAppIds, moderators = moderators)) }.start(wait = true)
 }

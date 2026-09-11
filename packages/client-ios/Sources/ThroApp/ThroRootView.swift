@@ -810,6 +810,8 @@ public struct HomeScreen: View {
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.vertical, ThroSpacing.spacing6)
             .padding(.horizontal, ThroSpacing.spaceScreenGutter)
+            // The board above runs edge to edge; what is read under it sits in a column (PD-052).
+            .throReadable()
     }
 }
 
@@ -1056,6 +1058,8 @@ public struct ArchiveScreen: View {
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.vertical, ThroSpacing.spacing6)
             .padding(.horizontal, ThroSpacing.spaceScreenGutter)
+            // The board above runs edge to edge; what is read under it sits in a column (PD-052).
+            .throReadable()
     }
 }
 
@@ -1258,6 +1262,8 @@ public struct PlayLandingScreen: View {
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.vertical, ThroSpacing.spacing6)
             .padding(.horizontal, ThroSpacing.spaceScreenGutter)
+            // The board above runs edge to edge; what is read under it sits in a column (PD-052).
+            .throReadable()
     }
 }
 
@@ -1734,6 +1740,8 @@ public struct LiveScreen: View {
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.vertical, ThroSpacing.spacing6)
             .padding(.horizontal, ThroSpacing.spaceScreenGutter)
+            // The board above runs edge to edge; what is read under it sits in a column (PD-052).
+            .throReadable()
     }
 }
 

@@ -51,6 +51,19 @@ deployment with the door open, whatever the variable says. It says so on every s
 is honoured. The production scheme (passkeys, short-lived access tokens, rotating refresh tokens, ADR-008)
 is founder decision FB-1 and replaces it; nothing in a deployment manifest may set that variable.
 
+**Answering reports** (PD-050) needs the people who answer them named at boot:
+
+```bash
+THRO_MODERATORS=<account uuid>,<account uuid> PGHOST=... gradle -p services/api serve
+```
+
+`GET /v1/reports` and `POST /v1/reports/{reportId}/decisions` refuse everybody not on that list, and a
+server that names nobody refuses everybody — which it says on every start, because a moderation queue no
+one can open is a promise to the stores that is quietly not being kept. It is not a table on purpose: a
+list in the database is a list somebody holding a session can eventually add themselves to, and this queue
+holds what people said about each other. An entry that is not an account id is dropped with a warning
+rather than guessed at.
+
 Migrations are a deploy step (ADR-013), not a boot step. `GET /healthz` reports the migration
 ledger's version and answers 503 when the database is behind the code.
 
@@ -67,7 +80,7 @@ routes are mounted from. In brief:
 | `GET /.well-known/apple-app-site-association` | anyone | webcredentials for the configured app ids |
 | `POST /v1/auth/refresh` | anyone, with a refresh token | Rotates it; reuse revokes the family |
 | `POST /v1/auth/logout` | principal | Revokes the session family |
-| `GET /v1/me`, `PUT /v1/me/profile` | principal | Who am I; set my display name |
+| `GET /v1/me`, `PUT /v1/me/profile` | principal | Who am I; set my display name. `GET` also carries the terms in force and whether this account has accepted them (PD-050), so the phone can hold somebody at the agreement without a second request to find out |
 | `POST /v1/commands` | principal + `X-Thro-Device` | The one command endpoint (ADR-007): `RecordVisit`, `RenameTeam`, `RearrangeFixture`, `SetAvailability`, `NameLineup`. Applied 200; replay returns what it returned; stale 409 with the current row; refused 422 in the store's words; sequence gap 409; not this match — or not in it — 404; body over 64 KiB 413 |
 | `GET /v1/me/inbox` | principal | The caller's own Secretary tasks by section |
 | `GET /v1/teams/{teamId}/inbox` | principal with `team.manage` | The team's Secretary inbox; anyone else is 403 and the refusal is on the audit record |
@@ -88,6 +101,11 @@ routes are mounted from. In brief:
 | `POST /v1/friends/invite` | principal | A friend code to give in person: eight characters, seven days, one use; 403 with the sentence to show unless the account has said it is an adult |
 | `POST /v1/friends/accept` | principal | Enter a code; both become friends; 409 with the sentence to show when the code is unknown, used, expired, your own, or you are friends already |
 | `POST /v1/friends/{accountId}/remove` | principal | End a friendship from this side; recorded, never deleted |
+| `POST /v1/reports` | principal | Report a team, venue, league, account or match (PD-050, V040): the thing, and one sentence of why. Answered inside a day, and a report raised by or about a child goes to the front of the queue. The record is kept whatever is decided — nothing a player wrote is destroyed by reporting it |
+| `GET /v1/reports` | an account named in `THRO_MODERATORS` | The moderation queue: unanswered first, then the urgent, then by the hour the answer is due. 403 to everybody else, because a queue anyone could read is a queue that tells people they were reported |
+| `POST /v1/reports/{reportId}/decisions` | an account named in `THRO_MODERATORS` | Answer one: `left`, `hidden`, `corrected`, `account_suspended` or `not_upheld`, with a note. A second look is a second decision and never an edit of the first; 404 when no such report exists, rather than a foreign key's 500 |
+| `POST /v1/blocks`, `DELETE /v1/blocks/{accountId}`, `GET /v1/blocks` | principal | Ask not to be reached by an account, lift it, and read the list. No reason is asked for and none is stored; a lift is marked and kept, so blocking again later is a new block; the list is ids only, because a block list names nobody it does not have to |
+| `POST /v1/me/terms` | principal | Accept the terms, recorded once per version with the version accepted — the only honest answer to what somebody agreed to |
 | `PUT /v1/me/profile` | principal | `displayName` and/or `ageBand` (adult or minor, self-declared, never back to unknown) |
 | `GET /v1/events?from` | anyone | Open-entry events that have not started, with their public venues: the notice on the pub door. Entry counts and eligibility stay on `/v1/me/discovery` |
 | `POST /v1/matches` | principal | Send a match this phone scored (PD-040): the journal as it was written — visits, retractions, and an ending (PD-042) last — idempotent by (match, device, sequence); the other seat becomes a competitor THRØ holds no name for; recorded self-reported |

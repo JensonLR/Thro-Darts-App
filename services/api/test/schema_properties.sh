@@ -744,6 +744,58 @@ if echo "$r" | grep -qi 'permission denied'; then ok "and nothing that reads a t
 else bad "and nothing that reads a team may ask a person's age" "${r:-the read role asked whether somebody is an adult}"; fi
 
 echo
+echo "== reports, blocks and the terms (V040, PD-050) =="
+# Fixtures: two accounts and something one of them wrote.
+RA=$($PSQL -c "SELECT gen_random_uuid();"); RB=$($PSQL -c "SELECT gen_random_uuid();")
+TS=$($PSQL -c "SELECT gen_random_uuid();"); RP=$($PSQL -c "SELECT gen_random_uuid();")
+$PSQL -c "INSERT INTO identity.account (account_id, display_name, age_band, age_assurance) VALUES ('$RA','Ann','adult','self_declared'), ('$RB','Bea','adult','self_declared');
+  INSERT INTO competition.team (team_id, name) VALUES ('$TS','A Reported Name');
+  SET ROLE app_competition;
+  INSERT INTO safety.report (report_id, subject_kind, subject_id, reported_by, reason, answer_due_at)
+    VALUES ('$RP','team','$TS','$RA','the name is a slur', now() + interval '12 hours');" >/dev/null 2>&1
+
+check "the application may record a report" "$($PSQL -c "SELECT count(*) FROM safety.report WHERE report_id='$RP';")" "1"
+
+r=$($PSQL -c "SET ROLE app_competition; INSERT INTO safety.report (subject_kind, subject_id, reported_by, reason, answer_due_at) VALUES ('weather','$TS','$RA','it is raining', now() + interval '1 hour');" 2>&1)
+if echo "$r" | grep -qi 'check constraint'; then ok "and only about something THRØ can act on"
+else bad "and only about something THRØ can act on" "${r:-a report about the weather was accepted}"; fi
+
+r=$($PSQL -c "SET ROLE app_competition; INSERT INTO safety.report (subject_kind, subject_id, reported_by, reason, answer_due_at) VALUES ('team','$TS','$RA','too slow', now() + interval '3 days');" 2>&1)
+if echo "$r" | grep -qi 'within_a_day\|check constraint'; then ok "a report is answered within a day, by construction"
+else bad "a report is answered within a day, by construction" "${r:-a three-day deadline was accepted}"; fi
+
+r=$($PSQL -c "UPDATE safety.report SET reason='something else' WHERE report_id='$RP';" 2>&1)
+if echo "$r" | grep -qi 'is kept'; then ok "a report is kept, even from the owner"
+else bad "a report is kept, even from the owner" "${r:-a report was rewritten}"; fi
+
+$PSQL -c "SET ROLE app_competition; INSERT INTO safety.decision (report_id, outcome, note, decided_by) VALUES ('$RP','hidden','hidden until renamed','$RB');" >/dev/null 2>&1
+check "a decision about it is recorded beside it" "$($PSQL -c "SELECT count(*) FROM safety.decision WHERE report_id='$RP';")" "1"
+
+r=$($PSQL -c "UPDATE safety.decision SET outcome='left' WHERE report_id='$RP';" 2>&1)
+if echo "$r" | grep -qi 'is kept'; then ok "and a decision is answered by making another, never by editing it"
+else bad "and a decision is answered by making another, never by editing it" "${r:-a decision was rewritten}"; fi
+
+$PSQL -c "SET ROLE app_competition; INSERT INTO safety.block (blocker_id, blocked_id) VALUES ('$RA','$RB');" >/dev/null 2>&1
+check "the read role can ask whether two people are blocked" "$($PSQL -c "SET ROLE app_read; SELECT safety.is_blocked('$RB','$RA');")" "t"
+
+r=$($PSQL -c "SET ROLE app_competition; INSERT INTO safety.block (blocker_id, blocked_id) VALUES ('$RA','$RB');" 2>&1)
+if echo "$r" | grep -qi 'duplicate key'; then ok "blocking twice is blocking once"
+else bad "blocking twice is blocking once" "${r:-a second live block was accepted}"; fi
+
+r=$($PSQL -c "SET ROLE app_competition; DELETE FROM safety.block WHERE blocker_id='$RA';" 2>&1)
+if echo "$r" | grep -qi 'permission denied\|not deleted'; then ok "a block is lifted, not deleted"
+else bad "a block is lifted, not deleted" "${r:-a block was deleted}"; fi
+
+$PSQL -c "SET ROLE app_competition; INSERT INTO safety.terms_acceptance (account_id, version) VALUES ('$RA','2026-09-11');" >/dev/null 2>&1
+r=$($PSQL -c "SET ROLE app_competition; INSERT INTO safety.terms_acceptance (account_id, version) VALUES ('$RA','2026-09-11');" 2>&1)
+if echo "$r" | grep -qi 'duplicate key'; then ok "the terms are accepted once per version"
+else bad "the terms are accepted once per version" "${r:-one version was accepted twice}"; fi
+
+r=$($PSQL -c "UPDATE safety.terms_acceptance SET version='2020-01-01' WHERE account_id='$RA';" 2>&1)
+if echo "$r" | grep -qi 'is kept'; then ok "and what somebody agreed to is not rewritten afterwards"
+else bad "and what somebody agreed to is not rewritten afterwards" "${r:-an acceptance was rewritten}"; fi
+
+echo
 echo "== a team says which league it plays in (V039, PD-049) =="
 # Fixtures: a team, a league THRØ lists, and the player who runs the team.
 TC=$($PSQL -c "SELECT gen_random_uuid();"); LC=$($PSQL -c "SELECT gen_random_uuid();")

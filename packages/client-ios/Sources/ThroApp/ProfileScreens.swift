@@ -87,10 +87,13 @@ public struct YourProfileScreen: View {
     @State private var deleting = false
     @State private var showing: Sub?
     @FocusState private var editingName: Bool
+    /// PD-050: who this person has asked not to hear from. Owned by this page rather than passed into it,
+    /// because the list is read when the page behind the row is opened and is of no use to anything else.
+    @StateObject private var safety = SafetyModel()
 
-    /// The three lists that used to live behind a separate Account screen. They are about the
-    /// person, so they are reached from the page about the person.
-    public enum Sub: Sendable { case friends, inbox, discovery }
+    /// The lists that used to live behind a separate Account screen, and the blocked list that has joined
+    /// them (PD-050). They are about the person, so they are reached from the page about the person.
+    public enum Sub: Sendable { case friends, inbox, discovery, blocked }
 
     /// The account this page is about. `Profile.accountId` is optional because a development
     /// principal has none; a page about nobody is not a page, so the caller passes one that has one.
@@ -148,6 +151,7 @@ public struct YourProfileScreen: View {
         case .friends: FriendsScreen(account: account, onBack: back)
         case .inbox: InboxScreen(account: account, onBack: back)
         case .discovery: DiscoveryScreen(account: account, onBack: back)
+        case .blocked: BlockedAccountsScreen(safety: safety, api: account.api, onBack: back)
         }
     }
 
@@ -162,6 +166,10 @@ public struct YourProfileScreen: View {
                     band
                     CardGroup("Friends") {
                         CardRow(icon: .users, label: "Friends", value: friendsLine) { showing = .friends }
+                        CardDivider()
+                        // PD-050: blocking is the other half of who may reach you, so it sits beside the
+                        // people who can — not in a settings list somebody would have to suspect exists.
+                        CardRow(icon: .shield, label: "Blocked", value: blockedLine) { showing = .blocked }
                     }
                     waysIn
                     CardGroup("From THRØ") {
@@ -176,6 +184,7 @@ public struct YourProfileScreen: View {
                 .padding(.horizontal, ThroSpacing.spaceScreenGutter)
                 .padding(.top, ThroSpacing.spacing5)
                 .padding(.bottom, ThroSpacing.spacing7)
+                .throReadable()
                 .frame(maxWidth: .infinity)
                 .background(ThroColor.colorBackgroundPrimary)
             }
@@ -297,6 +306,13 @@ public struct YourProfileScreen: View {
                 CardInfoRow(icon: .shield, label: "Age band", value: profile.ageBand == "adult" ? "18 or over" : "Under 18")
             }
         }
+    }
+
+    /// What the Blocked row says before it is opened. Nothing is fetched to fill it in: asking THRØ who
+    /// somebody blocked, to put a number on a row they may never tap, is a request spent on nothing. Once
+    /// the list has been opened the count is known, and then the count is the truer thing to say.
+    private var blockedLine: String {
+        safety.blocked.isEmpty ? "Anyone you never want to hear from" : "\(safety.blocked.count)"
     }
 
     private var friendsLine: String {

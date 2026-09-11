@@ -156,6 +156,10 @@ public struct TeamFrontScreen: View {
     @State private var venueQuery = ""
     @State private var newVenueName = ""
     @State private var newVenueTown = ""
+    /// PD-050: reporting is this screen's own state. Nothing else on the phone needs it, and a report keeps
+    /// nothing worth holding once it is sent — the record of it lives where it was sent to.
+    @StateObject private var safety = SafetyModel()
+    @State private var reporting = false
 
     public init(teams: TeamsModel, teamId: UUID, api: ThroAPI?, onBack: @escaping () -> Void) {
         self.teams = teams
@@ -286,9 +290,19 @@ public struct TeamFrontScreen: View {
                     Note(TeamFrontScreen.unnamedNote(front.roster.filter { $0.name == nil }.count))
                         .padding(.top, ThroSpacing.spacing3)
                 }
+                // PD-050: reportable from where it is read. A team's name is the whole of what a stranger
+                // sees of it, so the way to say that name is wrong belongs on the page carrying the name,
+                // not in a settings list somebody would have to already suspect exists.
+                ThroTextButton("Report this team", tone: .quiet) { reporting = true }
+                    .padding(.top, ThroSpacing.spaceSectionGap)
             }
             .padding(.horizontal, ThroSpacing.spaceScreenGutter)
             .padding(.bottom, ThroSpacing.spacing6)
+        }
+        .sheet(isPresented: $reporting) {
+            ReportSheet(safety: safety, kind: "team", subjectId: front.teamId, subjectName: front.name, api: api) {
+                reporting = false
+            }
         }
     }
 

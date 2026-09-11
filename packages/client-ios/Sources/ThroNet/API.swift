@@ -62,10 +62,19 @@ public struct Profile: Codable, Sendable, Equatable {
     public let ageBand: String
     /// How many ways into the account exist (PD-032): one is fragile, and the screen says so.
     public let credentials: Int?
+    /// The terms in force, and whether this account has accepted them (PD-050).
+    ///
+    /// **Both optional, deliberately.** The phone keeps the last profile it was given, and a field made
+    /// non-optional here would stop a cache written by an older build from decoding at all — a signed-in
+    /// person would be shown as nobody because the terms had changed since they last opened the app.
+    public let termsVersion: String?
+    public let acceptedTerms: Bool?
 
-    public init(accountId: UUID?, playerId: UUID?, displayName: String?, named: Bool, ageBand: String, credentials: Int?) {
+    public init(accountId: UUID?, playerId: UUID?, displayName: String?, named: Bool, ageBand: String, credentials: Int?,
+                termsVersion: String? = nil, acceptedTerms: Bool? = nil) {
         self.accountId = accountId; self.playerId = playerId; self.displayName = displayName
         self.named = named; self.ageBand = ageBand; self.credentials = credentials
+        self.termsVersion = termsVersion; self.acceptedTerms = acceptedTerms
     }
 }
 
@@ -788,6 +797,50 @@ public actor ThroAPI {
     /// And stops saying it. The claim is kept on the server, marked withdrawn.
     public func stopSayingLeague(_ teamId: UUID, leagueId: UUID) async throws -> TeamFront {
         try decode(await authorised("DELETE", "/v1/teams/\(teamId.uuidString.lowercased())/league/\(leagueId.uuidString.lowercased())"))
+    }
+
+    /// What came back from raising a report (PD-050): when it is answered by, which is the promise the app
+    /// makes on screen and the stores hold THRØ to.
+    public struct ReportRaised: Decodable, Sendable, Equatable {
+        public let reportId: UUID
+        public let subjectKind: String
+        public let subjectId: UUID
+        public let urgent: Bool
+        public let answerDueAt: Date
+    }
+
+    private struct BlockedAccounts: Decodable { let blocked: [UUID] }
+
+    /// Reports something somebody wrote — a team, venue or league name, an account, or a match (PD-050).
+    public func report(subjectKind: String, subjectId: UUID, reason: String) async throws -> ReportRaised {
+        let body = try JSONSerialization.data(withJSONObject: ["subjectKind": subjectKind,
+                                                               "subjectId": subjectId.uuidString.lowercased(),
+                                                               "reason": reason])
+        return try decode(await authorised("POST", "/v1/reports", body: body))
+    }
+
+    /// Asks not to be reached by an account. Answers the accounts you have blocked.
+    public func block(_ accountId: UUID) async throws -> [UUID] {
+        let body = try JSONSerialization.data(withJSONObject: ["accountId": accountId.uuidString.lowercased()])
+        let answered: BlockedAccounts = try decode(await authorised("POST", "/v1/blocks", body: body))
+        return answered.blocked
+    }
+
+    /// Lifts a block. The block is kept on the server, marked lifted.
+    public func unblock(_ accountId: UUID) async throws -> [UUID] {
+        let answered: BlockedAccounts = try decode(await authorised("DELETE", "/v1/blocks/\(accountId.uuidString.lowercased())"))
+        return answered.blocked
+    }
+
+    public func blocks() async throws -> [UUID] {
+        let answered: BlockedAccounts = try decode(await authorised("GET", "/v1/blocks"))
+        return answered.blocked
+    }
+
+    /// Records that this account accepted a version of the terms, before it writes anything anyone reads.
+    public func acceptTerms(_ version: String) async throws {
+        let body = try JSONSerialization.data(withJSONObject: ["version": version])
+        _ = try await authorised("POST", "/v1/me/terms", body: body)
     }
 
     public func joinTeam(code: String) async throws -> TeamSummary {

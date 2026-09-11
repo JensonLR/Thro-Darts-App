@@ -125,7 +125,10 @@ public object Contract {
         ),
         Endpoint(
             id = "me", method = "GET", path = "/v1/me", authenticated = true,
-            summary = "Who am I", description = "The caller's account id, player id, display name (and whether they have set one), and age band.",
+            summary = "Who am I",
+            description = "The caller's account id, player id, display name (and whether they have set one), and age band. "
+                + "Carries the terms in force and whether this account has accepted them (PD-050), so the phone can hold "
+                + "somebody at the agreement before their first public word without a second request to find out.",
             responses = mapOf(200 to "profile", 401 to "no principal"),
         ),
         Endpoint(
@@ -192,6 +195,64 @@ public object Contract {
             request = Schema("""{"type":"object","required":["code"],"properties":{"code":{"type":"string"}}}"""),
             responses = mapOf(200 to "the team, with your role", 401 to "no principal", 409 to "the code cannot be used, with the sentence to show",
                               429 to "too many codes tried from this address or device; Retry-After says when"),
+        ),
+        Endpoint(
+            id = "safety.report", method = "POST", path = "/v1/reports", authenticated = true,
+            summary = "Report something somebody wrote (PD-050)",
+            description = "A team, venue or league name, an account, or a match. Names the thing and a sentence of reason; "
+                + "the answer is due within a day, and a report raised by or about a child goes to the front of the queue.",
+            request = Schema("""{"type":"object","required":["subjectKind","subjectId","reason"],"properties":{"subjectKind":{"type":"string","enum":["account","team","venue","league","match"]},"subjectId":{"type":"string","format":"uuid"},"reason":{"type":"string"}}}"""),
+            responses = mapOf(200 to "the report, with when it is answered by", 400 to "not something THRØ can report, or no reason given",
+                              401 to "no principal"),
+        ),
+        Endpoint(
+            id = "safety.block", method = "POST", path = "/v1/blocks", authenticated = true,
+            summary = "Ask not to be reached by an account (PD-050)",
+            description = "No reason is asked for and none is stored. Neither account can invite, befriend, claim a seat "
+                + "against or watch the other while it stands. Blocking twice is blocking once.",
+            request = Schema("""{"type":"object","required":["accountId"],"properties":{"accountId":{"type":"string","format":"uuid"}}}"""),
+            responses = mapOf(200 to "the accounts you have blocked", 400 to "you cannot block yourself", 401 to "no principal"),
+        ),
+        Endpoint(
+            id = "safety.unblock", method = "DELETE", path = "/v1/blocks/{accountId}", authenticated = true,
+            summary = "Lift a block (PD-050)",
+            description = "The row is kept and marked lifted; blocking again later is a new block.",
+            responses = mapOf(200 to "the accounts you have blocked", 401 to "no principal"),
+        ),
+        Endpoint(
+            id = "safety.blocks", method = "GET", path = "/v1/blocks", authenticated = true,
+            summary = "The accounts you have blocked (PD-050)",
+            description = "Ids only: a block list names nobody it does not have to, and the phone already knows who it asked "
+                + "to block. Lifted blocks are not in it.",
+            responses = mapOf(200 to "the list", 401 to "no principal"),
+        ),
+        Endpoint(
+            id = "safety.queue", method = "GET", path = "/v1/reports", authenticated = true,
+            summary = "What is waiting to be answered (PD-050)",
+            description = "The moderation queue: unanswered first, then a report raised by or about a child, then by the "
+                + "hour its answer is due. Open only to the accounts named at boot as answering reports — THRØ has no "
+                + "staff table, and a queue anyone could read is a queue that tells people they were reported.",
+            responses = mapOf(200 to "the queue, each report with its reason and when it is due", 401 to "no principal",
+                              403 to "not one of the people who answer reports"),
+        ),
+        Endpoint(
+            id = "safety.decide", method = "POST", path = "/v1/reports/{reportId}/decisions", authenticated = true,
+            summary = "Answer a report (PD-050)",
+            description = "A decision is a row of its own, so a second look is a second decision and never an edit of the "
+                + "first. Nothing a player wrote is destroyed by one: it is left, hidden or corrected, or the account is "
+                + "suspended, and the note says why.",
+            request = Schema("""{"type":"object","required":["outcome","note"],"properties":{"outcome":{"type":"string","enum":["left","hidden","corrected","account_suspended","not_upheld"]},"note":{"type":"string"}}}"""),
+            responses = mapOf(200 to "the decision", 400 to "not one of the answers a report can have, or no note given",
+                              401 to "no principal", 403 to "not one of the people who answer reports",
+                              404 to "no such report"),
+        ),
+        Endpoint(
+            id = "me.terms", method = "POST", path = "/v1/me/terms", authenticated = true,
+            summary = "Accept the terms (PD-050)",
+            description = "Recorded once per version, with the version accepted, because that is the only honest answer to "
+                + "what somebody agreed to. Accepting a version twice changes nothing.",
+            request = Schema("""{"type":"object","properties":{"version":{"type":"string"}}}"""),
+            responses = mapOf(200 to "the version now accepted", 401 to "no principal"),
         ),
         Endpoint(
             id = "teams.league.say", method = "POST", path = "/v1/teams/{teamId}/league", authenticated = true,

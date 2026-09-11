@@ -114,6 +114,9 @@ public struct WelcomeScreen: View {
                 choices
             }
             .padding(.horizontal, ThroSpacing.spaceScreenGutter)
+            // The board bleeds; the welcome itself is a column, or on a tablet the two ways in are a
+            // yard apart and the sentence under them is one line the width of a desk (PD-052).
+            .throReadable()
         }
         // No `.ignoresSafeArea()` here. `ThroBoard` already bleeds its lamp, dust and vignette to
         // every edge while keeping its CONTENT inside the safe area — the distinction that exists

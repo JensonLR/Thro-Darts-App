@@ -3471,3 +3471,57 @@ again afterwards is a new claim with its own date. One live claim per team and l
 plays in two, because sides do.
 
 Counts: client 734, API 27 suites (64 tests), HTTP 48 properties, schema 124, contrast 94 pairs.
+
+## The queue nobody could open (PD-050), and where THRØ runs (PD-051)
+
+The safety kit landed with three of its four legs standing: anything a person wrote could be reported,
+anyone could be blocked, and accepting the terms was recorded with the version accepted. The fourth leg —
+**somebody answers** — was written and reachable by nothing. `Safety.queue()` and `Safety.decide()` existed,
+had tests, and had no route, which is a promise to Apple and Google that was quietly not being kept.
+
+Closing it needed an authority THRØ does not have: there is no staff, no admin role, and an event's officials
+are officials of that event alone. So the people who answer reports are **named at boot**, in
+`THRO_MODERATORS`, and both routes refuse everybody else; a server that names nobody refuses everybody, and
+says so on every start. A table was the obvious alternative and is the wrong one — a list in the database is
+a list somebody holding a session can eventually add themselves to, and this queue holds what people said
+about each other. Answering a report that does not exist is now a 404 rather than a foreign key's 500.
+
+**The terms travel with the profile.** `GET /v1/me` carries the version in force and whether this account has
+accepted it, so the phone can hold somebody at the agreement before their first public word without a second
+request to find out. Both fields are optional on the client's `Profile`, deliberately: the phone keeps the
+last profile it was given, and a required field would stop a cache written by an older build from decoding at
+all — a signed-in person shown as nobody because the terms had changed since they last opened the app.
+
+**Two defects of mine, both found by tests rather than by looking at anything.** The first was blunt:
+`TestDatabase` drops every schema a migration creates, its list did not know about `safety`, and 65 of 68
+Kotlin tests failed on tables that survived the reset. The second is the better lesson. `Safety` is handed a
+clock and used it for a report's hour but not a block's, leaving `blocked_at` to the column's
+`clock_timestamp()` default — so a test that blocked at a fixed hour and lifted a minute later was lifting a
+block the database believed had been made today, and `lift`'s own `AND ? > blocked_at` guard silently matched
+no row. **A class handed a clock must use it everywhere or it has not got one.** That guard is gone as well:
+V040's `a_lift_comes_after` already enforces the ordering, and a guard that turns a nonsensical lift into a
+silent no-op is worse than a constraint that raises — somebody asked to be left alone no longer, nothing
+happened, and nothing said so.
+
+On the phone, a team's page now carries **Report this team**, because a team's name is the whole of what a
+stranger sees of it and the way to say that name is wrong belongs on the page carrying the name, not in a
+settings list somebody would have to already suspect exists. **Blocked** sits beside Friends on your own
+page, since blocking is the other half of who may reach you, and the row reads "Anyone you never want to hear
+from" until the list has been opened: nothing is fetched to put a number on a row a person may never tap.
+
+**Where THRØ runs (PD-051).** The founder asked what Cloudflare costs and what the best arrangement is for
+iOS, Android and the web, then added Apple Watch, the Android equivalents, and the television. The first
+answer is that **Cloudflare cannot run this API at all** — Workers is a V8 isolate with no JVM, and Hyperdrive
+is reachable only from inside one, so "move to Cloudflare" is a rewrite wearing a hosting bill. What it can
+do (DNS, CDN, the free WAF ruleset, Turnstile, Tunnel, R2) costs nothing at our size. The rest is in
+`docs/product/PLATFORM.md`: Fly London beats Render at every size, Supabase Pro beats Neon's paid curve at
+launch because a pool that holds connections never earns a scale-to-zero discount, GitHub's macOS runners are
+now effectively free at thirty builds a month, and every surface from the watch to Android TV is laid out with
+what each would take. About $15 a month now, $40 at a thousand players, $142 at ten thousand. Neither move is
+made: both need a card, and the card is the founder's.
+
+One thing the research said we would have to build turned out to be built already. Behind Cloudflare a live
+stream must heartbeat and resume or the proxy cuts it mid-leg; THRØ's pings every fifteen seconds and resumes
+from `Last-Event-ID`, and `StreamTest` holds both.
+
+Counts: client 737, API 28 suites (68 tests), HTTP 49 properties, schema 135, contrast 94 pairs.

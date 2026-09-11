@@ -48,6 +48,7 @@ import thro.api.RelyingParty
 import thro.api.WebAuthn
 import java.util.Base64
 import thro.api.MatchRecords
+import thro.api.Safety
 import thro.api.Matches
 import thro.api.Json
 import thro.api.Migrations
@@ -88,6 +89,15 @@ public class Deps(
     /** How often a stream re-reads the log, and how often it pings a quiet client (ADR-007: fifteen seconds). */
     public val streamPoll: java.time.Duration = java.time.Duration.ofSeconds(1),
     public val streamHeartbeat: java.time.Duration = java.time.Duration.ofSeconds(15),
+    /**
+     * The accounts that may read the moderation queue and answer a report (PD-050).
+     *
+     * Named at boot rather than held in a table. THRØ has no staff and no admin role, and a list in the
+     * database would be a list somebody holding a session could eventually add themselves to; inventing
+     * either to make this route work would be inventing product behaviour. Empty by default, so a server
+     * nobody has named a moderator for refuses everyone rather than admitting the first caller.
+     */
+    public val moderators: Set<UUID> = emptySet(),
 )
 
 private class Http(val status: Int, val body: String)
@@ -184,6 +194,60 @@ public fun Application.thro(deps: Deps) {
                 val m = Json.parseObject(r.body)
                 val member = try { UUID.fromString(str(m, "memberId")) } catch (e: IllegalArgumentException) { throw IllegalArgumentException("memberId must be a UUID") }
                 Teams(r.connection(), deps.now).let { Http(200, it.json(it.assign(r.principal!!.subject, UUID.fromString(r.call.parameters["teamId"]), member, str(m, "role")))) }
+            }
+        },
+        // PD-050: reporting, blocking and the terms. A refusal is the sentence the phone shows.
+        "safety.report" to { r ->
+            withAccount(r) { a ->
+                safely {
+                    val m = Json.parseObject(r.body)
+                    val subject = try { UUID.fromString(str(m, "subjectId")) } catch (e: IllegalArgumentException) { throw IllegalArgumentException("subjectId must be a UUID") }
+                    Safety(r.connection(), deps.now).let { s ->
+                        Http(200, s.json(s.report(a, str(m, "subjectKind"), subject, str(m, "reason"))))
+                    }
+                }
+            }
+        },
+        "safety.block" to { r ->
+            withAccount(r) { a ->
+                safely {
+                    val other = try { UUID.fromString(str(Json.parseObject(r.body), "accountId")) } catch (e: IllegalArgumentException) { throw IllegalArgumentException("accountId must be a UUID") }
+                    Safety(r.connection(), deps.now).let { s -> s.block(a, other); Http(200, blocksJson(s.blocking(a))) }
+                }
+            }
+        },
+        "safety.unblock" to { r ->
+            withAccount(r) { a ->
+                safely {
+                    Safety(r.connection(), deps.now).let { s ->
+                        s.lift(a, UUID.fromString(r.call.parameters["accountId"])); Http(200, blocksJson(s.blocking(a)))
+                    }
+                }
+            }
+        },
+        "safety.blocks" to { r -> withAccount(r) { a -> Http(200, blocksJson(Safety(r.connection(), deps.now).blocking(a))) } },
+        // The fourth thing the stores ask for is that somebody answers. Two routes, closed to everyone but
+        // the people named to answer: the queue as it should be worked, and the answer itself.
+        "safety.queue" to { r ->
+            withModerator(r, deps.moderators) { _ -> Http(200, queueJson(Safety(r.connection(), deps.now).queue())) }
+        },
+        "safety.decide" to { r ->
+            withModerator(r, deps.moderators) { a ->
+                safely {
+                    val m = Json.parseObject(r.body)
+                    val report = UUID.fromString(r.call.parameters["reportId"])
+                    val decision = Safety(r.connection(), deps.now).decide(report, str(m, "outcome"), str(m, "note"), a)
+                    Http(200, """{"decisionId":"$decision","reportId":"$report"}""")
+                }
+            }
+        },
+        "me.terms" to { r ->
+            withAccount(r) { a ->
+                safely {
+                    val asked = (Json.parseObject(r.body)["version"] as? String)?.takeIf { it.isNotBlank() } ?: Safety.TERMS_VERSION
+                    Safety(r.connection(), deps.now).acceptTerms(a, asked)
+                    Http(200, """{"version":${Contract.q(asked)},"accepted":true}""")
+                }
             }
         },
         // PD-049: the team's own admin or captain says which league it plays in, and stops saying it.
@@ -449,6 +513,36 @@ private fun withAccount(r: Req, block: (UUID) -> Http): Http {
     return block(account)
 }
 
+/**
+ * A route only somebody who answers reports may call (PD-050).
+ *
+ * Two refusals rather than one, because they are two different truths: a principal with no account behind it
+ * cannot be a moderator, and an account that is not on the list is not one either. Neither answer says who is.
+ */
+private fun withModerator(r: Req, moderators: Set<UUID>, block: (UUID) -> Http): Http {
+    val account = r.principal!!.accountId ?: return Http(403, """{"error":"the development principal has no account"}""")
+    if (account !in moderators) return Http(403, """{"error":"reports are answered by the people named to answer them"}""")
+    return block(account)
+}
+
+/** The queue for whoever works it: what was reported, why, when the answer is due, and how often it has been answered. */
+private fun queueJson(queued: List<Safety.Queued>): String =
+    "{\"reports\":[" + queued.joinToString(",") { q ->
+        """{"reportId":"${q.report.reportId}","subjectKind":${Contract.q(q.report.subjectKind)},""" +
+            """"subjectId":"${q.report.subjectId}","reason":${Contract.q(q.report.reason)},""" +
+            """"urgent":${q.report.urgent},"reportedAt":"${q.report.reportedAt}",""" +
+            """"answerDueAt":"${q.report.answerDueAt}","decisions":${q.decisions}}"""
+    } + "]}"
+
+/** A safety refusal is an answer too: the sentence to show, with 400 unless the refusal names a status. */
+private fun safely(status: Int = 400, block: () -> Http): Http = try { block() } catch (e: Safety.Refused) {
+    Http(e.status ?: status, """{"error":${Contract.q(e.why)}}""")
+}
+
+/** The accounts somebody has blocked. Ids only: a block list names nobody it does not have to. */
+private fun blocksJson(ids: List<java.util.UUID>): String =
+    "{\"blocked\":[" + ids.joinToString(",") { "\"$it\"" } + "]}"
+
 /** A team refusal is an answer too: the sentence, with the status the route names. */
 private fun teamly(status: Int = 400, block: () -> Http): Http = try { block() } catch (e: Teams.Refused) { Http(e.status ?: status, """{"error":${Contract.q(e.why)}}""") }
 
@@ -459,9 +553,14 @@ private fun friendly(codeProblem: Int = 403, block: () -> Http): Http = try { bl
 }
 
 private fun profile(c: Connection, deps: Deps, p: Principal): Http {
-    val account = p.accountId ?: return Http(200, """{"accountId":null,"playerId":"${p.subject}","displayName":null,"named":false,"ageBand":"unknown","note":"development principal: no account"}""")
+    // PD-050: the terms in force travel with the profile the phone already reads, rather than behind a route
+    // of their own. A fact the client has to remember to go and ask for is a fact some build ships without.
+    val terms = """"termsVersion":${Contract.q(Safety.TERMS_VERSION)}"""
+    val account = p.accountId
+        ?: return Http(200, """{"accountId":null,"playerId":"${p.subject}","displayName":null,"named":false,"ageBand":"unknown",$terms,"acceptedTerms":false,"note":"development principal: no account"}""")
     val pr = Accounts(c, deps.now).profile(account) ?: return Http(404, """{"error":"no such account"}""")
-    return Http(200, """{"accountId":"${pr.accountId}","playerId":${pr.playerId?.let { "\"$it\"" } ?: "null"},"displayName":${Contract.q(pr.displayName)},"named":${pr.named},"ageBand":${Contract.q(pr.ageBand)},"credentials":${pr.credentials}}""")
+    val accepted = Safety(c, deps.now).hasAcceptedTerms(account)
+    return Http(200, """{"accountId":"${pr.accountId}","playerId":${pr.playerId?.let { "\"$it\"" } ?: "null"},"displayName":${Contract.q(pr.displayName)},"named":${pr.named},"ageBand":${Contract.q(pr.ageBand)},"credentials":${pr.credentials},$terms,"acceptedTerms":$accepted}""")
 }
 
 /**

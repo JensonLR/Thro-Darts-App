@@ -2215,6 +2215,57 @@ page was read, and nothing was seeded. The email to LeagueRepublic is now the wh
 question added, which is whether they will allow-list an identified THRØ agent at the CDN. Teams reach the
 map by the players who play in them (PD-047, PD-049) until they answer.
 
+## PD-050 — Anything a person wrote can be reported, and anyone can be blocked
+
+**Taken on delegated authority, 2026-09-11**, from the launch review: Apple's guideline 1.2 and Google Play's
+user-generated-content policy both require four things of any app carrying what people write — filtering,
+in-app reporting, blocking, and a published way to reach us — and THRØ has none of them. It is the largest
+blocking item between here and a public release, and it is not paperwork: it is a screen, a queue and a duty.
+
+### Decided
+
+**Everything a person wrote can be reported, from where it is read.** Display names, team names, venue names,
+league names and profile pictures. A report names the thing, not the person who owns it, and takes one
+sentence of reason. It is answered inside 24 hours, which is the promise the stores hold us to and the one
+the moderation queue is built to keep.
+
+**Blocking is between accounts and it is mutual in effect.** A blocked account cannot invite, befriend, claim
+a seat against, or watch the blocker; neither sees the other named anywhere THRØ can help it. Blocking is not
+a report and needs no reason: a player may simply want to be left alone.
+
+**A report is a record, not a deletion.** It is kept with who reported it, when, and what was decided; the
+decision is a row of its own. Nothing a player wrote is destroyed by a report — it is hidden, corrected or
+left, and the record says which and why. Erasure (PD-039) still erases.
+
+**Nobody posts before agreeing.** A player accepts the terms — which say plainly that objectionable content
+is not tolerated — before they can first write anything anyone else will read. Accepting is recorded once,
+with the version accepted.
+
+**A minor's report goes to the front of the queue**, and a report about a minor's safety is never left to a
+24-hour clock.
+
+### What this does not decide
+
+Automated filtering (a word list is a decision of its own and a bad one taken hastily); appeals against a
+decision; and what happens to a team whose admin is suspended.
+
+### Outcome, 2026-09-12 — who answers the queue
+
+The queue was built and had no door: `Safety.queue()` and `Safety.decide()` existed in Kotlin, reachable by
+nothing. Closing that needed an authority THRØ does not have — there is no staff, no admin role, and an
+event's officials are officials of that event and nothing else.
+
+**The people who answer reports are named at boot**, as a list of account ids in `THRO_MODERATORS`, and the
+two routes (`GET /v1/reports`, `POST /v1/reports/{reportId}/decisions`) refuse everybody else. A table was
+the obvious alternative and is the wrong one: a list in the database is a list that somebody holding a
+session can eventually add themselves to, and the queue holds what people said about each other. A server
+that names nobody refuses everybody — including the first caller, which is what an empty table would have
+admitted.
+
+This is deliberately the smallest thing that can be true. A real moderation console, appeals, and a way for
+a league to moderate its own members are all still undecided, and none of them should be inferred from an
+environment variable.
+
 ## PD-049 — A team says which league it plays in
 
 **Taken on delegated authority, 2026-09-11**, the same night PD-048 was refused at a CDN. THRØ lists 329
@@ -2243,3 +2294,147 @@ Saying it again afterwards is a new claim with its own date.
 Whether a league can confirm or refuse what a team says about it (a league arriving on THRØ is its own
 decision); whether a claimed team shows in a league's standings, which it does not and should not; and
 whether two teams claiming the same name in one league is worth resolving.
+
+## PD-052 — A screen is a column, not a phone pulled apart
+
+**Taken on delegated authority, 2026-09-12.** The founder's standing requirement is that every screen is
+beautiful on every device and every screen size, with the person's journey through it the priority. The app
+already builds for iPad and for landscape — `TARGETED_DEVICE_FAMILY = "1,2"`, both iPhone landscape
+orientations, all four iPad ones — so those screens are being shipped today whether or not they were designed.
+
+**This decision was being cited in code before it existed.** `ThroReadable` and five screens referenced
+PD-050, which is the reporting and blocking decision; the width rule had no record of its own. That is what
+this entry is, and the citations now point here.
+
+### Decided
+
+**One measure, named once.** `ThroReadable` holds content to 560 points and centres it. A screen asks for it;
+no view invents its own maximum width, so there is one number to change and one place it is written.
+
+**The board bleeds, and what is read sits in the column.** A map, a slate, a brand field and the scoring
+stage run to the edges of whatever glass they are given, because those are the product being looked at. Prose,
+rows, forms and tables sit in the measure. A settings list a foot wide is not a tablet layout, it is a phone
+layout that nobody stopped.
+
+**Never by stretching.** A phone screen scaled up to fill an iPad is the failure this rule exists to prevent,
+and it is why the measure is applied by the screen rather than by the window: the fix for a wide screen is a
+column with air around it, not bigger type or longer lines.
+
+**Verified where it is claimed.** The scoring stage is the model — a pure geometry function walked across
+eleven devices, both orientations, all twelve type sizes — and the rest of the app is held to the same standard
+by looking at it on the device rather than by asserting it in prose.
+
+### Where this stands
+
+Ten call sites of forty-three screens, as of tonight's audit: Home, Archive, Play, Live, the Settings pages,
+Discover, the Welcome, your own profile, and the scoring stage which owns its own width. **Thirty-three screens
+still stretch**, the league table is broken at both ends (eight fixed columns totalling 212 points, which
+crowds an iPhone SE and does not grow with Dynamic Type), and five shared components truncate long names with
+no scale factor. Those are recorded rather than quietly carried, and they are the next work.
+
+### What this does not decide
+
+Two-column layouts where a screen earns one — a list beside the map on an iPad is a design question, not a
+width rule. Split view and Slide Over, which hand a phone-narrow width to an iPad and which nothing in the app
+reads a size class to handle. And the watch, television and Android surfaces, which are PD-051's and
+PLATFORM.md's.
+
+## PD-051 — Where THRØ runs
+
+**Taken on delegated authority, 2026-09-12**, in answer to the founder's question about Cloudflare's costs
+and the best arrangement for iOS, Android and the web. The reasoning and the numbers are in
+[PLATFORM.md](PLATFORM.md); this is what was settled and what was not.
+
+### Decided
+
+**THRØ stays a JVM that holds open connections, and the platform is chosen to fit that.** This is the
+decision the others follow from. Cloudflare Workers cannot run it — a V8 isolate has no JVM, and Hyperdrive
+is reachable only from inside a Worker — so "move to Cloudflare" is a rewrite, not a migration, and is
+refused. The same test rules out Cloud Run (bills and caps an open stream), Railway (cuts at 15 minutes) and
+Render's free tier (spins down mid-stream, which is what staging does today).
+
+**Cloudflare's job is the edge, and at our size the edge is free.** DNS, CDN, the free WAF ruleset,
+Turnstile, Tunnel and R2 come to $0 a month; the Pro plan's managed rulesets are worth $25 at launch and not
+before. This is the answer to "what does Cloudflare cost": nothing, for the part of it we can actually use.
+
+**One region, and it is London.** The players are in the UK and the database round trip is the latency that
+matters, so the API and its Postgres sit together in London rather than the API being spread thin.
+
+**No serverless rewrite to chase a cheaper idle bill.** THRØ's pool holds connections, so scale-to-zero
+pricing never applies to us and every usage quote is read as 730 hours a month. A platform whose discount is
+suspension is the wrong shape for an app whose whole point is a live match.
+
+### What this does not decide
+
+**Anything that spends the founder's money.** Moving Render → Fly (~$6.46/mo) and Neon free → Supabase Pro
+($25/mo at launch) are both recommended and neither is done: they need a card, and a card is the founder's.
+Until then staging stays on Render and the database on Neon's free tier.
+
+**The order of the surfaces**, beyond noting which commitments already force one. Apple Watch, tvOS, Android,
+Wear OS, Android TV and the web are laid out in PLATFORM.md with what each would take; the web is nearer than
+it looks, because Google Play requires a web account-deletion URL and an organiser subscription is better
+sold off-store. Which we build first is a product decision, not an infrastructure one.
+
+## PD-053 — A league's administrator is named, never self-appointed
+
+**Founder decision, 2026-09-12**, asked because nothing in THRØ can grant league ownership today: the
+authorisation rule for a league exists over a tuple no user action produces, and PD-049 left the question
+open on purpose. Three routes were put to the founder, who chose the one where nobody can appoint
+themselves: *"Dont want false people running it or trying to disrupt."*
+
+### Decided
+
+**A league's administrator is granted out of band**, in the shape `THRO_MODERATORS` already set for the
+people who answer reports: a named grant, recorded in `authz.relation` with who granted it and when, and
+revocable. Nobody becomes a league's administrator by asking to be.
+
+**First-claimant adoption is refused for a league, though it stands for a team.** PD-047 lets an adult claim
+a listed team because that is what a pub side does when it puts a name on a board. A league is different in
+kind: its administrator publishes a table that a whole town reads as official, sets what a win is worth, and
+decides results. Handing that to whoever asks first is handing a stranger authority over other people's
+darts — which is the disruption the founder named.
+
+**The grant history is the record.** A revoked relation is kept, so who ran a league in September is still
+answerable in December.
+
+### What this does not decide
+
+**How this reaches 329 leagues.** Verification against a league's own published website — it already carries
+one, and every league row carries its provenance — is the route to self-service, and it is not built. It also
+fits the organiser subscription MONEY.md puts on the web, where a billing relationship is itself evidence.
+Until then a league administrator is named one at a time, which is slow and cannot be gamed.
+
+## PD-054 — THRØ has a standard for points, and a league may write its own
+
+**Founder decision, 2026-09-12**: *"Have a well thought out Throw standard but also allow leagues to do their
+own custom set up as some leagues are double in leagues etc."* This closes the half of OD-022 that was open —
+whether THRØ ships a standard a league may override — and it closes it the other way from the caution
+recorded there, with the condition that makes the caution unnecessary.
+
+### Decided
+
+**THRØ's standard: two points a win, one a draw, none for a loss, ordered by points, then leg difference,
+then legs for.** It is what most UK darts leagues already play, and a league that has said nothing gets a
+table rather than an empty screen.
+
+**A league may write its own, and when it has, the league's own orders the table.** Points per leg, per
+match, bonus points, a different tie-break: a league's rules are the league's, held as an approved policy
+against that season and versioned, so changing them next season cannot re-order last season's table.
+
+**The standard is never silent — this is the condition, and it is not optional.** Every table says which
+policy ordered it and whether that policy is the league's own or THRØ's standard. OD-022's warning was that
+*"a constant buried in a table calculation would be THRØ deciding a league's rules for it without saying
+so"*; the fault in that sentence is *buried*, not *constant*. A standard that names itself on every table it
+orders, beside the way to replace it, decides nothing on a league's behalf.
+
+**Format is not points.** Double-in, sets, best-of and the rest are a match-format policy; a league that
+plays double-in still scores its table in points. Keeping them apart is what stops "how we play" and "what a
+win is worth" from being one tangled setting.
+
+### What this does not decide
+
+Whether THRØ's standard carries bonus points — it does not, and a league that awards them writes its own.
+Whether two leagues' tables may be compared (OD-022 says they may not, and nothing here changes that). And
+what unit a league's results are recorded in, which PD-022 decided and the server has not yet implemented:
+`legs_home` and `legs_away` will hold legs, matches or match points depending on who typed them, and a table
+that heads them *Legs For* without knowing is mislabelling every row.

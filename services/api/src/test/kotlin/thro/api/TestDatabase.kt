@@ -33,7 +33,10 @@ public object TestDatabase {
         }
 
     /** Every schema the migrations create. Dropping them all is what makes a run repeatable. */
-    private val schemas = listOf("evidence", "trust", "rating", "read", "audit", "authz", "identity", "competition", "thro")
+    // Every schema a migration creates. A list that does not know about one leaves its tables standing
+    // through the reset, and the next run fails on "already exists" — which is what `safety` (V040) did.
+    private val schemas = listOf("evidence", "trust", "rating", "read", "audit", "authz", "identity", "competition",
+                                 "safety", "thro")
 
     private val roles = listOf("thro_owner", "app_match", "app_trust", "app_rating", "app_read", "app_competition")
 

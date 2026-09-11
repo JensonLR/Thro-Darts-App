@@ -223,6 +223,14 @@ class HttpTest {
             check("friends need a principal, and the development principal has no account to be friends from",
                 get("/v1/friends", subject = null).status.value == 401 && get("/v1/friends", subject = home).status.value == 403
                     && post("/v1/friends/invite", "{}", subject = home).status.value == 403)
+            // PD-050: the queue and the answer are mounted and closed. This server names no moderators, so
+            // every caller is refused — which is the state a deployment that forgot THRO_MODERATORS is in,
+            // and the one worth proving: a queue that let the first caller through would tell a stranger
+            // who had been reported.
+            check("the moderation queue and its decisions need a principal, and refuse whoever does not answer reports",
+                get("/v1/reports", subject = null).status.value == 401
+                    && get("/v1/reports", subject = home).status.value == 403
+                    && post("/v1/reports/${UUID.randomUUID()}/decisions", """{"outcome":"left","note":"Looked at it."}""", subject = home).status.value == 403)
             val events = get("/v1/events", subject = null)
             check("upcoming open events are public too, and a bad date is a 400", events.status.value == 200 && events.bodyAsText().startsWith("""{"events":[""") && get("/v1/events?from=soon", subject = null).status.value == 400)
 
@@ -241,6 +249,6 @@ class HttpTest {
                     && roles.all { it in setOf("app_match", "app_competition", "app_read", "app_trust") })
         }
         println("  $passed HTTP properties held")
-        assertEquals(48, passed)
+        assertEquals(49, passed)
     }
 }
