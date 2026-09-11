@@ -196,6 +196,15 @@ class HttpTest {
                     && get("/v1/venues?q=", subject = null).status.value == 400
                     && post("/v1/teams/$teamId/home", """{"name":"The Sun Inn","locality":"Stockton-on-Tees"}""", subject = away).status.value == 403
                     && post("/v1/teams/$teamId/home", """{"name":"The Sun Inn","locality":"Stockton-on-Tees"}""", subject = home).bodyAsText().contains(""""venue":{"""))
+            // Roles (PD-045): the admin's front carries each entry's handle, and names a captain with it.
+            // After the home check, not before it: a captain may set the home, and that check holds that
+            // a player may not.
+            val adminFront = get("/v1/teams/$teamId", subject = home).bodyAsText()
+            val playerHandle = Regex(""""role":"player","memberId":"([0-9a-f-]+)"""").find(adminFront)?.groupValues?.get(1)
+            check("the admin names a captain from the roster, nobody else may, and a public front carries no handles",
+                playerHandle != null && !get("/v1/teams/$teamId", subject = null).bodyAsText().contains("memberId")
+                    && post("/v1/teams/$teamId/roles", """{"memberId":"$playerHandle","role":"captain"}""", subject = away).status.value == 403
+                    && post("/v1/teams/$teamId/roles", """{"memberId":"$playerHandle","role":"captain"}""", subject = home).bodyAsText().contains(""""role":"captain""""))
             check("friends need a principal, and the development principal has no account to be friends from",
                 get("/v1/friends", subject = null).status.value == 401 && get("/v1/friends", subject = home).status.value == 403
                     && post("/v1/friends/invite", "{}", subject = home).status.value == 403)
@@ -217,6 +226,6 @@ class HttpTest {
                     && roles.all { it in setOf("app_match", "app_competition", "app_read", "app_trust") })
         }
         println("  $passed HTTP properties held")
-        assertEquals(45, passed)
+        assertEquals(46, passed)
     }
 }

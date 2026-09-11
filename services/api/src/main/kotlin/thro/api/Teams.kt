@@ -23,15 +23,22 @@ import thro.competition.MembershipRole
 public class Teams(private val connection: Connection, private val now: () -> Instant = Instant::now) {
 
     public data class Summary(val teamId: UUID, val name: String, val locality: String?, val role: String, val members: Int)
-    public data class Member(val name: String?, val role: String)
+    /**
+     * One roster entry. [memberId] is the membership's own id — a handle on a row of this roster, not
+     * a person's id — and is there only for the team's admin, to name a captain with (PD-045).
+     */
+    public data class Member(val name: String?, val role: String, val memberId: UUID? = null)
     public data class SeasonLine(val league: String, val label: String, val division: String?)
     public data class Front(val teamId: UUID, val name: String, val locality: String?, val venue: Leagues.Venue?,
                             val seasons: List<SeasonLine>, val roster: List<Member>, val yourRole: String?)
     public data class Invite(val code: String, val expiresAt: Instant, val maxUses: Int)
-    public class Refused(public val why: String) : Exception(why)
+    /** A refusal in words, and — where the route should not choose it — the status it carries. */
+    public class Refused(public val why: String, public val status: Int? = null) : Exception(why)
 
     public companion object {
         public val INVITE_TTL: Duration = Duration.ofDays(30)
+        /** The roles an admin names. Admin is not one: the admin stays the admin. */
+        private val ASSIGNABLE = setOf("captain", "vice_captain", "player")
         private const val ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
         private val random = SecureRandom()
         internal fun newCode(): String = (1..8).map { ALPHABET[random.nextInt(ALPHABET.length)] }.joinToString("")
@@ -87,14 +94,16 @@ public class Teams(private val connection: Connection, private val now: () -> In
                LEFT JOIN competition.division d ON d.division_id = ta.division_id
                WHERE ta.team_id = ? AND ta.valid_until IS NULL ORDER BY ls.starts_on DESC""",
         ).use { ps -> ps.setObject(1, teamId); ps.executeQuery().use { rs -> generateSequence { if (rs.next()) SeasonLine(rs.getString(1), rs.getString(2), rs.getString(3)) else null }.toList() } }
+        // Each entry's handle goes to the admin alone, to name a captain with; nobody else sees one.
+        val handles = yourRole == "admin"
         val roster = connection.prepareStatement(
-            """SELECT CASE WHEN identity.player_may_be_disclosed(m.player_id) THEN a.display_name END, m.role
+            """SELECT CASE WHEN identity.player_may_be_disclosed(m.player_id) THEN a.display_name END, m.role, m.membership_id
                  FROM competition.team_membership m
                  LEFT JOIN identity.player_claim c ON c.player_id = m.player_id AND c.revoked_at IS NULL
                  LEFT JOIN identity.account a ON a.account_id = c.account_id AND a.deleted_at IS NULL
                 WHERE m.team_id = ? AND m.valid_until IS NULL AND m.status = 'active'
                 ORDER BY CASE m.role WHEN 'admin' THEN 0 WHEN 'captain' THEN 1 WHEN 'vice_captain' THEN 2 ELSE 3 END, a.display_name NULLS LAST""",
-        ).use { ps -> ps.setObject(1, teamId); ps.executeQuery().use { rs -> generateSequence { if (rs.next()) Member(rs.getString(1), rs.getString(2)) else null }.toList() } }
+        ).use { ps -> ps.setObject(1, teamId); ps.executeQuery().use { rs -> generateSequence { if (rs.next()) Member(rs.getString(1), rs.getString(2), if (handles) rs.getObject(3) as UUID else null) else null }.toList() } }
         return Front(teamId, head.first, head.second, venue, seasons, roster, yourRole)
     }
 
@@ -110,6 +119,70 @@ public class Teams(private val connection: Connection, private val now: () -> In
             if (n == 1) return Invite(code, expires, 20)
         }
         error("could not mint a team code")
+    }
+
+    /**
+     * The admin names the captain or the vice-captain, or makes somebody a player again (PD-045).
+     * One of each at a time: naming a captain when there is one makes the old captain a player.
+     *
+     * A role belongs to a dated membership, and who captained the side is the team's history (V014),
+     * so a change ends the row and opens another rather than rewriting it; and the captain's
+     * `team.manage` relation — the one the command path asks — is granted and revoked with the
+     * captaincy, revoked and never deleted.
+     */
+    public fun assign(admin: UUID, teamId: UUID, memberId: UUID, role: String): Front {
+        if (roleOf(admin, teamId) != "admin") throw Refused("Only the team's admin names its captain and vice-captain.", 403)
+        if (role !in ASSIGNABLE) throw Refused("A role on a team is captain, vice-captain or player.")
+        val wasAutoCommit = connection.autoCommit
+        connection.autoCommit = false
+        try {
+            val target = openMembership(teamId, memberId) ?: throw Refused("That person is not on the team.")
+            if (target.role == "admin") throw Refused("The admin stays the admin.")
+            if (target.role != role) {
+                // One of each: whoever holds it now is a player again.
+                if (role != "player") holder(teamId, role)?.let { change(teamId, it, "player", admin) }
+                change(teamId, target, role, admin)
+            }
+            connection.commit()
+        } catch (e: Exception) {
+            connection.rollback()
+            throw e
+        } finally {
+            connection.autoCommit = wasAutoCommit
+        }
+        return front(teamId, admin) ?: throw Refused("That team is not on THRØ any more.")
+    }
+
+    private class Open(val membershipId: UUID, val playerId: UUID, val role: String, val from: Instant)
+
+    private fun openRow(sql: String, bind: (java.sql.PreparedStatement) -> Unit): Open? =
+        connection.prepareStatement(sql).use { ps ->
+            bind(ps)
+            ps.executeQuery().use { rs -> if (rs.next()) Open(rs.getObject(1) as UUID, rs.getObject(2) as UUID, rs.getString(3), rs.getTimestamp(4).toInstant()) else null }
+        }
+
+    private fun openMembership(teamId: UUID, memberId: UUID): Open? = openRow(
+        """SELECT membership_id, player_id, role, valid_from FROM competition.team_membership
+            WHERE membership_id = ? AND team_id = ? AND valid_until IS NULL AND status = 'active'""",
+    ) { ps -> ps.setObject(1, memberId); ps.setObject(2, teamId) }
+
+    private fun holder(teamId: UUID, role: String): Open? = openRow(
+        """SELECT membership_id, player_id, role, valid_from FROM competition.team_membership
+            WHERE team_id = ? AND role = ? AND valid_until IS NULL AND status = 'active' LIMIT 1""",
+    ) { ps -> ps.setObject(1, teamId); ps.setString(2, role) }
+
+    /**
+     * Ends [m]'s row and opens one with [role]. Never at or before the row began: a clock that has not
+     * moved — or moved back — would otherwise end a membership before it started, which the table
+     * refuses, so the change is recorded a microsecond after the start at the earliest.
+     */
+    private fun change(teamId: UUID, m: Open, role: String, by: UUID) {
+        val at = maxOf(now(), m.from.plusNanos(1_000))
+        org.endMembership(m.membershipId, at, "now " + (if (role == "vice_captain") "vice-captain" else role))
+        org.addMember(teamId, m.playerId, MembershipRole.valueOf(role.uppercase()), from = at, by = by)
+        val team = ObjectRef(ObjectType.TEAM, teamId.toString())
+        if (m.role == "captain") Relations(connection).revoke(m.playerId, "captain", team, by = by)
+        if (role == "captain") Relations(connection).grant(m.playerId, "captain", team, by = by)
     }
 
     /** Enters a team code: the player becomes a member, as a player. */
@@ -185,6 +258,6 @@ public class Teams(private val connection: Connection, private val now: () -> In
         """{"teamId":"${f.teamId}","name":${q(f.name)},"locality":${q(f.locality)},"venue":""" + (f.venue?.let { v ->
             """{"venueId":"${v.venueId}","name":${q(v.name)},"locality":${q(v.locality)},"postcode":${q(v.postcode)},"latitude":${v.latitude ?: "null"},"longitude":${v.longitude ?: "null"}}"""
         } ?: "null") + ""","seasons":[${f.seasons.joinToString(",") { """{"league":${q(it.league)},"label":${q(it.label)},"division":${q(it.division)}}""" }}],""" +
-            """"roster":[${f.roster.joinToString(",") { """{"name":${q(it.name)},"role":${q(it.role)}}""" }}],"yourRole":${q(f.yourRole)}}"""
+            """"roster":[${f.roster.joinToString(",") { """{"name":${q(it.name)},"role":${q(it.role)}${it.memberId?.let { id -> ""","memberId":"$id"""" } ?: ""}}""" }}],"yourRole":${q(f.yourRole)}}"""
     public fun json(i: Invite): String = """{"code":"${i.code}","expiresAt":"${i.expiresAt}","maxUses":${i.maxUses}}"""
 }

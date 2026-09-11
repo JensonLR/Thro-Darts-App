@@ -75,11 +75,12 @@ routes are mounted from. In brief:
 | `GET /v1/leagues?locality` | anyone | The leagues' public front (PD-033): seasons, divisions, teams, home venues with coordinates, and the source and basis of each; every league carries its own point and website (PD-037), and one the directory placed is listed with no season |
 | `POST /v1/teams` | principal | Start a team; the caller is its first member and admin (plan §6) |
 | `GET /v1/me/teams` | principal | The caller's current teams with their role and the member count |
-| `GET /v1/teams/{teamId}` | anyone | A team's front: name, town, home venue, seasons, roster — names only where `identity.player_may_be_disclosed` allows; private teams 404 to non-members; `yourRole` with a bearer |
+| `GET /v1/teams/{teamId}` | anyone | A team's front: name, town, home venue, seasons, roster — names only where `identity.player_may_be_disclosed` allows; private teams 404 to non-members; `yourRole` with a bearer, and for the team's admin each roster entry's `memberId` (PD-045) |
 | `POST /v1/teams/{teamId}/invite` | principal | A team code: eight characters, thirty days, twenty people; admin or captain only (V029) |
 | `GET /v1/venues?q&locality` | anyone | Public venues whose name contains q, at most twenty: for a captain choosing a home |
 | `POST /v1/teams/{teamId}/home` | principal | Set the home venue by id, or add one by name and town; a change closes the old tenure and opens the new (admin or captain) |
 | `POST /v1/teams/join` | principal | Enter a team code and join as a player; 409 with the sentence when the code is unknown, expired, full or you are in already |
+| `POST /v1/teams/{teamId}/roles` | the team's admin | Name the captain or vice-captain, or make somebody a player again (PD-045): one of each at a time; a change ends the membership row and opens another, and the captain's `team.manage` is granted and revoked with it; `memberId` is the roster entry's handle, on the admin's front only |
 | `GET /v1/friends` | principal | The caller's friends: display names and since when (PD-035) |
 | `POST /v1/friends/invite` | principal | A friend code to give in person: eight characters, seven days, one use; 403 with the sentence to show unless the account has said it is an adult |
 | `POST /v1/friends/accept` | principal | Enter a code; both become friends; 409 with the sentence to show when the code is unknown, used, expired, your own, or you are friends already |

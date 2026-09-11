@@ -67,4 +67,58 @@ class TeamsTest {
             assertNull(teams.front(team.teamId, viewer = null)); assertEquals("The Sun Inn", teams.front(team.teamId, viewer = kid)!!.name)
         }
     }
+
+    @Test
+    fun `the admin names a captain and a vice-captain, one of each, and the side's history is kept`() {
+        if (!configured) return
+        migrated().use { c ->
+            var now = Instant.parse("2026-09-11T20:00:00Z")
+            val teams = Teams(c) { now }
+            val admin = person(c, "Jenson R.", "adult"); val ethan = person(c, "Ethan T.", "adult"); val sam = person(c, "Sam C.", "adult")
+            val team = teams.create(admin, "The Bell", "Stockton-on-Tees")
+            val code = teams.invite(admin, team.teamId).code
+            now = now.plusSeconds(60); teams.join(ethan, code); teams.join(sam, code)
+            fun handle(front: Teams.Front, name: String): UUID = front.roster.first { it.name == name }.memberId!!
+            val teamRef = thro.authz.ObjectRef(thro.authz.ObjectType.TEAM, team.teamId.toString())
+
+            val asAdmin = teams.front(team.teamId, admin)!!
+            assertTrue(asAdmin.roster.all { it.memberId != null }, "the admin sees each entry's handle, to name a captain with")
+            assertTrue(teams.front(team.teamId, null)!!.roster.all { it.memberId == null }, "a public front carries none")
+            assertTrue(teams.front(team.teamId, ethan)!!.roster.all { it.memberId == null }, "and nor does a member's")
+            assertTrue(!teams.json(teams.front(team.teamId, null)!!).contains("memberId"))
+
+            now = now.plusSeconds(60)
+            val named = teams.assign(admin, team.teamId, handle(asAdmin, "Ethan T."), "captain")
+            assertEquals("captain", named.roster.first { it.name == "Ethan T." }.role)
+            assertTrue(Relations(c).decide(ethan, "team.manage", teamRef).allowed, "a captain runs the team on the command path too")
+            assertEquals(20, teams.invite(ethan, team.teamId).maxUses, "and makes its code")
+
+            now = now.plusSeconds(60)
+            val replaced = teams.assign(admin, team.teamId, handle(named, "Sam C."), "captain")
+            assertEquals(mapOf<String?, String>("Jenson R." to "admin", "Sam C." to "captain", "Ethan T." to "player"),
+                         replaced.roster.associate { it.name to it.role }, "one captain at a time")
+            assertTrue(!Relations(c).decide(ethan, "team.manage", teamRef).allowed, "the old captain's relation is revoked with the captaincy")
+            now = now.plusSeconds(60)
+            val vice = teams.assign(admin, team.teamId, handle(replaced, "Ethan T."), "vice_captain")
+            assertEquals("vice_captain", vice.roster.first { it.name == "Ethan T." }.role)
+            assertTrue(!Relations(c).decide(ethan, "team.manage", teamRef).allowed, "a vice-captain does not run the team")
+
+            assertEquals(403, assertFailsWith<Teams.Refused> { teams.assign(sam, team.teamId, handle(vice, "Ethan T."), "player") }.status,
+                "a captain does not name captains")
+            assertEquals("The admin stays the admin.", assertFailsWith<Teams.Refused> { teams.assign(admin, team.teamId, handle(vice, "Jenson R."), "player") }.why)
+            assertEquals("A role on a team is captain, vice-captain or player.", assertFailsWith<Teams.Refused> { teams.assign(admin, team.teamId, handle(vice, "Ethan T."), "admin") }.why)
+            assertEquals("That person is not on the team.", assertFailsWith<Teams.Refused> { teams.assign(admin, team.teamId, UUID.randomUUID(), "captain") }.why)
+
+            // Who held what, and until when, is the side's history: joined, captained, a player, vice-captain.
+            c.createStatement().use { st ->
+                st.executeQuery("SELECT string_agg(role, ',' ORDER BY valid_from) FROM competition.team_membership WHERE team_id = '${team.teamId}' AND player_id = '$ethan'")
+                    .use { rs -> rs.next(); assertEquals("player,captain,player,vice_captain", rs.getString(1)) }
+            }
+
+            // A clock that has not moved still records a change after the row it ends began.
+            val stuck = teams.assign(admin, team.teamId, handle(vice, "Ethan T."), "player")
+            val again = Teams(c) { now }.assign(admin, team.teamId, handle(stuck, "Ethan T."), "captain")
+            assertEquals("captain", again.roster.first { it.name == "Ethan T." }.role)
+        }
+    }
 }

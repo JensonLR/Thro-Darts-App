@@ -69,6 +69,17 @@ public final class TeamsModel: ObservableObject {
         do { invite = try await api.inviteToTeam(teamId); note = nil } catch { note = ThroAPI.refusal(error) ?? "A code could not be made just now." }
     }
 
+    /// Names a captain or vice-captain, or makes somebody a player again (PD-045). The front comes
+    /// back as the admin reads it; a refusal is the server's own sentence.
+    public func assign(_ teamId: UUID, memberId: UUID, role: String, _ api: ThroAPI?) async {
+        guard let api else { note = "This build names no server."; return }
+        do {
+            front = .loaded(try await api.assignRole(teamId, memberId: memberId, role: role))
+            frontFor = teamId
+            note = nil
+        } catch { note = ThroAPI.refusal(error) ?? "That could not be changed just now." }
+    }
+
     @discardableResult
     public func join(code: String, _ api: ThroAPI?) async -> TeamSummary? {
         guard let api else { note = "This build names no server."; return nil }
@@ -214,10 +225,19 @@ public struct TeamFrontScreen: View {
                     HStack(spacing: ThroSpacing.spacing3) {
                         PlayerIdentity(PlayerRef(name: member.name ?? "A player"), size: .small)
                         Spacer()
-                        Text(TeamFrontScreen.roleLabel(member.role)).thro(ThroTypography.metadata).foregroundStyle(ThroColor.colorTextSecondary)
+                        // The admin names the captain and vice-captain here (PD-045); everyone else reads the role.
+                        if front.yourRole == "admin", let handle = member.memberId, member.role != "admin" {
+                            roleMenu(front, member: member, handle: handle)
+                        } else {
+                            Text(TeamFrontScreen.roleLabel(member.role)).thro(ThroTypography.metadata).foregroundStyle(ThroColor.colorTextSecondary)
+                        }
                     }
                     .padding(.vertical, ThroSpacing.spacing2)
                     ThroDivider()
+                }
+                if front.yourRole == "admin" && front.roster.count > 1 {
+                    Note("Tap a role to name the captain or the vice-captain. One of each: naming a new one makes the old one a player again, and the captain runs the team with you.")
+                        .padding(.top, ThroSpacing.spacing3)
                 }
                 if front.roster.contains(where: { $0.name == nil }) {
                     Note(TeamFrontScreen.unnamedNote(front.roster.filter { $0.name == nil }.count))
@@ -227,6 +247,33 @@ public struct TeamFrontScreen: View {
             .padding(.horizontal, ThroSpacing.spaceScreenGutter)
             .padding(.bottom, ThroSpacing.spacing6)
         }
+    }
+
+    /// The role, as a control for the admin (PD-045): tapped, it lists the three with this one ticked.
+    /// A picker rather than a row of buttons — the system draws a menu's items, and a picker says which
+    /// role is held, where a list of "Make …" buttons only said which were not.
+    private func roleMenu(_ front: TeamFront, member: TeamFront.Member, handle: UUID) -> some View {
+        Menu {
+            Picker("Role", selection: Binding(get: { member.role }, set: { role in
+                guard role != member.role else { return }
+                Task { await teams.assign(front.teamId, memberId: handle, role: role, api) }
+            })) {
+                ForEach(TeamFrontScreen.assignable, id: \.self) { role in
+                    Text(TeamFrontScreen.roleLabel(role)).tag(role)
+                }
+            }
+        } label: {
+            HStack(spacing: ThroSpacing.spacing1) {
+                Text(TeamFrontScreen.roleLabel(member.role))
+                    .thro(ThroTypography.label.weight(.semibold))
+                    .foregroundStyle(ThroColor.colorTextBrand)
+                Icon(.chevronRight, size: 12)
+                    .rotationEffect(.degrees(90))
+                    .foregroundStyle(ThroColor.colorTextBrand)
+            }
+            .throTapTarget()
+        }
+        .accessibilityLabel("\(member.name ?? "A player"), \(TeamFrontScreen.roleLabel(member.role)). Change their role.")
     }
 
     /// Choosing a home: the public venues THRØ knows, by name, or a new one by name and town.
@@ -278,6 +325,8 @@ public struct TeamFrontScreen: View {
     static func roleLabel(_ role: String) -> String {
         switch role { case "admin": return "Admin"; case "captain": return "Captain"; case "vice_captain": return "Vice-captain"; default: return "Player" }
     }
+    /// The roles an admin names (PD-045). Admin is not one of them: the admin stays the admin.
+    static let assignable = ["captain", "vice_captain", "player"]
     static func unnamedNote(_ n: Int) -> String {
         n == 1 ? "One member is counted and not named: THRØ names a person only when they are an adult who has said so, or a guardian has."
                : "\(n) members are counted and not named: THRØ names a person only when they are an adult who has said so, or a guardian has."

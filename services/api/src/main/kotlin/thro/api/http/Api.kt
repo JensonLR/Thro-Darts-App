@@ -162,7 +162,7 @@ public object Contract {
         Endpoint(
             id = "teams.front", method = "GET", path = "/v1/teams/{teamId}", authenticated = false,
             summary = "A team's front",
-            description = "Name, locality, home venue, the seasons it is in, and its roster — names only where identity.player_may_be_disclosed allows, everyone else counted and not named. A private team answers 404 to anyone not in it. With a bearer, yourRole says what you are in it.",
+            description = "Name, locality, home venue, the seasons it is in, and its roster — names only where identity.player_may_be_disclosed allows, everyone else counted and not named. A private team answers 404 to anyone not in it. With a bearer, yourRole says what you are in it, and the team's admin also sees each roster entry's memberId, to name a captain with (PD-045).",
             responses = mapOf(200 to "the front", 400 to "not a UUID", 404 to "no such team, or not yours to see"),
         ),
         Endpoint(
@@ -192,6 +192,17 @@ public object Contract {
             request = Schema("""{"type":"object","required":["code"],"properties":{"code":{"type":"string"}}}"""),
             responses = mapOf(200 to "the team, with your role", 401 to "no principal", 409 to "the code cannot be used, with the sentence to show",
                               429 to "too many codes tried from this address or device; Retry-After says when"),
+        ),
+        Endpoint(
+            id = "teams.role", method = "POST", path = "/v1/teams/{teamId}/roles", authenticated = true,
+            summary = "Name the captain or vice-captain, or make somebody a player again (PD-045)",
+            description = "Admin only. One captain and one vice-captain at a time: naming one when there is one makes the old one "
+                + "a player. A change ends the membership row and opens another — who captained the side is the team's "
+                + "history (V014) — and the captain's team.manage relation is granted and revoked with it. memberId is the "
+                + "roster entry's own handle, which the team's front shows to its admin alone.",
+            request = Schema("""{"type":"object","required":["memberId","role"],"properties":{"memberId":{"type":"string","format":"uuid"},"role":{"type":"string","enum":["captain","vice_captain","player"]}}}"""),
+            responses = mapOf(200 to "the team's front, as its admin reads it", 400 to "malformed", 401 to "no principal",
+                              403 to "not the team's admin, with the sentence to show", 422 to "refused, in words"),
         ),
         Endpoint(
             id = "friends", method = "GET", path = "/v1/friends", authenticated = true,

@@ -178,6 +178,14 @@ public fun Application.thro(deps: Deps) {
         "venues" to { r -> r.role = DbRole.READ; val q = r.call.request.queryParameters["q"]?.trim().orEmpty(); if (q.length < 2) Http(400, """{"error":"q: at least two characters"}""") else Teams(r.connection(), deps.now).let { Http(200, it.venuesJson(it.venues(q, r.call.request.queryParameters["locality"]))) } },
         "teams.home" to { r -> teamly(403) { val m = Json.parseObject(r.body); Teams(r.connection(), deps.now).let { Http(200, it.json(it.setHome(r.principal!!.subject, UUID.fromString(r.call.parameters["teamId"]), (m["venueId"] as? String)?.let(UUID::fromString), m["name"] as? String, m["locality"] as? String))) } } },
         "teams.join" to { r -> teamly(409) { Teams(r.connection(), deps.now).let { Http(200, it.json(it.join(r.principal!!.subject, str(Json.parseObject(r.body), "code")))) } } },
+        // PD-045: the admin names the captain or vice-captain; a refusal says why, 403 when not the admin.
+        "teams.role" to { r ->
+            teamly(422) {
+                val m = Json.parseObject(r.body)
+                val member = try { UUID.fromString(str(m, "memberId")) } catch (e: IllegalArgumentException) { throw IllegalArgumentException("memberId must be a UUID") }
+                Teams(r.connection(), deps.now).let { Http(200, it.json(it.assign(r.principal!!.subject, UUID.fromString(r.call.parameters["teamId"]), member, str(m, "role")))) }
+            }
+        },
         "friends" to { r -> withAccount(r) { a -> Friends(r.connection(), deps.now).let { Http(200, it.json(it.friends(a))) } } },
         "friends.invite" to { r -> withAccount(r) { a -> friendly { Friends(r.connection(), deps.now).invite(a).let { Http(200, """{"code":"${it.code}","expiresAt":"${it.expiresAt}"}""") } } } },
         "friends.accept" to { r -> withAccount(r) { a -> friendly(codeProblem = 409) { Friends(r.connection(), deps.now).accept(a, str(Json.parseObject(r.body), "code")).let { Http(200, """{"friend":{"accountId":"${it.accountId}","displayName":${Contract.q(it.displayName)},"since":"${it.since}"}}""") } } } },
@@ -424,7 +432,7 @@ private fun withAccount(r: Req, block: (UUID) -> Http): Http {
 }
 
 /** A team refusal is an answer too: the sentence, with the status the route names. */
-private fun teamly(status: Int = 400, block: () -> Http): Http = try { block() } catch (e: Teams.Refused) { Http(status, """{"error":${Contract.q(e.why)}}""") }
+private fun teamly(status: Int = 400, block: () -> Http): Http = try { block() } catch (e: Teams.Refused) { Http(e.status ?: status, """{"error":${Contract.q(e.why)}}""") }
 
 /** A friends refusal is an answer: the sentence the phone shows, with the status that says which kind. */
 private fun friendly(codeProblem: Int = 403, block: () -> Http): Http = try { block() } catch (e: Friends.Refused) {

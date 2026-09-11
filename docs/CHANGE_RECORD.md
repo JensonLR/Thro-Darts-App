@@ -3318,3 +3318,21 @@ its doc had always promised and it never did, and renews an expired access token
 a watch at the first 401.
 
 Counts: client 712, API 27 suites (59 tests), HTTP 45 properties, schema 106.
+
+## The team's admin names the captain and vice-captain (PD-045)
+
+The Team OS row after starting a team and filling it by code. On a team's front the admin taps a roster
+entry's role and makes them captain, vice-captain, or a player again — one of each at a time, so naming a
+new captain makes the old one a player. A change ends the membership row and opens another, because who
+captained the side is the team's history (V014), and the captain's `team.manage` relation — the one the
+command path asks for a lineup or a rearrangement — is granted with the captaincy and revoked with it. The
+admin's front carries each entry's handle, the membership's own id and never a person's; a public front
+and a member's carry none, which a test holds.
+
+A change is never recorded at or before the row it ends began. The HTTP test's clock does not move, and
+the first version would have ended a membership at the instant it started, which the table refuses; it is
+recorded a microsecond after the start at the earliest, and a test turns the clock off to hold it. And one
+ordering in the HTTP test mattered: the property that names a captain runs after the one holding that a
+player may not set the team's home — a captain may, so run first it would have made that property false.
+
+Counts: client 713, API 27 suites (60 tests), HTTP 46 properties, schema 106.

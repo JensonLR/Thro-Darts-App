@@ -2057,3 +2057,32 @@ feed live (ADR-007's forty-five seconds).
 Watching by anybody but the two players — friends, a team, a screen in the pub — which needs its own
 decision about who may see a match as it happens, and the stream filtered for such a reader that ADR-007
 names and nobody has built. A notification when a shared match starts.
+
+## PD-045 — The team's admin names its captain and vice-captain
+
+**Taken on delegated authority, 2026-09-11**, the Team OS row after starting a team and filling it by
+code (PD-036): a team had an admin and players and no way to name a captain, though the captain is who
+runs a side on the night. Reversible: a role change is recorded, never rewritten, and can be changed back.
+
+### Decided
+
+**The admin names them, one of each.** From the team's roster, the admin makes somebody captain,
+vice-captain, or a player again. Naming a captain when there is one makes the old captain a player, and
+the same for vice-captain. Only the admin does this, and the admin's own role is not on offer: handing a
+team over is a different decision.
+
+**The captain runs the team with the admin.** A captain makes the team's code and sets its home, as
+PD-036 already allowed, and holds `team.manage` on the command path — granted with the captaincy and
+revoked with it, revoked and never deleted, because who could have done something is asked months later
+(ADR-008). A vice-captain is named and holds nothing more.
+
+**Who held what is the side's history.** A change ends the membership row and opens another (V014), so
+who was captain in March can be read back in September.
+
+**Only the admin sees a roster entry's handle** — the membership's own id, never a person's — to name
+somebody with. A public front and a member's front carry none.
+
+### What this does not decide
+
+Handing a team to a new admin, a second admin, taking somebody off the team, and whether a captain has
+any say over the roster.

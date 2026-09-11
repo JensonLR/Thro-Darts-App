@@ -35,6 +35,25 @@ final class TeamsModelTests: XCTestCase {
         XCTAssertEqual(teams.front(for: feathers), .loading, "and back to the first is a fresh load, not the second")
     }
 
+    func testTheAdminNamesACaptainAndTheFrontComesBackAsTheAdminReadsIt() async throws {
+        let bell = UUID(), ethan = UUID()
+        let named = #"{"teamId":"\#(bell.uuidString.lowercased())","name":"The Bell B","locality":null,"venue":null,"seasons":[],"roster":[{"name":"Jenson R.","role":"admin","memberId":"\#(UUID().uuidString.lowercased())"},{"name":"Ethan T.","role":"captain","memberId":"\#(ethan.uuidString.lowercased())"}],"yourRole":"admin"}"#
+        let script = NetTests.Script([(200, named)])
+        let session = Session(accountId: UUID(), playerId: nil, accessToken: "acc", refreshToken: "ref", accessExpiresAt: .distantFuture, created: false)
+        let server = ThroAPI(configuration: config, deviceId: UUID(), store: MemorySessionStore(session), transport: script)
+        let teams = TeamsModel()
+        await teams.assign(bell, memberId: ethan, role: "captain", server)
+        XCTAssertEqual(script.seen.first?.url?.path, "/v1/teams/\(bell.uuidString.lowercased())/roles")
+        let body = try XCTUnwrap(script.seen.first?.httpBody).flatMap { try JSONSerialization.jsonObject(with: $0) as? [String: String] }
+        XCTAssertEqual(body?["role"], "captain")
+        XCTAssertEqual(body?["memberId"], ethan.uuidString.lowercased())
+        guard case .loaded(let front) = teams.front(for: bell) else { return XCTFail("\(teams.front)") }
+        XCTAssertEqual(front.roster.map(\.role), ["admin", "captain"], "the front the server answered is the one shown")
+        XCTAssertEqual(front.roster.last?.memberId, ethan)
+        XCTAssertEqual(TeamFrontScreen.assignable, ["captain", "vice_captain", "player"], "the admin is never one of the roles on offer")
+        XCTAssertEqual(TeamFrontScreen.assignable.map(TeamFrontScreen.roleLabel), ["Captain", "Vice-captain", "Player"])
+    }
+
     func testShowingTheTeamAlreadyHeldAsksTheServerNothing() async {
         let feathers = UUID()
         let script = NetTests.Script([(200, front(feathers, "The Feathers A"))])

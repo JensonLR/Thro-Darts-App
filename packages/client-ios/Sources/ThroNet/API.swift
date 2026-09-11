@@ -172,6 +172,9 @@ public struct TeamFront: Decodable, Sendable, Equatable {
         /// Nil when the person may not be named (a minor, or consent not settled): counted, not shown.
         public let name: String?
         public let role: String
+        /// The roster entry's own handle, for the team's admin alone, to name a captain with (PD-045).
+        /// Not a person's id; nil for everybody else.
+        public let memberId: UUID?
     }
     public struct SeasonLine: Decodable, Sendable, Equatable {
         public let league: String
@@ -755,6 +758,13 @@ public actor ThroAPI {
     public func joinTeam(code: String) async throws -> TeamSummary {
         let body = try JSONSerialization.data(withJSONObject: ["code": code])
         return try decode(await authorised("POST", "/v1/teams/join", body: body))
+    }
+
+    /// The admin names a captain or vice-captain, or makes somebody a player again (PD-045). Answers
+    /// the team's front as its admin reads it; a refusal arrives as `.status(403 or 422, body)`.
+    public func assignRole(_ teamId: UUID, memberId: UUID, role: String) async throws -> TeamFront {
+        let body = try JSONSerialization.data(withJSONObject: ["memberId": memberId.uuidString.lowercased(), "role": role])
+        return try decode(await authorised("POST", "/v1/teams/\(teamId.uuidString.lowercased())/roles", body: body))
     }
 
     // MARK: a sent match, onward (PD-043)
