@@ -47,6 +47,7 @@ import thro.api.Provider
 import thro.api.RelyingParty
 import thro.api.WebAuthn
 import java.util.Base64
+import thro.api.MatchRecords
 import thro.api.Matches
 import thro.api.Json
 import thro.api.Migrations
@@ -98,7 +99,7 @@ private class Http(val status: Int, val body: String)
  * module it is for before it touches a table, so a handler that reaches past its module fails on
  * a grant rather than succeeding by accident. The names are constants, never input.
  */
-internal enum class DbRole(val sql: String) { COMPETITION("app_competition"), MATCH("app_match"), READ("app_read") }
+internal enum class DbRole(val sql: String) { COMPETITION("app_competition"), MATCH("app_match"), READ("app_read"), TRUST("app_trust") }
 
 private class Req(val call: ApplicationCall, val body: String, private val deps: Deps) {
     var principal: Principal? = null
@@ -133,6 +134,31 @@ public fun Application.thro(deps: Deps) {
         "aasa" to { _ -> if (deps.appleAppIds.isEmpty()) Http(404, """{"error":"no app ids configured"}""") else Http(200, """{"webcredentials":{"apps":[${deps.appleAppIds.joinToString(",") { Contract.q(it) }}]}}""") },
         "auth.logout" to { r -> Http(200, """{"revoked":${Accounts(r.connection(), deps.now).logout(bearer(r.call) ?: "")}}""") },
         "matches.upload" to { r -> r.role = DbRole.MATCH; upload(r.connection(), deps, r.principal!!, r.body) },
+        // A sent match, onward (PD-043): the sender's code for the other seat, the other player's claim
+        // with it and their answer for the result, and what either of them reads back. The answer is the
+        // trust module's to write; everything handed back is read as the read role.
+        "matches.code" to { r -> recordly { MatchRecords(r.connection(), deps.now).let { m -> Http(200, m.json(m.codeFor(r.principal!!.subject, UUID.fromString(r.call.parameters["matchId"])))) } } },
+        "matches.claim" to { r ->
+            recordly {
+                val claimed = MatchRecords(r.connection(), deps.now).claim(r.principal!!.subject, str(Json.parseObject(r.body), "code"))
+                r.role = DbRole.READ
+                matchRead(r, deps, claimed)
+            }
+        },
+        "matches.one" to { r -> r.role = DbRole.READ; matchRead(r, deps, UUID.fromString(r.call.parameters["matchId"])) },
+        "matches.mine" to { r -> r.role = DbRole.READ; MatchRecords(r.connection(), deps.now).let { m -> Http(200, m.json(m.mine(r.principal!!.subject))) } },
+        "matches.answer" to { r ->
+            recordly {
+                val id = UUID.fromString(r.call.parameters["matchId"])
+                val agree = Json.parseObject(r.body)["agree"] as? Boolean ?: throw IllegalArgumentException("agree must be true or false")
+                val phone = r.call.request.headers["X-Thro-Device"]?.let { runCatching { UUID.fromString(it) }.getOrNull() }
+                    ?: throw IllegalArgumentException("X-Thro-Device must name the phone that is answering")
+                r.role = DbRole.TRUST
+                MatchRecords(r.connection(), deps.now).answer(r.principal!!.subject, id, phone, agree)
+                r.role = DbRole.READ
+                matchRead(r, deps, id)
+            }
+        },
         "me" to { r -> profile(r.connection(), deps, r.principal!!) },
         "me.erase" to { r -> erase(r.connection(), deps, r.principal!!) },
         "me.profile" to { r ->
@@ -198,15 +224,22 @@ public fun Application.thro(deps: Deps) {
                         text
                     }
                     // Routes a stranger may call are rationed per address and per device before any
-                    // work is done for them; the answer says how long to wait.
-                    if (e.id.startsWith("auth.") || e.id.startsWith("passkey.")) {
+                    // work is done for them; the answer says how long to wait. The routes that take a
+                    // code are rationed the same way, from allowances of their own (CODE_ROUTES).
+                    val codeRoute = e.id in CODE_ROUTES
+                    if (codeRoute || e.id.startsWith("auth.") || e.id.startsWith("passkey.")) {
                         val address = call.request.headers["X-Forwarded-For"]?.substringBefore(",")?.trim()?.takeIf { it.isNotEmpty() }
                             ?: call.request.local.remoteHost
-                        val device = Regex("\"deviceId\"\\s*:\\s*\"([0-9a-fA-F-]{36})\"").find(body)?.groupValues?.get(1)
-                        val wait = listOfNotNull(deps.limiter.take("a:$address"), device?.let { deps.limiter.take("d:$it") }).maxOrNull()
+                        // Signing in names its device in the body. A code route's body is only the code;
+                        // the phone names itself in the header every one of its requests carries.
+                        val device = if (codeRoute) call.request.headers["X-Thro-Device"]?.takeIf { Regex("[0-9a-fA-F-]{36}").matches(it) }
+                                     else Regex("\"deviceId\"\\s*:\\s*\"([0-9a-fA-F-]{36})\"").find(body)?.groupValues?.get(1)
+                        val prefix = if (codeRoute) "code:" else ""
+                        val wait = listOfNotNull(deps.limiter.take("${prefix}a:$address"), device?.let { deps.limiter.take("${prefix}d:$it") }).maxOrNull()
                         if (wait != null) {
                             call.response.headers.append("Retry-After", wait.toString())
-                            return@run Http(429, """{"error":"too many attempts; try again in $wait seconds"}""")
+                            val what = if (codeRoute) "too many codes tried" else "too many attempts"
+                            return@run Http(429, """{"error":"$what; try again in $wait seconds"}""")
                         }
                     }
                     val req = Req(call, body, deps)
@@ -251,6 +284,21 @@ public fun Application.thro(deps: Deps) {
 
 private const val MAX_BODY: Long = 64 * 1024
 private const val MAX_LINEUP: Int = 32
+
+/**
+ * Routes that take a code somebody was handed: a friend's, a team's, a match's seat. A code opens
+ * something, so guessing one is the attack, and these are rationed like signing in — in allowances of
+ * their own, so a run of mistyped codes costs nobody their sign-in.
+ */
+private val CODE_ROUTES: Set<String> = setOf("friends.accept", "teams.join", "matches.claim")
+
+/** A match-record refusal is an answer: the sentence the phone shows, with the status it carries. */
+private fun recordly(block: () -> Http): Http = try { block() } catch (e: MatchRecords.Refused) { Http(e.status, """{"error":${Contract.q(e.why)}}""") }
+
+/** A match as the caller reads it. Anyone not in it is answered as though it did not exist. */
+private fun matchRead(r: Req, deps: Deps, matchId: UUID): Http = MatchRecords(r.connection(), deps.now).let { m ->
+    m.summary(matchId, r.principal!!.subject)?.let { Http(200, m.json(it)) } ?: Http(404, """{"error":"That match is not one of yours."}""")
+}
 
 private fun health(deps: Deps): Http = try {
     deps.connect().use { c ->

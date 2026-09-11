@@ -8,7 +8,7 @@
 # instance type has no pre-deploy hook.
 #
 # A free instance spins down after fifteen idle minutes and takes about a minute to wake, so the
-# first request after a quiet spell is slow and a live stream (ADR-007, not built yet) would drop.
+# first request after a quiet spell is slow and a live match stream (ADR-007) would drop.
 # That is acceptable for staging and not for production; production is Fly or a paid Render
 # instance, both of which need a card.
 services:

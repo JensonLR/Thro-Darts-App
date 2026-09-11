@@ -3,7 +3,9 @@ package thro.api.http
 import java.sql.Connection
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.withTimeoutOrNull
 import org.postgresql.PGConnection
 
 /**
@@ -18,18 +20,31 @@ import org.postgresql.PGConnection
  * **It holds its connection only while somebody is watching.** A connection held open all day would
  * keep a database that sleeps when idle — Neon's free compute — awake for nobody. The first stream
  * opens it, and it closes a little after the last one goes.
+ *
+ * **A watch begins once somebody is listening.** The first version started the listener and returned
+ * at once, and the stream read the log straight away — so a visit that committed in the few
+ * milliseconds before the new connection had said LISTEN was announced to nobody, and its watcher sat
+ * out the poll. The latency test caught it on its second run. [watch] now returns when the listener is
+ * listening, so a read made after it cannot miss a commit: anything later is announced to a connection
+ * already listening. The wait is bounded, because a database slow to answer is the poll's to carry.
  */
 internal class MatchNotifier(private val connect: () -> Connection) {
     private val watchers = ConcurrentHashMap<UUID, MutableSet<Channel<Unit>>>()
     private val lock = Any()
     @Volatile private var running = true
     private var thread: Thread? = null
+    /** Complete while the listener is LISTENing; a fresh, incomplete one whenever it is not. */
+    @Volatile private var listening = CompletableDeferred<Unit>()
 
-    /** A wake-up line for one stream of [matchId]. Give it back with [unwatch] when the stream ends. */
-    fun watch(matchId: UUID): Channel<Unit> {
+    /**
+     * A wake-up line for one stream of [matchId], handed back once the listener is listening. Give it
+     * back with [unwatch] when the stream ends.
+     */
+    suspend fun watch(matchId: UUID): Channel<Unit> {
         val line = Channel<Unit>(Channel.CONFLATED)
         watchers.computeIfAbsent(matchId) { ConcurrentHashMap.newKeySet() }.add(line)
         synchronized(lock) { if (thread == null && running) start() }
+        withTimeoutOrNull(READY_WAIT_MS) { listening.await() }
         return line
     }
 
@@ -59,17 +74,23 @@ internal class MatchNotifier(private val connect: () -> Connection) {
                         c.createStatement().use { st -> st.execute("SET ROLE " + DbRole.READ.sql); st.execute("LISTEN thro_match") }
                         val pg = c.unwrap(PGConnection::class.java)
                         backoff = FIRST_BACKOFF_MS
-                        while (running) {
-                            for (n in pg.getNotifications(WAIT_MS) ?: emptyArray()) {
-                                val matchId = runCatching { UUID.fromString(n.parameter) }.getOrNull() ?: continue
-                                watchers[matchId]?.forEach { it.trySend(Unit) }
+                        listening.complete(Unit)
+                        try {
+                            while (running) {
+                                for (n in pg.getNotifications(WAIT_MS) ?: emptyArray()) {
+                                    val matchId = runCatching { UUID.fromString(n.parameter) }.getOrNull() ?: continue
+                                    watchers[matchId]?.forEach { it.trySend(Unit) }
+                                }
+                                if (watchers.isEmpty()) {
+                                    if (idleSince == 0L) idleSince = System.currentTimeMillis()
+                                    else if (System.currentTimeMillis() - idleSince > LINGER_MS) return
+                                } else {
+                                    idleSince = 0L
+                                }
                             }
-                            if (watchers.isEmpty()) {
-                                if (idleSince == 0L) idleSince = System.currentTimeMillis()
-                                else if (System.currentTimeMillis() - idleSince > LINGER_MS) return
-                            } else {
-                                idleSince = 0L
-                            }
+                        } finally {
+                            // Not listening from here: a watch that begins now waits for the next connection.
+                            listening = CompletableDeferred()
                         }
                     }
                 } catch (e: InterruptedException) {
@@ -97,5 +118,7 @@ internal class MatchNotifier(private val connect: () -> Connection) {
         const val LINGER_MS = 30_000L
         const val FIRST_BACKOFF_MS = 250L
         const val MAX_BACKOFF_MS = 10_000L
+        /** The longest a watch waits for the listener before its stream reads anyway, the poll beneath it. */
+        const val READY_WAIT_MS = 2_000L
     }
 }

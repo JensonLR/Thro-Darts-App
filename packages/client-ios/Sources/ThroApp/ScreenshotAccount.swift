@@ -77,7 +77,14 @@ enum ScreenshotAccount {
                 return (200, #"{"code":"K7TQ2M4X","expiresAt":"2026-09-18T12:00:00Z"}"#)
             case ("POST", "/v1/auth/logout"):
                 return (200, "{}")
+            case ("GET", "/v1/me/matches"):
+                // One match this account sent, with the other seat nobody's yet; one it took with a
+                // code and confirmed (PD-043).
+                return (200, #"{"matches":[{"matchId":"5c4ee45e-0000-4000-8000-0000000000b1","openedAt":"2026-09-10T19:30:00Z","format":{"startingScore":501,"inRule":"straight","outRule":"double","legsMode":"first_to","legsTarget":3},"selfReported":true,"seats":[{"seat":"home","you":true,"name":"Jenson R.","claimable":false},{"seat":"away","you":false,"name":null,"claimable":true}],"legs":{"home":3,"away":1},"visits":41,"ending":null,"retired":null,"winner":"home","sentBy":"home","answers":{"home":null,"away":null},"standing":"self-reported"},{"matchId":"5c4ee45e-0000-4000-8000-0000000000b2","openedAt":"2026-09-08T20:10:00Z","format":{"startingScore":501,"inRule":"straight","outRule":"double","legsMode":"best_of","legsTarget":5},"selfReported":true,"seats":[{"seat":"home","you":false,"name":"Ethan T.","claimable":false},{"seat":"away","you":true,"name":"Jenson R.","claimable":false}],"legs":{"home":2,"away":3},"visits":52,"ending":null,"retired":null,"winner":"away","sentBy":"home","answers":{"home":null,"away":"confirmed"},"standing":"confirmed"}]}"#)
             default:
+                if method == "POST", path.hasPrefix("/v1/matches/"), path.hasSuffix("/code") {
+                    return (200, #"{"code":"M4TC7H2Q","seat":"away","expiresAt":"2026-09-18T12:00:00Z"}"#)
+                }
                 if path.hasPrefix("/v1/me/inbox") || path.contains("discovery") { return (200, #"{"sections":{}}"#) }
                 return (404, #"{"error":"not staged for screenshots"}"#)
             }

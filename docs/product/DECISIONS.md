@@ -1981,3 +1981,48 @@ about the record, and a match that has ended is exactly when they happen.
 
 Whether a retirement counts towards anything a rating would read (OD-013), and what a league does with
 a retirement in a fixture; both read the ending this stores, and neither is decided by storing it.
+
+## PD-043 — The other player takes their seat with a code, and answers for the result
+
+**Taken on delegated authority, 2026-09-11**, the half of PD-040 it left for later: a sent match names
+one person and a competitor THRØ minted for the other seat, "claimable later by a code", and stays one
+player's word until the other confirms it (PD-011). Reversible in the sense that matters: a claim and
+an answer are both added, never edited, and nothing under the match is rewritten.
+
+### Decided
+
+**The sender makes a code for the other seat, and the other player enters it.** Eight characters from
+the alphabet a code is said in, seven days, one use (V037). Only the player who sent the match may make
+one, only for a match sent from a phone, and only while the other seat is nobody's; asking twice hands
+back the same live code rather than a second one. A code is how THRØ always lets two people agree they
+know each other — there is no directory to search — and one handed over across a table is consent from
+both sides.
+
+**A seat is claimed; the competitor is not.** The other player already has a competitor of their own
+(V014) and an account holds one live claim, so entering the code records `competition.seat_claim`: this
+seat of this match was theirs. The match still names the competitor it was sent with and no evidence is
+rewritten. It is V014's deferred identity event, scoped to one seat of one match.
+
+**The other player answers; the sender cannot.** `ResultConfirmed` or `ResultContested`, on the trust
+stream beside attestations and disputes, naming the seat that answered. Every answer is kept and the
+latest stands. The sender's word is the match, so they cannot confirm it; an abandoned match has no
+result to confirm. **An answer stands only for the record it answered**: when the sender sends more of
+the match, the other player is asked again, because agreeing to two legs is not agreeing to three.
+
+**Standing is read, not stored.** Self-reported; confirmed, when the other seat's standing answer agrees;
+disputed, when a standing answer contests; or recorded, for a match scored on THRØ as it was played.
+Derived from the log on every read, like the legs and the winner, which the server replays through the
+engine with struck visits left out.
+
+**A seat shows a name only through the disclosure gate** (`identity.player_may_be_disclosed`): an adult
+who has consented, or a guardian's consent. An age THRØ does not know shows no name.
+
+**Entering a code is rationed** per address and per device, from allowances separate from signing in —
+the match code, and the friend and team codes, which were not rationed before.
+
+### What this does not decide
+
+What happens to a disputed match next — who looks at it, and whether a league may count it (PD-011's
+adjudication, OD-013). Whether a claimed seat ever merges the minted competitor into the claimer's own,
+which would be a whole-person identity event and stays deferred. Whether a confirmed friendly counts
+towards a rating (OD-013).

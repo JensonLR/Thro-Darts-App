@@ -211,6 +211,99 @@ public struct FriendInvite: Decodable, Sendable, Equatable {
     public var spoken: String { code.count == 8 ? String(code.prefix(4)) + " " + String(code.suffix(4)) : code }
 }
 
+/// A code for the other seat of a match this person sent (PD-043): seven days, one use, said across
+/// the table or shared, and entered on the other player's own phone.
+public struct MatchCode: Decodable, Sendable, Equatable {
+    public let code: String
+    public let seat: String
+    public let expiresAt: Date
+    public init(code: String, seat: String, expiresAt: Date) { self.code = code; self.seat = seat; self.expiresAt = expiresAt }
+    /// "ABCD EFGH": how a code is read out.
+    public var spoken: String { code.count == 8 ? String(code.prefix(4)) + " " + String(code.suffix(4)) : code }
+}
+
+/// A match on THRØ once it has been sent (PD-043), as the person reading it sits in it. All of it is
+/// the server's reading of the log at the moment it was asked — the legs, the winner, the standing —
+/// so the phone shows it and keeps none of it as truth.
+public struct MatchOnRecord: Decodable, Sendable, Equatable, Identifiable {
+    public struct SeatLine: Decodable, Sendable, Equatable {
+        public let seat: String
+        /// The seat the reader sits in.
+        public let you: Bool
+        /// Their name, only where THRØ may show it. Nil otherwise, and never guessed at.
+        public let name: String?
+        /// Nobody holds this seat yet, so the player who sent the match can give a code for it.
+        public let claimable: Bool
+        public init(seat: String, you: Bool, name: String?, claimable: Bool) {
+            self.seat = seat; self.you = you; self.name = name; self.claimable = claimable
+        }
+    }
+
+    public struct Format: Decodable, Sendable, Equatable {
+        public let startingScore: Int
+        public let inRule: String
+        public let outRule: String
+        public let legsMode: String
+        public let legsTarget: Int
+        public init(startingScore: Int, inRule: String, outRule: String, legsMode: String, legsTarget: Int) {
+            self.startingScore = startingScore; self.inRule = inRule; self.outRule = outRule
+            self.legsMode = legsMode; self.legsTarget = legsTarget
+        }
+    }
+
+    public struct Legs: Decodable, Sendable, Equatable {
+        public let home: Int
+        public let away: Int
+        public init(home: Int, away: Int) { self.home = home; self.away = away }
+    }
+
+    /// Each seat's latest answer where it still answers for the record: `confirmed`, `contested`, or nil.
+    public struct Answers: Decodable, Sendable, Equatable {
+        public let home: String?
+        public let away: String?
+        public init(home: String?, away: String?) { self.home = home; self.away = away }
+    }
+
+    public let matchId: UUID
+    public let openedAt: Date
+    public let format: Format
+    public let selfReported: Bool
+    public let seats: [SeatLine]
+    public let legs: Legs
+    public let visits: Int
+    /// `retired` or `abandoned` when the match ended short; nil when it did not.
+    public let ending: String?
+    /// The seat that retired, when one did.
+    public let retired: String?
+    public let winner: String?
+    /// The seat whose player sent it; nil for a match scored on THRØ as it was played.
+    public let sentBy: String?
+    public let answers: Answers
+    /// `self-reported`, `confirmed`, `disputed`, or `recorded`.
+    public let standing: String
+    public var id: UUID { matchId }
+
+    public init(matchId: UUID, openedAt: Date, format: Format, selfReported: Bool, seats: [SeatLine], legs: Legs,
+                visits: Int, ending: String?, retired: String?, winner: String?, sentBy: String?, answers: Answers, standing: String) {
+        self.matchId = matchId; self.openedAt = openedAt; self.format = format; self.selfReported = selfReported
+        self.seats = seats; self.legs = legs; self.visits = visits; self.ending = ending; self.retired = retired
+        self.winner = winner; self.sentBy = sentBy; self.answers = answers; self.standing = standing
+    }
+
+    public var yours: SeatLine? { seats.first { $0.you } }
+    public var theirs: SeatLine? { seats.first { !$0.you } }
+    /// The reader sent it: their word is the match, and the other seat is theirs to give a code for.
+    public var youSent: Bool { sentBy != nil && yours?.seat == sentBy }
+    public var canGiveCode: Bool { youSent && selfReported && theirs?.claimable == true }
+    /// The reader is the other player, and there is a result for them to answer for.
+    public var canAnswer: Bool { selfReported && !youSent && yours != nil && ending != "abandoned" }
+    public var yourAnswer: String? { yours.flatMap { $0.seat == "home" ? answers.home : answers.away } }
+    public var yourLegs: Int { yours?.seat == "away" ? legs.away : legs.home }
+    public var theirLegs: Int { yours?.seat == "away" ? legs.home : legs.away }
+    /// Nil when nobody won: the match is unfinished, or was abandoned.
+    public var youWon: Bool? { winner.map { $0 == yours?.seat } }
+}
+
 public struct DiscoveryCard: Decodable, Sendable, Equatable, Identifiable {
     public let eventId: UUID
     public let name: String
@@ -658,6 +751,38 @@ public actor ThroAPI {
     public func joinTeam(code: String) async throws -> TeamSummary {
         let body = try JSONSerialization.data(withJSONObject: ["code": code])
         return try decode(await authorised("POST", "/v1/teams/join", body: body))
+    }
+
+    // MARK: a sent match, onward (PD-043)
+
+    /// A code for the other seat of a match this person sent, to say across the table or share.
+    /// Asking again while one is live hands back the same code.
+    public func matchCode(_ matchId: UUID) async throws -> MatchCode {
+        try decode(await authorised("POST", "/v1/matches/\(matchId.uuidString.lowercased())/code"))
+    }
+
+    /// Enter a code somebody gave you: the seat it was made for becomes yours. Answers the match as you
+    /// now read it. A refusal — used, expired, your own — arrives as `.status(422, body)` with the sentence.
+    public func claimMatch(code: String) async throws -> MatchOnRecord {
+        let body = try JSONSerialization.data(withJSONObject: ["code": code])
+        return try decode(await authorised("POST", "/v1/matches/claim", body: body))
+    }
+
+    /// One match this person played in, as the server reads its log now.
+    public func match(_ matchId: UUID) async throws -> MatchOnRecord {
+        try decode(await authorised("GET", "/v1/matches/\(matchId.uuidString.lowercased())"))
+    }
+
+    /// The matches this person played in — sent, or taken with a code — newest first.
+    public func myMatches() async throws -> [MatchOnRecord] {
+        struct Envelope: Decodable { let matches: [MatchOnRecord] }
+        return try (decode(await authorised("GET", "/v1/me/matches")) as Envelope).matches
+    }
+
+    /// Confirm (`agree`) or contest a result somebody else sent. Answers the match with the answer counted.
+    public func answerMatch(_ matchId: UUID, agree: Bool) async throws -> MatchOnRecord {
+        let body = try JSONSerialization.data(withJSONObject: ["agree": agree])
+        return try decode(await authorised("POST", "/v1/matches/\(matchId.uuidString.lowercased())/answer", body: body))
     }
 
     // MARK: plumbing

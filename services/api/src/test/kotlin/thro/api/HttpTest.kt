@@ -147,8 +147,28 @@ class HttpTest {
             check("sending a match needs a principal", post("/v1/matches", "{}", subject = null).status.value == 401)
             val emptyMatch = post("/v1/matches", """{"matchId":"${UUID.randomUUID()}","deviceId":"$phone","seat":"home","format":{"startingScore":501,"inRule":"straight","outRule":"double","legsMode":"first_to","legsTarget":3,"throwFirst":"home"},"rows":[]}""", subject = home)
             check("a match with nothing in it is refused in words", emptyMatch.status.value == 422 && emptyMatch.bodyAsText().contains("nothing in it"))
-            val oneVisit = post("/v1/matches", """{"matchId":"${UUID.randomUUID()}","deviceId":"$phone","seat":"home","format":{"startingScore":501,"inRule":"straight","outRule":"double","legsMode":"first_to","legsTarget":3,"throwFirst":"home"},"rows":[{"deviceSeq":1,"kind":"visit","seat":"home","visitTotal":60,"occurredAt":"2026-09-11T19:30:00Z","occurredTz":"Europe/London"}]}""", subject = home)
+            val sentMatch = UUID.randomUUID()
+            val oneVisit = post("/v1/matches", """{"matchId":"$sentMatch","deviceId":"$phone","seat":"home","format":{"startingScore":501,"inRule":"straight","outRule":"double","legsMode":"first_to","legsTarget":3,"throwFirst":"home"},"rows":[{"deviceSeq":1,"kind":"visit","seat":"home","visitTotal":60,"occurredAt":"2026-09-11T19:30:00Z","occurredTz":"Europe/London"}]}""", subject = home)
             check("a match this phone scored is stored, self-reported", oneVisit.status.value == 200 && oneVisit.bodyAsText().contains("\"selfReported\":true"))
+
+            // The other seat, taken by a code and answered for (PD-043). What the records DO is
+            // MatchRecordsTest's; this holds the routes, the roles they run under, and refusals in words.
+            val made = post("/v1/matches/$sentMatch/code", "{}", subject = home)
+            val matchCode = Regex(""""code":"([A-Z2-9]{8})"""").find(made.bodyAsText())?.groupValues?.get(1)
+            check("only the player who sent a match makes a code for its other seat",
+                made.status.value == 200 && matchCode != null && post("/v1/matches/$sentMatch/code", "{}", subject = zed).status.value == 404)
+            val taken = post("/v1/matches/claim", """{"code":"${matchCode?.lowercase()}"}""", subject = away)
+            check("the player they played takes the seat with it, case ignored, and the code is refused in words after that",
+                taken.status.value == 200 && taken.bodyAsText().contains(""""seat":"away","you":true""")
+                    && post("/v1/matches/claim", """{"code":"$matchCode"}""", subject = zed).let { it.status.value == 422 && it.bodyAsText().contains("used already") })
+            check("the sender cannot answer for their own match; the other player confirms it, and it reads confirmed to both",
+                post("/v1/matches/$sentMatch/answer", """{"agree":true}""", subject = home).status.value == 422
+                    && post("/v1/matches/$sentMatch/answer", """{"agree":true}""", subject = away).bodyAsText().contains(""""standing":"confirmed"""")
+                    && get("/v1/matches/$sentMatch", subject = home).bodyAsText().contains(""""standing":"confirmed""""))
+            check("a match is read only by the people in it, and each finds it among their own",
+                get("/v1/matches/$sentMatch", subject = zed).status.value == 404
+                    && get("/v1/me/matches", subject = away).bodyAsText().contains(""""matchId":"$sentMatch"""")
+                    && !get("/v1/me/matches", subject = zed).bodyAsText().contains("$sentMatch"))
 
             check("erasing an account needs a principal", del("/v1/me", subject = null).status.value == 401)
             // A DELETE carries no body, so it declares no length. Demanding one answered every
@@ -192,10 +212,11 @@ class HttpTest {
             if (System.getenv("THRO_WRITE_OPENAPI") == "1") committed.writeText(served)
             check("the committed contract is the served one (regenerate with THRO_WRITE_OPENAPI=1 and review the diff)",
                 committed.exists() && committed.readText() == served)
-            check("every request narrowed its connection to a module role before touching a table: visits as app_match, organisational commands and reads as app_competition, health as app_read",
-                bareUse.get() == 0 && roles.contains("app_match") && roles.contains("app_competition") && roles.contains("app_read") && roles.all { it in setOf("app_match", "app_competition", "app_read") })
+            check("every request narrowed its connection to a module role before touching a table: visits as app_match, organisational commands and reads as app_competition, health as app_read, an answer for a result as app_trust",
+                bareUse.get() == 0 && roles.contains("app_match") && roles.contains("app_competition") && roles.contains("app_read") && roles.contains("app_trust")
+                    && roles.all { it in setOf("app_match", "app_competition", "app_read", "app_trust") })
         }
         println("  $passed HTTP properties held")
-        assertEquals(41, passed)
+        assertEquals(45, passed)
     }
 }

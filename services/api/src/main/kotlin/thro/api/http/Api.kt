@@ -190,7 +190,8 @@ public object Contract {
             summary = "Enter a team code",
             description = "The caller becomes a member, as a player. Refusals say why: not a code, unknown, expired, full, already in.",
             request = Schema("""{"type":"object","required":["code"],"properties":{"code":{"type":"string"}}}"""),
-            responses = mapOf(200 to "the team, with your role", 401 to "no principal", 409 to "the code cannot be used, with the sentence to show"),
+            responses = mapOf(200 to "the team, with your role", 401 to "no principal", 409 to "the code cannot be used, with the sentence to show",
+                              429 to "too many codes tried from this address or device; Retry-After says when"),
         ),
         Endpoint(
             id = "friends", method = "GET", path = "/v1/friends", authenticated = true,
@@ -209,7 +210,8 @@ public object Contract {
             summary = "Enter a friend code",
             description = "Both become friends and the code is spent. Refusals say why: not a code, unknown, used, expired, your own, already friends.",
             request = Schema("""{"type":"object","required":["code"],"properties":{"code":{"type":"string","description":"eight letters and numbers, case and spaces ignored"}}}"""),
-            responses = mapOf(200 to "the new friend", 401 to "no principal", 403 to "not an adult account", 409 to "the code cannot be used, with the sentence to show"),
+            responses = mapOf(200 to "the new friend", 401 to "no principal", 403 to "not an adult account", 409 to "the code cannot be used, with the sentence to show",
+                              429 to "too many codes tried from this address or device; Retry-After says when"),
         ),
         Endpoint(
             id = "friends.remove", method = "POST", path = "/v1/friends/{accountId}/remove", authenticated = true,
@@ -248,6 +250,55 @@ public object Contract {
             request = Schema("""{"type":"object","required":["matchId","deviceId","seat","format","rows"],"properties":{"matchId":{"type":"string","format":"uuid"},"deviceId":{"type":"string","format":"uuid"},"seat":{"type":"string","enum":["home","away"],"description":"Which seat the caller sat in. The other is minted."},"format":{"type":"object","required":["startingScore","inRule","outRule","legsMode","legsTarget","throwFirst"],"properties":{"startingScore":{"type":"integer"},"inRule":{"type":"string"},"outRule":{"type":"string"},"legsMode":{"type":"string"},"legsTarget":{"type":"integer"},"throwFirst":{"type":"string","enum":["home","away"]}}},"rows":{"type":"array","items":{"type":"object","required":["deviceSeq","kind","occurredAt"],"properties":{"deviceSeq":{"type":"integer"},"kind":{"type":"string","enum":["visit","retraction","retirement","abandonment"],"description":"An ending — retirement or abandonment — is the last row when there is one."},"seat":{"type":"string","enum":["home","away"],"description":"The seat that threw; for a retirement, the seat that retired. An abandonment names nobody and may leave it out."},"visitTotal":{"type":["integer","null"]},"correctsSeq":{"type":["integer","null"]},"occurredAt":{"type":"string"},"occurredTz":{"type":"string"}}}}}}"""),
             responses = mapOf(200 to "what was stored, and what was already held", 400 to "malformed",
                               401 to "no principal", 413 to "body over 64 KiB", 422 to "refused, in words"),
+        ),
+        Endpoint(
+            id = "matches.code", method = "POST", path = "/v1/matches/{matchId}/code", authenticated = true,
+            summary = "A code for the other seat of a match the caller sent (PD-043)",
+            description = "Eight characters, seven days, one use. The sender gives it to the player they played, who enters it "
+                + "on their own phone to take the other seat. Only the player who sent the match may make one, only for a "
+                + "match sent from a phone, and only while the other seat is nobody's; asking again while a code is live "
+                + "hands back the same code rather than a second one.",
+            responses = mapOf(200 to "code, seat and expiresAt", 400 to "not a UUID", 401 to "no principal",
+                              404 to "not a match the caller sent", 422 to "no code can be made for it, in words"),
+        ),
+        Endpoint(
+            id = "matches.claim", method = "POST", path = "/v1/matches/claim", authenticated = true,
+            summary = "Enter a match code: the seat it was made for becomes the caller's",
+            description = "Recorded as a seat claim (V037) and nothing else: the match, and the evidence under it, stay exactly "
+                + "as they were written. Refusals say why — not a code, unknown, used, expired, your own, already in the "
+                + "match, the seat already taken. Rationed per address and per device, like every route that takes a code.",
+            request = Schema("""{"type":"object","required":["code"],"properties":{"code":{"type":"string","description":"eight letters and numbers; case, spaces and dashes ignored"}}}"""),
+            responses = mapOf(200 to "the match, as the caller now reads it", 400 to "malformed", 401 to "no principal",
+                              422 to "the code cannot be used, with the sentence to show",
+                              429 to "too many codes tried from this address or device; Retry-After says when"),
+        ),
+        Endpoint(
+            id = "matches.one", method = "GET", path = "/v1/matches/{matchId}", authenticated = true,
+            summary = "A match the caller played in",
+            description = "Both seats — a name only where identity.player_may_be_disclosed allows — the legs as the engine replays "
+                + "the record with struck visits left out, how it ended, who won, which seat sent it, each seat's answer where it still stands, "
+                + "and its standing: self-reported, confirmed, disputed, or recorded for a match scored on THRØ as it was "
+                + "played. Derived from the log on every read and stored nowhere. Anyone not in the match is answered 404.",
+            responses = mapOf(200 to "the match", 400 to "not a UUID", 401 to "no principal", 404 to "not a match the caller played in"),
+        ),
+        Endpoint(
+            id = "matches.mine", method = "GET", path = "/v1/me/matches", authenticated = true,
+            summary = "The matches the caller played in, newest first",
+            description = "Sent by the caller, or taken with a code; at most thirty, each in the shape GET /v1/matches/{matchId} answers.",
+            responses = mapOf(200 to "matches", 401 to "no principal"),
+        ),
+        Endpoint(
+            id = "matches.answer", method = "POST", path = "/v1/matches/{matchId}/answer", authenticated = true,
+            summary = "The other player's answer for a result they did not send",
+            description = "agree true confirms the result and false contests it, appended to the trust stream as ResultConfirmed "
+                + "or ResultContested naming the seat (V037). Every answer is kept and the latest stands — but only for the "
+                + "record it answered: when the sender sends more of the match, the other player is asked again. The player "
+                + "who sent a match cannot answer for it, because their word is the match, and an abandoned match has no "
+                + "result to confirm. The phone names itself in X-Thro-Device.",
+            request = Schema("""{"type":"object","required":["agree"],"properties":{"agree":{"type":"boolean","description":"true confirms the result, false contests it"}}}"""),
+            responses = mapOf(200 to "the match, with the answer counted", 400 to "malformed, or no X-Thro-Device", 401 to "no principal",
+                              404 to "not a match the caller played in", 409 to "the answer could not be recorded; try again",
+                              422 to "refused, in words"),
         ),
         Endpoint(
             id = "me.inbox", method = "GET", path = "/v1/me/inbox", authenticated = true,

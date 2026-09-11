@@ -10,14 +10,17 @@ import java.net.http.HttpResponse
 import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withTimeoutOrNull
 import java.time.Duration
 import java.time.Instant
 import java.util.UUID
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
 import thro.api.http.Authenticator
 import thro.api.http.Deps
+import thro.api.http.MatchNotifier
 import thro.api.http.thro
 
 /**
@@ -172,6 +175,32 @@ class StreamTest {
         } finally {
             pool.shutdownNow()
             server.stop(100, 500)
+        }
+    }
+
+    @Test
+    fun `a commit made the moment a watch begins is announced, however new the listener`() {
+        if (!TestDatabase.configured) return
+        TestDatabase.migrated().close()
+        // The defect: a watch started the listener and returned at once, so anything committed in the
+        // milliseconds before the new connection said LISTEN was announced to nobody, and the stream
+        // sat out its poll. A fresh notifier each time makes every watch the first, with a listener
+        // that is brand new; the announcement goes from a connection already open, so it is as quick
+        // as a commit can be.
+        TestDatabase.connect().use { shout ->
+            repeat(10) { attempt ->
+                val notifier = MatchNotifier { TestDatabase.connect() }
+                try {
+                    val match = UUID.randomUUID()
+                    val line = runBlocking { notifier.watch(match) }
+                    shout.createStatement().use { it.execute("SELECT pg_notify('thro_match', '$match')") }
+                    val woke = runBlocking { withTimeoutOrNull(5_000) { line.receive() } }
+                    assertNotNull(woke, "attempt ${attempt + 1}: a commit made as the watch began was announced to nobody")
+                    notifier.unwatch(match, line)
+                } finally {
+                    notifier.stop()
+                }
+            }
         }
     }
 }

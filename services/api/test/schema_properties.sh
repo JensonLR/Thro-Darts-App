@@ -451,6 +451,72 @@ if echo "$r" | grep -qi 'error'; then
 else ok "a resend of the ending itself still lands as nothing"; fi
 
 echo
+echo "== the other seat is claimed by a code, and answered for (V037) =="
+# Fixtures, not properties: the sender, the minted seat, the player who takes it, and a match sent
+# from a phone. Codes are drawn from the alphabet a code is said in.
+S1=$($PSQL -c "SELECT gen_random_uuid();"); SM=$($PSQL -c "SELECT gen_random_uuid();")
+S2=$($PSQL -c "SELECT gen_random_uuid();"); M3=$($PSQL -c "SELECT gen_random_uuid();")
+newcode() { $PSQL -c "SELECT string_agg(substr('ABCDEFGHJKLMNPQRSTUVWXYZ23456789', 1 + floor(random() * 32)::int, 1), '') FROM generate_series(1, 8);"; }
+C1=$(newcode); C2=$(newcode)
+$PSQL -c "INSERT INTO competition.player (player_id) VALUES ('$S1'), ('$SM'), ('$S2');
+  INSERT INTO evidence.match (match_id,home_id,away_id,starting_score,in_rule,out_rule,legs_mode,legs_target,throw_first,self_reported)
+  VALUES ('$M3','$S1','$SM',501,'straight','double','first_to',3,'$S1',true);
+  SET ROLE app_competition;
+  INSERT INTO competition.match_claim_code (code, match_id, seat, made_by, expires_at)
+  VALUES ('$C1','$M3','away','$S1', now() + interval '7 days'), ('$C2','$M3','away','$S1', now() + interval '7 days');
+  UPDATE competition.match_claim_code SET used_by = '$S2', used_at = now() WHERE code = '$C1';
+  INSERT INTO competition.seat_claim (match_id, seat, player_id, code) VALUES ('$M3','away','$S2','$C1');" >/dev/null
+
+r=$($PSQL -c "SET ROLE app_competition; UPDATE competition.match_claim_code SET used_by = '$S1', used_at = now() WHERE code = '$C1';" 2>&1)
+if echo "$r" | grep -qi 'used once'; then ok "a match code is used once"
+else bad "a match code is used once" "${r:-a used code was used again}"; fi
+
+r=$($PSQL -c "UPDATE competition.match_claim_code SET expires_at = expires_at + interval '1 day' WHERE code = '$C2';" 2>&1)
+if echo "$r" | grep -qi 'not rewritten'; then ok "and never rewritten, even by the owner"
+else bad "and never rewritten, even by the owner" "${r:-the expiry of a used code was moved}"; fi
+
+r=$($PSQL -c "SET ROLE app_competition; DELETE FROM competition.match_claim_code WHERE code = '$C2';" 2>&1)
+if echo "$r" | grep -qi 'permission denied\|is kept'; then ok "the application cannot delete a code"
+else bad "the application cannot delete a code" "${r:-a code was deleted}"; fi
+
+r=$($PSQL -c "SET ROLE app_competition; INSERT INTO competition.seat_claim (match_id, seat, player_id, code) VALUES ('$M3','away','$S1','$C2');" 2>&1)
+if echo "$r" | grep -qi 'duplicate key'; then ok "a seat is claimed once"
+else bad "a seat is claimed once" "${r:-a second claim on one seat was accepted}"; fi
+
+r=$($PSQL -c "UPDATE competition.seat_claim SET player_id = '$S1' WHERE match_id = '$M3';" 2>&1)
+if echo "$r" | grep -qi 'is kept'; then ok "a seat claim is kept, even from the owner"
+else bad "a seat claim is kept, even from the owner" "${r:-a claim was rewritten}"; fi
+
+d=$($PSQL -c "SET ROLE app_trust; SELECT competition.seat_of('$M3', '$S2');")
+check "the trust role can ask whose seat a claimed player sits in" "$d" "away"
+d=$($PSQL -c "SET ROLE app_trust; SELECT coalesce(competition.seat_of('$M3', gen_random_uuid()), 'nobody');")
+check "and a stranger sits nowhere" "$d" "nobody"
+
+r=$($PSQL -c "SET ROLE app_match; INSERT INTO evidence.event
+  (event_id,match_id,device_id,device_seq,event_type,schema_version,correlation_id,actor_id,
+   actor_role,occurred_at,occurred_tz,payload,authority)
+  VALUES (gen_random_uuid(),'$M3',gen_random_uuid(),1,'ResultConfirmed',1,gen_random_uuid(),'$S2',
+   'participant',now(),'Europe/London','{\"seat\":\"away\"}'::jsonb,'ungranted');" 2>&1)
+if echo "$r" | grep -qi 'belongs to app_trust'; then ok "the match role cannot answer for a result"
+else bad "the match role cannot answer for a result" "${r:-the match role wrote an answer}"; fi
+
+r=$($PSQL -c "SET ROLE app_trust; INSERT INTO evidence.event
+  (event_id,match_id,device_id,device_seq,event_type,schema_version,correlation_id,actor_id,
+   actor_role,occurred_at,occurred_tz,payload,authority)
+  VALUES (gen_random_uuid(),'$M3',gen_random_uuid(),1,'ResultContested',1,gen_random_uuid(),'$S2',
+   'participant',now(),'Europe/London','{}'::jsonb,'ungranted');" 2>&1)
+if echo "$r" | grep -qi 'an_answer_names_its_seat'; then ok "an answer names the seat that gave it"
+else bad "an answer names the seat that gave it" "${r:-an answer from nobody was accepted}"; fi
+
+$PSQL -c "SET ROLE app_trust; INSERT INTO evidence.event
+  (event_id,match_id,device_id,device_seq,event_type,schema_version,correlation_id,actor_id,
+   actor_role,occurred_at,occurred_tz,payload,authority)
+  VALUES (gen_random_uuid(),'$M3',gen_random_uuid(),1,'ResultConfirmed',1,gen_random_uuid(),'$S2',
+   'participant',now(),'Europe/London','{\"seat\":\"away\"}'::jsonb,'ungranted');" >/dev/null 2>&1
+n=$($PSQL -c "SELECT count(*) FROM evidence.event WHERE match_id = '$M3' AND event_type = 'ResultConfirmed';")
+check "the trust role records the answer" "$n" "1"
+
+echo
 echo "== identity, and age as a dimension that cannot be forgotten =="
 ACC=$($PSQL -c "SELECT gen_random_uuid();")
 $PSQL -c "SET ROLE app_competition; INSERT INTO identity.account (account_id, display_name)

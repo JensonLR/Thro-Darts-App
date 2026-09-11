@@ -3237,3 +3237,53 @@ opening another showed the first. It now knows which team it holds and loads the
 two tests. The team code's share text sent people to a Discover button named something else.
 
 Counts: client 686, API 26 suites, HTTP 41 properties, schema 96.
+
+## The other player takes their seat with a code, and answers for the result (PD-043, V037)
+
+A match sent from a phone named one person and a competitor THRØ minted for the other seat, and stayed
+one player's word with no way for the other player ever to answer. **Now the sender makes a code for the
+other seat** — eight characters, seven days, one use — and the other player enters it on their own phone.
+That records a **seat claim** (`competition.seat_claim`), not a claim on the minted competitor: the other
+player already has a competitor of their own, an account holds one live claim, and nothing under the match
+is rewritten. The match still names the competitor it was sent with; the claim says whose seat that was.
+Then the other player **confirms or contests** the result: `ResultConfirmed` or `ResultContested` on the
+trust stream, naming the seat, written as `app_trust` — the first route to write as that role, so the HTTP
+test's role property now requires that role as well as permitting it. The sender cannot answer for their
+own match, and an abandoned match has no result to answer for.
+
+**Where a match stands is read, never stored.** `GET /v1/matches/{id}` and `GET /v1/me/matches` replay the
+record through the engine with struck visits left out, take the winner from it or from a retirement, and
+derive the standing — self-reported, confirmed, disputed, or recorded for a match scored live — from the
+answers. **An answer stands only for the record it answered**: when the sender sends more of the match
+after an agreement, the other player is asked again, because agreeing to two legs is not agreeing to
+three. A seat shows a name only through the disclosure gate, so an age THRØ does not know shows none —
+held by a test that signs two people in, one of them an adult who has said so.
+
+**Entering a code is rationed** — the match code, and the friend and team codes too, which were not. A
+code opens something, so guessing one is the attack; the allowances are separate from signing in, so a
+run of mistyped codes costs nobody their sign-in.
+
+On the phone, the Live tab has **On THRØ**: every match this person has on THRØ with where it stands —
+*Your word*, *Needs your answer*, *Confirmed*, *Disputed* — and a page for each, with the score on the
+slate, the code drawn as the friend code is, and Confirm and Contest for the other player. **Enter a code**
+is there for somebody who was given one, and the share text names that button. Sending a match reads the
+list again, so the code is one tap from the send. A name is the server's where it may show one, else the
+name typed for that seat on this phone at the oche, which is this phone's own to show back.
+
+Four things found on the way. `ThroJournal` already had a `MatchRecord` — the local match — and a second
+one in `ThroNet` would have made every use in the app ambiguous, so the server's is `MatchOnRecord`.
+*Claimable* first meant "held by no account", so a sender whose competitor had no account read their own
+seat as up for grabs; it now means a code could be made for it — the seat opposite the sender, of a sent
+match, that nobody holds — and a reading test caught the first version. **The stream's notifier had a
+start-up race** (V036): a watch started the listener and returned at once, so a visit that committed in
+the milliseconds before the new connection said LISTEN reached nobody, and its watcher sat out the poll.
+The latency test failed on its second full run; a watch now returns once the listener is listening, and a
+new test fires a notification the instant each of ten brand-new listeners begins. And an apostrophe inside
+`${r:-…}` in the schema properties opened a quote in bash and broke the rest of the file; it is reworded.
+
+Stale words retired: the README's *It talks to nothing* (it talks to staging), its two decisions called
+open (PD-030 and PD-043 closed them), Live as *Not started*; the runbook's paragraph saying nothing is
+uploaded, and its Settings line saying sending is not built, which the screen stopped saying at PD-040;
+and `render.yaml`'s *not built yet*.
+
+Counts: client 699, API 27 suites (58 tests), HTTP 45 properties, schema 106.

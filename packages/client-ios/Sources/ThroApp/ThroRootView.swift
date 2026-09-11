@@ -296,6 +296,8 @@ public struct ThroRootView: View {
     /// The You tab's Friends button opens the account screen on Friends rather than on its front.
     @State private var openingFriends = false
     @StateObject private var accountHolder = AccountHolder()
+    /// The matches this person has on THRØ (PD-043), for the Live tab.
+    @StateObject private var throMatches = ThroMatchesModel()
     /// The person whose page is open, if any. Their figures come from the journal, so this is the
     /// one screen in the app where a statistic is about a person rather than about a match.
     @State private var viewing: LocalPerson?
@@ -595,7 +597,11 @@ public struct ThroRootView: View {
                            openClub = ClubLanding(club: club.id, wanted: .fixtures)
                        },
                        onSend: account == nil ? nil : { match in sendToThro(match) },
-                       sendNote: sendNote)
+                       sendNote: sendNote,
+                       // What THRØ holds of this person's matches (PD-043): read again whenever the
+                       // tab is, and after every send.
+                       records: account == nil ? nil : throMatches, api: account?.api,
+                       signedIn: account?.isSignedIn ?? false)
         case .discover: ClubsFlow(store: clubs, open: $openClub, api: account?.api, signedIn: account?.isSignedIn ?? false)
         case .you: YouScreen(account: youAccount, picture: accountPicture, clubs: clubs.clubs, people: clubs.people,
                              badge: { clubs.image($0.badgeAssetId) },
@@ -1526,11 +1532,18 @@ public struct LiveScreen: View {
     /// Where a fixture still to play sends somebody: its club's list of fixtures, which is where
     /// the reminder, the calendar entry and the venue search live.
     private let onFixtures: ((Club) -> Void)?
+    /// What THRØ holds of the matches this person played (PD-043). Nil when this build names no server.
+    private let records: ThroMatchesModel?
+    private let api: ThroAPI?
+    private let signedIn: Bool
+    /// Which page of a sent match is open over this tab.
+    @State private var sheet: ThroMatchSheet?
 
     public init(store: AppStore, clubs: [Club] = [], onClubs: @escaping () -> Void = {},
                 onRecord: ((Club, Fixture) -> Void)? = nil,
                 onFixtures: ((Club) -> Void)? = nil,
-                onSend: ((AppStore.HomeMatch) -> Void)? = nil, sendNote: String? = nil) {
+                onSend: ((AppStore.HomeMatch) -> Void)? = nil, sendNote: String? = nil,
+                records: ThroMatchesModel? = nil, api: ThroAPI? = nil, signedIn: Bool = false) {
         self.store = store
         self.clubs = clubs
         self.onClubs = onClubs
@@ -1538,6 +1551,17 @@ public struct LiveScreen: View {
         self.onFixtures = onFixtures
         self.onSend = onSend
         self.sendNote = sendNote
+        self.records = records
+        self.api = api
+        self.signedIn = signedIn
+    }
+
+    /// The name typed on this phone for the other seat, when this phone scored the match — this
+    /// phone's own record, shown back to the person who typed it.
+    private func typedOpponent(_ r: MatchOnRecord) -> String? {
+        guard r.youSent, let other = r.theirs?.seat,
+              let local = store.matches.first(where: { UUID(uuidString: $0.record.id.value) == r.matchId }) else { return nil }
+        return other == "home" ? local.record.homeName : local.record.awayName
     }
 
     private var inProgress: [AppStore.HomeMatch] {
@@ -1649,17 +1673,40 @@ public struct LiveScreen: View {
                         }
                         .throEntrance(3)
                     }
+                    // What THRØ holds of the matches this person played (PD-043): where each one
+                    // stands, the code for the other player, and the way in for somebody given one.
+                    if let records, signedIn {
+                        block {
+                            ThroMatchesBlock(model: records, typedOpponent: typedOpponent,
+                                             onOpen: { sheet = .match($0.matchId) },
+                                             onEnterCode: { sheet = .enterCode })
+                        }
+                        .throEntrance(4)
+                    }
                     block {
                         Note("**Watching a match from another phone is next.** The server already "
-                             + "streams a match as it is scored; this build does not yet tune in. "
-                             + "Everything on this screen was scored on this phone.")
+                             + "streams a match as it is scored; this build does not yet tune in.")
                     }
-                    .throEntrance(4)
+                    .throEntrance(5)
                 }
                 .padding(.bottom, ThroSpacing.spacing6)
             }
         }
         .background(ThroColor.colorBackgroundPrimary.ignoresSafeArea())
+        .task(id: signedIn) { await records?.load(api, signedIn: signedIn) }
+        .sheet(item: $sheet) { which in
+            if let records {
+                switch which {
+                case .match(let id):
+                    ThroMatchScreen(model: records, matchId: id, api: api,
+                                    typed: records.record(id).flatMap(typedOpponent), onClose: { sheet = nil })
+                case .enterCode:
+                    // A seat taken opens its match, on the answer the other player is waiting for.
+                    MatchCodeEntryScreen(model: records, api: api,
+                                         onClaimed: { sheet = .match($0.matchId) }, onClose: { sheet = nil })
+                }
+            }
+        }
     }
 
     private func block<Content: View>(@ViewBuilder _ content: () -> Content) -> some View {
@@ -1791,6 +1838,8 @@ extension ThroRootView {
                     matchId: UUID(uuidString: record.id.value) ?? UUID(),
                     deviceId: UUID(uuidString: AppStore.deviceId()) ?? UUID(), seat: seat, format: format, rows: rows)
                 sendNote = MatchUpload.done(sent)
+                // It is on THRØ now, with a seat for the other player to take: show it there.
+                await throMatches.load(account.api, signedIn: true)
             } catch {
                 sendNote = SignInProblem.words(error)
             }
