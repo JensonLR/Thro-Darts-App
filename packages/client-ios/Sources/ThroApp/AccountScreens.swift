@@ -44,9 +44,13 @@ public struct AccountScreen: View {
             DiscoveryScreen(account: account) { showing = nil }
         } else if showing == .friends {
             FriendsScreen(account: account) { showing = nil }
-        } else if showing == .profile, case .signedIn(let profile) = account.state, let id = profile.accountId {
+        } else if case .signedIn(let profile) = account.state, let id = profile.accountId {
+            // **Signed in, this screen IS the profile.** It used to be a settings list whose first
+            // row went to the profile, so every route to a person's own name passed through a page
+            // that only pointed at another one. Both ways in — the You tab and Settings — land on
+            // the same page now, and the lists that were on this one live there.
             YourProfileScreen(account: account, profile: profile, accountId: id,
-                              images: images, picture: picture) { showing = nil }
+                              images: images, picture: picture) { showing = nil; onBack() }
         } else {
             VStack(spacing: 0) {
                 TopBar("Account", onBack: onBack, large: true)

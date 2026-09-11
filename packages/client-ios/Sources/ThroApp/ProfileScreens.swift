@@ -73,7 +73,12 @@ public struct YourProfileScreen: View {
     @State private var picked: Data?
     @State private var removed = false
     @State private var deleting = false
+    @State private var showing: Sub?
     @FocusState private var editingName: Bool
+
+    /// The three lists that used to live behind a separate Account screen. They are about the
+    /// person, so they are reached from the page about the person.
+    enum Sub { case friends, inbox, discovery }
 
     /// The account this page is about. `Profile.accountId` is optional because a development
     /// principal has none; a page about nobody is not a page, so the caller passes one that has one.
@@ -101,7 +106,13 @@ public struct YourProfileScreen: View {
     }
 
     public var body: some View {
-        if deleting {
+        if let showing {
+            switch showing {
+            case .friends: FriendsScreen(account: account) { self.showing = nil }
+            case .inbox: InboxScreen(account: account) { self.showing = nil }
+            case .discovery: DiscoveryScreen(account: account) { self.showing = nil }
+            }
+        } else if deleting {
             DeleteAccountScreen(account: account) {
                 AccountPicture.forget(accountId, in: images)
                 onBack()
@@ -113,6 +124,22 @@ public struct YourProfileScreen: View {
                     VStack(alignment: .leading, spacing: ThroSpacing.spacing5) {
                         head
                         band
+                        // **Everything about the person, on the page about the person.** These
+                        // were behind a second screen called Account, which is why reaching any of
+                        // them took four taps and a scroll.
+                        SectionHeader("Friends")
+                        LinkRow(icon: .users, label: "Friends",
+                                value: account.friends.map { $0.isEmpty ? "None yet" : "\($0.count)" } ?? "Codes, given in person") { showing = .friends }
+                        SectionHeader("Ways in")
+                        waysIn(profile.credentials ?? 1)
+                        ThroButton("Add a passkey", variant: .secondary, size: .medium, icon: .lock) { Task { await account.usePasskey() } }
+                        ThroTextButton("Add Sign in with Apple", tone: .quiet) { Task { await account.signInWithApple() } }
+                        if account.configuration.googleClientID != nil {
+                            ThroTextButton("Add Sign in with Google", tone: .quiet) { Task { await account.signInWithGoogle() } }
+                        }
+                        SectionHeader("From THRØ")
+                        LinkRow(icon: .bell, label: "Your inbox", value: "Tasks waiting on you") { showing = .inbox }
+                        LinkRow(icon: .compass, label: "Darts you can play", value: "Events, with why each is there") { showing = .discovery }
                         SectionHeader("Leaving")
                         ThroButton("Sign out of this phone", variant: .secondary, size: .medium) {
                             Task { await account.signOut(); onBack() }
@@ -186,6 +213,14 @@ public struct YourProfileScreen: View {
         .frame(maxWidth: .infinity)
         .padding(.top, ThroSpacing.spacing5)
         .onChange(of: editingName) { was, now in if was && !now { commitName() } }
+    }
+
+    /// How many ways into this account there are, and why one is not enough (PD-032).
+    private func waysIn(_ n: Int) -> some View {
+        Note(n <= 1
+             ? "**One way into this account.** Lose it and the account is lost: THRØ has no email or "
+               + "phone recovery, on purpose. Add a passkey or a second sign-in below."
+             : "**\(n) ways into this account.** If one is lost, another still gets you in.")
     }
 
     static func nameNote(named: Bool) -> String {

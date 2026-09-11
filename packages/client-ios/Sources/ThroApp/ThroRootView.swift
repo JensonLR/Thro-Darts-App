@@ -1483,216 +1483,24 @@ public struct SettingsScreen: View {
         Binding(get: { ScoringEntryMode(stored: entryModeRaw) }, set: { entryModeRaw = $0.rawValue })
     }
 
-    public var body: some View {
-        VStack(spacing: 0) {
-            TopBar("Settings", onBack: onBack, large: true)
-            ScrollView {
-                VStack(alignment: .leading, spacing: 0) {
-                    // First, and deliberately: the founder's own words on the build that carried
-                    // nine of these — *"not sure I can see or test majority of this."* A feature
-                    // nobody can find has not been delivered, and the answer is not a longer
-                    // release note but a screen that reads this phone and says where to look.
-                    group("What this build can do") {
-                        Text("Some of what this build added only appears when something else is true — a match in progress, a screen plugged in, a fixture with a date on it. This reads what this phone will allow and says where to look for each one.")
-                            .thro(ThroTypography.metadata)
-                            .foregroundStyle(ThroColor.colorTextSecondary)
-                            .fixedSize(horizontal: false, vertical: true)
-                        ThroButton("What you can see on this phone", variant: .secondary, size: .medium) {
-                            showingReadiness = true
-                        }
-                    }
-                    group("Appearance") {
-                        SegmentedControl(Appearance.allCases.map { ($0, $0.label) }, selection: appearance)
-                        Text("Every screen follows this, scoring included. System follows the phone.")
-                            .thro(ThroTypography.metadata)
-                            .foregroundStyle(ThroColor.colorTextSecondary)
-                    }
-                    group("Scoring") {
-                        // **How a visit is entered**, and the reason it is here as well as on the
-                        // scoring rail: the founder asked for both notations, and a control that
-                        // exists only inside a match is one nobody finds before their first match.
-                        // The rail's switch changes the same stored value, so the two cannot drift.
-                        // `SegmentedControl` and not SwiftUI's `Picker(.segmented)`, which is what
-                        // the first version of this row reached for. A `UISegmentedControl` is
-                        // **32 points tall** and a frame around it does not enlarge its segments —
-                        // so that row would have shipped a control below the 44-point floor this
-                        // app holds every other control to, on a screen whose whole reason for
-                        // existing is that the founder could not reliably hit things. The design
-                        // system already had the right control, drawing the Appearance row ten
-                        // lines above this one.
-                        Eyebrow("How a visit is entered")
-                        SegmentedControl(ScoringEntryMode.allCases.map { ($0, $0.label) },
-                                         selection: entryMode)
-                        Text(SettingsScreen.entryModeNote(ScoringEntryMode(stored: entryModeRaw)))
-                            .thro(ThroTypography.metadata)
-                            .foregroundStyle(ThroColor.colorTextSecondary)
-                            .fixedSize(horizontal: false, vertical: true)
-                        // The export's Settings lists this row under Scoring, default On. The switch
-                        // is the platform's; the export draws no toggle.
-                        HStack(spacing: 12) {
-                            Icon(.smartphone, size: 18).foregroundStyle(ThroColor.colorTextSecondary)
-                            Toggle(isOn: $keepScreenAwake) {
-                                Text("Keep screen awake").thro(ThroTypography.body).foregroundStyle(ThroColor.colorTextPrimary)
-                            }
-                            .tint(ThroColor.colorSurfaceBrand)
-                        }
-                        .frame(minHeight: 52)
-                        .overlay(alignment: .bottom) { Rectangle().fill(ThroColor.colorBorderDefault).frame(height: 1) }
-                        Text("While scoring, the phone does not sleep between visits.")
-                            .thro(ThroTypography.metadata)
-                            .foregroundStyle(ThroColor.colorTextSecondary)
-                        // PD-015. Default on: the point of a haptic at a dartboard is that it is
-                        // felt while the player is looking at the board. Off is offered because a
-                        // phone buzzing in a pocket through a match is somebody else's idea of help.
-                        HStack(spacing: 12) {
-                            Icon(.target, size: 18).foregroundStyle(ThroColor.colorTextSecondary)
-                            Toggle(isOn: $haptics) {
-                                Text("Haptics").thro(ThroTypography.body).foregroundStyle(ThroColor.colorTextPrimary)
-                            }
-                            .tint(ThroColor.colorSurfaceBrand)
-                        }
-                        .frame(minHeight: 52)
-                        .overlay(alignment: .bottom) { Rectangle().fill(ThroColor.colorBorderDefault).frame(height: 1) }
-                        Text("A light tap on every key, a firmer one when a visit is saved, and its own sensation for a bust, a checkout coming up, an undo, a leg, and the match — so the ones that matter are felt without looking at the phone.")
-                            .thro(ThroTypography.metadata)
-                            .foregroundStyle(ThroColor.colorTextSecondary)
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
-                    group("Opening") {
-                        // PD-007 v2: the throw that opens the app, its sound and its haptic. Sound goes
-                        // through the ambient session, so the silent switch always wins.
-                        toggleRow(icon: .info, label: "Sound", isOn: $openingSound)
-                        toggleRow(icon: .smartphone, label: "Haptic on the strike", isOn: $openingHaptics)
-                        if let onReplayOpening {
-                            ThroButton("Play the opening again", variant: .secondary, size: .medium, action: onReplayOpening)
-                                .padding(.top, ThroSpacing.spacing2)
-                        }
-                        Text("The silent switch silences the sound whatever this says. Reduce Motion shows the finished mark instead of the throw.")
-                            .thro(ThroTypography.metadata)
-                            .foregroundStyle(ThroColor.colorTextSecondary)
-                    }
-                    group("Search") {
-                        HStack(spacing: 12) {
-                            Icon(.search, size: 18).foregroundStyle(ThroColor.colorTextSecondary)
-                            Toggle(isOn: $spotlight) {
-                                Text("Find these on this phone").thro(ThroTypography.body)
-                                    .foregroundStyle(ThroColor.colorTextPrimary)
-                            }
-                            .tint(ThroColor.colorSurfaceBrand)
-                        }
-                        .frame(minHeight: 52)
-                        .overlay(alignment: .bottom) { Rectangle().fill(ThroColor.colorBorderDefault).frame(height: 1) }
-                        Text("Your matches, the people who play here and your teams appear in this iPhone's own search. The index is on the phone, is never sent to Apple, and is not shared with your other devices. Turning this off removes what is already there.")
-                            .thro(ThroTypography.metadata)
-                            .foregroundStyle(ThroColor.colorTextSecondary)
-                    }
-                    group("How the app performs") {
-                        HStack(spacing: 12) {
-                            Icon(.shield, size: 18).foregroundStyle(ThroColor.colorTextSecondary)
-                            Toggle(isOn: $diagnostics) {
-                                Text("Collect performance reports").thro(ThroTypography.body)
-                                    .foregroundStyle(ThroColor.colorTextPrimary)
-                            }
-                            .tint(ThroColor.colorSurfaceBrand)
-                        }
-                        .frame(minHeight: 52)
-                        .overlay(alignment: .bottom) { Rectangle().fill(ThroColor.colorBorderDefault).frame(height: 1) }
-                        Text("iOS can tell THRØ how long it took to open, when it froze and how much memory it used, at most once a day. The reports are written to this phone and go nowhere. Turning this off deletes the ones already collected.")
-                            .thro(ThroTypography.metadata)
-                            .foregroundStyle(ThroColor.colorTextSecondary)
-                            .fixedSize(horizontal: false, vertical: true)
-                            // Off means gone, not merely stopped. A switch that left the collected
-                            // reports behind would be a switch that lies, which is the rule the
-                            // Spotlight switch above already follows.
-                            .onChange(of: diagnostics) { _, on in if !on { onForgetDiagnostics() } }
-                        if diagnostics {
-                            Text(ThroDiagnostics.sentence(diagnosticsHeld()))
-                                .thro(ThroTypography.metadata)
-                                .foregroundStyle(ThroColor.colorTextSecondary)
-                                .fixedSize(horizontal: false, vertical: true)
-                        }
-                    }
-                    group("Your darts") {
-                        // PD-017. Both halves are told. A player who learns their darts are in
-                        // iCloud from a support article rather than from the app has been failed
-                        // twice — and one who assumes they are, and is wrong, has been failed worse.
-                        let state = backupState()
-                        SettingsRow(icon: state.isIncluded ? .cloudCheck : .cloudOff,
-                                    label: "In the phone's backup",
-                                    value: state.isIncluded ? "Yes" : "No")
-                        Text(BackupPolicy.sentence(state))
-                            .thro(ThroTypography.metadata)
-                            .foregroundStyle(state.isIncluded ? ThroColor.colorTextSecondary : ThroColor.colorStatusError)
-                            .fixedSize(horizontal: false, vertical: true)
-                        if let makeExport {
-                            ThroButton("Export everything", variant: .secondary, size: .medium) {
-                                do {
-                                    exported = try makeExport()
-                                    exportProblem = nil
-                                } catch {
-                                    exported = nil
-                                    exportProblem = "\(error)"
-                                }
-                            }
-                            .padding(.top, ThroSpacing.spacing2)
-                            if let exported {
-                                // A button's face rather than a line of text. It was a bare `Text`:
-                                // no pressed state and a hit area the size of the ink, which is the
-                                // founder's original complaint on a control `check_controls_react`
-                                // was not looking at. It looks at ShareLink now.
-                                ShareLink(item: exported) {
-                                    ThroButtonFace("Save or send \(exported.lastPathComponent)",
-                                                   variant: .secondary, size: .medium)
-                                }
-                                .buttonStyle(ThroPressStyle(radius: ThroSpacing.radiusControl))
-                            }
-                            if let exportProblem {
-                                Snackbar(exportProblem, tone: .error)
-                            }
-                            Text("One file with every match, every visit as written — corrections and all — and every team this phone keeps. Nothing is sent anywhere: you choose where it goes. Pictures are not in it; the file names the ones this phone holds.")
-                                .thro(ThroTypography.metadata)
-                                .foregroundStyle(ThroColor.colorTextSecondary)
-                                .fixedSize(horizontal: false, vertical: true)
+    /// Which page of Settings is open, or nil for the index.
+    @State private var page: Page?
 
-                            // PD-017. An export nobody can read back is a file a player has to
-                            // *trust* worked. This opens one and says what is in it — and writes
-                            // nothing, which is the decision rather than a limitation.
-                            ThroButton("Check a file", variant: .ghost, size: .medium) { picking = true }
-                                .padding(.top, ThroSpacing.spacing2)
-                            if let inspection {
-                                inspected(inspection)
-                            }
-                            Text("Checking a file reads it and nothing else. Bringing one back into the app is not built: merging two journals is the same problem as syncing two phones, and doing it badly would leave a record that lies about what this phone wrote.")
-                                .thro(ThroTypography.metadata)
-                                .foregroundStyle(ThroColor.colorTextSecondary)
-                                .fixedSize(horizontal: false, vertical: true)
+    public var body: some View {
+        Group {
+            if let page {
+                settingsPage(page)
+            } else {
+                VStack(spacing: 0) {
+                    TopBar("Settings", onBack: onBack, large: true)
+                    ScrollView {
+                        VStack(alignment: .leading, spacing: 0) {
+                            settingsIndex
                         }
-                    }
-                    if let onClearOrganisations {
-                        group("Start the Discover tab again") {
-                            let n = organisationCount()
-                            Note("Removes every team, league and tournament on this phone, with their rosters, "
-                                 + "fixtures and results — \(n) organisation\(n == 1 ? "" : "s") right now. Your matches and "
-                                 + "the people you have played stay: they are history, not organisations.")
-                            ThroButton("Remove every team, league and tournament", variant: .destructive, size: .medium, disabled: n == 0) { confirmingClear = true }
-                                .confirmationDialog("Remove every organisation on this phone?", isPresented: $confirmingClear, titleVisibility: .visible) {
-                                    Button("Remove \(n) organisation\(n == 1 ? "" : "s")", role: .destructive) { onClearOrganisations(); confirmingClear = false }
-                                    Button("Keep them", role: .cancel) { confirmingClear = false }
-                                } message: {
-                                    Text("Rosters, fixtures and results on this phone go with them. Matches and people stay. This cannot be undone.")
-                                }
-                        }
-                    }
-                    group("This build") {
-                        SettingsRow(icon: .info, label: "Build", value: BuildInfo.label)
-                        SettingsRow(icon: .info, label: "Matches", value: "Stay on this device")
-                        SettingsRow(icon: .cloudOff, label: "Sending results to THRØ", value: "Not built")
-                        SettingsRow(icon: .info, label: "Fonts", value: ThroFont.customFacesRegistered ? "Embedded" : "System face")
-                        if let onAccount {
-                            LinkRow(icon: .circleUser, label: "Account and profile", value: accountValue, action: onAccount)
-                        } else {
-                            SettingsRow(icon: .circleUser, label: "Account and profile", value: "This build names no server")
-                        }
+                        // The groups carried the screen gutter themselves; the index is rows, so it
+                        // carries its own or every one of them sits against the glass.
+                        .padding(.horizontal, ThroSpacing.spaceScreenGutter)
+                        .padding(.bottom, ThroSpacing.spacing7)
                     }
                 }
             }
@@ -1711,6 +1519,332 @@ public struct SettingsScreen: View {
             ReadinessScreen(onBack: { showingReadiness = false }, gather: readinessFacts) { go in
                 showingReadiness = false
                 onGoReadiness(go)
+            }
+        }
+    }
+
+    // MARK: - the index
+    //
+    // **Settings was one scroll with a paragraph under every row.** All of that prose is true and
+    // most of it is load-bearing — why haptics are on, what an export can and cannot do, why
+    // diagnostics are off — but shown all at once it buried the thing people actually came for.
+    // The founder had to *"scroll down an ugly long scroll of info to the bottom"* to reach their
+    // own account. So the prose moved one tap in, behind the row it explains, and the index is one
+    // screen: your account first, because it is the most asked-for row and it was the last one.
+
+    /// A page of Settings. The order is the order of the index.
+    enum Page: String, Identifiable, CaseIterable {
+        case appearance, scoring, opening, search, data, discover, performance, build
+        var id: String { rawValue }
+
+        var title: String {
+            switch self {
+            case .appearance: return "Appearance"
+            case .scoring: return "Scoring"
+            case .opening: return "The opening"
+            case .search: return "Search"
+            case .data: return "Your darts"
+            case .discover: return "Teams, leagues and tournaments"
+            case .performance: return "How the app performs"
+            case .build: return "This build"
+            }
+        }
+
+        /// One line, so the index says what is behind a row without opening it.
+        var summary: String {
+            switch self {
+            case .appearance: return "Light, dark or the phone's"
+            case .scoring: return "Notation, screen and haptics"
+            case .opening: return "Sound and haptics at launch"
+            case .search: return "What THRØ puts in Spotlight"
+            case .data: return "Export, backup and what a file holds"
+            case .discover: return "Remove everything kept on this phone"
+            case .performance: return "Off unless you turn it on"
+            case .build: return "Version, fonts and what is not built"
+            }
+        }
+
+        var icon: ThroIcon {
+            switch self {
+            case .appearance: return .eye
+            case .scoring: return .target
+            case .opening: return .play
+            case .search: return .search
+            case .data: return .filePen
+            case .discover: return .users
+            case .performance: return .clock
+            case .build: return .info
+            }
+        }
+    }
+
+    @ViewBuilder private var settingsIndex: some View {
+        // Your account, first. It used to be the last row of the last group.
+        SectionHeader("You")
+        if let onAccount {
+            LinkRow(icon: .circleUser, label: "Your account and profile", value: accountValue, action: onAccount)
+        } else {
+            SettingsRow(icon: .circleUser, label: "Your account and profile", value: "This build names no server")
+        }
+        // The readiness screen is not a page of settings, it is an answer to "can I even see this
+        // on my phone", so it keeps its own row rather than hiding behind one.
+        SectionHeader("This phone")
+        LinkRow(icon: .circleCheck, label: "What you can see on this phone",
+                value: "Every surface, and what is stopping each") { showingReadiness = true }
+        SectionHeader("Settings")
+        ForEach(Page.allCases) { page in
+            if page != .discover || onClearOrganisations != nil {
+                LinkRow(icon: page.icon, label: page.title, value: page.summary) { self.page = page }
+            }
+        }
+    }
+
+    @ViewBuilder private func settingsPage(_ page: Page) -> some View {
+        VStack(spacing: 0) {
+            TopBar(page.title, eyebrow: "Settings", onBack: { self.page = nil })
+            ScrollView {
+                VStack(alignment: .leading, spacing: 0) {
+                    switch page {
+                    case .appearance: appearanceGroup
+                    case .scoring: scoringGroup
+                    case .opening: openingGroup
+                    case .search: searchGroup
+                    case .data: yourDarts
+                    case .discover: startDiscoverAgain
+                    case .performance: performanceGroup
+                    case .build: thisBuild
+                    }
+                }
+            }
+        }
+        .background(ThroColor.colorBackgroundPrimary.ignoresSafeArea())
+    }
+
+    @ViewBuilder private var canDo: some View {
+        group("What this build can do") {
+            Text("Some of what this build added only appears when something else is true — a match in progress, a screen plugged in, a fixture with a date on it. This reads what this phone will allow and says where to look for each one.")
+                .thro(ThroTypography.metadata)
+                .foregroundStyle(ThroColor.colorTextSecondary)
+                .fixedSize(horizontal: false, vertical: true)
+            ThroButton("What you can see on this phone", variant: .secondary, size: .medium) {
+                showingReadiness = true
+            }
+        }
+    }
+
+    @ViewBuilder private var appearanceGroup: some View {
+        group("Appearance") {
+            SegmentedControl(Appearance.allCases.map { ($0, $0.label) }, selection: appearance)
+            Text("Every screen follows this, scoring included. System follows the phone.")
+                .thro(ThroTypography.metadata)
+                .foregroundStyle(ThroColor.colorTextSecondary)
+        }
+    }
+
+    @ViewBuilder private var scoringGroup: some View {
+        group("Scoring") {
+            // **How a visit is entered**, and the reason it is here as well as on the
+            // scoring rail: the founder asked for both notations, and a control that
+            // exists only inside a match is one nobody finds before their first match.
+            // The rail's switch changes the same stored value, so the two cannot drift.
+            // `SegmentedControl` and not SwiftUI's `Picker(.segmented)`, which is what
+            // the first version of this row reached for. A `UISegmentedControl` is
+            // **32 points tall** and a frame around it does not enlarge its segments —
+            // so that row would have shipped a control below the 44-point floor this
+            // app holds every other control to, on a screen whose whole reason for
+            // existing is that the founder could not reliably hit things. The design
+            // system already had the right control, drawing the Appearance row ten
+            // lines above this one.
+            Eyebrow("How a visit is entered")
+            SegmentedControl(ScoringEntryMode.allCases.map { ($0, $0.label) },
+                             selection: entryMode)
+            Text(SettingsScreen.entryModeNote(ScoringEntryMode(stored: entryModeRaw)))
+                .thro(ThroTypography.metadata)
+                .foregroundStyle(ThroColor.colorTextSecondary)
+                .fixedSize(horizontal: false, vertical: true)
+            // The export's Settings lists this row under Scoring, default On. The switch
+            // is the platform's; the export draws no toggle.
+            HStack(spacing: 12) {
+                Icon(.smartphone, size: 18).foregroundStyle(ThroColor.colorTextSecondary)
+                Toggle(isOn: $keepScreenAwake) {
+                    Text("Keep screen awake").thro(ThroTypography.body).foregroundStyle(ThroColor.colorTextPrimary)
+                }
+                .tint(ThroColor.colorSurfaceBrand)
+            }
+            .frame(minHeight: 52)
+            .overlay(alignment: .bottom) { Rectangle().fill(ThroColor.colorBorderDefault).frame(height: 1) }
+            Text("While scoring, the phone does not sleep between visits.")
+                .thro(ThroTypography.metadata)
+                .foregroundStyle(ThroColor.colorTextSecondary)
+            // PD-015. Default on: the point of a haptic at a dartboard is that it is
+            // felt while the player is looking at the board. Off is offered because a
+            // phone buzzing in a pocket through a match is somebody else's idea of help.
+            HStack(spacing: 12) {
+                Icon(.target, size: 18).foregroundStyle(ThroColor.colorTextSecondary)
+                Toggle(isOn: $haptics) {
+                    Text("Haptics").thro(ThroTypography.body).foregroundStyle(ThroColor.colorTextPrimary)
+                }
+                .tint(ThroColor.colorSurfaceBrand)
+            }
+            .frame(minHeight: 52)
+            .overlay(alignment: .bottom) { Rectangle().fill(ThroColor.colorBorderDefault).frame(height: 1) }
+            Text("A light tap on every key, a firmer one when a visit is saved, and its own sensation for a bust, a checkout coming up, an undo, a leg, and the match — so the ones that matter are felt without looking at the phone.")
+                .thro(ThroTypography.metadata)
+                .foregroundStyle(ThroColor.colorTextSecondary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+    }
+
+    @ViewBuilder private var openingGroup: some View {
+        group("Opening") {
+            // PD-007 v2: the throw that opens the app, its sound and its haptic. Sound goes
+            // through the ambient session, so the silent switch always wins.
+            toggleRow(icon: .info, label: "Sound", isOn: $openingSound)
+            toggleRow(icon: .smartphone, label: "Haptic on the strike", isOn: $openingHaptics)
+            if let onReplayOpening {
+                ThroButton("Play the opening again", variant: .secondary, size: .medium, action: onReplayOpening)
+                    .padding(.top, ThroSpacing.spacing2)
+            }
+            Text("The silent switch silences the sound whatever this says. Reduce Motion shows the finished mark instead of the throw.")
+                .thro(ThroTypography.metadata)
+                .foregroundStyle(ThroColor.colorTextSecondary)
+        }
+    }
+
+    @ViewBuilder private var searchGroup: some View {
+        group("Search") {
+            HStack(spacing: 12) {
+                Icon(.search, size: 18).foregroundStyle(ThroColor.colorTextSecondary)
+                Toggle(isOn: $spotlight) {
+                    Text("Find these on this phone").thro(ThroTypography.body)
+                        .foregroundStyle(ThroColor.colorTextPrimary)
+                }
+                .tint(ThroColor.colorSurfaceBrand)
+            }
+            .frame(minHeight: 52)
+            .overlay(alignment: .bottom) { Rectangle().fill(ThroColor.colorBorderDefault).frame(height: 1) }
+            Text("Your matches, the people who play here and your teams appear in this iPhone's own search. The index is on the phone, is never sent to Apple, and is not shared with your other devices. Turning this off removes what is already there.")
+                .thro(ThroTypography.metadata)
+                .foregroundStyle(ThroColor.colorTextSecondary)
+        }
+    }
+
+    @ViewBuilder private var performanceGroup: some View {
+        group("How the app performs") {
+            HStack(spacing: 12) {
+                Icon(.shield, size: 18).foregroundStyle(ThroColor.colorTextSecondary)
+                Toggle(isOn: $diagnostics) {
+                    Text("Collect performance reports").thro(ThroTypography.body)
+                        .foregroundStyle(ThroColor.colorTextPrimary)
+                }
+                .tint(ThroColor.colorSurfaceBrand)
+            }
+            .frame(minHeight: 52)
+            .overlay(alignment: .bottom) { Rectangle().fill(ThroColor.colorBorderDefault).frame(height: 1) }
+            Text("iOS can tell THRØ how long it took to open, when it froze and how much memory it used, at most once a day. The reports are written to this phone and go nowhere. Turning this off deletes the ones already collected.")
+                .thro(ThroTypography.metadata)
+                .foregroundStyle(ThroColor.colorTextSecondary)
+                .fixedSize(horizontal: false, vertical: true)
+                // Off means gone, not merely stopped. A switch that left the collected
+                // reports behind would be a switch that lies, which is the rule the
+                // Spotlight switch above already follows.
+                .onChange(of: diagnostics) { _, on in if !on { onForgetDiagnostics() } }
+            if diagnostics {
+                Text(ThroDiagnostics.sentence(diagnosticsHeld()))
+                    .thro(ThroTypography.metadata)
+                    .foregroundStyle(ThroColor.colorTextSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+    }
+
+    @ViewBuilder private var yourDarts: some View {
+        group("Your darts") {
+            // PD-017. Both halves are told. A player who learns their darts are in
+            // iCloud from a support article rather than from the app has been failed
+            // twice — and one who assumes they are, and is wrong, has been failed worse.
+            let state = backupState()
+            SettingsRow(icon: state.isIncluded ? .cloudCheck : .cloudOff,
+                        label: "In the phone's backup",
+                        value: state.isIncluded ? "Yes" : "No")
+            Text(BackupPolicy.sentence(state))
+                .thro(ThroTypography.metadata)
+                .foregroundStyle(state.isIncluded ? ThroColor.colorTextSecondary : ThroColor.colorStatusError)
+                .fixedSize(horizontal: false, vertical: true)
+            if let makeExport {
+                ThroButton("Export everything", variant: .secondary, size: .medium) {
+                    do {
+                        exported = try makeExport()
+                        exportProblem = nil
+                    } catch {
+                        exported = nil
+                        exportProblem = "\(error)"
+                    }
+                }
+                .padding(.top, ThroSpacing.spacing2)
+                if let exported {
+                    // A button's face rather than a line of text. It was a bare `Text`:
+                    // no pressed state and a hit area the size of the ink, which is the
+                    // founder's original complaint on a control `check_controls_react`
+                    // was not looking at. It looks at ShareLink now.
+                    ShareLink(item: exported) {
+                        ThroButtonFace("Save or send \(exported.lastPathComponent)",
+                                       variant: .secondary, size: .medium)
+                    }
+                    .buttonStyle(ThroPressStyle(radius: ThroSpacing.radiusControl))
+                }
+                if let exportProblem {
+                    Snackbar(exportProblem, tone: .error)
+                }
+                Text("One file with every match, every visit as written — corrections and all — and every team this phone keeps. Nothing is sent anywhere: you choose where it goes. Pictures are not in it; the file names the ones this phone holds.")
+                    .thro(ThroTypography.metadata)
+                    .foregroundStyle(ThroColor.colorTextSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
+
+                // PD-017. An export nobody can read back is a file a player has to
+                // *trust* worked. This opens one and says what is in it — and writes
+                // nothing, which is the decision rather than a limitation.
+                ThroButton("Check a file", variant: .ghost, size: .medium) { picking = true }
+                    .padding(.top, ThroSpacing.spacing2)
+                if let inspection {
+                    inspected(inspection)
+                }
+                Text("Checking a file reads it and nothing else. Bringing one back into the app is not built: merging two journals is the same problem as syncing two phones, and doing it badly would leave a record that lies about what this phone wrote.")
+                    .thro(ThroTypography.metadata)
+                    .foregroundStyle(ThroColor.colorTextSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+    }
+
+    @ViewBuilder private var startDiscoverAgain: some View {
+        if let onClearOrganisations {
+            group("Start the Discover tab again") {
+                let n = organisationCount()
+                Note("Removes every team, league and tournament on this phone, with their rosters, "
+                     + "fixtures and results — \(n) organisation\(n == 1 ? "" : "s") right now. Your matches and "
+                     + "the people you have played stay: they are history, not organisations.")
+                ThroButton("Remove every team, league and tournament", variant: .destructive, size: .medium, disabled: n == 0) { confirmingClear = true }
+                    .confirmationDialog("Remove every organisation on this phone?", isPresented: $confirmingClear, titleVisibility: .visible) {
+                        Button("Remove \(n) organisation\(n == 1 ? "" : "s")", role: .destructive) { onClearOrganisations(); confirmingClear = false }
+                        Button("Keep them", role: .cancel) { confirmingClear = false }
+                    } message: {
+                        Text("Rosters, fixtures and results on this phone go with them. Matches and people stay. This cannot be undone.")
+                    }
+            }
+        }
+    }
+
+    @ViewBuilder private var thisBuild: some View {
+        group("This build") {
+            SettingsRow(icon: .info, label: "Build", value: BuildInfo.label)
+            SettingsRow(icon: .info, label: "Matches", value: "Stay on this device")
+            SettingsRow(icon: .cloudOff, label: "Sending results to THRØ", value: "Not built")
+            SettingsRow(icon: .info, label: "Fonts", value: ThroFont.customFacesRegistered ? "Embedded" : "System face")
+            if let onAccount {
+                LinkRow(icon: .circleUser, label: "Account and profile", value: accountValue, action: onAccount)
+            } else {
+                SettingsRow(icon: .circleUser, label: "Account and profile", value: "This build names no server")
             }
         }
     }
