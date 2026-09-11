@@ -109,6 +109,12 @@ move together, so the app and its extension always carry the same build number. 
 "twice" until the Personal configuration and the extension were counted; build 2 was the first to find
 out.)
 
+**"exportArchive Failed to Use Accounts" means Xcode on this Mac holds no Apple ID with App Store
+Connect access** — the distribution log says *"Failed to find an account with App Store Connect access
+for team 2XM324WPD5"*. The archive still succeeds, because signing uses the certificate already in the
+keychain; only the upload needs somebody signed in. Xcode → Settings → Accounts → **+** → Apple ID,
+with the account's email (not the Team ID), then run the second command again: the archive is kept.
+
 ### What actually stopped it the first three times
 
 Worth reading before believing any error Xcode prints, because two of the three messages pointed at
