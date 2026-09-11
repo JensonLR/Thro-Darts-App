@@ -133,14 +133,20 @@ public final class AccountStore: ObservableObject {
     /// Returns the sentence to show when it did not work, and nil when it did.
     @discardableResult
     public func eraseAccount() async -> String? {
+        let before = state
         state = .busy("Erasing your account")
-        defer { friends = nil; invite = nil; friendsNote = nil }
         do {
             _ = try await api.eraseAccount()
             state = .signedOut
+            friends = nil; invite = nil; friendsNote = nil
             return nil
         } catch {
-            state = .signedOut
+            // **Back to where it was.** The first version signed out whatever happened, reasoning
+            // that a phone acting signed in to an account that has gone is worse — true, but the
+            // account has NOT gone when the erasure failed, and signing out then took the screen
+            // showing the error off the screen with it. A failure now leaves the person where they
+            // were, still signed in, reading what went wrong.
+            state = before
             return SignInProblem.words(error)
         }
     }

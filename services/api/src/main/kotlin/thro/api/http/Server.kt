@@ -162,11 +162,16 @@ public fun Application.thro(deps: Deps) {
                 // a declared length over the cap is 413, no declared length is 411, and what
                 // arrives is measured again.
                 val out: Http = run {
+                    // GET and DELETE carry no body, so neither needs a length declared. Requiring
+                    // one turned `DELETE /v1/me` into a 411 for every caller that sent no body —
+                    // which is every correct caller — and made erasure look broken on the phone.
+                    // A body that IS sent is still measured twice, which is what the rule is for.
+                    val bodyless = e.method == "GET" || e.method == "DELETE"
                     val body = if (e.method == "GET") "" else {
                         val declared = call.request.headers["Content-Length"]?.toLongOrNull()
                         when {
-                            declared == null -> return@run Http(411, """{"error":"Content-Length is required"}""")
-                            declared > MAX_BODY -> return@run Http(413, """{"error":"body over 64 KiB"}""")
+                            declared == null && !bodyless -> return@run Http(411, """{"error":"Content-Length is required"}""")
+                            (declared ?: 0) > MAX_BODY -> return@run Http(413, """{"error":"body over 64 KiB"}""")
                         }
                         val text = call.receiveText()
                         if (text.length > MAX_BODY) return@run Http(413, """{"error":"body over 64 KiB"}""")

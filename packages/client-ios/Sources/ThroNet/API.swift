@@ -372,14 +372,20 @@ public actor ThroAPI {
     public func eraseAccount() async throws -> Erasure {
         guard let bearer = session?.accessToken else { throw APIError.signedOut }
         do {
-            let (data, http) = try await send("DELETE", "/v1/me", body: nil, bearer: bearer)
+            // An empty JSON object rather than no body at all. The server used to demand a
+            // Content-Length on every non-GET and answered a bodyless DELETE with 411; that is
+            // fixed, but a phone in somebody's pocket meets whatever is deployed, and two bytes
+            // cost nothing.
+            let (data, http) = try await send("DELETE", "/v1/me", body: Data("{}".utf8), bearer: bearer)
             guard http.statusCode == 200 else { throw APIError.status(http.statusCode, String(decoding: data, as: UTF8.self)) }
             session = nil
             store.clear()
             return try Wire.decoder.decode(Erasure.self, from: data)
         } catch {
+            // Only when the account really is gone, or the session is. **Not on any other failure**:
+            // clearing the session on, say, a 411 signed the phone out while the account was still
+            // there, so the erasure looked like it had happened and had not.
             if case APIError.status(let code, _) = error, code == 401 || code == 409 {
-                // Gone already, or the session was: either way this phone is not signed in.
                 session = nil
                 store.clear()
             }

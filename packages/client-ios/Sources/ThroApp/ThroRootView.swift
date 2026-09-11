@@ -286,6 +286,8 @@ public struct ThroRootView: View {
     @AppStorage(Appearance.storageKey) private var appearanceRaw: String = Appearance.system.rawValue
     @State private var showingSettings = false
     @State private var showingAccount = false
+    /// Your profile, reached in one tap from the You tab rather than four from Settings.
+    @State private var showingProfile = false
     /// The You tab's Friends button opens the account screen on Friends rather than on its front.
     @State private var openingFriends = false
     @StateObject private var accountHolder = AccountHolder()
@@ -510,6 +512,9 @@ public struct ThroRootView: View {
                          onBack: { viewing = nil },
                          onRemove: { if clubs.deletePerson(person.id) { viewing = nil } })
                 .throAppearance(Appearance(stored: appearanceRaw))
+        } else if showingProfile, let account, case .signedIn(let profile) = account.state, let id = profile.accountId {
+            YourProfileScreen(account: account, profile: profile, accountId: id,
+                              images: clubs.images, picture: { clubs.image($0) }) { showingProfile = false }
         } else if showingAccount, let account {
             // **One way in, and it is the good one.** SIGN IN on the You tab used to open a settings
             // list of buttons under a paragraph; it opens the same board the welcome does. The
@@ -582,6 +587,7 @@ public struct ThroRootView: View {
                              onSettings: { showingSettings = true },
                              onAccount: { showingAccount = true },
                              onFriends: { openingFriends = true; showingAccount = true },
+                             onProfile: { showingProfile = true },
                              onClubs: { store.tab = .discover },
                              onPerson: { viewing = $0 })
             .task { if let account, account.isSignedIn, account.friends == nil { await account.loadFriends() } }
@@ -1246,6 +1252,8 @@ public struct YouScreen: View {
     private let onSettings: () -> Void
     private let onAccount: () -> Void
     private let onFriends: () -> Void
+    /// Straight to the page about the person, rather than to a list with it on.
+    private let onProfile: () -> Void
     private let onClubs: () -> Void
     private let onPerson: (LocalPerson) -> Void
     private let badge: (Club) -> Image?
@@ -1254,6 +1262,7 @@ public struct YouScreen: View {
                 badge: @escaping (Club) -> Image? = { _ in nil },
                 onSettings: @escaping () -> Void,
                 onAccount: @escaping () -> Void = {}, onFriends: @escaping () -> Void = {},
+                onProfile: @escaping () -> Void = {},
                 onClubs: @escaping () -> Void = {}, onPerson: @escaping (LocalPerson) -> Void = { _ in }) {
         self.account = account
         self.badge = badge
@@ -1262,6 +1271,7 @@ public struct YouScreen: View {
         self.onSettings = onSettings
         self.onAccount = onAccount
         self.onFriends = onFriends
+        self.onProfile = onProfile
         self.onClubs = onClubs
         self.onPerson = onPerson
     }
@@ -1368,7 +1378,12 @@ public struct YouScreen: View {
                 case .signedIn:
                     HStack(spacing: ThroSpacing.spacing3) {
                         slateButton("FRIENDS", lit: true, seed: 13, action: onFriends)
-                        slateButton("ACCOUNT", lit: false, seed: 17, action: onAccount)
+                        // **PROFILE, and it goes to the profile.** It used to say ACCOUNT and open
+                        // a settings list, from which the profile was another row — so the way to
+                        // your own name and picture ran You → Settings → a long scroll → Account
+                        // and profile → Your profile. Five steps to the page that is about you, on
+                        // the tab called You.
+                        slateButton("PROFILE", lit: false, seed: 17, action: onProfile)
                     }
                 case .none, .busy:
                     EmptyView()

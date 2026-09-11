@@ -2997,3 +2997,24 @@ so the naive version would have flashed the sign-in board at an already-signed-i
 single launch. `AccountStore.settled` says whether `start()` has finished, the root now calls
 `start()` as the app comes up rather than waiting for somebody to open the account screen, and
 `Welcome.shows` refuses to ask until the answer is actually known. A test holds both halves.
+
+## Delete actually deletes, and your profile is one tap from You
+
+**Why it did not work: 411.** `DELETE /v1/me` was deployed and reachable; the body guard in front of
+every route required a `Content-Length` on any method that was not GET, and a DELETE carries no
+body, so every correct caller was answered *Content-Length is required*. The guard now treats GET
+and DELETE as bodyless — a body that IS sent is still measured twice, which is what the rule was
+written for — and an HTTP property holds that a bodyless DELETE is never refused for having no
+length. The phone also sends `{}` now, so erasure works against the server that is deployed today
+rather than waiting for the next deploy.
+
+**And why it looked like nothing happened.** `AccountStore.eraseAccount` signed the phone out
+whatever the outcome, reasoning that a phone acting signed in to an account that has gone is worse.
+True — but the account has NOT gone when the erasure fails, and signing out took the screen showing
+the error off the screen with it, so a failure was indistinguishable from a success. A failure now
+puts the state back where it was, still signed in, with the reason on the page. The wire layer
+forgets the session only on 401 and 409, which are the two answers that mean it really is over.
+
+**The journey.** Reaching your own name ran You → Settings → a long scroll → *Account and profile* →
+*Your profile*: five steps, on the tab called You. The slate's second button says **PROFILE** and
+opens the profile. Two taps to your name, your picture and the way out.

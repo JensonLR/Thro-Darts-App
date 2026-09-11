@@ -143,6 +143,9 @@ class HttpTest {
             // with a sentence rather than a 500 from a null. What erasure DOES is ErasureTest's; this
             // holds that DELETE is routed at all, which no other endpoint in the contract exercises.
             check("erasing an account needs a principal", del("/v1/me", subject = null).status.value == 401)
+            // A DELETE carries no body, so it declares no length. Demanding one answered every
+            // correct caller with 411 and made erasure look broken on the phone.
+            check("a bodyless DELETE is not refused for having no Content-Length", del("/v1/me").status.value != 411)
             val noAccount = del("/v1/me")
             check("a development principal has no account to erase, and is told so",
                   noAccount.status.value == 400 && noAccount.bodyAsText().contains("no account to erase"))
@@ -185,6 +188,6 @@ class HttpTest {
                 bareUse.get() == 0 && roles.contains("app_match") && roles.contains("app_competition") && roles.contains("app_read") && roles.all { it in setOf("app_match", "app_competition", "app_read") })
         }
         println("  $passed HTTP properties held")
-        assertEquals(37, passed)
+        assertEquals(38, passed)
     }
 }
