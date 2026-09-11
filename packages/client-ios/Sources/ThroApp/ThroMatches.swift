@@ -438,14 +438,16 @@ struct ThroMatchScreen: View {
         VStack(alignment: .leading, spacing: ThroSpacing.spacing3) {
             SectionHeader(r.yourAnswer == nil ? "Your answer" : "Change your answer")
             HStack(spacing: ThroSpacing.spacing3) {
+                // Full width, as the match card's Continue is: two share the row, and the one left
+                // after an answer spans it rather than sitting small at its start.
                 if r.yourAnswer != "confirmed" {
-                    ThroButton("Confirm result", variant: .primary, size: .large) {
+                    ThroButton("Confirm result", variant: .primary, size: .large, fullWidth: true) {
                         Task { await model.answer(r.matchId, agree: true, api) }
                     }
                     .disabled(model.working)
                 }
                 if r.yourAnswer != "contested" {
-                    ThroButton("Contest", variant: .secondary, size: .large) { contesting = true }
+                    ThroButton("Contest", variant: .secondary, size: .large, fullWidth: true) { contesting = true }
                         .disabled(model.working)
                 }
             }
