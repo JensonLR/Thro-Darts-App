@@ -1799,3 +1799,36 @@ tournament follows when a league publishes one as a competition and not as a cup
 Leagues abroad (forty-two on the directory) wait until distances there can be stated truthfully.
 Names shouted in capitals are read down to title case for display; the name as listed is on the
 row's source record.
+
+## PD-038 — The app asks for an account once, straight after the opening, on the board
+
+**Taken on delegated authority, 2026-09-11**, from the founder: *"sign in should be at the loading
+page before main screen, should encourage people to sign up / sign in if that makes sense. need a
+beautiful way to do this that matches our brand identity."* Reversible: the screen is one flag.
+
+### Decided
+
+After the opening, and **once ever**, a signed-out player is shown the ways in: Continue with Apple,
+Continue with Google, Use a passkey, and *Not now, just score*. It is drawn on **the board** — the
+same lamp, dust and chalk the dart landed in a second earlier — with the wordmark on a chalk rule
+and the three ways in as the chalk keys the scoring screen is made of. Signing in dismisses it with
+no second tap. "Not now" dismisses it and is never shown again; sign-in stays where it was, on the
+You tab. The screen carries one promise, in small print under the door out: **matches scored on this
+phone stay on this phone, signed in or not**, which is true of this build and is asserted by a test
+so it cannot quietly stop being true.
+
+### Why
+
+Sign-in was four taps in — You, SIGN IN, then a settings list of buttons under a paragraph — so
+almost nobody had a THRØ ID, and everything that needs one (a name in a team's lineup, a friend by
+code, a league registration) could not reach them. The opening exists to make the first five seconds
+worth watching; handing that to a white settings form is throwing it away. And the board is already
+the app's own argument about what a scoreboard is, so the screen that asks for a name should be one.
+
+### What this does not decide
+
+It is **not a gate**. PD-012 is local-first: two people score a match on one phone with no account,
+no network and no permission, and that is the product rather than a trial. So the way past is plain
+text, plainly placed, and says what staying out costs, which is nothing. Encouraging is not
+cornering. Nor does it decide anything about a *second* ask later; a player who says not now is not
+asked again by this screen.

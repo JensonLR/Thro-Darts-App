@@ -2847,3 +2847,39 @@ absence of a twin and of any person; client 636 (LedgerTests 7, placed-league pi
 **TestFlight.** A second archive from the Mac stopped where the first did — *No Accounts* — so the
 runbook's Mac section is now the click-by-click the founder asked for, from the Xcode menu to the
 Organizer.
+
+## The app asks once, on the board: sign-in after the opening (PD-038)
+
+The founder: *"sign in should be at the loading page before main screen ... need a beautiful way to
+do this that matches our brand identity. google signin doesnt work either. need to sign in to be
+able to see the beautiful you profile view."*
+
+**The screen.** `WelcomeScreen` sits between the opening and the app, under the opening's own layer
+so the dart resolves *into* it rather than cutting to it. It is a `ThroBoard`: lamp at the top, chalk
+field, the wordmark at 1.3× display cap height on a `ChalkRule`, one headline in the sport face, one
+sentence naming what an account is actually for — a team's lineup (V029), a league's register (V014),
+a friend by code (PD-035) — and three ways in drawn as `ChalkKeyStyle` keys, the same control the
+keypad is made of. Apple's key carries the Apple mark, as a custom Sign in with Apple button must.
+Signing in dismisses it without a second tap; *Not now, just score* dismisses it for good. Four tests
+hold the rules: asked once and only where there is a server to ask about, the door out worded as a
+choice rather than a dismissal, the body selling only what THRØ has (no rating — OD-001), and the
+local-first promise asserted verbatim so the day match upload ships, the test fails and the sentence
+has to change with the behaviour.
+
+Two layout defects were found by looking at it on the phone rather than by reasoning: five equal
+`Spacer`s put a hole in the middle of the screen (now three groups and two flexible gaps), and
+`.ignoresSafeArea()` on the content cut the top off the wordmark under the Dynamic Island — `ThroBoard`
+already bleeds its surface to every edge while keeping content inside the safe area, which is the
+distinction that exists because the scoring rail once sat under the island.
+
+**Google sign-in was not broken.** Driven on the simulator it reaches Google's own consent sheet and
+then *Sign in to continue to THRØ*, so the OAuth client, the reversed-client-id redirect, the PKCE
+exchange and the server's audience are all correct; the staging routes verify both providers rather
+than answering 503. What failed on the founder's phone was the build **installed** there: signed
+before the App ID had its capabilities, so Sign in with Apple died with
+`AuthorizationError Code=1000` and the whole sign-in surface looked dead. Rebuilding against the
+corrected App ID fixes it, and the errors still on the Signing & Capabilities tab are stale — the
+profiles on disk now carry `applesignin`, `associated-domains` and the app group, and Xcode's
+capability cache refetched at 460 kB against the 25 kB stale one it had been answering from.
+
+Counts: client 640 (four on the welcome), every repository check, 92 schema properties.

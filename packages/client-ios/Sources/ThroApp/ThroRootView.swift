@@ -310,6 +310,9 @@ public struct ThroRootView: View {
     @AppStorage(ThroDiagnostics.enabledKey) private var diagnostics: Bool = false
     /// PD-007: the opening plays once, at cold launch, over whatever the app shows first.
     @State private var opening = true
+    /// Asked once, ever: the welcome (and its ways in) after the opening. Answered by signing in
+    /// OR by "not now" — both are answers, and neither is asked twice.
+    @AppStorage(Welcome.seenKey) private var welcomeSeen: Bool = false
     /// The opening withdraws its own motion under this setting; the handover has to withdraw too,
     /// or a person who asked for none would still be shown the app growing towards them.
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -325,6 +328,16 @@ public struct ThroRootView: View {
                 // magnitude defines. One movement, in one direction, rather than a cut.
                 .scaleEffect(opening && !reduceMotion ? 2 - ThroMotion.motionScaleImpact : 1)
                 .opacity(opening && !reduceMotion ? 0 : 1)
+            // Between the opening and the product, once: the welcome, on the board the dart landed
+            // in. It sits UNDER the opening and OVER the app, so the opening resolves into it
+            // rather than cutting to it, and the tabs are never briefly visible behind it.
+            if let account, Welcome.shows(configured: true, signedIn: account.isSignedIn, seen: welcomeSeen) {
+                WelcomeScreen(account: account) {
+                    withAnimation(.throExit(ThroMotion.motionDurationStandard)) { welcomeSeen = true }
+                }
+                .transition(.opacity)
+                .zIndex(0.5)
+            }
             if opening {
                 LaunchSequenceView { fade in
                     // `.easeInOut` was Apple's curve on the single most important transition in the
