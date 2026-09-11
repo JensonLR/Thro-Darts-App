@@ -72,7 +72,7 @@ routes are mounted from. In brief:
 | `GET /v1/me/inbox` | principal | The caller's own Secretary tasks by section |
 | `GET /v1/teams/{teamId}/inbox` | principal with `team.manage` | The team's Secretary inbox; anyone else is 403 and the refusal is on the audit record |
 | `GET /v1/me/discovery?from&to&locality` | principal | Discovery cards with their reasons |
-| `GET /v1/leagues?locality` | anyone | The leagues' public front (PD-033): seasons, divisions, teams, home venues with coordinates, and the source and basis of each |
+| `GET /v1/leagues?locality` | anyone | The leagues' public front (PD-033): seasons, divisions, teams, home venues with coordinates, and the source and basis of each; every league carries its own point and website (PD-037), and one the directory placed is listed with no season |
 | `POST /v1/teams` | principal | Start a team; the caller is its first member and admin (plan §6) |
 | `GET /v1/me/teams` | principal | The caller's current teams with their role and the member count |
 | `GET /v1/teams/{teamId}` | anyone | A team's front: name, town, home venue, seasons, roster — names only where `identity.player_may_be_disclosed` allows; private teams 404 to non-members; `yourRole` with a bearer |

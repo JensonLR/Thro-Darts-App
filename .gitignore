@@ -23,3 +23,5 @@ xcuserdata/
 .claude-crawl/
 .neon
 .env.local
+# Written by xcodebuild archive; nothing in it is ours.
+apps/ios/ThroDarts.xcodeproj/project.xcworkspace/xcshareddata/

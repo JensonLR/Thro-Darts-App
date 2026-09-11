@@ -169,6 +169,22 @@ public struct ThroLedger: View {
         return Array(mine.suffix(limit))
     }
 
+    /// The row whose remainder is what stands on the board for this seat: the last one no
+    /// retraction struck. Every earlier remainder was written over, and is drawn the way a chalker
+    /// draws it — **one line through it, still legible under the line** — because the column is a
+    /// chalkboard and that is what a chalkboard does when a new figure goes under an old one. The
+    /// standing figure is the one number in the column with no line through it, which is how a
+    /// player at the oche finds it without reading.
+    static func standing(_ rows: [ThroLedgerRow], seat: Int) -> String? {
+        rows.last { $0.seat == seat && !$0.struck }?.id
+    }
+
+    /// Written over by a later visit. A retracted row is not superseded — it is scraped, which is
+    /// a different mark for a different thing, and a row never carries both.
+    static func isSuperseded(_ row: ThroLedgerRow, in rows: [ThroLedgerRow]) -> Bool {
+        !row.struck && standing(rows, seat: row.seat) != row.id
+    }
+
     /// The last five visit totals, for the strip that stands in when there is no room for rows.
     static func tally(_ rows: [ThroLedgerRow], seat: Int) -> [Int] {
         rows.filter { $0.seat == seat && !$0.struck }.suffix(5).map(\.visitTotal)
@@ -222,21 +238,34 @@ public struct ThroLedger: View {
 
     @ViewBuilder
     private func column(seat: Int, limit: Int) -> some View {
+        let role = ThroTypography.heading3.family(.sport)
         VStack(alignment: seat == 0 ? .leading : .trailing, spacing: 0) {
             ForEach(ThroLedger.visible(rows, seat: seat, limit: limit)) { row in
+                let superseded = ThroLedger.isSuperseded(row, in: rows)
                 HStack(spacing: ThroSpacing.spacing3) {
                     Text("\(row.visitTotal)")
-                        .thro(ThroTypography.heading3.family(.sport).tracking(em: 0))
+                        .thro(role.tracking(em: 0))
                         .foregroundStyle(ThroColor.colorTextOnBoardSecondary)
                     Text(row.remainingAfter.map { "\($0)" } ?? "—")
-                        .thro(ThroTypography.heading3.family(.sport).weight(.bold).tracking(em: 0))
-                        .foregroundStyle(ThroColor.colorTextOnBoard)
+                        .thro(role.weight(.bold).tracking(em: 0))
+                        // The figure on the board is the bright one; the ones written over step
+                        // back, so the column reads bottom-up without being read.
+                        .foregroundStyle(superseded ? ThroColor.colorTextOnBoardSecondary : ThroColor.colorTextOnBoard)
+                        .overlay {
+                            if superseded {
+                                // The chalker's line: fresh chalk through an old remainder, at a
+                                // hand's angle, sized to the figure it strikes.
+                                ChalkStrike(capHeight: role.capHeight, angle: ChalkStrike.boardAngle)
+                                    .fill(ThroColor.colorTextOnBoard)
+                            }
+                        }
                 }
                 .frame(height: ThroStage.ledgerRow)
                 .overlay {
                     if row.struck {
-                        // Chalk scraped off, in the board's own colour. The row stays where it is.
-                        ChalkStrike(capHeight: ThroTypography.heading3.family(.sport).capHeight)
+                        // A retraction: chalk scraped off, in the board's own colour, across the
+                        // whole row. The row stays where it is.
+                        ChalkStrike(capHeight: role.capHeight, angle: ChalkStrike.boardAngle)
                             .fill(ThroColor.colorBoardField)
                     }
                 }

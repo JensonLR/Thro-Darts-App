@@ -120,17 +120,51 @@ public struct ThroFixtureSlate: View {
         self.expanded = expanded
     }
 
+    /// The names' role. Held once so the row's height and the text agree. Both names take ONE
+    /// size, set by the longer of them: `minimumScaleFactor` shrinks each name on its own, and
+    /// "Jenson R." against "Ethan T." came out as two different sizes of person — the thing the
+    /// slate exists not to say. The scale is from the longer name's length; the factor stays on
+    /// as a last resort for a name longer than the scale allows.
+    var nameRole: ThroTypeRole {
+        let base = (expanded ? ThroTypography.display : ThroTypography.heading1).family(.sport).weight(.bold).tracking(em: 0)
+        return base.sized(base.size * Self.nameScale(longest: max(home.count, away.count), expanded: expanded))
+    }
+
+    /// How far below full size both names are drawn, from the longer name's character count.
+    /// Eight characters sit comfortably either side of the mark at display size on the narrowest
+    /// phone, ten at heading size; beyond that the pair scales down together, never below 0.6.
+    static func nameScale(longest: Int, expanded: Bool) -> CGFloat {
+        let comfortable: CGFloat = expanded ? 8 : 10
+        return max(0.6, min(1, comfortable / CGFloat(max(1, longest))))
+    }
+
+    /// The names row is **exactly one cap height tall**, with the capitals sat on its bottom edge,
+    /// the way a figure sits in `ThroFigure`. A text line is taller than its capitals — the font
+    /// keeps room above for accents and below for descenders — and when the row took the line's
+    /// height the slate's padding was measured from that invisible room: the names sat 13 pt lower
+    /// than the middle and the founder saw a block that was not central. Measuring from the
+    /// capitals puts the mark's ring on the capitals' own centre and the padding equal above and
+    /// below what is actually seen. Descenders hang below the row, as they do on any baseline.
+    static func nameRowHeight(_ role: ThroTypeRole) -> CGFloat { ThroTypography.capBox(role) }
+
+    /// The mark between the names: tip to tip, a shade over the capitals, so the ring reads at
+    /// the letters' weight and the dart's tips clear the cap line as the wordmark's do.
+    static func markSide(_ role: ThroTypeRole) -> CGFloat { (1.4 * role.capHeight).rounded() }
+
     public var body: some View {
+        let role = nameRole
+        let rowHeight = Self.nameRowHeight(role)
         ThroSlate {
             VStack(spacing: expanded ? ThroSpacing.spacing6 : ThroSpacing.spacing5) {
                 HStack(alignment: .center, spacing: ThroSpacing.spacing4) {
-                    name(home, alignment: .trailing)
+                    name(home, alignment: .trailing, role: role, height: rowHeight)
                     ThroMark()
                         .fill(ThroColor.colorMarkOnBoard)
-                        .frame(width: expanded ? 56 : 36, height: expanded ? 56 : 36)
+                        .frame(width: Self.markSide(role), height: Self.markSide(role))
                         .accessibilityHidden(true)
-                    name(away, alignment: .leading)
+                    name(away, alignment: .leading, role: role, height: rowHeight)
                 }
+                .frame(height: rowHeight)
                 if !tags.isEmpty {
                     HStack(spacing: ThroSpacing.spacing2) {
                         ForEach(tags, id: \.self) { tag in
@@ -159,16 +193,21 @@ public struct ThroFixtureSlate: View {
         .accessibilityLabel("\(home) versus \(away)" + (tags.isEmpty ? "" : ", " + tags.joined(separator: ", ")))
     }
 
-    private func name(_ text: String, alignment: Alignment) -> some View {
+    private func name(_ text: String, alignment: Alignment, role: ThroTypeRole, height: CGFloat) -> some View {
         Text(text)
-            .thro((expanded ? ThroTypography.display : ThroTypography.heading1).family(.sport).weight(.bold).tracking(em: 0))
+            .thro(role)
             .foregroundStyle(ThroColor.colorTextOnBoard)
             // One line each side, shrinking to fit: a name that wrapped against one that did not
             // read as two different sizes of person.
             .lineLimit(1)
             .minimumScaleFactor(0.5)
             .multilineTextAlignment(alignment == .trailing ? .trailing : .leading)
-            .frame(maxWidth: .infinity, alignment: alignment)
+            // The text keeps its own height: `minimumScaleFactor` would otherwise shrink the name
+            // to fit the shorter row, and the founder's names came out two-thirds size.
+            .fixedSize(horizontal: false, vertical: true)
+            // The baseline IS the row's bottom edge, asked of the font rather than estimated.
+            .alignmentGuide(.bottom) { d in d[.firstTextBaseline] }
+            .frame(maxWidth: .infinity, maxHeight: height, alignment: alignment == .trailing ? .bottomTrailing : .bottomLeading)
     }
 }
 

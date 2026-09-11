@@ -1764,3 +1764,38 @@ admin's to give later. A team's **front is public** — name, town, home venue, 
 roster is **named only where the disclosure rule allows** (`identity.player_may_be_disclosed`): an
 adult who has said so, or a guardian's consent. Everyone else is counted and not named, so a public
 front never shows a child. A private team is nobody's business but its members'.
+
+## PD-037 — Every league the directory places is on the map before its teams are, and says so
+
+**Taken on delegated authority, 2026-09-11**, from the founder: *"for leagues I think it would be
+good to gradually add more & more leagues, teams & tournaments so people outside of the north east
+can use the app."* Reversible: the directory rows can be withdrawn by source.
+
+### Decided
+
+THRØ imports the **LeagueRepublic darts directory** — every darts league it places in the British
+Isles, with the position each league gave it and the address of its own pages — as league rows with
+a **point of their own** (V030) and nothing else: no season, no team, no venue, no person. Three
+hundred and twenty-nine leagues on 11 September 2026. A league already imported from its own pages
+is found by that address and given its point, never made twice. The Discover slate measures a
+league from its own point when none of its pubs is placed, so *around you* is true in Salisbury and
+Peterhead as it is in Stockton; and it says, of every such league, that its **teams are not on THRØ
+yet** — the row never claims nought teams, the pin is drawn as a league and not as a pub, and the
+slate under the pin offers the league's own website. Discover lists six leagues and points at the
+map for the rest; the map's list of teams is for the leagues that have them, with a line counting
+the ones that do not.
+
+### Why
+
+A player outside Teesside opened a map with three pins on it and a slate that said *nothing near
+you*. The directory is public, places its leagues, and names no person — the same tests PD-033 set
+for a source. Importing it as points is the honest first step of "gradually": the league is real,
+its position is what it said, and everything THRØ does not know is said to be unknown rather than
+filled in. Teams follow league by league, by the same importer, from each league's own pages; a
+tournament follows when a league publishes one as a competition and not as a cup on a page.
+
+### What this does not decide
+
+Leagues abroad (forty-two on the directory) wait until distances there can be stated truthfully.
+Names shouted in capitals are read down to title case for display; the name as listed is on the
+row's source record.

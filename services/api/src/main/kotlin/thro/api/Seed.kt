@@ -1,5 +1,11 @@
 package thro.api
 
+import java.sql.Types
+
+import java.net.URI
+
+import java.math.BigDecimal
+
 import java.io.File
 import java.sql.Connection
 import java.sql.Date
@@ -104,12 +110,22 @@ public class Seed(private val c: Connection, private val now: Instant = Instant.
         val key = l["key"] as String
         val name = l["name"] as String
         val url = l["url"] as String
+        // Found by name, else by its web address — the directory lists Stockton Thursday under a
+        // shorter name than its own pages do, and the same address is the same league. Never two.
         val leagueId = one("SELECT league_id FROM competition.league WHERE name = ?", name)
+            ?: byAddress(url)
             ?: org.createLeague(name, l["locality"] as String?).also { made = made.copy(leagues = made.leagues + 1) }
-        c.prepareStatement("UPDATE competition.league SET short_name = coalesce(short_name, ?), plays_on = coalesce(plays_on, ?) WHERE league_id = ?").use { ps ->
-            ps.setString(1, l["short_name"] as String?); ps.setString(2, l["night"] as String?); ps.setObject(3, leagueId); ps.executeUpdate()
+        // Fields a source adds and never overwrites: a secretary's word stays; a point stays placed.
+        c.prepareStatement(
+            """UPDATE competition.league SET short_name = coalesce(short_name, ?), plays_on = coalesce(plays_on, ?),
+                      latitude = coalesce(latitude, ?), longitude = coalesce(longitude, ?), website = coalesce(website, ?)
+                WHERE league_id = ?""",
+        ).use { ps ->
+            ps.setString(1, l["short_name"] as String?); ps.setString(2, l["night"] as String?)
+            ps.setObject(3, decimal(l["latitude"]), Types.NUMERIC); ps.setObject(4, decimal(l["longitude"]), Types.NUMERIC)
+            ps.setString(5, (l["website"] as String?) ?: url); ps.setObject(6, leagueId); ps.executeUpdate()
         }
-        record("league", leagueId, l["platform"] as String, url, key, retrievedOn, "stated by the source; $method")
+        record("league", leagueId, l["platform"] as String, url, key, retrievedOn, (l["basis"] as String?) ?: "stated by the source; $method")
         val teamsByName = HashMap<String, UUID>()
         for (s in l["seasons"] as List<*>) {
             s as Map<*, *>
@@ -140,6 +156,19 @@ public class Seed(private val c: Connection, private val now: Instant = Instant.
             }
         }
     }
+
+    /** The league whose recorded source address has this host, if one was imported before. */
+    private fun byAddress(url: String): UUID? {
+        val host = runCatching { URI(url).host }.getOrNull()?.lowercase()?.removePrefix("www.") ?: return null
+        return one(
+            """SELECT subject_id FROM competition.source_record
+                WHERE subject_kind = 'league' AND (source_url ILIKE ? OR source_url ILIKE ?)
+                ORDER BY retrieved_on DESC LIMIT 1""",
+            "%://$host/%", "%://www.$host/%",
+        )
+    }
+
+    private fun decimal(v: Any?): BigDecimal? = (v as Number?)?.let { BigDecimal(it.toString()) }
 
     /** The team of this name at this venue, or of this name already imported for this league, or a new one. */
     private fun team(name: String, locality: String?, venue: VenueRef?, leagueKey: String): UUID {
@@ -211,7 +240,9 @@ public class Seed(private val c: Connection, private val now: Instant = Instant.
 /**
  * `gradle -p services/api seed [file]`: import the seed file into the database the environment
  * names (MIGRATE_DATABASE_URL, else DATABASE_URL, else PG*), as the deploy user. Refuses a database
- * that is behind this image's migrations, because the rows it writes need V027.
+ * that is behind this image's migrations, because the rows it writes need V030 (a league's point).
+ * Two files ship: `leagues/directory.json` (every league the LeagueRepublic directory places in the
+ * British Isles, points only) and `leagues/teesside.json` (three leagues in full); import both.
  */
 public fun main(args: Array<String>) {
     val env: (String) -> String? = { System.getenv(it)?.takeIf { v -> v.isNotBlank() } }
@@ -220,7 +251,7 @@ public fun main(args: Array<String>) {
     val target = Db.target(env, urlVariable = if (env("MIGRATE_DATABASE_URL") != null) "MIGRATE_DATABASE_URL" else "DATABASE_URL")
     Db.connect(target).use { c ->
         val version = Migrations.currentVersion(c)
-        require(version != null && version >= 27) { "the database is at V${version ?: "---"}; the import needs V027 — run migrate first" }
+        require(version != null && version >= 30) { "the database is at V${version ?: "---"}; the import needs V030 — run migrate first" }
         println("import of ${file.name}: " + Seed(c).importFile(file))
     }
 }

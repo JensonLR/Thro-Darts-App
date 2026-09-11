@@ -122,6 +122,12 @@ public struct PublicLeague: Decodable, Sendable, Equatable, Identifiable {
     public let shortName: String?
     public let playsOn: String?
     public let locality: String?
+    /// Where the league says it is: its pin and its distance until a venue of its own is placed.
+    /// Absent on a wire from before V030, which is the same as unplaced.
+    public let latitude: Double?
+    public let longitude: Double?
+    /// The league's own pages, for the fixtures and tables THRØ does not hold.
+    public let website: String?
     public let sources: [Source]
     public let seasons: [Season]
     public var id: UUID { leagueId }

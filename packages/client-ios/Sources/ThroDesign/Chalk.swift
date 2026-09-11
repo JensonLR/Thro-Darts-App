@@ -193,11 +193,23 @@ public struct ChalkStrike: Shape {
     /// bar that clears their own ends, rather than a bar sized for a guessed width.
     public var figureWidth: CGFloat?
     public var capHeight: CGFloat
+    /// The stroke's angle in degrees, anticlockwise from level, as it reads on the screen. **45 is
+    /// the mark's own slash** — what a bust figure and the thrower's marker get. `boardAngle` is
+    /// the other one.
+    public var angle: Double
 
-    public init(figureWidth: CGFloat? = nil, capHeight: CGFloat) {
+    public init(figureWidth: CGFloat? = nil, capHeight: CGFloat, angle: Double = 45) {
         self.figureWidth = figureWidth
         self.capHeight = capHeight
+        self.angle = angle
     }
+
+    /// A chalker's stroke through a remainder that has been written over: quick, nearly level,
+    /// rising a little to the right. The Ø's 45° slash belongs to the mark and to a bust; laid
+    /// through every old remainder in a 24 pt ledger column it climbs into the rows above and
+    /// below, and a column of them reads as hatching, not as a scoreboard. Eight degrees is what a
+    /// hand does.
+    public static let boardAngle: Double = 8
 
     /// How far past the figure the bar runs, as a fraction of the figure's width.
     public static let span: CGFloat = 1.35
@@ -224,8 +236,14 @@ public struct ChalkStrike: Shape {
     public func path(in rect: CGRect) -> Path {
         let width = figureWidth ?? rect.width
         guard width > 0, capHeight > 0 else { return Path() }
-        return ChalkStrike.geometry(figureWidth: width, capHeight: capHeight)
-            .bar(at: CGPoint(x: rect.midX, y: rect.midY))
+        let centre = CGPoint(x: rect.midX, y: rect.midY)
+        let bar = ChalkStrike.geometry(figureWidth: width, capHeight: capHeight).bar(at: centre)
+        guard angle != 45 else { return bar }
+        // The geometry draws the mark's dart at 45°; any other angle is that dart turned about the
+        // figure's centre. Screen y runs down, so a positive rotation here turns clockwise.
+        let turn = CGFloat((45 - angle) * .pi / 180)
+        return bar.applying(CGAffineTransform(translationX: centre.x, y: centre.y).rotated(by: turn)
+                                .translatedBy(x: -centre.x, y: -centre.y))
     }
 }
 

@@ -2806,3 +2806,44 @@ nothing and the domain's check says so. The team front's admin sees *Home venue 
 a search over THRØ's venues and a way to add one. The match result now lands on a slate — outcome,
 score, names — in place of the paper card. The Live tab's note no longer claims the app has no
 network code; it says the server streams a match and this build does not yet tune in. HTTP 35.
+
+## The ledger strikes like a chalkboard, the fixture sits square, and 329 leagues take the map
+
+**The scores columns.** The founder: *"the scores list on either side of competition screen doesnt
+do that cool strike through like they do on the telly and pubs."* It did not: every remainder in the
+column was drawn the same, and the only strike was the scraped-out row of a retraction. Now the
+column does what a chalker's hand does — each remainder that a later visit wrote over carries **one
+line through it and stays legible under it**, and the one figure with no line is what is on the
+board. The line is `ChalkStrike` at a new `boardAngle` of eight degrees; the Ø's 45° slash, laid
+through every old remainder in a 24 pt column, climbed into the neighbouring rows and read as
+hatching, and a retraction's scrape at 45° across a whole row had been scraping the rows above and
+below as well. Both marks take the hand's angle; the retraction stays in the board's colour so the
+two things look like two things. `ThroLedger.standing` and `isSuperseded` hold the rule; LedgerTests
+(6) hold it, including that a retracted row is never the standing one and the row before it stands
+again.
+
+**The fixture slate** on Match setup and Match ready — *"the text & symbols inside the box aren't
+central."* Measured on the simulator, the names sat 13 pt below the slate's middle: the row took the
+text line's height, which keeps room above the capitals for accents and below for descenders, and
+the padding was equal round that invisible room rather than round what is seen. The names row is
+now exactly one cap height tall with the capitals on its bottom edge (the same guide `ThroFigure`
+uses), the mark's ring sits on the capitals' own centre, and the mark is sized from the cap height
+rather than a fixed 36 or 56. The ready screen's footnote no longer breaks a line at "self-".
+
+**Leagues beyond Teesside** (PD-037, V030). `tools/pull_leaguerepublic_directory.py` reads the
+LeagueRepublic darts directory — 329 leagues in the British Isles with the position each gave it and
+its web address — into `seed/leagues/directory.json`; a league now has a point and a website of its
+own, and the importer finds a league by its address as well as its name so Stockton Thursday, listed
+under a shorter name, gets its point and not a twin. `GET /v1/leagues` lists a league with no season
+(a LEFT JOIN where there was a JOIN) and carries `latitude`, `longitude` and `website`. On the phone
+a league with no pub placed is measured from its own point; Discover shows six leagues — nearest
+first, or the ones with teams first when it cannot measure — and *All N leagues on the map*; the
+map opens round the player and the five nearest pins, draws a league as a ring without the dart,
+says under it that its teams are not on THRØ yet, and offers *ITS WEBSITE*; the sections under the
+map are the leagues with teams, with a line counting the rest. Nothing on any of it is a person.
+Tests: SeedTest (4) imports the directory twice and proves the count, the point on every row, the
+absence of a twin and of any person; client 636 (LedgerTests 7, placed-league pins, shortlist).
+
+**TestFlight.** A second archive from the Mac stopped where the first did — *No Accounts* — so the
+runbook's Mac section is now the click-by-click the founder asked for, from the Xcode menu to the
+Organizer.

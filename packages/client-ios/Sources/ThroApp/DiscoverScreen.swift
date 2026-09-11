@@ -134,7 +134,7 @@ public struct DiscoverScreen: View {
                     .padding(.vertical, ThroSpacing.spacing3)
             } else {
                 ThroDivider().padding(.top, ThroSpacing.spacing2)
-                ForEach(DiscoverScreen.ranked(list, place: nearby.place), id: \.league.id) { row in
+                ForEach(DiscoverScreen.shortlist(list, place: nearby.place), id: \.league.id) { row in
                     Button { onLeague(row.league.id) } label: {
                         OrganisationRow(initials: DiscoverScreen.initials(row.league),
                                         name: row.league.shortName ?? row.league.name,
@@ -147,8 +147,38 @@ public struct DiscoverScreen: View {
                     .buttonStyle(ThroPressStyle(radius: ThroSpacing.radiusCard, pressedFill: ThroColor.colorSurfaceSecondary, scales: false))
                     ThroDivider()
                 }
+                if list.count > DiscoverScreen.shortlistLength {
+                    Button { onLeague(nil) } label: {
+                        HStack(spacing: ThroSpacing.spacing3) {
+                            Text("All \(list.count) leagues on the map")
+                                .thro(ThroTypography.labelStrong)
+                                .foregroundStyle(ThroColor.throGreen)
+                            Spacer()
+                            Icon(.chevronRight, size: 18).foregroundStyle(ThroColor.colorTextSecondary)
+                        }
+                        .padding(.vertical, ThroSpacing.spacing3)
+                        .throRowTapTarget()
+                    }
+                    .buttonStyle(ThroPressStyle(radius: ThroSpacing.radiusCard, pressedFill: ThroColor.colorSurfaceSecondary, scales: false))
+                    ThroDivider()
+                }
             }
         }
+    }
+
+    /// How many leagues Discover lists before pointing at the map. Six is a screen's worth; the
+    /// directory lists hundreds, and a list of hundreds under a slate is the long static list the
+    /// founder asked to be rid of.
+    static let shortlistLength = 6
+
+    /// The leagues Discover shows: nearest first when the phone knows where it is; otherwise the
+    /// ones with teams on THRØ first, so the list opens on something a player can join and not on
+    /// whichever league is first in the alphabet.
+    static func shortlist(_ leagues: [PublicLeague], place: NearbyLogic.Place) -> [(league: PublicLeague, km: Double?)] {
+        let rows = ranked(leagues, place: place)
+        if case .located = place { return Array(rows.prefix(shortlistLength)) }
+        let teams: ((league: PublicLeague, km: Double?)) -> Int = { $0.league.shownSeason?.divisions.flatMap(\.teams).count ?? 0 }
+        return Array((rows.filter { teams($0) > 0 } + rows.filter { teams($0) == 0 }).prefix(shortlistLength))
     }
 
     static func ranked(_ leagues: [PublicLeague], place: NearbyLogic.Place) -> [(league: PublicLeague, km: Double?)] {
@@ -161,10 +191,12 @@ public struct DiscoverScreen: View {
         return String(words.prefix(2).compactMap(\.first)).uppercased()
     }
 
-    /// "Thursday nights · 18 teams · Stockton-on-Tees". Distance goes on the trailing side.
+    /// "Thursday nights · 18 teams · Stockton-on-Tees". Distance goes on the trailing side. A league
+    /// the directory placed and nobody has filled in says so, rather than claiming nought teams.
     static func leagueMeta(_ league: PublicLeague, km: Double?) -> String {
         let teams = league.shownSeason?.divisions.flatMap(\.teams).count ?? 0
-        return [league.playsOn.map { "\($0) nights" }, "\(teams) teams", league.locality].compactMap { $0 }.joined(separator: " · ")
+        let filled = teams > 0 ? "\(teams) teams" : "teams not listed yet"
+        return [league.playsOn.map { "\($0) nights" }, filled, league.locality].compactMap { $0 }.joined(separator: " · ")
     }
 
     // MARK: tournaments

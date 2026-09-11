@@ -8,7 +8,9 @@ import ThroNet
 // subtraction done here, from a location the player grants while the app is in use and that is
 // read once per visit to Discover. "Around here" was a lie for anyone outside Teesside until this
 // existed — the app had three leagues and called them local to everybody. Now it measures, and
-// when the nearest league is a long way off it says so in miles rather than pretending.
+// when the nearest league is a long way off it says so in miles rather than pretending. Since the
+// directory import (V030) a league is measured from its own point when none of its pubs is placed,
+// so the nearest league is rarely far — and the slate says plainly when its teams are not here yet.
 
 /// The arithmetic, kept apart from CoreLocation so it can be tested without a location.
 public enum NearbyLogic {
@@ -20,19 +22,37 @@ public enum NearbyLogic {
         return 2 * r * asin(min(1, sqrt(h)))
     }
 
-    /// A league's distance: to its nearest venue with coordinates in the shown season. Nil when
-    /// no venue is placed.
+    /// A league's distance: to its nearest venue with coordinates in the shown season, or, when no
+    /// pub of its is placed yet, to the point the league itself gave (V030). Nil when it has neither.
     public static func distanceKm(to league: PublicLeague, fromLat lat: Double, lon: Double) -> Double? {
         var best: Double?
-        guard let season = league.shownSeason else { return nil }
-        for division in season.divisions {
+        for division in league.shownSeason?.divisions ?? [] {
             for team in division.teams {
                 guard let v = team.venue, let vlat = v.latitude, let vlon = v.longitude else { continue }
                 let d = distanceKm(fromLat: lat, lon: lon, toLat: vlat, lon: vlon)
                 if best == nil || d < best! { best = d }
             }
         }
+        if best == nil, let plat = league.latitude, let plon = league.longitude {
+            best = distanceKm(fromLat: lat, lon: lon, toLat: plat, lon: plon)
+        }
         return best
+    }
+
+    /// How many of these leagues have teams on THRØ. The directory places a league long before
+    /// anyone has filled it in, and the slate says which is which rather than counting "0 teams".
+    public static func filled(_ leagues: [PublicLeague]) -> Int {
+        leagues.filter { ($0.shownSeason?.divisions.flatMap(\.teams).count ?? 0) > 0 }.count
+    }
+
+    static func filledLine(_ leagues: [PublicLeague]) -> String {
+        let n = filled(leagues)
+        let teams = leagues.compactMap(\.shownSeason).flatMap(\.divisions).flatMap(\.teams).count
+        switch n {
+        case 0: return "None has its teams on THRØ yet."
+        case 1: return "One has its teams on THRØ so far (\(teams) teams)."
+        default: return "\(n) have their teams on THRØ so far (\(teams) teams)."
+        }
     }
 
     /// Leagues nearest first; leagues with no placed venue last, in the order they came.
@@ -64,23 +84,26 @@ public enum NearbyLogic {
     public static func headline(place: Place, leagues: [PublicLeague]?) -> (title: String, detail: String) {
         guard let leagues else { return ("Finding the leagues", "Reading THRØ's list of leagues and venues.") }
         if leagues.isEmpty { return ("No leagues listed yet", "THRØ has not been given any leagues yet.") }
-        let teams = leagues.compactMap(\.shownSeason).flatMap(\.divisions).flatMap(\.teams).count
+        let listed = leagues.count == 1 ? "1 league listed" : "\(leagues.count) leagues listed"
         switch place {
         case .located(let lat, let lon):
             let ranked = sorted(leagues, fromLat: lat, lon: lon)
             let near = ranked.filter { ($0.km ?? .infinity) <= farKm }
             if !near.isEmpty {
                 let count = near.count == 1 ? "1 league" : "\(near.count) leagues"
-                return ("\(count) near you", "\(near.flatMap { $0.league.shownSeason?.divisions ?? [] }.flatMap(\.teams).count) teams within \(Int(farKm * 0.621371)) miles. Nearest: \(near[0].league.shortName ?? near[0].league.name), \(miles(near[0].km ?? 0)).")
+                let teams = near.flatMap { $0.league.shownSeason?.divisions ?? [] }.flatMap(\.teams).count
+                let within = Int(farKm * 0.621371)
+                let line = teams > 0 ? "\(teams) teams within \(within) miles." : "Within \(within) miles; their teams are not on THRØ yet."
+                return ("\(count) near you", "\(line) Nearest: \(near[0].league.shortName ?? near[0].league.name), \(miles(near[0].km ?? 0)).")
             }
             if let nearest = ranked.first, let km = nearest.km {
-                return ("Nothing near you yet", "The nearest league THRØ knows is \(nearest.league.shortName ?? nearest.league.name), \(miles(km)) away. THRØ starts on Teesside; tell it about your league and it spreads.")
+                return ("Nothing near you yet", "The nearest league THRØ knows is \(nearest.league.shortName ?? nearest.league.name), \(miles(km)) away. Tell THRØ about your league and it spreads.")
             }
-            return ("\(leagues.count) leagues listed", "\(teams) teams. Their venues are not placed yet, so distance cannot be shown.")
+            return (listed, "None is placed yet, so distance cannot be shown.")
         case .denied:
-            return ("\(leagues.count) leagues listed", "\(teams) teams, on Teesside so far. Location is off for THRØ; turn it on in Settings to see how far they are.")
+            return (listed, "\(filledLine(leagues)) Location is off for THRØ; turn it on in Settings to see how far they are.")
         case .unknown, .asking:
-            return ("\(leagues.count) leagues listed", "\(teams) teams, on Teesside so far. Use your location to see which are near you.")
+            return (listed, "\(filledLine(leagues)) Use your location to see which are near you.")
         }
     }
 

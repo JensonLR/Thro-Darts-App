@@ -54,8 +54,9 @@ new; running it with nothing new is harmless and says so.
 export MIGRATE_DATABASE_URL='postgres://neondb_owner:<password>@ep-small-mountain-zavde3ff.c-2.eu-west-2.aws.neon.tech/neondb?sslmode=require'
 export APP_DB_USER='thro_app'
 gradle -p services/api migrate
-# then, when the league seed has changed (PD-033) — idempotent, as the same user:
-gradle -p services/api seed
+# then, when a league seed has changed (PD-033, PD-037) — idempotent, as the same user; both files:
+gradle -p services/api seed --args=seed/leagues/directory.json
+gradle -p services/api seed --args=seed/leagues/teesside.json
 ```
 Expected on a fresh migration: `migrated V026 -> V027: V027__...` then `application roles granted
 to thro_app`; otherwise `schema already at V026; nothing applied`.

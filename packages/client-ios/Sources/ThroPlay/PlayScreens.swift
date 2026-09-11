@@ -359,7 +359,7 @@ public struct MatchReadyScreen: View {
     }
 
     private var footnote: String {
-        "\(session.name(session.thrower ?? .home)) throws first · scored on this phone · self-reported, not rated"
+        "\(session.name(session.thrower ?? .home)) throws first · scored on this phone · self\u{2011}reported, not rated"
     }
 }
 

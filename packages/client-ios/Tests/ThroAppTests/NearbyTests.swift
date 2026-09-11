@@ -41,6 +41,48 @@ final class NearbyTests: XCTestCase {
         XCTAssertLessThan(ranked[0].km!, ranked[1].km!)
     }
 
+    /// A league the directory placed: a point of its own and nothing else yet.
+    private func placed(_ name: String, lat: Double, lon: Double) -> PublicLeague {
+        let json = """
+        {"leagueId":"\(UUID().uuidString)","name":"\(name)","shortName":null,"playsOn":null,"locality":null,
+         "latitude":\(lat),"longitude":\(lon),"website":"https://example.leaguerepublic.com/",
+         "sources":[{"source":"LeagueRepublic","url":"https://example.leaguerepublic.com/","retrievedOn":"2026-09-11"}],"seasons":[]}
+        """
+        return try! Wire.decoder.decode(PublicLeague.self, from: Data(json.utf8))
+    }
+
+    func testALeagueWithNoPubPlacedIsMeasuredFromItsOwnPoint() {
+        // Salisbury Premier is a point on the directory and nothing more; Stockton has pubs. From
+        // Salisbury market square the directory league is a mile off and Stockton is not.
+        let salisbury = placed("Salisbury Premier Darts League", lat: 51.0768, lon: -1.8014)
+        let stockton = league("Stockton Thursday", venues: [("The Sun Inn", 54.5656, -1.3119)])
+        let ranked = NearbyLogic.sorted([stockton, salisbury], fromLat: 51.0700, lon: -1.7950)
+        XCTAssertEqual(ranked.map { $0.league.name }, ["Salisbury Premier Darts League", "Stockton Thursday"])
+        XCTAssertLessThan(ranked[0].km!, 2)
+
+        // And the slate says the truth about it: near, teams not here yet.
+        let slate = NearbyLogic.headline(place: .located(lat: 51.0700, lon: -1.7950), leagues: [stockton, salisbury])
+        XCTAssertEqual(slate.title, "1 league near you")
+        XCTAssertTrue(slate.detail.hasPrefix("Within 24 miles; their teams are not on THRØ yet."), slate.detail)
+        XCTAssertEqual(NearbyLogic.filled([stockton, salisbury]), 1)
+        let unknown = NearbyLogic.headline(place: .unknown, leagues: [stockton, salisbury])
+        XCTAssertEqual(unknown.title, "2 leagues listed")
+        XCTAssertTrue(unknown.detail.hasPrefix("One has its teams on THRØ so far"), unknown.detail)
+    }
+
+    func testDiscoverShortlistsSixAndOpensOnLeaguesWithTeamsWhenItCannotMeasure() {
+        var many = (0..<9).map { placed("Directory \($0)", lat: 52 + Double($0) * 0.1, lon: -1) }
+        let stockton = league("Stockton Thursday", venues: [("The Sun Inn", 54.5656, -1.3119)])
+        many.append(stockton)
+        let unlocated = DiscoverScreen.shortlist(many, place: .unknown)
+        XCTAssertEqual(unlocated.count, DiscoverScreen.shortlistLength)
+        XCTAssertEqual(unlocated.first?.league.name, "Stockton Thursday", "a league you can join comes first")
+        XCTAssertEqual(DiscoverScreen.leagueMeta(many[0], km: nil), "teams not listed yet")
+        let located = DiscoverScreen.shortlist(many, place: .located(lat: 52.85, lon: -1))
+        XCTAssertEqual(located.count, DiscoverScreen.shortlistLength)
+        XCTAssertEqual(located.first?.league.name, "Directory 8", "nearest first when the phone knows where it is")
+    }
+
     func testMilesReadTheWayTheUKReadsThem() {
         XCTAssertEqual(NearbyLogic.miles(0.05), "here")
         XCTAssertEqual(NearbyLogic.miles(3.2), "2.0 mi")
@@ -59,7 +101,8 @@ final class NearbyTests: XCTestCase {
         XCTAssertTrue(stocktonian.detail.contains("Nearest: Stockton Thursday"))
 
         let noLocation = NearbyLogic.headline(place: .unknown, leagues: [stockton])
-        XCTAssertEqual(noLocation.title, "1 leagues listed".replacingOccurrences(of: "1 leagues", with: "1 leagues"))
+        XCTAssertEqual(noLocation.title, "1 league listed")
+        XCTAssertTrue(noLocation.detail.hasPrefix("One has its teams on THRØ so far (1 teams)."), noLocation.detail)
         XCTAssertTrue(noLocation.detail.contains("Use your location"))
         XCTAssertTrue(NearbyLogic.headline(place: .denied, leagues: [stockton]).detail.contains("Location is off"))
         XCTAssertEqual(NearbyLogic.headline(place: .unknown, leagues: nil).title, "Finding the leagues")
@@ -78,7 +121,7 @@ final class NearbyTests: XCTestCase {
         XCTAssertEqual(DiscoverScreen.leagueMeta(l, km: 3), "Monday nights · 1 teams · Stockton-on-Tees".replacingOccurrences(of: "1 teams", with: "1 teams"))
         XCTAssertEqual(DiscoverScreen.initials(l), "SM")
         let far = LeaguesPlot.farAway(place: .located(lat: 50.8225, lon: -0.1372), pins: LeaguesPlot.plotted([l]))
-        XCTAssertTrue(far?.hasPrefix("You are 2") == true && far!.contains("Showing Teesside"), far ?? "nil")
+        XCTAssertTrue(far?.hasPrefix("You are 2") == true && far!.contains("nearest league THRØ has listed"), far ?? "nil")
         XCTAssertNil(LeaguesPlot.farAway(place: .located(lat: 54.5645, lon: -1.3187), pins: LeaguesPlot.plotted([l])))
         XCTAssertNil(LeaguesPlot.farAway(place: .unknown, pins: LeaguesPlot.plotted([l])))
     }

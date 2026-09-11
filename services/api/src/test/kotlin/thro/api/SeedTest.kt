@@ -77,6 +77,40 @@ class SeedTest {
     }
 
     @Test
+    fun `the directory places hundreds of leagues, and one already imported from its own pages is not made twice`() {
+        if (!configured) return
+        migrated().use { c ->
+            Seed(c, Instant.parse("2026-09-11T08:00:00Z")).importFile(seedFile)
+            val directory = File(seedFile.parentFile, "directory.json")
+            val listed = (Json.parseObject(directory.readText())["leagues"] as List<*>).size
+            assertTrue(listed >= 300, "the directory places $listed leagues")
+
+            val first = Seed(c, Instant.parse("2026-09-11T09:00:00Z")).importFile(directory)
+            assertEquals(listed - 3, first.leagues, "Stockton Thursday, Stockton Monday and Redcar are already here: $first")
+            assertEquals(0, first.seasons); assertEquals(0, first.divisions); assertEquals(0, first.teams); assertEquals(0, first.venues)
+            // Stockton Thursday is listed under a shorter name than its own pages use; the address is the
+            // same league, so it gets its point and not a twin.
+            assertEquals(1, count(c, "SELECT count(*) FROM competition.league WHERE name ILIKE '%Stockton%Thursday%'"))
+            assertEquals(listed, count(c, "SELECT count(*) FROM competition.league"))
+            assertEquals(listed, count(c, "SELECT count(*) FROM competition.league WHERE latitude IS NOT NULL AND longitude IS NOT NULL AND website IS NOT NULL"))
+            // Idempotent, like the other file.
+            assertEquals(Seed.Outcome(0, 0, 0, 0, 0, 0, 0, 0), Seed(c, Instant.parse("2026-09-11T10:00:00Z")).importFile(directory))
+            // The public front lists every league, placed, with or without a season — and still no person.
+            val all = Leagues(c).all()
+            assertEquals(listed, all.size)
+            assertTrue(all.all { it.latitude != null && it.longitude != null && it.website != null })
+            assertEquals(3, all.count { it.seasons.isNotEmpty() }, "seasons only where pages were read")
+            val json = Leagues(c).json(all)
+            assertTrue(json.contains(""""latitude":57.50"""), "Peterhead is on the wire")
+            assertTrue(!json.contains("player"))
+            assertEquals(0, count(c, "SELECT count(*) FROM competition.player"))
+            // Every league says where it was read from.
+            assertEquals(0, count(c, """SELECT count(*) FROM competition.league x
+                WHERE NOT EXISTS (SELECT 1 FROM competition.source_record sr WHERE sr.subject_kind = 'league' AND sr.subject_id = x.league_id)"""))
+        }
+    }
+
+    @Test
     fun `what a secretary has recorded is not overwritten by an import`() {
         if (!configured) return
         migrated().use { c ->

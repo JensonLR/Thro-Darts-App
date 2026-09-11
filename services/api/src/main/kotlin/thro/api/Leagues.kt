@@ -8,7 +8,9 @@ import java.util.UUID
 
 /**
  * The public front of the leagues: league → season → division → team → home venue, with where
- * each came from. What the Discover tab draws and what the map plots (PD-033).
+ * each came from. What the Discover tab draws and what the map plots (PD-033). A league the
+ * directory has placed but nobody has filled in yet is listed too, with its own point and no
+ * season (V030): a player in Salisbury sees the league nearest them before its teams are on THRØ.
  *
  * Public means public: only `visibility = 'public'` teams and venues appear, and nothing on any
  * row is a person — a team's front is its name, its venue and its competition (PD-009). The
@@ -27,7 +29,10 @@ public class Leagues(private val connection: Connection) {
                              val current: Boolean, val divisions: List<Division>)
     public data class Source(val source: String, val url: String?, val retrievedOn: LocalDate)
     public data class League(val leagueId: UUID, val name: String, val shortName: String?, val playsOn: String?,
-                             val locality: String?, val sources: List<Source>, val seasons: List<Season>)
+                             val locality: String?,
+                             /** Where the league says it is (V030): the map's pin until its venues are placed. */
+                             val latitude: Double?, val longitude: Double?, val website: String?,
+                             val sources: List<Source>, val seasons: List<Season>)
 
     private val london = ZoneId.of("Europe/London")
 
@@ -47,9 +52,10 @@ public class Leagues(private val connection: Connection) {
                    v.venue_id, v.name, v.locality, v.postcode, v.latitude, v.longitude,
                    (SELECT sr.basis FROM competition.source_record sr
                      WHERE sr.subject_kind = 'team_venue_tenure' AND sr.subject_id = tv.tenure_id
-                     ORDER BY sr.retrieved_on DESC, sr.recorded_at DESC LIMIT 1)
+                     ORDER BY sr.retrieved_on DESC, sr.recorded_at DESC LIMIT 1),
+                   l.latitude, l.longitude, l.website
               FROM competition.league l
-              JOIN competition.league_season ls ON ls.league_id = l.league_id
+              LEFT JOIN competition.league_season ls ON ls.league_id = l.league_id
               LEFT JOIN competition.division d ON d.league_season_id = ls.league_season_id
               LEFT JOIN competition.team_affiliation ta
                      ON ta.league_season_id = ls.league_season_id AND ta.valid_until IS NULL
@@ -66,9 +72,12 @@ public class Leagues(private val connection: Connection) {
                 while (rs.next()) {
                     val leagueId = rs.getObject(1) as UUID
                     leagues.getOrPut(leagueId) {
-                        League(leagueId, rs.getString(2), rs.getString(3), rs.getString(4), rs.getString(5), sourcesOf(leagueId), emptyList())
+                        League(leagueId, rs.getString(2), rs.getString(3), rs.getString(4), rs.getString(5),
+                               rs.getBigDecimal(22)?.toDouble(), rs.getBigDecimal(23)?.toDouble(), rs.getString(24),
+                               sourcesOf(leagueId), emptyList())
                     }
-                    val seasonId = rs.getObject(6) as UUID
+                    // A league the directory placed and nobody has filled in yet: listed, with no season.
+                    val seasonId = rs.getObject(6) as UUID? ?: continue
                     val seasonList = seasons.getOrPut(leagueId) { mutableListOf() }
                     if (seasonList.none { it.leagueSeasonId == seasonId }) {
                         val starts = rs.getObject(8, LocalDate::class.java); val ends = rs.getObject(9, LocalDate::class.java)
@@ -108,7 +117,7 @@ public class Leagues(private val connection: Connection) {
     public fun json(leagues: List<League>): String {
         fun q(s: String?) = s?.let { "\"" + it.replace("\\", "\\\\").replace("\"", "\\\"").replace("\n", "\\n") + "\"" } ?: "null"
         return "{\"leagues\":[" + leagues.joinToString(",") { l ->
-            """{"leagueId":"${l.leagueId}","name":${q(l.name)},"shortName":${q(l.shortName)},"playsOn":${q(l.playsOn)},"locality":${q(l.locality)},""" +
+            """{"leagueId":"${l.leagueId}","name":${q(l.name)},"shortName":${q(l.shortName)},"playsOn":${q(l.playsOn)},"locality":${q(l.locality)},"latitude":${l.latitude ?: "null"},"longitude":${l.longitude ?: "null"},"website":${q(l.website)},""" +
                 """"sources":[${l.sources.joinToString(",") { """{"source":${q(it.source)},"url":${q(it.url)},"retrievedOn":"${it.retrievedOn}"}""" }}],""" +
                 """"seasons":[${l.seasons.joinToString(",") { s ->
                     """{"leagueSeasonId":"${s.leagueSeasonId}","label":${q(s.label)},"startsOn":"${s.startsOn}","endsOn":"${s.endsOn}","current":${s.current},""" +

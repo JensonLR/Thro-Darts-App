@@ -47,6 +47,11 @@ public final class LeaguesModel: ObservableObject {
 
 /// One pin: a venue, and the teams that play there — a pub with three sides is one pin, not three.
 public struct PlottedVenue: Identifiable, Equatable, Sendable {
+    /// A pub with teams at it, or a league placed by its own point with no pub placed yet. Drawn
+    /// differently, because a ring on a map that says "pub" where there is only "somewhere round
+    /// here" would be the map inventing a venue.
+    public enum Kind: Sendable { case venue, league }
+
     public let id: UUID
     public let name: String
     public let postcode: String?
@@ -54,34 +59,67 @@ public struct PlottedVenue: Identifiable, Equatable, Sendable {
     public let coordinate: CLLocationCoordinate2D
     public let teams: [String]
     public let inferred: Bool
+    public let kind: Kind
+    /// The league's own pages, on a league pin. Nil on a pub.
+    public let link: String?
+
+    init(id: UUID, name: String, postcode: String?, locality: String?, coordinate: CLLocationCoordinate2D,
+         teams: [String], inferred: Bool, kind: Kind = .venue, link: String? = nil) {
+        self.id = id; self.name = name; self.postcode = postcode; self.locality = locality
+        self.coordinate = coordinate; self.teams = teams; self.inferred = inferred; self.kind = kind; self.link = link
+    }
 
     public static func == (a: PlottedVenue, b: PlottedVenue) -> Bool {
-        a.id == b.id && a.name == b.name && a.teams == b.teams && a.inferred == b.inferred
+        a.id == b.id && a.name == b.name && a.teams == b.teams && a.inferred == b.inferred && a.kind == b.kind
             && a.coordinate.latitude == b.coordinate.latitude && a.coordinate.longitude == b.coordinate.longitude
     }
 }
 
 public enum LeaguesPlot {
-    /// The venues with coordinates across the shown season of every league, one pin per venue.
+    /// The venues with coordinates across the shown season of every league, one pin per venue; and
+    /// then, for every league with none of its pubs placed, one pin at the league's own point.
     public static func plotted(_ leagues: [PublicLeague]) -> [PlottedVenue] {
         var byVenue: [UUID: (PublicLeague.Venue, [String])] = [:]
         var order: [UUID] = []
+        var pubbed: Set<UUID> = []
         for league in leagues {
             guard let season = league.shownSeason else { continue }
             for division in season.divisions {
                 for team in division.teams {
                     guard let v = team.venue, v.latitude != nil, v.longitude != nil else { continue }
+                    pubbed.insert(league.id)
                     if byVenue[v.venueId] == nil { order.append(v.venueId); byVenue[v.venueId] = (v, []) }
                     if !byVenue[v.venueId]!.1.contains(team.name) { byVenue[v.venueId]!.1.append(team.name) }
                 }
             }
         }
-        return order.compactMap { id in
+        let venues = order.compactMap { id -> PlottedVenue? in
             guard let (v, teams) = byVenue[id], let lat = v.latitude, let lon = v.longitude else { return nil }
             return PlottedVenue(id: id, name: v.name, postcode: v.postcode, locality: v.locality,
                                 coordinate: CLLocationCoordinate2D(latitude: lat, longitude: lon),
                                 teams: teams, inferred: v.basis?.hasPrefix("inferred") ?? false)
         }
+        let placed = leagues.compactMap { league -> PlottedVenue? in
+            guard !pubbed.contains(league.id), let lat = league.latitude, let lon = league.longitude else { return nil }
+            return PlottedVenue(id: league.id, name: league.shortName ?? league.name, postcode: nil, locality: league.locality,
+                                coordinate: CLLocationCoordinate2D(latitude: lat, longitude: lon),
+                                teams: [], inferred: false, kind: .league, link: league.website)
+        }
+        return venues + placed
+    }
+
+    /// The line under the sections for the leagues that are pins and nothing more yet.
+    public static func unfilledLine(_ n: Int) -> String {
+        n == 1 ? "1 more league is on the map with no teams listed yet. Tap its pin."
+               : "\(n) more leagues are on the map with no teams listed yet. Tap a pin to see one."
+    }
+
+    /// The leagues that get a section under the map: those with teams to list, nearest first when
+    /// the phone knows where it is. The rest are on the map as pins, and the note says how many.
+    public static func sections(_ leagues: [PublicLeague], place: NearbyLogic.Place) -> [PublicLeague] {
+        let filled = leagues.filter { ($0.shownSeason?.divisions.flatMap(\.teams).count ?? 0) > 0 }
+        if case .located(let lat, let lon) = place { return NearbyLogic.sorted(filled, fromLat: lat, lon: lon).map(\.league) }
+        return filled
     }
 
     /// Pins that would sit on top of each other at the map's current scale, gathered into one
@@ -116,6 +154,17 @@ public enum LeaguesPlot {
             }
         }
         return out.map { Cluster(id: $0.pins[0].id, coordinate: $0.centre, pins: $0.pins) }
+    }
+
+    /// What the map opens on: when the phone knows where it is, the player and the five pins
+    /// nearest them — enough to choose between, close enough to read; otherwise every pin.
+    public static func region(_ pins: [PlottedVenue], place: NearbyLogic.Place) -> MKCoordinateRegion {
+        guard case .located(let lat, let lon) = place, !pins.isEmpty else { return region(pins) }
+        let squash = max(0.2, cos(lat * .pi / 180))
+        let reach = pins.map { max(abs($0.coordinate.latitude - lat), abs($0.coordinate.longitude - lon) * squash) }.sorted()
+        let half = max(0.08, reach[min(reach.count - 1, 4)] * 1.3)
+        return MKCoordinateRegion(center: CLLocationCoordinate2D(latitude: lat, longitude: lon),
+                                  span: MKCoordinateSpan(latitudeDelta: 2 * half, longitudeDelta: 2 * half / squash))
     }
 
     /// A region that holds every pin with a margin, or the Tees valley when there is nothing to hold.
@@ -165,7 +214,7 @@ public enum LeaguesPlot {
         guard case .located(let lat, let lon) = place, !pins.isEmpty else { return nil }
         let nearest = pins.map { NearbyLogic.distanceKm(fromLat: lat, lon: lon, toLat: $0.coordinate.latitude, lon: $0.coordinate.longitude) }.min() ?? 0
         guard nearest > NearbyLogic.farKm else { return nil }
-        return "You are \(NearbyLogic.miles(nearest)) from the nearest venue THRØ knows. Showing Teesside, where it starts."
+        return "You are \(NearbyLogic.miles(nearest)) from the nearest league THRØ has listed. Tell THRØ about yours and it spreads."
     }
 
     static func day(_ iso: String) -> String {
@@ -186,6 +235,7 @@ public struct LeaguesScreen: View {
     @State private var selected: UUID?
     @State private var open: Set<UUID> = []
     @State private var framed = false
+    @Environment(\.openURL) private var openURL
     /// Degrees of longitude per point at the current camera, from the last camera change; the
     /// clustering reads it. Starts at the Tees valley's framing width over a phone's width.
     @State private var degreesPerPoint: Double = 0.5 / 360
@@ -243,8 +293,14 @@ public struct LeaguesScreen: View {
                         .padding(.top, ThroSpacing.spacing4)
                         .transition(.opacity)
                 }
-                ForEach(leagues) { league in
+                let sections = LeaguesPlot.sections(leagues, place: nearby.place)
+                ForEach(sections) { league in
                     leagueSection(league)
+                }
+                if leagues.count > sections.count {
+                    Note(LeaguesPlot.unfilledLine(leagues.count - sections.count), icon: .info)
+                        .padding(.horizontal, ThroSpacing.spaceScreenGutter)
+                        .padding(.top, ThroSpacing.spaceSectionGap)
                 }
                 Note("Season dates are read from the season's name where the league publishes none. Nothing here is a person: players join a team in THRØ by choosing to, never by being listed.")
                     .padding(.horizontal, ThroSpacing.spaceScreenGutter)
@@ -256,9 +312,10 @@ public struct LeaguesScreen: View {
         .onAppear {
             guard !framed else { return }
             framed = true
-            camera = .region(LeaguesPlot.region(pins))
+            camera = .region(LeaguesPlot.region(pins, place: nearby.place))
         }
     }
+
 
     private func map(_ pins: [PlottedVenue]) -> some View {
         let clusters = LeaguesPlot.clustered(pins, degreesPerPoint: degreesPerPoint)
@@ -271,16 +328,25 @@ public struct LeaguesScreen: View {
                         ZStack {
                             Circle().fill(pin.id == selected ? ThroColor.colorBoardLit : ThroColor.colorBoardField)
                             Circle().strokeBorder(ThroColor.colorMarkOnBoard, lineWidth: pin.id == selected ? 3 : 2)
-                            ThroMark().fill(ThroColor.colorMarkOnBoard).padding(pin.id == selected ? 7 : 8)
+                            if pin.kind == .venue {
+                                ThroMark().fill(ThroColor.colorMarkOnBoard).padding(pin.id == selected ? 7 : 8)
+                            } else {
+                                // A league, not a pub: the ring without the dart. Where it is
+                                // roughly, not where you drink.
+                                Circle().strokeBorder(ThroColor.colorMarkOnBoard, lineWidth: 2).padding(pin.id == selected ? 10 : 8)
+                            }
                         }
-                        .frame(width: pin.id == selected ? 40 : 32, height: pin.id == selected ? 40 : 32)
-                        .accessibilityLabel("\(pin.name), \(pin.teams.count == 1 ? "one team" : "\(pin.teams.count) teams")")
+                        .frame(width: pin.id == selected ? 40 : (pin.kind == .venue ? 32 : 26),
+                               height: pin.id == selected ? 40 : (pin.kind == .venue ? 32 : 26))
+                        .accessibilityLabel(pin.kind == .venue
+                                            ? "\(pin.name), \(pin.teams.count == 1 ? "one team" : "\(pin.teams.count) teams")"
+                                            : "\(pin.name), a league; its teams are not on THRØ yet")
                     }
                     .tag(pin.id)
                 } else {
                     // Several pubs within a thumb of each other: one marker, the count on it, and
                     // a tap that zooms in until they come apart.
-                    Annotation("\(cluster.count) venues", coordinate: cluster.coordinate, anchor: .center) {
+                    Annotation("\(cluster.count) places", coordinate: cluster.coordinate, anchor: .center) {
                         Button { zoom(into: cluster) } label: {
                             ZStack {
                                 Circle().fill(ThroColor.colorBoardField)
@@ -293,7 +359,7 @@ public struct LeaguesScreen: View {
                             .throTapTarget()
                         }
                         .buttonStyle(ThroPressStyle(radius: 22))
-                        .accessibilityLabel("\(cluster.count) venues close together; zooms in")
+                        .accessibilityLabel("\(cluster.count) leagues and venues close together; zooms in")
                     }
                 }
             }
@@ -304,7 +370,7 @@ public struct LeaguesScreen: View {
             degreesPerPoint = max(1e-7, context.region.span.longitudeDelta / 400)
         }
         .frame(height: 300)
-        .accessibilityLabel("Map of \(pins.count) venues; tap a pin for its teams")
+        .accessibilityLabel("Map of \(pins.count) leagues and venues; tap a pin")
     }
 
     private func zoom(into cluster: LeaguesPlot.Cluster) {
@@ -330,28 +396,49 @@ public struct LeaguesScreen: View {
                     .buttonStyle(ThroPressStyle(radius: 22, pressedFill: ThroColor.colorBoardSunken))
                     .accessibilityLabel("Close")
                 }
-                Text([pin.locality, pin.postcode, distanceLine(pin)].compactMap { $0 }.joined(separator: " · "))
+                Text([pin.kind == .league ? "League" : nil, pin.locality, pin.postcode, distanceLine(pin)].compactMap { $0 }.joined(separator: " · "))
                     .thro(ThroTypography.label)
                     .foregroundStyle(ThroColor.colorTextOnBoardSecondary)
-                Text(pin.teams.joined(separator: " · "))
-                    .thro(ThroTypography.bodyLarge.weight(.semibold))
-                    .foregroundStyle(ThroColor.colorTextOnBoard)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .padding(.top, ThroSpacing.spacing1)
+                if pin.kind == .venue {
+                    Text(pin.teams.joined(separator: " · "))
+                        .thro(ThroTypography.bodyLarge.weight(.semibold))
+                        .foregroundStyle(ThroColor.colorTextOnBoard)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .padding(.top, ThroSpacing.spacing1)
+                } else {
+                    Text("Placed where the league lists itself. Its teams and pubs are not on THRØ yet — if you play in it, tell THRØ and it fills in.")
+                        .thro(ThroTypography.body)
+                        .foregroundStyle(ThroColor.colorTextOnBoard)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .padding(.top, ThroSpacing.spacing1)
+                }
                 if pin.inferred {
                     Text("Matched to the team by its name — tell THRØ if this is the wrong pub.")
                         .thro(ThroTypography.metadata)
                         .foregroundStyle(ThroColor.colorTextOnBoardSecondary)
                 }
-                Button { LeaguesScreen.directions(to: pin) } label: {
-                    Text("DIRECTIONS")
-                        .thro(ThroTypography.labelStrong.uppercase(true).tracking(em: 0.06))
-                        .foregroundStyle(ThroColor.colorTextOnBoard)
-                        .padding(.horizontal, ThroSpacing.spacing4)
+                if pin.kind == .venue {
+                    Button { LeaguesScreen.directions(to: pin) } label: {
+                        Text("DIRECTIONS")
+                            .thro(ThroTypography.labelStrong.uppercase(true).tracking(em: 0.06))
+                            .foregroundStyle(ThroColor.colorTextOnBoard)
+                            .padding(.horizontal, ThroSpacing.spacing4)
+                    }
+                    .buttonStyle(ChalkKeyStyle(.lit, minHeight: ThroSpacing.touchTargetMinimum, seedAngle: 83))
+                    .fixedSize()
+                    .padding(.top, ThroSpacing.spacing2)
+                } else if let link = pin.link, let url = URL(string: link) {
+                    Button { openURL(url) } label: {
+                        Text("ITS WEBSITE")
+                            .thro(ThroTypography.labelStrong.uppercase(true).tracking(em: 0.06))
+                            .foregroundStyle(ThroColor.colorTextOnBoard)
+                            .padding(.horizontal, ThroSpacing.spacing4)
+                    }
+                    .buttonStyle(ChalkKeyStyle(.lit, minHeight: ThroSpacing.touchTargetMinimum, seedAngle: 83))
+                    .fixedSize()
+                    .padding(.top, ThroSpacing.spacing2)
+                    .accessibilityHint("Opens the league's own pages in the browser")
                 }
-                .buttonStyle(ChalkKeyStyle(.lit, minHeight: ThroSpacing.touchTargetMinimum, seedAngle: 83))
-                .fixedSize()
-                .padding(.top, ThroSpacing.spacing2)
             }
             .padding(ThroSpacing.spacing5)
         }

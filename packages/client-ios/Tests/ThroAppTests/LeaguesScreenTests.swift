@@ -44,6 +44,32 @@ final class LeaguesScreenTests: XCTestCase {
         XCTAssertGreaterThanOrEqual(region.span.latitudeDelta, 0.02)
     }
 
+    static let directoryWire = """
+    {"leagueId":"66666666-6666-6666-6666-666666666661","name":"Salisbury Premier Darts League","shortName":null,"playsOn":null,"locality":null,
+     "latitude":51.0768,"longitude":-1.8014,"website":"https://salisburypremdartsleague.leaguerepublic.com/",
+     "sources":[{"source":"LeagueRepublic","url":"https://salisburypremdartsleague.leaguerepublic.com/","retrievedOn":"2026-09-11"}],"seasons":[]}
+    """
+
+    func testALeagueTheDirectoryPlacedIsALeaguePinAndALeagueWithPubsIsNot() throws {
+        let salisbury = try Wire.decoder.decode(PublicLeague.self, from: Data(Self.directoryWire.utf8))
+        let pins = LeaguesPlot.plotted(try leagues() + [salisbury])
+        XCTAssertEqual(pins.count, 3, "two pubs and one league")
+        XCTAssertEqual(pins.filter { $0.kind == .league }.map(\.name), ["Salisbury Premier Darts League"])
+        XCTAssertEqual(pins.last?.link, "https://salisburypremdartsleague.leaguerepublic.com/")
+        XCTAssertTrue(pins.last!.teams.isEmpty, "a league pin claims no team and no pub")
+        XCTAssertFalse(pins.prefix(2).contains { $0.kind == .league }, "Stockton has pubs, so it is not also a point")
+
+        // The list under the map is for leagues with teams; the note counts the rest.
+        XCTAssertEqual(LeaguesPlot.sections(try leagues() + [salisbury], place: .unknown).map(\.name).count, 1)
+        XCTAssertEqual(LeaguesPlot.unfilledLine(1), "1 more league is on the map with no teams listed yet. Tap its pin.")
+
+        // The map opens round the player, not round the whole country.
+        let region = LeaguesPlot.region(pins, place: .located(lat: 51.07, lon: -1.79))
+        XCTAssertEqual(region.center.latitude, 51.07, accuracy: 1e-9)
+        XCTAssertLessThan(region.span.latitudeDelta, 10, "Salisbury to Stockton is 3.5° of latitude; the frame is the nearest five, not the lot")
+        XCTAssertEqual(LeaguesPlot.region(pins, place: .unknown).center.latitude, LeaguesPlot.region(pins).center.latitude, accuracy: 1e-9)
+    }
+
     func testEveryLineSaysWhereItCameFrom() throws {
         let l = try leagues()[0]
         XCTAssertEqual(LeaguesPlot.meta(l), "Thursday nights · Stockton-on-Tees")
