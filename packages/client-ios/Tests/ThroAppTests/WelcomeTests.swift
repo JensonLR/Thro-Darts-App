@@ -20,8 +20,10 @@ final class WelcomeTests: XCTestCase {
         // PD-012 is local-first: two people score a match on one phone with no account. A welcome
         // that hid the way past it would be a lie about what the product is, so the skip is worded
         // as an action a person can want, not as a refusal.
-        XCTAssertEqual(Welcome.skip, "Not now, just score")
-        XCTAssertFalse(Welcome.skip.lowercased().contains("skip"), "not a dismissal, a choice")
+        XCTAssertEqual(Welcome.skip(.atLaunch), "Not now, just score")
+        XCTAssertFalse(Welcome.skip(.atLaunch).lowercased().contains("skip"), "not a dismissal, a choice")
+        // Asked for from the You tab it is not an offer to go and score, it is a way back.
+        XCTAssertEqual(Welcome.skip(.fromYou), "Back")
     }
 
     func testThePromiseIsTheOneThisBuildCanKeep() {

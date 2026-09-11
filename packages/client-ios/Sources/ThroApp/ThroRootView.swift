@@ -506,8 +506,20 @@ public struct ThroRootView: View {
                          onRemove: { if clubs.deletePerson(person.id) { viewing = nil } })
                 .throAppearance(Appearance(stored: appearanceRaw))
         } else if showingAccount, let account {
-            AccountScreen(account: account, opening: openingFriends ? .friends : .account) { showingAccount = false; openingFriends = false }
-                .throAppearance(Appearance(stored: appearanceRaw))
+            // **One way in, and it is the good one.** SIGN IN on the You tab used to open a settings
+            // list of buttons under a paragraph; it opens the same board the welcome does. The
+            // welcome is asked once at launch, so without this a player who tapped "Not now" could
+            // never see it again — which is exactly what happened. The full account list is still
+            // there for somebody signed in, and under Settings for the passkey-only path.
+            Group {
+                if !account.isSignedIn && !openingFriends {
+                    // The welcome sets its own appearance and draws its own board edge to edge.
+                    WelcomeScreen(account: account, ask: .fromYou) { showingAccount = false }
+                } else {
+                    AccountScreen(account: account, opening: openingFriends ? .friends : .account) { showingAccount = false; openingFriends = false }
+                        .throAppearance(Appearance(stored: appearanceRaw))
+                }
+            }
         } else if showingSettings {
             SettingsScreen(onBack: { showingSettings = false },
                            onReplayOpening: { showingSettings = false; opening = true },

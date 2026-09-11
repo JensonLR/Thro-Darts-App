@@ -2924,3 +2924,19 @@ that one is the impact of a dart and belongs to the outcome of a match. Under Re
 everything is simply there. A failure is now boxed in chalk rather than floating as loose red text.
 
 Counts: client 644, every repository check.
+
+## One way in, reachable more than once
+
+The welcome is asked once ever, which is right, and it meant that a player who had answered it —
+including the founder, who tapped *Not now* after the three sign-in errors above — could never see
+it again, and the next launch went straight to Home. **SIGN IN on the You tab opens the same board
+now.** It used to open a settings list of buttons under a paragraph; there is one way in and it is
+the good one. The door out is worded for how the screen was reached: *Not now, just score* after the
+opening, *Back* when it was asked for. Answering it either way answers it for the launch ask too.
+The full account list is still what a signed-in player gets, and is still under Settings for the
+create-an-account-with-a-passkey path that the board deliberately does not carry.
+
+`docs/runbooks/TESTFLIGHT.md` also gained the thing that was only ever in this session's scrollback:
+**the one-line command that builds and installs onto the phone over Wi-Fi**, which is how every
+build in the last hour got there. The phone is paired and reports `transportType: localNetwork`, so
+no cable is involved and neither is App Store Connect.

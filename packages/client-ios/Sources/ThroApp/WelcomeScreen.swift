@@ -50,13 +50,31 @@ public enum Welcome {
     /// stops being true is the day the sentence has to come off the screen.
     public static let promise = "Matches scored on this phone stay on this phone, signed in or not."
 
-    /// The door out.
-    public static let skip = "Not now, just score"
+    /// The door out, worded for why the screen is up.
+    public static func skip(_ ask: Ask) -> String {
+        switch ask {
+        case .atLaunch: return "Not now, just score"
+        // Asked for from the You tab, "just score" would be answering a question nobody put: the
+        // player came here on purpose and wants back where they were.
+        case .fromYou: return "Back"
+        }
+    }
+
+    /// Why the screen is up. It is the SAME screen either way — there is one way in and it is the
+    /// good one — but the door out is worded for the person going through it, and only the launch
+    /// ask is the one a person is asked once.
+    public enum Ask {
+        /// After the opening, unprompted, once ever.
+        case atLaunch
+        /// The player tapped SIGN IN on the You tab.
+        case fromYou
+    }
 }
 
 /// The welcome, on the board the opening left behind.
 public struct WelcomeScreen: View {
     @ObservedObject private var account: AccountStore
+    private let ask: Welcome.Ask
     private let onDone: () -> Void
     @AppStorage(Appearance.storageKey) private var appearanceRaw: String = Appearance.system.rawValue
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -65,8 +83,9 @@ public struct WelcomeScreen: View {
     /// How much of the rule under the wordmark has been drawn, 0 to 1.
     @State private var chalk: CGFloat = 0
 
-    public init(account: AccountStore, onDone: @escaping () -> Void) {
+    public init(account: AccountStore, ask: Welcome.Ask = .atLaunch, onDone: @escaping () -> Void) {
         self.account = account
+        self.ask = ask
         self.onDone = onDone
     }
 
@@ -171,7 +190,7 @@ public struct WelcomeScreen: View {
             arriving(Beat.footer) {
                 VStack(spacing: ThroSpacing.spacing3) {
                     Button(action: skip) {
-                        Text(Welcome.skip)
+                        Text(Welcome.skip(ask))
                             .thro(ThroTypography.labelStrong)
                             .foregroundStyle(ThroColor.colorTextOnBoard)
                             .underline()
@@ -269,6 +288,8 @@ public struct WelcomeScreen: View {
     }
 
     private func finish() {
+        // Answering the question answers it however it was reached: somebody who signs in from the
+        // You tab is not asked again at the next launch.
         UserDefaults.standard.set(true, forKey: Welcome.seenKey)
         onDone()
     }

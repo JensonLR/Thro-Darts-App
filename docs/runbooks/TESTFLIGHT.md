@@ -53,6 +53,35 @@ If it fails, the log says why, and the section at the end covers the likely reas
    a group called `Founders` → add your own Apple ID. Install **TestFlight** from the App Store on the
    phone and sign in with the same Apple ID.
 
+## Straight onto the phone over Wi-Fi, in about a minute
+
+TestFlight is for testers. For your own phone on your own desk this is faster, needs no upload, no
+processing wait and no App Store Connect: the Mac builds and pushes it over the network. The phone
+has to be **paired and on the same Wi-Fi** — it already is; Xcode paired it, and it shows up as
+`transportType: localNetwork`, which is why the last several builds went on without a cable.
+
+```bash
+cd ~/Documents/Thro-Darts-App
+xcrun devicectl list devices
+```
+
+That prints the phone and its identifier. **Jenson Raper (2)** is
+`F2113FA6-D7DA-5720-83C2-DABFABB2D1AD`. Then, in one go — build, install, launch:
+
+```bash
+cd ~/Documents/Thro-Darts-App && PHONE=F2113FA6-D7DA-5720-83C2-DABFABB2D1AD && xcodebuild -project apps/ios/ThroDarts.xcodeproj -scheme ThroDarts -configuration Debug -destination "id=$PHONE" -allowProvisioningUpdates -derivedDataPath /tmp/throdevice build && xcrun devicectl device install app --device "$PHONE" /tmp/throdevice/Build/Products/Debug-iphoneos/ThroDarts.app && xcrun devicectl device process launch --device "$PHONE" app.thro.darts
+```
+
+It ends with the app opening on the phone. Nothing about it needs Xcode to be running, and none of
+it touches the App Store Connect build number, so it can be done as many times as you like.
+
+**If `list devices` does not show the phone:** unlock it and have it on the same Wi-Fi as the Mac.
+If it is still missing, plug it in once — pairing survives, and the cable can come out again.
+
+**A build put on this way is a debug build signed for development.** It expires after seven days,
+like anything installed without TestFlight, and then wants installing again. That is the trade for
+not waiting on Apple.
+
 ## Getting a build from the Mac, without the workflow
 
 **The whole thing runs from a terminal. No clicking in Xcode at all.** Three archives were tried by
