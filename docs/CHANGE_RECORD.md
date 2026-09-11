@@ -3525,3 +3525,60 @@ stream must heartbeat and resume or the proxy cuts it mid-leg; THRØ's pings eve
 from `Last-Event-ID`, and `StreamTest` holds both.
 
 Counts: client 737, API 28 suites (68 tests), HTTP 49 properties, schema 135, contrast 94 pairs.
+
+## A league table is arithmetic, and the rules that order it are the league's (PD-054, V041)
+
+The founder asked how league data gets processed and presented back to the people in the league: tables,
+leaderboards, the lot. This is the table.
+
+**It is computed on every read and stored nowhere.** `OrganisationTest` has long asserted that no table in
+`competition` has "standing" in its name, and that is the guarantee being kept: a table that is arithmetic
+over the fixtures beneath it cannot drift from them, cannot be edited into disagreeing with them, and cannot
+be left behind by a corrected result. V041 adds one function that counts — `competition.league_tallies` —
+and `Standings.kt` applies the league's rules to the counts and orders the rows with the ranker that already
+existed in the pure package, so a league's table and a group's table cannot come to disagree about what a
+point is worth.
+
+**The live outcome of a fixture is not a column**, it is the one nobody has superseded with the voids
+excluded, and that predicate was already written three times across V014, V021 and V022 — only the last of
+which excludes voids. This was about to be the fourth copy. It is written once now.
+
+**The rules are the league's, and the table says whose they are.** PD-054 is the founder's decision and it
+was both halves: THRØ has a standard — two a win, one a draw, ordered by points then leg difference then
+legs for — and a league may write its own, for the leagues that score by the leg or play double-in. The
+condition that makes a standard safe is that it is never silent: every table names which policy ordered it
+and whether that policy is the league's. OD-022 warned that a constant buried in a table calculation would
+be THRØ deciding a league's rules without saying so, and the fault in that sentence is *buried*.
+
+**A rule THRØ cannot compute is refused by name.** A league whose bonus point depends on each fixture's own
+scoreline is told exactly that, and told what THRØ can do instead — because a table quietly missing a rule is
+wrong in a way only that league would ever notice. The same goes for a policy naming a tie-break THRØ cannot
+order by: the table is refused with the league's own word in the message, rather than quietly ordered by
+somebody else's rules.
+
+**Head to head is resolved as a mini-table, not as a pairwise question.** Three teams can each have beaten
+the next, and a comparator built on that answers differently depending on the order rows arrive in — and on a
+division large enough, Java's sort detects the contradiction and throws, which would have been a 500 on a
+public route. The teams a chain leaves level are grouped, the fixtures among them are scored under the same
+policy, and the comparison is between two numbers, which cannot cycle.
+
+**What was missing turned out to be the results path itself.** Nothing in the codebase set
+`league_fixture.match_id`, and V014 refuses a played outcome without it — so no played league result could
+exist at all, only awards and walkovers. `citeMatch` and `recordPlayedResult` are the other half, and
+`acceptAffiliation` is a third: `affiliate` left every team `applied`, and the tallies count accepted teams
+alone. Three writers that were never there, found by trying to write a test that needed them.
+
+**Two mistakes of mine, both caught rather than shipped.** The integration test copied its
+`INSERT INTO evidence.match` from `MigrationTest`, which builds the pre-V018 shape on purpose — names, not
+seats — so nine tests failed on a column that has not existed since V018. And the first expected order in the
+standings test was simply my arithmetic being wrong: Riverside had drawn *and* lost, Feathers had only drawn,
+so Feathers was second on leg difference and the table was right. That assertion now names the step that
+separated each row rather than only the order, which is the form that would have caught me immediately.
+
+Also here: the phone can read a table (`ThroAPI.standings`), and the JSON says `"whose":"league"` or
+`"thro"` rather than a boolean called `leagues`, which read like a list of leagues. Settings' index got the
+readable measure its own pages already had, and `Stage.swift`'s header stopped claiming THRØ is
+iPhone-portrait-only — it has built for iPad and landscape for some time, and that comment is a fair part of
+why thirty-three screens were written as though nobody would see them on a tablet.
+
+Counts: client 737, API 29 suites (79 tests), HTTP 50 properties, schema 141, contrast 94 pairs.

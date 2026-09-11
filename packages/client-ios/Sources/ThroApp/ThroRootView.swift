@@ -1397,6 +1397,9 @@ public struct YouScreen: View {
                 }
                 .padding(.horizontal, ThroSpacing.spaceScreenGutter)
                 .padding(.bottom, ThroSpacing.spacing6)
+                // The last of the five tabs without the measure (PD-052). Home, Archive, Play and Live all
+                // had it, so You was the one screen in the tab set that stretched across a tablet.
+                .throReadable()
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             // Paper under the lists; the field behind the top shows only above the header.

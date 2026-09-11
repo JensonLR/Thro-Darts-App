@@ -232,6 +232,17 @@ policy it was taken under; a later decision supersedes an earlier one and the ea
 **Not a bracket tie**: it has no parent-child dependency, can be awarded with no match played, and
 aggregates into a table rather than advancing a competitor.
 
+**League table** — the arithmetic of a League season's Fixtures, computed on every read and stored
+nowhere (V041, PD-054). No table in `competition` has "standing" in its name and a test holds that,
+so a table cannot drift from the results beneath it, be edited into disagreeing with them, or be
+left behind by a correction. Its rows are the Teams the League **affiliated**; a Team that merely
+says it plays in the League (PD-049) is never one. Each fixture contributes its **live outcome** —
+the one nobody has superseded, voids excluded — and an awarded outcome or walkover moves points
+without ever contributing legs, so a fixture nobody played cannot reach a leg-difference tie-break.
+What a result is worth is the League's own approved `points` policy, or **THRØ's standard** of two a
+win and one a draw where it has none; every table says which of those ordered it, and every row says
+which step of the declared chain separated it from the one below.
+
 **Check-in** — a person present at an Event, checked in for one of its Entries from one device, and
 the scoring grant issued to that person at that moment. Keyed on the person: for a Pair or a Team
 the entrant is the competitor and the grant holder is the member who checked it in, because a grant

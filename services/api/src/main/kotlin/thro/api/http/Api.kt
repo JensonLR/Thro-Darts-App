@@ -417,6 +417,23 @@ public object Contract {
             responses = mapOf(200 to "leagues, newest season first"),
         ),
         Endpoint(
+            id = "seasons.standings", method = "GET", path = "/v1/seasons/{leagueSeasonId}/standings",
+            authenticated = false,
+            summary = "A league season's table, computed from the results under it (PD-054)",
+            description = "Derived on every read from each fixture's live outcome and the league's own approved points "
+                + "policy. Nothing is stored, so a table cannot drift from the results beneath it, be edited into "
+                + "disagreeing with them, or be left behind by a correction. Only teams the league affiliated are rows: "
+                + "a team that merely says it plays in the league (PD-049) never is. An awarded fixture or a walkover "
+                + "moves the points and never the legs, so a match nobody played cannot pollute a leg-difference "
+                + "tie-break. Every row says which step of the declared chain separated it from the one below, and every "
+                + "table says whose rules ordered it — the league's own, or THRØ's standard of two a win and one a draw, "
+                + "named as the standard so nobody mistakes it for their league's constitution.",
+            query = listOf("division" to "a division of this season; omitted gives every division"),
+            responses = mapOf(200 to "the table, by division, with the rules it was ordered under",
+                              400 to "not a UUID", 404 to "no such league season",
+                              409 to "this league's own points rules name something THRØ cannot apply, and say what"),
+        ),
+        Endpoint(
             id = "events", method = "GET", path = "/v1/events", authenticated = false,
             summary = "Open-entry events that have not started yet, with their venues",
             description = "The notice on the pub door: open access only, public venues only, no person on any row. Eligibility, entry counts and whether the caller is in are on /v1/me/discovery.",

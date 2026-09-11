@@ -3,12 +3,14 @@ import ThroTokens
 
 // The scoring screen's shape, as a pure function of the room it has.
 //
-// **Why this is a value and not a view.** PD-005 made the scoring screen fit without scrolling by
-// choosing a portrait phone and locking the app to it. That is a decision the app cannot re-examine
-// at runtime, and it is why THRØ is iPhone-portrait-only today: `TARGETED_DEVICE_FAMILY = 1` and
-// `UISupportedInterfaceOrientations_iPhone = Portrait`. Turning those switches on without something
-// behind them ships a portrait layout squeezed into 390 points of height, which is worse than not
-// offering landscape at all.
+// **Why this is a value and not a view.** PD-005 made the scoring screen fit without scrolling, and the
+// first way to guarantee that was to choose a portrait phone and lock the app to it — a decision the app
+// could not re-examine at runtime. Turning those switches on without something behind them would have
+// shipped a portrait layout squeezed into 390 points of height, which is worse than not offering landscape
+// at all. **That something is this file**, so the switches are on: the project builds
+// `TARGETED_DEVICE_FAMILY = "1,2"` with iPhone landscape and all four iPad orientations. This comment said
+// the opposite until 2026-09-12, which is how thirty-three screens came to be written as though nobody
+// would ever see them on a tablet (PD-052).
 //
 // So the shape is decided here, by arithmetic, from the width and height actually available and the
 // player's own text size — and because it is a pure function it can be held to the one claim that

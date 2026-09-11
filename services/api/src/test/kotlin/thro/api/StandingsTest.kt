@@ -1,0 +1,313 @@
+package thro.api
+
+import java.sql.Connection
+import java.time.Instant
+import java.time.LocalDate
+import java.time.temporal.ChronoUnit
+import java.util.UUID
+import kotlin.test.Test
+import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
+import kotlin.test.assertFalse
+import kotlin.test.assertTrue
+
+/**
+ * A league's table, against a real PostgreSQL (PD-054, V041).
+ *
+ * The arithmetic is the easy half. What these hold is the half that would be wrong quietly: a team that only
+ * *says* it plays in the league appearing as a row, an award inventing legs it never won, a corrected result
+ * counted twice, a table ordered by THRØ's rules while looking like the league's, and the same table coming
+ * out in a different order on the second read.
+ */
+class StandingsTest {
+
+    private val configured = TestDatabase.configured
+    private fun migrated(): Connection = TestDatabase.migrated()
+
+    private val t0: Instant = Instant.parse("2026-09-01T19:00:00Z")
+    private val now: Instant = Instant.parse("2026-11-01T21:00:00Z")
+
+    /** A league with one division, three accepted teams, and the ids to play them against each other. */
+    private class Season(val seasonId: UUID, val leagueId: UUID, val division: UUID,
+                         val a: UUID, val b: UUID, val c: UUID)
+
+    private fun season(orgs: Organisations, admin: UUID): Season {
+        val league = orgs.createLeague("Teesside Thursday", "Teesside", by = admin)
+        val seasonId = orgs.openSeason(league, "2026/27", LocalDate.of(2026, 9, 1), LocalDate.of(2027, 5, 31))
+        val division = orgs.createDivision(seasonId, "Division One", 1)
+        val teams = listOf("Grange A", "Riverside A", "Feathers A").map { orgs.createTeam(it, "Stockton", by = admin) }
+        for (t in teams) orgs.acceptAffiliation(orgs.affiliate(t, seasonId, division, from = t0, by = admin), at = t0)
+        return Season(seasonId, league, division, teams[0], teams[1], teams[2])
+    }
+
+    /** A fixture played, with a match behind it — which V014 insists on for any played outcome. */
+    private fun played(
+        c: Connection, orgs: Organisations, s: Season, home: UUID, away: UUID, legsHome: Int, legsAway: Int,
+        admin: UUID, at: Instant = t0.plus(7, ChronoUnit.DAYS),
+    ): UUID {
+        val fixture = orgs.scheduleFixture(s.seasonId, s.division, home, away, at = at, by = admin)
+        val match = UUID.randomUUID()
+        val one = orgs.createPlayer()
+        val two = orgs.createPlayer()
+        // The columns as V018 left them: seats, not names. MigrationTest inserts `home_name` and `away_name`
+        // deliberately, because it is testing the world as it was before V018 rewrote it — and copying that
+        // insert into a test against a fully migrated database is exactly how this first failed.
+        c.prepareStatement(
+            """INSERT INTO evidence.match (match_id, home_id, away_id, starting_score,
+                                           in_rule, out_rule, legs_mode, legs_target, throw_first)
+               VALUES (?, ?, ?, 501, 'straight', 'double', 'first_to', 5, ?)""",
+        ).use { ps ->
+            ps.setObject(1, match); ps.setObject(2, one); ps.setObject(3, two); ps.setObject(4, one)
+            ps.executeUpdate()
+        }
+        orgs.citeMatch(fixture, match)
+        orgs.recordPlayedResult(fixture, legsHome, legsAway, by = admin)
+        return fixture
+    }
+
+    private fun table(c: Connection, s: Season) = LeagueTable(c).of(s.seasonId, null, now)
+
+    @Test
+    fun `a season nobody has is not a table`() {
+        if (!configured) return
+        migrated().use { c ->
+            val refused = assertFailsWith<LeagueTable.Refused> { LeagueTable(c).of(UUID.randomUUID(), null, now) }
+            assertEquals(404, refused.status)
+        }
+    }
+
+    @Test
+    fun `THRO's standard orders a league that has said nothing, and the table says whose rules those are`() {
+        if (!configured) return
+        migrated().use { c ->
+            val orgs = Organisations(c)
+            val admin = orgs.createPlayer()
+            val s = season(orgs, admin)
+            played(c, orgs, s, s.a, s.b, 5, 2, admin)
+            played(c, orgs, s, s.b, s.c, 3, 3, admin)
+
+            val t = table(c, s)
+            val rows = t.divisions.single().rows
+            assertFalse(t.rules.mine, "the league approved no points policy, so these are not its rules")
+            assertEquals(null, t.rules.policyId)
+            assertTrue(t.rules.says.contains("THRØ's standard"), t.rules.says)
+            assertEquals(listOf("points", "leg_difference", "legs_for"), t.rules.orderedBy)
+            // Grange A won. Riverside A and Feathers A are level on a point each, so leg difference
+            // separates them: Feathers only drew, Riverside drew and lost 2-5. The first version of this
+            // test expected Riverside second — that was my arithmetic being wrong, not the table's, and it
+            // is why the assertion below now names the step that separated each row rather than just the
+            // order it produced.
+            assertEquals(listOf("Grange A", "Feathers A", "Riverside A"), rows.map { it.name })
+            assertEquals(2, rows[0].points, "two for the win")
+            assertEquals(1, rows[1].points, "one for the draw")
+            assertEquals(1, rows[2].points)
+            assertEquals(3, rows[0].legDifference)
+            assertEquals(0, rows[1].legDifference)
+            assertEquals(-3, rows[2].legDifference)
+            assertEquals(null, rows[0].separatedBy, "nothing is above the top of a table")
+            assertEquals("points", rows[1].separatedBy, "the win is what put Grange A above them")
+            assertEquals("leg_difference", rows[2].separatedBy, "and these two are told apart by their legs")
+        }
+    }
+
+    @Test
+    fun `a team that only says it plays in the league is in nobody's table`() {
+        if (!configured) return
+        migrated().use { c ->
+            val orgs = Organisations(c)
+            val admin = orgs.createPlayer()
+            val s = season(orgs, admin)
+            played(c, orgs, s, s.a, s.b, 5, 1, admin)
+
+            // PD-049: a claim is a team speaking about itself. It reaches the league's public front as its
+            // own say and must never become a place in the league's table.
+            val sayer = orgs.createTeam("Anchor A", "Stockton", by = admin)
+            c.prepareStatement(
+                "INSERT INTO competition.team_league_claim (team_id, league_id, said_by) VALUES (?, ?, ?)",
+            ).use { ps -> ps.setObject(1, sayer); ps.setObject(2, s.leagueId); ps.setObject(3, admin); ps.executeUpdate() }
+
+            val names = table(c, s).divisions.single().rows.map { it.name }
+            assertEquals(3, names.size, "the three the league accepted, and not the one that said so: $names")
+            assertFalse(names.contains("Anchor A"))
+        }
+    }
+
+    @Test
+    fun `an award moves the points and never the legs`() {
+        if (!configured) return
+        migrated().use { c ->
+            val orgs = Organisations(c)
+            val admin = orgs.createPlayer()
+            val s = season(orgs, admin)
+            val fixture = orgs.scheduleFixture(s.seasonId, s.division, s.a, s.b, at = t0.plus(7, ChronoUnit.DAYS), by = admin)
+            orgs.awardFixture(fixture, s.a, "the away side did not raise a team", by = admin)
+
+            val rows = table(c, s).divisions.single().rows.associateBy { it.name }
+            val won = rows.getValue("Grange A")
+            val lost = rows.getValue("Riverside A")
+            assertEquals(2, won.points, "a walkover is worth a win under THRØ's standard")
+            assertEquals(0, won.legsFor, "a scoreline nobody threw would pollute every leg difference below it")
+            assertEquals(0, won.legsAgainst)
+            assertEquals(1, won.awardedFor)
+            assertEquals(1, won.played, "the fixture still happened to the table")
+            assertEquals(0, lost.points)
+            assertEquals(1, lost.awardedAgainst)
+            assertEquals(0, won.evidenced, "and nothing about it was scored on THRØ")
+        }
+    }
+
+    @Test
+    fun `a corrected result is counted once, and a voided one not at all`() {
+        if (!configured) return
+        migrated().use { c ->
+            val orgs = Organisations(c)
+            val admin = orgs.createPlayer()
+            val s = season(orgs, admin)
+            val fixture = played(c, orgs, s, s.a, s.b, 5, 0, admin)
+            val live = c.prepareStatement(
+                "SELECT outcome_id FROM competition.league_fixture_outcome WHERE fixture_id = ?",
+            ).use { ps ->
+                ps.setObject(1, fixture)
+                ps.executeQuery().use { rs -> rs.next(); rs.getObject(1) as UUID }
+            }
+            // A second look is a second decision (V014): the first stays on the record and must not be added
+            // to the second, or one fixture would be worth two results.
+            orgs.recordPlayedResult(fixture, 2, 3, by = admin, supersedes = live)
+
+            val corrected = table(c, s).divisions.single().rows.associateBy { it.name }
+            assertEquals(1, corrected.getValue("Grange A").played, "one fixture, however often it was decided")
+            assertEquals(0, corrected.getValue("Grange A").points, "and the answer that stands is the second one")
+            assertEquals(2, corrected.getValue("Riverside A").points)
+            assertEquals(2, corrected.getValue("Grange A").legsFor)
+
+            val second = c.prepareStatement(
+                "SELECT outcome_id FROM competition.league_fixture_outcome WHERE fixture_id = ? AND supersedes_outcome_id IS NOT NULL",
+            ).use { ps ->
+                ps.setObject(1, fixture)
+                ps.executeQuery().use { rs -> rs.next(); rs.getObject(1) as UUID }
+            }
+            orgs.voidOutcome(fixture, second, "played under protest, to be replayed", by = admin)
+            val voided = table(c, s).divisions.single().rows.associateBy { it.name }
+            assertEquals(0, voided.getValue("Grange A").played, "a voided fixture is not a result")
+            assertEquals(0, voided.getValue("Riverside A").points)
+        }
+    }
+
+    @Test
+    fun `a team that has played nothing is a row of zeroes rather than a team missing`() {
+        if (!configured) return
+        migrated().use { c ->
+            val orgs = Organisations(c)
+            val admin = orgs.createPlayer()
+            val s = season(orgs, admin)
+            played(c, orgs, s, s.a, s.b, 5, 4, admin)
+
+            val feathers = table(c, s).divisions.single().rows.single { it.name == "Feathers A" }
+            assertEquals(0, feathers.played)
+            assertEquals(0, feathers.points)
+            assertEquals(0, feathers.legsFor)
+        }
+    }
+
+    @Test
+    fun `a league's own rules replace THRO's, and the table says they are the league's`() {
+        if (!configured) return
+        migrated().use { c ->
+            val orgs = Organisations(c)
+            val admin = orgs.createPlayer()
+            val s = season(orgs, admin)
+            played(c, orgs, s, s.a, s.b, 5, 2, admin)
+            played(c, orgs, s, s.b, s.c, 3, 3, admin)
+
+            // Three a win and a point a leg: a shape THRØ's standard does not have, so a table ordered by it
+            // cannot be mistaken for one ordered by the default.
+            val policy = orgs.draftPolicy(
+                "league_season", s.seasonId, "points", 1, LocalDate.of(2026, 9, 1),
+                body = """{"win":3,"draw":1,"points_per_leg_won":1}""", by = admin,
+            )
+            orgs.approvePolicy(policy, by = admin)
+
+            val t = table(c, s)
+            val rows = t.divisions.single().rows.associateBy { it.name }
+            assertTrue(t.rules.mine, "the league approved these")
+            assertEquals(policy, t.rules.policyId)
+            assertTrue(t.rules.says.contains("This league's own rules"), t.rules.says)
+            assertEquals(8, rows.getValue("Grange A").points, "three for the win and five legs")
+            assertEquals(6, rows.getValue("Riverside A").points, "one for the draw, two legs and three legs")
+            assertEquals(4, rows.getValue("Feathers A").points, "one for the draw and three legs")
+        }
+    }
+
+    @Test
+    fun `rules THRO cannot apply refuse the table rather than quietly ordering it another way`() {
+        if (!configured) return
+        migrated().use { c ->
+            val orgs = Organisations(c)
+            val admin = orgs.createPlayer()
+            val s = season(orgs, admin)
+            played(c, orgs, s, s.a, s.b, 5, 2, admin)
+
+            val policy = orgs.draftPolicy(
+                "league_season", s.seasonId, "points", 1, LocalDate.of(2026, 9, 1),
+                body = """{"win":2,"promotion_places":2}""", by = admin,
+            )
+            orgs.approvePolicy(policy, by = admin)
+
+            val refused = assertFailsWith<LeagueTable.Refused> { table(c, s) }
+            assertEquals(409, refused.status)
+            assertTrue(refused.why.contains("promotion_places"),
+                       "the league is told which of its own words THRØ could not execute: ${refused.why}")
+        }
+    }
+
+    @Test
+    fun `the same results come out in the same order twice`() {
+        if (!configured) return
+        migrated().use { c ->
+            val orgs = Organisations(c)
+            val admin = orgs.createPlayer()
+            val s = season(orgs, admin)
+            // Three teams level on everything the standard can separate them by: the order must still be the
+            // same on the second read, or a published table reorders itself between two people looking at it.
+            played(c, orgs, s, s.a, s.b, 3, 3, admin)
+            played(c, orgs, s, s.b, s.c, 3, 3, admin)
+            played(c, orgs, s, s.c, s.a, 3, 3, admin)
+
+            val first = table(c, s).divisions.single().rows
+            val again = table(c, s).divisions.single().rows
+            assertEquals(first.map { it.name }, again.map { it.name })
+            assertEquals(listOf(null, null, null), first.map { it.separatedBy },
+                         "nothing in the chain separated them, and the table does not pretend otherwise")
+        }
+    }
+
+    @Test
+    fun `a fixture whose date has gone by with no result is counted and said`() {
+        if (!configured) return
+        migrated().use { c ->
+            val orgs = Organisations(c)
+            val admin = orgs.createPlayer()
+            val s = season(orgs, admin)
+            played(c, orgs, s, s.a, s.b, 5, 2, admin)
+            orgs.scheduleFixture(s.seasonId, s.division, s.b, s.c, at = t0.plus(14, ChronoUnit.DAYS), by = admin)
+            orgs.scheduleFixture(s.seasonId, s.division, s.a, s.c, at = now.plus(7, ChronoUnit.DAYS), by = admin)
+
+            val division = table(c, s).divisions.single()
+            assertEquals(1, division.awaitingResults,
+                         "the one whose night has been and gone, and not the one still to come")
+        }
+    }
+
+    @Test
+    fun `a fixture's match is named once`() {
+        if (!configured) return
+        migrated().use { c ->
+            val orgs = Organisations(c)
+            val admin = orgs.createPlayer()
+            val s = season(orgs, admin)
+            val fixture = played(c, orgs, s, s.a, s.b, 5, 2, admin)
+            val why = assertFailsWith<IllegalArgumentException> { orgs.citeMatch(fixture, UUID.randomUUID()) }
+            assertTrue(why.message!!.contains("already names a match"), why.message!!)
+        }
+    }
+}

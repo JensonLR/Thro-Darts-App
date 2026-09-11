@@ -111,6 +111,10 @@ public struct SettingsScreen: View {
                             .padding(.horizontal, ThroSpacing.spaceScreenGutter)
                             .padding(.top, ThroSpacing.spacing5)
                             .padding(.bottom, ThroSpacing.spacing7)
+                            // The index was the one part of Settings without the measure (PD-052), so on a
+                            // tablet the list stretched and every page you tapped into snapped back to a
+                            // column. A screen disagreeing with itself is worse than either width.
+                            .throReadable()
                     }
                 }
             }

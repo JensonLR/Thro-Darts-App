@@ -262,6 +262,23 @@ public class Organisations(private val connection: Connection) {
         return id
     }
 
+    /**
+     * A league accepts a team into a season.
+     *
+     * Applied → accepted and never back: V014's `status_moves_forward` refuses the return journey, and
+     * V041's tallies count accepted affiliations alone — a side still waiting to be let in is not a row in
+     * anybody's table, and should not be.
+     */
+    public fun acceptAffiliation(affiliationId: UUID, at: Instant) {
+        val n = connection.prepareStatement(
+            """UPDATE competition.team_affiliation SET status = 'accepted', accepted_at = ?
+                WHERE affiliation_id = ? AND status = 'applied'""",
+        ).use { ps ->
+            ps.setObject(1, Timestamp.from(at)); ps.setObject(2, affiliationId); ps.executeUpdate()
+        }
+        require(n == 1) { "no affiliation $affiliationId is waiting to be accepted" }
+    }
+
     // --- policy -------------------------------------------------------------------------------
 
     /** A draft policy: it decides nothing until [approvePolicy]. */
@@ -471,6 +488,52 @@ public class Organisations(private val connection: Connection) {
             ps.executeUpdate()
         }
         require(n == 1) { "stale write: fixture $fixtureId is not at version $expectedVersion" }
+    }
+
+    /**
+     * Names the match a fixture was played in. Once, and once only.
+     *
+     * **This is what makes a played league result possible at all**: V014 refuses a played outcome on a
+     * fixture with no match, so a scoreline in a table always has a match behind it. The row version is
+     * bumped because V014's `league_fixture_change_is_recorded` refuses any update that does not move it on
+     * by one — that trigger is what makes a stale write impossible — and `match_id IS NULL` is what makes
+     * this set-once rather than a correction: a fixture's match is not a field to be pointed somewhere else.
+     */
+    public fun citeMatch(fixtureId: UUID, matchId: UUID) {
+        val n = connection.prepareStatement(
+            """UPDATE competition.league_fixture SET match_id = ?, row_version = row_version + 1
+                WHERE fixture_id = ? AND match_id IS NULL""",
+        ).use { ps ->
+            ps.setObject(1, matchId); ps.setObject(2, fixtureId); ps.executeUpdate()
+        }
+        require(n == 1) { "fixture $fixtureId already names a match, or there is no such fixture" }
+    }
+
+    /**
+     * Records a fixture as played, with the legs each side won.
+     *
+     * **A played outcome cites the fixture's match** — V014's `outcome_is_a_recorded_decision` refuses one
+     * where `league_fixture.match_id` is null — so a league result is never a scoreline somebody typed with
+     * nothing behind it. [supersedes] is the live outcome when this is a correction, because a second
+     * decision supersedes the first and never edits it.
+     */
+    public fun recordPlayedResult(
+        fixtureId: UUID, legsHome: Int, legsAway: Int, by: UUID, policyId: UUID? = null, supersedes: UUID? = null,
+    ): UUID {
+        require(legsHome >= 0 && legsAway >= 0) { "a side cannot win fewer than no legs" }
+        val id = UUID.randomUUID()
+        connection.prepareStatement(
+            """
+            INSERT INTO competition.league_fixture_outcome
+              (outcome_id, fixture_id, kind, legs_home, legs_away, decided_by, policy_id, supersedes_outcome_id)
+            VALUES (?, ?, 'played', ?, ?, ?, ?, ?)
+            """.trimIndent(),
+        ).use { ps ->
+            ps.setObject(1, id); ps.setObject(2, fixtureId); ps.setInt(3, legsHome); ps.setInt(4, legsAway)
+            ps.setObject(5, by); ps.setObject(6, policyId); ps.setObject(7, supersedes)
+            ps.executeUpdate()
+        }
+        return id
     }
 
     /** Awards a fixture unplayed: a decision with an actor and a reason, never a scoreline. */

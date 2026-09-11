@@ -838,6 +838,47 @@ if echo "$r" | grep -qiv 'duplicate key' && [ "$($PSQL -c "SELECT count(*) FROM 
   ok "saying it again after withdrawing is a new claim of its own"
 else bad "saying it again after withdrawing is a new claim of its own" "${r:-the team could not say it again}"; fi
 
+# V041 — a league table is arithmetic over the fixtures, and the rule that orders it belongs to the league.
+SLG=$($PSQL -c "SELECT gen_random_uuid();"); SSN=$($PSQL -c "SELECT gen_random_uuid();")
+SDV=$($PSQL -c "SELECT gen_random_uuid();"); STA=$($PSQL -c "SELECT gen_random_uuid();"); STB=$($PSQL -c "SELECT gen_random_uuid();")
+SPOL=$($PSQL -c "SELECT gen_random_uuid();")
+$PSQL -c "INSERT INTO competition.league (league_id, name) VALUES ('$SLG','Property League');
+  INSERT INTO competition.league_season (league_season_id, league_id, label, starts_on, ends_on)
+    VALUES ('$SSN','$SLG','2026/27','2026-09-01','2027-05-31');
+  INSERT INTO competition.division (division_id, league_season_id, name, ordinal) VALUES ('$SDV','$SSN','Division One',1);
+  INSERT INTO competition.team (team_id, name) VALUES ('$STA','Accepted A');
+  INSERT INTO competition.team (team_id, name) VALUES ('$STB','Still Applying B');
+  INSERT INTO competition.team_affiliation (affiliation_id, team_id, league_season_id, division_id, status, accepted_at, valid_from)
+    VALUES (gen_random_uuid(),'$STA','$SSN','$SDV','accepted', now(), now());
+  INSERT INTO competition.team_affiliation (affiliation_id, team_id, league_season_id, division_id, valid_from)
+    VALUES (gen_random_uuid(),'$STB','$SSN','$SDV', now());" >/dev/null 2>&1
+
+check "a league table has a row for every team the league accepted" "$($PSQL -c "SELECT count(*) FROM competition.league_tallies('$SSN');")" "1"
+check "and none for a team still waiting to be let in" "$($PSQL -c "SELECT count(*) FROM competition.league_tallies('$SSN') WHERE team_name='Still Applying B';")" "0"
+
+r=$($PSQL -c "SET ROLE app_read; SELECT count(*) FROM competition.league_tallies('$SSN');" 2>&1)
+if [ "$r" = "1" ]; then ok "the read role may compute a table without holding anything else"
+else bad "the read role may compute a table without holding anything else" "${r:-app_read could not execute league_tallies}"; fi
+
+$PSQL -c "INSERT INTO competition.policy (policy_id, authority_kind, league_id, kind, version, effective_from, provenance, body)
+  VALUES ('$SPOL','league','$SLG','points',1,'2026-09-01','manual','{}'::jsonb);" >/dev/null 2>&1
+r=$($PSQL -c "UPDATE competition.league_season SET standings_policy_id='$SPOL', row_version = row_version + 1 WHERE league_season_id='$SSN';" 2>&1)
+if echo "$r" | grep -qi 'approved points or tie_break'; then ok "a season is not ordered by a rule nobody approved"
+else bad "a season is not ordered by a rule nobody approved" "${r:-a draft policy was pinned to a season}"; fi
+
+$PSQL -c "UPDATE competition.policy SET approval_state='approved', approved_by=gen_random_uuid(), approved_at=now() WHERE policy_id='$SPOL';" >/dev/null 2>&1
+$PSQL -c "UPDATE competition.league_season SET standings_policy_id='$SPOL', row_version = row_version + 1 WHERE league_season_id='$SSN';" >/dev/null 2>&1
+check "and is ordered by one its own league approved" "$($PSQL -c "SELECT count(*) FROM competition.league_season WHERE league_season_id='$SSN' AND standings_policy_id='$SPOL';")" "1"
+
+SFOR=$($PSQL -c "SELECT gen_random_uuid();")
+$PSQL -c "INSERT INTO competition.league (league_id, name) VALUES ('$SFOR','Another League');
+  INSERT INTO competition.policy (policy_id, authority_kind, league_id, kind, version, effective_from, provenance, approval_state, approved_by, approved_at, body)
+    VALUES (gen_random_uuid(),'league','$SFOR','points',1,'2026-09-01','manual','approved', gen_random_uuid(), now(), '{}'::jsonb);" >/dev/null 2>&1
+FOREIGNPOL=$($PSQL -c "SELECT policy_id FROM competition.policy WHERE league_id='$SFOR' LIMIT 1;")
+r=$($PSQL -c "UPDATE competition.league_season SET standings_policy_id='$FOREIGNPOL', row_version = row_version + 1 WHERE league_season_id='$SSN';" 2>&1)
+if echo "$r" | grep -qi 'its own league'; then ok "and never by another league's rule"
+else bad "and never by another league's rule" "${r:-a policy of another league was pinned}"; fi
+
 echo
 echo "-------------------------------------------"
 echo "  $PASS passed, $FAIL failed"

@@ -166,6 +166,67 @@ public struct PublicEvent: Decodable, Sendable, Equatable, Identifiable {
     public var id: UUID { eventId }
 }
 
+/// A league season's table, as the server computes it (PD-054).
+///
+/// Every field the app needs to say *why* the table reads as it does travels with it: which rules ordered
+/// it and whose they are, which step separated each row from the one above, how many fixtures have gone by
+/// with no result, and how much of each row came from a match scored on THRØ rather than somebody's word.
+public struct LeagueStandings: Decodable, Sendable, Equatable {
+
+    /// Which rules ordered the table. Never absent: a standard nobody can see is a standard THRØ imposed.
+    public struct Rules: Decodable, Sendable, Equatable {
+        public let policyId: UUID?
+        public let version: Int?
+        /// `league` when the league approved these, `thro` when it has said nothing and the standard applied.
+        public let whose: String
+        /// The sentence to print beside the table.
+        public let says: String
+        public let orderedBy: [String]
+
+        /// True when these are the league's own rules rather than THRØ's standard.
+        public var leagues: Bool { whose == "league" }
+    }
+
+    public struct Row: Decodable, Sendable, Equatable, Identifiable {
+        public let position: Int
+        /// The chain step that put this row above the next, or nil when nothing in the chain could.
+        public let separatedBy: String?
+        public let teamId: UUID
+        public let name: String
+        public let played: Int
+        public let won: Int
+        public let drawn: Int
+        public let lost: Int
+        public let legsFor: Int
+        public let legsAgainst: Int
+        public let legDifference: Int
+        public let points: Int
+        public let awardedFor: Int
+        public let awardedAgainst: Int
+        /// How many of the played fixtures cite a match scored on THRØ (PD-020).
+        public let evidenced: Int
+        public var id: UUID { teamId }
+    }
+
+    public struct Division: Decodable, Sendable, Equatable, Identifiable {
+        public let divisionId: UUID?
+        public let name: String
+        public let ordinal: Int?
+        /// Fixtures whose night has been and gone with no result entered.
+        public let awaitingResults: Int
+        public let rows: [Row]
+        public var id: String { divisionId?.uuidString ?? name }
+    }
+
+    public let leagueSeasonId: UUID
+    public let leagueId: UUID
+    public let league: String
+    public let label: String
+    public let state: String
+    public let rules: Rules
+    public let divisions: [Division]
+}
+
 /// A team the caller is in, as the server lists it.
 public struct TeamSummary: Decodable, Sendable, Equatable, Identifiable {
     public let teamId: UUID
@@ -725,6 +786,19 @@ public actor ThroAPI {
         let (data, http) = try await send("GET", path, bearer: session?.accessToken)
         guard http.statusCode == 200 else { throw APIError.status(http.statusCode, String(decoding: data, as: UTF8.self)) }
         return try (decode(data) as Envelope).leagues
+    }
+
+    /// A league season's table (PD-054). No session needed: a league's published competition is public.
+    ///
+    /// Computed by the server on every read from the fixtures beneath it, so what arrives cannot disagree
+    /// with the results — and the phone renders `position` as given rather than sorting again, or the two
+    /// would eventually order a table differently in front of the same person.
+    public func standings(season: UUID, division: UUID? = nil) async throws -> LeagueStandings {
+        var path = "/v1/seasons/\(season.uuidString.lowercased())/standings"
+        if let division { path += "?division=\(division.uuidString.lowercased())" }
+        let (data, http) = try await send("GET", path, bearer: session?.accessToken)
+        guard http.statusCode == 200 else { throw APIError.status(http.statusCode, String(decoding: data, as: UTF8.self)) }
+        return try decode(data)
     }
 
     /// Open-entry events that have not started (the notice on the pub door). No session needed.

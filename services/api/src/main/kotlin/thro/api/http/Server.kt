@@ -48,6 +48,7 @@ import thro.api.RelyingParty
 import thro.api.WebAuthn
 import java.util.Base64
 import thro.api.MatchRecords
+import thro.api.LeagueTable
 import thro.api.Safety
 import thro.api.Matches
 import thro.api.Json
@@ -282,6 +283,17 @@ public fun Application.thro(deps: Deps) {
         "me.inbox" to { r -> Http(200, inboxJson(Secretary(r.connection()).inboxForPlayer(r.principal!!.subject, deps.now()))) },
         "team.inbox" to { r -> teamInbox(r.connection(), r.principal!!, r.call.parameters["teamId"], deps.now()) },
         "leagues" to { r -> r.role = DbRole.READ; Http(200, Leagues(r.connection()).let { it.json(it.all(r.call.request.queryParameters["locality"]?.take(80), deps.now())) }) },
+        // PD-054: the table is arithmetic over the fixtures, so it is read as `app_read` and computed here
+        // rather than kept anywhere. A season nobody has given rules to is ordered by THRØ's standard, and
+        // the answer says so on its face.
+        "seasons.standings" to { r ->
+            r.role = DbRole.READ
+            tabled {
+                val season = UUID.fromString(r.call.parameters["leagueSeasonId"])
+                val division = r.call.request.queryParameters["division"]?.let { UUID.fromString(it) }
+                LeagueTable(r.connection()).let { Http(200, it.json(it.of(season, division, deps.now()))) }
+            }
+        },
         "events" to { r -> r.role = DbRole.READ; Http(200, Events(r.connection()).let { it.json(it.upcoming(r.call.request.queryParameters["from"]?.let { f -> Instant.parse(f) } ?: deps.now())) }) },
         "me.discovery" to { r -> discovery(r.connection(), r.principal!!, r.call.request.queryParameters["from"], r.call.request.queryParameters["to"], r.call.request.queryParameters["locality"], deps.now()) },
     )
@@ -545,6 +557,15 @@ private fun blocksJson(ids: List<java.util.UUID>): String =
 
 /** A team refusal is an answer too: the sentence, with the status the route names. */
 private fun teamly(status: Int = 400, block: () -> Http): Http = try { block() } catch (e: Teams.Refused) { Http(e.status ?: status, """{"error":${Contract.q(e.why)}}""") }
+
+/**
+ * A table's refusal is an answer: there is no such season, or the league's own rules name something THRØ
+ * cannot apply. The second is a 409 carrying the league's problem rather than a table quietly ordered by
+ * somebody else's rules, which would be worse than no table at all.
+ */
+private fun tabled(block: () -> Http): Http = try { block() } catch (e: LeagueTable.Refused) {
+    Http(e.status, """{"error":${Contract.q(e.why)}}""")
+}
 
 /** A friends refusal is an answer: the sentence the phone shows, with the status that says which kind. */
 private fun friendly(codeProblem: Int = 403, block: () -> Http): Http = try { block() } catch (e: Friends.Refused) {
