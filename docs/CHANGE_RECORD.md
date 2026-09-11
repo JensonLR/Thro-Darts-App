@@ -3424,3 +3424,26 @@ pub the league published. The front carries `adopted`, and both the team's page 
 it in those words: run on THRØ by one of its own players, by their own say, nobody appointed them.
 
 Counts: client 733, API 27 suites (61 tests), HTTP 47 properties, schema 115, contrast 94 pairs.
+
+## The twenty-league pilot asked honestly and was refused (PD-048)
+
+The founder chose the pilot: twenty leagues, read slowly, by an importer that gives its own name. It got as
+far as the first request. `robots.txt` answers 200 to a client calling itself THRØ, and allows exactly the
+pages the pilot wanted — the league's front page and its `/fg/` standings; fixtures, matches, players and
+live are disallowed and were never wanted. Every content page then answers **403 from CloudFront**,
+generated at the edge: *Request blocked*. The sites serve browsers and refuse everything else, and the tool
+that worked in September worked because it called itself Safari.
+
+So the pilot stopped there, which is what PD-048 said it would do. No league page was read and nothing was
+seeded. The email to LeagueRepublic now carries the evidence and one more question: whether an identified
+THRØ agent can be allow-listed at their CDN. Until they answer, teams reach the map through the players who
+play in them (PD-047).
+
+Two things in the importer were fixed before any of that, because a twenty-league seed would have exposed
+both. A team already recorded by hand was matched by name and `locality IS NOT DISTINCT FROM`, so NULL
+matched NULL — and every league the directory places has no locality, which means the Red Lion in Halifax
+would have become the Red Lion in Burnley on the second import. No locality now means no match, and a test
+holds two same-named teams apart across two leagues. And a league was found by name before its web address:
+the address is the league, two leagues can share a name, and the order is now the other way round.
+
+Counts: client 733, API 27 suites (62 tests), HTTP 47 properties, schema 115, contrast 94 pairs.

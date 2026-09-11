@@ -110,6 +110,40 @@ class SeedTest {
         }
     }
 
+    /**
+     * Two leagues, no locality on either — which is every league the directory places (PD-037) — and a pub
+     * name they share. They are two teams. The fallback that matches a team already recorded by hand used
+     * `locality IS NOT DISTINCT FROM`, so NULL matched NULL and the Red Lion in Halifax would have become
+     * the Red Lion in Burnley the moment a second league was imported.
+     */
+    @Test
+    fun `a pub name two leagues share is two teams when neither says where it is`() {
+        if (!configured) return
+        migrated().use { c ->
+            fun league(key: String, name: String, host: String) = """
+                {"key":"$key","name":"$name","short_name":null,"locality":null,"night":null,
+                 "platform":"LeagueRepublic","url":"https://$host/","notes":"",
+                 "seasons":[{"label":"2025-2026","starts_on":"2025-09-01","ends_on":"2026-05-31",
+                   "span_basis":"approximate: read from the season label",
+                   "divisions":[{"name":"Division One","ordinal":1,"source_url":"https://$host/fg/1_1.html",
+                     "teams":["The Red Lion"]}]}]}
+            """.trimIndent()
+            val json = """
+                {"retrieved_on":"2026-09-11","method":"test","personal_data":"none","venues":[],"team_venues":[],
+                 "leagues":[${league("halifax", "Halifax & District Darts League", "halifaxdartsleague.example")},
+                            ${league("burnley", "Burnley & District Darts League", "burnleydartsleague.example")}]}
+            """.trimIndent()
+            val file = File.createTempFile("thro-two-leagues", ".json").also { it.writeText(json); it.deleteOnExit() }
+
+            val made = Seed(c, Instant.parse("2026-09-11T12:00:00Z")).importFile(file)
+            assertEquals(2, made.leagues)
+            assertEquals(2, made.teams, "the Red Lion in Halifax is not the Red Lion in Burnley")
+            assertEquals(2, count(c, "SELECT count(*) FROM competition.team WHERE name = 'The Red Lion'"))
+            assertEquals(0, Seed(c, Instant.parse("2026-09-11T12:00:00Z")).importFile(file).teams,
+                         "and importing the same file again makes neither of them again")
+        }
+    }
+
     @Test
     fun `what a secretary has recorded is not overwritten by an import`() {
         if (!configured) return

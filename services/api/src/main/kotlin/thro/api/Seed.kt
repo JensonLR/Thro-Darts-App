@@ -110,10 +110,12 @@ public class Seed(private val c: Connection, private val now: Instant = Instant.
         val key = l["key"] as String
         val name = l["name"] as String
         val url = l["url"] as String
-        // Found by name, else by its web address — the directory lists Stockton Thursday under a
-        // shorter name than its own pages do, and the same address is the same league. Never two.
-        val leagueId = one("SELECT league_id FROM competition.league WHERE name = ?", name)
-            ?: byAddress(url)
+        // Found by its web address first, else by name. The address is the league: the directory
+        // lists Stockton Thursday under a shorter name than its own pages do, and two leagues can
+        // share a name ("Monday Night Darts League" is not one league). Never two rows for one site,
+        // and never one row for two leagues that happen to be called the same thing.
+        val leagueId = byAddress(url)
+            ?: one("SELECT league_id FROM competition.league WHERE name = ?", name)
             ?: org.createLeague(name, l["locality"] as String?).also { made = made.copy(leagues = made.leagues + 1) }
         // Fields a source adds and never overwrites: a secretary's word stays; a point stays placed.
         c.prepareStatement(
@@ -196,12 +198,19 @@ public class Seed(private val c: Connection, private val now: Instant = Instant.
         // A secretary may already have the team — recorded by hand, with no source record and perhaps
         // a home the import did not know. Exactly one public, living team of this name in this
         // locality is that team; two would be a guess, and the import does not guess.
-        val sameName = c.prepareStatement(
-            "SELECT team_id FROM competition.team WHERE name = ? AND locality IS NOT DISTINCT FROM ? AND dissolved_at IS NULL",
-        ).use { ps ->
-            ps.setString(1, name); ps.setString(2, locality)
-            ps.executeQuery().use { rs -> generateSequence { if (rs.next()) rs.getObject(1) as UUID else null }.toList() }
-        }
+        //
+        // **Only where the locality is known.** `IS NOT DISTINCT FROM` matched NULL to NULL, so a
+        // league with no locality — which every league from the directory has (PD-037) — matched a
+        // team of that name anywhere in the country. Import twenty leagues that way and every Red
+        // Lion in England is one team. No locality, no match: a team is made for this league instead.
+        val sameName = locality?.let {
+            c.prepareStatement(
+                "SELECT team_id FROM competition.team WHERE name = ? AND locality = ? AND dissolved_at IS NULL",
+            ).use { ps ->
+                ps.setString(1, name); ps.setString(2, it)
+                ps.executeQuery().use { rs -> generateSequence { if (rs.next()) rs.getObject(1) as UUID else null }.toList() }
+            }
+        } ?: emptyList()
         sameName.singleOrNull()?.let { return it }
         return org.createTeam(name, locality).also { made = made.copy(teams = made.teams + 1) }
     }

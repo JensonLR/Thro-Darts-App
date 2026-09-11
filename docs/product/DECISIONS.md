@@ -2200,3 +2200,17 @@ removed the same day.
 
 The other 285 leagues; whether to pay for LeagueRepublic's plan; and whether league secretaries are written
 to before or after their league appears.
+
+### What happened, the same night
+
+**Identifying honestly is refused, so the pilot stopped before it read a page.** `robots.txt` answers 200 to
+a client calling itself THRØ and allows exactly the pages the pilot wanted (`/fg/`, and the league's front
+page; fixtures, matches, players and live are disallowed and were never wanted). Every content page then
+answers **403 from CloudFront** — "Request blocked", generated at the edge, not by LeagueRepublic's own
+application. So the sites serve browsers and refuse everything else, and the tool that worked before worked
+because it called itself Safari.
+
+That is the answer this decision said it would take: the importer is not given a browser's name, no league
+page was read, and nothing was seeded. The email to LeagueRepublic is now the whole of the plan — with one
+question added, which is whether they will allow-list an identified THRØ agent at the CDN. Teams reach the
+map by the players who play in them (PD-047) until they answer.
