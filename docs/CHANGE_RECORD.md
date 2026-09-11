@@ -3077,3 +3077,26 @@ HTTP 41 properties, API 26 suites, schema 92.
 
 Still to come on the phone: reading the journal into that shape, the control that sends it, and the
 Live tab tuning in to the stream the server already publishes.
+
+## And the phone can send one
+
+`MatchUpload` turns a match's journal into what the wire takes: every visit and every retraction, in
+`deviceSeq` order, with the struck visit **sent rather than filtered out** — that is the whole of
+PD-040 in one behaviour, and a test asserts it. Nothing on the phone remembers how far a previous
+attempt got, deliberately: the server is unique on (match, device, deviceSeq), so sending the lot
+again adds only what is missing, and a phone that kept its own high-water mark is a phone that can
+be wrong about it.
+
+It refuses rather than lying in three cases, each with its own sentence: a match that was **retired
+or abandoned**, because the server has no event for an ending yet and uploading the visits alone
+would leave THRØ holding a record that says the match is still going; a row written by a **newer
+build**, which would have to be guessed at; and an **undo whose visit is not in the record**, caught
+here so the reason names the record rather than reading as a fault in THRØ.
+
+The control is on the Live tab rather than the result screen, because `ThroPlay` has no network
+target — the rule that keeps scoring working with no signal — so the one place with both the journal
+and the account is the app shell. **Which seat was yours is answered by your own name**: a local
+match is two names typed at an oche, so if neither is yours THRØ says so and does not guess, because
+a match filed under the wrong player is worse than a match not filed at all.
+
+Counts: client 668, API 26 suites, HTTP 41 properties, schema 92.

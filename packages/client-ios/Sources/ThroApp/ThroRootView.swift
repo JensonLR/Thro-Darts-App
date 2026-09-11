@@ -5,6 +5,7 @@ import ThroTokens
 import ThroDesign
 import ThroJournal
 import ThroLiveKit
+import ThroNet
 import ThroPlay
 
 /// The app's state: the journal, what is in it, and which tab or flow is showing.
@@ -316,6 +317,8 @@ public struct ThroRootView: View {
     /// on purpose — a cold launch while signed out asks again, because signing in is the thing the
     /// app needs and a person with no account has not done it. One tap is past it.
     @State private var welcomeAnswered = false
+    /// What the last attempt to send a match said (PD-040): a count, or the reason it could not go.
+    @State private var sendNote: String?
     /// The opening withdraws its own motion under this setting; the handover has to withdraw too,
     /// or a person who asked for none would still be shown the app growing towards them.
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -580,7 +583,9 @@ public struct ThroRootView: View {
                        onFixtures: { club in
                            store.tab = .discover
                            openClub = ClubLanding(club: club.id, wanted: .fixtures)
-                       })
+                       },
+                       onSend: account == nil ? nil : { match in sendToThro(match) },
+                       sendNote: sendNote)
         case .discover: ClubsFlow(store: clubs, open: $openClub, api: account?.api, signedIn: account?.isSignedIn ?? false)
         case .you: YouScreen(account: youAccount, clubs: clubs.clubs, people: clubs.people,
                              badge: { clubs.image($0.badgeAssetId) },
@@ -2005,18 +2010,25 @@ public struct LiveScreen: View {
     /// Where a fixture that has been played and not entered sends somebody: the screen that records
     /// it. Optional so the screen still stands up on its own with nowhere to send them.
     private let onRecord: ((Club, Fixture) -> Void)?
+    /// Sending a finished match to THRØ (PD-040). Nil when this build has no server to send to.
+    private let onSend: ((AppStore.HomeMatch) -> Void)?
+    /// What the last send said — a count, or the reason it could not go.
+    private let sendNote: String?
     /// Where a fixture still to play sends somebody: its club's list of fixtures, which is where
     /// the reminder, the calendar entry and the venue search live.
     private let onFixtures: ((Club) -> Void)?
 
     public init(store: AppStore, clubs: [Club] = [], onClubs: @escaping () -> Void = {},
                 onRecord: ((Club, Fixture) -> Void)? = nil,
-                onFixtures: ((Club) -> Void)? = nil) {
+                onFixtures: ((Club) -> Void)? = nil,
+                onSend: ((AppStore.HomeMatch) -> Void)? = nil, sendNote: String? = nil) {
         self.store = store
         self.clubs = clubs
         self.onClubs = onClubs
         self.onRecord = onRecord
         self.onFixtures = onFixtures
+        self.onSend = onSend
+        self.sendNote = sendNote
     }
 
     private var inProgress: [AppStore.HomeMatch] {
@@ -2092,12 +2104,48 @@ public struct LiveScreen: View {
                         }
                         .throEntrance(2)
                     }
+                    // Sending a match to THRØ (PD-040). Here rather than on the result screen
+                    // because ThroPlay has no network target — that is the rule that keeps scoring
+                    // working with no signal — so the one place that has both the journal and the
+                    // account is this one.
+                    if let onSend {
+                        let done = store.matches.filter { $0.complete && $0.unreadable == nil }
+                        block {
+                            SectionHeader("Send to THRØ", meta: done.isEmpty ? nil : "\(done.count)")
+                            if done.isEmpty {
+                                Note("**A finished match can be sent to your account.** There is nothing "
+                                     + "finished on this phone yet.")
+                            } else {
+                                Note("**THRØ takes the record, not a summary** — every visit and every undo, "
+                                     + "as this phone wrote them. It is your word for the match until the "
+                                     + "other player confirms it, and sending it again is safe.")
+                                ForEach(done) { match in
+                                    HStack(spacing: ThroSpacing.spacing3) {
+                                        VStack(alignment: .leading, spacing: 2) {
+                                            Text("\(match.record.homeName) v \(match.record.awayName)")
+                                                .thro(ThroTypography.body).foregroundStyle(ThroColor.colorTextPrimary)
+                                            Text("\(match.legsHome)–\(match.legsAway)")
+                                                .thro(ThroTypography.metadata).foregroundStyle(ThroColor.colorTextSecondary)
+                                        }
+                                        Spacer()
+                                        ThroButton("Send", variant: .secondary, size: .small) { onSend(match) }
+                                    }
+                                    .frame(minHeight: ThroSpacing.touchTargetMinimum)
+                                    ThroDivider()
+                                }
+                            }
+                            if let sendNote {
+                                Note(sendNote, icon: .info)
+                            }
+                        }
+                        .throEntrance(3)
+                    }
                     block {
                         Note("**Watching a match from another phone is next.** The server already "
                              + "streams a match as it is scored; this build does not yet tune in. "
                              + "Everything on this screen was scored on this phone.")
                     }
-                    .throEntrance(3)
+                    .throEntrance(4)
                 }
                 .padding(.bottom, ThroSpacing.spacing6)
             }
@@ -2159,6 +2207,60 @@ final class AccountHolder: ObservableObject {
 
 extension ThroRootView {
     var account: AccountStore? { accountHolder.resolve(journalDeviceId: AppStore.deviceId()) }
+
+    /// Send a finished match to THRØ (PD-040).
+    ///
+    /// **Which seat was yours is a question only you can answer**, and this build answers it the one
+    /// honest way it can without asking: by your own name. A local match is two names typed at an
+    /// oche, so if neither is yours THRØ says so rather than guessing — a match filed under the
+    /// wrong player is worse than a match not filed at all.
+    private func sendToThro(_ match: AppStore.HomeMatch) {
+        guard let account, let journal = store.journal else { return }
+        guard case .signedIn(let profile) = account.state, let mine = profile.displayName, profile.named else {
+            sendNote = "Name yourself on your profile first, so THRØ knows which player you were."
+            return
+        }
+        let record = match.record
+        func same(_ a: String, _ b: String) -> Bool {
+            a.trimmingCharacters(in: .whitespaces).caseInsensitiveCompare(b.trimmingCharacters(in: .whitespaces)) == .orderedSame
+        }
+        let seat: String
+        if same(record.homeName, mine) { seat = "home" }
+        else if same(record.awayName, mine) { seat = "away" }
+        else {
+            sendNote = "THRØ cannot tell which player you were in \(record.homeName) v \(record.awayName). "
+                + "Your profile says \(mine). Score under the name on your profile and it will know."
+            return
+        }
+
+        let entries: [JournalEntry]
+        do { entries = try journal.entries(for: record.id) } catch {
+            sendNote = "This phone could not read that match back: \(error.localizedDescription)"
+            return
+        }
+        guard case .ready(let rows) = MatchUpload.rows(from: entries) else {
+            if case .notYet(let reason) = MatchUpload.rows(from: entries) { sendNote = reason }
+            return
+        }
+        let format = ThroAPI.UploadFormat(
+            startingScore: record.startingScore,
+            inRule: String(describing: record.inRule).lowercased(),
+            outRule: String(describing: record.outRule).lowercased(),
+            legsMode: String(describing: record.legsMode).lowercased(),
+            legsTarget: record.legsTarget,
+            throwFirst: record.throwFirst == .home ? "home" : "away")
+        sendNote = "Sending…"
+        Task {
+            do {
+                let sent = try await account.api.sendMatch(
+                    matchId: UUID(uuidString: record.id.value) ?? UUID(),
+                    deviceId: UUID(uuidString: AppStore.deviceId()) ?? UUID(), seat: seat, format: format, rows: rows)
+                sendNote = MatchUpload.done(sent)
+            } catch {
+                sendNote = SignInProblem.words(error)
+            }
+        }
+    }
     /// What the You tab shows on its slate.
     var youAccount: YouScreen.Account {
         guard let account else { return .none }

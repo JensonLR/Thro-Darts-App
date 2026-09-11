@@ -354,6 +354,75 @@ public actor ThroAPI {
 
     /// Revokes the session's family on the server and forgets it here whatever the server says:
     /// a sign-out that could fail would leave a person holding a token they asked to drop.
+    /// What the server did with a match that was sent to it (PD-040).
+    public struct Sent: Decodable, Sendable, Equatable {
+        public let matchId: UUID
+        public let opponentId: UUID
+        public let visits: Int
+        public let retractions: Int
+        /// Rows THRØ already had: a resend, or the second half of one that stopped.
+        public let alreadyHeld: Int
+        public let opened: Bool
+        public let selfReported: Bool
+
+        public init(matchId: UUID, opponentId: UUID, visits: Int, retractions: Int,
+                    alreadyHeld: Int, opened: Bool, selfReported: Bool) {
+            self.matchId = matchId; self.opponentId = opponentId
+            self.visits = visits; self.retractions = retractions
+            self.alreadyHeld = alreadyHeld; self.opened = opened; self.selfReported = selfReported
+        }
+    }
+
+    /// One row of the device's journal, on the wire exactly as it is in the journal.
+    public struct UploadRow: Encodable, Sendable, Equatable {
+        public let deviceSeq: Int64
+        public let kind: String
+        public let seat: String
+        public let visitTotal: Int?
+        public let correctsSeq: Int64?
+        public let occurredAt: String
+        public let occurredTz: String
+
+        public init(deviceSeq: Int64, kind: String, seat: String, visitTotal: Int?,
+                    correctsSeq: Int64?, occurredAt: String, occurredTz: String) {
+            self.deviceSeq = deviceSeq; self.kind = kind; self.seat = seat
+            self.visitTotal = visitTotal; self.correctsSeq = correctsSeq
+            self.occurredAt = occurredAt; self.occurredTz = occurredTz
+        }
+    }
+
+    /// The format, in the words the server's contract uses.
+    public struct UploadFormat: Encodable, Sendable, Equatable {
+        public let startingScore: Int
+        public let inRule: String
+        public let outRule: String
+        public let legsMode: String
+        public let legsTarget: Int
+        public let throwFirst: String
+
+        public init(startingScore: Int, inRule: String, outRule: String,
+                    legsMode: String, legsTarget: Int, throwFirst: String) {
+            self.startingScore = startingScore; self.inRule = inRule; self.outRule = outRule
+            self.legsMode = legsMode; self.legsTarget = legsTarget; self.throwFirst = throwFirst
+        }
+    }
+
+    /// Send a match this phone scored (PD-040).
+    ///
+    /// Safe to call again with the same rows: the server is unique on (match, device, deviceSeq), so
+    /// a resend after a dropped connection adds only what is missing. That is why this needs no
+    /// bookkeeping on the phone about how far it got.
+    public func sendMatch(matchId: UUID, deviceId: UUID, seat: String,
+                          format: UploadFormat, rows: [UploadRow]) async throws -> Sent {
+        struct Body: Encodable {
+            let matchId: UUID, deviceId: UUID, seat: String
+            let format: UploadFormat, rows: [UploadRow]
+        }
+        let encoder = JSONEncoder()
+        let body = try encoder.encode(Body(matchId: matchId, deviceId: deviceId, seat: seat, format: format, rows: rows))
+        return try decode(await authorised("POST", "/v1/matches", body: body))
+    }
+
     /// What an erasure destroyed. Counts, because there is nothing else left to report.
     public struct Erasure: Decodable, Sendable, Equatable {
         public let credentials: Int
