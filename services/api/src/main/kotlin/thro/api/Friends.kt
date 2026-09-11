@@ -67,6 +67,10 @@ public class Friends(private val connection: Connection, private val now: () -> 
         if (owner.third != null) throw Refused("That code has been used already. Ask for a new one.")
         if (owner.second.isBefore(at)) throw Refused("That code has expired. Ask for a new one.")
         if (owner.first == accountId) throw Refused("That is your own code. Give it to a friend.")
+        // The maker has erased their account (V033 leaves the code unused rather than faking a use).
+        // The trigger would refuse it too, but with a sentence about age bands addressed to the
+        // wrong person — and this one says nothing about why, because that is the maker's business.
+        if (band(owner.first) == null) throw Refused("That code no longer works. Ask for a new one.")
         requireAdult(owner.first)
         val (a, b) = if (owner.first.toString() < accountId.toString()) owner.first to accountId else accountId to owner.first
         val already = connection.prepareStatement("SELECT 1 FROM identity.friendship WHERE account_a = ? AND account_b = ? AND ended_at IS NULL")

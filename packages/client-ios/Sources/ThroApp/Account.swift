@@ -23,40 +23,95 @@ public protocol SignInServices: Sendable {
 public final class AccountStore: ObservableObject {
     public enum State: Equatable {
         case signedOut
-        /// Something is in flight; the text says what, so a slow network is not a frozen screen.
+        /// Signing in, or finding out who a held session is. The text says what, so a slow network
+        /// is not a frozen screen. **Never used for a change to an account that is already signed
+        /// in** — that is `working` — because every screen about a signed-in person is shown only
+        /// while the state says `signedIn`, and a name being saved took the page off the screen.
         case busy(String)
         case signedIn(Profile)
-        /// The last attempt failed; the person is still whatever they were before it.
+        /// The last attempt failed. `wasSignedIn` is true when this phone still holds a session —
+        /// signed in, just not confirmed — and false when nobody is signed in.
         case failed(String, wasSignedIn: Bool)
     }
 
-    @Published public private(set) var state: State = .signedOut
-    public let api: ThroAPI
-    public let configuration: ServerConfiguration
-    private let services: SignInServices
-    private let transport: Transport
-
-    public init(api: ThroAPI, configuration: ServerConfiguration, services: SignInServices, transport: Transport = URLSessionTransport()) {
-        self.api = api
-        self.configuration = configuration
-        self.services = services
-        self.transport = transport
+    /// What asking for an erasure came to.
+    public enum Erased: Equatable {
+        /// Done, with what the server destroyed — which the screen says back, because a person who
+        /// exercised a right is owed an account of what was done with it.
+        case erased(ThroAPI.Erasure)
+        /// Not done, and why, in words. The account is still there.
+        case failed(String)
     }
 
-    public var profile: Profile? { if case .signedIn(let p) = state { return p } else { return nil } }
-    public var isSignedIn: Bool { profile != nil }
-
-    /// On launch: a held session is asked who it is; one the server no longer honours is dropped.
+    @Published public private(set) var state: State = .signedOut
+    /// Something is being done to the account that is signed in: a name saving, a way in being
+    /// added, an erasure. The state stays `signedIn` while it happens, so the page it was started
+    /// from stays where it is and shows this instead of vanishing.
+    ///
+    /// **This is the bug that made Delete look like it did nothing.** An erasure set the state to
+    /// busy, which took the profile page and the delete screen on it off the screen; the failure
+    /// that followed was reported to a screen that no longer existed, and the person landed back on
+    /// their profile with the account still there and no word about why.
+    @Published public private(set) var working: String?
+    /// The last thing that went wrong with an account that is still signed in, in words, for the
+    /// page it happened on. Cleared by `dismissProblem()` or by the next thing that works.
+    @Published public private(set) var problem: String?
+    /// Whether this phone holds a session: signed in, whether or not THRØ has confirmed who yet.
+    /// The welcome asks this rather than `isSignedIn`, so a phone that is offline at launch does not
+    /// ask a signed-in person to sign in.
+    @Published public private(set) var holdsSession = false
     /// Whether `start()` has finished looking. Until it has, `signedOut` means *not looked yet*
     /// rather than *not signed in* — and a screen that cannot tell those apart shows the sign-in
     /// board for a moment to somebody who is already signed in.
     @Published public private(set) var settled = false
 
+    public let api: ThroAPI
+    public let configuration: ServerConfiguration
+    private let services: SignInServices
+    private let transport: Transport
+    private let cache: ProfileCache
+
+    public init(api: ThroAPI, configuration: ServerConfiguration, services: SignInServices,
+                transport: Transport = URLSessionTransport(), cache: ProfileCache = MemoryProfileCache()) {
+        self.api = api
+        self.configuration = configuration
+        self.services = services
+        self.transport = transport
+        self.cache = cache
+    }
+
+    public var profile: Profile? { if case .signedIn(let p) = state { return p } else { return nil } }
+    public var isSignedIn: Bool { profile != nil }
+
+    /// On launch: who is signed in on this phone, and — behind it — whether THRØ still agrees.
+    ///
+    /// **Known at once when it can be.** A held session and the profile this phone was last given
+    /// for that account are enough to say who somebody is, offline or while the free server wakes;
+    /// the server is asked afterwards and can only correct it. Only a phone holding a session and
+    /// no profile for it (the first launch of this build, or after a reinstall) has to wait, and
+    /// the opening holds on its last frame while it does.
     public func start() async {
-        defer { settled = true }
-        guard await api.isSignedIn else { state = .signedOut; return }
-        state = .busy("Checking your sign-in")
-        await load()
+        guard let held = await api.session else {
+            cache.clear()
+            holdsSession = false
+            state = .signedOut
+            settled = true
+            return
+        }
+        holdsSession = true
+        switch state {
+        case .signedIn:
+            break  // already known this run; a second caller only refreshes it
+        default:
+            if let known = cache.load(), known.accountId == held.accountId {
+                state = .signedIn(known)
+            } else {
+                state = .busy("Checking your sign-in")
+            }
+        }
+        if isSignedIn { settled = true }
+        await verify()
+        settled = true
     }
 
     public func signInWithApple() async {
@@ -72,7 +127,9 @@ public final class AccountStore: ObservableObject {
 
     public func signInWithGoogle() async {
         guard configuration.googleClientID != nil else {
-            state = .failed("Sign in with Google is not set up in this build yet.", wasSignedIn: isSignedIn); return
+            let why = "Sign in with Google is not set up in this build yet."
+            if isSignedIn { problem = why } else { state = .failed(why, wasSignedIn: false) }
+            return
         }
         await ceremony("Signing in with Google") {
             let nonce = Nonce.fresh()
@@ -114,40 +171,41 @@ public final class AccountStore: ObservableObject {
     public func setDisplayName(_ name: String) async {
         let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
-        let before = state
-        state = .busy("Saving your name")
-        do { state = .signedIn(try await api.setDisplayName(trimmed)) } catch { state = failure(error, before: before) }
+        await change("Saving your name") { try await self.api.setDisplayName(trimmed) }
+    }
+
+    public func declareAdult() async {
+        await change("Saving") { try await self.api.declareAge(adult: true) }
     }
 
     public func signOut() async {
-        state = .busy("Signing out")
+        working = "Signing out"
         await api.signOut()
-        state = .signedOut
-        friends = nil; invite = nil; friendsNote = nil
+        working = nil
+        forget()
     }
 
-    /// Erase the account (V031). Signed out here whatever the server says, for the reason
-    /// `ThroAPI.eraseAccount` gives: a phone still acting signed in to an account that has gone is
-    /// worse than a failure the person can see.
+    /// Erase the account (V031, V033).
     ///
-    /// Returns the sentence to show when it did not work, and nil when it did.
+    /// **The page that asked stays on screen for the answer.** The state is left `signedIn` while
+    /// the server works — `working` says what is happening — so a failure is read on the delete
+    /// screen that asked, and a success is too: that screen says what was destroyed, and only then
+    /// does the person leave it.
     @discardableResult
-    public func eraseAccount() async -> String? {
-        let before = state
-        state = .busy("Erasing your account")
+    public func eraseAccount() async -> Erased {
+        working = "Erasing your account"
+        defer { working = nil }
         do {
-            _ = try await api.eraseAccount()
-            state = .signedOut
-            friends = nil; invite = nil; friendsNote = nil
-            return nil
+            let gone = try await api.eraseAccount()
+            forget()
+            return .erased(gone)
         } catch {
-            // **Back to where it was.** The first version signed out whatever happened, reasoning
-            // that a phone acting signed in to an account that has gone is worse — true, but the
-            // account has NOT gone when the erasure failed, and signing out then took the screen
-            // showing the error off the screen with it. A failure now leaves the person where they
-            // were, still signed in, reading what went wrong.
-            state = before
-            return SignInProblem.words(error)
+            // A 401 that survived a refresh, or a 409 (already erased): the API has dropped the
+            // session, so nobody is signed in any more whatever the page says. Anything else and the
+            // account is still there, the person is still signed in, and the page says why.
+            let still = await api.isSignedIn
+            if !still { forget() }
+            return .failed(SignInProblem.words(error))
         }
     }
 
@@ -158,12 +216,6 @@ public final class AccountStore: ObservableObject {
     @Published public private(set) var invite: FriendInvite?
     /// The last thing the server said about friends — a refusal's own sentence, or an error.
     @Published public private(set) var friendsNote: String?
-
-    public func declareAdult() async {
-        let before = state
-        state = .busy("Saving")
-        do { state = .signedIn(try await api.declareAge(adult: true)) } catch { state = failure(error, before: before) }
-    }
 
     public func loadFriends() async {
         do { friends = try await api.friends(); friendsNote = nil } catch { friendsNote = ThroAPI.refusal(error) ?? "Your friends could not be read just now." }
@@ -189,33 +241,104 @@ public final class AccountStore: ObservableObject {
         catch { friendsNote = ThroAPI.refusal(error) ?? "That could not be done just now." }
     }
 
+    /// Back from a failed sign-in: signed out again, or — when this phone still holds a session —
+    /// another go at asking THRØ who it is.
     public func dismissFailure() {
-        if case .failed(_, let was) = state { state = was ? .busy("Checking your sign-in") : .signedOut; if was { Task { await load() } } }
-    }
-
-    // MARK: -
-
-    /// One ceremony: busy while it runs, the profile when it ends, the state it started from when
-    /// the person cancels, and words when it fails. A cancel is not a failure and is not shown as one.
-    private func ceremony(_ what: String, _ run: () async throws -> Bool) async {
-        let before = state
-        state = .busy(what)
-        do {
-            if try await run() { await load() } else { state = before }
-        } catch {
-            state = failure(error, before: before)
+        guard case .failed(_, let held) = state else { return }
+        if held {
+            state = .busy("Checking your sign-in")
+            Task { await verify() }
+        } else {
+            state = .signedOut
         }
     }
 
-    private func load() async {
-        do { state = .signedIn(try await api.me()) } catch APIError.signedOut { state = .signedOut } catch { state = failure(error, before: .signedOut) }
+    public func dismissProblem() { problem = nil }
+
+    // MARK: -
+
+    /// Asks THRØ who the held session is, and changes what the phone says only when THRØ answers.
+    ///
+    /// Offline-first: a network that is not there changes nothing that is already known. Only the
+    /// server refusing the session signs the phone out.
+    private func verify() async {
+        do {
+            adopt(try await api.me())
+        } catch APIError.signedOut {
+            forget()
+        } catch {
+            if isSignedIn { return }
+            state = .failed(SignInProblem.words(error), wasSignedIn: true)
+        }
     }
 
-    private func failure(_ error: Error, before: State) -> State {
-        let was: Bool = { if case .signedIn = before { return true } else { return false } }()
-        if let e = error as? ASAuthorizationError, e.code == .canceled { return before }
-        if let e = error as? ASWebAuthenticationSessionError, e.code == .canceledLogin { return before }
-        return .failed(SignInProblem.words(error), wasSignedIn: was)
+    /// One ceremony.
+    ///
+    /// **Signed out**, it is the whole screen: busy while it runs, the profile when it ends, the
+    /// state it started from when the person cancels, and words when it fails. **Signed in**, it is
+    /// a way in being added to the account on screen, so the page stays and `working` says what is
+    /// happening. A cancel is not a failure and is not shown as one, either way.
+    private func ceremony(_ what: String, _ run: () async throws -> Bool) async {
+        if isSignedIn {
+            working = what
+            defer { working = nil }
+            do {
+                if try await run() { adopt(try await api.me()); problem = nil }
+            } catch APIError.signedOut {
+                forget()
+            } catch {
+                if !Self.cancelled(error) { problem = SignInProblem.words(error) }
+            }
+            return
+        }
+        let before = state
+        state = .busy(what)
+        do {
+            guard try await run() else { state = before; return }
+        } catch {
+            state = Self.cancelled(error) ? before : .failed(SignInProblem.words(error), wasSignedIn: false)
+            return
+        }
+        holdsSession = true
+        await verify()
+    }
+
+    /// One change to the signed-in account: the page stays, `working` says what, and the new
+    /// profile or the reason it failed arrives in place.
+    private func change(_ what: String, _ run: () async throws -> Profile) async {
+        working = what
+        defer { working = nil }
+        do {
+            adopt(try await run())
+            problem = nil
+        } catch APIError.signedOut {
+            forget()
+        } catch {
+            problem = SignInProblem.words(error)
+        }
+    }
+
+    private func adopt(_ profile: Profile) {
+        state = .signedIn(profile)
+        holdsSession = true
+        // A development principal has no account id, and a profile for nobody is not worth keeping.
+        if profile.accountId != nil { cache.save(profile) }
+    }
+
+    /// Nobody is signed in on this phone any more: the session is gone, so everything that was
+    /// about the person who held it goes with it.
+    private func forget() {
+        cache.clear()
+        holdsSession = false
+        state = .signedOut
+        problem = nil
+        friends = nil; invite = nil; friendsNote = nil
+    }
+
+    private static func cancelled(_ error: Error) -> Bool {
+        if let e = error as? ASAuthorizationError, e.code == .canceled { return true }
+        if let e = error as? ASWebAuthenticationSessionError, e.code == .canceledLogin { return true }
+        return false
     }
 }
 
@@ -399,8 +522,14 @@ public enum ThroServer {
 
     /// Nil when the build names no server, in which case the account screen says so.
     @MainActor public static func account(journalDeviceId: String?) -> AccountStore? {
+        #if DEBUG
+        // Screenshots of the signed-in screens, in a simulator that cannot sign in to anything.
+        // Debug builds only, and only when launched with the argument; see `ScreenshotAccount`.
+        if let staged = ScreenshotAccount.storeIfAsked() { return staged }
+        #endif
         guard let configuration = ServerConfiguration.fromInfoPlist() else { return nil }
         let api = ThroAPI(configuration: configuration, deviceId: deviceId(journalDeviceId: journalDeviceId), store: KeychainSessionStore())
-        return AccountStore(api: api, configuration: configuration, services: LiveSignInServices())
+        return AccountStore(api: api, configuration: configuration, services: LiveSignInServices(),
+                            cache: KeychainProfileCache())
     }
 }

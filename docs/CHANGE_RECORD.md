@@ -3100,3 +3100,71 @@ match is two names typed at an oche, so if neither is yours THRØ says so and do
 a match filed under the wrong player is worse than a match not filed at all.
 
 Counts: client 668, API 26 suites, HTTP 41 properties, schema 92.
+
+## Delete that deletes, a launch that knows who you are, and the account area on the board (V033, PD-041)
+
+Three things the founder said on 2026-09-11, all of them true: *"still won't let me delete full
+account"*; *"Loaded me to home screen and when i checked profile tab it said checking, shouldn't load
+past the checking screen until checked in"*; and *"the spacing on settings page is really ugly &
+design is too colour palette & style, branding & design needs to be aligned throughout our E2E
+journey."*
+
+**Delete had a defect on each side.** On the server, V031's `identity.erase_account` spent every unused
+friend code against the account being erased (`used_by = a`), and V028's trigger
+`friend_actor_is_adult` refuses exactly that row — *a code is for somebody else*. So nobody who had
+made a friend code and not handed it over could be erased: the function raised, the erasure rolled
+back as it should, and the server answered 500. The founder's own account on staging was that account
+— one code, made at 09:29 and never used — and `ErasureTest` had only ever made a code somebody then
+used. V033 drops the step, because the door it closed is shut twice already: the trigger refuses any
+use of a code whose maker is erased, and `Friends.accept` now refuses one first, in words that do not
+say why (*"That code no longer works"*). V033 also pins `search_path` on both SECURITY DEFINER
+functions. A new test reproduces the founder's account exactly — Apple and Google, three sessions, an
+adult, one unused code — and fails without V033. Neon was migrated to V033 and the founder's erasure
+was run inside a transaction and rolled back: it goes through (2 ways in, 3 sessions, 1 claim, 1
+consent), and the account was untouched afterwards.
+
+On the phone, every change to the account set the store to *busy*, and every screen about a signed-in
+person is shown only while the store says *signed in*. So the delete screen left the screen the moment
+the erasure began, the 500 was reported to a screen that no longer existed, and the founder landed back
+on their profile with the account intact and nothing said. `AccountStore.working` now carries what is
+happening to a signed-in account while the state stays `signedIn`, a failure lands in `problem` on the
+page that asked, and the root holds the profile it opened (`ProfileOpening`) instead of re-reading the
+account on every pass. The delete screen stays up through the erasure and, once the server answers,
+reads back what it destroyed from the server's own counts before anybody leaves it — a person who
+exercised a right is owed an account of what was done with it.
+
+**A launch that knows who you are.** Knowing who was signed in took a round trip to a free server that
+sleeps, so a signed-in person reached Home with the You tab saying *Checking* for up to a minute — and
+offline, for as long as the signal stayed away. The phone now keeps the last profile THRØ gave it for
+the held session (`KeychainProfileCache`, beside the session in the keychain), so a signed-in person is
+themselves from the first frame; THRØ is asked behind it and can only correct it — a new name, or a
+session it no longer honours, which signs the phone out and forgets the person. A cached profile for
+anybody else is never shown. Only a phone holding a session and no profile for it has to wait, and then
+the opening holds on its last frame — *Checking your sign-in* — offering *Just score* after four seconds
+and saying why after eight (PD-041). The welcome asks `holdsSession` rather than `isSignedIn`, so an
+offline launch never asks a signed-in person to sign in, and `AccountHolder` relays the store's changes
+to the root, which decides the welcome, the hold and the profile route and used to notice a change only
+when something else happened to redraw it.
+
+The first build of the hold held for ever, and it was the simulator that found it rather than a test:
+the closure that ends the throw is scheduled at `onAppear` and carries the copy of the view made then,
+so it read *holding* as it was then. The account answered in a tenth of a second, `onChange` fired while
+the dart was still in the air and did nothing, and 4.4 seconds later the throw came to rest believing
+nobody had answered. It reads a `@State` mirror now, which even a stale copy of the view reads through
+its storage.
+
+**The account area, on the board.** Every screen in it now opens on the brand field with chalk on it —
+Home's masthead — and lists its rows on raised cards, each icon on a tile of the brand, sections
+`spaceSectionGap` apart (`AccountDesign.swift`); the section titles had been sitting on the hairline of
+the row above, which is the spacing the founder saw. Settings opens on whoever is signed in, on the
+slate; the ten rows under it are eight, in three groups, with the build as a line at the foot. Your
+profile puts you on the field — your mark, your name in chalk where it is changed, and who sees it — and
+the You tab opens on the same field with you on it, rather than on a slate under a system title bar. The
+field runs under the clock on Home, You, Settings and your profile alike, so the opening, the welcome and
+the app are one green from the first frame. Friends, the inbox and events open on the same header, and
+Settings moved into its own file. The build page still said *Sending results to THRØ: Not built* after
+PD-040 built it; it says *From the Live tab*. A Debug build launched with `-ThroScreenshotAccount` stands
+up a signed-in account over a transport that answers from memory, so the signed-in screens can be seen in
+a simulator that cannot sign in to anything; a Release build does not contain it.
+
+Counts: client 682, API 26 suites, HTTP 41 properties, schema 92.

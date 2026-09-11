@@ -51,7 +51,9 @@ public struct Session: Codable, Sendable, Equatable {
     }
 }
 
-public struct Profile: Decodable, Sendable, Equatable {
+/// Codable rather than only Decodable because the phone keeps the last one it was given
+/// (`ProfileCache`), so a signed-in person is shown as themselves before the server has answered.
+public struct Profile: Codable, Sendable, Equatable {
     public let accountId: UUID?
     public let playerId: UUID?
     public let displayName: String?

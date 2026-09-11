@@ -398,8 +398,41 @@ public enum WordmarkGeometry {
     public static let tailPerCap: CGFloat = gap + ringOuter + tip * CGFloat(0.5).squareRoot()
 }
 
+/// When the opening hands over to the app, as rules a test can state.
+///
+/// **It waits for the account.** The founder, on a cold start: *"Loaded me to home screen and when
+/// i checked profile tab it said checking, shouldn't load past the checking screen until checked
+/// in."* The opening used to hand over on its own clock whatever the account was doing, so a
+/// signed-in person arrived in an app that did not yet know who they were. Now the throw runs, and
+/// if the check has not answered by the time it comes to rest, the board holds — the wordmark, the
+/// tagline, and one line saying what it is waiting for.
+///
+/// **It never traps anybody.** PD-012 is local-first: scoring needs no account and no network. A
+/// phone holding a session and nothing else is the only one that waits at all — everybody else is
+/// known at once — and after `escapeAfter` the line offers the same way out the welcome does.
+public enum OpeningHold {
+    public enum Next: Equatable { case handOver, hold }
+    public enum Tap: Equatable { case finish, skipToRest }
+
+    /// The throw has come to rest: go on to the app, unless the account has not answered yet.
+    public static func next(holding: Bool) -> Next { holding ? .hold : .handOver }
+
+    /// A tap skips the throw. It never skips the check: while the account is being checked, a tap
+    /// brings the composition to rest and waits with it.
+    public static func tap(holding: Bool) -> Tap { holding ? .skipToRest : .finish }
+
+    /// How long the board holds before it offers a way past the check.
+    public static let escapeAfter: TimeInterval = 4
+    /// How long it holds before it says why it is slow.
+    public static let explainAfter: TimeInterval = 8
+
+    public static let checking = "Checking your sign-in"
+    public static let slow = "THRØ's server sleeps when nobody needs it. Waking it can take up to a minute."
+    public static let escape = "Just score"
+}
+
 /// The opening. Draws every frame from a Canvas as a pure function of time; scores it with the
-/// soundtrack and haptics; a tap finishes it early.
+/// soundtrack and haptics; a tap finishes it early — but never past the check on who is signed in.
 public struct LaunchSequenceView: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @AppStorage(OpeningPreferences.soundKey) private var soundOn: Bool = true
@@ -407,45 +440,150 @@ public struct LaunchSequenceView: View {
     /// Called with how long the cross-fade to Home should take: the exit segment when the opening runs
     /// its course, and a shorter one when a tap skips it, because a skip should feel answered.
     private let onFinished: (Double) -> Void
+    /// The account has not answered yet (`AccountStore.settled` is false): see `OpeningHold`.
+    private let holding: Bool
+    /// `holding` as it is NOW, which the property above is not everywhere it is read.
+    ///
+    /// **The first build of the hold held forever.** The closure that ends the throw is scheduled
+    /// at `onAppear`, and it carries the copy of this view made then — so a plain property read
+    /// from it is the value from then. The account answered in a tenth of a second, `onChange`
+    /// fired while the throw was still in the air and did nothing, and 4.4 seconds later the throw
+    /// came to rest still believing nobody had answered. State is read through its storage, so a
+    /// stale copy of the view still reads the current value.
+    @State private var accountPending: Bool
     @State private var start = Date()
     @State private var finished = false
+    /// The throw has run, by its own clock or a tap's, and the composition is at rest.
+    @State private var atRest = false
+    /// When the board began to hold, for the line that grows if the wait goes on.
+    @State private var heldSince: Date?
     @State private var soundtrack: LaunchSoundtrack? = nil
 
-    public init(onFinished: @escaping (Double) -> Void) { self.onFinished = onFinished }
+    public init(holding: Bool = false, onFinished: @escaping (Double) -> Void) {
+        self.holding = holding
+        self._accountPending = State(initialValue: holding)
+        self.onFinished = onFinished
+    }
 
     private var timeline: LaunchTimeline { reduceMotion ? .reduced : .standard }
 
     public var body: some View {
         let timeline = self.timeline
-        TimelineView(.animation(minimumInterval: 1.0 / 60.0, paused: finished)) { context in
-            LaunchFrame(t: context.date.timeIntervalSince(start), timeline: timeline)
+        ZStack(alignment: .bottom) {
+            TimelineView(.animation(minimumInterval: 1.0 / 60.0, paused: finished || atRest)) { context in
+                // At rest the frame is the finished composition and stays there, so a hold never
+                // lets the exit segment play while nothing is fading.
+                LaunchFrame(t: atRest ? timeline.finishAt : context.date.timeIntervalSince(start), timeline: timeline)
+            }
+            .background(ThroColor.throGreen.ignoresSafeArea())
+            .ignoresSafeArea()
+            .contentShape(Rectangle())
+            .onTapGesture { tapped() }
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel("THRØ")
+            .accessibilityHint(heldSince == nil ? "Opening. Tap to skip." : OpeningHold.checking)
+            .accessibilityAddTraits(.isButton)
+            // Outside the element above, so the way past the check is a control VoiceOver can reach.
+            if let heldSince, !finished {
+                OpeningHoldLine(since: heldSince) { finish(fade: Self.skipFade) }
+                    .transition(.opacity)
+            }
         }
-        .background(ThroColor.throGreen.ignoresSafeArea())
-        .ignoresSafeArea()
-        .contentShape(Rectangle())
-        .onTapGesture { finish(fade: Self.skipFade) }
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel("THRØ")
-        .accessibilityHint("Opening. Tap to skip.")
-        .accessibilityAddTraits(.isButton)
         .onAppear {
             let now = Date()
             start = now
             let track = LaunchSoundtrack(sound: soundOn, haptics: hapticsOn)
             track.schedule(timeline.cues, from: now)
             soundtrack = track
-            DispatchQueue.main.asyncAfter(deadline: .now() + timeline.finishAt) { finish(fade: timeline.exit.duration) }
+            DispatchQueue.main.asyncAfter(deadline: .now() + timeline.finishAt) { comeToRest() }
+        }
+        .onChange(of: holding) { _, now in
+            accountPending = now
+            handOver()
         }
     }
 
     /// How long the cross-fade takes when a tap skips the opening.
     static let skipFade = 0.22
 
+    private func tapped() {
+        switch OpeningHold.tap(holding: accountPending) {
+        case .finish: finish(fade: Self.skipFade)
+        case .skipToRest: comeToRest()
+        }
+    }
+
+    private func comeToRest() {
+        guard !atRest else { return }
+        atRest = true
+        soundtrack?.stop()
+        handOver()
+    }
+
+    private func handOver() {
+        guard atRest, !finished else { return }
+        switch OpeningHold.next(holding: accountPending) {
+        case .handOver:
+            finish(fade: timeline.exit.duration)
+        case .hold:
+            guard heldSince == nil else { return }
+            withAnimation(reduceMotion ? nil : .throEnter(ThroMotion.motionDurationStandard)) { heldSince = Date() }
+        }
+    }
+
     private func finish(fade: Double) {
         guard !finished else { return }
         finished = true
         soundtrack?.stop()
         onFinished(fade)
+    }
+}
+
+/// What the opening says while it waits on the account, at the foot of the board: what it is
+/// doing at once, why it is slow if it is, and — after a moment — the way past it.
+struct OpeningHoldLine: View {
+    let since: Date
+    let onJustScore: () -> Void
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    var body: some View {
+        TimelineView(.periodic(from: since, by: 0.5)) { context in
+            let waited = context.date.timeIntervalSince(since)
+            VStack(spacing: ThroSpacing.spacing4) {
+                HStack(spacing: ThroSpacing.spacing3) {
+                    ProgressView().tint(ThroColor.throChalk)
+                    Text(OpeningHold.checking)
+                        .thro(ThroTypography.labelStrong.uppercase(true).tracking(em: 0.08))
+                        .foregroundStyle(ThroColor.throChalk)
+                }
+                .accessibilityElement(children: .combine)
+                if waited >= OpeningHold.explainAfter {
+                    Text(OpeningHold.slow)
+                        .thro(ThroTypography.metadata)
+                        .foregroundStyle(ThroColor.throChalk.opacity(0.78))
+                        .multilineTextAlignment(.center)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .transition(.opacity)
+                }
+                if waited >= OpeningHold.escapeAfter {
+                    Button(action: onJustScore) {
+                        Text(OpeningHold.escape)
+                            .thro(ThroTypography.labelStrong.uppercase(true).tracking(em: 0.06))
+                            .foregroundStyle(ThroColor.throChalk)
+                            .padding(.horizontal, ThroSpacing.spacing5)
+                            .frame(minHeight: ThroSpacing.touchTargetMinimum)
+                            .contentShape(Rectangle())
+                    }
+                    .buttonStyle(ChalkKeyStyle(.field, minHeight: ThroSpacing.touchTargetMinimum, seedAngle: 29))
+                    .fixedSize()
+                    .transition(.opacity)
+                }
+            }
+            .animation(reduceMotion ? nil : .throEnter(ThroMotion.motionDurationStandard),
+                       value: Int(waited / OpeningHold.escapeAfter))
+            .padding(.horizontal, ThroSpacing.spaceScreenGutter)
+            .padding(.bottom, ThroSpacing.spacing7)
+        }
     }
 }
 

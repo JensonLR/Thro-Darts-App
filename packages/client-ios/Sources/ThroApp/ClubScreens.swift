@@ -42,10 +42,12 @@ struct Note: View {
 /// The 44-point back chevron the scoring screen already uses, where a TopBar costs height.
 struct BackChevron: View {
     let action: () -> Void
+    /// The chevron's ink: the page's text on paper, chalk on the brand field (`BoardHeader`).
+    var ink: Color = ThroColor.colorTextPrimary
     var body: some View {
         Button(action: action) {
             Icon(.chevronLeft, size: 20)
-                .foregroundStyle(ThroColor.colorTextPrimary)
+                .foregroundStyle(ink)
                 .frame(width: 44, height: 44, alignment: .leading)
                 // Without this the 44 points are decoration: SwiftUI hit-tests the chevron's ink,
                 // so three quarters of the target did nothing.
@@ -87,10 +89,12 @@ struct PageBar: View {
 
     let onBack: () -> Void
     var actions: [Action] = []
+    /// Chalk when the bar sits on the brand field rather than on paper.
+    var ink: Color = ThroColor.colorTextPrimary
 
     var body: some View {
         HStack(spacing: ThroSpacing.spacing4) {
-            BackChevron(action: onBack)
+            BackChevron(action: onBack, ink: ink)
             Spacer(minLength: ThroSpacing.spacing2)
             ForEach(actions) { action in
                 ThroTextButton(action.label, alignment: .trailing, action: action.action)

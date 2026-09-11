@@ -122,6 +122,45 @@ class ErasureTest {
     }
 
     @Test
+    fun `somebody holding a friend code they never gave out can still be erased`() {
+        if (!configured) return
+        migrated().use { c ->
+            val accounts = Accounts(c, { now })
+            val friends = Friends(c) { now }
+            // The founder's own account on staging, exactly as it stood when Delete did nothing: Apple
+            // and Google, signed in more than once, an adult, and one friend code made and never
+            // handed over. The first test above only ever made a code somebody then used.
+            val me = accounts.signIn("apple", "apple-subject-holder-0001", UUID.randomUUID()).accountId
+            accounts.signIn("google", "google-subject-holder-0001", UUID.randomUUID(), linkTo = me)
+            accounts.signIn("apple", "apple-subject-holder-0001", UUID.randomUUID())
+            accounts.setDisplayName(me, "Jenson R.")
+            c.createStatement().use { st ->
+                st.execute("UPDATE identity.account SET age_band = 'adult', age_assurance = 'self_declared' WHERE account_id = '$me'")
+            }
+            val code = friends.invite(me).code
+
+            // V031 raised here — "a code is for somebody else" — and the whole erasure rolled back.
+            val gone = accounts.erase(me)
+            assertEquals(2, gone.credentials, "both ways in")
+            assertTrue(gone.sessions >= 3, "every sign-in's session")
+            assertEquals("", one(c, "SELECT display_name FROM identity.account WHERE account_id = '$me'"))
+
+            // Nobody typed the code, so the record does not say anybody did.
+            assertEquals(1, count(c, "SELECT count(*) FROM identity.friend_invite WHERE code = '$code'"))
+            assertNull(one(c, "SELECT used_at::text FROM identity.friend_invite WHERE code = '$code'"))
+
+            // And it admits nobody. The person it was meant for is told so in words, and not why.
+            val stranger = accounts.signIn("apple", "apple-subject-stranger-0002", UUID.randomUUID()).accountId
+            c.createStatement().use { st ->
+                st.execute("UPDATE identity.account SET age_band = 'adult', age_assurance = 'self_declared' WHERE account_id = '$stranger'")
+            }
+            val refused = assertFailsWith<Friends.Refused> { friends.accept(stranger, code) }
+            assertEquals("That code no longer works. Ask for a new one.", refused.why)
+            assertEquals(0, count(c, "SELECT count(*) FROM identity.friendship WHERE account_a = '$stranger' OR account_b = '$stranger'"))
+        }
+    }
+
+    @Test
     fun `signing in again after an erasure is a new person, not the old one coming back`() {
         if (!configured) return
         migrated().use { c ->

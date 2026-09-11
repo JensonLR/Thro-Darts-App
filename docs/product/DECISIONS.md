@@ -1921,3 +1921,37 @@ applies the whole journal or none of it is the honest shape for a thing that alr
 Watching a live match from another phone (the server already streams; the client does not tune in),
 and what a league does with a self-reported result. Neither is needed for a person to get the match
 they played off their phone and onto their account.
+
+## PD-041 — Who is signed in is known at launch, and the opening waits for it only when it must
+
+**Taken on delegated authority, 2026-09-11**, on the founder's report: *"Loaded me to home screen and
+when i checked profile tab it said checking, shouldn't load past the checking screen until checked
+in."* Reversible: it is a cache on the phone and a hold in the opening; nothing on the server changed.
+
+### Decided
+
+**The phone knows who is signed in without asking.** A held session and the last profile THRØ gave for
+that account — kept beside the session in the keychain — are enough to show the person as themselves
+from the first frame, offline in a pub or while the free server wakes. THRØ is asked behind it and can
+only correct it: a changed name, or a session it no longer honours, which signs the phone out and
+forgets the person. The cache is never an authority, and it is never shown for any account but the one
+the held session names.
+
+**The opening waits only for a phone that cannot know.** A phone holding a session and no profile for
+it — the first launch of a build that keeps one, or after a reinstall — holds the opening on its last
+frame and says *Checking your sign-in* until THRØ answers. Everybody else is known at once, and the
+opening hands over on its own clock as PD-007 has it.
+
+**It never traps anybody.** PD-012 says scoring needs no account and no network, so after four seconds
+the hold offers *Just score*, and after eight it says why it is slow. A tap skips the throw but never
+the check.
+
+**A change to an account never takes its page away.** Saving a name, adding a way in, erasing the
+account: the state stays *signed in* while it happens, the page says what is happening, and a failure
+is said on the page that asked. The state changes only when who is signed in changes.
+
+### What this does not decide
+
+How long a cached profile may be trusted without the server confirming it. Today it is shown until the
+server says otherwise, which is the offline-first answer; an account that was suspended or restricted
+would need the server to reach the phone first, and nothing in THRØ suspends an account yet.

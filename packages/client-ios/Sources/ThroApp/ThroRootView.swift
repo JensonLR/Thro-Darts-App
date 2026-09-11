@@ -1,3 +1,4 @@
+import Combine
 import CoreSpotlight
 import SwiftUI
 import UniformTypeIdentifiers
@@ -287,8 +288,11 @@ public struct ThroRootView: View {
     @AppStorage(Appearance.storageKey) private var appearanceRaw: String = Appearance.system.rawValue
     @State private var showingSettings = false
     @State private var showingAccount = false
-    /// Your profile, reached in one tap from the You tab rather than four from Settings.
-    @State private var showingProfile = false
+    /// Your profile, when it is open: the profile it was opened on, and which part of it. Held here
+    /// rather than re-read from the account on every pass, so the page stays on screen through what
+    /// happens on it — a name saving, a way in being added, an erasure finishing — instead of
+    /// vanishing the moment the account stops saying `signedIn`.
+    @State private var profileOpen: ProfileOpening?
     /// The You tab's Friends button opens the account screen on Friends rather than on its front.
     @State private var openingFriends = false
     @StateObject private var accountHolder = AccountHolder()
@@ -337,8 +341,13 @@ public struct ThroRootView: View {
             // Between the opening and the product, once: the welcome, on the board the dart landed
             // in. It sits UNDER the opening and OVER the app, so the opening resolves into it
             // rather than cutting to it, and the tabs are never briefly visible behind it.
+            // `holdsSession`, not `isSignedIn`: a phone that is offline at launch holds a session it
+            // cannot confirm yet, and asking that person to sign in would be the wrong question. Not
+            // while the profile is open, either — an erasure ends there, and the screen that says
+            // what was destroyed is the one to read, not a sign-in board laid over it.
             if let account, Welcome.shows(configured: true, settled: account.settled,
-                                          signedIn: account.isSignedIn, answeredThisLaunch: welcomeAnswered) {
+                                          signedIn: account.holdsSession,
+                                          answeredThisLaunch: welcomeAnswered || profileOpen != nil) {
                 WelcomeScreen(account: account) {
                     withAnimation(.throExit(ThroMotion.motionDurationStandard)) { welcomeAnswered = true }
                 }
@@ -346,7 +355,8 @@ public struct ThroRootView: View {
                 .zIndex(0.5)
             }
             if opening {
-                LaunchSequenceView { fade in
+                // Held on its last frame until the account has answered (`OpeningHold`).
+                LaunchSequenceView(holding: account.map { !$0.settled } ?? false) { fade in
                     // `.easeInOut` was Apple's curve on the single most important transition in the
                     // app — the handover from the opening to the product. `throExit` is the
                     // design's own (PD-027).
@@ -515,9 +525,9 @@ public struct ThroRootView: View {
                          onBack: { viewing = nil },
                          onRemove: { if clubs.deletePerson(person.id) { viewing = nil } })
                 .throAppearance(Appearance(stored: appearanceRaw))
-        } else if showingProfile, let account, case .signedIn(let profile) = account.state, let id = profile.accountId {
-            YourProfileScreen(account: account, profile: profile, accountId: id,
-                              images: clubs.images, picture: { clubs.image($0) }) { showingProfile = false }
+        } else if let opened = profileOpen, let account, let id = opened.profile.accountId {
+            YourProfileScreen(account: account, profile: opened.profile, accountId: id, opening: opened.part,
+                              images: clubs.images, picture: { clubs.image($0) }) { profileOpen = nil }
         } else if showingAccount, let account {
             // **One way in, and it is the good one.** SIGN IN on the You tab used to open a settings
             // list of buttons under a paragraph; it opens the same board the welcome does. The
@@ -525,7 +535,7 @@ public struct ThroRootView: View {
             // never see it again — which is exactly what happened. The full account list is still
             // there for somebody signed in, and under Settings for the passkey-only path.
             Group {
-                if !account.isSignedIn && !openingFriends {
+                if !account.holdsSession && !openingFriends {
                     // The welcome sets its own appearance and draws its own board edge to edge.
                     WelcomeScreen(account: account, ask: .fromYou) { showingAccount = false }
                 } else {
@@ -537,8 +547,8 @@ public struct ThroRootView: View {
         } else if showingSettings {
             SettingsScreen(onBack: { showingSettings = false },
                            onReplayOpening: { showingSettings = false; opening = true },
-                           onAccount: account == nil ? nil : { showingAccount = true },
-                           accountValue: accountRowValue,
+                           onAccount: account == nil ? nil : { openAccount(nil) },
+                           account: youAccount, picture: accountPicture,
                            organisationCount: { clubs.clubs.count },
                            onClearOrganisations: { clubs.deleteAllOrganisations() },
                            backupState: { store.backupState },
@@ -587,12 +597,13 @@ public struct ThroRootView: View {
                        onSend: account == nil ? nil : { match in sendToThro(match) },
                        sendNote: sendNote)
         case .discover: ClubsFlow(store: clubs, open: $openClub, api: account?.api, signedIn: account?.isSignedIn ?? false)
-        case .you: YouScreen(account: youAccount, clubs: clubs.clubs, people: clubs.people,
+        case .you: YouScreen(account: youAccount, picture: accountPicture, clubs: clubs.clubs, people: clubs.people,
                              badge: { clubs.image($0.badgeAssetId) },
                              onSettings: { showingSettings = true },
-                             onAccount: { showingAccount = true },
-                             onFriends: { openingFriends = true; showingAccount = true },
-                             onProfile: { showingProfile = true },
+                             onAccount: { openAccount(nil) },
+                             onFriends: { openAccount(.friends) },
+                             onProfile: { openAccount(nil) },
+                             onRetry: { Task { await account?.start() } },
                              onClubs: { store.tab = .discover },
                              onPerson: { viewing = $0 })
             .task { if let account, account.isSignedIn, account.friends == nil { await account.loadFriends() } }
@@ -687,7 +698,12 @@ public struct HomeScreen: View {
                 }
             }
             .padding(.bottom, ThroSpacing.spacing6)
+            // Paper under everything below the masthead; the field behind the top shows above it.
+            .background(ThroColor.colorBackgroundPrimary)
         }
+        // The field under the clock, so Home opens on green edge to edge as the opening ends on it,
+        // rather than on a paper strip with the green starting below it.
+        .throBrandFieldBehind()
         .confirmationDialog("Delete this match?",
                             isPresented: Binding(get: { confirmingDelete != nil },
                                                  set: { if !$0 { confirmingDelete = nil } }),
@@ -1249,6 +1265,8 @@ public struct YouScreen: View {
         case signedOut
         case busy(String)
         case signedIn(name: String?, ageBand: String, friends: Int?)
+        /// Holding a session THRØ could not confirm — offline, or the server did not answer.
+        case unverified
     }
 
     private let account: Account
@@ -1263,12 +1281,19 @@ public struct YouScreen: View {
     private let onPerson: (LocalPerson) -> Void
     private let badge: (Club) -> Image?
 
-    public init(account: Account = .none, clubs: [Club] = [], people: [LocalPerson] = [],
+    /// Another go at confirming a session THRØ could not reach (`Account.unverified`).
+    private let onRetry: () -> Void
+    /// The signed-in person's picture, where this phone holds one.
+    private let picture: Image?
+
+    public init(account: Account = .none, picture: Image? = nil, clubs: [Club] = [], people: [LocalPerson] = [],
                 badge: @escaping (Club) -> Image? = { _ in nil },
                 onSettings: @escaping () -> Void,
                 onAccount: @escaping () -> Void = {}, onFriends: @escaping () -> Void = {},
-                onProfile: @escaping () -> Void = {},
+                onProfile: @escaping () -> Void = {}, onRetry: @escaping () -> Void = {},
                 onClubs: @escaping () -> Void = {}, onPerson: @escaping (LocalPerson) -> Void = { _ in }) {
+        self.onRetry = onRetry
+        self.picture = picture
         self.account = account
         self.badge = badge
         self.clubs = clubs
@@ -1287,6 +1312,9 @@ public struct YouScreen: View {
         case .none: return ("You", "This phone", "This build names no server, so what you score stays here.")
         case .signedOut: return ("You", "Sign in to carry your darts with you", "Your name, your friends and the leagues you join live on your account. Matches scored here stay here either way.")
         case .busy(let what): return ("You", what, "One moment.")
+        case .unverified:
+            return ("You", "Signed in on this phone",
+                    "THRØ could not be reached to confirm it just now. Nothing you score here depends on it.")
         case .signedIn(let name, let band, let friends):
             let who = name ?? "No name yet"
             let age = band == "adult" ? "18 or over" : band == "minor" ? "Under 18" : "Age not said yet"
@@ -1296,11 +1324,10 @@ public struct YouScreen: View {
     }
 
     public var body: some View {
-        VStack(spacing: 0) {
-            TopBar("You", actions: [TopBar.Action(icon: .settings, label: "Settings", action: onSettings)], large: true)
-            ScrollView {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 0) {
+                header
                 VStack(alignment: .leading, spacing: 0) {
-                    slate.padding(.top, ThroSpacing.spacing4)
                     if !people.isEmpty {
                         Eyebrow("Who plays on this phone").padding(.top, ThroSpacing.spacing6)
                         ThroDivider().padding(.top, ThroSpacing.spacing2)
@@ -1353,49 +1380,70 @@ public struct YouScreen: View {
                 }
                 .padding(.horizontal, ThroSpacing.spaceScreenGutter)
                 .padding(.bottom, ThroSpacing.spacing6)
-                .throEntrance(0)
             }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            // Paper under the lists; the field behind the top shows only above the header.
+            .background(ThroColor.colorBackgroundPrimary)
+            .throEntrance(0)
         }
-        .background(ThroColor.colorBackgroundPrimary.ignoresSafeArea())
+        .throBrandFieldBehind()
     }
 
-    /// The account on a slate: who you are here, or the door in.
-    private var slate: some View {
+    /// The top of the tab: the brand field, and on it whoever this phone is signed in as — or the
+    /// door in. It was a slate card under a system title bar, which made the You tab the one screen
+    /// of the account area that started on paper; now it opens on the same field Home, Settings and
+    /// your profile do, with you on it.
+    private var header: some View {
         let w = YouScreen.words(account)
-        return ThroSlate(seed: 55) {
-            VStack(alignment: .leading, spacing: ThroSpacing.spacing3) {
-                HStack {
-                    Eyebrow(w.eyebrow, color: ThroColor.colorTextOnBoardSecondary)
-                    Spacer()
-                    ThroMark().fill(ThroColor.colorMarkOnBoard).frame(width: 22, height: 22).accessibilityHidden(true)
+        return VStack(alignment: .leading, spacing: ThroSpacing.spacing4) {
+            HStack(alignment: .center) {
+                Eyebrow(w.eyebrow, color: ThroColor.throChalk.opacity(0.78))
+                Spacer()
+                Button(action: onSettings) {
+                    Icon(.settings, size: 22)
+                        .foregroundStyle(ThroColor.throChalk)
+                        .throTapTarget(.trailing)
                 }
-                Text(w.title)
-                    .thro(ThroTypography.heading1.family(.sport).weight(.bold).tracking(em: 0))
-                    .foregroundStyle(ThroColor.colorTextOnBoard)
-                    .fixedSize(horizontal: false, vertical: true)
-                Text(w.detail)
-                    .thro(ThroTypography.body)
-                    .foregroundStyle(ThroColor.colorTextOnBoardSecondary)
-                    .fixedSize(horizontal: false, vertical: true)
-                switch account {
-                case .signedOut:
-                    slateButton("SIGN IN", lit: true, seed: 11, action: onAccount)
-                case .signedIn:
-                    HStack(spacing: ThroSpacing.spacing3) {
-                        slateButton("FRIENDS", lit: true, seed: 13, action: onFriends)
-                        // **PROFILE, and it goes to the profile.** It used to say ACCOUNT and open
-                        // a settings list, from which the profile was another row — so the way to
-                        // your own name and picture ran You → Settings → a long scroll → Account
-                        // and profile → Your profile. Five steps to the page that is about you, on
-                        // the tab called You.
-                        slateButton("PROFILE", lit: false, seed: 17, action: onProfile)
-                    }
-                case .none, .busy:
-                    EmptyView()
+                .buttonStyle(ThroPressStyle(radius: ThroSpacing.radiusStatus))
+                .accessibilityLabel("Settings")
+            }
+            HStack(alignment: .center, spacing: ThroSpacing.spacing4) {
+                if case .signedIn(let name, _, _) = account {
+                    PersonMark(initials: AccountSlate.initials(name), size: 64, picture: picture)
+                }
+                VStack(alignment: .leading, spacing: ThroSpacing.spacing1) {
+                    Text(w.title)
+                        .thro(ThroTypography.heading1.family(.sport).weight(.bold).tracking(em: 0))
+                        .foregroundStyle(ThroColor.throChalk)
+                        .fixedSize(horizontal: false, vertical: true)
+                    Text(w.detail)
+                        .thro(ThroTypography.body)
+                        .foregroundStyle(ThroColor.throChalk.opacity(0.78))
+                        .fixedSize(horizontal: false, vertical: true)
                 }
             }
-            .padding(ThroSpacing.spacing5)
+            switch account {
+            case .signedOut:
+                slateButton("SIGN IN", lit: true, seed: 11, action: onAccount)
+            case .signedIn:
+                HStack(spacing: ThroSpacing.spacing3) {
+                    slateButton("FRIENDS", lit: true, seed: 13, action: onFriends)
+                    // **PROFILE, and it goes to the profile.** It used to say ACCOUNT and open a
+                    // settings list, from which the profile was another row — five steps to the
+                    // page that is about you, on the tab called You.
+                    slateButton("PROFILE", lit: false, seed: 17, action: onProfile)
+                }
+            case .unverified:
+                slateButton("TRY AGAIN", lit: true, seed: 19, action: onRetry)
+            case .none, .busy:
+                EmptyView()
+            }
         }
+        .padding(.horizontal, ThroSpacing.spaceScreenGutter)
+        .padding(.top, ThroSpacing.spacing2)
+        .padding(.bottom, ThroSpacing.spacing6)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(ThroColor.colorBackgroundBrand)
     }
 
     private func slateButton(_ label: String, lit: Bool, seed: Double, action: @escaping () -> Void) -> some View {
@@ -1406,545 +1454,6 @@ public struct YouScreen: View {
         .buttonStyle(ChalkKeyStyle(lit ? .lit : .field, minHeight: ThroSpacing.touchTargetMinimum, seedAngle: seed))
         .fixedSize()
         .padding(.top, ThroSpacing.spacing1)
-    }
-}
-
-/// After the export's Settings screen: grouped rows of icon, label and value under section headers.
-/// Only what is true of this build appears — one setting, and the facts of the build. PD-003 puts the
-/// appearance choice here.
-public struct SettingsScreen: View {
-    @AppStorage(Appearance.storageKey) private var appearanceRaw: String = Appearance.system.rawValue
-    @AppStorage(ScoringPreferences.keepScreenAwakeKey) private var keepScreenAwake: Bool = true
-    /// Which keypad the scoring screen offers. Held here as well as on the rail because a setting
-    /// that only exists inside a match is a setting nobody finds before their first match.
-    @AppStorage(ScoringPreferences.entryModeKey) private var entryModeRaw: String
-        = ScoringEntryMode.default.rawValue
-    @AppStorage(ThroHaptics.enabledKey) private var haptics: Bool = true
-    @AppStorage(OpeningPreferences.soundKey) private var openingSound: Bool = true
-    @AppStorage(OpeningPreferences.hapticsKey) private var openingHaptics: Bool = true
-    @AppStorage(ThroSpotlight.enabledKey) private var spotlight: Bool = true
-    /// PD-017's neighbour: what the phone can say about how the app performed on it. **Off by
-    /// default**, because this is the one thing in the app the player gains nothing from — theirs
-    /// to turn on rather than theirs to discover and turn off.
-    @AppStorage(ThroDiagnostics.enabledKey) private var diagnostics: Bool = false
-    private let onBack: () -> Void
-    private let onReplayOpening: (() -> Void)?
-    private let onAccount: (() -> Void)?
-    private let accountValue: String
-    private let organisationCount: () -> Int
-    private let onClearOrganisations: (() -> Void)?
-    @State private var confirmingClear = false
-    /// PD-017. Where the file comes from and what the file system says about backups. Closures
-    /// rather than the stores themselves, so Settings stays a screen and not a second owner of the
-    /// device's data — and so a test can drive both without a journal on disk.
-    private let backupState: () -> BackupPolicy.State
-    private let makeExport: (() throws -> URL)?
-    /// What the diagnostics folder holds, and how to empty it. Closures for the same reason the
-    /// two above are: Settings is a screen, not a second owner of the device's data.
-    private let diagnosticsHeld: () -> ThroDiagnostics.Held
-    private let onForgetDiagnostics: () -> Void
-    /// What this phone can currently show of everything the build added. Async because two of the
-    /// answers — whether notifications are allowed, and what is pending — only come back that way.
-    private let readinessFacts: @MainActor () async -> ThroReadiness.Facts
-    /// Where the readiness screen sends somebody when a row has somewhere to send them.
-    private let onGoReadiness: (ThroReadiness.Go) -> Void
-    @State private var showingReadiness = false
-    @State private var exported: URL?
-    @State private var exportProblem: String?
-    @State private var picking = false
-    @State private var inspection: ExportInspection?
-
-    public init(onBack: @escaping () -> Void, onReplayOpening: (() -> Void)? = nil,
-                onAccount: (() -> Void)? = nil, accountValue: String = "Not signed in",
-                organisationCount: @escaping () -> Int = { 0 }, onClearOrganisations: (() -> Void)? = nil,
-                backupState: @escaping () -> BackupPolicy.State = { .unknown("no data folder in this build") },
-                makeExport: (() throws -> URL)? = nil,
-                diagnosticsHeld: @escaping () -> ThroDiagnostics.Held = { .init(count: 0, bytes: 0, newest: nil) },
-                onForgetDiagnostics: @escaping () -> Void = {},
-                readinessFacts: @escaping @MainActor () async -> ThroReadiness.Facts = { await ThroReadiness.probe(app: .init()) },
-                onGoReadiness: @escaping (ThroReadiness.Go) -> Void = { _ in }) {
-        self.onBack = onBack
-        self.onReplayOpening = onReplayOpening
-        self.onAccount = onAccount
-        self.accountValue = accountValue
-        self.organisationCount = organisationCount
-        self.onClearOrganisations = onClearOrganisations
-        self.backupState = backupState
-        self.makeExport = makeExport
-        self.diagnosticsHeld = diagnosticsHeld
-        self.onForgetDiagnostics = onForgetDiagnostics
-        self.readinessFacts = readinessFacts
-        self.onGoReadiness = onGoReadiness
-    }
-
-    private var appearance: Binding<Appearance> {
-        Binding(get: { Appearance(stored: appearanceRaw) }, set: { appearanceRaw = $0.rawValue })
-    }
-
-    /// The stored notation as the value the control works in. The same shape as `appearance`, for
-    /// the same reason: `@AppStorage` holds a string, because that is what survives a build that
-    /// does not know a value, and every reader turns it back into the type at the edge.
-    private var entryMode: Binding<ScoringEntryMode> {
-        Binding(get: { ScoringEntryMode(stored: entryModeRaw) }, set: { entryModeRaw = $0.rawValue })
-    }
-
-    /// Which page of Settings is open, or nil for the index.
-    @State private var page: Page?
-
-    public var body: some View {
-        Group {
-            if let page {
-                settingsPage(page)
-            } else {
-                VStack(spacing: 0) {
-                    TopBar("Settings", onBack: onBack, large: true)
-                    ScrollView {
-                        VStack(alignment: .leading, spacing: 0) {
-                            settingsIndex
-                        }
-                        // The groups carried the screen gutter themselves; the index is rows, so it
-                        // carries its own or every one of them sits against the glass.
-                        .padding(.horizontal, ThroSpacing.spaceScreenGutter)
-                        .padding(.bottom, ThroSpacing.spacing7)
-                    }
-                }
-            }
-        }
-        // The screen arrives (PD-027): one beat, on the design's own curve,
-        // withdrawn entirely under Reduce Motion.
-        .throEntrance(0)
-        .background(ThroColor.colorBackgroundPrimary.ignoresSafeArea())
-        .fileImporter(isPresented: $picking, allowedContentTypes: [.json]) { result in
-            inspection = SettingsScreen.inspect(result)
-        }
-        .sheet(isPresented: $showingReadiness) {
-            // The sheet closes itself before the route is taken. It sits over Settings, which sits
-            // over the tabs, so leaving it open would put the destination behind two screens the
-            // player never asked to still be there.
-            ReadinessScreen(onBack: { showingReadiness = false }, gather: readinessFacts) { go in
-                showingReadiness = false
-                onGoReadiness(go)
-            }
-        }
-    }
-
-    // MARK: - the index
-    //
-    // **Settings was one scroll with a paragraph under every row.** All of that prose is true and
-    // most of it is load-bearing — why haptics are on, what an export can and cannot do, why
-    // diagnostics are off — but shown all at once it buried the thing people actually came for.
-    // The founder had to *"scroll down an ugly long scroll of info to the bottom"* to reach their
-    // own account. So the prose moved one tap in, behind the row it explains, and the index is one
-    // screen: your account first, because it is the most asked-for row and it was the last one.
-
-    /// A page of Settings. The order is the order of the index.
-    enum Page: String, Identifiable, CaseIterable {
-        case appearance, scoring, opening, search, data, discover, performance, build
-        var id: String { rawValue }
-
-        var title: String {
-            switch self {
-            case .appearance: return "Appearance"
-            case .scoring: return "Scoring"
-            case .opening: return "The opening"
-            case .search: return "Search"
-            case .data: return "Your darts"
-            case .discover: return "Teams, leagues and tournaments"
-            case .performance: return "How the app performs"
-            case .build: return "This build"
-            }
-        }
-
-        /// One line, so the index says what is behind a row without opening it.
-        var summary: String {
-            switch self {
-            case .appearance: return "Light, dark or the phone's"
-            case .scoring: return "Notation, screen and haptics"
-            case .opening: return "Sound and haptics at launch"
-            case .search: return "What THRØ puts in Spotlight"
-            case .data: return "Export, backup and what a file holds"
-            case .discover: return "Remove everything kept on this phone"
-            case .performance: return "Off unless you turn it on"
-            case .build: return "Version, fonts and what is not built"
-            }
-        }
-
-        var icon: ThroIcon {
-            switch self {
-            case .appearance: return .eye
-            case .scoring: return .target
-            case .opening: return .play
-            case .search: return .search
-            case .data: return .filePen
-            case .discover: return .users
-            case .performance: return .clock
-            case .build: return .info
-            }
-        }
-    }
-
-    @ViewBuilder private var settingsIndex: some View {
-        // Your account, first. It used to be the last row of the last group.
-        SectionHeader("You")
-        if let onAccount {
-            LinkRow(icon: .circleUser, label: "Your account and profile", value: accountValue, action: onAccount)
-        } else {
-            SettingsRow(icon: .circleUser, label: "Your account and profile", value: "This build names no server")
-        }
-        // The readiness screen is not a page of settings, it is an answer to "can I even see this
-        // on my phone", so it keeps its own row rather than hiding behind one.
-        SectionHeader("This phone")
-        LinkRow(icon: .circleCheck, label: "What you can see on this phone",
-                value: "Every surface, and what is stopping each") { showingReadiness = true }
-        SectionHeader("Settings")
-        ForEach(Page.allCases) { page in
-            if page != .discover || onClearOrganisations != nil {
-                LinkRow(icon: page.icon, label: page.title, value: page.summary) { self.page = page }
-            }
-        }
-    }
-
-    @ViewBuilder private func settingsPage(_ page: Page) -> some View {
-        VStack(spacing: 0) {
-            TopBar(page.title, eyebrow: "Settings", onBack: { self.page = nil })
-            ScrollView {
-                VStack(alignment: .leading, spacing: 0) {
-                    switch page {
-                    case .appearance: appearanceGroup
-                    case .scoring: scoringGroup
-                    case .opening: openingGroup
-                    case .search: searchGroup
-                    case .data: yourDarts
-                    case .discover: startDiscoverAgain
-                    case .performance: performanceGroup
-                    case .build: thisBuild
-                    }
-                }
-            }
-        }
-        .background(ThroColor.colorBackgroundPrimary.ignoresSafeArea())
-    }
-
-    @ViewBuilder private var canDo: some View {
-        group("What this build can do") {
-            Text("Some of what this build added only appears when something else is true — a match in progress, a screen plugged in, a fixture with a date on it. This reads what this phone will allow and says where to look for each one.")
-                .thro(ThroTypography.metadata)
-                .foregroundStyle(ThroColor.colorTextSecondary)
-                .fixedSize(horizontal: false, vertical: true)
-            ThroButton("What you can see on this phone", variant: .secondary, size: .medium) {
-                showingReadiness = true
-            }
-        }
-    }
-
-    @ViewBuilder private var appearanceGroup: some View {
-        group("Appearance") {
-            SegmentedControl(Appearance.allCases.map { ($0, $0.label) }, selection: appearance)
-            Text("Every screen follows this, scoring included. System follows the phone.")
-                .thro(ThroTypography.metadata)
-                .foregroundStyle(ThroColor.colorTextSecondary)
-        }
-    }
-
-    @ViewBuilder private var scoringGroup: some View {
-        group("Scoring") {
-            // **How a visit is entered**, and the reason it is here as well as on the
-            // scoring rail: the founder asked for both notations, and a control that
-            // exists only inside a match is one nobody finds before their first match.
-            // The rail's switch changes the same stored value, so the two cannot drift.
-            // `SegmentedControl` and not SwiftUI's `Picker(.segmented)`, which is what
-            // the first version of this row reached for. A `UISegmentedControl` is
-            // **32 points tall** and a frame around it does not enlarge its segments —
-            // so that row would have shipped a control below the 44-point floor this
-            // app holds every other control to, on a screen whose whole reason for
-            // existing is that the founder could not reliably hit things. The design
-            // system already had the right control, drawing the Appearance row ten
-            // lines above this one.
-            Eyebrow("How a visit is entered")
-            SegmentedControl(ScoringEntryMode.allCases.map { ($0, $0.label) },
-                             selection: entryMode)
-            Text(SettingsScreen.entryModeNote(ScoringEntryMode(stored: entryModeRaw)))
-                .thro(ThroTypography.metadata)
-                .foregroundStyle(ThroColor.colorTextSecondary)
-                .fixedSize(horizontal: false, vertical: true)
-            // The export's Settings lists this row under Scoring, default On. The switch
-            // is the platform's; the export draws no toggle.
-            HStack(spacing: 12) {
-                Icon(.smartphone, size: 18).foregroundStyle(ThroColor.colorTextSecondary)
-                Toggle(isOn: $keepScreenAwake) {
-                    Text("Keep screen awake").thro(ThroTypography.body).foregroundStyle(ThroColor.colorTextPrimary)
-                }
-                .tint(ThroColor.colorSurfaceBrand)
-            }
-            .frame(minHeight: 52)
-            .overlay(alignment: .bottom) { Rectangle().fill(ThroColor.colorBorderDefault).frame(height: 1) }
-            Text("While scoring, the phone does not sleep between visits.")
-                .thro(ThroTypography.metadata)
-                .foregroundStyle(ThroColor.colorTextSecondary)
-            // PD-015. Default on: the point of a haptic at a dartboard is that it is
-            // felt while the player is looking at the board. Off is offered because a
-            // phone buzzing in a pocket through a match is somebody else's idea of help.
-            HStack(spacing: 12) {
-                Icon(.target, size: 18).foregroundStyle(ThroColor.colorTextSecondary)
-                Toggle(isOn: $haptics) {
-                    Text("Haptics").thro(ThroTypography.body).foregroundStyle(ThroColor.colorTextPrimary)
-                }
-                .tint(ThroColor.colorSurfaceBrand)
-            }
-            .frame(minHeight: 52)
-            .overlay(alignment: .bottom) { Rectangle().fill(ThroColor.colorBorderDefault).frame(height: 1) }
-            Text("A light tap on every key, a firmer one when a visit is saved, and its own sensation for a bust, a checkout coming up, an undo, a leg, and the match — so the ones that matter are felt without looking at the phone.")
-                .thro(ThroTypography.metadata)
-                .foregroundStyle(ThroColor.colorTextSecondary)
-                .fixedSize(horizontal: false, vertical: true)
-        }
-    }
-
-    @ViewBuilder private var openingGroup: some View {
-        group("Opening") {
-            // PD-007 v2: the throw that opens the app, its sound and its haptic. Sound goes
-            // through the ambient session, so the silent switch always wins.
-            toggleRow(icon: .info, label: "Sound", isOn: $openingSound)
-            toggleRow(icon: .smartphone, label: "Haptic on the strike", isOn: $openingHaptics)
-            if let onReplayOpening {
-                ThroButton("Play the opening again", variant: .secondary, size: .medium, action: onReplayOpening)
-                    .padding(.top, ThroSpacing.spacing2)
-            }
-            Text("The silent switch silences the sound whatever this says. Reduce Motion shows the finished mark instead of the throw.")
-                .thro(ThroTypography.metadata)
-                .foregroundStyle(ThroColor.colorTextSecondary)
-        }
-    }
-
-    @ViewBuilder private var searchGroup: some View {
-        group("Search") {
-            HStack(spacing: 12) {
-                Icon(.search, size: 18).foregroundStyle(ThroColor.colorTextSecondary)
-                Toggle(isOn: $spotlight) {
-                    Text("Find these on this phone").thro(ThroTypography.body)
-                        .foregroundStyle(ThroColor.colorTextPrimary)
-                }
-                .tint(ThroColor.colorSurfaceBrand)
-            }
-            .frame(minHeight: 52)
-            .overlay(alignment: .bottom) { Rectangle().fill(ThroColor.colorBorderDefault).frame(height: 1) }
-            Text("Your matches, the people who play here and your teams appear in this iPhone's own search. The index is on the phone, is never sent to Apple, and is not shared with your other devices. Turning this off removes what is already there.")
-                .thro(ThroTypography.metadata)
-                .foregroundStyle(ThroColor.colorTextSecondary)
-        }
-    }
-
-    @ViewBuilder private var performanceGroup: some View {
-        group("How the app performs") {
-            HStack(spacing: 12) {
-                Icon(.shield, size: 18).foregroundStyle(ThroColor.colorTextSecondary)
-                Toggle(isOn: $diagnostics) {
-                    Text("Collect performance reports").thro(ThroTypography.body)
-                        .foregroundStyle(ThroColor.colorTextPrimary)
-                }
-                .tint(ThroColor.colorSurfaceBrand)
-            }
-            .frame(minHeight: 52)
-            .overlay(alignment: .bottom) { Rectangle().fill(ThroColor.colorBorderDefault).frame(height: 1) }
-            Text("iOS can tell THRØ how long it took to open, when it froze and how much memory it used, at most once a day. The reports are written to this phone and go nowhere. Turning this off deletes the ones already collected.")
-                .thro(ThroTypography.metadata)
-                .foregroundStyle(ThroColor.colorTextSecondary)
-                .fixedSize(horizontal: false, vertical: true)
-                // Off means gone, not merely stopped. A switch that left the collected
-                // reports behind would be a switch that lies, which is the rule the
-                // Spotlight switch above already follows.
-                .onChange(of: diagnostics) { _, on in if !on { onForgetDiagnostics() } }
-            if diagnostics {
-                Text(ThroDiagnostics.sentence(diagnosticsHeld()))
-                    .thro(ThroTypography.metadata)
-                    .foregroundStyle(ThroColor.colorTextSecondary)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-        }
-    }
-
-    @ViewBuilder private var yourDarts: some View {
-        group("Your darts") {
-            // PD-017. Both halves are told. A player who learns their darts are in
-            // iCloud from a support article rather than from the app has been failed
-            // twice — and one who assumes they are, and is wrong, has been failed worse.
-            let state = backupState()
-            SettingsRow(icon: state.isIncluded ? .cloudCheck : .cloudOff,
-                        label: "In the phone's backup",
-                        value: state.isIncluded ? "Yes" : "No")
-            Text(BackupPolicy.sentence(state))
-                .thro(ThroTypography.metadata)
-                .foregroundStyle(state.isIncluded ? ThroColor.colorTextSecondary : ThroColor.colorStatusError)
-                .fixedSize(horizontal: false, vertical: true)
-            if let makeExport {
-                ThroButton("Export everything", variant: .secondary, size: .medium) {
-                    do {
-                        exported = try makeExport()
-                        exportProblem = nil
-                    } catch {
-                        exported = nil
-                        exportProblem = "\(error)"
-                    }
-                }
-                .padding(.top, ThroSpacing.spacing2)
-                if let exported {
-                    // A button's face rather than a line of text. It was a bare `Text`:
-                    // no pressed state and a hit area the size of the ink, which is the
-                    // founder's original complaint on a control `check_controls_react`
-                    // was not looking at. It looks at ShareLink now.
-                    ShareLink(item: exported) {
-                        ThroButtonFace("Save or send \(exported.lastPathComponent)",
-                                       variant: .secondary, size: .medium)
-                    }
-                    .buttonStyle(ThroPressStyle(radius: ThroSpacing.radiusControl))
-                }
-                if let exportProblem {
-                    Snackbar(exportProblem, tone: .error)
-                }
-                Text("One file with every match, every visit as written — corrections and all — and every team this phone keeps. Nothing is sent anywhere: you choose where it goes. Pictures are not in it; the file names the ones this phone holds.")
-                    .thro(ThroTypography.metadata)
-                    .foregroundStyle(ThroColor.colorTextSecondary)
-                    .fixedSize(horizontal: false, vertical: true)
-
-                // PD-017. An export nobody can read back is a file a player has to
-                // *trust* worked. This opens one and says what is in it — and writes
-                // nothing, which is the decision rather than a limitation.
-                ThroButton("Check a file", variant: .ghost, size: .medium) { picking = true }
-                    .padding(.top, ThroSpacing.spacing2)
-                if let inspection {
-                    inspected(inspection)
-                }
-                Text("Checking a file reads it and nothing else. Bringing one back into the app is not built: merging two journals is the same problem as syncing two phones, and doing it badly would leave a record that lies about what this phone wrote.")
-                    .thro(ThroTypography.metadata)
-                    .foregroundStyle(ThroColor.colorTextSecondary)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-        }
-    }
-
-    @ViewBuilder private var startDiscoverAgain: some View {
-        if let onClearOrganisations {
-            group("Start the Discover tab again") {
-                let n = organisationCount()
-                Note("Removes every team, league and tournament on this phone, with their rosters, "
-                     + "fixtures and results — \(n) organisation\(n == 1 ? "" : "s") right now. Your matches and "
-                     + "the people you have played stay: they are history, not organisations.")
-                ThroButton("Remove every team, league and tournament", variant: .destructive, size: .medium, disabled: n == 0) { confirmingClear = true }
-                    .confirmationDialog("Remove every organisation on this phone?", isPresented: $confirmingClear, titleVisibility: .visible) {
-                        Button("Remove \(n) organisation\(n == 1 ? "" : "s")", role: .destructive) { onClearOrganisations(); confirmingClear = false }
-                        Button("Keep them", role: .cancel) { confirmingClear = false }
-                    } message: {
-                        Text("Rosters, fixtures and results on this phone go with them. Matches and people stay. This cannot be undone.")
-                    }
-            }
-        }
-    }
-
-    @ViewBuilder private var thisBuild: some View {
-        group("This build") {
-            SettingsRow(icon: .info, label: "Build", value: BuildInfo.label)
-            SettingsRow(icon: .info, label: "Matches", value: "Stay on this device")
-            SettingsRow(icon: .cloudOff, label: "Sending results to THRØ", value: "Not built")
-            SettingsRow(icon: .info, label: "Fonts", value: ThroFont.customFacesRegistered ? "Embedded" : "System face")
-            if let onAccount {
-                LinkRow(icon: .circleUser, label: "Account and profile", value: accountValue, action: onAccount)
-            } else {
-                SettingsRow(icon: .circleUser, label: "Account and profile", value: "This build names no server")
-            }
-        }
-    }
-
-    /// Reads the picked file and describes it. Static and taking the importer's own result so the
-    /// whole path — including the two failures that are not the file's fault — is testable without
-    /// a file picker.
-    /// What each notation costs and buys, in the words a player would use.
-    ///
-    /// **It says the cost as well as the gain**, because a setting that only lists advantages is
-    /// one somebody switches and then quietly regrets. Entering darts is more taps and it takes
-    /// room off the board on a small phone; what it buys is that a checkout stops interrupting to
-    /// ask questions the app could have worked out.
-    static func entryModeNote(_ mode: ScoringEntryMode) -> String {
-        switch mode {
-        case .visitTotal:
-            return "Type the total of three darts. Fewer taps, and the way every darts app works — "
-                 + "but a checkout stops to ask how many darts it took and how many were at a "
-                 + "double, because nothing else can know."
-        case .perDart:
-            return "Tap each dart as it lands. A checkout asks nothing, because the answers are in "
-                 + "what you entered — and your checkout percentage becomes exact instead of a "
-                 + "range. It is more taps, and on a small phone the score steps down a size to "
-                 + "make room for the three darts."
-        }
-    }
-
-    static func inspect(_ result: Result<URL, Error>, thisDevice: DeviceId? = nil) -> ExportInspection {
-        switch result {
-        case let .failure(error):
-            return .refused("That file could not be opened: \(error.localizedDescription)")
-        case let .success(url):
-            // A file chosen outside the app's own container needs its scope claimed for the read
-            // and released after it, whether or not the read succeeds.
-            let scoped = url.startAccessingSecurityScopedResource()
-            defer { if scoped { url.stopAccessingSecurityScopedResource() } }
-            guard let data = try? Data(contentsOf: url) else {
-                return .refused("That file could not be opened.")
-            }
-            return ExportInspection.of(data, thisDevice: thisDevice)
-        }
-    }
-
-    @ViewBuilder
-    private func inspected(_ inspection: ExportInspection) -> some View {
-        switch inspection {
-        case let .readable(file):
-            VStack(alignment: .leading, spacing: ThroSpacing.spacing2) {
-                Tag("Readable", tone: .success)
-                Text(file.summary)
-                    .thro(ThroTypography.body)
-                    .foregroundStyle(ThroColor.colorTextPrimary)
-                    .fixedSize(horizontal: false, vertical: true)
-                Text(file.fromThisDevice
-                     ? "Written by this phone."
-                     : "Written by a different phone. That is normal for a file you have kept or been sent.")
-                    .thro(ThroTypography.metadata)
-                    .foregroundStyle(ThroColor.colorTextSecondary)
-                    .fixedSize(horizontal: false, vertical: true)
-                if file.assetsNotIncluded > 0 {
-                    Text("It names \(file.assetsNotIncluded) picture\(file.assetsNotIncluded == 1 ? "" : "s") it does not carry.")
-                        .thro(ThroTypography.metadata)
-                        .foregroundStyle(ThroColor.colorTextSecondary)
-                }
-            }
-            .padding(ThroSpacing.spacing4)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background(RoundedRectangle(cornerRadius: ThroSpacing.radiusCard).fill(ThroColor.colorBackgroundRaised))
-            .overlay(RoundedRectangle(cornerRadius: ThroSpacing.radiusCard).strokeBorder(ThroColor.colorBorderDefault, lineWidth: 1))
-        case let .refused(why):
-            Snackbar(why, tone: .error)
-        }
-    }
-
-    private func toggleRow(icon: ThroIcon, label: String, isOn: Binding<Bool>) -> some View {
-        HStack(spacing: 12) {
-            Icon(icon, size: 18).foregroundStyle(ThroColor.colorTextSecondary)
-            Toggle(isOn: isOn) {
-                Text(label).thro(ThroTypography.body).foregroundStyle(ThroColor.colorTextPrimary)
-            }
-            .tint(ThroColor.colorSurfaceBrand)
-        }
-        .frame(minHeight: 52)
-        .overlay(alignment: .bottom) { Rectangle().fill(ThroColor.colorBorderDefault).frame(height: 1) }
-    }
-
-    private func group<Content: View>(_ title: String, @ViewBuilder _ content: () -> Content) -> some View {
-        VStack(alignment: .leading, spacing: ThroSpacing.spacing3) {
-            SectionHeader(title)
-            content()
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.top, ThroSpacing.spacing2)
-        .padding(.bottom, ThroSpacing.spacing4)
-        .padding(.horizontal, ThroSpacing.spaceScreenGutter)
     }
 }
 
@@ -2199,14 +1708,40 @@ struct LiveFixtureRow: View {
 @MainActor
 final class AccountHolder: ObservableObject {
     private(set) var store: AccountStore?
+    /// The store's own changes, passed on. The root decides three things from the account — whether
+    /// the welcome shows, whether the opening holds, where the profile goes — and before this it
+    /// only re-read the account when something else happened to redraw it, which is how the opening
+    /// could hand over to an app that did not yet know who was signed in.
+    private var relay: AnyCancellable?
+
     func resolve(journalDeviceId: String?) -> AccountStore? {
-        if store == nil { store = ThroServer.account(journalDeviceId: journalDeviceId) }
+        if store == nil {
+            store = ThroServer.account(journalDeviceId: journalDeviceId)
+            relay = store?.objectWillChange.sink { [weak self] _ in self?.objectWillChange.send() }
+        }
         return store
     }
 }
 
+/// The profile as it was when it was opened, and which part of it to open on.
+struct ProfileOpening: Equatable {
+    let profile: Profile
+    let part: YourProfileScreen.Sub?
+}
+
 extension ThroRootView {
     var account: AccountStore? { accountHolder.resolve(journalDeviceId: AppStore.deviceId()) }
+
+    /// Your profile if you are signed in; the welcome board if you are not; and, for a phone holding a
+    /// session THRØ has not confirmed yet, the account screen that says so and tries again.
+    func openAccount(_ part: YourProfileScreen.Sub?) {
+        if let profile = account?.profile, profile.accountId != nil {
+            profileOpen = ProfileOpening(profile: profile, part: part)
+        } else {
+            openingFriends = false
+            showingAccount = true
+        }
+    }
 
     /// Send a finished match to THRØ (PD-040).
     ///
@@ -2267,17 +1802,15 @@ extension ThroRootView {
         switch account.state {
         case .signedIn(let p): return .signedIn(name: p.named ? p.displayName : nil, ageBand: p.ageBand, friends: account.friends?.count)
         case .busy(let what): return .busy(what)
+        // Still holding a session THRØ could not confirm: signed in, and said so honestly.
+        case .failed(_, wasSignedIn: true): return .unverified
         case .failed, .signedOut: return .signedOut
         }
     }
-    var accountRowValue: String {
-        guard let account else { return "This build names no server" }
-        switch account.state {
-        case .signedIn(let p): return p.named ? (p.displayName ?? "Signed in") : "Signed in, no name yet"
-        case .busy: return "Checking"
-        case .failed: return "Needs attention"
-        case .signedOut: return "Not signed in"
-        }
+    /// The signed-in person's picture, where this phone holds one (`AccountPicture`).
+    var accountPicture: Image? {
+        guard let id = account?.profile?.accountId else { return nil }
+        return clubs.image(AccountPicture.assetId(id))
     }
 }
 

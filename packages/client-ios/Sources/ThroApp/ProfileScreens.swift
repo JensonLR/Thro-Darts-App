@@ -6,14 +6,22 @@ import ThroTokens
 
 // Your profile, and the way out of THRØ.
 //
-// **What was wrong.** Setting a name meant: You, SIGN IN, scroll a settings list, find a row called
-// Name, tap a text link called *Set your name*, get a field, type, tap Save. Seven steps to type two
-// words, and no picture at any point. The founder: *"Hard & painful experience to customise your
-// account, name etc. during this experience too. no profile pic option."* Correct on both counts.
+// **What was wrong, the first time.** Setting a name meant: You, SIGN IN, scroll a settings list,
+// find a row called Name, tap a text link called *Set your name*, get a field, type, tap Save. Seven
+// steps to type two words, and no picture at any point.
 //
-// **What it is now.** One screen that looks like the person it is about: the mark at 96 pt, their
-// name under it in the sport face, and both editable where they sit. No sub-screen, no Save button
-// hunting — the name commits when the field is left, which is how every field in iOS behaves.
+// **What was wrong, the second time.** The founder: *"poor journey for profile experience overall
+// too just very clunky & poorly designed"*, and then *"still won't let me delete full account."*
+// Two causes, one of them invisible. The page was grey rows on a system list. And every change to
+// the account set it to busy, which took this page off the screen while a name saved and took the
+// delete screen off the screen while an erasure ran — so an erasure that failed reported its failure
+// to a screen that no longer existed, and the person landed back here with the account still there
+// and no word about why. (The failure itself was V031 refusing anybody who held a friend code they
+// had not given out yet; V033 is that fix. `AccountStore.working` is this one.)
+//
+// **What it is now.** The person on the brand field — their mark, their name in chalk where it is
+// changed, and who sees it — and under it the cards the rest of the account area is made of.
+// Changes happen where they are asked for, and the page stays put while they do.
 
 /// Where an account's own picture is kept, and the rule about who may have one.
 ///
@@ -60,10 +68,14 @@ public enum AccountPicture {
     }
 }
 
-/// Your profile: the mark, the name, the age band, and the way out.
+/// Your profile: the mark, the name, the age band, the people and ways in around them, the way out.
 public struct YourProfileScreen: View {
     @ObservedObject private var account: AccountStore
-    private let profile: Profile
+    /// The profile the page was opened on. What it shows is the account's own profile while there
+    /// is one (`profile`), so a saved name or a declared age appears as soon as it lands.
+    private let opened: Profile
+    /// Which list the page was opened on, if any — the You tab's FRIENDS opens straight on Friends.
+    private let openedOn: Sub?
     private let images: ImageStore?
     private let picture: (String?) -> Image?
     private let onBack: () -> Void
@@ -78,22 +90,28 @@ public struct YourProfileScreen: View {
 
     /// The three lists that used to live behind a separate Account screen. They are about the
     /// person, so they are reached from the page about the person.
-    enum Sub { case friends, inbox, discovery }
+    public enum Sub: Sendable { case friends, inbox, discovery }
 
     /// The account this page is about. `Profile.accountId` is optional because a development
     /// principal has none; a page about nobody is not a page, so the caller passes one that has one.
     private let accountId: UUID
 
-    public init(account: AccountStore, profile: Profile, accountId: UUID, images: ImageStore?,
-                picture: @escaping (String?) -> Image?, onBack: @escaping () -> Void) {
+    public init(account: AccountStore, profile: Profile, accountId: UUID, opening: Sub? = nil,
+                images: ImageStore?, picture: @escaping (String?) -> Image?, onBack: @escaping () -> Void) {
         self.account = account
-        self.profile = profile
+        self.opened = profile
+        self.openedOn = opening
         self.accountId = accountId
         self.images = images
         self.picture = picture
         self.onBack = onBack
         _name = State(initialValue: profile.named ? (profile.displayName ?? "") : "")
+        _showing = State(initialValue: opening)
     }
+
+    /// The account's own profile while there is one; the one the page opened on once there is not,
+    /// because an erasure finishes on this page and the page should not blank itself first.
+    private var profile: Profile { account.profile ?? opened }
 
     private var assetId: String? { AccountPicture.assetId(accountId) }
 
@@ -106,121 +124,149 @@ public struct YourProfileScreen: View {
     }
 
     public var body: some View {
-        if let showing {
-            switch showing {
-            case .friends: FriendsScreen(account: account) { self.showing = nil }
-            case .inbox: InboxScreen(account: account) { self.showing = nil }
-            case .discovery: DiscoveryScreen(account: account) { self.showing = nil }
+        Group {
+            if let showing {
+                list(showing)
+            } else if deleting {
+                DeleteAccountScreen(account: account) {
+                    AccountPicture.forget(accountId, in: images)
+                    onBack()
+                } onCancel: { deleting = false }
+            } else {
+                page
             }
-        } else if deleting {
-            DeleteAccountScreen(account: account) {
-                AccountPicture.forget(accountId, in: images)
-                onBack()
-            } onCancel: { deleting = false }
-        } else {
-            VStack(spacing: 0) {
-                TopBar("Your profile", onBack: { commitName(); onBack() }, large: true)
-                ScrollView {
-                    VStack(alignment: .leading, spacing: ThroSpacing.spacing5) {
-                        head
-                        band
-                        // **Everything about the person, on the page about the person.** These
-                        // were behind a second screen called Account, which is why reaching any of
-                        // them took four taps and a scroll.
-                        SectionHeader("Friends")
-                        LinkRow(icon: .users, label: "Friends",
-                                value: account.friends.map { $0.isEmpty ? "None yet" : "\($0.count)" } ?? "Codes, given in person") { showing = .friends }
-                        SectionHeader("Ways in")
-                        waysIn(profile.credentials ?? 1)
-                        ThroButton("Add a passkey", variant: .secondary, size: .medium, icon: .lock) { Task { await account.usePasskey() } }
-                        ThroTextButton("Add Sign in with Apple", tone: .quiet) { Task { await account.signInWithApple() } }
-                        if account.configuration.googleClientID != nil {
-                            ThroTextButton("Add Sign in with Google", tone: .quiet) { Task { await account.signInWithGoogle() } }
-                        }
-                        SectionHeader("From THRØ")
-                        LinkRow(icon: .bell, label: "Your inbox", value: "Tasks waiting on you") { showing = .inbox }
-                        LinkRow(icon: .compass, label: "Darts you can play", value: "Events, with why each is there") { showing = .discovery }
-                        SectionHeader("Leaving")
-                        ThroButton("Sign out of this phone", variant: .secondary, size: .medium) {
-                            Task { await account.signOut(); onBack() }
-                        }
-                        // Apple requires an account that can be made in an app to be deletable in
-                        // it, and so does the law. It is a plain row rather than something hidden
-                        // behind support: a person who wants out should not have to ask anybody.
-                        ThroButton("Delete your account", variant: .destructive, size: .medium, icon: .circleX) {
-                            commitName(); deleting = true
-                        }
-                        Text("Deleting takes your name, your sign-ins and your friends out of THRØ for good. "
-                             + "The next screen says exactly what goes and what stays.")
-                            .thro(ThroTypography.metadata)
-                            .foregroundStyle(ThroColor.colorTextSecondary)
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
-                    .padding(.horizontal, ThroSpacing.spaceScreenGutter)
-                    .padding(.bottom, ThroSpacing.spacing7)
-                }
-            }
-            .background(ThroColor.colorBackgroundPrimary.ignoresSafeArea())
-            .throAppearance(Appearance(stored: appearanceRaw))
+        }
+        .throAppearance(Appearance(stored: appearanceRaw))
+    }
+
+    /// One of the lists about the person. Back from the list the page was opened on goes back to
+    /// where the person came from — FRIENDS on the You tab lands on Friends, and its back button
+    /// should not take a detour through a page they never asked for.
+    @ViewBuilder private func list(_ part: Sub) -> some View {
+        let back = { if openedOn == part { onBack() } else { showing = nil } }
+        switch part {
+        case .friends: FriendsScreen(account: account, onBack: back)
+        case .inbox: InboxScreen(account: account, onBack: back)
+        case .discovery: DiscoveryScreen(account: account, onBack: back)
         }
     }
 
-    // MARK: - the head: a face and a name, both editable where they sit
+    private var page: some View {
+        ScrollView {
+            VStack(spacing: 0) {
+                hero
+                VStack(alignment: .leading, spacing: ThroSpacing.spaceSectionGap) {
+                    if let problem = account.problem {
+                        Snackbar(problem, tone: .error, actionLabel: "OK") { account.dismissProblem() }
+                    }
+                    band
+                    CardGroup("Friends") {
+                        CardRow(icon: .users, label: "Friends", value: friendsLine) { showing = .friends }
+                    }
+                    waysIn
+                    CardGroup("From THRØ") {
+                        CardRow(icon: .bell, label: "Your inbox", value: "Tasks waiting on you") { showing = .inbox }
+                        CardDivider()
+                        CardRow(icon: .compass, label: "Darts you can play", value: "Events, with why each is there") {
+                            showing = .discovery
+                        }
+                    }
+                    leaving
+                }
+                .padding(.horizontal, ThroSpacing.spaceScreenGutter)
+                .padding(.top, ThroSpacing.spacing5)
+                .padding(.bottom, ThroSpacing.spacing7)
+                .frame(maxWidth: .infinity)
+                .background(ThroColor.colorBackgroundPrimary)
+            }
+        }
+        // The field runs up under the clock, as it does on Settings.
+        .throBrandFieldBehind()
+        .task { if account.friends == nil { await account.loadFriends() } }
+    }
 
-    @ViewBuilder private var head: some View {
-        VStack(spacing: ThroSpacing.spacing4) {
-            PicturePicker(subject: .person(initials: initials), size: 96,
-                          current: picture(assetId),
-                          refusedBecause: AccountPicture.refusal(ageBand: profile.ageBand),
-                          picked: $picked, removed: $removed)
-                .onChange(of: picked) { _, data in
-                    guard let data else { return }
-                    AccountPicture.set(data, for: accountId, in: images)
-                    picked = nil
+    // MARK: - the head: a face and a name, both changed where they sit
+
+    /// The top of the page: the brand field, and on it the person.
+    private var hero: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            PageBar(onBack: { commitName(); onBack() }, ink: ThroColor.throChalk)
+            VStack(alignment: .leading, spacing: ThroSpacing.spacing4) {
+                Eyebrow("Your profile", color: ThroColor.throChalk.opacity(0.78))
+                PicturePicker(subject: .person(initials: initials), size: 88,
+                              current: picture(assetId),
+                              refusedBecause: AccountPicture.refusal(ageBand: profile.ageBand),
+                              picked: $picked, removed: $removed, onBoard: true)
+                    .onChange(of: picked) { _, data in
+                        guard let data else { return }
+                        AccountPicture.set(data, for: accountId, in: images)
+                        picked = nil
+                    }
+                    .onChange(of: removed) { _, gone in
+                        guard gone else { return }
+                        AccountPicture.set(nil, for: accountId, in: images)
+                        removed = false
+                    }
+                VStack(alignment: .leading, spacing: ThroSpacing.spacing2) {
+                    nameField
+                    status
                 }
-                .onChange(of: removed) { _, gone in
-                    guard gone else { return }
-                    AccountPicture.set(nil, for: accountId, in: images)
-                    removed = false
-                }
-            // The name IS the field. No row, no "Set your name" link, no Save: it is typed where it
-            // is read, and it commits when the field is left, which is what every other field on
-            // the phone does.
-            TextField("Your name", text: $name)
+            }
+            .padding(.horizontal, ThroSpacing.spaceScreenGutter)
+            .padding(.top, ThroSpacing.spacing1)
+            .padding(.bottom, ThroSpacing.spacing6)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(ThroColor.colorBackgroundBrand)
+        .onChange(of: editingName) { was, now in if was && !now { commitName() } }
+    }
+
+    /// The name IS the field: typed where it is read, in chalk on the board, and committed when the
+    /// field is left — which is what every other field on the phone does. No row, no Save button.
+    private var nameField: some View {
+        HStack(spacing: ThroSpacing.spacing3) {
+            TextField("", text: $name, prompt: Text("Your name").foregroundStyle(ThroColor.throChalk.opacity(0.55)))
                 .thro(ThroTypography.heading1.family(.sport).weight(.bold).tracking(em: 0))
-                .foregroundStyle(ThroColor.colorTextPrimary)
-                .multilineTextAlignment(.center)
+                .foregroundStyle(ThroColor.throChalk)
+                .tint(ThroColor.throChalk)
                 .textContentType(.name)
                 .autocorrectionDisabled()
                 .submitLabel(.done)
                 .focused($editingName)
                 .onSubmit(commitName)
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, ThroSpacing.spacing2)
-                .overlay(alignment: .bottom) {
-                    // A chalk rule under it, so it reads as something written rather than a box.
-                    ChalkRule(weight: 2, seedAngle: 17).fill(ThroColor.colorBorderDefault)
-                        .frame(height: 3)
-                }
                 .accessibilityLabel("Your name")
                 .accessibilityHint("Shown to the teams and leagues you are part of")
-            Text(YourProfileScreen.nameNote(named: profile.named))
-                .thro(ThroTypography.metadata)
-                .foregroundStyle(ThroColor.colorTextSecondary)
-                .multilineTextAlignment(.center)
-                .fixedSize(horizontal: false, vertical: true)
+            if !editingName {
+                // Says the name can be changed where it sits, which a heading otherwise would not.
+                Icon(.pencilLine, size: 18)
+                    .foregroundStyle(ThroColor.throChalk.opacity(0.78))
+                    .accessibilityHidden(true)
+            }
         }
-        .frame(maxWidth: .infinity)
-        .padding(.top, ThroSpacing.spacing5)
-        .onChange(of: editingName) { was, now in if was && !now { commitName() } }
+        .padding(.vertical, ThroSpacing.spacing2)
+        .overlay(alignment: .bottom) {
+            // A chalk rule under it, so it reads as something written on the board, not a box.
+            ChalkRule(weight: 2, seedAngle: 17).fill(ThroColor.colorMarkOnBoard)
+                .frame(height: 3)
+        }
     }
 
-    /// How many ways into this account there are, and why one is not enough (PD-032).
-    private func waysIn(_ n: Int) -> some View {
-        Note(n <= 1
-             ? "**One way into this account.** Lose it and the account is lost: THRØ has no email or "
-               + "phone recovery, on purpose. Add a passkey or a second sign-in below."
-             : "**\(n) ways into this account.** If one is lost, another still gets you in.")
+    /// Under the name: who sees it — or, while something is being done to the account, what.
+    @ViewBuilder private var status: some View {
+        if let working = account.working {
+            HStack(spacing: ThroSpacing.spacing2) {
+                ProgressView().controlSize(.small).tint(ThroColor.throChalk)
+                Text(working)
+                    .thro(ThroTypography.metadata)
+                    .foregroundStyle(ThroColor.throChalk.opacity(0.78))
+            }
+            .accessibilityElement(children: .combine)
+        } else {
+            Text(YourProfileScreen.nameNote(named: profile.named))
+                .thro(ThroTypography.metadata)
+                .foregroundStyle(ThroColor.throChalk.opacity(0.78))
+                .fixedSize(horizontal: false, vertical: true)
+        }
     }
 
     static func nameNote(named: Bool) -> String {
@@ -234,29 +280,86 @@ public struct YourProfileScreen: View {
         Task { await account.setDisplayName(trimmed) }
     }
 
-    // MARK: - the age band
+    // MARK: - the cards
 
     @ViewBuilder private var band: some View {
-        SectionHeader("Your age band")
         if profile.ageBand == "unknown" {
-            Note("THRØ does not guess ages. Saying you are 18 or over unlocks friends and a picture; "
-                 + "under 18 is welcome to play, and a guardian's confirmation for the rest is coming.")
-            ThroButton("I am 18 or over", variant: .secondary, size: .medium, icon: .check) {
-                Task { await account.declareAdult() }
+            CardGroup("Your age band",
+                      footnote: "THRØ does not guess ages. Saying you are 18 or over unlocks friends and a picture; "
+                          + "under 18 is welcome to play, and a guardian's confirmation for the rest is coming.") {
+                CardRow(icon: .check, label: "I am 18 or over", value: "Said once, by you", leads: false) {
+                    Task { await account.declareAdult() }
+                }
             }
+            .disabled(account.working != nil)
         } else {
-            SettingsRow(icon: .shield, label: "Age band",
-                        value: profile.ageBand == "adult" ? "18 or over" : "Under 18")
+            CardGroup("Your age band") {
+                CardInfoRow(icon: .shield, label: "Age band", value: profile.ageBand == "adult" ? "18 or over" : "Under 18")
+            }
         }
+    }
+
+    private var friendsLine: String {
+        guard let friends = account.friends else { return "Codes, given in person" }
+        if friends.isEmpty { return "None yet. Codes are given in person" }
+        return friends.count == 1 ? "1 friend" : "\(friends.count) friends"
+    }
+
+    /// How many ways into this account there are, and why one is not enough (PD-032).
+    static func waysInNote(_ n: Int) -> String {
+        n <= 1
+            ? "One way into this account. Lose it and the account is lost: THRØ has no email or phone "
+              + "recovery, on purpose. Add a passkey or a second sign-in above."
+            : "\(n) ways into this account. If one is lost, another still gets you in."
+    }
+
+    private var waysIn: some View {
+        CardGroup("Ways in", footnote: YourProfileScreen.waysInNote(profile.credentials ?? 1)) {
+            CardRow(icon: .lock, label: "Add a passkey", leads: false) { Task { await account.usePasskey() } }
+            CardDivider()
+            // Apple's own mark, as Sign in with Apple requires of a control that starts it.
+            CardRow(icon: nil, symbol: "apple.logo", label: "Add Sign in with Apple", leads: false) {
+                Task { await account.signInWithApple() }
+            }
+            if account.configuration.googleClientID != nil {
+                CardDivider()
+                CardRow(icon: .user, label: "Add Sign in with Google", leads: false) {
+                    Task { await account.signInWithGoogle() }
+                }
+            }
+        }
+        .disabled(account.working != nil)
+    }
+
+    private var leaving: some View {
+        CardGroup("Leaving",
+                  footnote: "Deleting takes your name, your sign-ins and your friends out of THRØ for good. "
+                      + "The next screen says exactly what goes and what stays.") {
+            CardRow(icon: .smartphone, label: "Sign out of this phone", leads: false) {
+                Task { await account.signOut(); onBack() }
+            }
+            CardDivider()
+            // Apple requires an account that can be made in an app to be deletable in it, and so
+            // does the law. It is a row rather than something hidden behind support: a person who
+            // wants out should not have to ask anybody.
+            CardRow(icon: .circleX, label: "Delete your account", tone: .destructive) {
+                commitName(); deleting = true
+            }
+        }
+        .disabled(account.working != nil)
     }
 }
 
-/// Erasure (V031), said in words before it is done.
+/// Erasure (V031, V033), said in words before it is done — and after.
 ///
 /// **Why it lists what stays.** A match is two people's record. Telling somebody "everything will be
 /// deleted" and then keeping the leg they played against their mate would be a lie; telling them
 /// nothing and keeping it would be worse. So the screen says both halves, and the half that stays
 /// is the half that names nobody once this has run.
+///
+/// **Why it says what was done.** A person who exercises a right is owed an account of what was
+/// done with it (UK GDPR Art 12(3)). So when the server answers, this screen reads its counts back —
+/// the ways in destroyed, the sessions ended — before the person leaves it.
 public struct DeleteAccountScreen: View {
     @ObservedObject private var account: AccountStore
     private let onErased: () -> Void
@@ -266,6 +369,8 @@ public struct DeleteAccountScreen: View {
     @State private var confirming = false
     @State private var problem: String?
     @State private var working = false
+    /// What the server destroyed, once it has.
+    @State private var erased: ThroAPI.Erasure?
 
     public init(account: AccountStore, onErased: @escaping () -> Void, onCancel: @escaping () -> Void) {
         self.account = account
@@ -286,40 +391,33 @@ public struct DeleteAccountScreen: View {
     public static let stays = [
         "Matches you have played. A leg is the other player's record too, and a league's table "
             + "stands on it — so the result stays, with no name on it and nothing pointing back to you.",
-        "Matches scored on this phone. They were never sent anywhere; clear them under Settings if "
-            + "you want them gone as well.",
+        "Matches scored on this phone. They were never sent anywhere unless you sent them; delete "
+            + "them from Home if you want them gone as well.",
     ]
 
     public static let finality =
         "This cannot be undone. Signing in again with the same Apple ID makes a brand new account "
         + "with nothing in it."
 
+    /// Said once it is done.
+    public static let afterwards =
+        "Matches you played stay, with no name on them. Matches scored on this phone are still here. "
+        + "You can sign in again at any time; it will be a new account with nothing in it."
+
     public var body: some View {
         VStack(spacing: 0) {
-            TopBar("Delete your account", onBack: onCancel, large: true)
+            BoardHeader(title: erased == nil ? "Delete your account" : "Your account is deleted",
+                        eyebrow: "Your profile", onBack: erased == nil ? onCancel : nil)
             ScrollView {
-                VStack(alignment: .leading, spacing: ThroSpacing.spacing4) {
-                    if let problem {
-                        Snackbar(problem, tone: .error)
+                VStack(alignment: .leading, spacing: ThroSpacing.spaceSectionGap) {
+                    if let erased {
+                        done(erased)
+                    } else {
+                        ask
                     }
-                    SectionHeader("What goes")
-                    ForEach(DeleteAccountScreen.goes, id: \.self) { line in
-                        bullet(line, icon: .circleX, tone: ThroColor.colorTextPrimary)
-                    }
-                    SectionHeader("What stays, and why")
-                    ForEach(DeleteAccountScreen.stays, id: \.self) { line in
-                        bullet(line, icon: .info, tone: ThroColor.colorTextSecondary)
-                    }
-                    Note(DeleteAccountScreen.finality, icon: .info)
-                        .padding(.top, ThroSpacing.spacing2)
-                    ThroButton(working ? "Deleting" : "Delete my account", variant: .destructive,
-                               size: .large, fullWidth: true, disabled: working, loading: working) {
-                        confirming = true
-                    }
-                    .padding(.top, ThroSpacing.spacing3)
-                    ThroButton("Keep my account", variant: .ghost, size: .large, fullWidth: true, action: onCancel)
                 }
                 .padding(.horizontal, ThroSpacing.spaceScreenGutter)
+                .padding(.top, ThroSpacing.spacing5)
                 .padding(.bottom, ThroSpacing.spacing7)
             }
         }
@@ -335,26 +433,64 @@ public struct DeleteAccountScreen: View {
         }
     }
 
-    private func bullet(_ line: String, icon: ThroIcon, tone: Color) -> some View {
-        HStack(alignment: .top, spacing: ThroSpacing.spacing3) {
-            Icon(icon, size: 18).foregroundStyle(ThroColor.colorTextSecondary)
-            Text(line)
-                .thro(ThroTypography.body)
-                .foregroundStyle(tone)
-                .fixedSize(horizontal: false, vertical: true)
+    @ViewBuilder private var ask: some View {
+        if let problem {
+            Snackbar(problem, tone: .error)
         }
-        .accessibilityElement(children: .combine)
+        CardGroup("What goes") {
+            ForEach(Array(DeleteAccountScreen.goes.enumerated()), id: \.offset) { index, line in
+                if index > 0 { CardDivider() }
+                CardLine(icon: .circleX, tone: .destructive, text: line)
+            }
+        }
+        CardGroup("What stays, and why") {
+            ForEach(Array(DeleteAccountScreen.stays.enumerated()), id: \.offset) { index, line in
+                if index > 0 { CardDivider() }
+                CardLine(icon: .info, text: line)
+            }
+        }
+        Note(DeleteAccountScreen.finality, icon: .info)
+        VStack(spacing: ThroSpacing.spacing3) {
+            ThroButton(working ? "Deleting" : "Delete my account", variant: .destructive,
+                       size: .large, fullWidth: true, disabled: working, loading: working) {
+                confirming = true
+            }
+            ThroButton("Keep my account", variant: .ghost, size: .large, fullWidth: true, action: onCancel)
+                .disabled(working)
+        }
+    }
+
+    @ViewBuilder private func done(_ gone: ThroAPI.Erasure) -> some View {
+        Note("THRØ has taken your name, your sign-ins and your friends out for good. This is what it "
+             + "destroyed, as the server reported it.", icon: .circleCheck)
+        CardGroup("What was destroyed") {
+            CardInfoRow(icon: .lock, label: "Ways in", value: "\(gone.credentials)")
+            CardDivider()
+            CardInfoRow(icon: .smartphone, label: "Sessions ended", value: "\(gone.sessions)")
+            CardDivider()
+            CardInfoRow(icon: .users, label: "Friendships ended", value: "\(gone.friendships)")
+            CardDivider()
+            CardInfoRow(icon: .circleUser, label: "Claim on your player record", value: gone.claims == 0 ? "None held" : "Revoked")
+            CardDivider()
+            CardInfoRow(icon: .shield, label: "Consents withdrawn", value: "\(gone.consents)")
+        }
+        Note(DeleteAccountScreen.afterwards, icon: .info)
+        ThroButton("Done", variant: .primary, size: .large, fullWidth: true, action: onErased)
     }
 
     private func erase() {
         working = true
+        problem = nil
         Task {
-            let why = await account.eraseAccount()
+            let outcome = await account.eraseAccount()
             working = false
-            // Signed out either way — `AccountStore.eraseAccount` says why — so the screen leaves
-            // either way, and a failure is reported rather than swallowed.
-            problem = why
-            if why == nil { onErased() }
+            switch outcome {
+            case .erased(let gone):
+                withAnimation(.throEnter(ThroMotion.motionDurationStandard)) { erased = gone }
+            case .failed(let why):
+                // The account is still there, and this is the screen that asked: it says why here.
+                problem = why
+            }
         }
     }
 }

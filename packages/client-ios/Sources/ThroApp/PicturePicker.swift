@@ -56,13 +56,26 @@ struct PicturePicker: View {
     /// Written out rather than left to the synthesised memberwise initialiser, which the private
     /// `@State` above would otherwise make private too — and this is called from two other files.
     init(subject: Subject, size: CGFloat, current: Image?, refusedBecause: String?,
-         picked: Binding<Data?>, removed: Binding<Bool>) {
+         picked: Binding<Data?>, removed: Binding<Bool>, onBoard: Bool = false) {
         self.subject = subject
         self.size = size
         self.current = current
         self.refusedBecause = refusedBecause
         self._picked = picked
         self._removed = removed
+        self.onBoard = onBoard
+    }
+
+    /// Drawn on the brand field (your profile's header) rather than on paper: chalk words, because
+    /// the brand ink the paper version uses is green on green there.
+    let onBoard: Bool
+
+    private var secondaryInk: Color { onBoard ? ThroColor.throChalk.opacity(0.78) : ThroColor.colorTextSecondary }
+
+    private func remove() {
+        removed = true
+        picked = nil
+        item = nil
     }
 
     private var preview: Image? {
@@ -85,21 +98,27 @@ struct PicturePicker: View {
                 if let refusedBecause {
                     Text(refusedBecause)
                         .thro(ThroTypography.metadata)
-                        .foregroundStyle(ThroColor.colorTextSecondary)
+                        .foregroundStyle(secondaryInk)
                         .fixedSize(horizontal: false, vertical: true)
                 } else {
                     VStack(alignment: .leading, spacing: ThroSpacing.spacing2) {
                         PhotosPicker(selection: $item, matching: .images) {
                             Text(preview == nil ? "Choose a \(noun)" : "Change \(noun)")
                                 .thro(ThroTypography.label.weight(.semibold))
-                                .foregroundStyle(ThroColor.colorTextBrand)
+                                .foregroundStyle(onBoard ? ThroColor.throChalk : ThroColor.colorTextBrand)
                                 .throTapTarget(.leading)
                         }
                         if preview != nil {
-                            ThroTextButton("Remove \(noun)", tone: .destructive) {
-                                removed = true
-                                picked = nil
-                                item = nil
+                            if onBoard {
+                                Button(action: remove) {
+                                    Text("Remove \(noun)")
+                                        .thro(ThroTypography.label)
+                                        .foregroundStyle(secondaryInk)
+                                        .throTapTarget(.leading)
+                                }
+                                .buttonStyle(ThroPressStyle(radius: ThroSpacing.radiusControl, pressedFill: ThroColor.colorBoardSunken))
+                            } else {
+                                ThroTextButton("Remove \(noun)", tone: .destructive, action: remove)
                             }
                         }
                     }
@@ -111,7 +130,7 @@ struct PicturePicker: View {
             if let problem {
                 Text(problem)
                     .thro(ThroTypography.metadata)
-                    .foregroundStyle(ThroColor.colorStatusError)
+                    .foregroundStyle(onBoard ? ThroColor.colorStatusErrorOnBoard : ThroColor.colorStatusError)
                     .fixedSize(horizontal: false, vertical: true)
             }
         }

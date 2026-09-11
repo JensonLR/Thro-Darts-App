@@ -53,7 +53,7 @@ public struct AccountScreen: View {
                               images: images, picture: picture) { showing = nil; onBack() }
         } else {
             VStack(spacing: 0) {
-                TopBar("Account", onBack: onBack, large: true)
+                BoardHeader(title: "Account", eyebrow: "THRØ", onBack: onBack)
                 ScrollView {
                     VStack(alignment: .leading, spacing: ThroSpacing.spacing4) {
                         switch account.state {
@@ -65,9 +65,11 @@ public struct AccountScreen: View {
                         server
                     }
                     .padding(.horizontal, ThroSpacing.spaceScreenGutter)
+                    .padding(.top, ThroSpacing.spacing5)
                     .padding(.bottom, ThroSpacing.spacing6)
                 }
             }
+            .background(ThroColor.colorBackgroundPrimary.ignoresSafeArea())
             .task { await account.start() }
         }
     }
@@ -191,7 +193,7 @@ public struct InboxScreen: View {
 
     public var body: some View {
         VStack(spacing: 0) {
-            TopBar("Your inbox", onBack: onBack, large: true)
+            BoardHeader(title: "Your inbox", eyebrow: "Your profile", onBack: onBack)
             ScrollView {
                 VStack(alignment: .leading, spacing: ThroSpacing.spacing4) {
                     if let problem {
@@ -216,8 +218,10 @@ public struct InboxScreen: View {
                     }
                 }
                 .padding(.horizontal, ThroSpacing.spaceScreenGutter)
+                .padding(.vertical, ThroSpacing.spacing5)
             }
         }
+        .background(ThroColor.colorBackgroundPrimary.ignoresSafeArea())
         .task { await load() }
     }
 
@@ -263,7 +267,7 @@ public struct DiscoveryScreen: View {
 
     public var body: some View {
         VStack(spacing: 0) {
-            TopBar("Darts you can play", onBack: onBack, large: true)
+            BoardHeader(title: "Darts you can play", eyebrow: "Your profile", onBack: onBack)
             ScrollView {
                 VStack(alignment: .leading, spacing: ThroSpacing.spacing4) {
                     if let problem {
@@ -292,8 +296,10 @@ public struct DiscoveryScreen: View {
                     }
                 }
                 .padding(.horizontal, ThroSpacing.spaceScreenGutter)
+                .padding(.vertical, ThroSpacing.spacing5)
             }
         }
+        .background(ThroColor.colorBackgroundPrimary.ignoresSafeArea())
         .task { await load() }
     }
 
@@ -345,7 +351,7 @@ public struct FriendsScreen: View {
 
     public var body: some View {
         VStack(spacing: 0) {
-            TopBar("Friends", eyebrow: "Account", onBack: onBack)
+            BoardHeader(title: "Friends", eyebrow: "Your profile", onBack: onBack)
             ScrollView {
                 VStack(alignment: .leading, spacing: ThroSpacing.spacing3) {
                     inviteSlate
@@ -419,7 +425,7 @@ public struct FriendsScreen: View {
                         .thro(ThroTypography.metadata).foregroundStyle(ThroColor.colorTextOnBoardSecondary)
                         .fixedSize(horizontal: false, vertical: true)
                     HStack(spacing: ThroSpacing.spacing3) {
-                        ShareLink(item: "My THRØ friend code is \(invite.spoken) — enter it under Account → Friends.") {
+                        ShareLink(item: "My THRØ friend code is \(invite.spoken) — enter it in THRØ under You → Friends.") {
                             Text("SHARE").thro(ThroTypography.labelStrong.uppercase(true).tracking(em: 0.06))
                                 .foregroundStyle(ThroColor.colorTextOnBoard).padding(.horizontal, ThroSpacing.spacing4)
                         }
