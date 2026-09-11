@@ -366,12 +366,16 @@ public actor ThroAPI {
         public let alreadyHeld: Int
         public let opened: Bool
         public let selfReported: Bool
+        /// How the match ended, when this send stored its ending: `retired` or `abandoned` (V034).
+        /// Optional, so an answer from a server that predates endings still reads.
+        public let ending: String?
 
         public init(matchId: UUID, opponentId: UUID, visits: Int, retractions: Int,
-                    alreadyHeld: Int, opened: Bool, selfReported: Bool) {
+                    alreadyHeld: Int, opened: Bool, selfReported: Bool, ending: String? = nil) {
             self.matchId = matchId; self.opponentId = opponentId
             self.visits = visits; self.retractions = retractions
             self.alreadyHeld = alreadyHeld; self.opened = opened; self.selfReported = selfReported
+            self.ending = ending
         }
     }
 

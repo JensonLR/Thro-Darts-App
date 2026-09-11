@@ -3168,3 +3168,72 @@ up a signed-in account over a transport that answers from memory, so the signed-
 a simulator that cannot sign in to anything; a Release build does not contain it.
 
 Counts: client 682, API 26 suites, HTTP 41 properties, schema 92.
+
+## A match that ended short is sent as it ended (PD-042, V034, V035)
+
+PD-040's upload refused a retired or abandoned match: the server had no event for an ending, and the
+visits alone would have left THRØ saying the match was still going. **The ending is now an event.** The
+phone's retirement or abandonment row (PD-016) is sent last, like the rest of the journal, and the server
+stores it as `MatchEndedShort` on the match stream — the same role and the same device sequence as the
+visits before it. The payload says how it ended and, for a retirement, which seat retired; the winner is
+the other seat and is not stored, because a stored copy of an inference is a second thing that can
+disagree with the first. **Nothing is added after it**: a trigger refuses a visit, a retraction or a
+second ending for a match that has ended, except a row the stream already holds — an upload is resent
+whole, and `ON CONFLICT DO NOTHING` has to be reached for the resend to land as nothing. An official's
+correction and the trust events are still allowed; they are about the record, and an ended match is when
+they happen. The upload refuses the same things first, in words: a row after the ending, a second ending,
+a retirement that names a person rather than a seat.
+
+**V034's CHECK let NULL through, and the schema properties caught it the first time they ran.** It read
+`ending = 'abandoned' OR (ending = 'retired' AND seat IN ('home','away'))`: a retirement with no seat
+makes the second half NULL, the whole expression NULL, and a CHECK passes on NULL. The upload never sends
+such a row — it checks the seat itself — which is why no Kotlin test could see it. V034 had already
+reached staging, holding no ending rows, because my chained command took `grep` finding the failure lines
+for the properties passing; the chain now reads the properties' own summary before it migrates anything.
+V035 replaces the constraint forward with one that cannot be NULL (`IS NOT DISTINCT FROM`, and a missing
+seat is false), and a new property holds an ending that says nothing at all.
+
+The phone: `MatchUpload` sends the ending. The refusal and its sentence are gone, and the test that held
+the refusal was replaced by three that hold what replaced it. `ThroAPI.Sent.ending` reads the server's
+answer and is optional, so an older server still decodes; a person is told *"Sent 12 visits, 1 undo and
+the retirement."* The result screen still said *"Sending results to THRØ is not built yet"* after PD-040
+built it; it says where to send it.
+
+Counts: client 684, API 26 suites, HTTP 41 properties, schema 96.
+
+## Nobody signed in could watch a match, and now a new visit arrives on commit (V036)
+
+Reading the stream end to end before building live watching on it found that no signed-in person could
+ever have watched a match. The route narrowed its connection to the match role and **then** asked the
+authenticator who the caller was — and the production authenticator resolves a bearer token against the
+identity schema, which the match role cannot see at all: *permission denied for schema identity* is what
+that role gets for the query today. The route's one test used the development principal, which reads
+nothing, so it stayed green for the route's whole life. Identity is read first now, under the role every
+other request starts with, and only then is the connection narrowed; a new test signs in for real and
+watches.
+
+The same reading found the grant door open too wide. `Grants.roleFor` answers what was ever issued —
+revoked, expired, or scoped to a different event — which is right for stamping a command and wrong for a
+door. The stream asks `liveRoleFor` now: in force, and for a grant that names no match, only on its own
+event's matches. And an open stream asks again once a minute whether its watcher may still watch, so a
+revoked grant or an ended session closes it rather than lasting as long as the connection (ADR-007's
+re-authorisation, which the first version did not do).
+
+**ADR-007's LISTEN/NOTIFY, built (V036).** An insert into the evidence log notifies `thro_match` with the
+match id, delivered on commit; one connection in the server listens while anybody is watching and wakes the
+streams of that match. The notification is a hint to re-read and never the transport — a woken stream reads
+the log exactly as a polling one does, and every stream still polls once a second beneath it — so a
+listener that is down costs latency and nothing else. It holds its connection only while somebody is
+watching, because a connection held open all day would keep Neon's free compute awake for nobody. With the
+poll set to thirty seconds, the test's new visit reached its watcher in 3 ms.
+
+Two slips of mine on the way, recorded: the latency test's second visit was the same seat's, which the
+engine rightly refused, and the check had no message, so it failed as *"Expected value to be true."*; and
+my command moved staging to V036 on the schema properties alone while the Kotlin suite was red. V036 only
+adds a notification the deployed server ignores, so it was harmless — the gate now needs both.
+
+On the phone: the team front was one slot loaded only while it was empty, so after opening one team,
+opening another showed the first. It now knows which team it holds and loads the one it is asked for, with
+two tests. The team code's share text sent people to a Discover button named something else.
+
+Counts: client 686, API 26 suites, HTTP 41 properties, schema 96.

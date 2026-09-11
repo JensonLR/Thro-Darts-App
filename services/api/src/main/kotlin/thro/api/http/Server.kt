@@ -18,6 +18,7 @@ import io.ktor.http.ContentType
 import io.ktor.http.HttpStatusCode
 import io.ktor.server.application.Application
 import io.ktor.server.application.ApplicationCall
+import io.ktor.server.application.ApplicationStopped
 import io.ktor.server.application.call
 import io.ktor.server.application.install
 import io.ktor.server.request.receiveText
@@ -117,6 +118,10 @@ private class Req(val call: ApplicationCall, val body: String, private val deps:
 
 public fun Application.thro(deps: Deps) {
     val verifier = IdTokenVerifier(deps.keys, deps.now)
+    // One LISTEN connection for every open stream (V036), held only while somebody is watching and
+    // told to go when the server does.
+    val notifier = MatchNotifier(deps.connect)
+    monitor.subscribe(ApplicationStopped) { notifier.stop() }
     val handlers: Map<String, (Req) -> Http> = mapOf(
         "auth.apple" to { r -> signIn(r.connection(), deps, verifier, Provider.APPLE, r.body, r.principal) },
         "auth.google" to { r -> signIn(r.connection(), deps, verifier, Provider.GOOGLE, r.body, r.principal) },
@@ -171,7 +176,7 @@ public fun Application.thro(deps: Deps) {
 
     routing {
         for (e in Contract.endpoints) {
-            if (e.stream) { matchStream(e.path, deps); continue }
+            if (e.stream) { matchStream(e.path, deps, notifier); continue }
             val handle: suspend (ApplicationCall) -> Unit = { call ->
                 // The body is bounded before it is read, and read before any connection is held:
                 // a declared length over the cap is 413, no declared length is 411, and what
@@ -432,8 +437,9 @@ private fun upload(c: Connection, deps: Deps, p: Principal, body: String): Http 
         val r = raw as? Map<*, *> ?: throw IllegalArgumentException("every row is an object")
         Uploads.Row(
             deviceSeq = (r["deviceSeq"] as? Number)?.toLong() ?: throw IllegalArgumentException("deviceSeq must be an integer"),
-            kind = r["kind"] as? String ?: throw IllegalArgumentException("kind must be visit or retraction"),
-            seat = r["seat"] as? String ?: throw IllegalArgumentException("seat must be home or away"),
+            kind = r["kind"] as? String ?: throw IllegalArgumentException("kind must be visit, retraction, retirement or abandonment"),
+            // An abandonment names nobody, so it may come without a seat; every other row says one.
+            seat = r["seat"] as? String ?: if (r["kind"] == "abandonment") "home" else throw IllegalArgumentException("seat must be home or away"),
             visitTotal = (r["visitTotal"] as? Number)?.toInt(),
             correctsSeq = (r["correctsSeq"] as? Number)?.toLong(),
             occurredAt = try { Instant.parse(r["occurredAt"] as? String ?: "") } catch (e: Exception) { throw IllegalArgumentException("occurredAt must be an instant") },
@@ -444,7 +450,8 @@ private fun upload(c: Connection, deps: Deps, p: Principal, body: String): Http 
     return when (val out = Uploads(c, deps.now).receive(p.subject, uuid("deviceId"), uuid("matchId"), str(m, "seat"), format, rows)) {
         is Uploads.Result.Refused -> Http(422, """{"error":${Contract.q(out.why)}}""")
         is Uploads.Result.Stored -> Http(200, """{"matchId":"${out.matchId}","opponentId":"${out.opponentId}","visits":${out.visits},""" +
-            """"retractions":${out.retractions},"alreadyHeld":${out.alreadyHeld},"opened":${out.opened},"selfReported":true}""")
+            """"retractions":${out.retractions},"alreadyHeld":${out.alreadyHeld},"opened":${out.opened},""" +
+            """"ending":${out.ending?.let { "\"$it\"" } ?: "null"},"selfReported":true}""")
     }
 }
 

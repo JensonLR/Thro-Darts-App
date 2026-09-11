@@ -1955,3 +1955,29 @@ is said on the page that asked. The state changes only when who is signed in cha
 How long a cached profile may be trusted without the server confirming it. Today it is shown until the
 server says otherwise, which is the offline-first answer; an account that was suspended or restricted
 would need the server to reach the phone first, and nothing in THRØ suspends an account yet.
+
+## PD-042 — A match that ended short is sent as it ended
+
+**Taken on delegated authority, 2026-09-11**, closing the gap PD-040 left open: its upload refused a
+retired or abandoned match, because the server had no event for an ending and the visits alone would
+have said the match was still going. Reversible in the sense that matters: nothing sent can be edited,
+only added to, and nothing is added after an ending.
+
+### Decided
+
+**One event, `MatchEndedShort`, on the match stream (V034, V035).** The phone's retirement or
+abandonment row (PD-016) is sent last, as the rest of the journal is sent; the server stores it in the
+same device sequence as the visits before it, written by the same role. Its payload says how the match
+ended and, for a retirement, which seat retired. **The winner is not stored**: it is the other seat, and
+a stored copy of an inference is a second thing that can disagree with the first. An abandonment names
+nobody and has no winner.
+
+**Nothing is added after it.** The table refuses a visit, a retraction or a second ending for a match
+that has ended, except a row it already holds, so a phone that resends the whole match still lands as
+nothing (PD-040's idempotence). An official's correction and the trust events are not refused: they are
+about the record, and a match that has ended is exactly when they happen.
+
+### What this does not decide
+
+Whether a retirement counts towards anything a rating would read (OD-013), and what a league does with
+a retirement in a fixture; both read the ending this stores, and neither is decided by storing it.

@@ -400,6 +400,57 @@ if echo "$r" | grep -qi 'every stream must have a named owner'; then
 else bad "an event type nobody owns is refused" "$(echo "$r" | head -1)"; fi
 
 echo
+echo "== a match that ended short stays ended (V034) =="
+M2=$($PSQL -c "SELECT gen_random_uuid();")
+$PSQL -c "SET ROLE app_match; INSERT INTO evidence.match
+  (match_id,home_id,away_id,starting_score,in_rule,out_rule,
+   legs_mode,legs_target,throw_first)
+  VALUES ('$M2', '$DA', '$DB', 501, 'straight', 'double', 'first_to', 5, '$DA');" >/dev/null 2>&1
+
+r=$($PSQL -c "SET ROLE app_match; INSERT INTO evidence.event
+  (event_id,match_id,device_id,device_seq,event_type,schema_version,correlation_id,actor_id,
+   actor_role,occurred_at,occurred_tz,payload)
+  VALUES (gen_random_uuid(),'$M2','$DA',1,'MatchEndedShort',1,gen_random_uuid(),'$DA',
+   'participant',now(),'Europe/London','{\"ending\":\"retired\"}'::jsonb);" 2>&1)
+if echo "$r" | grep -qi 'an_ending_says_how'; then
+  ok "a retirement says which seat retired"
+else bad "a retirement says which seat retired" "$(echo "$r" | head -1)"; fi
+
+# V034 let this through: with nothing to compare, its CHECK came out NULL, and NULL passes a CHECK.
+r=$($PSQL -c "SET ROLE app_match; INSERT INTO evidence.event
+  (event_id,match_id,device_id,device_seq,event_type,schema_version,correlation_id,actor_id,
+   actor_role,occurred_at,occurred_tz,payload)
+  VALUES (gen_random_uuid(),'$M2','$DA',5,'MatchEndedShort',1,gen_random_uuid(),'$DA',
+   'participant',now(),'Europe/London','{}'::jsonb);" 2>&1)
+if echo "$r" | grep -qi 'an_ending_says_how'; then
+  ok "an ending says how it ended"
+else bad "an ending says how it ended" "$(echo "$r" | head -1)"; fi
+
+$PSQL -c "SET ROLE app_match; INSERT INTO evidence.event
+  (event_id,match_id,device_id,device_seq,event_type,schema_version,correlation_id,actor_id,
+   actor_role,occurred_at,occurred_tz,payload)
+  VALUES (gen_random_uuid(),'$M2','$DA',2,'MatchEndedShort',1,gen_random_uuid(),'$DA',
+   'participant',now(),'Europe/London','{\"ending\":\"abandoned\"}'::jsonb);" >/dev/null 2>&1
+r=$($PSQL -c "SET ROLE app_match; INSERT INTO evidence.event
+  (event_id,match_id,device_id,device_seq,event_type,schema_version,correlation_id,actor_id,
+   actor_role,occurred_at,occurred_tz,payload)
+  VALUES (gen_random_uuid(),'$M2','$DA',3,'VisitRecorded',1,gen_random_uuid(),'$DA',
+   'participant',now(),'Europe/London','{\"player\":\"home\",\"visitTotal\":60}'::jsonb);" 2>&1)
+if echo "$r" | grep -qi 'has ended'; then
+  ok "nothing is added to a match after its end"
+else bad "nothing is added to a match after its end" "$(echo "$r" | head -1)"; fi
+
+r=$($PSQL -c "SET ROLE app_match; INSERT INTO evidence.event
+  (event_id,match_id,device_id,device_seq,event_type,schema_version,correlation_id,actor_id,
+   actor_role,occurred_at,occurred_tz,payload)
+  VALUES (gen_random_uuid(),'$M2','$DA',2,'MatchEndedShort',1,gen_random_uuid(),'$DA',
+   'participant',now(),'Europe/London','{\"ending\":\"abandoned\"}'::jsonb)
+  ON CONFLICT (match_id, device_id, device_seq) DO NOTHING;" 2>&1)
+if echo "$r" | grep -qi 'error'; then
+  bad "a resend of the ending itself still lands as nothing" "$(echo "$r" | head -1)"
+else ok "a resend of the ending itself still lands as nothing"; fi
+
+echo
 echo "== identity, and age as a dimension that cannot be forgotten =="
 ACC=$($PSQL -c "SELECT gen_random_uuid();")
 $PSQL -c "SET ROLE app_competition; INSERT INTO identity.account (account_id, display_name)

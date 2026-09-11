@@ -86,7 +86,7 @@ routes are mounted from. In brief:
 | `POST /v1/friends/{accountId}/remove` | principal | End a friendship from this side; recorded, never deleted |
 | `PUT /v1/me/profile` | principal | `displayName` and/or `ageBand` (adult or minor, self-declared, never back to unknown) |
 | `GET /v1/events?from` | anyone | Open-entry events that have not started, with their public venues: the notice on the pub door. Entry counts and eligibility stay on `/v1/me/discovery` |
-| `GET /v1/streams/match/{matchId}` | a participant, a grant holder, or an official of the event | `text/event-stream`: every event of the match in commit order, then each new one; `Last-Event-ID` resumes; a comment ping every 15 s; the client treats 45 quiet seconds as stale (ADR-007) |
+| `GET /v1/streams/match/{matchId}` | a participant, the holder of a grant in force, or an official of the event | `text/event-stream`: every event of the match in commit order, then each new one — woken by the database the moment one commits (V036), and still polling once a second beneath that; `Last-Event-ID` resumes; a comment ping every 15 s; the client treats 45 quiet seconds as stale; who may watch is asked again every minute, so a revoked grant or an ended session closes the stream (ADR-007) |
 | `GET /healthz` | anyone | Liveness and the schema version |
 | `GET /openapi.json` | anyone | This contract |
 
@@ -102,10 +102,9 @@ THRO_WRITE_OPENAPI=1 gradle -p services/api test --tests 'thro.api.HttpTest'
 ## Not built
 
 The other ADR-007 streams (`event:{id}:public`, `event:{id}:queue`, `event:{id}:organiser`,
-`player:{id}:inbox`) and its LISTEN/NOTIFY hint — the match stream polls the log once a second,
-which is a latency choice, not a correctness one; email recovery (PD-032 says why not yet); a
-client generated from the schema (ADR-001's acceptance condition, waiting on the organiser
-console).
+`player:{id}:inbox`) — the match stream is the only one, woken by LISTEN/NOTIFY since V036; email
+recovery (PD-032 says why not yet); a client generated from the schema (ADR-001's acceptance
+condition, waiting on the organiser console).
 
 ## Rationing the routes a stranger may call
 

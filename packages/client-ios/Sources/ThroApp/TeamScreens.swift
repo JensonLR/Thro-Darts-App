@@ -13,12 +13,31 @@ public final class TeamsModel: ObservableObject {
     public enum Loading<T: Equatable>: Equatable { case idle, loading, loaded(T), failed(String) }
     @Published public private(set) var mine: Loading<[TeamSummary]> = .idle
     @Published public private(set) var front: Loading<TeamFront> = .idle
+    /// Which team `front` is for. The front is one slot, and the first version loaded it only while it
+    /// was empty — so after one team had been opened, opening a second showed the first.
+    @Published public private(set) var frontFor: UUID?
     @Published public private(set) var invite: TeamInvite?
     @Published public private(set) var note: String?
 
     public init() {}
 
     public var list: [TeamSummary]? { if case .loaded(let l) = mine { return l } else { return nil } }
+
+    /// The front, when it is for [teamId]; nil while another team's is still held.
+    public func front(for teamId: UUID) -> Loading<TeamFront> {
+        frontFor == teamId ? front : .loading
+    }
+
+    /// Shows [teamId]'s front: loads it unless it is already the one held, or on its way.
+    public func show(_ teamId: UUID, _ api: ThroAPI?) async {
+        if frontFor == teamId {
+            switch front {
+            case .loaded, .loading: return
+            case .idle, .failed: break
+            }
+        }
+        await open(teamId, api)
+    }
 
     public func loadMine(_ api: ThroAPI?, signedIn: Bool) async {
         guard let api, signedIn else { mine = .idle; return }
@@ -27,6 +46,7 @@ public final class TeamsModel: ObservableObject {
     }
 
     public func open(_ teamId: UUID, _ api: ThroAPI?) async {
+        frontFor = teamId
         guard let api else { front = .failed("This build names no server."); return }
         front = .loading; invite = nil; note = nil
         do { front = .loaded(try await api.teamFront(teamId)) } catch { front = .failed(ThroAPI.refusal(error) ?? LeaguesModel.explain(error, what: "the team")) }
@@ -101,7 +121,7 @@ public struct TeamFrontScreen: View {
     public var body: some View {
         VStack(spacing: 0) {
             TopBar("Team", eyebrow: "On THRØ", onBack: onBack)
-            switch teams.front {
+            switch teams.front(for: teamId) {
             case .idle, .loading:
                 ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity)
             case .failed(let why):
@@ -114,7 +134,8 @@ public struct TeamFrontScreen: View {
             }
         }
         .background(ThroColor.colorBackgroundPrimary.ignoresSafeArea())
-        .task { if case .idle = teams.front { await teams.open(teamId, api) } }
+        // Keyed on the team, so a second team opened after the first is loaded rather than shown as the first.
+        .task(id: teamId) { await teams.show(teamId, api) }
     }
 
     private func loaded(_ front: TeamFront) -> some View {
@@ -142,7 +163,7 @@ public struct TeamFrontScreen: View {
                             Text("Say it to the side or share it. Good until \(invite.expiresAt.formatted(.dateTime.day().month(.abbreviated))), for up to \(invite.maxUses) people.")
                                 .thro(ThroTypography.metadata).foregroundStyle(ThroColor.colorTextOnBoardSecondary)
                                 .fixedSize(horizontal: false, vertical: true)
-                            ShareLink(item: "Join \(front.name) on THRØ: the team code is \(invite.spoken). Enter it under Discover → Join a team.") {
+                            ShareLink(item: "Join \(front.name) on THRØ: the team code is \(invite.spoken). Enter it in THRØ under Discover → Join or start.") {
                                 Text("SHARE").thro(ThroTypography.labelStrong.uppercase(true).tracking(em: 0.06))
                                     .foregroundStyle(ThroColor.colorTextOnBoard).padding(.horizontal, ThroSpacing.spacing4)
                             }

@@ -5,6 +5,7 @@ import java.time.Instant
 import java.util.UUID
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
 import kotlin.test.assertNotEquals
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
@@ -164,6 +165,96 @@ class UploadTest {
             assertTrue(out is Uploads.Result.Refused)
             assertEquals(0, count(c, "SELECT count(*) FROM evidence.event WHERE match_id = '$match'"))
             assertNull(one(c, "SELECT match_id::text FROM evidence.match WHERE match_id = '$match'"))
+        }
+    }
+
+    // --- a match that ended short (PD-016, V034) ---------------------------------------------------
+
+    private fun ending(seq: Long, kind: String, seat: String = "home") =
+        Uploads.Row(seq, kind, seat, null, null, at.plusSeconds(seq * 20), "Europe/London")
+
+    private fun endingPayload(c: Connection, match: UUID, key: String): String? =
+        one(c, "SELECT payload->>'$key' FROM evidence.event WHERE match_id = '$match' AND event_type = 'MatchEndedShort'")
+
+    @Test
+    fun `a retirement arrives last, says who retired, and the winner is not stored twice`() {
+        if (!configured) return
+        migrated().use { c ->
+            val me = player(c); val match = UUID.randomUUID()
+            val out = Uploads(c) { at }.receive(me, UUID.randomUUID(), match, "home", format,
+                listOf(visit(1, "home", 60), visit(2, "away", 45), ending(3, "retirement", "away")))
+            val stored = out as? Uploads.Result.Stored ?: error("refused: $out")
+            assertEquals("retired", stored.ending)
+            assertEquals(2, stored.visits)
+            assertEquals("retired", endingPayload(c, match, "ending"))
+            assertEquals("away", endingPayload(c, match, "seat"), "the seat that retired")
+            // The winner is the other seat, worked out on read. A stored copy would be a second thing
+            // that could disagree with the first.
+            assertNull(endingPayload(c, match, "winner"))
+            assertEquals("3", one(c, "SELECT max(device_seq)::text FROM evidence.event WHERE match_id = '$match'"),
+                         "and it is the last thing in the stream")
+        }
+    }
+
+    @Test
+    fun `an abandonment names nobody`() {
+        if (!configured) return
+        migrated().use { c ->
+            val me = player(c); val match = UUID.randomUUID()
+            val stored = Uploads(c) { at }.receive(me, UUID.randomUUID(), match, "home", format,
+                listOf(visit(1, "home", 60), ending(2, "abandonment"))) as Uploads.Result.Stored
+            assertEquals("abandoned", stored.ending)
+            assertEquals("abandoned", endingPayload(c, match, "ending"))
+            assertNull(endingPayload(c, match, "seat"), "nobody retired, so no seat is named")
+        }
+    }
+
+    @Test
+    fun `nothing is added after the end, and resending the whole match still lands as nothing`() {
+        if (!configured) return
+        migrated().use { c ->
+            val me = player(c); val device = UUID.randomUUID(); val match = UUID.randomUUID()
+            val uploads = Uploads(c) { at }
+            val whole = listOf(visit(1, "home", 60), ending(2, "abandonment"))
+            uploads.receive(me, device, match, "home", format, whole) as Uploads.Result.Stored
+
+            // The same match again, as a phone that lost the answer would send it: every row is here.
+            val again = uploads.receive(me, device, match, "home", format, whole) as Uploads.Result.Stored
+            assertEquals(2, again.alreadyHeld)
+            assertNull(again.ending, "nothing new was stored, so nothing new is claimed")
+
+            // A visit written after the end is refused in words, and nothing lands.
+            val later = uploads.receive(me, device, match, "home", format, listOf(visit(3, "home", 100)))
+            assertTrue((later as Uploads.Result.Refused).why.contains("has ended"), later.why)
+            assertEquals(2, count(c, "SELECT count(*) FROM evidence.event WHERE match_id = '$match'"))
+
+            // And the table refuses one whoever asks, so a route written later cannot forget (V034).
+            val refused = assertFailsWith<Exception> {
+                c.createStatement().use { st ->
+                    st.execute("""INSERT INTO evidence.event
+                        (event_id, match_id, device_id, device_seq, event_type, schema_version, correlation_id,
+                         actor_id, actor_role, occurred_at, occurred_tz, payload, authority)
+                        VALUES (gen_random_uuid(), '$match', '$device', 9, 'VisitRecorded', 1, gen_random_uuid(),
+                         '$me', 'participant', now(), 'Europe/London', '{"player":"home","visitTotal":60}'::jsonb, 'ungranted')""")
+                }
+            }
+            assertTrue(refused.message!!.contains("has ended"), refused.message!!)
+        }
+    }
+
+    @Test
+    fun `a journal with a row after its ending is refused, in words`() {
+        if (!configured) return
+        migrated().use { c ->
+            val me = player(c); val uploads = Uploads(c) { at }
+            fun why(rows: List<Uploads.Row>) =
+                (uploads.receive(me, UUID.randomUUID(), UUID.randomUUID(), "home", format, rows) as Uploads.Result.Refused).why
+            assertTrue(why(listOf(visit(1, "home", 60), ending(2, "abandonment"), visit(3, "home", 20)))
+                .contains("nothing comes after the end"))
+            assertTrue(why(listOf(visit(1, "home", 60), ending(2, "abandonment"), ending(3, "retirement", "home")))
+                .contains("nothing comes after the end"), "a match ends once")
+            assertTrue(why(listOf(visit(1, "home", 60), ending(2, "retirement", "Jenson")))
+                .contains("which seat retired"), "a seat, never a person")
         }
     }
 }

@@ -54,14 +54,34 @@ final class MatchUploadTests: XCTestCase {
         XCTAssertEqual(sent.map(\.deviceSeq), [1, 2, 3])
     }
 
-    func testAMatchThatEndedEarlyIsRefusedRatherThanSentAsUnfinished() {
-        // Sending the visits alone would leave THRØ holding a record that says the match is still
-        // going, which is not what happened. Refusing and saying so is the honest answer.
-        for ending in [JournalEntry.Kind.retirement, .abandonment] {
-            let reason = why([entry(1, .visit, .home, total: 60), entry(2, ending)])
-            XCTAssertEqual(reason, MatchUpload.endedEarly, "\(ending)")
-            XCTAssertTrue(reason.contains("not what happened"))
+    // A match that ended short (PD-016). This used to be refused — sending the visits alone would
+    // have left THRØ saying the match was still going — and V034 gave the server an ending to hold, so
+    // the refusal became the thing to replace. What stays true: it never goes as unfinished.
+
+    func testARetirementIsSentLastAndSaysWhoRetired() {
+        let sent = rows([entry(1, .visit, .home, total: 60), entry(2, .visit, .away, total: 45),
+                         entry(3, .retirement, .away)])
+        XCTAssertEqual(sent.map(\.kind), ["visit", "visit", "retirement"], "the ending is the last row")
+        XCTAssertEqual(sent.last?.seat, "away", "the seat that retired; the winner is worked out, not sent")
+        XCTAssertNil(sent.last?.visitTotal, "an ending scores nothing")
+        XCTAssertNil(sent.last?.correctsSeq)
+    }
+
+    func testAnAbandonmentIsSentAndScoresNothing() {
+        let sent = rows([entry(1, .visit, .home, total: 60), entry(2, .abandonment)])
+        XCTAssertEqual(sent.map(\.kind), ["visit", "abandonment"])
+        XCTAssertNil(sent.last?.visitTotal)
+    }
+
+    func testWhatAPersonIsToldSaysHowTheMatchEnded() {
+        func sent(_ v: Int, _ ending: String?) -> ThroAPI.Sent {
+            ThroAPI.Sent(matchId: UUID(), opponentId: UUID(), visits: v, retractions: 0,
+                         alreadyHeld: 0, opened: true, selfReported: true, ending: ending)
         }
+        XCTAssertTrue(MatchUpload.done(sent(2, "retired")).hasPrefix("Sent 2 visits and the retirement."))
+        XCTAssertTrue(MatchUpload.done(sent(0, "abandoned")).hasPrefix("Sent the abandonment."),
+                      "a resend that only added the ending says so, and nothing else")
+        XCTAssertEqual(MatchUpload.sentence(["12 visits", "1 undo", "the retirement"]), "12 visits, 1 undo and the retirement")
     }
 
     func testARowFromANewerBuildIsNeverGuessedAt() {

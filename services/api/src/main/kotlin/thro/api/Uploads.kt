@@ -26,13 +26,17 @@ import thro.engine.MatchFormat
  *
  * **And it arrives self-reported.** PD-011 wants both players to confirm a result; an upload from
  * one phone is one player's word, recorded as exactly that and evidence of nothing more.
+ *
+ * **A match that ended short arrives as it ended (PD-016, V034).** The journal's retirement or
+ * abandonment row becomes a `MatchEndedShort` event, last in the stream, and nothing is added after
+ * it — so THRØ never holds a record saying a match is still going when the people in it stopped.
  */
 public class Uploads(private val connection: Connection, private val now: () -> Instant = { Instant.now() }) {
 
     /** One row of a device's journal, as the phone wrote it. */
     public data class Row(
         val deviceSeq: Long,
-        /** `visit` or `retraction`. */
+        /** `visit`, `retraction`, or an ending: `retirement` (by [seat]) or `abandonment` (by nobody). */
         val kind: String,
         /** The seat that threw: `home` or `away`. */
         val seat: String,
@@ -53,6 +57,8 @@ public class Uploads(private val connection: Connection, private val now: () -> 
             /** Rows that were already here — a resumed upload, or the same one sent twice. */
             val alreadyHeld: Int,
             val opened: Boolean,
+            /** How the match ended, when this call stored its ending: `retired` or `abandoned`. */
+            val ending: String? = null,
         ) : Result
 
         public data class Refused(val why: String) : Result
@@ -80,9 +86,13 @@ public class Uploads(private val connection: Connection, private val now: () -> 
         // The journal is a sequence. Out of order, or two rows claiming one place in it, and this is
         // not a journal — it is a bag of events with a story attached.
         var previous = 0L
+        var ended = false
         for (row in rows) {
             if (row.deviceSeq <= previous) return Result.Refused("the rows are not in the order the device wrote them")
             previous = row.deviceSeq
+            // An ending is the last thing a device writes about a match — the journal refuses anything
+            // after one — so a journal with a row after its ending is not a journal.
+            if (ended) return Result.Refused("nothing comes after the end of a match")
             when (row.kind) {
                 "visit" -> {
                     val total = row.visitTotal ?: return Result.Refused("a visit with no total is not a visit")
@@ -98,6 +108,13 @@ public class Uploads(private val connection: Connection, private val now: () -> 
                         return Result.Refused("a retraction strikes a visit that is not in this match")
                     }
                 }
+                "retirement" -> {
+                    if (row.seat != "home" && row.seat != "away") {
+                        return Result.Refused("a retirement says which seat retired, home or away")
+                    }
+                    ended = true
+                }
+                "abandonment" -> ended = true
                 else -> return Result.Refused("THRØ does not know how to store a ${row.kind}")
             }
         }
@@ -124,11 +141,18 @@ public class Uploads(private val connection: Connection, private val now: () -> 
                 }
                 opponentId = existing.idFor(if (seat == "home") "away" else "home")
                     ?: return Result.Refused("that match has no other seat").also { connection.rollback() }
+                // A resend of a match that has ended is fine: every row is already here and lands as
+                // nothing. A NEW row after the end is refused in words here, before the trigger that
+                // would refuse it anyway (V034) turns it into a fault.
+                if (hasEnded(matchId) && rows.any { eventIdOf(matchId, deviceId, it.deviceSeq) == null }) {
+                    connection.rollback()
+                    return Result.Refused("that match has ended, so nothing more can be added to it")
+                }
             }
 
             val correlation = UUID.randomUUID()
             val bySeq = HashMap<Long, UUID>()     // device_seq -> event id, for a retraction to point at
-            var visits = 0; var retractions = 0; var already = 0
+            var visits = 0; var retractions = 0; var already = 0; var ending: String? = null
             for (row in rows) {
                 val eventId = UUID.randomUUID()
                 val corrects = row.correctsSeq?.let { bySeq[it] ?: eventIdOf(matchId, deviceId, it) }
@@ -138,14 +162,19 @@ public class Uploads(private val connection: Connection, private val now: () -> 
                 }
                 val wrote = append(eventId, matchId, deviceId, row, uploaderPlayerId, correlation, corrects)
                 if (wrote) {
-                    if (row.kind == "visit") visits++ else retractions++
+                    when (row.kind) {
+                        "visit" -> visits++
+                        "retraction" -> retractions++
+                        "retirement" -> ending = "retired"
+                        else -> ending = "abandoned"
+                    }
                 } else {
                     already++
                 }
                 bySeq[row.deviceSeq] = eventIdOf(matchId, deviceId, row.deviceSeq) ?: eventId
             }
             connection.commit()
-            return Result.Stored(matchId, opponentId, visits, retractions, already, opened)
+            return Result.Stored(matchId, opponentId, visits, retractions, already, opened, ending)
         } catch (e: Exception) {
             connection.rollback()
             throw e
@@ -180,16 +209,27 @@ public class Uploads(private val connection: Connection, private val now: () -> 
             ps.executeQuery().use { rs -> if (rs.next()) rs.getObject(1) as UUID else null }
         }
 
+    /** Whether this match's stream already holds its ending (V034). */
+    private fun hasEnded(matchId: UUID): Boolean =
+        connection.prepareStatement("SELECT 1 FROM evidence.event WHERE match_id = ? AND event_type = 'MatchEndedShort'")
+            .use { ps -> ps.setObject(1, matchId); ps.executeQuery().use { it.next() } }
+
     /** Appends one row. False when that place in the device's sequence is already filled — a resend. */
     private fun append(
         eventId: UUID, matchId: UUID, deviceId: UUID, row: Row,
         actor: UUID, correlation: UUID, corrects: UUID?,
     ): Boolean {
-        val type = if (row.kind == "visit") "VisitRecorded" else "VisitRetracted"
-        val payload = if (row.kind == "visit") {
-            """{"player":"${row.seat}","visitTotal":${row.visitTotal},"dartsUsed":null,"dartsAtDouble":null,"effect":"uploaded"}"""
-        } else {
-            """{"player":"${row.seat}","retracts":${row.correctsSeq}}"""
+        val type = when (row.kind) {
+            "visit" -> "VisitRecorded"
+            "retraction" -> "VisitRetracted"
+            else -> "MatchEndedShort"
+        }
+        val payload = when (row.kind) {
+            "visit" -> """{"player":"${row.seat}","visitTotal":${row.visitTotal},"dartsUsed":null,"dartsAtDouble":null,"effect":"uploaded"}"""
+            "retraction" -> """{"player":"${row.seat}","retracts":${row.correctsSeq}}"""
+            // The seat that retired. The winner is the other one, and is not stored twice (V034).
+            "retirement" -> """{"ending":"retired","seat":"${row.seat}"}"""
+            else -> """{"ending":"abandoned"}"""
         }
         return connection.prepareStatement(
             """

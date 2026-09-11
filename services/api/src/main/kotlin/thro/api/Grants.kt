@@ -113,6 +113,31 @@ public class Grants(private val connection: Connection) {
             ps.executeQuery().use { rs -> if (rs.next()) rs.getString(1) else null }
         }
 
+    /**
+     * The role of a grant IN FORCE now for this actor and device on this match: not revoked, not
+     * expired, and — for a grant that names no match — only on a match of the grant's own event.
+     *
+     * [roleFor] answers what was issued, which is what a command is stamped with; its authority is
+     * judged separately and recorded beside it. A door asks something else — may this person come in
+     * now — and answering it with [roleFor] let a revoked scorer, an expired one, and the holder of a
+     * grant for one event watch any match at all (found reading the match stream, 2026-09-11).
+     */
+    public fun liveRoleFor(actorId: UUID, deviceId: UUID, matchId: UUID): String? =
+        connection.prepareStatement(
+            """
+            SELECT g.actor_role FROM trust.scoring_grant g
+             WHERE g.actor_id = ? AND g.device_id = ?
+               AND g.revoked_at IS NULL AND g.expires_at > clock_timestamp()
+               AND (g.match_id = ?
+                    OR (g.match_id IS NULL
+                        AND g.event_id = (SELECT m.event_id FROM evidence.match m WHERE m.match_id = ?)))
+             ORDER BY (g.match_id IS NOT NULL) DESC, g.issued_at DESC LIMIT 1
+            """.trimIndent(),
+        ).use { ps ->
+            ps.setObject(1, actorId); ps.setObject(2, deviceId); ps.setObject(3, matchId); ps.setObject(4, matchId)
+            ps.executeQuery().use { rs -> if (rs.next()) rs.getString(1) else null }
+        }
+
     public fun revoke(grantId: UUID, revokedBy: UUID, reason: String) {
         connection.prepareStatement(
             """

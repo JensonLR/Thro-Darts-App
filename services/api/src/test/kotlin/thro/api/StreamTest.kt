@@ -117,4 +117,61 @@ class StreamTest {
         println("  $passed stream properties held")
         assertEquals(9, passed)
     }
+
+    @Test
+    fun `a signed-in watcher is let in, and a new visit reaches them long before the poll would`() {
+        if (!TestDatabase.configured) return
+        val c = TestDatabase.migrated()
+        val session = Accounts(c, { Instant.now() }).signIn("apple", "apple-subject-watcher-${UUID.randomUUID()}", UUID.randomUUID())
+        val me = session.playerId ?: error("signing in made no competitor")
+        val match = UUID.randomUUID(); val device = UUID.randomUUID()
+        Matches(c).open(match, me, UUID.randomUUID(), playtestFormat())
+        val handler = CommandHandler(c)
+        // The scorer enters both seats' visits, in turn: the engine refuses a seat throwing twice.
+        fun visit(seq: Long, seat: String, total: Int) = handler.handle(VisitCommand(
+            commandId = UUID.randomUUID(), matchId = match, deviceId = device, deviceSeq = seq, actorId = me, actorRole = "participant",
+            correlationId = UUID.randomUUID(), player = seat, visitTotal = total, dartsUsed = 3,
+            occurredAt = "2026-09-12T19:0$seq:00Z", occurredTz = "Europe/London",
+        ))
+        assertTrue(visit(1, "home", 60) is CommandResult.Applied, "home's first visit is recorded")
+
+        // A thirty-second poll: anything that arrives much sooner was woken by the database (V036).
+        val server = embeddedServer(CIO, port = 0) {
+            thro(Deps(connect = { TestDatabase.connect() }, authenticator = Authenticator.Bearer(), now = { Instant.now() },
+                      streamPoll = Duration.ofSeconds(30), streamHeartbeat = Duration.ofSeconds(60)))
+        }.start(wait = false)
+        val pool = Executors.newSingleThreadExecutor()
+        try {
+            val port = runBlocking { server.engine.resolvedConnectors().first().port }
+            val request = HttpRequest.newBuilder(URI("http://127.0.0.1:$port/v1/streams/match/$match"))
+                .header("Accept", "text/event-stream").header("Authorization", "Bearer ${session.accessToken}").build()
+            val response = HttpClient.newHttpClient().send(request, HttpResponse.BodyHandlers.ofInputStream())
+            // The defect: the stream stood as the match role, which cannot read the token table, so a
+            // signed-in watcher never got past the door. The development principal always did.
+            assertEquals(200, response.statusCode(), "a signed-in participant is let in")
+
+            val arrivals = java.util.concurrent.LinkedBlockingQueue<Pair<String, Long>>()
+            val reader = BufferedReader(response.body().reader())
+            pool.submit {
+                while (true) {
+                    val line = reader.readLine() ?: break
+                    if (line.startsWith("data:")) arrivals.put(line to System.nanoTime())
+                }
+            }
+            val replayed = arrivals.poll(10, TimeUnit.SECONDS) ?: error("the replay never came")
+            assertTrue(replayed.first.replace(" ", "").contains("\"visitTotal\":60"), "the visit already there is replayed")
+
+            val sent = System.nanoTime()
+            assertTrue(visit(2, "away", 100) is CommandResult.Applied, "away's reply is recorded")
+            val (data, at) = arrivals.poll(10, TimeUnit.SECONDS) ?: error("the new visit never arrived")
+            assertTrue(data.replace(" ", "").contains("\"visitTotal\":100"))
+            val ms = (at - sent) / 1_000_000
+            println("  a new visit reached the watcher in $ms ms; the poll was set to 30 s")
+            assertTrue(ms < 5_000, "it arrived in $ms ms: the database woke the stream, where the poll would have taken up to 30 s")
+            response.body().close()
+        } finally {
+            pool.shutdownNow()
+            server.stop(100, 500)
+        }
+    }
 }

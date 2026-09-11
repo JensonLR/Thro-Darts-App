@@ -1129,7 +1129,7 @@ public struct MatchResultScreen: View {
                                 .fixedSize(horizontal: false, vertical: true)
                         }
                         }
-                        Text("Saved on this device. Sending results to THRØ is not built yet, so this one has not left the phone.")
+                        Text("Saved on this device. To put it on your THRØ record, send it from the Live tab.")
                             .thro(ThroTypography.metadata)
                             .foregroundStyle(ThroColor.colorTextSecondary)
                         if !session.awaitingAttestation.isEmpty {

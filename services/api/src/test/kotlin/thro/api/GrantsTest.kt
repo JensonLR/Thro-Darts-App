@@ -9,6 +9,7 @@ import java.util.UUID
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 /**
@@ -26,6 +27,30 @@ class GrantsTest {
     private val configured = TestDatabase.configured
 
     private fun migrated(): Connection = TestDatabase.migrated()
+
+    @Test
+    fun `only a grant in force opens a door, and only into its own event`() {
+        if (!configured) return
+        migrated().use { c ->
+            val grants = Grants(c)
+            val scorer = UUID.randomUUID(); val device = UUID.randomUUID(); val official = UUID.randomUUID()
+            val eventA = UUID.randomUUID(); val eventB = UUID.randomUUID()
+            val inA = UUID.randomUUID(); val inB = UUID.randomUUID()
+            Matches(c).open(inA, UUID.randomUUID(), UUID.randomUUID(), playtestFormat(), eventId = eventA)
+            Matches(c).open(inB, UUID.randomUUID(), UUID.randomUUID(), playtestFormat(), eventId = eventB)
+            val grant = grants.issue(eventId = eventA, actorId = scorer, deviceId = device, actorRole = "venue_scorer",
+                                     matchId = null, sessionEndsAt = Instant.now().plus(2, ChronoUnit.HOURS), issuedBy = official)
+
+            assertEquals("venue_scorer", grants.liveRoleFor(scorer, device, inA), "an event's grant covers that event's match")
+            // What the match stream used to ask: `roleFor` answers the same grant for another event's match.
+            assertEquals("venue_scorer", grants.roleFor(scorer, device, inB))
+            assertNull(grants.liveRoleFor(scorer, device, inB), "but it is no door into somebody else's event")
+            assertNull(grants.liveRoleFor(scorer, UUID.randomUUID(), inA), "nor from another device")
+
+            grants.revoke(grant, official, "left the venue")
+            assertNull(grants.liveRoleFor(scorer, device, inA), "and a revoked grant opens nothing")
+        }
+    }
 
     @Test
     fun `authority annotates evidence and never destroys it`() {
