@@ -28,10 +28,20 @@ each claim, so that the ones that need a solicitor can be taken to one knowingly
    accepted before a player can post anything**, stating that objectionable content is not tolerated.
 2. **`PrivacyInfo.xcprivacy` with required-reason API declarations.** *Build.* Mandatory since 1 May 2024;
    its absence is an automatic rejection (ITMS-91053/91055). The app uses `UserDefaults` (reason `CA92.1`).
-3. **A web address, and a contact on it.** *Founder.* `apps/web/` is built and holds the account-deletion
-   page Google Play requires (PD-056), but it has nowhere to live until a domain is bought, and its
-   "if you cannot use the app" paragraph says *not published yet* where an address belongs. The same
-   address answers the DSA point of contact below, so one purchase and one mailbox close two items.
+3. **A web address, and a contact on it.** *Founder.* **Half done, 12 September 2026.** The pages are
+   live at `https://thro-web-q7ys.onrender.com`, so the account-deletion page Google Play requires
+   (PD-056) is publicly reachable and this no longer waits on buying a domain — a free Render subdomain
+   is a valid URL for the store's purposes, and `thro.uk` upgrades it rather than unblocking it (PD-058).
+
+   **What is still missing is the contact.** `delete-account.html` says *"Contact address: not published
+   yet"* where an address belongs, and that paragraph exists for exactly the person the requirement is
+   about: somebody who cannot open the app and needs their account deleted anyway. A deletion page with
+   no way to ask is a deletion page that fails the requirement it was built for.
+
+   This needs a **mailbox decision, not code**: a role address the product owns (`privacy@thro.uk` or
+   similar) rather than a personal one, because it goes on a public page and outlives whoever reads it
+   today. The same address answers the DSA point of contact below, so one mailbox closes two items — and
+   it can be a forwarding alias long before it is a real inbox.
 
 4. **A privacy policy, linked in the app and in App Store Connect** (5.1.1(i)). *Founder + build.* Must say
    what is collected, who receives it (Neon London, Render Frankfurt), how long it is kept, and how to
