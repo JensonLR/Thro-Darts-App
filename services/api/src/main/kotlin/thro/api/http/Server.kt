@@ -37,6 +37,7 @@ import thro.api.CommandHandler
 import thro.api.CommandResult
 import thro.api.Discovery
 import thro.api.Events
+import thro.api.Fixtures
 import thro.api.Friends
 import thro.api.Teams
 import thro.api.Leagues
@@ -340,6 +341,15 @@ public fun Application.thro(deps: Deps) {
                         Http(200, """{"outcomeId":"$id","fixtureId":"$fixtureId","kind":"awarded"}""")
                     }
                 }
+            }
+        },
+        // PD-056: a season's fixtures, publicly. Read as `app_read`, like the table it belongs beside.
+        "seasons.fixtures" to { r ->
+            r.role = DbRole.READ
+            val season = UUID.fromString(r.call.parameters["leagueSeasonId"])
+            Fixtures(r.connection()).let { f ->
+                if (!f.seasonExists(season)) Http(404, """{"error":"THRØ has no such league season."}""")
+                else Http(200, f.json(f.of(season)))
             }
         },
         // PD-054: the table is arithmetic over the fixtures, so it is read as `app_read` and computed here

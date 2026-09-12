@@ -3782,3 +3782,25 @@ the card surface every other card in the app uses now — the same raised fill, 
 fixtures: all of them, from one change.
 
 Counts: client 746, API 29 suites (82 tests), HTTP 51 properties, schema 144, contrast 94 pairs.
+
+## The other half of a league's own data: its fixtures (PD-056)
+
+A table says how a season stands; it does not say what is left. `GET /v1/seasons/{id}/fixtures` is the rest
+of it — every fixture with its date, its lifecycle, its venue, and what it finished as where it has — read
+from the same rows the table is, so the two cannot disagree about a result.
+
+**A result says how it was arrived at**, which is the distinction V042 exists for: *scored on THRØ* where a
+match sits behind it, *the league's word* where an official declared it, and awarded or walked over where
+nobody played. The web page prints exactly that, so a league member reading a score can see what is standing
+behind it without knowing anything about the schema.
+
+**Public means public, and a hole in a calendar is not privacy.** A team or venue marked private is not
+named. The fixture is still listed, with the private side simply unnamed — the same answer the app gives for
+a player who may not be disclosed. A test holds both halves: the fixture survives, and the name does not
+appear.
+
+One thing the schema caught, which is the sort of thing it is for: the test set a team private with a plain
+UPDATE and the trigger refused it as a stale write, because every write to a team advances its row version.
+The test obeys the same rule as the store rather than sidestepping it.
+
+Counts: client 746, API 29 suites (83 tests), HTTP 52 properties, schema 144, contrast 94 pairs.

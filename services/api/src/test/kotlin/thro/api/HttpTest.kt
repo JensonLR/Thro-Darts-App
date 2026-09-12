@@ -240,6 +240,10 @@ class HttpTest {
                     && post("/v1/fixtures/${UUID.randomUUID()}/result", """{"legsHome":5,"legsAway":2}""", subject = home).status.value == 404
                     && post("/v1/fixtures/${UUID.randomUUID()}/award", """{"toTeamId":"${UUID.randomUUID()}","reason":"nobody came"}""", subject = home).status.value == 404
                     && post("/v1/seasons/${UUID.randomUUID()}/affiliations/${UUID.randomUUID()}", "{}", subject = home).status.value == 404)
+            // PD-056: the fixtures beside the table, and public for the same reason.
+            check("a season's fixtures are public, and a season nobody has is a 404",
+                get("/v1/seasons/${UUID.randomUUID()}/fixtures", subject = null).status.value == 404
+                    && get("/v1/seasons/not-a-uuid/fixtures", subject = null).status.value == 400)
             // PD-054: a league's table is public, as its competition is (PD-009), and no row on it is a
             // person. This database has no season, so the route's reachability and its refusals are what is
             // held here; the arithmetic is StandingsTest's, against real fixtures and real outcomes.
@@ -264,6 +268,6 @@ class HttpTest {
                     && roles.all { it in setOf("app_match", "app_competition", "app_read", "app_trust") })
         }
         println("  $passed HTTP properties held")
-        assertEquals(51, passed)
+        assertEquals(52, passed)
     }
 }

@@ -453,6 +453,18 @@ public object Contract {
                               409 to "this fixture already has a result"),
         ),
         Endpoint(
+            id = "seasons.fixtures", method = "GET", path = "/v1/seasons/{leagueSeasonId}/fixtures",
+            authenticated = false,
+            summary = "A league season's fixtures, played and still to play (PD-056)",
+            description = "The other half of a league's own data: the table says how the season stands, this says "
+                + "what is left. Each fixture carries its date, its lifecycle — scheduled, rearranged, postponed — "
+                + "the venue, and what it finished as where it has: played, declared by an official, awarded or "
+                + "walked over. Read from the same rows the table is, so the two cannot disagree. Public means "
+                + "public: a team or venue marked private is not named, though the fixture is still listed, because "
+                + "hiding it would leave a hole in a league's own calendar.",
+            responses = mapOf(200 to "the fixtures, soonest first", 400 to "not a UUID", 404 to "no such league season"),
+        ),
+        Endpoint(
             id = "seasons.standings", method = "GET", path = "/v1/seasons/{leagueSeasonId}/standings",
             authenticated = false,
             summary = "A league season's table, computed from the results under it (PD-054)",

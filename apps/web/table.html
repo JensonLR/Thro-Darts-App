@@ -19,11 +19,14 @@
   <p class="quiet">Reading the table…</p>
 </main>
 <footer class="measure">
-  <p><a href="index.html">All leagues</a></p>
+  <p><a id="fixtures-link" href="index.html">Fixtures</a> · <a href="index.html">All leagues</a></p>
 </footer>
 <script src="thro.js"></script>
 <script>
   THRO.mountTable(document.getElementById('table'), document.getElementById('league'), document.getElementById('season'));
+  // The fixtures are the other half of the same season, so the link carries the season with it.
+  const s = new URLSearchParams(location.search).get('season');
+  if (s) document.getElementById('fixtures-link').href = 'fixtures.html?season=' + encodeURIComponent(s);
 </script>
 </body>
 </html>

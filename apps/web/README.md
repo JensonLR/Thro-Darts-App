@@ -7,6 +7,7 @@ account. It is a static site over the public API.
 |---|---|
 | `index.html` | The leagues, searchable by name or town. A league with a season links to its table |
 | `table.html?season=<uuid>` | That season's table, as `GET /v1/seasons/{id}/standings` computes it |
+| `fixtures.html?season=<uuid>` | That season's fixtures, played and still to play, from `GET /v1/seasons/{id}/fixtures`. A result says how it was arrived at: scored on THRØ, or the league's word |
 | `delete-account.html` | Static. Google Play requires a web URL for account deletion before an Android app may ship, and it says what the app says: what goes, what stays, and why |
 
 ## Why it looks like THRØ without a design system in it

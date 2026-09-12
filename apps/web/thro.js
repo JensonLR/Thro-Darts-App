@@ -162,4 +162,67 @@ async function mountTable(where, titleEl, eyebrowEl) {
   where.replaceChildren(...parts);
 }
 
-window.THRO = { mountLeagues, mountTable };
+
+// --- a season's fixtures ------------------------------------------------------------------------
+
+/** What a fixture finished as, in the words a player would use rather than the schema's. */
+function decided(d) {
+  if (!d) return null;
+  if (d.kind === 'played') return { score: `${d.legsHome}–${d.legsAway}`, tag: 'Scored on THRØ', how: 'played' };
+  if (d.kind === 'declared') return { score: `${d.legsHome}–${d.legsAway}`, tag: 'The league’s word', how: 'declared' };
+  if (d.kind === 'walkover') return { score: null, tag: d.awardedToHome ? 'Walkover, home' : 'Walkover, away', how: 'awarded' };
+  return { score: null, tag: d.awardedToHome ? 'Awarded, home' : 'Awarded, away', how: 'awarded' };
+}
+
+const when = iso => new Date(iso).toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' });
+
+async function mountFixtures(where, titleEl, eyebrowEl) {
+  const season = new URLSearchParams(location.search).get('season');
+  if (!season) { fail(where, new Error('This address names no season.')); return; }
+  let data;
+  try {
+    data = await read(`/v1/seasons/${encodeURIComponent(season)}/fixtures`);
+  } catch (e) { fail(where, e); return; }
+
+  const fixtures = data.fixtures || [];
+  titleEl.textContent = 'Fixtures';
+  eyebrowEl.textContent = fixtures.length ? `${fixtures.length} fixture${fixtures.length === 1 ? '' : 's'}` : 'Fixtures';
+  document.title = 'Fixtures — THRØ';
+
+  if (!fixtures.length) {
+    where.replaceChildren(
+      make('p', null, 'No fixtures yet.'),
+      make('p', 'quiet', 'When the league publishes its calendar the fixtures appear here, and the table fills itself in from their results.'),
+    );
+    return;
+  }
+
+  const list = make('ul', 'rows');
+  for (const f of fixtures) {
+    const li = make('li');
+    const row = make('div');
+    row.style.padding = '14px 0';
+    // A private team is unnamed rather than absent, exactly as the server sends it.
+    const side = n => n || 'A team';
+    const d = decided(f.decided);
+    const head = make('div', 'row-name', d && d.score
+      ? `${side(f.home)}  ${d.score}  ${side(f.away)}`
+      : `${side(f.home)} v ${side(f.away)}`);
+    const bits = [when(f.scheduledAt)];
+    if (f.venue) bits.push(f.locality ? `${f.venue}, ${f.locality}` : f.venue);
+    if (f.state !== 'scheduled') bits.push(f.state);
+    if (d) bits.push(d.tag); else bits.push('To play');
+    row.append(head, make('div', 'row-meta', bits.join(' · ')));
+    li.append(row);
+    list.append(li);
+  }
+  const unplayed = fixtures.filter(f => !f.decided).length;
+  where.replaceChildren(
+    list,
+    make('p', 'quiet', unplayed
+      ? `${unplayed} of ${fixtures.length} still to play.`
+      : 'Every fixture in this season has a result.'),
+  );
+}
+
+window.THRO = { mountLeagues, mountTable, mountFixtures };

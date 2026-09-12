@@ -373,4 +373,38 @@ class StandingsTest {
                         "naming one administrator names one, not everybody")
         }
     }
+    @Test
+    fun `a season's fixtures say what is left and what was decided, and never name a private team`() {
+        if (!configured) return
+        migrated().use { c ->
+            val orgs = Organisations(c)
+            val admin = orgs.createPlayer()
+            val s = season(orgs, admin)
+            played(c, orgs, s, s.a, s.b, 5, 2, admin)
+            val awarded = orgs.scheduleFixture(s.seasonId, s.division, s.b, s.c, at = t0.plus(7, ChronoUnit.DAYS), by = admin)
+            orgs.awardFixture(awarded, s.b, "the away side did not raise a team", by = admin)
+            orgs.scheduleFixture(s.seasonId, s.division, s.c, s.a, at = t0.plus(14, ChronoUnit.DAYS), by = admin)
+
+            val all = Fixtures(c).of(s.seasonId)
+            assertEquals(3, all.size, "played, awarded and still to play")
+            assertEquals(listOf("played", "awarded", null), all.map { it.decided?.kind }, "soonest first")
+            assertEquals(5, all[0].decided?.legsHome)
+            assertEquals(true, all[1].decided?.awardedToHome, "the home side was given that one")
+            assertEquals(null, all[2].decided, "and the last has been decided by nobody")
+
+            // PD-056: a private team is unnamed and its fixtures are still listed — hiding them would leave
+            // a hole in the league's own calendar, which is nobody's idea of privacy.
+            // row_version advances or the trigger refuses it as a stale write — the same rule every other
+            // write to a team obeys, and the reason a test cannot quietly sidestep the store.
+            c.prepareStatement(
+                "UPDATE competition.team SET visibility = 'private', row_version = row_version + 1 WHERE team_id = ?",
+            ).use { ps ->
+                ps.setObject(1, s.c); ps.executeUpdate()
+            }
+            val hidden = Fixtures(c).of(s.seasonId)
+            assertEquals(3, hidden.size, "the fixtures are still there")
+            assertFalse(hidden.any { it.home == "Feathers A" || it.away == "Feathers A" }, "and it is not named")
+            assertTrue(hidden.any { it.home == null || it.away == null }, "the side is simply unnamed")
+        }
+    }
 }
