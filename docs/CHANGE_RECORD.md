@@ -4339,3 +4339,24 @@ reaching its slot and the first letter being struck.
 The flight, the strike and the ring being drawn were looked at across four sheets and left alone.
 
 Counts: client 824 tests, all 22 checks.
+
+## The Apple TV's artwork, generated from the one mark
+
+tvOS wants a layered icon — 5:3, and it parallaxes, so the subject needs its own layer with the field
+behind. `tools/make_tv_artwork.swift` lifts the mark off the phone's icon by keying its own background out
+and lays it over a field lit the way every board in this app is. One source of truth for the mark, and the
+rest deterministic, so a diff means somebody changed the mark.
+
+Three faults, all the same kind — a generator producing something plausible and wrong — and only the first
+failed a build. `NSImage.lockFocus` draws at the screen's backing scale, so every "1x" image came out at
+twice the pixels and `actool` refused the stack, precisely and helpfully. The alpha channel is premultiplied
+and the key wrote straight chalk beside a zero alpha, which is a pixel brighter than its own coverage, so
+the mark came out as an opaque white rectangle. And the phone's icon was exported with a green a shade
+lighter than `throGreen`, so keying against the token left the whole background at 6% alpha — a pale square,
+uniform and therefore invisible in the source, obvious the moment it was on a darker field. The background
+is read off the image's own corner now, which is exact and needs no threshold to fudge.
+
+The icon is on the tvOS home screen. What is left for the store is an Apple TV registered to the team, which
+is what a development provisioning profile for that platform needs and what `xcodebuild` cannot conjure.
+
+Counts: client 824 tests, all 22 checks.
