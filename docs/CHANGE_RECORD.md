@@ -3977,3 +3977,16 @@ which is why the table and everything under a league had gone unopened. And the 
 a confused ten minutes.
 
 Counts: client 770 tests (184 design), all 22 checks.
+
+## Discover is two things as well, and the second one found the rule's sharp edge
+
+The same treatment, on the split the screen already had in it: what is out there — the leagues near you and
+the tournaments taking entries — beside what is yours. A phone runs them one after the other as it always
+did.
+
+Applying it twice is what taught it something. `yours` carried a section gap of its own to hold it off the
+section above; beside `ThroBeside`'s gutter that became 64 points on a phone and pushed the right-hand
+column 32 points below the left on a tablet. The gap belongs to whichever thing knows the arrangement, which
+is not the half — a half that adds its own spacing is a half that cannot be put anywhere else.
+
+Counts unchanged: client 770 tests, API 29 suites (86 tests), 148 schema properties, all 22 checks.

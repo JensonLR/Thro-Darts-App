@@ -2851,5 +2851,15 @@ Verified on both: an iPad Pro 11 shows the table beside four fixtures to come an
 
 ### Where it applies next
 
-Discover is the obvious second — a list beside its map — and Home is not: the Continue card is the one
-unfinished thing on the screen and halving it would make it smaller, not clearer. Neither is done here.
+**Discover is done too**, and the split is the one the screen already had in it: what is out there — the
+leagues near you and the tournaments taking entries — beside what is yours. On a phone they run one after
+the other as they always did.
+
+Doing the second one found the rule's first sharp edge. `yours` carried a section gap of its own to separate
+it from the section above, and beside `ThroBeside`'s gutter that became 64 points on a phone and pushed the
+right-hand column 32 below the left on a tablet. **One source for the gap, and it is the thing that knows
+which arrangement the screen is in** — a half that adds its own spacing is a half that cannot be put
+anywhere else.
+
+Home is not a candidate: the Continue card is the one unfinished thing on the screen and halving it would
+make it smaller, not clearer.

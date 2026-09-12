@@ -50,17 +50,26 @@ public struct DiscoverScreen: View {
     public var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             TopBar("Discover", actions: clubs.isEmpty ? [] : [TopBar.Action(icon: .plus, label: "Start a team", action: onCreate)])
-            ScrollView {
-                VStack(alignment: .leading, spacing: 0) {
-                    slate.padding(.top, ThroSpacing.spacing4)
-                    leagues
-                    tournaments
-                    yours
+            // Discover is two things, and says so on a screen with room for two (PD-062): what is out
+            // there — the leagues near you and the tournaments taking entries — and what is yours. On a
+            // phone they run one after the other as they always have; on a tablet the second half stops
+            // being a scroll away from the first, and the glass beside a 560-point column stops being
+            // empty. The width comes from out here because a geometry reader inside a scroll view takes
+            // all the height it can reach.
+            GeometryReader { proxy in
+                ScrollView {
+                    ThroBeside(width: proxy.size.width) {
+                        VStack(alignment: .leading, spacing: 0) {
+                            slate.padding(.top, ThroSpacing.spacing4)
+                            leagues
+                            tournaments
+                        }
+                    } aside: {
+                        VStack(alignment: .leading, spacing: 0) { yours }
+                    }
+                    .padding(.horizontal, ThroSpacing.spaceScreenGutter)
+                    .padding(.bottom, ThroSpacing.spacing6)
                 }
-                .padding(.horizontal, ThroSpacing.spaceScreenGutter)
-                // On a tablet the gutter alone leaves a line of text a foot wide (PD-052).
-                .throReadable()
-                .padding(.bottom, ThroSpacing.spacing6)
             }
         }
         .throEntrance(0)
@@ -251,8 +260,12 @@ public struct DiscoverScreen: View {
 
     @ViewBuilder private var yours: some View {
         // Teams on THRØ first — the connected ones — then what this phone keeps on its own.
+        //
+        // **No top gap of its own.** `ThroBeside` puts the gutter between the two halves when they stack,
+        // and adding one here as well made it 64 points on a phone and pushed this column 32 below the
+        // other one on a tablet. One source for the gap, and it is the thing that knows which arrangement
+        // the screen is in (PD-062).
         SectionHeader("Your teams on THRØ", action: signedIn ? "Join or start" : nil, onAction: onJoinOrStart)
-            .padding(.top, ThroSpacing.spaceSectionGap)
         if !signedIn {
             Text("Sign in under You to join a team by its code or start one. A team on THRØ has a roster, a home venue and its place in a league.")
                 .thro(ThroTypography.body).foregroundStyle(ThroColor.colorTextSecondary)
