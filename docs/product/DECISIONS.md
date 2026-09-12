@@ -3972,3 +3972,52 @@ neither would be location quietly in use, which is the thing being legislated ag
 
 What is still open under the code: **high-privacy defaults on every public surface** (Standard 7), and the
 DPIA itself, which is a written assessment rather than code.
+
+
+## PD-087 — A report is kept until it is not needed
+
+**12 September 2026.** The DPIA, written the same day, named its own biggest gap: a safety report carries
+free text a reporter wrote, that text may be about somebody's health or sexuality, some of these people are
+children, and **nothing in THRØ ever removed one.** V040 had made both `safety.report` and `safety.decision`
+refuse UPDATE and DELETE outright, with a message — *"a report is kept"* — that was written on purpose and
+for a good reason.
+
+**The two are not actually in conflict, and seeing why is the whole decision.** "A report is kept" protects
+against one specific thing: a report being made to go away by whoever it embarrasses. It was never an
+argument for holding an allegation for ever. So the guarantee was narrowed to exactly what it protects —
+**nobody may delete a report; time may** — and the only path out is one function that applies one rule to
+all of them at once. Nobody chooses which report goes, which is what keeps the append-only promise meaning
+something.
+
+**The founder chose two years after the decision**, from three offered (one year / two years / never
+without a decision). Long enough to see somebody across two seasons, short enough to be proportionate about
+a child.
+
+**What survives is a tally.** How many decisions of each outcome have been made about a subject, with the
+first and last dates — and no reason, no note, no reporter, no decider. A repeat offender still shows across
+seasons, which is the thing safeguarding actually needs; what goes is the words, which is the thing
+minimisation demands. A test asserts that the tally table has no column named `reason`, `note`,
+`reported_by` or `decided_by`, so it cannot quietly grow one.
+
+**An undecided report is never forgotten, however old it is.** This is the part worth arguing with, because
+the tidier rule would be "everything goes after N years". A report that has sat unanswered for five years is
+a failure of process, and deleting it would tidy away the evidence of that failure. The only way an old
+report leaves is if somebody looked at it.
+
+### Two things the implementation had to get right
+
+**The door has to close behind it.** The trigger's exception is keyed on a transaction-local setting
+(`SET LOCAL thro.forgetting`), so it cannot survive into a later statement on a pooled connection. If it
+leaked, any code holding that connection could remove a report at any time afterwards — which would be the
+whole risk of doing it this way. A test forgets a report and then tries a raw delete on the same connection
+and gets *"a report is kept"*.
+
+**A period nothing enforces is a sentence in a policy.** The server sweeps on its own clock, once a day, on
+a daemon thread started before it begins serving. `Retention.KEEP` is the one place the number lives, and
+the test asserts against that constant rather than restating "2 years" — a period in two places drifts, and
+nobody would know which was in force.
+
+*Found while writing the test:* the decision could not be backdated to make an old report, because
+`decision_is_kept` refuses UPDATE as well. That is the guarantee working — there is no way to make a
+decision look older than it is, so nobody can accelerate a report out of the database — and the test now
+inserts decisions with an explicit `decided_at` instead.

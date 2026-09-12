@@ -4571,10 +4571,48 @@ age band is exactly as reliable as the person typing it; the mitigation is that 
 wrongly-classified child is exposed to very little. And it records the rating (OD-001) as a profiling risk
 *now*, so that when it closes the Children's-code question cannot be answered by omission.
 
-It also names its own biggest gap: **safety reports carry free text a reporter wrote, which may be
-special-category data, and nothing deletes one.** A report from four years ago about a child who is now an
-adult should not still be there.
+It also named its own biggest gap: **safety reports carry free text a reporter wrote, which may be
+special-category data, and nothing removed one.** A report from four years ago about a child who is now an
+adult should not still be there. That gap was closed the same day — see below.
 
 Against the code's fifteen standards: minimisation and data sharing are strong, geolocation is met as of
 PD-086, and what is open is high-privacy defaults (Standard 7), a child-facing explanation (Standard 4) and
 the mailbox (Standard 15).
+
+## A report is kept until it is not needed (PD-087, V044)
+
+The gap the DPIA named against itself, closed in the same session, because a document that lists its own
+biggest problem and then does nothing about it is worse than not having written it.
+
+**The apparent conflict.** V040 made a safety report undeletable and said so in the error: *"a report is
+kept: somebody raised it, and that it was raised does not change"*. The DPIA said holding a reporter's free
+text for ever, about children, is not a defensible position. Both are right, and the resolution is to notice
+what "kept" was ever protecting: **a report must not be made to go away by whoever it embarrasses.** That is
+an argument against a person choosing, not against time passing.
+
+So: **nobody may delete a report; one function may.** `safety.forget_decided(interval)` applies one rule to
+everything at once — decided, and the newest decision is older than the period — and there is no argument to
+it that selects a report. The founder chose **two years after the decision**. An **undecided** report is
+never forgotten however old it is: one that has sat unanswered for five years is a failure of process, and
+removing it would tidy the evidence of that away.
+
+**What survives is `safety.decision_tally`** — a count of decisions by outcome against a subject, with a
+first and last date and nothing else. No reason, no note, no reporter, no decider. A repeat offender still
+shows across seasons; the allegation does not. One of the nine tests reads `information_schema.columns` and
+fails if the tally ever grows a column called `reason`, `note`, `reported_by` or `decided_by`.
+
+**The two mechanisms that carry the risk**, both tested:
+
+- The trigger exception is keyed on `SET LOCAL thro.forgetting`, transaction-local, so it cannot leak onto a
+  pooled connection. *"The door closes behind it"* forgets a report, then attempts a raw delete on the same
+  connection and asserts it still gets *"a report is kept"*.
+- The server sweeps daily on a daemon thread started before it serves, because a retention period nothing
+  enforces is a sentence in a policy. `Retention.KEEP` is the single place the number lives and the test
+  asserts against the constant, not against a restated string.
+
+**Found by the test, and it is the guarantee working:** a decision cannot be backdated, because
+`decision_is_kept` refuses UPDATE too. There is no way to make a decision look older than it is, so nobody
+can accelerate a report out of the database. The test inserts decisions with an explicit `decided_at`.
+
+The DPIA's R2 and item 1 of "what must happen before launch" now say this is built rather than needed, and
+the ROPA's retention row for the safety store states the period. Nine new tests; the whole API suite passes.

@@ -74,9 +74,17 @@ sexuality or ethnicity. THRØ cannot prevent that and should not try to parse it
 What holds today: the queue is authorised, decisions are recorded with who made them, and the data sits in
 its own `safety` schema that other areas cannot read.
 
-**Open:** a retention period. A report from four years ago about a child who is now an adult should not
-still be there, and nothing currently deletes one. *This is the single most actionable gap in this
-assessment.*
+**Closed, 12 September 2026 (PD-087).** A decided report is forgotten **two years after the decision** —
+the founder's number, chosen as long enough to see somebody across two seasons and short enough to be
+proportionate about a child. What survives is a tally: how many decisions of each outcome a subject has had,
+with no text, no reporter and no dates beyond the first and last. A repeat offender still shows; the
+allegation does not.
+
+Two properties of the mechanism matter more than the number. **Nobody may delete a report** — the V040
+guarantee is unchanged, and an administrator, a support script and the subject all still get *"a report is
+kept"*. The only way out is one function applying one rule to everything at once, so nobody chooses which
+report goes. And **an undecided report is never forgotten however old it is**, because one that has sat
+unanswered for five years is a failure of process and deleting it would tidy away the evidence of that.
 
 ### R3 — A guardian's consent is claimed and was never given
 
@@ -159,7 +167,8 @@ to breach.
 
 ## 5. What must happen before launch
 
-1. **A retention period for safety reports**, and something that enforces it. *(R2 — the biggest gap here.)*
+1. ~~A retention period for safety reports.~~ **Done** (PD-087): two years after the decision, swept daily
+   by the server itself, because a period nothing enforces is a sentence in a policy.
 2. **The mailbox**, so a DSAR can be received and answered inside a month. *(R7.)*
 3. **A 72-hour breach plan.** *(R8.)*
 4. **A high-privacy defaults audit** against Standard 7, surface by surface.

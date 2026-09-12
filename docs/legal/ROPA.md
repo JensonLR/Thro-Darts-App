@@ -63,7 +63,7 @@ player.
 | **Lawful basis** | Legal obligation and legitimate interests — the safety of users, including children. |
 | **Categories of data** | `report` (who reported, about whom or what, the reason), `block` (who blocked whom, and when it was lifted), `decision` (the outcome, a note, who decided). |
 | **Special category risk** | A free-text reason or note **may** contain special-category data, because a reporter writes what they think matters. This is the highest-risk store in the system and the DPIA treats it as such. |
-| **Retention** | Not yet decided. **An open item**: see the DPIA. |
+| **Retention** | **Two years after the report is decided** (PD-087), swept daily by the server. An undecided report is kept indefinitely — deleting one would hide that nobody answered it. What survives a forgotten report is a count of decisions by outcome against the subject, with no text and no reporter. |
 
 ### 5. Location
 

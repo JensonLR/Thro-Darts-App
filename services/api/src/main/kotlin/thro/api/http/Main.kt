@@ -51,6 +51,14 @@ public fun main() {
     val moderators = named.mapNotNull { runCatching { UUID.fromString(it) }.getOrNull() }.toSet()
     if (moderators.size != named.size) System.err.println("WARNING: ${named.size - moderators.size} entry in THRO_MODERATORS is not an account id and was ignored.")
     if (moderators.isEmpty()) System.err.println("note: no moderators (THRO_MODERATORS); /v1/reports answers 403 to everyone, so nobody can answer a report on this server.")
+    // PD-087: a decided report is forgotten two years later, and the thing that forgets it runs here.
+    //
+    // **In the server rather than a cron job**, because a cron on Render is a paid line item and a cron on
+    // GitHub needs a credential that can reach the database — and this needs neither. It is idempotent and
+    // cheap: one statement that usually matches nothing. A retention period nothing enforces is a sentence
+    // in a policy, which is the failure the DPIA was written to avoid.
+    Retention.everyDay(connect)
+
     val port = env("PORT")?.toIntOrNull() ?: 8080
     embeddedServer(CIO, port = port) { thro(Deps(connect, authenticator, providers = providers, keys = HttpJwkSource(), relyingParty = rp, appleAppIds = appleAppIds, moderators = moderators)) }.start(wait = true)
 }
