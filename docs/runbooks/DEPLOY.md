@@ -60,6 +60,17 @@ against, and a stable home for passkeys and universal links.
 the host changes, every existing passkey stops working. Today that costs nothing, because nobody has one.
 After a hundred people have signed in it costs each of them a sign-in.
 
+> **Deployed, 12 September 2026.** The web is live at **https://thro-web-q7ys.onrender.com** (Render
+> service `THRO-web`, id `srv-daik669594qs7393h5d0`), built from `apps/web` on this branch with no build
+> command. The API is `thro-api-staging` on the free instance, which sleeps after fifteen idle minutes —
+> the first request after a quiet spell took **24 seconds** when this was written, which is what PD-057's
+> $7 is for and why the static site was the right call for the pages.
+>
+> The two rewrites are set on the service, not in this repo: a service created through the dashboard does
+> not read `render.yaml`. They are `/v1/*` and `/.well-known/apple-app-site-association`, both **Rewrite**
+> and not Redirect — a redirect would send the browser to the API's own host, which is a different
+> registrable domain, and the one-origin design would be gone.
+
 > **The day you buy the domain, follow [GOING_LIVE.md](GOING_LIVE.md)** — it is the ordered list, and the
 > switch itself is `python3 tools/host.py --set thro.uk`. Do not do it by hand: the relying party and the
 > app's base URL become different names, and a find-and-replace breaks passkeys silently (PD-058).
