@@ -4153,3 +4153,24 @@ between: that is `ThroStage` doing what it is specified to do, and the space bet
 surface rather than a void. Recorded so the next pass does not rediscover it as a fault.
 
 Counts: client 772 tests, all 22 checks.
+
+## The scoring screen looked clipped on its side, and was not
+
+Scoring a match on an iPhone 17 Pro in landscape, the bottom looked cut: the ledger and **ENTER SCORE** both
+seemed to run off the edge. The app's core screen, in the orientation just committed to, so it was chased.
+
+The device was not in `StageTests`' list — the simulator this project is developed against, which is the only
+reason a doubt about it could not be settled by running the tests. Added, and the sixteen stage tests pass.
+Probing deeper: beside the board the tray clears the height by exactly **1.0 point**, which looks like luck,
+so a stricter assertion was written to turn the suspicion into a failing test. It failed everywhere including
+an iPhone SE — which is how the assertion, not the layout, was shown to be wrong. Beside the board the tray
+is given the whole height on purpose and clears by whatever the key height's rounding leaves.
+
+**And it cannot clip**: the screen passes `GeometryReader`'s own `proxy.size`, so the stage measures the room
+it actually has rather than an inset modelled from published figures. Flush is flush. The fragility that a
+one-point margin implies would be real if the height were modelled, and it is not.
+
+Kept: the device in the list, and a note where the assertion would have gone. Not kept: any change to the
+stage, which was right. Recording a negative result costs a paragraph and saves the next person the hour.
+
+Counts: client 772 tests, all 22 checks.

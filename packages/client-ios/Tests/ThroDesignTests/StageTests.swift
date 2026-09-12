@@ -43,6 +43,11 @@ final class StageTests: XCTestCase {
                portraitInsets: (47, 34), landscapeInsets: (0, 21, 47)),
         Device(name: "iPhone 16 Pro Max", width: 440, height: 956,
                portraitInsets: (62, 34), landscapeInsets: (0, 21, 62)),
+        // Added 2026-09-12 after scoring a match on one and reading the landscape screen as clipped.
+        // It is the simulator this project is developed against and it was not in this list, which is
+        // the only reason a doubt about it could not be settled by running the tests (PD-071).
+        Device(name: "iPhone 17 Pro", width: 402, height: 874,
+               portraitInsets: (62, 34), landscapeInsets: (0, 21, 62)),
         Device(name: "iPad mini (6th gen)", width: 744, height: 1133,
                portraitInsets: (24, 20), landscapeInsets: (24, 20, 0)),
         Device(name: "iPad (10th gen)", width: 820, height: 1180,
@@ -97,6 +102,14 @@ final class StageTests: XCTestCase {
                     XCTAssertTrue(stage.keysFit(in: screen.height),
                                   "\(where_): keys are \(stage.keyHeight) pt in a tray of "
                                   + "\(stage.trayHeight) pt on a \(screen.height) pt screen")
+
+                    // **The one-point margin in landscape is correct, and was chased down once.**
+                    // Beside the board the tray is given the whole height on purpose, so it clears by
+                    // whatever `keyHeight`'s rounding leaves — 1.0 pt on most screens — and a stricter
+                    // margin here fails everywhere for no reason. It cannot clip in spite of that,
+                    // because the screen passes `GeometryReader`'s own `proxy.size`: the stage measures
+                    // the room it actually has rather than a modelled inset, so flush is flush and not
+                    // one point of luck (PD-071).
 
                     // The number is still a number a player can read from the oche.
                     XCTAssertGreaterThanOrEqual(stage.hero, 40, where_)

@@ -3138,3 +3138,32 @@ stays stacked and gets the biggest number on the ladder — and the space betwee
 which is the surface and not a void. It has 1,056 screens of arithmetic behind it and a written rationale
 for every part. **Looked at, behaving as designed, not touched**, recorded so the next pass does not
 rediscover it as a fault.
+
+## PD-071 — The scoring screen measures its room, which is why it cannot clip
+
+**Investigated and closed with no change to the layout, 12 September 2026.** Recorded because the
+investigation cost an hour and the next person to look at a landscape screenshot will have the same
+suspicion.
+
+A match was scored on an iPhone 17 Pro on its side, and the bottom of the screen looked clipped: the ledger
+and the **ENTER SCORE** key both appeared cut by the edge. That is the app's core screen, in the orientation
+PD-061 just committed to being good at, so it was chased down.
+
+**What the numbers said.** The device was not in `StageTests`' list — it is the simulator this project is
+developed against, which is the only reason a doubt about it could not be answered by running the tests. Added
+(402 × 874), and the sixteen stage tests pass. Probing further: beside the board the tray clears the height by
+exactly **1.0 point**.
+
+One point looks like fitting by luck, and a stricter assertion was written to convert the suspicion into a
+failing test. It failed — everywhere, including an iPhone SE — which is what showed the assertion to be wrong
+rather than the layout. **Beside the board the tray is given the whole height on purpose**; it clears by
+whatever `keyHeight`'s rounding-down leaves, and that is 1.0 point by construction rather than by chance.
+
+**And it cannot clip, for a reason worth naming.** The screen passes `GeometryReader`'s own `proxy.size` into
+`ThroStage.choose`. The stage measures the room it actually has rather than a safe-area inset modelled from
+published figures, so a tray that fills that height is flush with the bottom of the safe area — which is
+exactly what a screenshot of it looks like. The fragility a one-point margin implies would be real if the
+height were modelled, and it is not.
+
+**What is kept:** the iPhone 17 Pro in the device list, and a note at the assertion site so the same hour is
+not spent twice. **What is not:** any change to the stage, whose arithmetic was right.
