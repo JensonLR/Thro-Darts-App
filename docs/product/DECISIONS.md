@@ -3848,3 +3848,55 @@ That is the strongest statement available that this is the same journal and not 
   relaunch. That is a gap, not a decision, and it is the next thing.
 - The result screen, history, the club book, accounts, and everything downstream of them.
 - **A durability number.** Still ADR-006's, still outstanding on a real Android device.
+
+## PD-084 — Picking a match back up, and saying how a result is known
+
+**12 September 2026.** Two gaps PD-083 named and left open, closed the same day.
+
+### A match comes back by being replayed
+
+The journal held a match in progress and the app did not offer it back, which is a gap and not a decision.
+It does now — and it comes back the same way every other number in this product does: **by replaying the
+journal through the engine**. There is no saved score to load, because there is no saved score. The visits
+are what happened; where that leaves the match is the engine's answer, and asking it the same question a
+fresh visit asks is what stops the two ever disagreeing.
+
+**Offered, not resumed for you.** A match left half-scored three weeks ago is not the match somebody has
+just opened the app to start, and dropping them into it would be the app deciding something it cannot know.
+The card names both players and the score — *"Jenson 141 · Ethan 261"* — which is enough for anybody to tell
+at a glance which it is.
+
+**"Unfinished" is not a column.** Every candidate is replayed to find out, because a match is over when the
+engine says the visits add up to a win, and storing a flag beside that would be a second opinion about the
+rules. It is O(matches) on launch, which is fine for one phone's evening and is the first thing to
+reconsider if a season's worth ever piles up.
+
+### A result says how it is known
+
+Every figure in THRØ carries where it came from, and a result is the largest figure the product makes. On
+Android, today, a match scored here is **self-reported**: one person held the phone and typed the numbers,
+and nobody has agreed to them. PD-011's whole apparatus — both players confirming on one device, a dispute
+if either refuses, an agreement going stale when a later visit outruns it — is on iOS and is not here.
+
+So the screen says *"Self-reported: scored on this phone, and nobody has confirmed it."* The tempting word
+is "confirmed", and it would be the app claiming something nobody did.
+
+The scoreline is **home first, whoever won**. Sorting it so the winner leads would make a scoreline whose
+order changes with the result, which is a scoreline nobody can read at a glance.
+
+### Tested against a real journal, not a mock
+
+Seven of the fourteen Android tests open an actual journal in a temp file and score real matches through it
+— which is only possible because Android did not get a second implementation (PD-082). So the
+engine-journal-screen order, the retraction, the resume and the whole five-leg match are exercised on the
+JVM, and what the emulator adds is a screen rather than a fact.
+
+The five-leg sequence in that test is written as a literal sequence rather than a loop with a condition,
+because it is the one that was actually played on the emulator and came out 3–2. A test that computes what
+it expects can agree with a bug; one that repeats an observation cannot.
+
+### Still not here
+
+Per-dart entry, a list of past matches, the club book, accounts, and everything downstream of them. And
+PD-011 itself: two players confirming a result on one phone is the next thing worth having on Android,
+because it is the difference between a record and a claim.

@@ -34,6 +34,7 @@ ROWS = {
     "| The Lock Screen, the wall and the Home Screen |": ["packages/client-ios/Tests/ThroLiveKitTests"],
     "| A leg on a wrist |": ["packages/client-ios/Tests/ThroWatchKitTests"],
     "| A league on a wall |": ["packages/client-ios/Tests/ThroVenueKitTests"],
+    "| Scoring on Android |": ["packages/client-android/src/test"],
 }
 
 IOS = "packages/client-ios/Tests"

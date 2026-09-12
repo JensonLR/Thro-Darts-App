@@ -31,10 +31,14 @@ public fun ThroAndroidRoot() {
     var store by remember { mutableStateOf<ThroStore?>(null) }
     var trouble by remember { mutableStateOf<String?>(null) }
     var session by remember { mutableStateOf<ThroSession?>(null) }
+    var carryOn by remember { mutableStateOf<ThroCarryOn?>(null) }
 
     LaunchedEffect(Unit) {
         ThroStore.open(context).fold(
-            onSuccess = { store = it },
+            onSuccess = {
+                store = it
+                carryOn = ThroAndroidWords.carryOn(it.journal)
+            },
             onFailure = { trouble = ThroAndroidWords.journalRefused(it) },
         )
     }
@@ -47,9 +51,20 @@ public fun ThroAndroidRoot() {
             // without one. Saying so is better than a keypad that quietly forgets.
             trouble != null -> Trouble(trouble!!)
             open == null -> Waiting()
+            playing != null && playing.state.isComplete -> ThroResultScreen(playing) {
+                session = null
+                carryOn = null
+            }
             playing != null -> ThroScoringScreen(playing) { session = null }
-            else -> ThroSetupScreen { home, away ->
+            else -> ThroSetupScreen(
+                carryOn = carryOn,
+                onCarryOn = {
+                    ThroSession.resumable(open.journal)?.let { session = ThroSession.resume(open.journal, it) }
+                    carryOn = null
+                },
+            ) { home, away ->
                 session = ThroSession.start(open.journal, home, away)
+                carryOn = null
             }
         }
     }
@@ -93,4 +108,14 @@ public object ThroAndroidWords {
     /// is not a scoring app, and the player is entitled to know that before they throw.
     public fun journalRefused(error: Throwable): String =
         error.message ?: error::class.simpleName ?: "unknown"
+
+    /// The match to offer back, said the way somebody will read it: both names and where the score stands,
+    /// so they can tell at a glance whether it is the one they meant.
+    public fun carryOn(journal: thro.journal.Journal): ThroCarryOn? {
+        val record = ThroSession.resumable(journal) ?: return null
+        val state = runCatching { journal.replay(record.id) }.getOrNull() ?: return null
+        val home = state.remaining[state.home] ?: return null
+        val away = state.remaining[state.away] ?: return null
+        return ThroCarryOn("${record.homeName} $home  ·  ${record.awayName} $away")
+    }
 }

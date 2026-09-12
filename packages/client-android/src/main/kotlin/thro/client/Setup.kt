@@ -28,7 +28,11 @@ import androidx.compose.ui.unit.sp
 // somebody has to get past before they can throw.
 
 @Composable
-public fun ThroSetupScreen(onStart: (String, String) -> Unit) {
+public fun ThroSetupScreen(
+    carryOn: ThroCarryOn? = null,
+    onCarryOn: () -> Unit = {},
+    onStart: (String, String) -> Unit,
+) {
     var home by remember { mutableStateOf("") }
     var away by remember { mutableStateOf("") }
     val colors = LocalThroColors.current
@@ -38,6 +42,26 @@ public fun ThroSetupScreen(onStart: (String, String) -> Unit) {
             Modifier.align(Alignment.Center).safeDrawingPadding().padding(horizontal = 28.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp),
         ) {
+            // **Offered, not resumed for you.** A match left half-scored three weeks ago is not the match
+            // somebody has just opened the app to start, and dropping them into it would be the app
+            // deciding. Naming the players and the score is enough for them to know which it is.
+            if (carryOn != null) {
+                Box(
+                    Modifier.fillMaxWidth()
+                        .background(colors.throChalk.copy(alpha = 0.14f), RoundedCornerShape(10.dp))
+                        .clickable { onCarryOn() }
+                        .padding(horizontal = 16.dp, vertical = 14.dp),
+                ) {
+                    Column {
+                        BasicText("Carry on", style = TextStyle(
+                            color = colors.throGreenOnink, fontSize = 13.sp, fontWeight = FontWeight.Bold,
+                        ))
+                        BasicText(carryOn.line, style = TextStyle(
+                            color = colors.colorTextOnBoard, fontSize = 19.sp, fontWeight = FontWeight.SemiBold,
+                        ))
+                    }
+                }
+            }
             BasicText("Who is playing?", style = TextStyle(
                 color = colors.colorTextOnBoard, fontSize = 30.sp, fontWeight = FontWeight.Black,
             ))
@@ -87,6 +111,9 @@ private fun NameField(value: String, placeholder: String, onChange: (String) -> 
         )
     }
 }
+
+/// A match the journal is still holding, said the way it will be shown.
+public data class ThroCarryOn(val line: String)
 
 /// The rules about the two names, apart from the drawing.
 public object ThroSetupWords {

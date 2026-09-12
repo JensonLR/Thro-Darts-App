@@ -4494,3 +4494,24 @@ Not here yet: per-dart entry, resuming a match in progress, the result screen, a
 an account.
 
 Counts: client 824 tests on iOS, 7 on Android, all 22 checks.
+
+## Picking a match back up on Android, and saying how a result is known
+
+The journal held a match in progress and the app did not offer it back. It does now, and it comes back
+**by replaying the journal through the engine** — there is no saved score, because there is no saved score.
+Offered rather than resumed for you: a match left half-scored three weeks ago is not the one somebody has
+just opened the app to start, so the card names both players and the score and lets them decide. And
+"unfinished" is not a column — every candidate is replayed, because a match is over when the engine says the
+visits add up to a win and a flag beside that would be a second opinion about the rules.
+
+A finished match now says **how the result is known**: *self-reported, scored on this phone, and nobody has
+confirmed it*. PD-011's confirmation is on iOS and not here, and the tempting word is "confirmed". The
+scoreline is home first whoever won, because one whose order changes with the result is one nobody can read
+at a glance.
+
+Seven of the fourteen Android tests open a **real journal** in a temp file and score real matches through
+it, which is only possible because Android did not get a second implementation. The five-leg sequence is
+written as a literal sequence rather than a loop with a condition: it is the one played on the emulator that
+came out 3–2, and a test that computes what it expects can agree with a bug.
+
+Counts: client 824 tests on iOS, 14 on Android, all 22 checks.

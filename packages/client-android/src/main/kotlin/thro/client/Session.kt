@@ -11,6 +11,7 @@ import thro.engine.PlayerId
 import thro.engine.RejectionReason
 import thro.journal.Journal
 import thro.journal.MatchId
+import thro.journal.MatchRecord
 import thro.journal.NewMatch
 import thro.journal.Seat
 
@@ -65,6 +66,26 @@ public class ThroSession internal constructor(
             val record = journal.createMatch(NewMatch(homeName = home, awayName = away, legsTarget = legsTarget))
             return ThroSession(journal, record.id, record.homeName, record.awayName, record.initialState)
         }
+
+        /// Picks a match back up, by **replaying it**. Not by loading a saved score — there is no saved
+        /// score. The journal holds what was thrown and the engine works out where that leaves the match,
+        /// which is the same path a fresh visit takes and therefore cannot disagree with it.
+        public fun resume(journal: Journal, record: MatchRecord): ThroSession =
+            ThroSession(journal, record.id, record.homeName, record.awayName, journal.replay(record.id))
+
+        /// The match to offer back, or null. The most recently started one that nobody has won and nobody
+        /// has ended.
+        ///
+        /// **Every candidate is replayed to find out**, because "unfinished" is not a column: a match is
+        /// over when the engine says the visits add up to a win, and asking anything else would be a second
+        /// opinion about the rules. That is O(matches) on launch and fine at the scale of one phone's
+        /// evening; it is the first thing to reconsider if a season's worth ever piles up.
+        public fun resumable(journal: Journal): MatchRecord? =
+            journal.matches(archived = false).firstOrNull { record ->
+                runCatching {
+                    journal.ending(record.id) == null && journal.replay(record.id).winner == null
+                }.getOrDefault(false)
+            }
     }
 
     public val throwerSeat: Seat?
