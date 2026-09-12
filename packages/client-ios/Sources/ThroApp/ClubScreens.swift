@@ -608,6 +608,7 @@ public struct AnnounceScreen: View {
                 .padding(.horizontal, ThroSpacing.spaceScreenGutter)
                 .padding(.top, ThroSpacing.spacing5)
                 .padding(.bottom, ThroSpacing.spacing5)
+                .throReadable()
             }
             VStack(spacing: ThroSpacing.spacing3) {
                 ThroButton("Send to \(club.delivery.reaches) member\(club.delivery.reaches == 1 ? "" : "s")",
@@ -624,6 +625,7 @@ public struct AnnounceScreen: View {
             }
             .padding(.horizontal, ThroSpacing.spaceScreenGutter)
             .padding(.bottom, ThroSpacing.spacing6)
+            .throReadable()
         }
         // The screen arrives (PD-027): one beat, on the design's own curve,
         // withdrawn entirely under Reduce Motion.

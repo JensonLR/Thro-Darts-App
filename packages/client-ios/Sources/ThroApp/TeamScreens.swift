@@ -298,6 +298,7 @@ public struct TeamFrontScreen: View {
             }
             .padding(.horizontal, ThroSpacing.spaceScreenGutter)
             .padding(.bottom, ThroSpacing.spacing6)
+            .throReadable()
         }
         .sheet(isPresented: $reporting) {
             ReportSheet(safety: safety, kind: "team", subjectId: front.teamId, subjectName: front.name, api: api) {
@@ -450,6 +451,7 @@ public struct JoinOrStartTeamScreen: View {
                 }
                 .padding(.horizontal, ThroSpacing.spaceScreenGutter)
                 .padding(.vertical, ThroSpacing.spacing5)
+                .throReadable()
             }
         }
         .background(ThroColor.colorBackgroundPrimary.ignoresSafeArea())

@@ -684,6 +684,7 @@ public struct ReadinessScreen: View {
                 }
                 .padding(.horizontal, ThroSpacing.spaceScreenGutter)
                 .padding(.vertical, ThroSpacing.spacing4)
+                .throReadable()
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
         }

@@ -311,6 +311,7 @@ public struct LeagueScreen: View {
                 }
                 .padding(.horizontal, ThroSpacing.spaceScreenGutter)
                 .padding(.bottom, ThroSpacing.spacing6)
+                .throReadable()
             }
         }
         // The screen arrives (PD-027): one beat, on the design's own curve,
@@ -536,6 +537,7 @@ public struct TournamentScreen: View {
                 }
                 .padding(.horizontal, ThroSpacing.spaceScreenGutter)
                 .padding(.bottom, ThroSpacing.spacing6)
+                .throReadable()
             }
         }
         // The screen arrives (PD-027): one beat, on the design's own curve,
@@ -1191,6 +1193,7 @@ public struct NewTeamScreen: View {
                        disabled: trimmed.isEmpty || taken) { onAdd(trimmed) }
                 .padding(.horizontal, ThroSpacing.spaceScreenGutter)
                 .padding(.bottom, ThroSpacing.spacing6)
+                .throReadable()
         }
         // The screen arrives (PD-027): one beat, on the design's own curve,
         // withdrawn entirely under Reduce Motion.
@@ -1278,6 +1281,7 @@ public struct RecordResultScreen: View {
             }
             .padding(.horizontal, ThroSpacing.spaceScreenGutter)
             .padding(.bottom, ThroSpacing.spacing6)
+            .throReadable()
         }
         // The screen arrives (PD-027): one beat, on the design's own curve,
         // withdrawn entirely under Reduce Motion.
@@ -1488,6 +1492,7 @@ public struct NewTeamFixtureScreen: View {
                 }
                 .padding(.horizontal, ThroSpacing.spaceScreenGutter)
                 .padding(.bottom, ThroSpacing.spacing6)
+                .throReadable()
             }
         }
         // The screen arrives (PD-027): one beat, on the design's own curve,

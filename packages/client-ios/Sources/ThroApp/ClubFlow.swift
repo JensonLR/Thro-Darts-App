@@ -1068,6 +1068,7 @@ public struct NewClubScreen: View {
             }
             .padding(.horizontal, ThroSpacing.spaceScreenGutter)
             .padding(.bottom, ThroSpacing.spacing6)
+            .throReadable()
         }
         // The screen arrives (PD-027): one beat, on the design's own curve,
         // withdrawn entirely under Reduce Motion.
@@ -1218,6 +1219,7 @@ public struct NewMemberScreen: View {
             }
             .padding(.horizontal, ThroSpacing.spaceScreenGutter)
             .padding(.bottom, ThroSpacing.spacing6)
+            .throReadable()
         }
         // The screen arrives (PD-027): one beat, on the design's own curve,
         // withdrawn entirely under Reduce Motion.
@@ -1279,6 +1281,7 @@ public struct NewFixtureScreen: View {
             }
             .padding(.horizontal, ThroSpacing.spaceScreenGutter)
             .padding(.bottom, ThroSpacing.spacing6)
+            .throReadable()
         }
         // The screen arrives (PD-027): one beat, on the design's own curve,
         // withdrawn entirely under Reduce Motion.
@@ -1503,6 +1506,7 @@ public struct EditClubScreen: View {
             }
             .padding(.horizontal, ThroSpacing.spaceScreenGutter)
             .padding(.bottom, ThroSpacing.spacing6)
+            .throReadable()
         }
         // The screen arrives (PD-027): one beat, on the design's own curve,
         // withdrawn entirely under Reduce Motion.
@@ -1668,6 +1672,7 @@ public struct EditMemberPictureScreen: View {
                 }
                 .padding(.horizontal, ThroSpacing.spaceScreenGutter)
                 .padding(.bottom, ThroSpacing.spacing6)
+                .throReadable()
             }
         }
         // The screen arrives (PD-027): one beat, on the design's own curve,

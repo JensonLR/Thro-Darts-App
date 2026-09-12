@@ -3597,3 +3597,30 @@ the synthesised memberwise one private and break the two views that build the ta
 once, and documented, which is the only reason it did not spring twice.
 
 Counts: client 737, API 29 suites (79 tests), HTTP 50 properties, schema 141, contrast 94 pairs.
+
+## A league member can read the table, and every screen is a column
+
+Two halves of the same night. The server could compute a league table and nothing showed one, and thirty-odd
+screens were still drawn as though nobody would ever open them on a tablet.
+
+**The table is on the league's own card**, in the board drawer, because that is where somebody looking for
+their league already is — and it opens a screen that reads the season's standings from THRØ. It is drawn as
+five things on a row rather than eight columns: the position and the name read across, the two figures that
+decide the order sit at the end, and won-drawn-lost goes on a second line where it has room. Nothing on it is
+a fixed width, so it holds at every text size and on every screen — a better answer than scaling a layout
+that was wrong at both ends. Underneath, every time, the sentence that says whose rules ordered it and in
+what order they were applied: *"Ordered on points, then leg difference, then legs won."* A step this build
+does not recognise is printed rather than dropped, so a league that approves something a later server
+understands is never handed a table quietly ordered by less than it asked for. Nine tests hold the words,
+because the words are the part that can be wrong while nothing fails.
+
+**The measure went from ten call sites to forty-three.** Every screen in the tab set, and the club, league,
+tournament, team, match, account, profile, settings, welcome, readiness and safety screens, plus the Play
+flow's setup, result and confirmation. What was left alone is now written into PD-052 rather than left to be
+rediscovered: the scoring stage owns its width by arithmetic, the bars belong to the screen's edge, Home's
+masthead floated when the measure was tried there, the announcement card is already capped at 340 points, and
+a pinned footer is not content. One thing is still outstanding on purpose — the 400-point brand band behind
+Home, You and your profile, which is 60% of an iPhone SE's height and covers a landscape phone entirely. It
+is a visual constant, and the right number for it comes from looking at it on a device.
+
+Counts: client 746, API 29 suites (79 tests), HTTP 50 properties, schema 141, contrast 94 pairs.

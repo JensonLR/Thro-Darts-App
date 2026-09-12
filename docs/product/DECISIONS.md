@@ -2326,9 +2326,16 @@ by looking at it on the device rather than by asserting it in prose.
 
 ### Where this stands
 
-Twelve call sites of forty-three screens: Home, Archive, Play, Live, You, the Settings index and its pages,
-Discover, the Welcome, your own profile, and the scoring stage, which owns its own width. **Thirty-one screens
-still stretch**, and they are the next work.
+**Forty-three call sites**, from ten when the audit ran: every screen in the tab set, and the club, league,
+tournament, team, match, account, profile, settings, welcome, readiness and safety screens, the league table,
+and the Play flow's setup, result and confirmation.
+
+What is deliberately **not** held to the measure, written down so nobody adds it later believing it was
+missed: the components inside the scoring stage, which owns its own width by arithmetic and is walked across
+eleven devices to prove it; the top bars and page bars, which belong to the screen's edge rather than to the
+column; Home's masthead, where the measure made the board float and was reverted the first time it was tried;
+the announcement card, already capped at 340 points by the approved design; and the pinned footers, which are
+not content.
 
 Fixed the same night, because each of these was worth more than the one screen it sat on: the five shared
 components that truncated long names now shrink them first — an organisation row, a top bar's eyebrow and

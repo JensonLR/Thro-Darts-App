@@ -340,6 +340,7 @@ public struct MatchReadyScreen: View {
             .padding(.top, ThroSpacing.spacing5)
             .padding(.bottom, ThroSpacing.spacing4)
             .padding(.horizontal, ThroSpacing.spaceScreenGutter)
+            .throReadable()
             ThroBottomAction {
                 ThroButton(session.visits.isEmpty ? "Start scoring" : "Continue scoring",
                            variant: .primary, size: .large, fullWidth: true, action: onStart)
@@ -1187,6 +1188,7 @@ public struct MatchResultScreen: View {
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.vertical, ThroSpacing.spacing6)
             .padding(.horizontal, ThroSpacing.spaceScreenGutter)
+            .throReadable()
     }
 }
 
@@ -1249,6 +1251,7 @@ public struct ConfirmResultScreen: View {
                 }
                 .padding(.horizontal, ThroSpacing.spaceScreenGutter)
                 .padding(.vertical, ThroSpacing.spacing5)
+                .throReadable()
             }
         }
         // The screen arrives (PD-027): one beat, on the design's own curve,

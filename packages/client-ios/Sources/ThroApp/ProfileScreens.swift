@@ -435,6 +435,7 @@ public struct DeleteAccountScreen: View {
                 .padding(.horizontal, ThroSpacing.spaceScreenGutter)
                 .padding(.top, ThroSpacing.spacing5)
                 .padding(.bottom, ThroSpacing.spacing7)
+                .throReadable()
             }
         }
         .background(ThroColor.colorBackgroundPrimary.ignoresSafeArea())

@@ -99,6 +99,7 @@ struct LeagueSayPicker: View {
                 }
                 .padding(.horizontal, ThroSpacing.spaceScreenGutter)
                 .padding(.vertical, ThroSpacing.spacing5)
+                .throReadable()
             }
         }
         .background(ThroColor.colorBackgroundPrimary.ignoresSafeArea())

@@ -362,6 +362,7 @@ struct ThroMatchScreen: View {
                 .padding(.horizontal, ThroSpacing.spaceScreenGutter)
                 .padding(.top, ThroSpacing.spacing5)
                 .padding(.bottom, ThroSpacing.spacing7)
+                .throReadable()
             }
         }
         .background(ThroColor.colorBackgroundPrimary.ignoresSafeArea())
@@ -519,6 +520,7 @@ struct MatchCodeEntryScreen: View {
                 }
                 .padding(.horizontal, ThroSpacing.spaceScreenGutter)
                 .padding(.vertical, ThroSpacing.spacing5)
+                .throReadable()
             }
         }
         .background(ThroColor.colorBackgroundPrimary.ignoresSafeArea())

@@ -67,6 +67,7 @@ public struct AccountScreen: View {
                     .padding(.horizontal, ThroSpacing.spaceScreenGutter)
                     .padding(.top, ThroSpacing.spacing5)
                     .padding(.bottom, ThroSpacing.spacing6)
+                    .throReadable()
                 }
             }
             .background(ThroColor.colorBackgroundPrimary.ignoresSafeArea())
