@@ -3272,3 +3272,28 @@ The diagnostic from PD-074 is what will catch the next one, and it was changed t
 reading your own entitlements, so it probes the app-group container instead —
 `containerURL(forSecurityApplicationGroupIdentifier:)` is nil exactly when the binary is not entitled, which
 is the same fault the phone's log named.
+
+### Proved on the signed binaries, not argued
+
+`codesign -d --entitlements` on three builds of the same source, on the founder's own Mac:
+
+| Build | applesignin | associated-domains | app group |
+|---|---|---|---|
+| **Personal, 16:59** — theirs, before the fix | missing | missing | missing |
+| **Debug, 17:27** — after the fix | present | present | present |
+| **Personal, after the fix** | present | present | present |
+
+The first row is the failure, reproduced. The third is the fix, verified: pressing ▶ in Xcode now produces a
+properly entitled binary.
+
+**One wrong turn worth recording**, because it nearly sent this the other way: the first `codesign` read was
+of a `.app` from a *different* DerivedData directory, dated six days earlier, and reported all three
+missing on what looked like a fresh build. Two DerivedData folders exist for this project and `find` returned
+the stale one first. The profile embedded in that old artefact was from 5 September, which made a
+week-old build look like a live contradiction. **Check the timestamp of any build artefact before believing
+what it says about the code that is on disk now.**
+
+The Xcode errors the founder pasted — *"the capability associated with APPLE_ID_AUTH could not be
+determined"*, *"doesn't include the Associated Domains capability"* — are stale in the same way. The profile
+they name was regenerated at 15:40 and does carry all three; the runbook already warned that these messages
+outlive the fault.
