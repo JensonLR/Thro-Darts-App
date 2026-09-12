@@ -225,4 +225,220 @@ async function mountFixtures(where, titleEl, eyebrowEl) {
   );
 }
 
-window.THRO = { mountLeagues, mountTable, mountFixtures };
+
+// --- signing in, with a passkey ------------------------------------------------------------------
+//
+// A passkey rather than an OAuth redirect, because the API already speaks WebAuthn (PD-030) and because a
+// redirect flow on a static site means a client id, a callback page and a third party in the round trip. A
+// passkey needs none of those: the browser holds the key, the server holds the public half, and the whole
+// exchange is two requests to our own origin.
+//
+// The session lives in sessionStorage, not localStorage. It is cleared when the tab closes, which is the
+// right default for somebody entering results on a shared laptop in a pub back room — the place this page
+// is actually for.
+
+const B64U = {
+  toBytes(s) {
+    const b64 = s.replace(/-/g, '+').replace(/_/g, '/');
+    const bin = atob(b64 + '='.repeat((4 - (b64.length % 4)) % 4));
+    return Uint8Array.from(bin, c => c.charCodeAt(0));
+  },
+  fromBytes(buf) {
+    const bin = String.fromCharCode(...new Uint8Array(buf));
+    return btoa(bin).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+  },
+};
+
+/** This browser's device id, kept so a session family belongs to it as the phone's does. */
+function deviceId() {
+  let id = localStorage.getItem('thro.device');
+  if (!id) { id = crypto.randomUUID(); localStorage.setItem('thro.device', id); }
+  return id;
+}
+
+const session = {
+  get() { try { return JSON.parse(sessionStorage.getItem('thro.session') || 'null'); } catch { return null; } },
+  set(s) { sessionStorage.setItem('thro.session', JSON.stringify(s)); },
+  clear() { sessionStorage.removeItem('thro.session'); },
+};
+
+async function post(path, body, bearer) {
+  const res = await fetch(`${API}${path}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...(bearer ? { Authorization: `Bearer ${bearer}` } : {}) },
+    body: JSON.stringify(body),
+  });
+  const text = await res.text();
+  let parsed = null;
+  try { parsed = text ? JSON.parse(text) : null; } catch { /* the status is all there is */ }
+  if (!res.ok) throw new Error((parsed && parsed.error) || `THRØ answered ${res.status}.`);
+  return parsed;
+}
+
+/** A request that needs a session: one refresh on a 401, then it gives up and says so — as the phone does. */
+async function authorised(method, path, body) {
+  let s = session.get();
+  if (!s) throw new Error('You are not signed in.');
+  const send = token => fetch(`${API}${path}`, {
+    method,
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+    body: body === undefined ? undefined : JSON.stringify(body),
+  });
+  let res = await send(s.accessToken);
+  if (res.status === 401) {
+    let renewed;
+    try { renewed = await post('/v1/auth/refresh', { refreshToken: s.refreshToken }); }
+    catch { session.clear(); throw new Error('Your sign-in has expired. Sign in again.'); }
+    session.set(renewed);
+    res = await send(renewed.accessToken);
+  }
+  const text = await res.text();
+  let parsed = null;
+  try { parsed = text ? JSON.parse(text) : null; } catch { /* nothing to read */ }
+  if (!res.ok) throw new Error((parsed && parsed.error) || `THRØ answered ${res.status}.`);
+  return parsed;
+}
+
+/** True when this browser can do the ceremony at all — an old one, or an insecure origin, cannot. */
+function passkeysPossible() {
+  return typeof PublicKeyCredential !== 'undefined' && window.isSecureContext;
+}
+
+async function signInWithPasskey() {
+  if (!passkeysPossible()) {
+    throw new Error('This browser cannot use a passkey here. It needs a recent browser on a secure connection.');
+  }
+  const asked = await post('/v1/auth/passkey/options', { deviceId: deviceId() });
+  const assertion = await navigator.credentials.get({
+    publicKey: {
+      challenge: B64U.toBytes(asked.publicKey.challenge),
+      rpId: asked.publicKey.rpId,
+      userVerification: asked.publicKey.userVerification,
+      timeout: asked.publicKey.timeout,
+      // No allowCredentials: the passkey is discoverable, so the browser offers the ones it holds
+      // for this domain rather than the page having to know who is signing in.
+    },
+  });
+  if (!assertion) throw new Error('No passkey was chosen.');
+  const signedIn = await post('/v1/auth/passkey', {
+    deviceId: deviceId(),
+    challengeId: asked.challengeId,
+    credentialId: B64U.fromBytes(assertion.rawId),
+    clientDataJSON: B64U.fromBytes(assertion.response.clientDataJSON),
+    authenticatorData: B64U.fromBytes(assertion.response.authenticatorData),
+    signature: B64U.fromBytes(assertion.response.signature),
+  });
+  session.set(signedIn);
+  return signedIn;
+}
+
+async function whoAmI() { return authorised('GET', '/v1/me'); }
+
+function signOut() { session.clear(); }
+
+
+// --- running a league ----------------------------------------------------------------------------
+//
+// The surface a league secretary actually wants: a laptop, a keyboard, and the week's results typed in one
+// sitting. The routes behind it are PD-053's, and nothing here can grant the relation they check — an
+// administrator is named out of band, so this page refuses politely for everybody else rather than
+// pretending the button might work.
+
+async function mountOrganiser(where, signInEl) {
+  const season = new URLSearchParams(location.search).get('season');
+  if (!season) { fail(where, new Error('This address names no season.')); return; }
+
+  const draw = async () => {
+    if (!session.get()) {
+      signInEl.replaceChildren(make('p', 'quiet', 'Signing in uses a passkey — the same one the app uses. Nothing is typed.'));
+      const button = make('button', 'primary', 'Sign in with a passkey');
+      button.onclick = async () => {
+        button.disabled = true;
+        try { await signInWithPasskey(); await draw(); }
+        catch (e) { signInEl.append(make('p', 'note', e.message)); button.disabled = false; }
+      };
+      signInEl.append(button);
+      where.replaceChildren(make('p', 'quiet', 'Sign in to enter this season’s results.'));
+      return;
+    }
+
+    signInEl.replaceChildren();
+    const out = make('button', 'quiet-button', 'Sign out');
+    out.onclick = () => { signOut(); draw(); };
+    signInEl.append(out);
+
+    let data;
+    try { data = await read(`/v1/seasons/${encodeURIComponent(season)}/fixtures`); }
+    catch (e) { fail(where, e); return; }
+
+    const todo = (data.fixtures || []).filter(f => !f.decided);
+    const done = (data.fixtures || []).filter(f => f.decided);
+    const parts = [];
+
+    if (!todo.length) {
+      parts.push(make('p', null, 'Every fixture in this season has a result.'));
+    } else {
+      parts.push(make('h2', null, `${todo.length} to enter`));
+      for (const f of todo) parts.push(entry(f, draw));
+    }
+    if (done.length) {
+      parts.push(make('h2', null, `${done.length} already in`));
+      const list = make('ul', 'rows');
+      for (const f of done) {
+        const li = make('li');
+        const row = make('div');
+        row.style.padding = '12px 0';
+        const d = f.decided;
+        const score = d.legsHome === null ? (d.kind === 'walkover' ? 'walkover' : 'awarded') : `${d.legsHome}–${d.legsAway}`;
+        row.append(make('div', 'row-name', `${f.home || 'A team'} ${score} ${f.away || 'A team'}`),
+                   make('div', 'row-meta', when(f.scheduledAt)));
+        li.append(row); list.append(li);
+      }
+      parts.push(list);
+      parts.push(make('p', 'quiet', 'A result already in is corrected by a new decision that supersedes it, which this page does not do yet — the app and the API can.'));
+    }
+    where.replaceChildren(...parts);
+  };
+
+  /** One fixture, with two boxes and a button. The server decides whether it is played or declared. */
+  function entry(f, redraw) {
+    const box = make('div', 'entry');
+    box.append(make('div', 'row-name', `${f.home || 'A team'} v ${f.away || 'A team'}`),
+               make('div', 'row-meta', when(f.scheduledAt) + (f.venue ? ` · ${f.venue}` : '')));
+    const form = make('div', 'entry-form');
+    const home = make('input'); home.type = 'number'; home.min = '0'; home.inputMode = 'numeric';
+    home.setAttribute('aria-label', `Legs for ${f.home || 'the home team'}`);
+    const away = make('input'); away.type = 'number'; away.min = '0'; away.inputMode = 'numeric';
+    away.setAttribute('aria-label', `Legs for ${f.away || 'the away team'}`);
+    const save = make('button', 'primary', 'Save');
+    const said = make('p', 'note');
+    said.hidden = true;
+    save.onclick = async () => {
+      const h = parseInt(home.value, 10);
+      const a = parseInt(away.value, 10);
+      if (!Number.isInteger(h) || !Number.isInteger(a) || h < 0 || a < 0) {
+        said.hidden = false; said.textContent = 'A result is two numbers, one for each side.'; return;
+      }
+      save.disabled = true;
+      try {
+        const done = await authorised('POST', `/v1/fixtures/${encodeURIComponent(f.fixtureId)}/result`,
+                                      { legsHome: h, legsAway: a });
+        // The server chose the kind from the evidence, not from anything this page sent (PD-055).
+        said.hidden = false;
+        said.textContent = done.kind === 'played'
+          ? 'Saved, against the match scored on THRØ.'
+          : 'Saved as the league’s word — no match was scored on THRØ for this fixture.';
+        setTimeout(redraw, 900);
+      } catch (e) {
+        said.hidden = false; said.textContent = e.message; save.disabled = false;
+      }
+    };
+    form.append(home, make('span', 'v', 'v'), away, save);
+    box.append(form, said);
+    return box;
+  }
+
+  await draw();
+}
+
+window.THRO = { mountLeagues, mountTable, mountFixtures, mountOrganiser, signInWithPasskey, whoAmI, signOut, session, authorised, passkeysPossible };

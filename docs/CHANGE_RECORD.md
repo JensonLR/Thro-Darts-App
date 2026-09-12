@@ -3804,3 +3804,32 @@ UPDATE and the trigger refused it as a stale write, because every write to a tea
 The test obeys the same rule as the store rather than sidestepping it.
 
 Counts: client 746, API 29 suites (83 tests), HTTP 52 properties, schema 144, contrast 94 pairs.
+
+## A league secretary, a laptop, and the week's results (PD-056, PD-053)
+
+The routes to run a league went in earlier tonight and had nobody to call them: an administrator is named
+out of band, and the app has no screen for it. The web does now.
+
+**Signing in is a passkey.** The API already speaks WebAuthn, and a redirect flow on a static site would mean
+a client id, a callback page and a third party in the round trip. A passkey needs none of that — the browser
+holds the key, the server holds the public half, and the exchange is two requests to our own origin. The
+session lives in `sessionStorage` and goes when the tab closes, which is the right default for a shared
+laptop in a pub back room.
+
+**Entering a result is two boxes and a button**, and the page does not say what kind of result it is. It
+sends the legs; the server reads whether a match was scored on THRØ and records *played* or *declared*
+accordingly (PD-055). A client cannot claim otherwise because it is never asked.
+
+**Proven end to end through the web's own origin**, with the dev principal standing in for the ceremony: a
+post before the grant is *"You do not administer this league season"*; the same post after the relation is
+granted returns `"kind":"declared"`, because that fixture had no match behind it; and a second result on it
+is *"This fixture already has a result. Correcting one is a new decision that supersedes it."* The authority
+model, the evidence rule and the supersede rule, all three, from the outside.
+
+**What is not verified**: the passkey ceremony needs a human with a device, so the signed-in view has not
+been seen in a browser. Said plainly in the web README rather than left to be discovered.
+
+And the dev server learned to proxy more than GET, which is how the first attempt failed — it answered 501
+to the very POST the page exists to make, and a developer chasing that would have gone looking in the API.
+
+Counts: client 746, API 29 suites (83 tests), HTTP 52 properties, schema 144, contrast 94 pairs.

@@ -24,15 +24,42 @@ class Handler(http.server.SimpleHTTPRequestHandler):
     def __init__(self, *a, **kw):
         super().__init__(*a, directory=HERE, **kw)
 
-    def do_GET(self):  # noqa: N802 - the base class names it
-        if self.path.startswith("/v1/"):
-            self.proxy()
-        else:
-            super().do_GET()
+    # Every method, not only GET: the organiser page posts results, and a dev server that proxied reads
+    # and answered 501 to writes would send somebody hunting through the API for a fault that is here.
+    def do_GET(self):  # noqa: N802 - the base class names these
+        if self.proxied(): return
+        super().do_GET()
+
+    def do_HEAD(self):  # noqa: N802
+        if self.proxied(): return
+        super().do_HEAD()
+
+    def do_POST(self): self.proxied(required=True)  # noqa: N802
+
+    def do_PUT(self): self.proxied(required=True)  # noqa: N802
+
+    def do_DELETE(self): self.proxied(required=True)  # noqa: N802
+
+    def proxied(self, required: bool = False) -> bool:
+        """Proxies /v1 and the association file; True when it handled the request."""
+        if not (self.path.startswith("/v1/") or self.path.startswith("/.well-known/")):
+            if required:
+                self.send_error(404, "only /v1 is proxied")
+                return True
+            return False
+        self.proxy()
+        return True
 
     def proxy(self):
+        length = int(self.headers.get("Content-Length") or 0)
+        payload = self.rfile.read(length) if length else None
+        request = urllib.request.Request(f"{API}{self.path}", data=payload, method=self.command)
+        # The headers the API actually reads: what is being sent, and who is sending it.
+        for h in ("Content-Type", "Authorization", "X-Thro-Device", "X-Thro-Dev-Subject", "Accept"):
+            if self.headers.get(h):
+                request.add_header(h, self.headers[h])
         try:
-            with urllib.request.urlopen(f"{API}{self.path}", timeout=20) as up:
+            with urllib.request.urlopen(request, timeout=20) as up:
                 body, status = up.read(), up.status
         except urllib.error.HTTPError as e:
             body, status = e.read(), e.code

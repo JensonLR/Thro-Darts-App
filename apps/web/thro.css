@@ -91,3 +91,18 @@ td.team { font-weight: var(--font-weight-semibold); }
 .goes li, .stays li { margin-bottom: 8px; }
 
 footer { border-top: 1px solid var(--color-border-default); padding-block: 24px 40px; color: var(--color-text-secondary); font-size: 14px; }
+
+/* Running a league: two boxes and a button, on a card. */
+.entry { border: 1px solid var(--color-border-default); border-radius: var(--radius-card);
+         background: var(--color-background-raised); padding: 14px; margin-bottom: 12px; }
+.entry-form { display: flex; align-items: center; gap: 10px; margin-top: 10px; flex-wrap: wrap; }
+.entry-form input { width: 5rem; font: inherit; padding: 10px; text-align: center;
+                    color: var(--color-text-primary); background: var(--color-background-primary);
+                    border: 1px solid var(--color-border-default); border-radius: var(--radius-field); }
+.entry-form .v { color: var(--color-text-secondary); }
+button.primary { font: inherit; font-weight: var(--font-weight-semibold); padding: 12px 20px;
+                 color: var(--color-text-inverse); background: var(--color-background-brand);
+                 border: 0; border-radius: var(--radius-control); cursor: pointer; min-height: 44px; }
+button.primary:disabled { opacity: 1; background: var(--color-text-tertiary); cursor: default; }
+button.quiet-button { font: inherit; padding: 8px 0; color: var(--color-text-brand);
+                      background: none; border: 0; cursor: pointer; text-decoration: underline; }

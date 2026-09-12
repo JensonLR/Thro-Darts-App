@@ -8,6 +8,7 @@ account. It is a static site over the public API.
 | `index.html` | The leagues, searchable by name or town. A league with a season links to its table |
 | `table.html?season=<uuid>` | That season's table, as `GET /v1/seasons/{id}/standings` computes it |
 | `fixtures.html?season=<uuid>` | That season's fixtures, played and still to play, from `GET /v1/seasons/{id}/fixtures`. A result says how it was arrived at: scored on THRØ, or the league's word |
+| `organiser.html?season=<uuid>` | **Running a league.** Sign in with a passkey, then type the week's results. Only an administrator of that season may save one (PD-053); everybody else is refused politely, because nothing on this page can grant the relation |
 | `delete-account.html` | Static. Google Play requires a web URL for account deletion before an Android app may ship, and it says what the app says: what goes, what stays, and why |
 
 ## Why it looks like THRØ without a design system in it
@@ -39,9 +40,21 @@ python3 apps/web/serve.py                                       # another; http:
 `serve.py` serves the directory and proxies `/v1` to the API, so what you look at in development is
 arranged the way the real thing is rather than in a way that only works locally.
 
+## Signing in
+
+A passkey, not an OAuth redirect. The API already speaks WebAuthn (PD-030), and a redirect flow on a static
+site means a client id, a callback page and a third party in the round trip; a passkey needs none of those.
+The session lives in `sessionStorage` and goes when the tab closes, which is the right default for somebody
+entering results on a shared laptop in a pub back room.
+
+**What is verified, and what is not.** The handshake's first half is proven end to end — the options call
+returns a challenge and the relying-party id through the same origin. The ceremony itself needs a human with
+a device, so the signed-in view has not been seen in a browser. The server side behind it *is* proven: a
+result posted by somebody who does not administer the season is a 403, the same post after they are named is
+a 200 that comes back `"kind":"declared"` because no match was scored, and a second result on the same
+fixture is a 409. That is the whole authority model and PD-055's rule, tested through this proxy.
+
 ## Not built
 
-Signing in, the organiser's own surface (entering results from a laptop, which the routes behind
-PD-053 already allow), the privacy policy and terms, and anything that writes. This is the public face
-and the one page a store requires; everything that writes still needs an account, and an account on the
-web needs sign-in that does not exist here yet.
+Correcting a result already in — the API supersedes, this page does not offer it yet. The privacy policy and
+terms. And anything about a team or a player: this is a league's own surface, not an account's.

@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="en-GB">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Run this league — THRØ</title>
+<meta name="robots" content="noindex">
+<link rel="stylesheet" href="tokens.css">
+<link rel="stylesheet" href="thro.css">
+</head>
+<body>
+<header class="field">
+  <div class="measure">
+    <p class="eyebrow">Run this league</p>
+    <p class="wordmark" style="font-size:28px">Results</p>
+  </div>
+</header>
+<main class="measure">
+  <div id="signin"></div>
+  <div id="organiser"><p class="quiet">One moment…</p></div>
+</main>
+<footer class="measure">
+  <p><a href="index.html">All leagues</a></p>
+</footer>
+<script src="thro.js"></script>
+<script>
+  THRO.mountOrganiser(document.getElementById('organiser'), document.getElementById('signin'));
+</script>
+</body>
+</html>
