@@ -419,7 +419,10 @@ public final class LiveSignInServices: NSObject, SignInServices, @unchecked Send
 
     public func appleIdentityToken(nonce: String) async throws -> String? {
         let request = ASAuthorizationAppleIDProvider().createRequest()
-        request.requestedScopes = [.fullName]
+        // No scopes (PD-063). Only `apple.identityToken` is read below, and the server takes one claim
+        // from it — the subject. `.fullName` asked Apple for a name that was handed over, never looked at
+        // and never stored, and the sheet said so to the player while it happened.
+        request.requestedScopes = []
         request.nonce = Nonce.hashed(nonce)
         let credential = try await perform([request])
         guard let apple = credential as? ASAuthorizationAppleIDCredential, let token = apple.identityToken else { return nil }

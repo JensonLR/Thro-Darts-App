@@ -2863,3 +2863,41 @@ anywhere else.
 
 Home is not a candidate: the Continue card is the one unfinished thing on the screen and halving it would
 make it smaller, not clearer.
+
+## PD-063 — THRØ asks a sign-in provider for one thing, and that is the subject
+
+**Found while writing the privacy policy, 2026-09-12.** Writing down what THRØ collects meant reading what
+it actually asks for, and the two did not match.
+
+The app's own words to a player, on two screens: *"THRØ has no email or phone."* True of the database —
+there is no email column anywhere in `identity` — and **not true of what was being requested**:
+
+| | Asked for | Read | Stored |
+|---|---|---|---|
+| Google | `openid email profile` | subject only | subject only |
+| Apple | `.fullName` | subject only | subject only |
+
+`IdTokenVerifier.Claims` carried `nameHint` and `emailHint`, both parsed out of every token and **read by
+nothing**. So on every Google sign-in a person handed over their email address, saw a consent sheet listing
+it, and THRØ threw it away — having told them on the previous screen that it has no email.
+
+**Now: `openid` alone, no Apple scopes, and the two hint fields are gone.** Nothing changes about what THRØ
+stores, because it never stored them; what changes is what it asks a person to give.
+
+### Why this is a decision and not a tidy-up
+
+**A scope requested is data collected**, whatever happens to it next. It appears on the consent sheet, it
+crosses the wire, it is in a log somewhere at the provider, and on Apple's and Google's privacy
+questionnaires it is a line THRØ would have to declare, defend and be able to delete. Removing it does not
+simplify a form — it makes an entire category of the form *"not collected"*, which is a stronger position
+than any wording could buy, and it makes the sentence on the screen true.
+
+It also removes a temptation. A field holding somebody's email address that nothing reads is a field the
+next feature reaches for without a decision being made.
+
+**What it costs:** a display name cannot be pre-filled from the provider. It never was — a player types
+their name — so this costs nothing today. If pre-filling is wanted later it is a decision to take then,
+with the consent sheet it implies, rather than a capability sitting quietly open.
+
+The test asserts the absence as well as the presence: `email`, `profile`, `phone` and `address` must not
+appear in the scope. The failure being guarded is somebody adding one back for a feature that never lands.

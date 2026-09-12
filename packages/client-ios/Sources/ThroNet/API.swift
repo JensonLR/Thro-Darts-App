@@ -1158,7 +1158,11 @@ public enum GoogleOAuth {
         var c = URLComponents(url: authorizationEndpoint, resolvingAgainstBaseURL: false)!
         c.queryItems = [
             .init(name: "client_id", value: clientID), .init(name: "redirect_uri", value: redirect),
-            .init(name: "response_type", value: "code"), .init(name: "scope", value: "openid email profile"),
+            // `openid` alone (PD-063). THRØ reads exactly one claim from the token it gets back — the
+            // provider's subject — so asking for `email` and `profile` requested a name and an email
+            // address that nothing has ever looked at, and would have to be declared on a store's privacy
+            // label as data THRØ collects. Apple's side of this already asked only for the name.
+            .init(name: "response_type", value: "code"), .init(name: "scope", value: "openid"),
             .init(name: "code_challenge", value: pkce.challenge), .init(name: "code_challenge_method", value: "S256"),
             .init(name: "nonce", value: nonce),
         ]

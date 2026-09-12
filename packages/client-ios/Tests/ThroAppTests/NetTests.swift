@@ -146,7 +146,16 @@ final class NetTests: XCTestCase {
         let url = try XCTUnwrap(GoogleOAuth.authorizationURL(configuration: config, pkce: pkce, nonce: "n1"))
         let items = Dictionary(uniqueKeysWithValues: URLComponents(url: url, resolvingAgainstBaseURL: false)!.queryItems!.map { ($0.name, $0.value ?? "") })
         XCTAssertEqual(items["code_challenge_method"], "S256")
-        XCTAssertEqual(items["scope"], "openid email profile")
+        // PD-063: THRØ reads one claim from the token it gets back — the subject — so it asks for one
+        // scope. Asserted as *what must not be there* as well as what must, because the failure this
+        // guards is somebody adding `email` back for a feature that never lands: a scope requested is
+        // data handed over, and data handed over is a line on a store's privacy label whether or not
+        // anything reads it.
+        XCTAssertEqual(items["scope"], "openid")
+        for asked in ["email", "profile", "phone", "address"] {
+            XCTAssertFalse(items["scope"]!.contains(asked),
+                           "THRØ asks Google for no \(asked): it stores none and tells the player so")
+        }
         XCTAssertEqual(items["redirect_uri"], "com.googleusercontent.apps.12345-abc:/oauth2redirect")
         XCTAssertNil(ServerConfiguration(baseURL: config.baseURL, googleClientID: "").googleClientID, "an empty plist value is no client id")
         XCTAssertEqual(GoogleOAuth.code(from: URL(string: "com.googleusercontent.apps.12345-abc:/oauth2redirect?code=4%2Fabc&scope=openid")!), "4/abc")

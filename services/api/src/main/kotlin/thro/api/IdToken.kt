@@ -18,8 +18,10 @@ import java.util.concurrent.ConcurrentHashMap
  * Verifying a Sign in with Apple or Google ID token (PD-030). An ID token is a JWT the provider
  * signed; THRØ checks the signature against the provider's published keys, the issuer, the
  * audience and the expiry, and takes from it exactly one fact: the provider's subject for this
- * person. Nothing else in the token is trusted for anything — a name or email claim is a hint the
- * person may accept on a screen, never a fact THRØ writes on its own.
+ * person. **Nothing else is read at all** (PD-063). The token carries a name and often an email; both were
+ * parsed into `Claims` and never looked at by anything, which is a copy of somebody's email address made
+ * for no reason and then written down in a privacy policy. THRØ's own words to the player are "THRØ has no
+ * email or phone", and that is now true of the code and not only of the screen.
  *
  * No library: RS256 is `SHA256withRSA` over `header.payload`, and the JWKS is an RSA modulus and
  * exponent. The key source is an interface so a test can sign tokens with a key it holds.
@@ -36,7 +38,9 @@ public fun interface JwkSource {
 
 public class IdTokenVerifier(private val keys: JwkSource, private val now: () -> Instant = { Instant.now() }) {
 
-    public data class Claims(val subject: String, val issuer: String, val nameHint: String?, val emailHint: String?)
+    /// The one fact taken from a verified token. There is deliberately nothing else here: a field that
+    /// holds personal data nobody reads is personal data THRØ has to declare, defend and delete.
+    public data class Claims(val subject: String, val issuer: String)
 
     public sealed interface Result {
         public data class Verified(val claims: Claims) : Result
@@ -82,8 +86,7 @@ public class IdTokenVerifier(private val keys: JwkSource, private val now: () ->
             tokenNonce == null && nonce != null -> return Result.Rejected("the request named a nonce and the token carries none")
         }
         val sub = payload["sub"] as? String ?: return Result.Rejected("no subject")
-        val name = (payload["name"] as? String) ?: (payload["given_name"] as? String)
-        return Result.Verified(Claims(sub, iss!!, name, payload["email"] as? String))
+        return Result.Verified(Claims(sub, iss!!))
     }
 
     private fun b64(s: String): ByteArray = Base64.getUrlDecoder().decode(s)
