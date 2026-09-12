@@ -4555,3 +4555,26 @@ to turn it on or the sign that it is on with the way to stop. A state showing ne
 quietly in use.
 
 Counts: client 828 tests on iOS, 19 on Android, all 22 checks.
+
+## A DPIA and a ROPA, written from the schema
+
+Both were on the blocking list and neither existed. They are drafts for the founder to adopt and a solicitor
+to check — but the *facts* in them are true, which is the part a solicitor cannot check for you.
+
+The spine of both is a claim that was verified rather than asserted: **there is no email address, no phone
+number, no postal address and no date of birth anywhere in the system.** Every column in every schema was
+queried for those names. The only postcode belongs to a **venue** — a pub — and is not personal data about a
+player. Signing in with Apple or Google stores the provider's subject identifier and nothing else.
+
+The DPIA is honest about what it cannot solve. THRØ has **no way to verify a guardian**, and a self-declared
+age band is exactly as reliable as the person typing it; the mitigation is that THRØ holds so little that a
+wrongly-classified child is exposed to very little. And it records the rating (OD-001) as a profiling risk
+*now*, so that when it closes the Children's-code question cannot be answered by omission.
+
+It also names its own biggest gap: **safety reports carry free text a reporter wrote, which may be
+special-category data, and nothing deletes one.** A report from four years ago about a child who is now an
+adult should not still be there.
+
+Against the code's fifteen standards: minimisation and data sharing are strong, geolocation is met as of
+PD-086, and what is open is high-privacy defaults (Standard 7), a child-facing explanation (Standard 4) and
+the mailbox (Standard 15).

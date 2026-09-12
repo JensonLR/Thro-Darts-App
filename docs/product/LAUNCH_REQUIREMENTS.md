@@ -72,8 +72,10 @@ each claim, so that the ones that need a solicitor can be taken to one knowingly
    indicator while it is on** (Standard 10) — off by default it always was, and **the indicator is now
    built** (PD-086): whenever the phone's location is being used, Discover says so and offers Stop beside
    it, in the app rather than only in iOS Settings. What remains under the code is **high-privacy defaults**
-   on every public surface (Standard 7), and the DPIA document itself, which is a written assessment rather
-   than code. Consent age is 13 in the UK and
+   on every public surface (Standard 7). **The DPIA is written** — `docs/legal/DPIA.md`, drafted from the
+   schema rather than from memory — and so is the **ROPA** Art 30 requires, at `docs/legal/ROPA.md`. Both
+   need the founder to adopt them and a solicitor to check them. The DPIA names its own gaps; the largest is
+   that safety reports have no retention period. Consent age is 13 in the UK and
    16 in several EU states unless lowered.
 9. **Digital Services Act, if any EU user.** *Founder + build.* A published single point of contact
    (Art 12), terms that state restrictions **and explain them in a way a minor can understand** (Art 14(3)),
