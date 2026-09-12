@@ -3833,3 +3833,29 @@ And the dev server learned to proxy more than GET, which is how the first attemp
 to the very POST the page exists to make, and a developer chasing that would have gone looking in the API.
 
 Counts: client 746, API 29 suites (83 tests), HTTP 52 properties, schema 144, contrast 94 pairs.
+
+## Buying the domain is one command, because doing it by hand would break passkeys
+
+The founder's constraint, plainly put: the free arrangement is for a handful of testers, and *"adding the
+domain is what kicks it all into gear."* Making that true needed one correction and one tool.
+
+**The correction.** PD-056 put the app and the browser behind one name, with `/v1` rewritten from the static
+site to the API. Right for the browser, wrong for the app: it puts a CDN in front of the live match stream,
+and a CDN that buffers `text/event-stream` is how a live match dies silently (ADR-007). So with a domain
+there are two names — `thro.uk` serves the pages, `api.thro.uk` serves the app — and **one relying party
+covers both**, because WebAuthn lets an origin assert a relying party that is a registrable-domain suffix of
+itself. That is the whole value of owning the domain, and it is unavailable on Render's free subdomains at
+any price: `onrender.com` is on the Public Suffix List.
+
+**The tool.** `tools/host.py` holds the four values that name a host to one of two legal arrangements and
+switches between them. It is not a convenience. A find-and-replace at launch sets the relying party to
+`api.thro.uk`, which works silently for everyone who has no passkey yet and permanently separates the
+website's credentials from the app's; it also drags `render.yaml`'s rewrite destinations, which address the
+API service and must not move. Both mistakes were perturbed into the check and both are caught, along with a
+forgotten file, a `www.` prefix, and a name under `onrender.com`. The round trip is the identity, and a bare
+run is registered in CI, so a half-finished switch fails the build rather than reaching a tester.
+
+**And a thing to say out loud rather than discover:** a passkey is bound to its relying party, so every one
+registered under the old host dies at the switch. Sign in with Apple does not — a native app's audience is
+the bundle id, not a host. Hence the guidance for the testing period, now written where a tester's account
+depends on it (PD-058, `docs/runbooks/GOING_LIVE.md`).

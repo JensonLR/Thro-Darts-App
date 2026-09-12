@@ -92,6 +92,14 @@ jobs:
       - name: The web's tokens are the generated ones
         run: python3 tools/check_web_tokens.py
 
+      # Three files name THRØ's public host and they do not all name the same one once a real domain
+      # exists — the app talks to api.thro.uk while the relying party stays thro.uk, because a passkey
+      # is bound to its RP ID and only a registrable domain can be shared. A find-and-replace at
+      # launch would point the relying party at the API's subdomain and break every passkey, silently
+      # and only for people who already had one. This holds the four values to one arrangement.
+      - name: Every place that names the host agrees
+        run: python3 tools/host.py
+
       # And a document that describes the build has to still be true of it. The runbook said
       # "Attestation | Not in the app" three weeks after PD-011 shipped, "Haptics | None" after
       # PD-015 shipped four, and that the checkout card carried no route because no route table

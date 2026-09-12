@@ -2607,3 +2607,60 @@ against Fly's $7, and $39 against $14 at ten thousand. That is the moment to mov
 The purchase itself, which needs a card. Whether to take `throdarts.com` defensively. And the switch-over,
 which is a short checklist in DEPLOY.md rather than a decision: the relying-party id, the entitlement, and
 the association file all name a host, and all three change together or passkeys stop working.
+
+## PD-058 — The domain is the switch, and the app gets its own subdomain
+
+**Founder, 2026-09-12**, on the free Render arrangement: *"the whole free server layout is only while I & a
+very small number of people will be testing, once live to public it will have the domain etc. so I wanted
+the best way to wire it up where adding the domain is what kicks it all into gear."*
+
+That is the right instinct and it needed one correction, which changes the target arrangement.
+
+### The app talks to `api.thro.uk`, not to `thro.uk`
+
+The earlier sketch (PD-056) put everything behind one name: pages at `thro.uk`, `/v1` rewritten from there to
+the API, and the app pointed at `thro.uk` too. One origin, one relying party, no CORS. That is right for the
+**browser** and wrong for the **app**, because it puts Render's static CDN in front of every request the app
+makes — including the live match stream. A CDN that buffers a `text/event-stream` is exactly how a live
+match dies, and ADR-007 exists because that failure is silent and looks like the app being broken.
+
+So with a domain the arrangement is two names:
+
+| Name | Serves | Who calls it |
+|---|---|---|
+| `thro.uk` | the static pages, with `/v1/*` rewritten to the API | the browser |
+| `api.thro.uk` | the API service directly | the app |
+
+**One relying party covers both**, and that is the entire value of owning a domain here. WebAuthn permits an
+origin to assert a relying party that is a registrable-domain suffix of itself, so `https://api.thro.uk` may
+assert `thro.uk`, and a passkey created on the website works in the app. Two `*.onrender.com` subdomains
+cannot do this at any price: `onrender.com` is on the Public Suffix List (line 15457), which makes each
+subdomain its own registrable domain. **This is why web sign-in waits for the domain** — not cost, not
+effort, a rule.
+
+### The switch is a command, because a find-and-replace would break it
+
+Three files name the host, and after the switch they do not name the same one: the relying party is
+`thro.uk` and the app's base URL is `https://api.thro.uk`. A replace-all would set the relying party to
+`api.thro.uk` — which still works, silently, for anyone with no passkey yet, and permanently separates the
+website's credentials from the app's. It would also drag `render.yaml`'s rewrite destinations, which address
+the API *service* and must not move, onto the public name.
+
+`tools/host.py` encodes the two legal arrangements: `--set thro.uk`, `--set-free`, and a bare run that
+checks. It refuses a name that cannot be a relying party (`www.` prefixed, or anything under
+`onrender.com`), names the api-subdomain mistake specifically rather than reporting it as three unrelated
+mismatches, and round-trips to the identity. It runs in CI, so a half-finished switch fails the build.
+
+### Passkeys do not survive the switch, and testers should not be using them
+
+A passkey is bound to one relying party; changing it invalidates every credential registered under the old
+one. That is WebAuthn being correct — a credential that followed a hostname across an ownership change would
+be one that whoever bought the old name could claim.
+
+Sign in with Apple **is** unaffected: a native app's audience is the bundle id, not a host. So the guidance
+for the testing period is to sign in with Apple, and then the domain switch costs nobody an account. This is
+recorded because it is a decision about what to tell people, not only about what the code does — the cost of
+getting it wrong is a tester locked out of a season they entered.
+
+Order of operations, and what stays on Render's dashboard rather than in the repo:
+[docs/runbooks/GOING_LIVE.md](../runbooks/GOING_LIVE.md).

@@ -60,6 +60,10 @@ against, and a stable home for passkeys and universal links.
 the host changes, every existing passkey stops working. Today that costs nothing, because nobody has one.
 After a hundred people have signed in it costs each of them a sign-in.
 
+> **The day you buy the domain, follow [GOING_LIVE.md](GOING_LIVE.md)** — it is the ordered list, and the
+> switch itself is `python3 tools/host.py --set thro.uk`. Do not do it by hand: the relying party and the
+> app's base URL become different names, and a find-and-replace breaks passkeys silently (PD-058).
+
 ### Web Service or Static Site?
 
 Render offers both and they are different jobs, not two ways of doing one:
