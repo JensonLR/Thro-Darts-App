@@ -67,11 +67,20 @@ The design tokens are compiled **from where they are generated**: `packages/desi
 source directory of the client module, so `build.py` feeds Swift, Kotlin and CSS from one run and there is no
 copy here to forget.
 
-## What the journal will use, and why it matters
+## The journal, and the two things it took (PD-082)
 
-`packages/journal` depends on `org.xerial:sqlite-jdbc`, and its README is careful to say those tests are not
-Android's SQLite. **The JAR ships Android natives** — `org/sqlite/native/Linux-Android/aarch64/libsqlitejdbc.so`
-— so the Android client can run the same journal code the JVM tests exercise: the same schema, the same
-triggers, the same replay, the same SQLite build. That is worth having and it is not yet wired up; when it is,
-ADR-006's outstanding measurement on a real Android device is still outstanding, because a bundled SQLite on
-an emulator says nothing about a phone's storage.
+The client runs `packages/journal` — the same package the 39 JVM tests exercise, against the same SQLite
+build. Verified on the emulator, which reports `journal_mode wal · synchronous 2`.
+
+Two things were needed, and a future reader will hit both again if either is undone:
+
+1. **The `.so` must be in the APK's own `lib/`.** Android refuses to `dlopen` from an app's writable
+   storage, so the driver's habit of extracting to a temp folder fails with *dlopen failed: library
+   "libsqlitejdbc.so" not found*. `packages/client-android/build.gradle.kts` has an `extractSqliteNatives`
+   task that lifts them out of the resolved JAR at build time — not committed, so the driver and its native
+   library cannot drift apart.
+2. **`org.sqlite.lib.path` must be `applicationInfo.nativeLibraryDir`**, set before the first connection.
+   `ThroStore.open` does it.
+
+**No durability number is claimed.** ADR-006's measurement on a real Android device is still outstanding;
+an emulator's storage says nothing about a phone's.

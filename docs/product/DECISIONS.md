@@ -3750,3 +3750,45 @@ of that measurement.
 Everything else. There is no scoring screen, no journal on the phone, no keypad, no accounts, no chalk grain
 on the board. What exists is the floor, and it is a floor that CI now builds on every push — on Linux,
 because Android's toolchain is Linux-native and macOS minutes here cost ten times as much.
+
+## PD-082 — Android runs the journal, not a copy of it
+
+**12 September 2026**, the day after the floor. The first real question about an Android client was never
+the UI: it was whether ADR-006's on-device journal would have to be written a second time.
+
+### It does not, and that is the whole point
+
+`packages/journal` is the Kotlin half of ADR-006 — the same schema, the same append-only triggers, the same
+replay, held by 39 tests. Its README was careful that those tests run on `org.xerial:sqlite-jdbc` and *not*
+on `android.database.sqlite`, and the natural reading was that Android needed its own.
+
+**The JAR ships Android natives.** So the Compose client runs that package, against that SQLite build, on
+the phone. The emulator reports `journal_mode wal · synchronous 2` back — the measured configuration, in
+force, on Android.
+
+What that is worth is not convenience. A trigger that refuses a bare `DELETE` is now *the same trigger* on
+both platforms; a replay that throws on a corrupt row throws the same way; and the next change to the
+schema is one change. The alternative was two implementations of the one thing in this product that must
+never lose a dart.
+
+### Two things it took, neither of them obvious
+
+1. **Android will not `dlopen` from an app's writable storage.** The driver's loader extracts the `.so` to a
+   temp directory and calls `System.load`, which is exactly what W^X forbids, and the first run said so:
+   *dlopen failed: library "libsqlitejdbc.so" not found* — a true statement about the only directory it is
+   allowed to look in. The library has to be in the **APK's own `lib/`**.
+2. **`org.sqlite.lib.path` must point at `applicationInfo.nativeLibraryDir`** before the first connection,
+   or the driver goes back to extracting.
+
+The natives are lifted out of the **resolved JAR at build time** rather than committed. That keeps four
+megabytes of binary out of git, and — the reason that matters more — it makes it impossible for the driver
+and its native library to be different versions, which is the bug this would otherwise grow into.
+
+### What is still not claimed
+
+**No durability number.** The README's paragraph stands unchanged and is worth restating: `fullfsync` is
+Apple's barrier, SQLite accepts the pragma everywhere and stores it, so reading it back on Android returns
+1 while nothing has happened to the hardware — a verification that always passes, which is worse than none.
+ADR-006's measurement on a real Android device is **still outstanding**, and an emulator's storage says
+nothing about a phone's. Running the journal on Android moves that measurement from *impossible to take* to
+*not yet taken*, which is progress and is not the same thing.

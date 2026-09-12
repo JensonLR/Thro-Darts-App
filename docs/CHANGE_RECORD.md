@@ -4437,3 +4437,31 @@ And the three replies that have to exist **before** the mailbox answers, because
 first message: a data-subject acknowledgement that points at the deletion page since it is usually the whole
 answer, a safeguarding first response that promises nothing about outcomes and never continues a
 conversation with a child, and the DSA one-liner.
+
+## Android runs the journal, not a copy of it
+
+The first real question about an Android client was never the UI. It was whether ADR-006's on-device
+journal would have to be written a second time — and the journal's own README, careful that its tests run
+on `sqlite-jdbc` and not on `android.database.sqlite`, read like a yes.
+
+**It is a no.** The JAR ships Android natives, so the Compose client runs *that* package against *that*
+SQLite build on the phone, and the emulator reports `journal_mode wal · synchronous 2` back. A trigger that
+refuses a bare `DELETE` is now the same trigger on both platforms, a replay that throws on a corrupt row
+throws the same way, and the next schema change is one change rather than two.
+
+Two things it took, neither obvious and the first found by reading what the phone said. **Android will not
+`dlopen` from an app's writable storage** — the driver extracts the `.so` to a temp folder and calls
+`System.load`, which W^X forbids, and the first run reported *dlopen failed: library "libsqlitejdbc.so" not
+found*, which is a true statement about the only directory it is allowed to look in. The library has to be
+in the APK's own `lib/`. And `org.sqlite.lib.path` has to point at `applicationInfo.nativeLibraryDir` before
+the first connection.
+
+The natives are lifted out of the **resolved JAR at build time** rather than committed: four megabytes stay
+out of git, and the driver and its native library cannot end up different versions.
+
+**No durability number is claimed and the README's paragraph stands.** `fullfsync` is Apple's barrier;
+SQLite accepts the pragma everywhere and stores it, so reading it back on Android returns 1 while nothing
+has happened to the hardware. ADR-006's measurement on a real Android device is still outstanding — this
+moves it from impossible to take to not yet taken, which is progress and is not the same thing.
+
+Counts: client 824 tests, all 22 checks.

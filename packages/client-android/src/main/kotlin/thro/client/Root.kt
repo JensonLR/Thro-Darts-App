@@ -4,6 +4,12 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
@@ -24,6 +30,18 @@ import thro.engine.RuleTables
 
 @Composable
 public fun ThroAndroidRoot() {
+    val context = LocalContext.current
+    // The journal is opened once, off the main thread, and what happened is said on screen. The risky
+    // part of running the shared journal on Android is whether `sqlite-jdbc` can load its native library
+    // at all under the W^X rules — so the first build shows the answer rather than hiding it in a log.
+    var journal by remember { mutableStateOf<String?>(null) }
+    LaunchedEffect(Unit) {
+        journal = ThroStore.open(context).fold(
+            onSuccess = { ThroAndroidWords.journalOpened(it.journal.configurationInForce) },
+            onFailure = { ThroAndroidWords.journalRefused(it) },
+        )
+    }
+
     ThroTheme {
         ThroBoard {
             Column(
@@ -46,6 +64,12 @@ public fun ThroAndroidRoot() {
                                       fontWeight = FontWeight.Bold, textAlign = TextAlign.Center),
                     modifier = Modifier.padding(top = 24.dp),
                 )
+                BasicText(
+                    journal ?: "opening the journal…",
+                    style = TextStyle(color = chalk.copy(alpha = 0.8f), fontSize = 14.sp,
+                                      textAlign = TextAlign.Center),
+                    modifier = Modifier.padding(top = 8.dp),
+                )
             }
         }
     }
@@ -62,4 +86,14 @@ public object ThroAndroidWords {
         val route = RuleTables.route(from, outRule)
         return if (route == null) "no route from $from" else "$from: " + route.joinToString(" ")
     }
+
+    /// What the journal is running under, in the words it uses about itself.
+    public fun journalOpened(configuration: Map<String, String>): String =
+        "journal open · " + configuration.entries.sortedBy { it.key }
+            .joinToString(" · ") { "${it.key} ${it.value}" }
+
+    /// Why it would not open. Said on screen rather than logged, because the whole point of the first
+    /// build is finding out.
+    public fun journalRefused(error: Throwable): String =
+        "journal refused: " + (error.message ?: error::class.simpleName ?: "unknown")
 }

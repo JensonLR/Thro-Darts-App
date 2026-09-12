@@ -34,10 +34,26 @@ a test.
 
 ## What this package does not claim
 
-**It is not Android's SQLite.** These tests run on `org.xerial:sqlite-jdbc`, a JVM build. Android
-ships its own SQLite behind `android.database.sqlite`, with its own version and its own defaults.
-What is proved here is the schema, the triggers, the replay and the API — the parts that are the
-domain. How a device's storage behaves is not proved by a JVM.
+**It is not Android's SQLite — and the Android client does not use Android's SQLite either.** These
+tests run on `org.xerial:sqlite-jdbc`, a JVM build; Android ships its own behind
+`android.database.sqlite`, with its own version and its own defaults. The obvious reading of that
+sentence, when it was written, was that an Android client would need a second implementation.
+
+**It does not.** The `sqlite-jdbc` JAR ships Android natives, so as of 12 September 2026 (PD-082) the
+Compose client runs *this* package, against *this* SQLite build: the same schema, the same
+append-only triggers, the same replay, the same `DurabilityConfiguration`. Verified on an emulator,
+which reported `journal_mode wal · synchronous 2` back from the phone.
+
+Two things it took, and neither is obvious. The `.so` has to be in the **APK's own `lib/`
+directory** — Android will not `dlopen` from an app's writable storage, so the driver's habit of
+extracting to a temp folder fails with *dlopen failed: library "libsqlitejdbc.so" not found*; the
+Android build lifts the natives out of the resolved JAR at build time, which also makes it impossible
+for the driver and its native library to be different versions. And `org.sqlite.lib.path` has to be
+set to `applicationInfo.nativeLibraryDir` before the first connection.
+
+What is proved here is still the schema, the triggers, the replay and the API — the parts that are
+the domain. How a device's storage behaves is not proved by a JVM, and is not proved by an emulator
+either.
 
 **No durability number is claimed.** `ThroJournal` on iOS sets four pragmas: WAL, `synchronous=FULL`,
 `fullfsync` and `checkpoint_fullfsync`. The last two are Apple's `F_FULLSYNC`, which pushes data past

@@ -19,11 +19,47 @@ android {
         targetCompatibility = JavaVersion.VERSION_17
     }
     sourceSets["main"].kotlin.srcDir("../design-tokens/generated")
+    // A literal path, not `layout.buildDirectory.dir(...)`: AGP 9 refuses a Provider here because Android
+    // Studio cannot tell generated directories from static ones through one. The task dependency it would
+    // have carried is wired by hand below, which the error message says is the trade.
+    sourceSets["main"].jniLibs.srcDir("build/generated/sqliteJniLibs")
 }
 
+// SQLite's native library, out of the JAR and into the APK.
+//
+// **`sqlite-jdbc` ships Android natives and Android still would not load them.** The JAR carries
+// `org/sqlite/native/Linux-Android/aarch64/libsqlitejdbc.so`, and the driver's loader extracts it to a temp
+// directory and calls `System.load` — which Android refuses, because an app may not execute code from its
+// own writable storage. The first run said so exactly: *dlopen failed: library "libsqlitejdbc.so" not
+// found*. The only place Android will dlopen from is the APK's own `lib/` directory.
+//
+// So the `.so` is lifted out of the resolved JAR at build time rather than committed. That keeps a
+// multi-megabyte binary out of git and — the part that matters — makes it **impossible for the native
+// library and the JDBC driver to be different versions**, which is the bug this would otherwise grow.
+val sqliteNatives: Configuration by configurations.creating { isTransitive = false }
+
+val extractSqliteNatives by tasks.registering(Copy::class) {
+    val abis = mapOf("aarch64" to "arm64-v8a", "arm" to "armeabi-v7a", "x86_64" to "x86_64")
+    from({ zipTree(sqliteNatives.singleFile) }) {
+        include("org/sqlite/native/Linux-Android/**/libsqlitejdbc.so")
+        eachFile {
+            val abi = abis[path.substringAfter("Linux-Android/").substringBefore("/")]
+            if (abi == null) exclude() else path = "$abi/libsqlitejdbc.so"
+        }
+        includeEmptyDirs = false
+    }
+    into(layout.buildDirectory.dir("generated/sqliteJniLibs"))
+}
+
+tasks.named("preBuild") { dependsOn(extractSqliteNatives) }
+
 dependencies {
-    // The scoring engine, which is the same Gradle project the JVM conformance corpus runs against.
+    sqliteNatives("org.xerial:sqlite-jdbc:3.46.1.3")
+    // The scoring engine and the journal, which are the same Gradle projects the JVM conformance corpus
+    // and the 39 journal tests run against. Not copies: ADR-002 and ADR-006 both turn on there being one
+    // implementation per language, and a second one here would be the thing those decisions exist to stop.
     implementation("thro-engine:thro-engine")
+    implementation("thro-journal:thro-journal")
     implementation("androidx.compose.ui:ui:1.7.5")
     implementation("androidx.compose.ui:ui-graphics:1.7.5")
     implementation("androidx.compose.ui:ui-text:1.7.5")
