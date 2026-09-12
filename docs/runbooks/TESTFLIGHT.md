@@ -150,9 +150,29 @@ the wrong thing.
    sibling identifier `app.thro.darts.live` needs App Groups only, and already had it. Automatic
    signing is *supposed* to register these itself and did not, so check them by hand whenever a
    profile is said to be missing a capability.
-2. **Xcode's cached list of what capabilities exist was stale.** The symptom is the strange one:
-   *"The capability associated with ASSOCIATED_DOMAINS could not be determined. Please file a bug
-   report."* That is not a bug to report. Delete the cache and the archive works:
+2. **Xcode's cached list of what capabilities exist was stale — and it produces three errors, not one.**
+   The strange one names itself: *"The capability associated with ASSOCIATED_DOMAINS could not be
+   determined. Please file a bug report."* (or `APPLE_ID_AUTH`, same fault). That is not a bug to report.
+
+   **The other two are consequences of it, and they lie:** *"Provisioning profile … doesn't include the
+   Associated Domains capability"* and *"… doesn't include the Sign In with Apple capability."* When Xcode
+   cannot determine what a capability is, it concludes the profile lacks it. On 12 September all three
+   appeared at once while the profile on disk, issued that afternoon, carried every one of them — checked
+   with `security cms -D -i` against the file Xcode itself had just downloaded. **Do not go back to the
+   portal on the strength of those two messages.** Check the profile first:
+
+   ```bash
+   for f in ~/Library/Developer/Xcode/UserData/Provisioning\ Profiles/*.mobileprovision; do
+     security cms -D -i "$f" | plutil -extract Entitlements xml1 -o - - | grep '<key>'
+   done
+   ```
+
+   An empty `~/Library/Developer/Xcode/UserData/Capabilities/` is the tell: Xcode is supposed to refetch it
+   on the next build and does not always, and **quitting and reopening Xcode is what makes it**. The
+   command line does not consult that cache at all, which is why the one-liner above keeps working while
+   the Xcode UI refuses — and why it is the way out of this rather than a workaround.
+
+   Delete the cache and the archive works:
    ```bash
    rm ~/Library/Developer/Xcode/UserData/Capabilities/capabilities-*-2XM324WPD5-bundle.json
    rm ~/Library/Developer/Xcode/UserData/Provisioning\ Profiles/*.mobileprovision
