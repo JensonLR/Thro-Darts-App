@@ -38,6 +38,9 @@ each claim, so that the ones that need a solicitor can be taken to one knowingly
    about: somebody who cannot open the app and needs their account deleted anyway. A deletion page with
    no way to ask is a deletion page that fails the requirement it was built for.
 
+   **The names are decided and checked** — see `docs/product/PRESENCE.md`: `privacy@thro.uk` for this and
+   the DSA contact, `safeguarding@thro.uk`, `hello@thro.uk`, one inbox behind all three. `thro.uk` was
+   confirmed unregistered at Nominet on 12 September 2026, so nothing blocks it but buying it.
    This needs a **mailbox decision, not code**: a role address the product owns (`privacy@thro.uk` or
    similar) rather than a personal one, because it goes on a public page and outlives whoever reads it
    today. The same address answers the DSA point of contact below, so one mailbox closes two items — and

@@ -62,7 +62,14 @@ for (index, entry) in images.enumerated() {
     let x = gap + CGFloat(column) * (cellWidth + gap)
     // AppKit's origin is bottom-left; the sheet reads top-left, so rows count down.
     let y = height - gap - CGFloat(row + 1) * (cellHeight + caption) - CGFloat(row) * gap
-    entry.0.draw(in: NSRect(x: x, y: y + caption, width: cellWidth, height: cellHeight))
+    // Letterboxed, not stretched. The first version sized every cell from the FIRST image, so a sheet
+    // mixing a phone screenshot with a 6:1 banner showed the banner squashed into a phone's aspect — and
+    // the artwork looked broken when the sheet was. A contact sheet that lies about shape is worse than
+    // no contact sheet.
+    let scale = min(cellWidth / entry.0.size.width, cellHeight / entry.0.size.height)
+    let w = entry.0.size.width * scale, h = entry.0.size.height * scale
+    entry.0.draw(in: NSRect(x: x + (cellWidth - w) / 2, y: y + caption + (cellHeight - h) / 2,
+                            width: w, height: h))
     NSString(string: entry.1).draw(in: NSRect(x: x, y: y + 4, width: cellWidth, height: caption - 6),
                                    withAttributes: attributes)
 }

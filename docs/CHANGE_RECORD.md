@@ -4386,3 +4386,34 @@ the same journal the JVM tests exercise rather than a reimplementation against `
 ADR-006's measurement on a real Android device stays outstanding either way.
 
 Counts: client 824 tests, all 22 checks; the Android client builds on Linux in CI.
+
+## The names THRØ answers to, and a link that previews as something
+
+The founder asked for social accounts and an email address — the best names, and checked. `docs/product/PRESENCE.md`
+is the answer: **`throdarts`** everywhere, verified free on X, Instagram, TikTok, YouTube and Bluesky by
+loading each profile and reading the platform's own "doesn't exist"; Threads follows Instagram; Facebook and
+Reddit could not be checked and say so rather than being guessed at. **`thro` on its own is gone** — X has
+had it since 2009, dormant, and dormant is not available.
+
+**`thro.uk` is confirmed unregistered** at Nominet, which means every plan built on it — the API's host, the
+passkey relying party, the email domain, `tools/host.py --set thro.uk` — is still good. `thro.co.uk` belongs
+to somebody else and has since 2014, which is worth knowing before anything is printed.
+
+Three addresses behind one inbox: `privacy@` (which also answers the DSA point of contact), `safeguarding@`
+and `hello@`. That closes four open items at once. **One consequence had to be written down**: the privacy
+policy says in terms that THRØ holds no email address — and a mailbox means correspondence *is* personal
+data, the only data of that kind the product will hold. The policy needs a paragraph and a retention rule,
+and the contact line must stay unpublished until the mailbox answers, because a data-subject request that
+bounces is a missed statutory deadline rather than a missed email.
+
+The banners are **generated, not drawn**: `tools/make_social_artwork.swift` builds the X, YouTube, Facebook,
+LinkedIn and Open Graph images from the app's own wordmark geometry — the Ø is a dart through a ring at
+measured proportions and not the typeface's Ø, so a banner made by eye would drift the first time either
+moved. The Open Graph image is now `apps/web/og.png` and every web page carries the tags, so a link to THRØ
+previews as something instead of a bare URL.
+
+And the safeguarding rule the app already obeys is written down for marketing, where nobody enforces it:
+never repost a player without knowing they are over 18 and have said yes, an unknown age is a no, and use
+the seeded demo season for screenshots because nobody in it is real.
+
+Counts: client 824 tests, all 22 checks.
