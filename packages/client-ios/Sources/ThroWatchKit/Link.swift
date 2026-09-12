@@ -86,6 +86,15 @@ public final class ThroWristLink: NSObject {
     private var latest: [String: Any]?
     private let lock = NSLock()
 
+    /// What is waiting to go, for a test. `LiveBoard` is the one place a leg leaves the app and it
+    /// reaches three singletons; without this the join between a real match and this link would be the
+    /// only untested step in the chain, and it is the step a person would notice.
+    var pending: [String: Any]? {
+        lock.lock()
+        defer { lock.unlock() }
+        return latest
+    }
+
     public init(wrist: ThroWrist = .shared) {
         self.wrist = wrist
         super.init()

@@ -4267,5 +4267,11 @@ Release failed under Personal alone. Its three configurations were confirmed byt
 the scheme's Run action moves to Debug. Two configurations that must stay identical are one configuration and
 a trap.
 
-Counts: client 803 tests (29 on a wrist), all 22 checks, Debug and Release both build for the simulator and
+**Proved with a paired pair of simulators**: the wrist showing a leg, the phone app launched, the wrist
+clearing — activation, the pending write, delivery, the mark and the main-thread hop, in one observation.
+A script cannot play a match, though, so the last join is a test rather than a screenshot: a real
+`MatchSession` reaching the link with a real state and format, a visit reaching it, the wall going dark at
+the end while the wrist keeps the result, and a launch saying nothing is on.
+
+Counts: client 807 tests (29 on a wrist), all 22 checks, Debug and Release both build for the simulator and
 the device, and the watch app for watchOS.

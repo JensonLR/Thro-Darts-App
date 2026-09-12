@@ -3461,6 +3461,21 @@ this project's rule about looking before calling something done.
    won, so a decided leg dimmed both numerals — the screen's answer to the only question left, in the
    background colour. The subject of the screen is now the winner, then the thrower, then nobody.
 
+### Proving it, without a script that can tap
+
+The transport was watched carrying a real message between two processes: a watch simulator paired to a phone
+simulator, the wrist showing a leg, the phone app launched — and the wrist cleared, because the first thing a
+launch says is *nothing is on*. Activation on both ends, the pending write, delivery, the mark being
+recognised and the hop to the main thread, all in one observation.
+
+What a script **cannot** do is play a match: every screen here is reached by tapping, which is the reason
+`-ThroScreen` exists and the reason it cannot help — it speaks the `thro://` link grammar, and no link starts
+a leg. So the last join — a real `MatchSession` reaching the link with a real state and format — is held by
+`LiveBoardBridgeTests` instead, which runs on every push and is better than a screenshot anyway. Four tests:
+starting a match puts that leg on the wrist with the format the wall was given; a visit reaches it; **the
+wall goes dark at the end while the wrist keeps the result**, so the one asymmetry cannot be tidied away into
+consistency by somebody who does not know why it is there; and a launch says nothing is on.
+
 ### And `Personal` is gone
 
 **It broke this change, in a second and entirely different way from PD-075's.** A custom build

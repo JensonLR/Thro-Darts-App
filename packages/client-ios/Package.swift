@@ -122,7 +122,7 @@ let package = Package(
         .testTarget(
             name: "ThroPlayTests",
             dependencies: [
-                "ThroPlay", "ThroJournal",
+                "ThroPlay", "ThroJournal", "ThroLiveKit", "ThroWatchKit",
                 .product(name: "ThroEngine", package: "engine-swift"),
                 .product(name: "ThroStatistics", package: "statistics-swift"),
             ],
