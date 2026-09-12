@@ -4465,3 +4465,32 @@ has happened to the hardware. ADR-006's measurement on a real Android device is 
 moves it from impossible to take to not yet taken, which is progress and is not the same thing.
 
 Counts: client 824 tests, all 22 checks.
+
+## Scoring a match on Android
+
+Two names, a keypad, and a match that is recorded as it is scored. The iOS session's rule carries over
+unchanged — **engine, then journal, then screen** — because a scoreboard ahead of the record is a record
+nobody can trust. A rejection is part of the contract and not an exception: nothing is written and the
+screen says why in words a player can act on, and a test walks every reason the engine can return so a new
+one cannot arrive as "That cannot be scored". Undo is a retraction and the screen is rebuilt by replaying.
+
+**A bug worth writing down.** The session first kept plain properties and the screen bumped a counter to
+force a redraw, justified by a comment saying observable state would invite a screen that updates before the
+write. It was wrong twice: Compose skipped the composable that reads the session because its arguments had
+not changed, so two visits reached the journal and neither reached the screen — 501 and 501 on the board
+with 321 and 361 in the database — and the reasoning was confused, because what keeps the order is the code
+that assigns state after `append` returns. A comment explaining why something unusual is correct is worth
+re-reading when the unusual thing does not work.
+
+**The journal was proved rather than asserted.** Pulled off the device: two rows, the match row reading
+`Jenson|Ethan|501|double|5`, and a bare `DELETE FROM journal` typed straight at the file coming back
+`Error: stepping, journal is append-only (19)` — ADR-006's guarantee enforced by SQLite on the phone,
+against a shell that is not the app.
+
+The checkout on screen is derived by the engine's own tables for that number under that match's out-rule
+(PD-013), which is why 141 shows T20 T19 D12 and why there is no table of finishes anywhere in the UI.
+
+Not here yet: per-dart entry, resuming a match in progress, the result screen, and everything downstream of
+an account.
+
+Counts: client 824 tests on iOS, 7 on Android, all 22 checks.

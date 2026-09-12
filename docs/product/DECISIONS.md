@@ -3792,3 +3792,59 @@ Apple's barrier, SQLite accepts the pragma everywhere and stores it, so reading 
 ADR-006's measurement on a real Android device is **still outstanding**, and an emulator's storage says
 nothing about a phone's. Running the journal on Android moves that measurement from *impossible to take* to
 *not yet taken*, which is progress and is not the same thing.
+
+## PD-083 — Scoring a match on Android
+
+**12 September 2026.** The floor was PD-081 and the journal was PD-082; this is the thing they were for.
+
+### Engine, then journal, then screen — never another order
+
+The iOS session's rule, carried over because it is not a style preference. The engine decides whether a
+visit is legal, because it is the only thing that knows. The journal is written next, because a visit the
+player can see and the phone has not recorded is a visit that vanishes when the battery does. The screen
+moves last, from what was actually written. Any other order produces a scoreboard ahead of the record, and
+the record is the product.
+
+A rejection is **part of the contract, not an exception**: nothing is written and the screen says why, in
+words a player can act on. `IMPOSSIBLE_VISIT_TOTAL` is true and useless to somebody holding three darts, so
+it reads *"No three darts make that"* — and a test walks every case the engine can return, so a new reason
+fails here rather than arriving on a screen as "That cannot be scored".
+
+Undo is a **retraction, not a delete**, and the screen is rebuilt by replaying rather than by subtracting.
+That is ADR-006's whole shape and it costs nothing to honour.
+
+### The bug worth writing down: a wrong reason, then a wrong behaviour
+
+The session first kept its state as plain properties, and the screen bumped a counter to force a redraw. The
+comment justifying it said observable state *"would invite a screen that updates before the write"*.
+
+**It was wrong twice.** It did not work: Compose skipped the composable that reads the session, because its
+arguments had not changed, so two visits went into the journal and neither reached the screen — 501 and 501,
+with 321 and 361 in the database. And the reasoning was confused. What keeps the order is the *code* in
+`enter()`, which assigns state only after `append` returns; whether that property is observable has nothing
+to do with it. The state is `mutableStateOf` now and the counter is gone.
+
+The general lesson is the one about justifications: a comment that explains why something unusual is correct
+is worth re-reading when the unusual thing does not work, because it is often the reason it was done.
+
+### The journal, proved rather than asserted
+
+The screen said 321 and 361 and the screen is not evidence. Pulled off the device with `run-as` and a
+`sqlite3` shell: two rows in `journal`, the match row reading `Jenson|Ethan|501|double|5`, and — the one
+that matters — a bare `DELETE FROM journal` typed straight at the file came back
+
+    Error: stepping, journal is append-only (19)
+
+**ADR-006's append-only guarantee, enforced by SQLite on the phone**, against a shell that is not the app.
+That is the strongest statement available that this is the same journal and not something shaped like it.
+
+### What is deliberately not here
+
+- **Per-dart entry.** The iOS client has both keypads and the dart one is the larger: it carries the
+  evidence that makes checkout percentage computable (PD-024). A total is the whole of what the engine
+  needs, so the total keypad ships first and the dart keypad is a second decision rather than a smaller
+  version of this one.
+- **Resuming a match.** The journal holds a match in progress and the app does not offer it back on
+  relaunch. That is a gap, not a decision, and it is the next thing.
+- The result screen, history, the club book, accounts, and everything downstream of them.
+- **A durability number.** Still ADR-006's, still outstanding on a real Android device.

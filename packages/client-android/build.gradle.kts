@@ -53,8 +53,21 @@ val extractSqliteNatives by tasks.registering(Copy::class) {
 
 tasks.named("preBuild") { dependsOn(extractSqliteNatives) }
 
+// The rules the screens obey run on the JVM, so they are tested there. Nothing in `ThroScoringWords` or
+// `ThroSetupWords` needs a device, and a rule nothing checks is a rule that comes back.
+android {
+    testOptions.unitTests.isReturnDefaultValues = true
+}
+
 dependencies {
     sqliteNatives("org.xerial:sqlite-jdbc:3.46.1.3")
+    // Explicit coordinates, not `kotlin("test")`: AGP 9 supplies Kotlin without the Kotlin Gradle Plugin,
+    // and that helper comes from the plugin. Named versions are also honest about what is being resolved.
+    // `kotlin-test-junit`, not plain `kotlin-test`: the plain artefact picks its framework variant through
+    // Gradle attributes the Kotlin plugin sets, and AGP 9 does not apply that plugin — so it resolves to the
+    // common variant and `kotlin.test.Test` does not exist. Naming the JUnit variant removes the guesswork.
+    testImplementation("org.jetbrains.kotlin:kotlin-test-junit:2.2.20")
+    testImplementation("junit:junit:4.13.2")
     // The scoring engine and the journal, which are the same Gradle projects the JVM conformance corpus
     // and the 39 journal tests run against. Not copies: ADR-002 and ADR-006 both turn on there being one
     // implementation per language, and a second one here would be the thing those decisions exist to stop.
