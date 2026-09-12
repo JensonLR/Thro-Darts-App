@@ -3231,3 +3231,44 @@ signed with a profile carrying **none** of the entitlements — not only Sign in
 too, which the Live Activity needs. That is the cause recorded here from the previous occasion, and it is
 not code. The diagnostic would have said `profile: applesignin MISSING` on the phone's own screen, which is
 the whole point of building it.
+
+## PD-075 — The `Personal` configuration was crippling a paid team's build
+
+**Found, 12 September 2026**, after the founder confirmed every capability was ticked on the App ID and
+Sign in with Apple still failed on their phone with `AKAuthenticationError Code=-7026` and
+`container_create_or_lookup_app_group_path_by_app_group_identifier: client is not entitled`.
+
+The App ID was right. The provisioning profile was right. **The binary had no entitlements**, because the
+`Personal` build configuration signs against `ThroDarts.personal.entitlements`, which is an empty dict — and
+the scheme's **Run action uses `Personal`**, so pressing ▶ in Xcode produces exactly that build.
+
+The empty file was correct when it was written, and said so in its own comment: *"a free Apple team cannot
+sign Sign in with Apple, Associated Domains or App Groups"*. It even predicted the symptoms — *"Sign in with
+Apple and passkeys refuse (Google still works), and the Live Activity's shared container is absent"* — which
+is precisely what the founder reported.
+
+**It stopped being correct at enrolment and nobody noticed.** `Personal` carries
+`DEVELOPMENT_TEAM = 2XM324WPD5`, the paid team, which can sign all three capabilities. Diffing the two
+configurations, the entitlements file is now the **only** difference between `Debug` and `Personal`: same
+team, same signing style, same bundle id, same everything. A configuration whose sole remaining purpose was
+to work around a limitation that no longer applies, wired to the button everybody presses.
+
+So `Personal` signs with the real entitlements, and the two empty files are deleted. Debug, Personal and
+Release all build.
+
+### Why this outlived two investigations
+
+Because every place anyone looks says the right thing. The entitlements file in the repository is correct.
+The App ID is correct. The profile is correct. `check_app_group.py` passed throughout — it holds the group's
+name in agreement across three places, which it was, and never asked whether the configuration being *run*
+grants it. The only artefact that was wrong is the one nobody reads: a build setting pointing at a second
+file.
+
+The lesson is narrow and worth keeping: **a build configuration that differs from another in exactly one
+setting is a trap wearing a name.** `Personal` should be retired the next time the project file is open;
+it now means nothing.
+
+The diagnostic from PD-074 is what will catch the next one, and it was changed to suit: iOS has no API for
+reading your own entitlements, so it probes the app-group container instead —
+`containerURL(forSecurityApplicationGroupIdentifier:)` is nil exactly when the binary is not entitled, which
+is the same fault the phone's log named.

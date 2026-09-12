@@ -4174,3 +4174,30 @@ Kept: the device in the list, and a note where the assertion would have gone. No
 stage, which was right. Recording a negative result costs a paragraph and saves the next person the hour.
 
 Counts: client 772 tests, all 22 checks.
+
+## Every place anyone looked was right, and the binary still had no entitlements
+
+Sign in with Apple failed on the founder's phone. The App ID had every capability ticked, the caches were
+cleared, the app was reinstalled, and it failed again — with `AKAuthenticationError Code=-7026` and
+`client is not entitled` for the app group.
+
+**The `Personal` build configuration signs against an empty entitlements file, and the scheme's Run action
+uses `Personal`.** Pressing ▶ in Xcode produces a build with no capabilities at all. The file was correct
+when written — a free Apple team cannot sign those three — and its own comment predicted these exact
+symptoms, down to "Google still works". It stopped being correct at enrolment: `Personal` carries the paid
+team now, and the entitlements file is the *only* thing left that differs between it and `Debug`.
+
+Fixed by pointing `Personal` at the real entitlements and deleting the two empty files. All three
+configurations build.
+
+**Why it survived two investigations:** everything anyone reads says the right thing. The repository's
+entitlements are right, the App ID is right, the profile is right, and `check_app_group.py` passed
+throughout — it holds the group's name in agreement across three places, which it was, and never asked
+whether the configuration being run grants it. The single wrong artefact is a build setting pointing at a
+second file.
+
+And the PD-074 diagnostic changed to suit. `SecTask` is macOS-only, so there is no way to read your own
+entitlements on iOS; it probes the app-group container instead, which is nil exactly when the binary is not
+entitled — the same fault the phone's log named, asked directly.
+
+Counts: client 774 tests, all 22 checks, Debug/Personal/Release all build.

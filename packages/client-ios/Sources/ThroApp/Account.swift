@@ -1,6 +1,7 @@
 import AuthenticationServices
 import CryptoKit
 import Foundation
+import ThroLiveKit
 import ThroNet
 
 // The account, as the app sees it: PD-030's sign-in (Apple and Google first, a passkey as the
@@ -396,18 +397,26 @@ public enum SignInProblem {
         return parts.joined(separator: " · ")
     }
 
+    /// **The binary's own entitlement, not the profile's** (PD-075).
+    ///
+    /// The profile is a red herring here and cost an evening proving it. The App ID can have every box
+    /// ticked and the profile can carry every capability, and the binary still have none — because the
+    /// `Personal` build configuration signs against `ThroDarts.personal.entitlements`, which is an empty
+    /// dict on purpose: a free Apple team cannot sign Sign in with Apple, Associated Domains or App
+    /// Groups. The scheme's Run action uses that configuration, so the ordinary way of running the app
+    /// produces a build with no entitlements and a portal that looks perfectly correct.
+    ///
+    /// iOS has no API for reading your own entitlements — `SecTask` is macOS — so the app group is the
+    /// probe. `containerURL(forSecurityApplicationGroupIdentifier:)` returns nil when the binary is not
+    /// entitled to the group, which is public, exact, and the very thing the phone's log complained about:
+    /// *"container_create_or_lookup_app_group_path_by_app_group_identifier: client is not entitled"*.
+    /// The two capabilities come from the same entitlements file and are granted or withheld together.
     private static var signedForAppleSignIn: String {
-        guard let url = Bundle.main.url(forResource: "embedded", withExtension: "mobileprovision"),
-              let data = try? Data(contentsOf: url) else {
-            return "no profile (simulator)"
-        }
-        // Latin-1 never fails on arbitrary bytes, which UTF-8 would on a signed blob.
-        let text = String(decoding: data, as: UTF8.self).isEmpty
-            ? String(data: data, encoding: .isoLatin1) ?? ""
-            : String(decoding: data, as: UTF8.self)
-        return text.contains("com.apple.developer.applesignin")
-            ? "profile: applesignin present"
-            : "profile: applesignin MISSING — rebuild against the App ID"
+        let entitled = FileManager.default
+            .containerURL(forSecurityApplicationGroupIdentifier: ThroProjectionStore.groupId) != nil
+        return entitled
+            ? "entitlements: present"
+            : "entitlements: NONE — a build signed with no capabilities. Rebuild with -configuration Debug."
     }
     #endif
 
