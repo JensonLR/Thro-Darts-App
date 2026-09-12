@@ -3317,3 +3317,53 @@ to say, that evening, "the only change to this path today is not in the build yo
 worth having while three explanations were live. Reverting under uncertainty and re-applying under evidence
 is not indecision — it is the only order that produces an answer, when the thing cannot be tested where the
 work happens.
+
+## PD-077 — The watch draws the state the other surfaces already draw
+
+**Started 12 September 2026**, the first piece of PD-064's "rest of Apple" after the polish pass.
+
+### The foundation, and what it cost
+
+Before writing a watch app, the question was whether the design system compiles for watchOS at all — that is
+what decides whether a watch is cheap or expensive. It does. **Four errors, all in one file**, both about
+choosing a club's accent colour: a `resolvedColor(with: UITraitCollection)` that pins an answer to the light
+appearance, which a watch does not have and does not need because every colour reaching it is a fixed hex;
+and a `ColorPicker`, which does not exist on watchOS and describes an act nobody performs from a wrist. The
+scoring engine and the statistics build untouched, so PLATFORM.md's *"the rules come free"* is now checked
+rather than hoped.
+
+CI builds all four for watchOS on every push. A foundation nobody compiles rots, and the bill would arrive
+all at once on the day the target exists.
+
+### No fifth shape for two numbers
+
+`ThroLiveState` already answers *"what does a leg look like from outside the app"*. The Lock Screen draws
+it, the Dynamic Island draws it, the widgets draw it, an external display draws it; it is `Codable` and
+`Sendable` because ActivityKit made it cross a process boundary inside 4 KB, which is exactly what
+WatchConnectivity will want. **A watch that invented its own model would be a fifth thing to keep true**, and
+the first divergence would be silent.
+
+So `ThroWatchKit` is a view over that state and carries no model of its own. A test holds the boundary: the
+state a watch draws is the state that crosses to a widget, round-tripped through JSON.
+
+### What is new is the arrangement, because a wrist is not a banner
+
+The Lock Screen puts the two players side by side, which suits something wider than tall. A watch is nearly
+square and read at arm's length with a dart in the other hand. So the sides stack, **the thrower's score is
+the largest thing on the screen**, and the checkout sits under it rather than at the end of a caption —
+because the route is the one fact a player at the oche actually wants, and it is the thing a watch is better
+at than a phone lying on a table across the room.
+
+The route is **carried and never derived**, for the reason `ThroLiveState` already gives: the rule tables
+live in the engine, and a wrist that computed a finish would be linking a scoring engine to draw three
+words.
+
+### Its own module
+
+Rather than a view inside `ThroLiveKit`, which is documented as *"deliberately the lightest target here"*
+because a widget extension links it. An extension carrying a watch layout it can never run is exactly the
+weight that comment exists to keep out.
+
+**Not done yet:** the watchOS target in the Xcode project, and WatchConnectivity to feed the state across.
+The view and its rules are the part worth getting right first; the target is thirteen lines mounting a
+module, which is how the iOS app is built too.

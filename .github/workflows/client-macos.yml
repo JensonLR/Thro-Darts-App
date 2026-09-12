@@ -78,6 +78,10 @@ jobs:
         run: |
           cd packages/client-ios
           xcodebuild -scheme ThroDesign -destination 'generic/platform=watchOS Simulator' -quiet build
+      - name: The watch's own module, for watchOS
+        run: |
+          cd packages/client-ios
+          xcodebuild -scheme ThroWatchKit -destination 'generic/platform=watchOS Simulator' -quiet build
       - name: Scoring engine, for watchOS
         run: |
           cd packages/engine-swift

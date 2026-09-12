@@ -4201,3 +4201,31 @@ entitlements on iOS; it probes the app-group container instead, which is nil exa
 entitled — the same fault the phone's log named, asked directly.
 
 Counts: client 774 tests, all 22 checks, Debug/Personal/Release all build.
+
+## A leg on a wrist, drawing the state four other surfaces already draw
+
+The first piece of the watch, after checking the thing that decides whether a watch is cheap: **does the
+design system compile for watchOS?** It does — four errors, all in one file, both about picking a club's
+accent colour (a trait resolution with nothing to resolve on a watch, and a `ColorPicker` nobody uses from a
+wrist). The scoring engine and statistics build untouched. CI now builds all four for watchOS every push,
+because a foundation nobody compiles rots and the bill arrives all at once.
+
+**`ThroWatchKit` carries no model.** `ThroLiveState` already answers what a leg looks like from outside the
+app — the Lock Screen, the Dynamic Island, the widgets and an external display all draw it, and it is
+Codable and Sendable because ActivityKit made it cross a process boundary inside 4 KB, which is what
+WatchConnectivity will want. A fifth shape for two numbers and a checkout would be a fifth thing to keep
+true, and the first divergence would be silent. A test round-trips it to hold that.
+
+What is new is the arrangement. A Lock Screen banner is wider than it is tall and puts the players side by
+side; a watch is nearly square and read at arm's length with a dart in the other hand, so the sides stack,
+the thrower's score is the largest thing on the screen, and the checkout sits under it rather than at the end
+of a caption — the route being the one fact a player at the oche wants, and the thing a wrist is better at
+than a phone across the room. Carried, never derived: the rule tables are in the engine and a watch that
+computed a finish would be linking a scoring engine to draw three words.
+
+Its own target rather than a view in `ThroLiveKit`, which is deliberately the lightest here because a widget
+extension links it.
+
+Still to come: the watchOS target in the Xcode project and the connectivity to feed it.
+
+Counts: client 780 tests (6 on a wrist), all 22 checks.

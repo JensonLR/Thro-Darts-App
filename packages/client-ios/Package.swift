@@ -39,6 +39,7 @@ let package = Package(
     products: [
         .library(name: "ThroDesign", targets: ["ThroDesign"]),
         .library(name: "ThroLiveKit", targets: ["ThroLiveKit"]),
+        .library(name: "ThroWatchKit", targets: ["ThroWatchKit"]),
         .library(name: "ThroJournal", targets: ["ThroJournal"]),
         .library(name: "ThroNet", targets: ["ThroNet"]),
         .library(name: "ThroPlay", targets: ["ThroPlay"]),
@@ -74,6 +75,18 @@ let package = Package(
             path: "Sources/ThroLiveKit"
         ),
         .testTarget(name: "ThroLiveKitTests", dependencies: ["ThroLiveKit"], path: "Tests/ThroLiveKitTests"),
+
+        // A leg on a wrist (PD-077). Draws `ThroLiveState` — the same state the Lock Screen, the widgets
+        // and an external display draw — in the arrangement a nearly-square screen read at arm's length
+        // wants. Its own target rather than a view inside ThroLiveKit, which is deliberately the lightest
+        // here because a widget extension links it.
+        .target(
+            name: "ThroWatchKit",
+            dependencies: ["ThroLiveKit", .product(name: "ThroTokens", package: "design-tokens")],
+            path: "Sources/ThroWatchKit"
+        ),
+        .testTarget(name: "ThroWatchKitTests",
+                    dependencies: ["ThroWatchKit", "ThroLiveKit"], path: "Tests/ThroWatchKitTests"),
 
         // ADR-006's on-device journal: SQLite under the measured durability configuration, verified
         // in force on every open, append-only by trigger, replayed through the engine. Reaches the
