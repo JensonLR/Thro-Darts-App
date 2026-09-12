@@ -28,8 +28,10 @@ The rewrite destinations in `render.yaml` are deliberately NOT touched. They add
 """
 from __future__ import annotations
 
+import os
 import pathlib
 import re
+import socket
 import sys
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
@@ -87,6 +89,27 @@ def guess_domain(found: dict[str, str | None]) -> str | None:
     return None if rp is None or rp == API_SERVICE_HOST else rp
 
 
+def resolves(name: str) -> bool | None:
+    """True, False, or None when there is no network to ask.
+
+    A missing name and a missing network are the same exception, so a control lookup separates them:
+    if `onrender.com` answers and the domain does not, the domain genuinely is not there.
+    """
+    if os.environ.get("THRO_HOST_SKIP_DNS"):
+        return None
+    def one(host: str) -> bool:
+        try:
+            socket.getaddrinfo(host, None)
+            return True
+        except socket.gaierror:
+            return False
+        except OSError:
+            return False
+    if one(name):
+        return True
+    return False if one("onrender.com") else None
+
+
 def check() -> int:
     found = read()
     missing = [k for k, v in found.items() if v is None and k != "rp_origins"]
@@ -121,6 +144,22 @@ def check() -> int:
     for line in render.splitlines():
         if "destination:" in line and API_SERVICE_HOST not in line:
             problems.append(f"  a rewrite no longer addresses the API service: {line.strip()}")
+
+    # Agreeing with each other is not the same as being right. A `--set thro.uk` run to try the tool out,
+    # swept into a later `git add -A`, leaves three files in perfect agreement about a host that does not
+    # exist — which is exactly what happened on 2026-09-12 and what this catches. The domain arrangement
+    # is only correct once the domain is.
+    if domain and not problems:
+        answer = resolves(domain)
+        if answer is False:
+            print(f"FAIL host: the repo is set up for {domain}, and {domain} does not resolve.")
+            print("  Every place agrees, so the arrangement is internally fine and still wrong: the app")
+            print(f"  would be built pointing at api.{domain} and passkeys bound to a name nobody owns.")
+            print("  If the domain has just been bought and DNS has not propagated, wait; otherwise:")
+            print("  fix: python3 tools/host.py --set-free")
+            return 1
+        if answer is None:
+            print(f"note host: cannot check that {domain} resolves (no network); the three places agree.")
 
     if problems:
         print(f"FAIL host: the repo is in {where}, and these disagree with it:")

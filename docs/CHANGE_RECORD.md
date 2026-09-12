@@ -3990,3 +3990,26 @@ column 32 points below the left on a tablet. The gap belongs to whichever thing 
 is not the half — a half that adds its own spacing is a half that cannot be put anywhere else.
 
 Counts unchanged: client 770 tests, API 29 suites (86 tests), 148 schema properties, all 22 checks.
+
+## Three files agreed perfectly about a host that does not exist
+
+`tools/host.py` was written to stop a find-and-replace breaking passkeys at launch. Four commits later it
+caught something else, and the something else was mine: a `--set thro.uk` run to exercise the tool got swept
+into a later `git add -A`, and the repository spent an afternoon configured for a domain nobody has bought.
+`Info.plist` pointed the app at `api.thro.uk`; the relying party was `thro.uk`. The check passed the whole
+time, because **all three places agreed** — which is what it was asked to verify.
+
+That is the gap. Internal consistency is not correctness, and a tool that can put the repo into an
+arrangement can put it into the wrong one. So the check now asks whether the arrangement is *true*: if the
+repo claims a domain, that domain has to resolve. A missing name and a missing network raise the same
+exception, so a control lookup against `onrender.com` separates them — no network is a note and a pass, a
+name that genuinely is not there is a failure that says so and names the fix.
+
+Nothing shipped from the bad state: the app was only ever built against a local API through the Debug
+override, and the API service on Render was made through the dashboard and does not read `render.yaml`. The
+cost was an afternoon of a config that would have failed the moment anybody built for a device.
+
+Also fixed here, from the same session's evidence: the web service in `render.yaml` had `autoDeploy: false`,
+copied from the API where it is right because ADR-013 puts migrations before the code that expects them. A
+static deploy runs no migration and cannot half-apply anything, so the web deploys itself now — with a build
+filter on `apps/web/**`, because this repository commits often and almost none of it touches those files.

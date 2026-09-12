@@ -26,9 +26,7 @@ services:
       - key: DATABASE_URL
         sync: false            # the Neon connection string for the app's role, pasted in the dashboard
       - key: THRO_RP_ID
-        value: thro.uk
-      - key: THRO_RP_ORIGINS
-        value: https://thro.uk,https://api.thro.uk
+        value: thro-api-staging.onrender.com
       - key: THRO_APPLE_CLIENT_ID
         value: app.thro.darts
       - key: THRO_APPLE_APP_IDS
@@ -52,7 +50,17 @@ services:
     runtime: static
     staticPublishPath: ./apps/web
     buildCommand: ""
-    autoDeploy: false
+    # Unlike the API, the web deploys itself. A static deploy runs no migration and cannot half-apply
+    # anything: the worst case is the pages being briefly older than the API, which they are designed to
+    # survive because `thro.js` asks for what it needs and says so when a field is missing. The API keeps
+    # autoDeploy off because ADR-013 puts migrations before the code that expects them, run by hand.
+    autoDeploy: true
+    # And only when the web actually changed. This repository commits often and almost none of it touches
+    # these files; apps/web is self-contained down to its copy of tokens.css, which check_web_tokens.py
+    # holds to the generated one.
+    buildFilter:
+      paths:
+        - apps/web/**
     routes:
       - type: rewrite
         source: /v1/*
