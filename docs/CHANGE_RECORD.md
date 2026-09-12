@@ -3888,3 +3888,34 @@ an awarded fixture opens with empty boxes rather than the string "null"; and the
 as the note, with the button re-enabled so it can be retried after a reload.
 
 Counts: API 29 suites (86 tests), schema 148 properties.
+
+## The brand field was a portrait number, and looking at it gave a negative result
+
+PD-052 left one thing open deliberately: the 400-point brand field, *"60% of an iPhone SE's height"*, whose
+right number *"comes from looking at it on a device."* It has now been looked at, on an iPhone 17 Pro in both
+orientations.
+
+**The number was a portrait assumption wearing a constant.** 400 is the answer to how far a page can be
+dragged before paper shows above the field, measured upright; in landscape that phone is 402 points tall, so
+the field was the entire background. It is now `min(400, height × 0.7)` — every portrait phone unchanged to
+within two points, no screen ever covered — with four tests over the four phone sizes THRØ runs on.
+
+**And the honest part: the change is not visible.** The old constant was restored, rebuilt, and photographed
+beside the new one on the You tab in landscape. In both builds the green stopped where the page's own card
+stopped — 156 points in one state, 245 in another — never at 400 and never at 281. The pages paint their own
+paper over the background, so the field only shows during a pull. The iPad finding holds for a landscape
+phone: harmless, because the content covers it. Kept anyway, because a background larger than its container
+is wrong whether or not something is currently hiding it, and recorded as a negative result rather than
+written up as a fix for a problem that was not there.
+
+**What landscape did show is worth more.** On You in landscape the sign-in prompt takes 61% of the screen's
+402 points and the content beneath it gets the rest; on Home the masthead takes 29% before the first card.
+These are portrait proportions on a screen that is not portrait — the same finding as the tablet one, in a
+second place. Not fixed here: what a masthead does when the screen is short is a design decision, and it is
+PD-060's open question rather than a default to fall into.
+
+Two smaller things the session learned by looking. `xcrun simctl` cannot rotate a simulator, so rotation goes
+through the Simulator app's own Device menu — and with three devices booted the menu acts on whichever window
+is frontmost, which is why the first two rotate attempts appeared to do nothing. And screenshots of a rotated
+device come back in the portrait framebuffer, so taps are still in portrait points while the image is
+sideways; the conversion is what made the second attempt land.

@@ -257,23 +257,8 @@ struct CardDivider: View {
     var body: some View { ThroDivider(inset: CardRow.textInset) }
 }
 
-extension View {
-    /// The brand field behind the top of a page whose header scrolls with it — under the clock, and
-    /// above the page when it is pulled down — so it reads the same as a page whose header stays put.
-    ///
-    /// A page that opens on the field and has a paper strip above it looks like two screens stacked.
-    /// The page's own content carries its paper below the header, so none of this shows between
-    /// the cards; the field only has to be taller than the clock plus a pull.
-    func throBrandFieldBehind() -> some View {
-        background(alignment: .top) {
-            VStack(spacing: 0) {
-                ThroColor.colorBackgroundBrand.frame(height: 400)
-                ThroColor.colorBackgroundPrimary
-            }
-            .ignoresSafeArea()
-        }
-    }
-}
+// The brand field moved to ThroDesign, where its height can be held to the screen it is on
+// rather than to a constant measured in portrait (PD-060): `throBrandFieldBehind()`.
 
 /// Whoever is signed in, on the You tab's slate: the first thing in Settings, because it is the row
 /// people come for and it used to be the last one on the screen.

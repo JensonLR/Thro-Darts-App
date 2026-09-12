@@ -2713,3 +2713,46 @@ next decision is a first decision. Both the voided outcome and the void stay on 
 over HTTP calls it. Annulment is a different act from correction — it says a fixture should be replayed —
 and it wants its own decision about who may do it and what the league sees, rather than being added because
 the plumbing happened to be open.
+
+## PD-060 — The brand field is a share of the screen, not a number measured in portrait
+
+**Looked at on a device, 2026-09-12**, closing the one thing PD-052 left open on purpose: the 400-point
+brand field behind Home, You and a profile, *"which is 60% of an iPhone SE's height and covers a landscape
+phone entirely"*, and whose right number *"comes from looking at it on a device."*
+
+### What the number was
+
+400 points is not a design decision. It is the answer to "how far can this page be dragged down before paper
+appears above the field", measured on a phone held upright. That question has a different answer on a screen
+of a different height, and the constant carried the portrait answer everywhere: an iPhone 17 Pro is 402
+points tall in landscape and an SE is 320, so on its side the field was the whole background.
+
+`ThroBrandField.height(in:)` is now `min(400, height × 0.7)`. **No portrait phone moves** — the shortest,
+an SE at 568 points, asks for 398 and would have taken 400 — and no screen is ever covered edge to edge.
+Four tests hold both halves against the four phone sizes THRØ runs on.
+
+### What looking at it actually showed, which was not what was expected
+
+**The field is invisible on the screens it sits behind, in both orientations.** It was built with the old
+constant restored and photographed beside the new one on the You tab in landscape, and the green in each
+case stopped where the page's own card stopped — 156 points in one state, 245 in another — never at 400 and
+never at 281. The page paints its own paper over the background, so the only time the field is on show is
+during a rubber-band pull.
+
+So this is a correctness fix and not a visible one, and it is recorded that way rather than dressed up: a
+background that is larger than the container it backs is wrong whether or not something happens to be
+covering it, and the next page that does not paint its own paper would have found out the hard way. The
+earlier iPad finding — *"harmless, because the page's own paper covers it from the header down"* — turns out
+to hold for a landscape phone too. That is the answer to the open question, and it is a negative result.
+
+### The thing landscape did show
+
+**A landscape phone gives most of its short screen to a header.** On You in landscape the sign-in prompt
+takes 61% of the 402 points available and the content it introduces — who plays on this phone — is squeezed
+into what is left; on Home the masthead takes 29% before the first card. In portrait these are proportionate;
+in landscape they are a phone layout rotated rather than a landscape layout.
+
+That is the same finding as the tablet one recorded in PD-052, in a second place: **a screen with a different
+shape needs to spend its room differently, and THRØ currently spends it the same way everywhere.** It is
+noted here rather than fixed, because the fix is a design decision about what a masthead does when the screen
+is short — compress, move beside the content, or go — and that is worth choosing rather than defaulting into.
