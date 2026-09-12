@@ -675,6 +675,7 @@
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 2;
 				DEVELOPMENT_TEAM = 2XM324WPD5;
+				ASSETCATALOG_COMPILER_APPICON_NAME = "App Icon & Top Shelf Image";
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = SupportTV/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = "THRØ";
@@ -699,6 +700,7 @@
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 2;
 				DEVELOPMENT_TEAM = 2XM324WPD5;
+				ASSETCATALOG_COMPILER_APPICON_NAME = "App Icon & Top Shelf Image";
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = SupportTV/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = "THRØ";
@@ -738,11 +740,11 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
-		7A5E00000000000000000066 /* Build configuration list for PBXNativeTarget "ThroTV" */ = {
+		7A5E00000000000000000036 /* Build configuration list for PBXNativeTarget "ThroLive" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
-				7A5E00000000000000000067 /* Debug */,
-				7A5E00000000000000000068 /* Release */,
+				7A5E00000000000000000037 /* Debug */,
+				7A5E00000000000000000038 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
@@ -756,11 +758,11 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
-		7A5E00000000000000000036 /* Build configuration list for PBXNativeTarget "ThroLive" */ = {
+		7A5E00000000000000000066 /* Build configuration list for PBXNativeTarget "ThroTV" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
-				7A5E00000000000000000037 /* Debug */,
-				7A5E00000000000000000038 /* Release */,
+				7A5E00000000000000000067 /* Debug */,
+				7A5E00000000000000000068 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;

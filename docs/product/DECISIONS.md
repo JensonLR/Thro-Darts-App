@@ -3592,11 +3592,32 @@ unreachable if any had been named `…Screen`. It reads the app targets now, whi
 and nowhere else. `check_controls_react.py` was right about the chooser's rows and the fix was one it
 suggested; a remote does not miss, but the module builds for a phone too.
 
+### The artwork, generated rather than drawn (added the same day)
+
+tvOS wants a **layered** icon: 5:3, and it parallaxes, so the subject has to be on its own layer with the
+field behind it. There is no way to make a good one by cropping a square, and no reason to draw a second
+mark — so `tools/make_tv_artwork.swift` lifts the mark off the phone's icon by keying its own background
+out, and lays it over a field drawn the way every board in this app is lit. One source of truth for the
+mark; the rest is arithmetic, deterministic, and re-runnable, so a diff means somebody changed the mark.
+
+**Three faults, all of them the same kind** — a generator that produced something plausible and wrong:
+
+1. `NSImage.lockFocus` draws at the **screen's backing scale**, so on a Retina Mac every "1x" image came
+   out at twice the pixels and `actool` refused the stack outright. A generator whose output depends on
+   which Mac ran it is not a generator; it is CoreGraphics at explicit pixel sizes now.
+2. The alpha channel is **premultiplied** and the key wrote straight chalk beside a zero alpha, which is a
+   pixel brighter than its own coverage. CoreGraphics clamps it, and the mark came out as an opaque white
+   rectangle.
+3. The phone's icon was exported with a green **a shade lighter than `throGreen`**, so keying against the
+   token left every background pixel at 6% alpha — a pale square behind the mark, uniform and therefore
+   invisible in the source, and obvious the moment it was laid on a darker field. The background is read
+   off the image's own corner now, which is exact and needs no threshold to fudge.
+
+All three were caught by looking at the output. None would have failed a build except the first.
+
 ### Not done
 
-The **layered app icon and top-shelf artwork** tvOS wants for the store: a 5:3 parallax stack and two
-top-shelf images, which is a graphic-design job rather than a coding one. The app builds and runs without
-them. A **device build** also needs an Apple TV registered to the team — `xcodebuild` can create the App ID
+A **device build** needs an Apple TV registered to the team — `xcodebuild` can create the App ID
 but cannot create a development profile for a platform with no device on it, which is the founder's step and
 not a defect. And the live board on the Apple TV itself, which is the safeguarding decision above.
 
