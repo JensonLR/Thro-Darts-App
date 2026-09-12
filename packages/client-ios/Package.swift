@@ -35,7 +35,7 @@ let package = Package(
     // a migration of its own, unplanned, and nothing to do with raising a deployment floor. The
     // string form has meant exactly the same thing since tools 5.0. CI found this in thirteen
     // seconds, which is the argument for pushing a floor change on its own.
-    platforms: [.iOS("18.0"), .macOS("15.0")],
+    platforms: [.iOS("18.0"), .macOS("15.0"), .watchOS("11.0")],
     products: [
         .library(name: "ThroDesign", targets: ["ThroDesign"]),
         .library(name: "ThroLiveKit", targets: ["ThroLiveKit"]),

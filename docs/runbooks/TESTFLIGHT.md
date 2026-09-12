@@ -115,6 +115,28 @@ for team 2XM324WPD5"*. The archive still succeeds, because signing uses the cert
 keychain; only the upload needs somebody signed in. Xcode → Settings → Accounts → **+** → Apple ID,
 with the account's email (not the Team ID), then run the second command again: the archive is kept.
 
+### *"Apple could not finish the sign-in"* on the phone
+
+**This is almost always the installed build, not the code.** Sign in with Apple failing with
+`ASAuthorizationError.unknown` — `AuthorizationError Code=1000`, which the app shows as *"Apple could not
+finish the sign-in. Check you are signed in to your Apple Account in iPhone Settings"* — happened once
+before and the cause was a build **signed before the App ID carried its capabilities**. The entitlement file
+in this repository has always been right; what was wrong was the profile the binary on the phone was signed
+with.
+
+In order:
+
+1. Check the App ID's capabilities are still ticked (point 1 below). Automatic signing is supposed to
+   register them and has not, here, more than once.
+2. Delete Xcode's capability and profile caches (point 2 below).
+3. **Rebuild and reinstall.** A phone keeps running the old binary until it is replaced, so the symptom
+   survives every fix until the app is installed again.
+4. Only then suspect the code. The message is generic: iOS gives the same 1000 for a missing capability, a
+   device with no Apple Account signed in, and a malformed request.
+
+It cannot be reproduced on a simulator, which is why it has to be worked through in this order rather than
+debugged.
+
 ### What actually stopped it the first three times
 
 Worth reading before believing any error Xcode prints, because two of the three messages pointed at

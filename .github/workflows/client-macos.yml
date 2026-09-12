@@ -63,6 +63,26 @@ jobs:
       - name: Build and test
         run: swift test --package-path packages/client-ios
 
+  watch-ready:
+    name: The design system still builds for the watch
+    # There is no watch app yet (PD-064 puts it after the polish pass). This is the foundation for
+    # one, and a foundation nobody compiles rots: the whole design system, the scoring engine and the
+    # statistics all build for watchOS today, and the only two things that did not were a trait
+    # resolution with nothing to resolve on a watch and a colour picker nobody uses from a wrist
+    # (PD-072). Without this step the next iOS-only API to arrive would put that back without anybody
+    # noticing until the watch target existed and the bill came due all at once.
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Design system, for watchOS
+        run: |
+          cd packages/client-ios
+          xcodebuild -scheme ThroDesign -destination 'generic/platform=watchOS Simulator' -quiet build
+      - name: Scoring engine, for watchOS
+        run: |
+          cd packages/engine-swift
+          xcodebuild -scheme ThroEngine -destination 'generic/platform=watchOS Simulator' -quiet build
+
   ios-app:
     name: iOS app builds for the simulator
     # The Xcode project is a few lines that mount ThroApp from packages/client-ios. `swift test` on

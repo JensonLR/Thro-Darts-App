@@ -419,10 +419,14 @@ public final class LiveSignInServices: NSObject, SignInServices, @unchecked Send
 
     public func appleIdentityToken(nonce: String) async throws -> String? {
         let request = ASAuthorizationAppleIDProvider().createRequest()
-        // No scopes (PD-063). Only `apple.identityToken` is read below, and the server takes one claim
-        // from it — the subject. `.fullName` asked Apple for a name that was handed over, never looked at
-        // and never stored, and the sheet said so to the player while it happened.
-        request.requestedScopes = []
+        // **Back to `.fullName`, and PD-063's Apple half is unproven rather than wrong** (PD-073).
+        // Asking for a name nothing reads is still worth not doing, and it was changed to `[]` on the
+        // same day Sign in with Apple failed on the founder's phone with `AuthorizationError Code=1000`.
+        // That error has a documented cause here that is not code — a build signed before the App ID
+        // carried its capabilities — and Sign in with Apple cannot be exercised from a simulator, so the
+        // change could not be cleared. A working sign-in beats a tidier consent sheet: this goes back to
+        // what shipped, and the scope comes off again only once someone has watched it work on a device.
+        request.requestedScopes = [.fullName]
         request.nonce = Nonce.hashed(nonce)
         let credential = try await perform([request])
         guard let apple = credential as? ASAuthorizationAppleIDCredential, let token = apple.identityToken else { return nil }

@@ -3167,3 +3167,26 @@ height were modelled, and it is not.
 
 **What is kept:** the iPhone 17 Pro in the device list, and a note at the assertion site so the same hour is
 not spent twice. **What is not:** any change to the stage, whose arithmetic was right.
+
+## PD-073 — Apple keeps its `.fullName` scope until somebody watches sign-in work
+
+**Reverted the same day it was made, 12 September 2026.** PD-063 removed the sign-in scopes THRØ asks for
+and never reads — `openid email profile` from Google, `.fullName` from Apple. Hours later Sign in with Apple
+failed on the founder's phone with *"Apple could not finish the sign-in"*, which is
+`ASAuthorizationError.unknown`, `Code=1000`.
+
+**The likely cause is not the code.** That exact error is on the record here from a previous occasion, where
+it was a build signed before the App ID carried its capabilities, and rebuilding fixed it. The entitlement in
+this repository has always been right.
+
+**The Apple half is reverted anyway**, and the reasoning is worth keeping. It was the only change to that
+code path that day; **Sign in with Apple cannot be exercised on a simulator**, so it cannot be cleared here;
+and the asymmetry is one-sided — being wrong to revert costs a tidier consent sheet, being wrong not to
+revert costs the founder an evening chasing a phantom. A working sign-in beats a cleaner sheet.
+
+So `.fullName` is back. **PD-063's Apple half is unproven, not wrong**, and the scope comes off again only
+once somebody has watched Sign in with Apple work on a device — at which point it can be removed on its own,
+with nothing else moving, and re-tested immediately.
+
+Google's `openid` stays. It is a different flow through a different framework, the failure is specific to
+Apple's, and Google's was reported working on the same build.

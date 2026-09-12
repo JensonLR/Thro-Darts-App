@@ -79,7 +79,15 @@ public enum AccentBranding {
     /// current appearance would make the chosen text colour depend on the phone's dark-mode setting,
     /// so a badge would flip its initials from chalk to ink at sunset.
     static func components(_ color: Color) -> (Double, Double, Double) {
-        #if canImport(UIKit)
+        #if os(watchOS)
+        // **Nothing to resolve here.** The trait resolution below pins the answer to the light
+        // appearance so a badge does not flip its initials from chalk to ink at sunset; a watch has
+        // one appearance and no dynamic colours, and every colour that reaches this function is a
+        // fixed sRGB hex, so resolving would be a no-op if the API existed (PD-072).
+        var r: CGFloat = 0, g: CGFloat = 0, b: CGFloat = 0, a: CGFloat = 0
+        UIColor(color).getRed(&r, green: &g, blue: &b, alpha: &a)
+        return (Double(r), Double(g), Double(b))
+        #elseif canImport(UIKit)
         let native = UIColor(color).resolvedColor(with: UITraitCollection(userInterfaceStyle: .light))
         var r: CGFloat = 0, g: CGFloat = 0, b: CGFloat = 0, a: CGFloat = 0
         native.getRed(&r, green: &g, blue: &b, alpha: &a)
@@ -199,11 +207,16 @@ public struct AccentPicker: View {
             .padding(.horizontal, -4)
 
             HStack(spacing: ThroSpacing.spacing3) {
+                // `ColorPicker` does not exist on watchOS, and neither does the act: nobody sets a
+                // club's colours from a wrist. The swatches above are the whole control there — which
+                // is also the only arrangement a watch has room for (PD-072).
+                #if !os(watchOS)
                 ColorPicker(selection: custom, supportsOpacity: false) {
                     Text("Any other colour")
                         .thro(ThroTypography.body)
                         .foregroundStyle(ThroColor.colorTextPrimary)
                 }
+                #endif
                 if chosen != nil {
                     ThroTextButton("Use THRØ's") { hex = "" }
                 }
