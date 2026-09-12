@@ -4312,3 +4312,30 @@ Still to come: the layered tvOS app icon and top-shelf artwork the store wants, 
 the team before a device build can sign.
 
 Counts: client 822 tests (15 on a wall), all 22 checks, and the Apple TV app builds for tvOS in CI.
+
+## The opening's eighth look, and a way to look at it
+
+`-ThroOpeningAt 1.9` holds the opening at an instant; `tools/contact_sheet.swift` lays twenty of those on one
+sheet. `LaunchFrame` was already a pure function of time, so the freeze is four lines and DEBUG-only —
+confirmed absent from a Release binary. **A single still says almost nothing about a motion, and twenty read
+one after another say only slightly more**; side by side, the shape of the film is visible.
+
+It found a false alarm first: the dart appeared to be missing for 0.4 s mid-strike, and was not. The tell was
+that the *vignette* was missing too, and the vignette is on from 0.28 s to the end — a completely flat green
+frame is not this film at any instant, it is the launch screen caught before the first draw. **A blank frame
+out of a screenshot harness is a capture artefact until proved otherwise.**
+
+Then the real one: **the peak of the film lasted one frame.** The chalk ran to the very end of the ring's
+segment and the mark left for the name on the next, so a whole Ø with a dart through it — the image the
+entire opening builds towards — was never still. The chalk now runs round in two thirds of that segment and
+the last third is stillness, which costs nothing: the opening is the same length to the millisecond, and five
+seconds is the founder's ceiling in both directions.
+
+And a still frame with nothing moving in it is a paused video, so **chalk comes off the board and falls** —
+forty-six motes, anchored to where the ring was rather than to the mark, because dust does not follow a logo
+into a wordmark. That also fills what the sheet showed was the emptiest stretch in the film, between the mark
+reaching its slot and the first letter being struck.
+
+The flight, the strike and the ring being drawn were looked at across four sheets and left alone.
+
+Counts: client 824 tests, all 22 checks.

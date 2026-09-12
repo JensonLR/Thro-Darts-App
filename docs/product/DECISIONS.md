@@ -3599,3 +3599,66 @@ top-shelf images, which is a graphic-design job rather than a coding one. The ap
 them. A **device build** also needs an Apple TV registered to the team — `xcodebuild` can create the App ID
 but cannot create a development profile for a platform with no device on it, which is the founder's step and
 not a defect. And the live board on the Apple TV itself, which is the safeguarding decision above.
+
+## PD-080 — The opening's eighth look, and a way to look at it
+
+**12 September 2026.** The founder asked to *"tidy up the intro further… to really make it a utterly
+beautiful app intro"*. Every previous version of this film was reviewed by somebody watching it and saying
+what they saw, which is the only way an animation has ever been judged here — and it is why the notes have
+always been about *feel* rather than about frames.
+
+### First, a way to see a frame
+
+`-ThroOpeningAt 1.9` holds the opening at 1.9 seconds. DEBUG only, like `-ThroScreen`, because an opening a
+shipped build could be frozen from the command line is an opening that could be frozen. `LaunchFrame` was
+already a pure function of `t`, so this is four lines.
+
+With it, `tools/contact_sheet.swift` lays twenty stills on one sheet. **A single still says almost nothing
+about a motion and twenty read one after another say only slightly more**, because by the fourth you have
+forgotten the first; side by side, the shape of the film is visible — what holds too long, what is over
+before it is seen, where nothing is happening at all.
+
+**It immediately produced a false alarm worth recording.** The first sheet showed the dart *missing* for
+0.4 s in the middle of the strike — three consecutive blank frames. It was not: the tell was that the
+vignette was missing too, and the vignette is on from 0.28 s to the end. A completely flat green frame is
+not this film at any instant; it is the *launch screen*, caught before the app's first draw, because the
+capture waited 2.2 s and the simulator was slower than that. Re-captured with a longer settle, the strike is
+intact. **A blank frame out of a screenshot harness is a capture artefact until proved otherwise**, and the
+proof is whether the things that are always on screen are on it.
+
+### The peak of the film lasted one frame
+
+The chalk ran to the very end of the ring's segment and the mark set off for the name on the next. So the
+one image the whole opening is building towards — a whole Ø, glowing, with a real dart through it — was
+**never still**. It was the founder's own note about the tagline (*"visible a little bit longer so people can
+read it properly"*) applied one beat earlier, and nobody had to give it because nobody can see a frame that
+is not there.
+
+The chalk now runs round in **two thirds** of the segment it had and the last third is stillness. A shock
+travels fast and looks better for it. **The opening is the same length to the millisecond**, which matters
+because five seconds is the founder's ceiling in both directions and a beat that had to be paid for in
+length would not have been worth having. The close flash and the settling pulse moved with it — they belong
+to the instant the ring becomes whole, which is no longer the instant the clock says.
+
+### A held shot, not a paused one
+
+A still frame with nothing moving anywhere in it is a paused video. The difference is something drifting, so
+**chalk comes off the board and falls**: forty-six motes, deterministic like everything else here, brightest
+a moment after they come off and away to nothing over about a second. They are the ones the shock did not
+throw — the shock's motes fly outward and are spent in a tenth of a second, and these simply come down.
+
+They are anchored to **where the ring was**, not to the mark, because dust does not follow a logo into a
+wordmark. That has a second effect worth having: the mark leaves for the name and its dust stays behind
+falling, which fills what the contact sheet showed was the emptiest stretch in the film — a single small
+glyph alone on a wide field between the mark arriving in its slot and the first letter being struck.
+
+They start **outside** the band. The first version started them on it, where a white mote against pure chalk
+is invisible, so the held beat — the one moment they exist for — was the one moment they could not be seen.
+
+### What was looked at and not changed
+
+The flight, the strike and the ring being drawn are left exactly as they were; four sheets of stills gave no
+reason to touch them. The dart's flights dissolving as the mark becomes type was considered and left: in
+stills it looks like a fade, but the frames either side show it already trailing and smeared, and **a still
+is the wrong evidence for a 120 ms motion**. Changing it on that evidence would be tuning to the tool rather
+than to the film.

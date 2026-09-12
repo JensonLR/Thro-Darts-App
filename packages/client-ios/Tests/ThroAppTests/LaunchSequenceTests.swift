@@ -56,6 +56,38 @@ final class LaunchSequenceTests: XCTestCase {
         XCTAssertGreaterThanOrEqual(LaunchTimeline.reduced.taglineSettledFor, 1.1)
     }
 
+    /// The eighth look, and the first note nobody had to give: **the peak of the film lasted one frame.**
+    func testTheFinishedMarkIsHeldStillBeforeItLeavesForTheName() {
+        let timeline = LaunchTimeline.standard
+        let held = timeline.ring.duration * (1 - LaunchFrame.Tune.chalkRunsFor)
+        XCTAssertGreaterThanOrEqual(held, 0.15,
+                                    "a whole Ø with a dart through it is what the whole opening is building "
+                                    + "towards; it has to be still long enough to be an image")
+        XCTAssertLessThan(LaunchFrame.Tune.chalkRunsFor, 1.0)
+        // And it costs nothing. Five seconds is the founder's ceiling in both directions, so a beat that
+        // had to be paid for in length would not have been worth having.
+        XCTAssertEqual(timeline.total, 4.86, accuracy: 1e-9)
+        XCTAssertEqual(timeline.ring.end, 2.58, accuracy: 1e-9)
+    }
+
+    func testTheChalkComesOffWhenTheRingIsSetAndIsStillSettlingAfterTheMarkHasGone() {
+        let timeline = LaunchTimeline.standard
+        let closes = timeline.ring.start + timeline.ring.duration * LaunchFrame.Tune.chalkRunsFor
+        XCTAssertGreaterThan(closes + LaunchFrame.Tune.fallSeconds, timeline.word.start + 0.3,
+                             "dust that stopped when the mark left would make the beat a pause again")
+        XCTAssertLessThan(closes + LaunchFrame.Tune.fallSeconds, timeline.finishAt,
+                          "and it is gone by the time the name is being read")
+        XCTAssertEqual(LaunchFrame.fallingChalk.count, LaunchFrame.Tune.fallMotes)
+        for mote in LaunchFrame.fallingChalk {
+            XCTAssertGreaterThanOrEqual(mote.radius, 0.95,
+                                        "a mote inside the band is invisible against pure chalk")
+            XCTAssertGreaterThan(mote.size, 0)
+            XCTAssertGreaterThan(mote.life, 0)
+            XCTAssertLessThanOrEqual(mote.life, 1)
+            XCTAssertLessThan(mote.lag, 0.2, "chalk comes off at the strike, not in a second wave")
+        }
+    }
+
     func testReduceMotionHasNoMotionAndNoCues() {
         let r = LaunchTimeline.reduced
         for seg in [r.flight, r.impact, r.ring, r.word] {

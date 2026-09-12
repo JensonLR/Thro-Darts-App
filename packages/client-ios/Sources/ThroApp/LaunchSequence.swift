@@ -30,6 +30,18 @@ import ThroDesign
 // tracks in as the last letter sets, and is then left alone to be read. The first frame is the launch
 // screen's flat green. Cold launch only; a tap skips; Reduce Motion shows the name, still.
 
+#if DEBUG
+/// Holds the opening at one instant, so a frame of it can be looked at rather than guessed at.
+enum OpeningInspection {
+    static let argument = "-ThroOpeningAt"
+
+    static func frozen(_ arguments: [String] = ProcessInfo.processInfo.arguments) -> Double? {
+        guard let i = arguments.firstIndex(of: argument), arguments.indices.contains(i + 1) else { return nil }
+        return Double(arguments[i + 1])
+    }
+}
+#endif
+
 /// The spine of the opening, in seconds from the first frame. Segments are contiguous; effects that
 /// outlive their segment (the quiver, the ring's pulse) run from a segment's boundary on their own clock.
 public struct LaunchTimeline: Equatable, Sendable {
@@ -467,14 +479,38 @@ public struct LaunchSequenceView: View {
 
     private var timeline: LaunchTimeline { reduceMotion ? .reduced : .standard }
 
+    /// The film, running — or one frame of it, held.
+    ///
+    /// **An animation cannot be judged from the one frame a screenshot happens to catch**, and this one has
+    /// been through eight versions on the strength of somebody watching it and describing what they saw.
+    /// `-ThroOpeningAt 1.9` holds it at 1.9 seconds so that instant can actually be looked at, and a strip
+    /// of them can be laid side by side. DEBUG only, like `-ThroScreen`: an opening that could be frozen
+    /// from the command line in a shipped build is an opening that could be frozen.
+    @ViewBuilder private var film: some View {
+        let timeline = self.timeline
+        #if DEBUG
+        if let held = OpeningInspection.frozen() {
+            LaunchFrame(t: held, timeline: timeline)
+        } else {
+            running(timeline)
+        }
+        #else
+        running(timeline)
+        #endif
+    }
+
+    private func running(_ timeline: LaunchTimeline) -> some View {
+        TimelineView(.animation(minimumInterval: 1.0 / 60.0, paused: finished || atRest)) { context in
+            // At rest the frame is the finished composition and stays there, so a hold never
+            // lets the exit segment play while nothing is fading.
+            LaunchFrame(t: atRest ? timeline.finishAt : context.date.timeIntervalSince(start), timeline: timeline)
+        }
+    }
+
     public var body: some View {
         let timeline = self.timeline
         ZStack(alignment: .bottom) {
-            TimelineView(.animation(minimumInterval: 1.0 / 60.0, paused: finished || atRest)) { context in
-                // At rest the frame is the finished composition and stays there, so a hold never
-                // lets the exit segment play while nothing is fading.
-                LaunchFrame(t: atRest ? timeline.finishAt : context.date.timeIntervalSince(start), timeline: timeline)
-            }
+            film
             .background(ThroColor.throGreen.ignoresSafeArea())
             .ignoresSafeArea()
             .contentShape(Rectangle())
@@ -490,6 +526,10 @@ public struct LaunchSequenceView: View {
             }
         }
         .onAppear {
+            #if DEBUG
+            // A held frame is held: no soundtrack, and nothing that would hand over out from under it.
+            if OpeningInspection.frozen() != nil { return }
+            #endif
             let now = Date()
             start = now
             let track = LaunchSoundtrack(sound: soundOn, haptics: hapticsOn)
@@ -624,9 +664,60 @@ struct LaunchFrame: View {
         static let shockInner = 0.72                     // it is only drawn out near the ring, in ring radii
         static let shockScatter = 0.34                   // how ragged its front is
         static let closeFlash = 0.17                     // the light of the ring becoming whole
+        /// How much of the ring's segment the chalk takes to run round — the rest of it is **the beat**.
+        ///
+        /// **The completed mark is the film's peak and it used to last one frame.** The chalk ran to the
+        /// very end of its segment and the mark set off for the name on the next: the one image the whole
+        /// opening is building towards — a whole Ø, glowing, with a real dart through it — was never still.
+        /// The founder had already given this note once about the tagline ("visible a little bit longer so
+        /// people can read it properly"); this is the same note one beat earlier, and nobody had to give it.
+        ///
+        /// It costs nothing. A shock travels fast and looks better for it, so the chalk runs round in two
+        /// thirds of the segment it had and the last third is stillness. The opening is the same length to
+        /// the millisecond, which matters because five seconds is the founder's ceiling in both directions.
+        static let chalkRunsFor = 0.66
+        /// Chalk knocked off the board by the ring being set, falling.
+        ///
+        /// **The beat above was a freeze until this.** Holding the finished mark still is right, and a
+        /// still frame with nothing moving in it anywhere is a paused video rather than a held shot — the
+        /// difference between the two is something drifting. Real chalk does this: a board takes a dart and
+        /// dust comes off it for a second afterwards, falling, not flying. The shock's motes fly outward
+        /// and are spent in a tenth of a second; these are the ones that did not go anywhere and are simply
+        /// coming down.
+        ///
+        /// They fall from where the ring *was*, not from the mark — the mark leaves for the name and its
+        /// dust stays behind, because dust does not follow a logo into a wordmark.
+        static let fallMotes = 46
+        static let fallSeconds = 1.15
+        /// In ring radii per second squared. Chosen by eye against the mark's size, which is the only
+        /// scale on screen: real gravity in a frame with no horizon is just a number.
+        static let fallGravity: CGFloat = 1.30
         static let taglineSeconds = LaunchTimeline.taglineSeconds
         static let tagline = "FROM THE PUB BOARD TO THE WORLD STAGE"
     }
+
+    /// Where one falling mote starts, in ring radii from the mark's centre, and how it drifts.
+    ///
+    /// A fixed scatter, so the opening is the same film every time it runs — the whole composition is
+    /// deterministic and this is not the place to start seeding from the clock.
+    struct Mote { let angle: Double, radius: CGFloat, size: CGFloat, drift: CGFloat, life: Double, lag: Double }
+    static let fallingChalk: [Mote] = {
+        var rng = Grain(seed: 0xC4A1_C500)
+        return (0..<LaunchFrame.Tune.fallMotes).map { _ in
+            // Round the band, weighted to the lower half: chalk that was going to fall has already
+            // fallen off the top of the ring by the time the ring is whole.
+            let a = Double(rng.next()) * 2 * Double.pi
+            let lower = abs(sin(a)) * (sin(a) > 0 ? 1 : 0.35)
+            return Mote(angle: a,
+                        // Outside the band as well as on it: a mote starting inside the ring is invisible
+                        // against pure chalk, and the held beat is exactly when it should be seen falling.
+                        radius: 0.95 + 0.55 * CGFloat(rng.next()),
+                        size: 0.5 + 1.1 * CGFloat(rng.next()) * CGFloat(0.4 + 0.6 * lower),
+                        drift: (CGFloat(rng.next()) - 0.5) * 0.28,
+                        life: 0.45 + 0.55 * Double(rng.next()),
+                        lag: 0.16 * Double(rng.next()))
+        }
+    }()
 
     /// One speck of chalk at a fixed place on the wall, in dart-lengths from the spot being aimed at.
     /// `tier` is how brightly it takes the light — its own grain, times the falloff away from the lit
@@ -654,11 +745,13 @@ struct LaunchFrame: View {
         let animated = timeline.isAnimated
         let pField = timeline.field.progress(at: t)
         let tau = timeline.flight.progress(at: t)
-        let pRing = Easing.chalk(timeline.ring.progress(at: t))
+        let pRing = Easing.chalk(Easing.unit(timeline.ring.progress(at: t) / Tune.chalkRunsFor))
         let pWord = Easing.resolve(timeline.word.progress(at: t))
         let pHold = timeline.hold.progress(at: t)
         let sinceImpact = t - timeline.impact.start
-        let sinceRing = t - timeline.ring.end
+        // When the ring actually became whole, which is `chalkRunsFor` into its segment and not at the
+        // end of it — the flash and the settling pulse belong to that instant, not to the clock.
+        let sinceRing = t - (timeline.ring.start + timeline.ring.duration * Tune.chalkRunsFor)
         let axis = MarkGeometry.axis
         let across = CGVector(dx: -axis.dy, dy: axis.dx)
 
@@ -896,6 +989,29 @@ struct LaunchFrame: View {
                 flare.addFilter(.blur(radius: geo.ringWidth * CGFloat(0.35 + 0.9 * (1 - q))))
                 flare.fill(geo.ringShape(at: centre, radiusScale: pulse),
                            with: .color(ThroColor.throChalkRaised.opacity(0.55 * q * q)))
+            }
+        }
+
+        // The chalk that came off when the ring was set, falling and settling. It is anchored to where the
+        // ring was made rather than to the mark, so it goes on coming down after the mark has left for the
+        // name — which is what makes the held beat a held shot rather than a paused one.
+        if animated && sinceRing >= 0 && sinceRing < Tune.fallSeconds {
+            let r0 = big.ringCentreRadius
+            for mote in Self.fallingChalk {
+                let age = sinceRing - mote.lag
+                guard age > 0 else { continue }
+                let span = Tune.fallSeconds * mote.life
+                guard age < span else { continue }
+                let q = age / span
+                let x = bigCentre.x + r0 * mote.radius * CGFloat(cos(mote.angle)) + r0 * mote.drift * CGFloat(age)
+                let y = bigCentre.y + r0 * mote.radius * CGFloat(sin(mote.angle))
+                    + r0 * Tune.fallGravity * CGFloat(age * age) * 0.5
+                // Brightest a moment after it comes off, then away to nothing: a mote that vanished at
+                // full strength would read as a rendering glitch rather than as dust settling.
+                let alpha = 0.62 * min(1, age / 0.08) * (1 - q) * (1 - q)
+                context.fill(Path(ellipseIn: CGRect(x: x - mote.size, y: y - mote.size,
+                                                    width: mote.size * 2, height: mote.size * 2)),
+                             with: .color(ThroColor.throChalkRaised.opacity(alpha)))
             }
         }
 
