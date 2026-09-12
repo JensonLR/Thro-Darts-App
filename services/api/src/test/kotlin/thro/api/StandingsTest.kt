@@ -10,6 +10,7 @@ import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
+import org.postgresql.util.PSQLException
 
 /**
  * A league's table, against a real PostgreSQL (PD-054, V041).
@@ -308,6 +309,42 @@ class StandingsTest {
             val fixture = played(c, orgs, s, s.a, s.b, 5, 2, admin)
             val why = assertFailsWith<IllegalArgumentException> { orgs.citeMatch(fixture, UUID.randomUUID()) }
             assertTrue(why.message!!.contains("already names a match"), why.message!!)
+        }
+    }
+
+    @Test
+    fun `an official may declare a result nobody scored on THRO, and it is never evidence`() {
+        if (!configured) return
+        migrated().use { c ->
+            val orgs = Organisations(c)
+            val admin = orgs.createPlayer()
+            val s = season(orgs, admin)
+            played(c, orgs, s, s.a, s.b, 5, 2, admin)
+            // This one never reached a phone: the secretary has it on a paper card (PD-055).
+            val fixture = orgs.scheduleFixture(s.seasonId, s.division, s.b, s.c, at = t0.plus(7, ChronoUnit.DAYS), by = admin)
+            orgs.declareResult(fixture, 4, 5, by = admin)
+
+            val rows = table(c, s).divisions.single().rows.associateBy { it.name }
+            assertEquals(1, rows.getValue("Feathers A").played, "a declared result is what happened")
+            assertEquals(2, rows.getValue("Feathers A").points, "and it is worth a win like any other")
+            assertEquals(5, rows.getValue("Feathers A").legsFor)
+            assertEquals(0, rows.getValue("Feathers A").evidenced, "but nobody recorded it happening")
+            assertEquals(1, rows.getValue("Grange A").evidenced, "where a match was scored on THRØ, the row says so")
+        }
+    }
+
+    @Test
+    fun `a fixture scored on THRO cannot have its result declared over the top`() {
+        if (!configured) return
+        migrated().use { c ->
+            val orgs = Organisations(c)
+            val admin = orgs.createPlayer()
+            val s = season(orgs, admin)
+            val fixture = played(c, orgs, s, s.a, s.b, 5, 2, admin)
+            // Correcting a played result is what superseding is for; declaring a different scoreline over
+            // the top of a match would be an official overwriting evidence with a recollection.
+            val why = assertFailsWith<PSQLException> { orgs.declareResult(fixture, 9, 0, by = admin) }
+            assertTrue(why.message!!.contains("read from the match"), why.message!!)
         }
     }
 }

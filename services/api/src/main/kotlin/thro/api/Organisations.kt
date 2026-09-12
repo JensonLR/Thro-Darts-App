@@ -536,6 +536,33 @@ public class Organisations(private val connection: Connection) {
         return id
     }
 
+    /**
+     * An official declares a result for a fixture nobody scored on THRØ (PD-055, V042).
+     *
+     * It counts in the table exactly as a played one does, because it is what happened, and it is never
+     * evidence, because nobody recorded it happening. [by] is the whole of what stands behind the scoreline,
+     * and `decided_by` is NOT NULL, so there is no way to declare a result and leave nobody accountable.
+     * V042 refuses one on a fixture that cites a match: there the result is read from the match.
+     */
+    public fun declareResult(
+        fixtureId: UUID, legsHome: Int, legsAway: Int, by: UUID, supersedes: UUID? = null,
+    ): UUID {
+        require(legsHome >= 0 && legsAway >= 0) { "a side cannot win fewer than no legs" }
+        val id = UUID.randomUUID()
+        connection.prepareStatement(
+            """
+            INSERT INTO competition.league_fixture_outcome
+              (outcome_id, fixture_id, kind, legs_home, legs_away, decided_by, supersedes_outcome_id)
+            VALUES (?, ?, 'declared', ?, ?, ?, ?)
+            """.trimIndent(),
+        ).use { ps ->
+            ps.setObject(1, id); ps.setObject(2, fixtureId); ps.setInt(3, legsHome); ps.setInt(4, legsAway)
+            ps.setObject(5, by); ps.setObject(6, supersedes)
+            ps.executeUpdate()
+        }
+        return id
+    }
+
     /** Awards a fixture unplayed: a decision with an actor and a reason, never a scoreline. */
     public fun awardFixture(fixtureId: UUID, toTeamId: UUID, reason: String, by: UUID, policyId: UUID? = null): UUID {
         val id = UUID.randomUUID()

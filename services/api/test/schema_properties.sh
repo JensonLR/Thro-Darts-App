@@ -879,6 +879,29 @@ r=$($PSQL -c "UPDATE competition.league_season SET standings_policy_id='$FOREIGN
 if echo "$r" | grep -qi 'its own league'; then ok "and never by another league's rule"
 else bad "and never by another league's rule" "${r:-a policy of another league was pinned}"; fi
 
+# V042 — a named official may declare a result nobody scored on THRØ (PD-055).
+SFX1=$($PSQL -c "SELECT gen_random_uuid();"); SFX2=$($PSQL -c "SELECT gen_random_uuid();"); SFX3=$($PSQL -c "SELECT gen_random_uuid();")
+SOFF=$($PSQL -c "SELECT gen_random_uuid();")
+$PSQL -c "INSERT INTO competition.player (player_id, source) VALUES ('$SOFF','self');
+  INSERT INTO competition.league_fixture (fixture_id, league_season_id, division_id, home_team_id, away_team_id, scheduled_at)
+    VALUES ('$SFX1','$SSN','$SDV','$STA','$STB', now()),
+           ('$SFX2','$SSN','$SDV','$STA','$STB', now()),
+           ('$SFX3','$SSN','$SDV','$STA','$STB', now());" >/dev/null 2>&1
+
+$PSQL -c "INSERT INTO competition.league_fixture_outcome (outcome_id, fixture_id, kind, legs_home, legs_away, decided_by)
+  VALUES (gen_random_uuid(),'$SFX1','declared',5,3,'$SOFF');" >/dev/null 2>&1
+check "an official may declare a result with no match behind it" "$($PSQL -c "SELECT count(*) FROM competition.league_fixture_outcome WHERE fixture_id='$SFX1' AND kind='declared';")" "1"
+
+r=$($PSQL -c "INSERT INTO competition.league_fixture_outcome (outcome_id, fixture_id, kind, decided_by)
+  VALUES (gen_random_uuid(),'$SFX2','declared','$SOFF');" 2>&1)
+if echo "$r" | grep -qi 'outcome_with_a_score_has_both_halves'; then ok "and a declared result without a score is refused"
+else bad "and a declared result without a score is refused" "${r:-a declared result with no legs was accepted}"; fi
+
+r=$($PSQL -c "INSERT INTO competition.league_fixture_outcome (outcome_id, fixture_id, kind, legs_home, legs_away, to_team_id, reason, decided_by)
+  VALUES (gen_random_uuid(),'$SFX3','awarded',5,0,'$STA','they did not turn up','$SOFF');" 2>&1)
+if echo "$r" | grep -qi 'outcome_without_a_score_has_none'; then ok "while an award still invents no scoreline"
+else bad "while an award still invents no scoreline" "${r:-an awarded fixture was given legs}"; fi
+
 echo
 echo "-------------------------------------------"
 echo "  $PASS passed, $FAIL failed"

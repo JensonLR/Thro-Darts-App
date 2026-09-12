@@ -2454,3 +2454,38 @@ Whether two leagues' tables may be compared (OD-022 says they may not, and nothi
 what unit a league's results are recorded in, which PD-022 decided and the server has not yet implemented:
 `legs_home` and `legs_away` will hold legs, matches or match points depending on who typed them, and a table
 that heads them *Legs For* without knowing is mislabelling every row.
+
+## PD-055 — A named official may declare a result nobody scored on THRØ
+
+**Founder decision, 2026-09-12**, asked because the server was refusing something the phone has always
+allowed. V014 admits a `played` league outcome only where the fixture cites a real match, so a league could
+award a fixture but could not record that Grange A won it 5–2 on a Thursday from a paper card. Meanwhile the
+phone's own club book keeps both and holds them apart — its constraint "refuses a scored result with no match
+and an official's word with nobody's name". A league secretary could therefore keep their season on a phone
+and not on THRØ, which is the wrong way round.
+
+### Decided
+
+**A fifth outcome: a result declared by a named official.** It carries a scoreline and no match, and it
+counts in the table exactly as a played result does, because it is what happened.
+
+**It is never evidence.** `decided_by` is NOT NULL, so a declared result always has somebody's name behind it
+and nothing else does. It can never move a rating, and every table separates the two: the `evidenced` column
+counts the fixtures whose result came from a match scored on THRØ, and before this decision that column was
+tautological — every played outcome cited a match by construction, so the count was always the whole column
+and told nobody anything.
+
+**A fixture that was scored on THRØ cannot have a result declared over the top of it.** Where a match exists
+the result is read from the match; an official declaring a different scoreline would be overwriting evidence
+with a recollection. Correcting a played result is what superseding is for, and that is untouched.
+
+**The rejected option is recorded because it was tempting.** The third way to make the foreign key happy is
+to invent a match from the typed score. That writes a match nobody played, with no visits, into the evidence
+schema — the one place this codebase refuses to put anything that did not happen — and every later rating and
+statistic would read it as real. It was put to the founder as an option and not chosen.
+
+### What this does not decide
+
+Who may declare one, which is PD-053's named administrator and needs the routes that do not exist yet.
+Whether a league may declare a result for a fixture whose match was abandoned. And whether a player whose
+match was declared rather than scored should be told — they probably should, and nothing tells them yet.

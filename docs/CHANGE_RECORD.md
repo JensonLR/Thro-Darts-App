@@ -3624,3 +3624,34 @@ Home, You and your profile, which is 60% of an iPhone SE's height and covers a l
 is a visual constant, and the right number for it comes from looking at it on a device.
 
 Counts: client 746, API 29 suites (79 tests), HTTP 50 properties, schema 141, contrast 94 pairs.
+
+## The server was stricter than the phone, and wrong to be (PD-055, V042)
+
+Building the league table turned up something the table itself could not fix. V014 admits a `played` league
+outcome only where the fixture cites a real match, so a league on THRØ could award a fixture but could not
+record that Grange A won it 5–2 on a Thursday from a paper card. The phone's own club book has always kept
+both and held them apart — its constraint "refuses a scored result with no match and an official's word with
+nobody's name". A secretary could therefore keep their season on a phone and not on the server, which is the
+wrong way round, and it was put to the founder as a decision rather than patched around.
+
+**A fifth outcome kind: a result declared by a named official**, carrying a scoreline and no match. It counts
+in the table exactly as a played one does, because it is what happened. It is never evidence, because nobody
+recorded it happening — and `decided_by` is already NOT NULL, so a declared result cannot exist without
+somebody's name behind it.
+
+**This is what made `evidenced` mean anything.** The column had gone into V041 as a straight copy of the
+phone's — how many of a row's results came from a match scored on THRØ rather than somebody's word — and on
+the server it was tautological: every played outcome cites a match by construction, so the count was always
+the whole column. It was reported, in a shipped contract, telling nobody anything. With a declared result in
+the world the distinction is real again, and V042's tallies count only the played ones.
+
+**A fixture scored on THRØ cannot have a result declared over the top of it.** Where a match exists the
+result is read from the match; an official declaring a different scoreline would be overwriting evidence with
+a recollection, and superseding is what correcting a played result is for. A test holds the refusal by its
+sentence.
+
+The third option was the tempting one and is recorded in PD-055 as refused: invent a match from the typed
+score so the foreign key is satisfied. It writes a match nobody played, with no visits, into the evidence
+schema — the one place this codebase refuses to put anything that did not happen.
+
+Counts: client 746, API 29 suites (81 tests), HTTP 50 properties, schema 144, contrast 94 pairs.
