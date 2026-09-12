@@ -2503,3 +2503,39 @@ statistic would read it as real. It was put to the founder as an option and not 
 Who may declare one, which is PD-053's named administrator and needs the routes that do not exist yet.
 Whether a league may declare a result for a fixture whose match was abandoned. And whether a player whose
 match was declared rather than scored should be told — they probably should, and nothing tells them yet.
+
+## PD-056 — The web is the next surface, and it is a public face rather than a second app
+
+**Founder decision, 2026-09-12.** Asked which of four surfaces to build next — the web, Android, Apple
+Watch or a television — with everything buildable on iPhone and iPad done. They chose the web, which is
+also what the analysis pointed at: two commitments already depend on it, and the other three are easier
+after it.
+
+### Decided
+
+**The web is built next**, and it starts as three pages: the leagues THRØ knows, a league season's table,
+and how to delete an account.
+
+**It unblocks Android before Android starts.** Google Play will not accept an app that carries accounts
+without a web URL where a person can ask for theirs to be deleted. That page exists now and says exactly
+what the app says — what goes, what stays, and why the matches stay.
+
+**A table is worth more on the web than anywhere else.** It is the thing a league member sends to the side's
+group chat, and a link opens for everybody whether or not they have the app. The same route the phone reads
+serves it, so the two cannot disagree about a table, and PD-054's condition holds on the web as it does on
+the phone: every table says whose rules ordered it.
+
+**Static, no framework, no build step.** The pages need the generated tokens, one fetch and a little DOM.
+The tokens are copied in with a check that fails on drift, because a static host will not follow a link out
+of the directory it serves, and an unguarded copy is how a brand forks.
+
+**The API is on the same origin.** The client calls `/v1/...` with no host, so the edge routes `/v1/*` to the
+API (PD-051) and the browser never makes a cross-origin request: no CORS, no preflight, no second host, and
+no credentials in a query string. A development server mirrors that arrangement rather than working around it.
+
+### What this does not decide
+
+Signing in on the web, and with it the organiser's own surface — entering results from a laptop, which the
+routes behind PD-053 already allow and which is the obvious next piece. The privacy policy and terms, which
+are founder documents. And where it is hosted: Cloudflare Pages is free and already the plan, but the domain
+is the founder's to buy, and until there is one the deletion page has no address to give a store.

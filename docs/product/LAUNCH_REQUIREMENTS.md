@@ -28,24 +28,29 @@ each claim, so that the ones that need a solicitor can be taken to one knowingly
    accepted before a player can post anything**, stating that objectionable content is not tolerated.
 2. **`PrivacyInfo.xcprivacy` with required-reason API declarations.** *Build.* Mandatory since 1 May 2024;
    its absence is an automatic rejection (ITMS-91053/91055). The app uses `UserDefaults` (reason `CA92.1`).
-3. **A privacy policy, linked in the app and in App Store Connect** (5.1.1(i)). *Founder + build.* Must say
+3. **A web address, and a contact on it.** *Founder.* `apps/web/` is built and holds the account-deletion
+   page Google Play requires (PD-056), but it has nowhere to live until a domain is bought, and its
+   "if you cannot use the app" paragraph says *not published yet* where an address belongs. The same
+   address answers the DSA point of contact below, so one purchase and one mailbox close two items.
+
+4. **A privacy policy, linked in the app and in App Store Connect** (5.1.1(i)). *Founder + build.* Must say
    what is collected, who receives it (Neon London, Render Frankfurt), how long it is kept, and how to
    withdraw consent.
-4. **App privacy "nutrition" labels.** *Founder.* Name and email (from Apple/Google sign-in), user id, and
+5. **App privacy "nutrition" labels.** *Founder.* Name and email (from Apple/Google sign-in), user id, and
    user content (match journals, photos) are *linked to you*; location is **not collected**; no tracking.
-5. **Age rating questionnaire, including the social-media capability answers** — required for new
+6. **Age rating questionnaire, including the social-media capability answers** — required for new
    submissions since September 2026, and the tiers are now 4+/9+/13+/16+/18+. *Founder.* Expect 13+ or 16+.
    **Do not enter the Kids Category**: its obligations persist even after leaving it.
-6. **ICO registration** — tier 1, £52 a year. *Founder.* Plus an Article 13 privacy notice, a lawful-basis
+7. **ICO registration** — tier 1, £52 a year. *Founder.* Plus an Article 13 privacy notice, a lawful-basis
    map (contract for accounts and match records; legitimate interests for safety; consent only for extras),
    a DSAR process answering inside a month, and a 72-hour breach plan. A DPO is not required at this size;
    a **record of processing (ROPA) is**, because children's data is involved.
-7. **A DPIA, because the ICO's Children's code applies.** *Founder + build.* THRØ is "likely to be accessed
+8. **A DPIA, because the ICO's Children's code applies.** *Founder + build.* THRØ is "likely to be accessed
    by children". Against the code's standards, two gaps stand out: **geolocation must be off by default and
    show an in-use indicator while it is on** (Standard 10) — it is opt-in but shows no indicator — and
    **high-privacy defaults** must hold on every public surface (Standard 7). Consent age is 13 in the UK and
    16 in several EU states unless lowered.
-8. **Digital Services Act, if any EU user.** *Founder + build.* A published single point of contact
+9. **Digital Services Act, if any EU user.** *Founder + build.* A published single point of contact
    (Art 12), terms that state restrictions **and explain them in a way a minor can understand** (Art 14(3)),
    notice-and-action with confirmation of receipt (Art 16), and statements of reasons (Art 17). As a
    micro/small enterprise, Arts 15(2) and 20–28 do not apply (Art 19). Targeting EU users from the UK needs

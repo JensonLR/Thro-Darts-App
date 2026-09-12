@@ -86,6 +86,12 @@ jobs:
       - name: Tokens exist
         run: python3 tools/check_tokens_exist.py
 
+      # The web serves a directory and cannot follow a link out of it, so apps/web/tokens.css is a copy
+      # of the generated one. A copy drifts; this fails the moment it does, which is the only thing that
+      # makes a copy safe.
+      - name: The web's tokens are the generated ones
+        run: python3 tools/check_web_tokens.py
+
       # And a document that describes the build has to still be true of it. The runbook said
       # "Attestation | Not in the app" three weeks after PD-011 shipped, "Haptics | None" after
       # PD-015 shipped four, and that the checkout card carried no route because no route table

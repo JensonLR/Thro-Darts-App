@@ -3711,3 +3711,34 @@ the audit actually flagged, and that has still not been looked at. And `xcrun si
 back as a flat green field before the cause was understood rather than explained away.
 
 Counts: client 746, API 29 suites (82 tests), HTTP 51 properties, schema 144, contrast 94 pairs.
+
+## THRØ on the web, because two things were already waiting on it (PD-056)
+
+With everything buildable on iPhone and iPad done, the founder was asked which surface came next and chose
+the web. It is also the one that unblocks the others: Google Play will not take an app carrying accounts
+without a web URL for deleting one, and the organiser subscription is better sold off-store.
+
+Three pages, no framework, no build step. The leagues THRØ knows, searchable by name or town. A league
+season's table, from the same route the phone reads — so a table on the web and a table in the app cannot
+come to disagree, and PD-054's condition holds in both: the sentence under it says whose rules ordered it and
+in what order. And the deletion page, which says what the app says, word for word, because a page that
+contradicted the app about what deletion destroys would be worse than no page.
+
+**It is on brand without a design system in it.** `apps/web/tokens.css` is the generated token file, and
+`tools/check_web_tokens.py` fails the build if the copy drifts — a static host serves a directory and will
+not follow a link out of one, so a copy is the only shape available and an unguarded copy is how a brand
+quietly forks. Everything else in the stylesheet is arrangement.
+
+**The API is on the same origin**, which is a design decision rather than a convenience: the client calls
+`/v1/...` with no host, the edge routes `/v1/*` to the API, and the browser never makes a cross-origin
+request — no CORS, no preflight, no second host to configure. `serve.py` mirrors that locally, so what a
+developer looks at is arranged the way the real thing is.
+
+**And looking at it found two things reading it had not.** The leagues page reported *"undefined leagues"*
+over an empty list, because `/v1/leagues` answers with an envelope and the first version took the object for
+the array. Then, fixed, it said *"1 leagues"*. Both were found by opening the page against a real API with a
+real league in it — a Stockton season whose three results were **declared** rather than scored, which also
+put V042 on a screen: every row's evidence column reads nought, because a secretary's paper card is not a
+match anybody scored on THRØ.
+
+Counts: client 746, API 29 suites (82 tests), HTTP 51 properties, schema 144, contrast 94 pairs.

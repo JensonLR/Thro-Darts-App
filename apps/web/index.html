@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="en-GB">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>THRØ — local darts leagues</title>
+<meta name="description" content="Local darts leagues, their teams and their tables. THRØ works a table out from the results rather than keeping one of its own.">
+<link rel="stylesheet" href="tokens.css">
+<link rel="stylesheet" href="thro.css">
+</head>
+<body>
+<header class="field">
+  <div class="measure">
+    <p class="wordmark">THRØ</p>
+    <p class="eyebrow">Local darts</p>
+    <p class="lede">The leagues THRØ knows, their teams, and their tables — worked out from the results
+      beneath them rather than kept as a table of their own.</p>
+  </div>
+</header>
+<main class="measure">
+  <label for="q" class="quiet">Find a league by name or town</label>
+  <input id="q" type="search" placeholder="Stockton, Teesside, Thursday…" autocomplete="off">
+  <p id="count" class="quiet" style="margin-top:8px"></p>
+  <ul class="rows" id="leagues"></ul>
+</main>
+<footer class="measure">
+  <p>THRØ is a darts app for iPhone. <a href="delete-account.html">Delete your account</a>.</p>
+</footer>
+<script src="thro.js"></script>
+<script>
+  THRO.mountLeagues(document.getElementById('leagues'), document.getElementById('q'), document.getElementById('count'));
+</script>
+</body>
+</html>

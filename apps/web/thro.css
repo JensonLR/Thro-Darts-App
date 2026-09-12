@@ -1,0 +1,93 @@
+/* THRØ on the web. The colours, spacing and radii are the generated tokens (tokens.css); nothing here
+   invents one. What this file adds is the arrangement: a brand field that bleeds, paper under it, and
+   content held to the same 560-point measure the app holds it to (PD-052). */
+
+*, *::before, *::after { box-sizing: border-box; }
+
+html { -webkit-text-size-adjust: 100%; }
+
+body {
+  margin: 0;
+  font-family: var(--font-ui);
+  background: var(--color-background-primary);
+  color: var(--color-text-primary);
+  line-height: 1.5;
+}
+
+/* The measure. A column of comfortable width with the room around it left as room. */
+.measure { max-width: 560px; margin-inline: auto; padding-inline: 20px; }
+
+/* The board bleeds; what is read under it sits in the column. */
+.field {
+  background: var(--color-background-brand);
+  color: var(--color-text-on-board);
+  padding-block: 28px 32px;
+}
+.field a { color: var(--color-text-on-board); }
+.wordmark {
+  font-family: var(--font-sport);
+  font-weight: var(--font-weight-extrabold);
+  font-size: 34px;
+  letter-spacing: 0.02em;
+  margin: 0;
+}
+.eyebrow {
+  font-size: 13px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--color-text-on-board-secondary);
+  margin: 6px 0 0;
+}
+.field .lede { color: var(--color-text-on-board-secondary); margin: 16px 0 0; }
+
+main { padding-block: 28px 56px; }
+
+h1, h2, h3 { font-family: var(--font-ui); font-weight: var(--font-weight-bold); line-height: 1.2; }
+h2 { font-size: 22px; margin: 32px 0 8px; }
+h3 { font-size: 17px; margin: 24px 0 4px; }
+p { margin: 0 0 12px; }
+.quiet { color: var(--color-text-secondary); font-size: 14px; }
+
+a { color: var(--color-text-brand); }
+
+input[type="search"] {
+  width: 100%;
+  font: inherit;
+  padding: 12px 14px;
+  color: var(--color-text-primary);
+  background: var(--color-background-raised);
+  border: 1px solid var(--color-border-default);
+  border-radius: var(--radius-field);
+}
+input[type="search"]:focus-visible { outline: 2px solid var(--color-border-focus); outline-offset: 2px; }
+
+ul.rows { list-style: none; margin: 16px 0 0; padding: 0; }
+ul.rows li { border-top: 1px solid var(--color-border-default); }
+ul.rows li:last-child { border-bottom: 1px solid var(--color-border-default); }
+ul.rows a { display: block; padding: 14px 0; text-decoration: none; color: inherit; }
+ul.rows a:hover, ul.rows a:focus-visible { background: var(--color-background-secondary); }
+.row-name { font-weight: var(--font-weight-semibold); }
+.row-meta { color: var(--color-text-secondary); font-size: 14px; }
+
+/* A table is not prose, so it may scroll inside its own box rather than force the page sideways. */
+.table-scroll { overflow-x: auto; margin-top: 8px; }
+table { border-collapse: collapse; width: 100%; font-variant-numeric: tabular-nums; }
+caption { text-align: left; color: var(--color-text-secondary); font-size: 14px; padding-bottom: 8px; }
+th, td { padding: 10px 6px; border-bottom: 1px solid var(--color-border-default); text-align: right; }
+th:nth-child(1), td:nth-child(1) { width: 2ch; text-align: left; color: var(--color-text-secondary); }
+th:nth-child(2), td:nth-child(2) { text-align: left; width: auto; }
+thead th { font-size: 13px; color: var(--color-text-secondary); font-weight: var(--font-weight-medium); }
+td.points { font-family: var(--font-sport); font-weight: var(--font-weight-bold); }
+td.team { font-weight: var(--font-weight-semibold); }
+.evidenced { color: var(--color-status-verified); }
+
+.note {
+  border-left: 3px solid var(--color-border-brand);
+  padding: 10px 0 10px 14px;
+  margin: 20px 0;
+  color: var(--color-text-secondary);
+  font-size: 14px;
+}
+.goes li, .stays li { margin-bottom: 8px; }
+
+footer { border-top: 1px solid var(--color-border-default); padding-block: 24px 40px; color: var(--color-text-secondary); font-size: 14px; }

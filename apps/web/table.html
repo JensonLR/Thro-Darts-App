@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="en-GB">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>A league table — THRØ</title>
+<meta name="description" content="A league season's table, computed from the results under it.">
+<link rel="stylesheet" href="tokens.css">
+<link rel="stylesheet" href="thro.css">
+</head>
+<body>
+<header class="field">
+  <div class="measure">
+    <p class="eyebrow" id="season">Table</p>
+    <p class="wordmark" id="league" style="font-size:28px">Table</p>
+  </div>
+</header>
+<main class="measure" id="table">
+  <p class="quiet">Reading the table…</p>
+</main>
+<footer class="measure">
+  <p><a href="index.html">All leagues</a></p>
+</footer>
+<script src="thro.js"></script>
+<script>
+  THRO.mountTable(document.getElementById('table'), document.getElementById('league'), document.getElementById('season'));
+</script>
+</body>
+</html>
