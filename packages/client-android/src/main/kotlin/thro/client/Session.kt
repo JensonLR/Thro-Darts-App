@@ -14,6 +14,7 @@ import thro.journal.MatchId
 import thro.journal.MatchRecord
 import thro.journal.NewMatch
 import thro.journal.Seat
+import thro.journal.Standing
 
 // A match being scored on this phone (PD-083).
 //
@@ -52,6 +53,10 @@ public class ThroSession internal constructor(
     /// screen — and the reasoning was confused: what keeps the order is the *code below*, which assigns
     /// this only after `journal.append` has returned. Observability has nothing to do with it.
     public var state: MatchState by mutableStateOf(state)
+        private set
+
+    /// Who stands behind this result, read back from the journal after every change (PD-011).
+    public var standing: Standing by mutableStateOf(journal.standing(matchId))
         private set
 
     /// The last thing that happened, for the screen to say out loud. Null before anything has.
@@ -112,6 +117,10 @@ public class ThroSession internal constructor(
                 runCatching { journal.append(command, matchId) }
                     .onFailure { mark = ThroMark.Trouble(it.message ?: "not saved, so not recorded"); return }
                 state = outcome.state
+                // A visit after an attestation makes that attestation stale, and the journal knows it. The
+                // label is read back rather than kept, so it cannot go on claiming an agreement nobody gave
+                // to this version of the result.
+                standing = journal.standing(matchId)
                 mark = when {
                     state.winner != null -> ThroMark.MatchWon
                     outcome.bustReason != null -> ThroMark.Bust(total)
@@ -123,6 +132,22 @@ public class ThroSession internal constructor(
         }
     }
 
+    /// One competitor says whether they accept the result (PD-011).
+    ///
+    /// Written to the journal like everything else, and the label is then **read back** rather than
+    /// assumed — the journal decides whether an agreement still describes what is recorded, and a screen
+    /// that remembered its own answer would go on claiming an agreement a later visit had overtaken.
+    public fun attest(seat: Seat, agrees: Boolean) {
+        runCatching {
+            journal.attest(matchId, seat, agrees)
+            standing = journal.standing(matchId)
+        }.onFailure { mark = ThroMark.Trouble(it.message ?: "not recorded") }
+    }
+
+    /// Whether there is a result for anybody to stand behind. An abandoned match has none (PD-016), so
+    /// there is nothing to confirm and nothing to dispute.
+    public val hasResult: Boolean get() = state.winner != null
+
     /// Takes the last visit back. **A retraction, not a delete**: the journal keeps what was written and
     /// records that it no longer stands, which is ADR-006's whole shape and why the screen is rebuilt by
     /// replaying rather than by subtracting.
@@ -130,6 +155,7 @@ public class ThroSession internal constructor(
         runCatching {
             journal.retractLastVisit(matchId)
             state = journal.replay(matchId)
+            standing = journal.standing(matchId)
         }.onFailure { mark = ThroMark.Trouble(it.message ?: "nothing to take back") }
             .onSuccess { mark = null }
     }

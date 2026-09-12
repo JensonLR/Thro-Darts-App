@@ -7,6 +7,7 @@ import java.nio.file.Files
 import kotlin.test.AfterTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
@@ -96,12 +97,82 @@ class SessionTest {
         // A scoreline whose order changes with the result is a scoreline nobody can read at a glance.
         val session = match()
         assertEquals("0–0", ThroResultWords.scoreline(session))
+        assertEquals("3–2", ThroResultWords.scoreline(wonMatch()))
+    }
+
+    // MARK: PD-011, who stands behind the result
+
+    private fun wonMatch(): ThroSession {
+        val session = match()
+        repeat(5) {
+            if (session.state.winner == null) { repeat(4) { session.enter(180) }; session.enter(141) }
+        }
+        return session
+    }
+
+    @Test fun `a result starts self-reported because nobody has said anything`() {
+        assertEquals(ThroVerification.SELF_REPORTED, ThroResultWords.label(wonMatch()))
+    }
+
+    @Test fun `both agreeing is two people and the sentence says so`() {
+        val session = wonMatch()
+        session.attest(Seat.HOME, agrees = true)
+        assertEquals(ThroVerification.SELF_REPORTED, ThroResultWords.label(session),
+                     "one is not both — a single confirmation claims nothing")
+        // ...and the sentence says which of them, because "nobody has confirmed it" stopped being true
+        // the moment one of them did.
+        val halfway = ThroResultWords.verified(session)
+        assertTrue(halfway.startsWith("Jenson has confirmed this and Ethan has not"), halfway)
+        assertFalse(halfway.contains("nobody"), halfway)
+
+        session.attest(Seat.AWAY, agrees = true)
+        assertEquals(ThroVerification.BOTH_CONFIRMED, ThroResultWords.label(session))
+        val said = ThroResultWords.verified(session)
+        assertTrue(said.contains("Two people agreeing, not two devices"),
+                   "the honest limit of what one phone can witness")
+    }
+
+    @Test fun `a contest outranks a confirmation whichever came first`() {
+        // A result one competitor does not accept is disputed whatever the other said. Both orders,
+        // because "the last one wins" would make the label depend on who reached for the phone.
+        val first = wonMatch()
+        first.attest(Seat.HOME, agrees = true)
+        first.attest(Seat.AWAY, agrees = false)
+        assertEquals(ThroVerification.DISPUTED, ThroResultWords.label(first))
+
+        val second = wonMatch()
+        second.attest(Seat.HOME, agrees = false)
+        second.attest(Seat.AWAY, agrees = true)
+        assertEquals(ThroVerification.DISPUTED, ThroResultWords.label(second))
+    }
+
+    @Test fun `an agreement a later change overtakes stops counting`() {
+        // What was agreed is no longer what is recorded. Falling back to self-reported is the conservative
+        // answer; going on saying "both confirmed" would be claiming an agreement nobody gave to THIS
+        // version of the result.
+        val session = wonMatch()
+        session.attest(Seat.HOME, agrees = true)
+        session.attest(Seat.AWAY, agrees = true)
+        assertEquals(ThroVerification.BOTH_CONFIRMED, ThroResultWords.label(session))
+
+        session.undo()
+        assertEquals(ThroVerification.SELF_REPORTED, ThroResultWords.label(session),
+                     "a retraction after the agreement makes it stale, and stale is not confirmed")
+    }
+
+    @Test fun `nothing about an attestation is deleted`() {
+        val session = wonMatch()
+        val before = journal.entries(session.matchId).size
+        session.attest(Seat.HOME, agrees = true)
+        session.attest(Seat.HOME, agrees = false)
+        assertTrue(journal.entries(session.matchId).size > before,
+                   "changing your mind appends; it does not rewrite what you said")
     }
 
     @Test fun `a result says it is self-reported and claims nothing more`() {
         // PD-011's confirmation is on iOS and not here. Saying "confirmed" would be the app claiming
         // something nobody did, on the largest figure the product produces.
-        val said = ThroResultWords.verified().lowercase()
+        val said = ThroResultWords.verified(wonMatch()).lowercase()
         assertTrue(said.contains("self-reported"))
         assertTrue(said.contains("nobody has confirmed"))
     }

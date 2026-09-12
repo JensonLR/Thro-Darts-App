@@ -3900,3 +3900,45 @@ it expects can agree with a bug; one that repeats an observation cannot.
 Per-dart entry, a list of past matches, the club book, accounts, and everything downstream of them. And
 PD-011 itself: two players confirming a result on one phone is the next thing worth having on Android,
 because it is the difference between a record and a claim.
+
+## PD-085 — Two people agreeing, on Android
+
+**12 September 2026.** PD-084's result screen had to say *"nobody has confirmed it"*, and said so honestly.
+This is the thing that lets it stop apologising.
+
+### The same rule as iOS, conservative in both directions
+
+PD-011 on one phone means exactly one thing and it is worth being precise about: **two people agreeing, not
+two devices.** The phone cannot tell who pressed which button. What it can witness is that both people were
+standing there and both said yes, under the names typed at the start — and that is the whole of the claim
+the sentence makes.
+
+Two rows, one per competitor. **Never a single "confirm" button**: one press cannot mean two people, and the
+value of the label is entirely that it does not overclaim.
+
+The derivation is iOS's, unchanged:
+
+- **A contest outranks a confirmation**, because a result one competitor does not accept is disputed
+  whatever the other said. Tested in both orders, because "the last one wins" would make the label depend on
+  who reached for the phone first.
+- **An agreement a later visit or retraction has overtaken counts for nothing.** What was agreed is no
+  longer what is recorded, so it falls back to self-reported rather than claiming an agreement nobody gave
+  to *this* version of the result. The journal decides that, not the screen: the label is **read back**
+  after every change, and a screen that remembered its own answer would go on claiming a stale one.
+- **Nothing is deleted.** Changing your mind appends; it does not rewrite what you said.
+
+### The sentence that had become false
+
+With one Agree pressed, the label was correctly `SELF_REPORTED` — one is not both — and the sentence under
+it still read *"nobody has confirmed it"*, which by then was not true.
+
+Caught by looking at the screen rather than by a test, and it is a small thing that matters here: this
+product's entire argument is that every figure says where it came from. It now names who has and who has
+not — *"Jenson has confirmed this and Ethan has not. Until both do, it is one person's word."* — and a test
+holds that the word "nobody" cannot appear once somebody has.
+
+### Not the same as iOS, and worth saying
+
+iOS also has the share card, the disputed badge on it, and the undo path from a disputed result. Android has
+the label and the two rows. What it does **not** have is any way for this to reach anybody else — no upload,
+no claim by code, no league. A confirmed result on this phone is a confirmed result on this phone.

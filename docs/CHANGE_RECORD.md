@@ -4515,3 +4515,25 @@ written as a literal sequence rather than a loop with a condition: it is the one
 came out 3–2, and a test that computes what it expects can agree with a bug.
 
 Counts: client 824 tests on iOS, 14 on Android, all 22 checks.
+
+## Two people agreeing, on Android
+
+PD-084's result screen had to say *"nobody has confirmed it"*. Now the two competitors can each say whether
+they accept it, and the label follows iOS's rule unchanged: a contest outranks a confirmation whichever came
+first, and an agreement a later visit or retraction has overtaken stops counting — the journal decides that,
+not the screen, so the label is read back after every change rather than remembered.
+
+Two rows, one per player, and never a single "confirm" button: one press cannot mean two people. What one
+phone can witness is exactly **two people agreeing, not two devices** — both were standing there, both said
+yes, under the names typed at the start.
+
+One fault found by looking at the screen rather than by a test: with a single Agree pressed the label was
+correctly self-reported — one is not both — and the sentence under it still read "nobody has confirmed it",
+which had stopped being true. It names who has and who has not now, and a test holds that "nobody" cannot
+appear once somebody has.
+
+Also fixed: the iCloud `" 2"` duplicate-file problem, which this Mac's notes already record for Gradle test
+scans, turned up in the Android build directory and broke dexing with *Type thro.design.ThroType is defined
+multiple times*.
+
+Counts: client 824 tests on iOS, 19 on Android, all 22 checks.
