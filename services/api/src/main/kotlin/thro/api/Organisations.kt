@@ -590,17 +590,19 @@ public class Organisations(private val connection: Connection) {
     }
 
     /** Awards a fixture unplayed: a decision with an actor and a reason, never a scoreline. */
-    public fun awardFixture(fixtureId: UUID, toTeamId: UUID, reason: String, by: UUID, policyId: UUID? = null): UUID {
+    public fun awardFixture(
+        fixtureId: UUID, toTeamId: UUID, reason: String, by: UUID, policyId: UUID? = null, supersedes: UUID? = null,
+    ): UUID {
         val id = UUID.randomUUID()
         connection.prepareStatement(
             """
             INSERT INTO competition.league_fixture_outcome
-              (outcome_id, fixture_id, kind, to_team_id, reason, decided_by, policy_id)
-            VALUES (?, ?, 'awarded', ?, ?, ?, ?)
+              (outcome_id, fixture_id, kind, to_team_id, reason, decided_by, policy_id, supersedes_outcome_id)
+            VALUES (?, ?, 'awarded', ?, ?, ?, ?, ?)
             """.trimIndent(),
         ).use { ps ->
             ps.setObject(1, id); ps.setObject(2, fixtureId); ps.setObject(3, toTeamId)
-            ps.setString(4, reason); ps.setObject(5, by); ps.setObject(6, policyId)
+            ps.setString(4, reason); ps.setObject(5, by); ps.setObject(6, policyId); ps.setObject(7, supersedes)
             ps.executeUpdate()
         }
         return id

@@ -18,8 +18,17 @@ import java.util.UUID
  */
 public class Fixtures(private val connection: Connection) {
 
-    /** What a fixture finished as, where it has. Null while nobody has decided anything. */
-    public data class Decided(val kind: String, val legsHome: Int?, val legsAway: Int?, val awardedToHome: Boolean?)
+    /**
+     * What a fixture finished as, where it has. Null while nobody has decided anything.
+     *
+     * [outcomeId] is the decision standing right now, and it is here because **correcting a result means
+     * naming the one being replaced** (PD-059). An organiser who has to name it cannot silently overwrite a
+     * correction somebody else made in the meantime: the database refuses a supersede of an outcome that
+     * has itself been superseded, so a stale page is told to reload rather than winning.
+     */
+    public data class Decided(
+        val outcomeId: UUID, val kind: String, val legsHome: Int?, val legsAway: Int?, val awardedToHome: Boolean?,
+    )
 
     public data class Fixture(
         val fixtureId: UUID,
@@ -44,7 +53,7 @@ public class Fixtures(private val connection: Connection) {
             """
             SELECT f.fixture_id, f.division_id, d.name, f.scheduled_at, f.schedule_state,
                    h.name, a.name, v.name, v.locality,
-                   o.kind, o.legs_home, o.legs_away, (o.to_team_id = f.home_team_id)
+                   o.kind, o.legs_home, o.legs_away, (o.to_team_id = f.home_team_id), o.outcome_id
               FROM competition.league_fixture f
               -- A private team is unnamed rather than absent: the join is left, so the fixture survives it.
               LEFT JOIN competition.team h ON h.team_id = f.home_team_id AND h.visibility = 'public'
@@ -76,7 +85,7 @@ public class Fixtures(private val connection: Connection) {
                                 val lh = rs.getInt(11).takeUnless { _ -> rs.wasNull() }
                                 val la = rs.getInt(12).takeUnless { _ -> rs.wasNull() }
                                 val toHome = rs.getBoolean(13).takeUnless { _ -> rs.wasNull() }
-                                Decided(it, lh, la, toHome)
+                                Decided(rs.getObject(14) as UUID, it, lh, la, toHome)
                             },
                         )
                     }
@@ -88,7 +97,8 @@ public class Fixtures(private val connection: Connection) {
         fun q(s: String?) = s?.let { "\"" + it.replace("\\", "\\\\").replace("\"", "\\\"").replace("\n", "\\n") + "\"" } ?: "null"
         return "{\"fixtures\":[" + fixtures.joinToString(",") { f ->
             val decided = f.decided?.let { d ->
-                """{"kind":${q(d.kind)},"legsHome":${d.legsHome ?: "null"},"legsAway":${d.legsAway ?: "null"},""" +
+                """{"outcomeId":"${d.outcomeId}","kind":${q(d.kind)},""" +
+                    """"legsHome":${d.legsHome ?: "null"},"legsAway":${d.legsAway ?: "null"},""" +
                     """"awardedToHome":${d.awardedToHome?.toString() ?: "null"}}"""
             } ?: "null"
             """{"fixtureId":"${f.fixtureId}","divisionId":${f.divisionId?.let { "\"$it\"" } ?: "null"},""" +

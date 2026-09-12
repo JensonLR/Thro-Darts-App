@@ -311,17 +311,21 @@ public fun Application.thro(deps: Deps) {
                     val m = Json.parseObject(r.body)
                     val home = (m["legsHome"] as? Number)?.toInt()
                     val away = (m["legsAway"] as? Number)?.toInt()
+                    val supersedes = supersededOutcome(m)
                     if (home == null || away == null) {
                         Http(400, """{"error":"A result is two numbers: legsHome and legsAway."}""")
+                    } else if (supersedes is Named.NotAUuid) {
+                        Http(400, """{"error":"supersedes must be the outcomeId of the result being corrected."}""")
                     } else {
                         // PD-055: the evidence decides the kind, not the caller. A match scored on THRØ makes
                         // this a played result; without one it is the official's declared word, which counts
                         // the same in the table and is never evidence.
                         val played = fixture.matchId != null
-                        outcomely {
-                            val id = if (played) orgs.recordPlayedResult(fixtureId, home, away, by = r.principal!!.subject)
-                                     else orgs.declareResult(fixtureId, home, away, by = r.principal!!.subject)
-                            Http(200, """{"outcomeId":"$id","fixtureId":"$fixtureId","kind":${Contract.q(if (played) "played" else "declared")}}""")
+                        val old = (supersedes as Named.Ok).id
+                        outcomely(superseding = old != null) {
+                            val id = if (played) orgs.recordPlayedResult(fixtureId, home, away, by = r.principal!!.subject, supersedes = old)
+                                     else orgs.declareResult(fixtureId, home, away, by = r.principal!!.subject, supersedes = old)
+                            Http(200, """{"outcomeId":"$id","fixtureId":"$fixtureId","kind":${Contract.q(if (played) "played" else "declared")},"supersedes":${old?.let { Contract.q(it.toString()) } ?: "null"}}""")
                         }
                     }
                 }
@@ -336,9 +340,12 @@ public fun Application.thro(deps: Deps) {
                     val m = Json.parseObject(r.body)
                     val to = try { UUID.fromString(str(m, "toTeamId")) } catch (e: IllegalArgumentException) { throw IllegalArgumentException("toTeamId must be a UUID") }
                     val reason = str(m, "reason")
-                    outcomely {
-                        val id = orgs.awardFixture(fixtureId, to, reason, by = r.principal!!.subject)
-                        Http(200, """{"outcomeId":"$id","fixtureId":"$fixtureId","kind":"awarded"}""")
+                    when (val supersedes = supersededOutcome(m)) {
+                        is Named.NotAUuid -> Http(400, """{"error":"supersedes must be the outcomeId of the result being corrected."}""")
+                        is Named.Ok -> outcomely(superseding = supersedes.id != null) {
+                            val id = orgs.awardFixture(fixtureId, to, reason, by = r.principal!!.subject, supersedes = supersedes.id)
+                            Http(200, """{"outcomeId":"$id","fixtureId":"$fixtureId","kind":"awarded","supersedes":${supersedes.id?.let { Contract.q(it.toString()) } ?: "null"}}""")
+                        }
                     }
                 }
             }
@@ -635,6 +642,23 @@ private fun teamly(status: Int = 400, block: () -> Http): Http = try { block() }
  * administrator is named out of band, because an administrator publishes a table a whole town reads as
  * official and the founder does not want that handed to whoever asks first.
  */
+/** Absent is not the same as malformed: one means a first result, the other is a caller to correct. */
+private sealed interface Named {
+    @JvmInline value class Ok(val id: UUID?) : Named
+    object NotAUuid : Named
+}
+
+/**
+ * The outcome a decision replaces, where it replaces one (PD-059). Absent means this is the fixture's first
+ * result and the database will say so if it is not; present means a correction, and naming it is what stops
+ * two organisers from silently overwriting one another.
+ */
+private fun supersededOutcome(m: Map<String, Any?>): Named {
+    val raw = m["supersedes"] ?: return Named.Ok(null)
+    if (raw !is String) return Named.NotAUuid
+    return try { Named.Ok(UUID.fromString(raw)) } catch (e: IllegalArgumentException) { Named.NotAUuid }
+}
+
 private fun leagueAdmin(r: Req, season: UUID, block: () -> Http): Http {
     val decision = Relations(r.connection())
         .decide(r.principal!!.subject, "league_season.administer", ObjectRef(ObjectType.LEAGUE_SEASON, season.toString()))
@@ -644,13 +668,24 @@ private fun leagueAdmin(r: Req, season: UUID, block: () -> Http): Http {
 /**
  * A fixture already holding a result is a 409, not a 500. The database refuses a second live outcome — a new
  * decision must supersede the one standing — and that is a thing the caller can act on rather than a fault.
+ *
+ * **The same refusal means two different things, and the caller is owed the difference** (PD-059). It fires
+ * when nothing was superseded and a result already stands, which is "you meant to correct this"; and it
+ * fires when the outcome you named has itself been superseded since you read it, which is "somebody
+ * corrected it while you were typing". The second is a lost update the database refused on our behalf, and
+ * telling an organiser to reload is the only honest answer to it. [superseding] is what separates them,
+ * because the trigger cannot say which case it is and the handler knows.
  */
-private fun outcomely(block: () -> Http): Http = try {
+private fun outcomely(superseding: Boolean = false, block: () -> Http): Http = try {
     block()
 } catch (e: java.sql.SQLException) {
     val why = e.message.orEmpty()
-    if (why.contains("already has an outcome")) Http(409, """{"error":"This fixture already has a result. Correcting one is a new decision that supersedes it."}""")
-    else if (why.contains("read from the match")) Http(409, """{"error":"This fixture was scored on THRØ, so its result is read from the match."}""")
+    if (why.contains("already has an outcome")) {
+        if (superseding) Http(409, """{"error":"This fixture's result changed while you were entering one. Reload, and correct the result that is standing now."}""")
+        else Http(409, """{"error":"This fixture already has a result. Correcting one is a new decision that supersedes it: send its outcomeId as `supersedes`."}""")
+    } else if (why.contains("supersede one of its own fixture")) {
+        Http(409, """{"error":"That result belongs to a different fixture."}""")
+    } else if (why.contains("read from the match")) Http(409, """{"error":"This fixture was scored on THRØ, so its result is read from the match."}""")
     else throw e
 }
 

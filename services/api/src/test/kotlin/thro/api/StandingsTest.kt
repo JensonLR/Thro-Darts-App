@@ -374,6 +374,79 @@ class StandingsTest {
         }
     }
     @Test
+    fun `the standing result names itself, so a correction can name what it replaces`() {
+        if (!configured) return
+        migrated().use { c ->
+            val orgs = Organisations(c)
+            val admin = orgs.createPlayer()
+            val s = season(orgs, admin)
+            val fixture = played(c, orgs, s, s.a, s.b, 5, 2, admin)
+
+            val first = Fixtures(c).of(s.seasonId).single().decided!!
+            assertEquals(5, first.legsHome)
+            // PD-059: without this a reader can see that a fixture has a result and has no way to say which
+            // result, so the only correction available is a blind overwrite — which is the thing the
+            // database refuses and therefore the thing nobody could do at all.
+            orgs.recordPlayedResult(fixture, 4, 5, by = admin, supersedes = first.outcomeId)
+
+            val second = Fixtures(c).of(s.seasonId).single().decided!!
+            assertEquals(4, second.legsHome, "the correction is what stands")
+            assertFalse(second.outcomeId == first.outcomeId, "and it is a different decision, not an edit")
+        }
+    }
+
+    @Test
+    fun `a correction that names a result somebody already corrected is refused`() {
+        if (!configured) return
+        migrated().use { c ->
+            val orgs = Organisations(c)
+            val admin = orgs.createPlayer()
+            val s = season(orgs, admin)
+            val fixture = played(c, orgs, s, s.a, s.b, 5, 2, admin)
+            val first = Fixtures(c).of(s.seasonId).single().decided!!.outcomeId
+
+            // Two officials open the fixture. The first correction lands.
+            orgs.recordPlayedResult(fixture, 4, 5, by = admin, supersedes = first)
+
+            // The second still holds the outcome it read, and its correction would silently undo the other's.
+            // The database refuses it: superseding a result that is no longer standing leaves the standing
+            // one unaccounted for, which is exactly the lost update nobody would have noticed.
+            val why = assertFailsWith<PSQLException> {
+                orgs.recordPlayedResult(fixture, 3, 5, by = admin, supersedes = first)
+            }
+            assertTrue(why.message!!.contains("already has an outcome"), why.message!!)
+
+            val stands = Fixtures(c).of(s.seasonId).single().decided!!
+            assertEquals(4, stands.legsHome, "the first correction still stands, untouched")
+        }
+    }
+
+    @Test
+    fun `a fixture whose result was voided can be decided again`() {
+        if (!configured) return
+        migrated().use { c ->
+            val orgs = Organisations(c)
+            val admin = orgs.createPlayer()
+            val s = season(orgs, admin)
+            val fixture = played(c, orgs, s, s.a, s.b, 5, 2, admin)
+            val first = Fixtures(c).of(s.seasonId).single().decided!!.outcomeId
+            orgs.voidOutcome(fixture, first, "played under protest, to be replayed", by = admin)
+
+            // Every reader agrees a voided fixture has no result: the table counts it as unplayed and the
+            // fixture list shows nothing decided. So entering one must be entering a first result — there is
+            // nothing on show to supersede, and an organiser looking at the page cannot name what they
+            // cannot see.
+            assertEquals(null, Fixtures(c).of(s.seasonId).single().decided, "a void is not a result")
+            assertEquals(0, table(c, s).divisions.single().rows.associateBy { it.name }
+                .getValue("Grange A").played)
+
+            orgs.recordPlayedResult(fixture, 3, 5, by = admin)
+            assertEquals(3, Fixtures(c).of(s.seasonId).single().decided?.legsHome,
+                         "the replayed result stands, and the void stays on the record behind it")
+        }
+    }
+
+    @Test
     fun `a season's fixtures say what is left and what was decided, and never name a private team`() {
         if (!configured) return
         migrated().use { c ->

@@ -3859,3 +3859,32 @@ run is registered in CI, so a half-finished switch fails the build rather than r
 registered under the old host dies at the switch. Sign in with Apple does not — a native app's audience is
 the bundle id, not a host. Hence the guidance for the testing period, now written where a tester's account
 depends on it (PD-058, `docs/runbooks/GOING_LIVE.md`).
+
+## A result could be entered and never corrected, and the page said otherwise
+
+The organiser page shipped with this sentence: *"A result already in is corrected by a new decision that
+supersedes it, which this page does not do yet — the app and the API can."* Neither could. The database has
+taken `supersedes_outcome_id` since V014 and the store has passed it since PD-055, but no HTTP route ever
+did — so a mistyped 5–2 was permanent, and the 409 telling you to supersede it named a capability that
+existed nowhere. A claim of absence that was wrong in the generous direction, which is the harder kind to
+notice.
+
+Both writing routes now take the `outcomeId` of the result being replaced, and `seasons.fixtures` carries it
+so a page can name what it is correcting. Naming it is not ceremony: the V042 trigger refuses a correction
+that leaves another live outcome unaccounted for, so two officials with the page open cannot overwrite each
+other — the second is told the result changed while they were typing rather than being silently discarded.
+The two 409s read differently because the handler knows which case it is and the trigger does not.
+
+**And a second fault fell out of it.** Every reader treats a voided outcome as no result; the writer counted
+it as one. So a voided fixture sat in "still to enter", and entering a result was refused as *"already has a
+result"* — about a result the page could not show and therefore could not offer to correct. V043 gives the
+trigger the same definition of "live" that the tallies and the fixture list have always used: a void annuls,
+the fixture is open, the next decision is a first one. Proven by a test written before the migration, which
+failed with exactly that message.
+
+Verified rather than assumed: the correction form was driven in a browser against stubbed data, and it sends
+`{"legsHome":4,"legsAway":2,"supersedes":"…"}` for a correction and no `supersedes` for a first result;
+an awarded fixture opens with empty boxes rather than the string "null"; and the stale-correction 409 renders
+as the note, with the button re-enabled so it can be retried after a reload.
+
+Counts: API 29 suites (86 tests), schema 148 properties.

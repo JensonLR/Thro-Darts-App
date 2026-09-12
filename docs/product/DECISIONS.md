@@ -2664,3 +2664,52 @@ getting it wrong is a tester locked out of a season they entered.
 
 Order of operations, and what stays on Render's dashboard rather than in the repo:
 [docs/runbooks/GOING_LIVE.md](../runbooks/GOING_LIVE.md).
+
+## PD-059 — A result can be corrected, and correcting it cannot overwrite somebody else's correction
+
+**Found in review, 2026-09-12**, while answering a question about hosting. The organiser page said, in
+shipped copy: *"A result already in is corrected by a new decision that supersedes it, which this page does
+not do yet — the app and the API can."* **Neither could.** The database has taken `supersedes_outcome_id`
+since V014 and the store has passed it since PD-055, but no HTTP route ever did, so the only answer a
+corrected result could get was a 409 telling the caller to do a thing nothing was able to do. A league
+secretary who mistyped 5–2 as 2–5 had no way back.
+
+### Correcting is a second decision that names the first
+
+Both writing routes take an optional `supersedes`: the `outcomeId` of the result standing now. The earlier
+decision stays on the record with its author and its time, because a league's results are a history of who
+decided what, not a mutable scoreline.
+
+**Naming it is not ceremony — it is the concurrency control.** The V042 trigger refuses an outcome that
+leaves any other live outcome unaccounted for, so a correction that names a result somebody else has already
+corrected is rejected rather than applied on top. Two officials with the page open cannot silently overwrite
+each other, and the one who loses is told to reload rather than being quietly discarded. This is the same
+rule the app's own writes obey (`row_version`), reached by a different mechanism, and it is why the answer
+had to be "name what you are replacing" rather than "PUT the new score".
+
+The refusal says which case it is, because the trigger cannot: *"already has a result"* when nothing was
+named, and *"changed while you were entering one"* when the named one is stale. The handler knows which
+because it knows whether the caller sent anything.
+
+### The reader had to name the standing result
+
+A page that can see a fixture has a result and cannot say **which** result has only a blind overwrite
+available to it — the thing the database refuses. So `seasons.fixtures` now carries the live outcome's
+`outcomeId`. It is public, like the scoreline it identifies.
+
+### And a void reopens the fixture (V043)
+
+Chasing this turned up a second, quieter fault. Every reader in THRØ treats a voided outcome as no result —
+the tallies skip it, the fixture list skips it, and a test has asserted since V014 that a voided fixture is
+counted unplayed. The **writer** did not: `outcome_is_a_recorded_decision()` counted every unsuperseded
+outcome, voids included. So a voided fixture appeared in "still to enter", and entering one was refused with
+*"this fixture already has a result"* — about a result the page could not show and therefore could not offer
+to correct. A dead end, made of two halves of one system disagreeing about the word "live".
+
+V043 teaches the trigger the rule everything else already followed. A void annuls; the fixture is open; the
+next decision is a first decision. Both the voided outcome and the void stay on the record.
+
+**Not done, deliberately:** there is no route that voids a result. The store can (`voidOutcome`) and nothing
+over HTTP calls it. Annulment is a different act from correction — it says a fixture should be replayed —
+and it wants its own decision about who may do it and what the league sees, rather than being added because
+the plumbing happened to be open.

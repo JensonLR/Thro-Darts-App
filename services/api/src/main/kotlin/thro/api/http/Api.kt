@@ -434,23 +434,29 @@ public object Contract {
             description = "The legs each side won. **The caller does not choose what kind of result this is — the "
                 + "evidence does.** A fixture with a match scored on THRØ behind it records a played result; one "
                 + "without records the official's declared word, which counts in the table exactly the same and is "
-                + "never evidence for a rating. Correcting a result is a second decision that supersedes the first, "
-                + "so a fixture that already has one answers 409 rather than quietly holding two.",
-            request = Schema("""{"type":"object","required":["legsHome","legsAway"],"properties":{"legsHome":{"type":"integer","minimum":0},"legsAway":{"type":"integer","minimum":0}}}"""),
-            responses = mapOf(200 to "the outcome, saying whether it was played or declared", 400 to "not two numbers",
+                + "never evidence for a rating. **Correcting a result is a second decision that supersedes the "
+                + "first, never an edit**: send the standing result's `outcomeId` as `supersedes` and the earlier "
+                + "decision stays on the record with its author. Omit it and a fixture that already has a result "
+                + "answers 409; send one that has itself been superseded since you read it and it answers 409 too, "
+                + "because that is a correction somebody else made and this would silently undo it (PD-059).",
+            request = Schema("""{"type":"object","required":["legsHome","legsAway"],"properties":{"legsHome":{"type":"integer","minimum":0},"legsAway":{"type":"integer","minimum":0},"supersedes":{"type":"string","format":"uuid","description":"the outcomeId of the result being corrected"}}}"""),
+            responses = mapOf(200 to "the outcome, saying whether it was played or declared", 400 to "not two numbers, or supersedes is not a UUID",
                               401 to "no principal", 403 to "you do not administer this league season",
-                              404 to "no such fixture", 409 to "this fixture already has a result"),
+                              404 to "no such fixture",
+                              409 to "this fixture already has a result, or the one you named is no longer the standing one"),
         ),
         Endpoint(
             id = "leagues.award", method = "POST", path = "/v1/fixtures/{fixtureId}/award", authenticated = true,
             summary = "Award a fixture nobody played (PD-055)",
             description = "A decision with an actor and a reason, and never a scoreline: inventing one would reward "
                 + "an unplayed match in every leg-difference tie-break beneath it (ADR-012). The award goes to one of "
-                + "the fixture's two teams and says why.",
-            request = Schema("""{"type":"object","required":["toTeamId","reason"],"properties":{"toTeamId":{"type":"string","format":"uuid"},"reason":{"type":"string"}}}"""),
+                + "the fixture's two teams and says why. It corrects a standing result the same way a scoreline does, "
+                + "by naming it as `supersedes`, because a fixture recorded as played and later awarded is a "
+                + "correction and not a second result (PD-059).",
+            request = Schema("""{"type":"object","required":["toTeamId","reason"],"properties":{"toTeamId":{"type":"string","format":"uuid"},"reason":{"type":"string"},"supersedes":{"type":"string","format":"uuid","description":"the outcomeId of the result being corrected"}}}"""),
             responses = mapOf(200 to "the outcome", 400 to "not a UUID, or no reason given", 401 to "no principal",
                               403 to "you do not administer this league season", 404 to "no such fixture",
-                              409 to "this fixture already has a result"),
+                              409 to "this fixture already has a result, or the one you named is no longer the standing one"),
         ),
         Endpoint(
             id = "seasons.fixtures", method = "GET", path = "/v1/seasons/{leagueSeasonId}/fixtures",

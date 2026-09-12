@@ -69,6 +69,14 @@ ul.rows a:hover, ul.rows a:focus-visible { background: var(--color-background-se
 .row-name { font-weight: var(--font-weight-semibold); }
 .row-meta { color: var(--color-text-secondary); font-size: 14px; }
 
+/* A result and the word that corrects it, on one line: the scoreline takes the room and the correction
+   sits at the end of it, so a season of right answers reads as a list and not as a page of open forms. */
+.row-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+.row-head .row-name { min-width: 0; }
+.row-head button.quiet-button { flex: none; padding: 0; font-size: 14px; }
+/* The form a correction opens belongs to the row above it, not beside it. */
+.row-head + .row-meta + .entry { margin-top: 10px; }
+
 /* A table is not prose, so it may scroll inside its own box rather than force the page sideways. */
 .table-scroll { overflow-x: auto; margin-top: 8px; }
 table { border-collapse: collapse; width: 100%; font-variant-numeric: tabular-nums; }

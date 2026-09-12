@@ -384,33 +384,65 @@ async function mountOrganiser(where, signInEl) {
     if (done.length) {
       parts.push(make('h2', null, `${done.length} already in`));
       const list = make('ul', 'rows');
-      for (const f of done) {
-        const li = make('li');
-        const row = make('div');
-        row.style.padding = '12px 0';
-        const d = f.decided;
-        const score = d.legsHome === null ? (d.kind === 'walkover' ? 'walkover' : 'awarded') : `${d.legsHome}–${d.legsAway}`;
-        row.append(make('div', 'row-name', `${f.home || 'A team'} ${score} ${f.away || 'A team'}`),
-                   make('div', 'row-meta', when(f.scheduledAt)));
-        li.append(row); list.append(li);
-      }
+      for (const f of done) list.append(standing(f, draw));
       parts.push(list);
-      parts.push(make('p', 'quiet', 'A result already in is corrected by a new decision that supersedes it, which this page does not do yet — the app and the API can.'));
+      parts.push(make('p', 'quiet', 'Correcting a result does not rub the old one out: it records a second decision, with your name on it, that supersedes the first.'));
     }
     where.replaceChildren(...parts);
   };
 
-  /** One fixture, with two boxes and a button. The server decides whether it is played or declared. */
-  function entry(f, redraw) {
+  /**
+   * A result already in, with a way to correct it (PD-059).
+   *
+   * Folded away behind one word, because a season is mostly results that are right and a page of open
+   * forms is a page nobody can read. The form it opens is the same one used to enter a result, told which
+   * decision it replaces — the page never edits anything, it records a second decision.
+   */
+  function standing(f, redraw) {
+    const li = make('li');
+    const row = make('div');
+    row.style.padding = '12px 0';
+    const d = f.decided;
+    const score = d.legsHome === null ? (d.kind === 'walkover' ? 'walkover' : 'awarded') : `${d.legsHome}–${d.legsAway}`;
+    const head = make('div', 'row-head');
+    head.append(make('div', 'row-name', `${f.home || 'A team'} ${score} ${f.away || 'A team'}`));
+    const fix = make('button', 'quiet-button', 'Correct');
+    fix.setAttribute('aria-expanded', 'false');
+    head.append(fix);
+    row.append(head, make('div', 'row-meta', when(f.scheduledAt)));
+
+    let open = null;
+    fix.onclick = () => {
+      if (open) { open.remove(); open = null; fix.textContent = 'Correct'; fix.setAttribute('aria-expanded', 'false'); return; }
+      open = entry(f, redraw, d);
+      fix.textContent = 'Leave it';
+      fix.setAttribute('aria-expanded', 'true');
+      row.append(open);
+    };
+    li.append(row);
+    return li;
+  }
+
+  /**
+   * One fixture, with two boxes and a button. The server decides whether it is played or declared.
+   *
+   * [replacing] is the decision standing now, when this is a correction. Naming it is what stops two
+   * officials from silently overwriting one another: the server refuses a correction to a result that has
+   * itself been corrected since this page was drawn, and says so rather than taking the last write.
+   */
+  function entry(f, redraw, replacing) {
     const box = make('div', 'entry');
-    box.append(make('div', 'row-name', `${f.home || 'A team'} v ${f.away || 'A team'}`),
-               make('div', 'row-meta', when(f.scheduledAt) + (f.venue ? ` · ${f.venue}` : '')));
+    if (!replacing) {
+      box.append(make('div', 'row-name', `${f.home || 'A team'} v ${f.away || 'A team'}`),
+                 make('div', 'row-meta', when(f.scheduledAt) + (f.venue ? ` · ${f.venue}` : '')));
+    }
     const form = make('div', 'entry-form');
     const home = make('input'); home.type = 'number'; home.min = '0'; home.inputMode = 'numeric';
     home.setAttribute('aria-label', `Legs for ${f.home || 'the home team'}`);
     const away = make('input'); away.type = 'number'; away.min = '0'; away.inputMode = 'numeric';
     away.setAttribute('aria-label', `Legs for ${f.away || 'the away team'}`);
-    const save = make('button', 'primary', 'Save');
+    if (replacing && replacing.legsHome !== null) { home.value = replacing.legsHome; away.value = replacing.legsAway; }
+    const save = make('button', 'primary', replacing ? 'Correct it' : 'Save');
     const said = make('p', 'note');
     said.hidden = true;
     save.onclick = async () => {
@@ -421,13 +453,16 @@ async function mountOrganiser(where, signInEl) {
       }
       save.disabled = true;
       try {
-        const done = await authorised('POST', `/v1/fixtures/${encodeURIComponent(f.fixtureId)}/result`,
-                                      { legsHome: h, legsAway: a });
+        const body = { legsHome: h, legsAway: a };
+        if (replacing) body.supersedes = replacing.outcomeId;
+        const done = await authorised('POST', `/v1/fixtures/${encodeURIComponent(f.fixtureId)}/result`, body);
         // The server chose the kind from the evidence, not from anything this page sent (PD-055).
         said.hidden = false;
-        said.textContent = done.kind === 'played'
-          ? 'Saved, against the match scored on THRØ.'
-          : 'Saved as the league’s word — no match was scored on THRØ for this fixture.';
+        said.textContent = replacing
+          ? 'Corrected. The earlier result stays on the record, superseded.'
+          : done.kind === 'played'
+            ? 'Saved, against the match scored on THRØ.'
+            : 'Saved as the league’s word — no match was scored on THRØ for this fixture.';
         setTimeout(redraw, 900);
       } catch (e) {
         said.hidden = false; said.textContent = e.message; save.disabled = false;

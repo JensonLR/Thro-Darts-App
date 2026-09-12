@@ -902,6 +902,42 @@ r=$($PSQL -c "INSERT INTO competition.league_fixture_outcome (outcome_id, fixtur
 if echo "$r" | grep -qi 'outcome_without_a_score_has_none'; then ok "while an award still invents no scoreline"
 else bad "while an award still invents no scoreline" "${r:-an awarded fixture was given legs}"; fi
 
+# V043 — a voided fixture has no result, so the next decision is a first one (PD-059).
+# Every reader has always said a void is not a result; until V043 the writer disagreed, and a fixture whose
+# result had been voided could not be given another one — a dead end an organiser could reach and not leave.
+SFX4=$($PSQL -c "SELECT gen_random_uuid();")
+$PSQL -c "INSERT INTO competition.league_fixture (fixture_id, league_season_id, division_id, home_team_id, away_team_id, scheduled_at)
+  VALUES ('$SFX4','$SSN','$SDV','$STA','$STB', now());" >/dev/null 2>&1
+SOUT1=$($PSQL -c "SELECT gen_random_uuid();")
+$PSQL -c "INSERT INTO competition.league_fixture_outcome (outcome_id, fixture_id, kind, legs_home, legs_away, decided_by)
+  VALUES ('$SOUT1','$SFX4','declared',5,3,'$SOFF');" >/dev/null 2>&1
+
+# A second decision that names nothing is refused: that is the lost update the whole scheme exists to stop.
+r=$($PSQL -c "INSERT INTO competition.league_fixture_outcome (outcome_id, fixture_id, kind, legs_home, legs_away, decided_by)
+  VALUES (gen_random_uuid(),'$SFX4','declared',4,4,'$SOFF');" 2>&1)
+if echo "$r" | grep -qi 'must supersede it'; then ok "a second result that supersedes nothing is refused"
+else bad "a second result that supersedes nothing is refused" "${r:-a fixture was given two live results}"; fi
+
+# Naming it is what makes it a correction.
+$PSQL -c "INSERT INTO competition.league_fixture_outcome (outcome_id, fixture_id, kind, legs_home, legs_away, decided_by, supersedes_outcome_id)
+  VALUES (gen_random_uuid(),'$SFX4','declared',4,4,'$SOFF','$SOUT1');" >/dev/null 2>&1
+check "and one that names the standing result corrects it" "$($PSQL -c "SELECT count(*) FROM competition.league_fixture_outcome WHERE fixture_id='$SFX4';")" "2"
+
+# Naming one somebody already corrected is refused, which is how two officials cannot overwrite each other.
+r=$($PSQL -c "INSERT INTO competition.league_fixture_outcome (outcome_id, fixture_id, kind, legs_home, legs_away, decided_by, supersedes_outcome_id)
+  VALUES (gen_random_uuid(),'$SFX4','declared',3,5,'$SOFF','$SOUT1');" 2>&1)
+if echo "$r" | grep -qi 'must supersede it'; then ok "while naming a result already corrected is refused"
+else bad "while naming a result already corrected is refused" "${r:-a stale correction overwrote a newer one}"; fi
+
+# And a void reopens the fixture, because every reader already treats it as no result at all.
+SLIVE=$($PSQL -c "SELECT outcome_id FROM competition.league_fixture_outcome WHERE fixture_id='$SFX4' AND supersedes_outcome_id IS NOT NULL LIMIT 1;")
+$PSQL -c "INSERT INTO competition.league_fixture_outcome (outcome_id, fixture_id, kind, reason, decided_by, supersedes_outcome_id)
+  VALUES (gen_random_uuid(),'$SFX4','void','played under protest','$SOFF','$SLIVE');" >/dev/null 2>&1
+r=$($PSQL -c "INSERT INTO competition.league_fixture_outcome (outcome_id, fixture_id, kind, legs_home, legs_away, decided_by)
+  VALUES (gen_random_uuid(),'$SFX4','declared',2,5,'$SOFF');" 2>&1)
+if echo "$r" | grep -qi 'must supersede it'; then bad "a voided fixture may be decided again" "the writer still counts a void as a result"
+else ok "a voided fixture may be decided again"; fi
+
 echo
 echo "-------------------------------------------"
 echo "  $PASS passed, $FAIL failed"
