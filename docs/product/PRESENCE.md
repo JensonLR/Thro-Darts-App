@@ -145,8 +145,9 @@ on the other end of getting it wrong.
 2. **Claim `throdarts`** on X, Instagram (which brings Threads), TikTok, YouTube, Facebook and Reddit, in
    that order of who squats fastest. Claiming is not launching; an empty account with the right name is the
    point.
-3. **Stand up the mailbox** and its DNS records, then tell me and I will put the address into the privacy
-   policy, the terms, the deletion page and the DSA contact in one change.
+3. **Stand up the mailbox** — `docs/product/MAILBOX.md` has the host comparison, the exact DNS records and
+   the three replies that must exist *before* it answers. Then tell me and I will put the address into the
+   privacy policy, the terms, the deletion page and the DSA contact in one change.
 4. **Look at `thro.co.uk`** and decide whether it matters.
 5. **Consider a UK word mark** for THRØ in classes 9 and 41 — about £170 for one class. Not urgent; worth
    knowing the number before somebody else does.

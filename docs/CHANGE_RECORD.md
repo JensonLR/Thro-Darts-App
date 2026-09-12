@@ -4417,3 +4417,23 @@ never repost a player without knowing they are over 18 and have said yes, an unk
 the seeded demo season for screenshots because nobody in it is real.
 
 Counts: client 824 tests, all 22 checks.
+
+## What the Gmail connection can and cannot do, and the mailbox it cannot make
+
+The founder asked whether the connected Gmail could just create the addresses. It cannot, and the reason
+worth recording is not the permissions one: **`thro.uk` is not registered**, and no tool anywhere can create
+an address at a domain nobody owns. Beyond that, the connection is a mailbox client — drafts, sends,
+searches, labels — inside one already-authenticated account, with no address or domain administration in it
+at all; and a personal `@gmail.com` cannot host `@thro.uk` addresses in any case.
+
+So `docs/product/MAILBOX.md` does the part that needed judgement rather than access: the host comparison
+(Fastmail, with the free Cloudflare-plus-Gmail path written up honestly including its catch — routing is
+inbound only, so replies come from a personal address until an SMTP relay is added, which for a statutory
+privacy contact is worse than it sounds); the exact DNS records, with `-all` and not `~all` because a soft
+SPF fail invites spoofing of a safeguarding address; and the note that mail belongs on the apex where it
+cannot disturb what `tools/host.py` owns.
+
+And the three replies that have to exist **before** the mailbox answers, because the clock starts on the
+first message: a data-subject acknowledgement that points at the deletion page since it is usually the whole
+answer, a safeguarding first response that promises nothing about outcomes and never continues a
+conversation with a child, and the DSA one-liner.
