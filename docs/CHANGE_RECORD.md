@@ -3948,3 +3948,32 @@ What a tablet does with spare room is untouched. Folding a masthead buys back a 
 little; it says nothing about a screen with too much, and that stays PD-052's open question.
 
 Counts: client 755 tests (178 design), all 22 checks.
+
+## One thing, one column; two things, two columns
+
+Put to the founder with three options and a preview of each, and they chose two columns where a screen earns
+them. `ThroSpread` decides it from the width available, in the shape `ThroStage`'s beside-or-stacked choice
+takes. The threshold is derived rather than picked — a column must clear 340 points, which is an iPhone SE's
+proven 280 with margin, so the narrowest spreading screen is the one that fits two of those and a gutter —
+and the test that holds the rule to its own stated reason caught the first pair of numbers disagreeing
+within a minute of being written.
+
+**The app had no fixtures.** They existed on the web and nowhere else, so this added the model, the call
+beside `standings`, and the column. The two load together because a reader compares them, and the fixtures
+may fail on their own into a quiet note rather than taking the table down with them.
+
+The words carry what the drawing cannot and are tested apart from it: an award never reads as a scoreline
+(ADR-012), a declared result says "the league's word" because 5–2 cannot carry PD-055 by itself, a team THRØ
+may not name is "A team" and not a blank, and a scoreline is spoken "5 to 2".
+
+**And it was correct and unreachable.** On an iPad it stacked — the rule was right and the sheet it lives in
+is 577 points, under the threshold, so a tablet got a phone page floating in the middle of a map. The
+table's sheet is page-sized now; the two sheets beside it are single objects and keep the form width.
+
+Two things this needed that are worth more than the feature. A Debug build now takes `-ThroAPIBaseURL`, so a
+server-backed screen can be looked at against a local API instead of guessed at — staging holds no seasons,
+which is why the table and everything under a league had gone unopened. And the local runbook now says
+`serve` rather than `run`: `run` starts the playtest harness, which answers HTML to every API path and cost
+a confused ten minutes.
+
+Counts: client 770 tests (184 design), all 22 checks.

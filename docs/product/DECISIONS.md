@@ -2798,3 +2798,58 @@ The welcome's mark also takes the plain display cap on a short screen instead of
 What a **tablet** does with genuinely spare room — two columns where a screen earns them, a larger board —
 is untouched and stays PD-052's question. Folding a masthead buys back a strip; it does not answer what to do
 with a screen that has too much room rather than too little.
+
+## PD-062 — One thing, one column; two things, two columns
+
+**Founder, 2026-09-12**, given three options for what a screen with genuinely spare room should do and shown
+a preview of each. They chose **two columns where a screen earns them** — a league's table beside its
+fixtures — over scaling everything up or showing more in one column. This closes the question PD-052 left
+open, and the founder's own summary of it is the rule: *one thing, one column; two things, two columns.*
+
+### The rule
+
+`ThroReadable` holds a screen to 560 points because a paragraph a thousand points wide is a phone page
+pulled apart. That is right for a screen that is one thing and wrong for a screen that is two: a table and
+the fixtures it was computed from are separate objects a reader compares, and stacking them on a tablet
+leaves half the glass empty and puts the next fixture below the fold of a screen with room for both.
+
+`ThroSpread` is arithmetic on the width available, in the same shape `ThroStage` chooses between a board
+above its keys and a board beside them. **The threshold is derived, not picked**: a column must be at least
+340 points — an iPhone SE has 280 points of content and every component in THRØ is proven at that, so 340 is
+that with margin — and the screen that spreads is the narrowest that fits two of those with a gutter, which
+is 712. Past 960 the pair stops widening, so two columns never become two rooms.
+
+**A test asserts the rule against its own stated reason**, and it earned its keep immediately: the first
+pair of numbers written — a 700 threshold beside a claim of 400-point columns — disagreed, and the test said
+so within a minute. A threshold chosen independently of the justification beside it is a number nobody
+checked.
+
+### What it took beyond the rule
+
+The app had no fixtures at all — they existed on the web and nowhere else — so this added `LeagueFixtures`
+to the client, the call beside `standings`, and the column that draws them. The two load together, because
+they are read from the same rows on the server and a reader compares them; **the fixtures are allowed to
+fail on their own** and say so in a quiet note rather than taking the table down with a full-page refusal.
+
+The words carry the rules the drawing cannot, and are tested apart from it: an award reads *"Feathers A
+awarded, Riverside A"* and never as a scoreline, because legs an award invented would reward an unplayed
+match in every tie-break beneath it (ADR-012); a declared result reads as the result it is and says *"the
+league's word"* underneath, because "5–2" cannot carry PD-055's distinction on its own; a team THRØ may not
+name is *"A team"* and not a blank; and a scoreline is spoken as *"5 to 2"*, because an en dash between two
+numerals is not a word and read out is the same sound as fifty-two.
+
+### And the layout was correct and unreachable
+
+Looked at on an iPad and it stacked. The rule was right and the container was 577 points: this screen is
+presented in a sheet, and a sheet at the form's default width is narrower than the threshold. A tablet was
+getting a phone page floating in the middle of a map. The table's sheet is now `.presentationSizing(.page)`
+— the other two sheets it shares a presenter with are single objects and keep the form width, which is the
+right size for them.
+
+Verified on both: an iPad Pro 11 shows the table beside four fixtures to come and five already in; an iPhone
+17 Pro shows the table, then the rules, then the fixtures under them.
+
+### Where it applies next
+
+Discover is the obvious second — a list beside its map — and Home is not: the Continue card is the one
+unfinished thing on the screen and halving it would make it smaller, not clearer. Neither is done here.

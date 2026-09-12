@@ -28,8 +28,25 @@ public struct ServerConfiguration: Sendable, Equatable {
     }
 
     /// Read from the app's Info.plist: `THROAPIBaseURL` and `THROGoogleClientID`.
-    public static func fromInfoPlist(_ bundle: Bundle = .main) -> ServerConfiguration? {
-        guard let raw = bundle.object(forInfoDictionaryKey: "THROAPIBaseURL") as? String,
+    ///
+    /// **A Debug build may be pointed somewhere else from the command line**, which is the difference
+    /// between looking at a server-backed screen and guessing at it:
+    ///
+    ///     xcrun simctl launch <device> app.thro.darts -ThroAPIBaseURL http://localhost:8080
+    ///
+    /// Staging holds no seasons, so the table, the fixtures beside it and everything else read from a
+    /// league were being changed without anybody opening them — the same gap `-ThroScreen` exists to close,
+    /// one layer down. A Release build ignores the argument entirely: it is compiled out, so a shipped app
+    /// cannot be talked into pointing at somebody else's server by a URL scheme or a shortcut.
+    public static func fromInfoPlist(_ bundle: Bundle = .main,
+                                     arguments: [String] = ProcessInfo.processInfo.arguments) -> ServerConfiguration? {
+        var raw = bundle.object(forInfoDictionaryKey: "THROAPIBaseURL") as? String
+        #if DEBUG
+        if let i = arguments.firstIndex(of: "-ThroAPIBaseURL"), arguments.indices.contains(i + 1) {
+            raw = arguments[i + 1]
+        }
+        #endif
+        guard let raw,
               let url = URL(string: raw.trimmingCharacters(in: .whitespacesAndNewlines)), url.host != nil else { return nil }
         return ServerConfiguration(baseURL: url, googleClientID: bundle.object(forInfoDictionaryKey: "THROGoogleClientID") as? String)
     }
@@ -171,6 +188,55 @@ public struct PublicEvent: Decodable, Sendable, Equatable, Identifiable {
 /// Every field the app needs to say *why* the table reads as it does travels with it: which rules ordered
 /// it and whose they are, which step separated each row from the one above, how many fixtures have gone by
 /// with no result, and how much of each row came from a match scored on THRØ rather than somebody's word.
+/// A league season's fixtures: what is left to play and what each finished as (PD-056).
+///
+/// The other half of a league's own data. Read from the same rows the table is computed from, so the two
+/// cannot disagree — a fixture shown as won 5–2 here is the fixture that put those legs in the table.
+///
+/// **A private team or venue is unnamed and the fixture is still listed.** Hiding it would leave a hole in
+/// a league's own calendar, which is nobody's idea of privacy; `home`, `away` and `venue` are nil in that
+/// case and the screen says so rather than inventing a name.
+public struct LeagueFixtures: Decodable, Sendable, Equatable {
+
+    /// What a fixture finished as, where it has. Nil while nobody has decided anything.
+    public struct Decided: Decodable, Sendable, Equatable {
+        /// The decision standing now. Naming it is what a correction has to do (PD-059).
+        public let outcomeId: UUID
+        /// played, declared, awarded or walkover. A void is not a result and never arrives here.
+        public let kind: String
+        public let legsHome: Int?
+        public let legsAway: Int?
+        /// Which side an award went to, where it was an award.
+        public let awardedToHome: Bool?
+
+        /// True when a scoreline was recorded, however it was arrived at.
+        public var scored: Bool { legsHome != nil && legsAway != nil }
+    }
+
+    public struct Fixture: Decodable, Sendable, Equatable, Identifiable {
+        public let fixtureId: UUID
+        public let divisionId: UUID?
+        public let division: String?
+        public let scheduledAt: Date
+        /// scheduled, rearranged or postponed — a fixture's own lifecycle, not its result.
+        public let state: String
+        public let home: String?
+        public let away: String?
+        public let venue: String?
+        public let locality: String?
+        public let decided: Decided?
+
+        public var id: UUID { fixtureId }
+    }
+
+    public let fixtures: [Fixture]
+
+    /// Still to play, soonest first — the half a player actually looks for.
+    public var toPlay: [Fixture] { fixtures.filter { $0.decided == nil } }
+    /// Decided, most recent first, because a result read after the fact is read backwards.
+    public var decided: [Fixture] { fixtures.filter { $0.decided != nil }.reversed() }
+}
+
 public struct LeagueStandings: Decodable, Sendable, Equatable {
 
     /// Which rules ordered the table. Never absent: a standard nobody can see is a standard THRØ imposed.
@@ -796,6 +862,14 @@ public actor ThroAPI {
     public func standings(season: UUID, division: UUID? = nil) async throws -> LeagueStandings {
         var path = "/v1/seasons/\(season.uuidString.lowercased())/standings"
         if let division { path += "?division=\(division.uuidString.lowercased())" }
+        let (data, http) = try await send("GET", path, bearer: session?.accessToken)
+        guard http.statusCode == 200 else { throw APIError.status(http.statusCode, String(decoding: data, as: UTF8.self)) }
+        return try decode(data)
+    }
+
+    /// A league season's fixtures (PD-056). No session needed, for the same reason the table needs none.
+    public func fixtures(season: UUID) async throws -> LeagueFixtures {
+        let path = "/v1/seasons/\(season.uuidString.lowercased())/fixtures"
         let (data, http) = try await send("GET", path, bearer: session?.accessToken)
         guard http.statusCode == 200 else { throw APIError.status(http.statusCode, String(decoding: data, as: UTF8.self)) }
         return try decode(data)

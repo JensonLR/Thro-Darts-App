@@ -26,7 +26,9 @@ services:
       - key: DATABASE_URL
         sync: false            # the Neon connection string for the app's role, pasted in the dashboard
       - key: THRO_RP_ID
-        value: thro-api-staging.onrender.com
+        value: thro.uk
+      - key: THRO_RP_ORIGINS
+        value: https://thro.uk,https://api.thro.uk
       - key: THRO_APPLE_CLIENT_ID
         value: app.thro.darts
       - key: THRO_APPLE_APP_IDS

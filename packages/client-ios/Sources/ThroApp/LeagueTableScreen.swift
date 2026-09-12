@@ -22,6 +22,9 @@ public struct LeagueTableScreen: View {
     private let onBack: () -> Void
 
     @State private var state: TeamsModel.Loading<LeagueStandings> = .idle
+    /// The fixtures beside the table (PD-062). Loaded separately and allowed to fail on its own: the table
+    /// is what this screen is for, and losing its companion must not take the subject down with it.
+    @State private var fixtures: TeamsModel.Loading<LeagueFixtures> = .idle
 
     public init(seasonId: UUID, leagueName: String, api: ThroAPI?, onBack: @escaping () -> Void) {
         self.seasonId = seasonId
@@ -53,12 +56,34 @@ public struct LeagueTableScreen: View {
     private func load() async {
         guard let api else { state = .failed("This build names no server."); return }
         state = .loading
-        do { state = .loaded(try await api.standings(season: seasonId)) }
+        fixtures = .loading
+        // Both at once: they are read from the same rows on the server and a reader compares them, so
+        // fetching one after the other would show a table beside an empty column for no reason.
+        async let table = api.standings(season: seasonId)
+        async let list = api.fixtures(season: seasonId)
+        do { state = .loaded(try await table) }
         catch { state = .failed(ThroAPI.refusal(error) ?? "The table could not be read just now.") }
+        do { fixtures = .loaded(try await list) }
+        catch { fixtures = .failed(ThroAPI.refusal(error) ?? "The fixtures could not be read just now.") }
     }
 
     @ViewBuilder private func loaded(_ table: LeagueStandings) -> some View {
-        ScrollView {
+        // The width comes from here rather than from inside the scroll view, where a geometry reader takes
+        // all the height it can reach (PD-062).
+        GeometryReader { proxy in
+            ScrollView {
+                ThroBeside(width: proxy.size.width) {
+                    standings(table)
+                } aside: {
+                    stillToPlay
+                }
+                .padding(.horizontal, ThroSpacing.spaceScreenGutter)
+                .padding(.bottom, ThroSpacing.spacing6)
+            }
+        }
+    }
+
+    @ViewBuilder private func standings(_ table: LeagueStandings) -> some View {
             VStack(alignment: .leading, spacing: 0) {
                 Text(table.label)
                     .thro(ThroTypography.metadata).foregroundStyle(ThroColor.colorTextSecondary)
@@ -89,10 +114,69 @@ public struct LeagueTableScreen: View {
                 Note(table.rules.says + " " + LeagueTableWords.ordered(table.rules))
                     .padding(.top, ThroSpacing.spaceSectionGap)
             }
-            .padding(.horizontal, ThroSpacing.spaceScreenGutter)
-            .padding(.bottom, ThroSpacing.spacing6)
-            .throReadable()
+    }
+
+    /// What is left to play, and what has already been decided — the other half of a league's own data.
+    ///
+    /// Beside the table on a screen with room and under it on a phone, which is the whole of PD-062: these
+    /// are two objects a reader compares, not one object split in half.
+    @ViewBuilder private var stillToPlay: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            switch fixtures {
+            case .idle, .loading:
+                SectionHeader("Still to play", meta: nil).padding(.top, ThroSpacing.spacing4)
+                ProgressView().padding(.top, ThroSpacing.spacing4)
+            case .failed(let why):
+                SectionHeader("Still to play", meta: nil).padding(.top, ThroSpacing.spacing4)
+                // A quiet note, not an error state: the table beside this one loaded, and a full-page
+                // refusal for the companion would shout about the half that did not matter.
+                Note(why).padding(.top, ThroSpacing.spacing3)
+            case .loaded(let list):
+                let next = list.toPlay
+                let done = list.decided
+                SectionHeader("Still to play", meta: next.isEmpty ? nil : "\(next.count)")
+                    .padding(.top, ThroSpacing.spacing4)
+                ThroDivider().padding(.top, ThroSpacing.spacing2)
+                if next.isEmpty {
+                    Note(LeagueTableWords.everythingPlayed).padding(.top, ThroSpacing.spacing3)
+                } else {
+                    ForEach(next.prefix(6)) { fixture in
+                        fixtureLine(fixture)
+                        ThroDivider()
+                    }
+                    if next.count > 6 {
+                        Note(LeagueTableWords.andMore(next.count - 6)).padding(.top, ThroSpacing.spacing3)
+                    }
+                }
+                if !done.isEmpty {
+                    SectionHeader("Already in", meta: "\(done.count)")
+                        .padding(.top, ThroSpacing.spaceSectionGap)
+                    ThroDivider().padding(.top, ThroSpacing.spacing2)
+                    ForEach(done.prefix(5)) { fixture in
+                        fixtureLine(fixture)
+                        ThroDivider()
+                    }
+                }
+            }
         }
+    }
+
+    /// One fixture: who, when and where — or what it finished as, where it has finished.
+    private func fixtureLine(_ f: LeagueFixtures.Fixture) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(LeagueTableWords.sides(f))
+                .thro(ThroTypography.bodyLarge.weight(.semibold))
+                .foregroundStyle(ThroColor.colorTextPrimary)
+                .lineLimit(2)
+            Text(LeagueTableWords.when(f))
+                .thro(ThroTypography.metadata)
+                .foregroundStyle(ThroColor.colorTextSecondary)
+                .lineLimit(2)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.vertical, ThroSpacing.spacing3)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(LeagueTableWords.spokenFixture(f))
     }
 
     /// One row: who, then what decided where they are, then the detail underneath.
@@ -166,6 +250,56 @@ enum LeagueTableWords {
         n == 1
             ? "**One fixture has been played with no result entered**, so this table is not finished."
             : "**\(n) fixtures have been played with no result entered**, so this table is not finished."
+    }
+
+    // --- the fixtures beside the table (PD-062) -------------------------------------------------
+
+    static let everythingPlayed = "Every fixture in this season has a result."
+
+    static func andMore(_ n: Int) -> String {
+        n == 1 ? "And one more after those." : "And \(n) more after those."
+    }
+
+    /// A team THRØ may not name is *"A team"* and never a blank, because a fixture with one side missing
+    /// reads as a bug rather than as a side that asked not to be listed (PD-056).
+    static func side(_ name: String?) -> String { name ?? "A team" }
+
+    /// "Grange A v Riverside A" while it is to come, "Grange A 5–2 Riverside A" once it is decided, and
+    /// "Grange A awarded, Riverside A" where nobody played — an award never invents a scoreline (ADR-012).
+    static func sides(_ f: LeagueFixtures.Fixture) -> String {
+        let home = side(f.home), away = side(f.away)
+        guard let d = f.decided else { return "\(home) v \(away)" }
+        if let h = d.legsHome, let a = d.legsAway { return "\(home) \(h)–\(a) \(away)" }
+        let word = d.kind == "walkover" ? "walkover" : "awarded"
+        guard let toHome = d.awardedToHome else { return "\(home) v \(away) · \(word)" }
+        return toHome ? "\(home) \(word), \(away)" : "\(home), \(away) \(word)"
+    }
+
+    /// When and where, and what kind of result it was where that is not obvious from the scoreline.
+    ///
+    /// **A declared result says so.** It counts in the table exactly as a played one does and it is not
+    /// evidence, and the difference is invisible in "5–2" unless this says it (PD-055).
+    static func when(_ f: LeagueFixtures.Fixture) -> String {
+        var parts = [dayAndMonth(f.scheduledAt)]
+        if f.state != "scheduled" { parts.append(f.state) }
+        if let venue = f.venue { parts.append(venue) }
+        if f.decided?.kind == "declared" { parts.append("the league's word") }
+        return parts.joined(separator: " · ")
+    }
+
+    /// "Thu 24 Sep" — the day matters in a league that plays on one.
+    static func dayAndMonth(_ date: Date) -> String {
+        let f = DateFormatter()
+        f.locale = Locale(identifier: "en_GB")
+        f.setLocalizedDateFormatFromTemplate("EEE d MMM")
+        return f.string(from: date)
+    }
+
+    static func spokenFixture(_ f: LeagueFixtures.Fixture) -> String {
+        // An en dash between two numerals is not a word, and read out "5–2" is the same sound as
+        // fifty-two. The table's own figures learned this; so does this one.
+        let said = sides(f).replacingOccurrences(of: "–", with: " to ")
+        return said + ". " + when(f) + "."
     }
 
     static func spoken(_ row: LeagueStandings.Row) -> String {

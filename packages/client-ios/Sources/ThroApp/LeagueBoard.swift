@@ -90,7 +90,14 @@ public struct LeaguesScreen: View {
             case .join:
                 JoinOrStartTeamScreen(teams: teams, api: api, onBack: { sheet = nil }) { made in sheet = .team(made.teamId) }
             case .table(let season, let league):
+                // A page, not a form. The table and the fixtures beside it are two objects a reader
+                // compares (PD-062), and a sheet at the form's default width is 577 points on an iPad —
+                // under the 712 two columns need, so the layout correctly stacked and the tablet got a
+                // phone page floating in the middle of a map. `.page` gives the sheet the room the
+                // content was designed for; the other two sheets here are single objects and keep the
+                // form width, which is the right size for them.
                 LeagueTableScreen(seasonId: season, leagueName: league, api: api, onBack: { sheet = nil })
+                    .presentationSizing(.page)
             }
         }
     }
