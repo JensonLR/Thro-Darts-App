@@ -43,21 +43,81 @@ API one origin:
 | `/v1/*` | the API service | `thro.js` calls `/v1/...` with no host, so the browser never makes a cross-origin request: no CORS, no preflight, no second host to configure, no token in a query string |
 | `/.well-known/apple-app-site-association` | the API service | iOS offers a passkey for a domain only when **that** domain serves the association file. The moment the pages live at a domain, the domain has to serve it |
 
-### Switching to `thro.uk`
+### They are two different things
 
-Six places name a host, and they change together or passkeys and universal links stop working. Do them in
-one sitting:
+Render and the domain are not alternatives, and it is worth saying plainly because the question came up:
 
-1. **Register `thro.uk`** and point it at Render — a custom domain on **`thro-web`**, not on the API, since
-   the web is what sits in front.
-2. **`THRO_RP_ID` → `thro.uk`** in `render.yaml` and in the API service's environment.
-3. **`apps/ios/Support/ThroDarts.entitlements`** → `webcredentials:thro.uk`.
-4. **`apps/ios/Support/Info.plist`** → the base URL becomes `https://thro.uk`; the API answers there through
+- **Render is the machine.** It serves the pages and runs the API. It is free for the web, and it gives you
+  an address of its own — `thro-web.onrender.com` — the moment you deploy.
+- **The domain is the address people type.** You buy it from a registrar, once a year, and point it at
+  Render.
+
+So you can be live today with no domain at all. The domain buys three things: an address that looks like a
+company rather than a hosting account, the address a store's account-deletion requirement will be checked
+against, and a stable home for passkeys and universal links.
+
+**Buy it before anybody has a passkey.** A passkey is bound to the domain it was created under, so the day
+the host changes, every existing passkey stops working. Today that costs nothing, because nobody has one.
+After a hundred people have signed in it costs each of them a sign-in.
+
+### Step 1 — Put the web on Render (no domain needed)
+
+1. <https://dashboard.render.com> → **New → Blueprint** (or open the existing Blueprint).
+2. Connect `JensonLR/Thro-Darts-App`, branch `claude/thro-production-build-je2mkf`.
+3. Render reads `render.yaml`, finds **`thro-web`** beside the API, and creates it. Free, no card.
+4. When it goes green, check both halves — the pages, and the API through the same origin:
+
+```bash
+curl -s -o /dev/null -w "pages %{http_code}\n" https://thro-web.onrender.com/delete-account.html
+curl -s -o /dev/null -w "api   %{http_code}\n" https://thro-web.onrender.com/v1/leagues
+```
+
+Two 200s means the rewrite is working and the site is done until the domain arrives.
+
+### Step 2 — Register `thro.uk`
+
+Nominet does not sell direct; you buy `.uk` through a registrar. Namecheap, Porkbun, Gandi and 123-reg all
+sell it; **Cloudflare Registrar does not carry `.uk`**, which is worth knowing because it is otherwise the
+usual recommendation. Expect roughly £8–12 a year — **compare the renewal price, not the first year**, which
+is where the cheap offers make their money.
+
+What matters more than the price: DNS you can edit yourself (all four above have it), and no bundled
+"privacy" upsell — `.uk` has its own arrangement. Nominet publishes a registrant's address on the public
+register, and lets a **non-trading individual** opt out of that. Whether THRØ counts as trading is worth ten
+minutes of your own judgement; if it does, use a business address you are content to have published.
+
+### Step 3 — Point the domain at Render
+
+1. Render → **`thro-web`** → **Settings → Custom Domains → Add Custom Domain** → `thro.uk`.
+   Render adds `www.thro.uk` automatically and redirects it to the root.
+2. Render then **shows you the exact DNS records**. Use those, not a value from a blog or from me — they are
+   provider-specific and Render changes them.
+3. At your registrar's DNS page, add what Render showed, and **delete any AAAA records**: Render is IPv4
+   only, and a stray AAAA makes the domain fail in ways that look like a Render fault.
+4. Back in Render, click **Verify**. If it fails, DNS has not propagated — wait a few minutes and click
+   again. TLS is issued automatically and free once it verifies.
+5. Once the domain works, **disable the `onrender.com` subdomain** (same settings page), so the site has one
+   address rather than two. Two addresses mean two relying parties for passkeys and two of everything for a
+   search engine.
+
+### Step 4 — Switching to `thro.uk`
+
+With the domain live on Render, four places in this repository still name the old host, and they change
+together or passkeys and universal links stop working. Do them in one sitting, then check two things:
+
+1. **`THRO_RP_ID` → `thro.uk`**, in `render.yaml` and in the API service's environment in the dashboard.
+   Redeploy the API so it picks the value up.
+2. **`apps/ios/Support/ThroDarts.entitlements`** → `webcredentials:thro.uk`.
+3. **`apps/ios/Support/Info.plist`** → the base URL becomes `https://thro.uk`. The API answers there through
    the rewrite, so the app needs no second host either.
-5. **Check the association file** actually serves from the new host:
-   `curl -s https://thro.uk/.well-known/apple-app-site-association` — it must return the app id, not a 404
-   from the static site.
-6. **Check the API** through the same origin: `curl -s https://thro.uk/v1/leagues | head -c 80`.
+4. Rebuild the app and install it, or the phone is still talking to the old address.
+
+Then check both halves from the new host:
+
+```bash
+curl -s https://thro.uk/.well-known/apple-app-site-association   # the app id, not the static site's 404
+curl -s https://thro.uk/v1/leagues | head -c 80                  # the API, through the same origin
+```
 
 **Every existing passkey stops working.** A passkey is bound to the relying-party id it was created under, so
 one made against `thro-api-staging.onrender.com` cannot be used against `thro.uk`. Anybody who has made one —
