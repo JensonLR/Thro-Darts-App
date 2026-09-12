@@ -154,7 +154,7 @@ final class AccountTests: XCTestCase {
         // would be untrue, and would put the sign-in board in front of somebody who is signed in.
         let (account, _) = store([], session: held, cache: MemoryProfileCache())
         await account.start()
-        guard case .failed(_, let stillHeld) = account.state else { return XCTFail("\(account.state)") }
+        guard case .failed(_, let stillHeld, _) = account.state else { return XCTFail("\(account.state)") }
         XCTAssertTrue(stillHeld)
         XCTAssertTrue(account.holdsSession)
         XCTAssertTrue(account.settled, "the opening does not wait forever")

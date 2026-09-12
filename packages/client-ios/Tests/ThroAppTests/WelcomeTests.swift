@@ -1,3 +1,4 @@
+import AuthenticationServices
 import XCTest
 @testable import ThroApp
 import ThroNet
@@ -66,6 +67,24 @@ final class SignInProblemTests: XCTestCase {
         XCTAssertFalse(words.contains("com.apple"), words)
         XCTAssertFalse(words.contains("1000"), words)
         XCTAssertTrue(words.contains("Apple Account"), "it says the thing to go and check: \(words)")
+    }
+
+    func testTheDeveloperHalfNeverBecomesThePlayerHalf() {
+        // PD-074. The diagnosis carries a domain, a code and a signing fact, and it exists because
+        // `ASAuthorizationError.unknown` is one code for three faults. It must stay beside the sentence
+        // and never inside it: the rule above is the reason this app does not show people error numbers.
+        let apple = ASAuthorizationError(ASAuthorizationError.Code.unknown)
+        let words = SignInProblem.words(apple)
+        XCTAssertFalse(words.contains("1000"), words)
+        if let diagnosis = SignInProblem.diagnosis(apple) {
+            XCTAssertFalse(words.contains(diagnosis), "the annotation is not folded into the sentence")
+            XCTAssertTrue(diagnosis.contains("1000"), "and it does carry the code: \(diagnosis)")
+        }
+    }
+
+    func testAServerRefusalGetsNoDiagnosisBecauseItAlreadySaysWhy() {
+        // The server's sentence knows exactly what it refused. A domain and a zero on top of it is noise.
+        XCTAssertNil(SignInProblem.diagnosis(APIError.status(409, "already claimed")))
     }
 
     func testAPasskeyOnAnUnprovenDomainSaysWhatStillWorks() {

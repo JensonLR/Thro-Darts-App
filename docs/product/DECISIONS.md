@@ -3190,3 +3190,44 @@ with nothing else moving, and re-tested immediately.
 
 Google's `openid` stays. It is a different flow through a different framework, the failure is specific to
 Apple's, and Google's was reported working on the same build.
+
+## PD-074 — A sign-in failure names itself, beside the sentence and never inside it
+
+**Founder, 12 September 2026**, after Sign in with Apple failed on their phone: build the diagnostic rather
+than guess again.
+
+`ASAuthorizationError.unknown` — `Code=1000` — is **one code for at least three faults**: no Apple Account
+on the phone, a binary signed without the Sign in with Apple capability, and a malformed request. The
+sentence a player reads names the most common one and cannot name all three without becoming a support
+article. And it cannot be narrowed down by debugging, because Sign in with Apple does not run on a simulator:
+the only place the difference exists is the device it failed on.
+
+So a **Debug build** prints, under the chalk box, the domain and code, the build commit, and whether the
+running binary's provisioning profile carries `com.apple.developer.applesignin` — read by searching the
+embedded profile, which is a signed blob with a plain-text plist inside it, so no CMS parsing is needed. A
+build with no profile at all says so, which is itself the answer to *"why does this never fail on the
+simulator"*.
+
+### It is an annotation, not the message
+
+The first version appended it to `SignInProblem.words(_:)` and **a test caught it immediately**: no domain
+and no code ever reaches the screen. That rule is right and it exists for a reason recorded in the tests
+themselves — the founder's phone once showed *"The operation couldn't be completed. (…AuthorizationError
+error 1000.)"*, a sentence with no cause and no action in it.
+
+So the diagnosis is carried beside the sentence, in the quiet ink, outside the box, in a separate field on
+the failure state. Two tests now hold the boundary: the annotation must not be folded into the sentence, and
+the sentence must still not carry the code.
+
+**And only where the code hides something.** A server refusal already carries the server's own sentence,
+which knows exactly what it refused; annotating that with a domain and a zero is noise on top of the best
+message available. The diagnosis fires for `ASAuthorizationError` and nothing else.
+
+### What it found, before it shipped
+
+The founder's Xcode log answered the question first: `container_create_or_lookup_app_group_path_by_app_group
+_identifier: client is not entitled`, and `AKAuthenticationError Code=-7026`. The binary on the phone is
+signed with a profile carrying **none** of the entitlements — not only Sign in with Apple but the app group
+too, which the Live Activity needs. That is the cause recorded here from the previous occasion, and it is
+not code. The diagnostic would have said `profile: applesignin MISSING` on the phone's own screen, which is
+the whole point of building it.

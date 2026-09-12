@@ -280,7 +280,7 @@ public struct WelcomeScreen: View {
             .padding(.vertical, ThroSpacing.spacing5)
         default:
             VStack(spacing: ThroSpacing.spacing3) {
-                if case .failed(let why, _) = account.state {
+                if case .failed(let why, _, _) = account.state {
                     // Boxed in chalk, the way anything that matters gets boxed on a board — rather
                     // than a line of loose red text floating between the sentence and the keys.
                     // The words are the server's own, or `SignInProblem`'s; never a domain and a code.
@@ -296,6 +296,20 @@ public struct WelcomeScreen: View {
                         .padding(.bottom, ThroSpacing.spacing2)
                         .transition(.opacity)
                         .accessibilityAddTraits(.isStaticText)
+                }
+                // The developer's half, on a Debug build only (PD-074): the domain, the code, the build
+                // and whether the binary this is running from was signed with the Sign in with Apple
+                // capability. Outside the box and in the quiet ink, because it is an annotation on the
+                // sentence rather than part of it — the sentence a person reads never carries a code.
+                if case .failed(_, _, let diagnosis) = account.state, let diagnosis {
+                    Text(diagnosis)
+                        .thro(ThroTypography.metadata)
+                        .foregroundStyle(ThroColor.colorTextOnBoardSecondary)
+                        .multilineTextAlignment(.center)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .padding(.bottom, ThroSpacing.spacing2)
+                        .textSelection(.enabled)
+                        .accessibilityLabel("Diagnostics: \(diagnosis)")
                 }
                 // **Two keys, not three.** Three identical boxes had no hierarchy in them and read
                 // as a list of equally likely choices, which is not true: almost everybody arrives

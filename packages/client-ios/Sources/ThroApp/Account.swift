@@ -31,7 +31,10 @@ public final class AccountStore: ObservableObject {
         case signedIn(Profile)
         /// The last attempt failed. `wasSignedIn` is true when this phone still holds a session —
         /// signed in, just not confirmed — and false when nobody is signed in.
-        case failed(String, wasSignedIn: Bool)
+        /// [diagnosis] is the developer's half and is nil outside a Debug build (PD-074): the domain,
+        /// the code, the build, and whether the binary was signed with the capability. Held beside the
+        /// sentence rather than inside it, because no domain and no code ever reaches a player.
+        case failed(String, wasSignedIn: Bool, diagnosis: String? = nil)
     }
 
     /// What asking for an erasure came to.
@@ -244,7 +247,7 @@ public final class AccountStore: ObservableObject {
     /// Back from a failed sign-in: signed out again, or — when this phone still holds a session —
     /// another go at asking THRØ who it is.
     public func dismissFailure() {
-        guard case .failed(_, let held) = state else { return }
+        guard case .failed(_, let held, _) = state else { return }
         if held {
             state = .busy("Checking your sign-in")
             Task { await verify() }
@@ -268,7 +271,8 @@ public final class AccountStore: ObservableObject {
             forget()
         } catch {
             if isSignedIn { return }
-            state = .failed(SignInProblem.words(error), wasSignedIn: true)
+            state = .failed(SignInProblem.words(error), wasSignedIn: true,
+                            diagnosis: SignInProblem.diagnosis(error))
         }
     }
 
@@ -296,7 +300,9 @@ public final class AccountStore: ObservableObject {
         do {
             guard try await run() else { state = before; return }
         } catch {
-            state = Self.cancelled(error) ? before : .failed(SignInProblem.words(error), wasSignedIn: false)
+            state = Self.cancelled(error) ? before
+                : .failed(SignInProblem.words(error), wasSignedIn: false,
+                          diagnosis: SignInProblem.diagnosis(error))
             return
         }
         holdsSession = true
@@ -350,6 +356,61 @@ public final class AccountStore: ObservableObject {
 /// app admitting it has not thought about the case. Every sentence here says what happened and,
 /// where there is one, the thing to go and do.
 public enum SignInProblem {
+    /// What a sign-in failure will not tell you on its own, on a Debug build (PD-074).
+    ///
+    /// **`ASAuthorizationError.unknown` is one code for at least three faults**: no Apple Account on the
+    /// phone, a binary signed without the Sign in with Apple capability, and a malformed request. The
+    /// sentence a player reads names the most common one and cannot name all three without becoming a
+    /// support article, and Sign in with Apple cannot be exercised on a simulator — so the one place the
+    /// difference can be seen is the device it failed on. This puts it there, and nowhere near a release.
+    ///
+    /// The provisioning profile is the tell. It is a signed blob with a plain-text plist inside it, so the
+    /// capability's key is findable by search without parsing CMS. A simulator build carries no profile at
+    /// all, which is itself the answer to "why does this never fail on the simulator".
+    ///
+    /// **It is not part of `words(_:)` and must not become part of it.** A test holds that no domain and
+    /// no code ever reaches the screen, and that rule is right: it exists because the founder's phone once
+    /// showed *"The operation couldn't be completed. (…AuthorizationError error 1000.)"*, a sentence with
+    /// no cause and no action in it. This is an annotation a Debug build prints beside the sentence, not
+    /// the sentence — so the rule holds unchanged and the developer still gets the code.
+    static func diagnosis(_ error: Error) -> String? {
+        #if DEBUG
+        // **Only where one code hides several causes.** A server refusal already carries the server's own
+        // sentence, which knows exactly what it refused; annotating that with a domain and a zero would be
+        // noise on top of the best message available. `ASAuthorizationError.unknown` is the case this
+        // exists for — no Apple Account, a binary signed without the capability, and a malformed request
+        // all arrive as 1000.
+        guard error is ASAuthorizationError else { return nil }
+        return debugDiagnosis(error)
+        #else
+        return nil
+        #endif
+    }
+
+    #if DEBUG
+    private static func debugDiagnosis(_ error: Error) -> String {
+        let ns = error as NSError
+        var parts = ["\(ns.domain) \(ns.code)"]
+        parts.append("build " + (Bundle.main.object(forInfoDictionaryKey: "ThroBuildCommit") as? String ?? "unstamped"))
+        parts.append(signedForAppleSignIn)
+        return parts.joined(separator: " · ")
+    }
+
+    private static var signedForAppleSignIn: String {
+        guard let url = Bundle.main.url(forResource: "embedded", withExtension: "mobileprovision"),
+              let data = try? Data(contentsOf: url) else {
+            return "no profile (simulator)"
+        }
+        // Latin-1 never fails on arbitrary bytes, which UTF-8 would on a signed blob.
+        let text = String(decoding: data, as: UTF8.self).isEmpty
+            ? String(data: data, encoding: .isoLatin1) ?? ""
+            : String(decoding: data, as: UTF8.self)
+        return text.contains("com.apple.developer.applesignin")
+            ? "profile: applesignin present"
+            : "profile: applesignin MISSING — rebuild against the App ID"
+    }
+    #endif
+
     public static func words(_ error: Error) -> String {
         // The server's own sentence is already the best one available: it knows exactly what it
         // refused and why, and it is written for a person.
@@ -366,7 +427,8 @@ public enum SignInProblem {
             switch e.code {
             case .unknown:
                 // 1000. Apple does not say why; being signed out of the Apple Account on the phone
-                // is far and away the most common reason, so that is what to check first.
+                // is far and away the most common reason, so that is what to check first. The
+                // developer's half of this is `diagnosis(_:)`, kept out of the sentence on purpose.
                 return "Apple could not finish the sign-in. Check you are signed in to your Apple "
                     + "Account in iPhone Settings, then try again."
             case .invalidResponse, .notHandled:

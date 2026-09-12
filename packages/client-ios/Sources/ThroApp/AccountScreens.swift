@@ -60,7 +60,7 @@ public struct AccountScreen: View {
                         case .signedOut: signedOut
                         case .busy(let what): busy(what)
                         case .signedIn(let profile): signedIn(profile)
-                        case .failed(let why, let was): failed(why, wasSignedIn: was)
+                        case .failed(let why, let was, _): failed(why, wasSignedIn: was)
                         }
                         server
                     }

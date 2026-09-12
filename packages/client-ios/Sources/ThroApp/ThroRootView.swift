@@ -2004,7 +2004,7 @@ extension ThroRootView {
         case .signedIn(let p): return .signedIn(name: p.named ? p.displayName : nil, ageBand: p.ageBand, friends: account.friends?.count)
         case .busy(let what): return .busy(what)
         // Still holding a session THRØ could not confirm: signed in, and said so honestly.
-        case .failed(_, wasSignedIn: true): return .unverified
+        case .failed(_, wasSignedIn: true, _): return .unverified
         case .failed, .signedOut: return .signedOut
         }
     }
