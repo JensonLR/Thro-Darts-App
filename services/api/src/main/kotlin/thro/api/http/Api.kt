@@ -459,6 +459,23 @@ public object Contract {
                               409 to "this fixture already has a result, or the one you named is no longer the standing one"),
         ),
         Endpoint(
+            id = "leagues.void", method = "POST", path = "/v1/fixtures/{fixtureId}/void", authenticated = true,
+            summary = "Annul a result, leaving the fixture to be replayed (PD-065)",
+            description = "**Different from correcting one.** A correction says the scoreline was wrong; this says "
+                + "the fixture should not have had a result at all — played under protest, abandoned, ordered "
+                + "again by the league. The annulled decision stays on the record, superseded, and the fixture is "
+                + "open: the table counts it as unplayed and the fixture list shows it as annulled with the reason "
+                + "rather than quietly returning it to the ones still to play, because a result that vanishes "
+                + "without trace is how a league stops trusting its own table. A reason is required and the "
+                + "database has always insisted on one. Send the standing result's `outcomeId` as `supersedes`; a "
+                + "fixture with nothing standing has nothing to annul and answers 409.",
+            request = Schema("""{"type":"object","required":["supersedes","reason"],"properties":{"supersedes":{"type":"string","format":"uuid","description":"the outcomeId being annulled"},"reason":{"type":"string","minLength":1}}}"""),
+            responses = mapOf(200 to "the void", 400 to "no reason, or supersedes is not a UUID",
+                              401 to "no principal", 403 to "you do not administer this league season",
+                              404 to "no such fixture",
+                              409 to "this fixture has no standing result, or the one you named is no longer it"),
+        ),
+        Endpoint(
             id = "seasons.fixtures", method = "GET", path = "/v1/seasons/{leagueSeasonId}/fixtures",
             authenticated = false,
             summary = "A league season's fixtures, played and still to play (PD-056)",

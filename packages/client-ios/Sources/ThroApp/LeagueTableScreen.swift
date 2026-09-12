@@ -284,6 +284,10 @@ enum LeagueTableWords {
         if f.state != "scheduled" { parts.append(f.state) }
         if let venue = f.venue { parts.append(venue) }
         if f.decided?.kind == "declared" { parts.append("the league's word") }
+        // PD-065: an annulled fixture is open, and says so rather than sitting among the ones nobody has
+        // got round to. The reason is carried because a result withdrawn without one is a result a league
+        // cannot answer for; whoever withdrew it is not named, because this is public.
+        if let annulled = f.annulled { parts.append("annulled, to be replayed — " + annulled.reason) }
         return parts.joined(separator: " · ")
     }
 

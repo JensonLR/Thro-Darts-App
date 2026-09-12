@@ -2901,3 +2901,79 @@ with the consent sheet it implies, rather than a capability sitting quietly open
 
 The test asserts the absence as well as the presence: `email`, `profile`, `phone` and `address` must not
 appear in the scope. The failure being guarded is somebody adding one back for a feature that never lands.
+
+## PD-064 — Finish what exists, then the rest of Apple, then Android, then the rating
+
+**Founder, 2026-09-12**, asked which large piece to start next and revised the order instead:
+*"polish & perfect what exists first and then all apple related products if possible then continue with
+android etc. then rating research lab."*
+
+This revises the order PLATFORM.md has carried since PD-057, which put **Android** next after the web.
+
+| | Was | Now |
+|---|---|---|
+| 1 | Web | **Finish what exists** — the two-column rule across the remaining screens, the iPad and landscape passes, the surfaces a tester will actually touch |
+| 2 | Android | **The rest of Apple** — the watch app, then tvOS for a venue |
+| 3 | Watch | Android, and Wear OS behind it |
+| 4 | TV | The rating research laboratory, and the leaderboard it unblocks |
+
+**Why it is the right revision.** The web went out today and nobody has used any of this yet. A second
+platform doubles the surface that has never been in front of a person, and every fault found on Android
+would be a fault that was already on iPhone. The three things found by *looking* at what exists — a
+masthead eating 61% of a landscape screen, the welcome screen clipping the way past sign-in, a two-column
+layout that was correct and unreachable — were all in shipped code, none had a failing test, and none would
+have been found by building something new.
+
+And Apple before Android is cheaper than it looks: the watch and tvOS share the design tokens, the pure
+Swift engine and the whole client, so they are new surfaces on a known stack. Android is a second
+implementation of everything.
+
+**What it costs, said plainly:** Android is half the market and it waits. The deletion URL that unblocked
+Play is live and will keep, so nothing expires by waiting — this is a decision about order, not about
+whether.
+
+**The rating stays last on purpose.** It is not last because it is least wanted; it is last because
+OD-001 cannot close without real matches, and real matches need players on a finished app. Building the
+laboratory earlier would produce a harness that could rule candidates out on simulated players and could
+not rule one in.
+
+## PD-065 — A result can be annulled, and an annulled fixture says so
+
+**Founder, 2026-09-12**, given three ways to handle a fixture that should not have had a result — played
+under protest, abandoned, ordered again — and chose *"annul, with a reason on show"* over leaving it out and
+over requiring a second administrator to confirm.
+
+The store has had `voidOutcome` since V014 and nothing over HTTP called it, deliberately: annulment is a
+different act from correction and wanted its own decision about who may do it and what a league then sees.
+
+### It is not a correction
+
+A correction says the scoreline was wrong. An annulment says the fixture should not have had a result at
+all. So it is its own route, `POST /v1/fixtures/{id}/void`, with the same authority as entering a result —
+a league administrator — because inventing a higher tier would be machinery for a need nobody has
+demonstrated, and **the two-administrator option is unusable in a league that has only ever named one**,
+which is every league on THRØ today.
+
+### The part that makes it safe is not the authority, it is the visibility
+
+Before this, a voided fixture simply reappeared among the ones still to play, indistinguishable from one
+nobody had got round to. **A result that vanishes without trace is how a league stops trusting its own
+table**, and it is worse than not offering the feature.
+
+So the annulment is carried beside the absence. `seasons.fixtures` gained `annulled` — the reason, which the
+database has required of a void since V014, and when — and every surface prints *"annulled, to be replayed
+— played under protest"* where a fixture is open for that reason. The old result stays on the record,
+superseded; nothing is rubbed out.
+
+**Whoever annulled it is not named.** `decided_by` is NOT NULL so the record can always answer for it, but
+that endpoint is public and putting an official's name on a public page is a disclosure decision nobody has
+taken. This deliberately departs from the sketch the decision was taken against, which showed a name.
+
+**`annulled` means open, and stops being true the moment a result stands.** A void stays unsuperseded after
+a replayed result is entered — V043 lets a decision follow an annulment without superseding it, because an
+annulment terminates rather than links — so the row is still there while the fixture is no longer open. The
+first version reported both at once and a test caught a fixture showing a scoreline and an annulment side by
+side.
+
+A reason is required and refused with a sentence rather than a validation error: *"An annulment says why. A
+result withdrawn without a reason is one nobody can answer for."*

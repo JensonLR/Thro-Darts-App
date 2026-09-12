@@ -422,6 +422,34 @@ class StandingsTest {
     }
 
     @Test
+    fun `an annulled fixture says so, and the table counts it as unplayed`() {
+        if (!configured) return
+        migrated().use { c ->
+            val orgs = Organisations(c)
+            val admin = orgs.createPlayer()
+            val s = season(orgs, admin)
+            val fixture = played(c, orgs, s, s.a, s.b, 5, 2, admin)
+            val standing = Fixtures(c).of(s.seasonId).single().decided!!.outcomeId
+            orgs.voidOutcome(fixture, standing, "played under protest, to be replayed", by = admin)
+
+            val f = Fixtures(c).of(s.seasonId).single()
+            // Two facts, and the point of PD-065 is that they are both true at once: there is no result,
+            // and the reason there is no result is on the record where a reader can see it. A fixture that
+            // simply reappeared under "still to play" would look like one nobody had got round to.
+            assertEquals(null, f.decided, "a void is not a result")
+            assertEquals("played under protest, to be replayed", f.annulled?.reason)
+            assertEquals(0, table(c, s).divisions.single().rows.associateBy { it.name }
+                .getValue("Grange A").played, "and the table counts it as unplayed")
+
+            // Deciding it again clears the annulment: the fixture has a result, so it is not open any more.
+            orgs.recordPlayedResult(fixture, 3, 5, by = admin)
+            val replayed = Fixtures(c).of(s.seasonId).single()
+            assertEquals(3, replayed.decided?.legsHome)
+            assertEquals(null, replayed.annulled, "a fixture decided again is not still annulled")
+        }
+    }
+
+    @Test
     fun `a fixture whose result was voided can be decided again`() {
         if (!configured) return
         migrated().use { c ->

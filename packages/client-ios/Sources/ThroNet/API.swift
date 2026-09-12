@@ -213,6 +213,13 @@ public struct LeagueFixtures: Decodable, Sendable, Equatable {
         public var scored: Bool { legsHome != nil && legsAway != nil }
     }
 
+    /// A result annulled, leaving the fixture to be replayed (PD-065). Present only while the fixture is
+    /// actually open: a replayed result clears it. Whoever decided it is not named — this is public.
+    public struct Annulled: Decodable, Sendable, Equatable {
+        public let reason: String
+        public let at: Date
+    }
+
     public struct Fixture: Decodable, Sendable, Equatable, Identifiable {
         public let fixtureId: UUID
         public let divisionId: UUID?
@@ -225,6 +232,8 @@ public struct LeagueFixtures: Decodable, Sendable, Equatable {
         public let venue: String?
         public let locality: String?
         public let decided: Decided?
+        /// Set when this fixture's result was annulled and it is open again.
+        public let annulled: Annulled?
 
         public var id: UUID { fixtureId }
     }
@@ -865,6 +874,18 @@ public actor ThroAPI {
         let (data, http) = try await send("GET", path, bearer: session?.accessToken)
         guard http.statusCode == 200 else { throw APIError.status(http.statusCode, String(decoding: data, as: UTF8.self)) }
         return try decode(data)
+    }
+
+    /// Annul a result, leaving the fixture to be replayed (PD-065). Different from correcting one: this
+    /// says the fixture should not have had a result at all. A reason is required.
+    public func annul(fixture: UUID, supersedes: UUID, reason: String) async throws {
+        let path = "/v1/fixtures/\(fixture.uuidString.lowercased())/void"
+        let body = try JSONSerialization.data(withJSONObject: [
+            "supersedes": supersedes.uuidString.lowercased(),
+            "reason": reason,
+        ])
+        let (data, http) = try await send("POST", path, body: body, bearer: session?.accessToken)
+        guard http.statusCode == 200 else { throw APIError.status(http.statusCode, String(decoding: data, as: UTF8.self)) }
     }
 
     /// A league season's fixtures (PD-056). No session needed, for the same reason the table needs none.

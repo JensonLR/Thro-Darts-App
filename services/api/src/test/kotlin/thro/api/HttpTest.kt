@@ -240,6 +240,13 @@ class HttpTest {
                     && post("/v1/fixtures/${UUID.randomUUID()}/result", """{"legsHome":5,"legsAway":2}""", subject = home).status.value == 404
                     && post("/v1/fixtures/${UUID.randomUUID()}/award", """{"toTeamId":"${UUID.randomUUID()}","reason":"nobody came"}""", subject = home).status.value == 404
                     && post("/v1/seasons/${UUID.randomUUID()}/affiliations/${UUID.randomUUID()}", "{}", subject = home).status.value == 404)
+            // PD-065: annulling a result is the same authority as entering one, and a fixture nobody
+            // has is a 404 before anything in the body is looked at — so a caller cannot probe for
+            // fixtures by watching which refusal comes back.
+            check("annulling a result needs a principal, and a fixture nobody has is a 404",
+                post("/v1/fixtures/${UUID.randomUUID()}/void", """{"supersedes":"${UUID.randomUUID()}","reason":"protest"}""", subject = null).status.value == 401
+                    && post("/v1/fixtures/${UUID.randomUUID()}/void", """{"supersedes":"${UUID.randomUUID()}","reason":"protest"}""", subject = home).status.value == 404
+                    && post("/v1/fixtures/${UUID.randomUUID()}/void", "{}", subject = home).status.value == 404)
             // PD-056: the fixtures beside the table, and public for the same reason.
             check("a season's fixtures are public, and a season nobody has is a 404",
                 get("/v1/seasons/${UUID.randomUUID()}/fixtures", subject = null).status.value == 404
@@ -268,6 +275,6 @@ class HttpTest {
                     && roles.all { it in setOf("app_match", "app_competition", "app_read", "app_trust") })
         }
         println("  $passed HTTP properties held")
-        assertEquals(52, passed)
+        assertEquals(53, passed)
     }
 }

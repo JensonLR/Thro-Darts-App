@@ -113,7 +113,14 @@ and four to eight hours a month of the founder's time, in Germany rather than Lo
 | **Android TV / Chromecast** | — | Follows the Android client; the tvOS layout ports |
 | **Web** | Built (PD-056): the leagues, a season's table, its fixtures, and the account-deletion page Play requires. Static, on Render, `/v1` rewritten to the API so it is one origin | Sign-in, and with it the organiser's own surface — entering results from a laptop, which the PD-053 routes already allow |
 
-The order the founder chose, and the reasons still hold: iPhone and iPad first, then the **web** — done to a
-first slice — then **Android** (the second half of the market, cheaper store fees, and now unblocked, because
-the deletion URL Play demands exists), then the **watch** (the most-wanted extra for a player at the oche),
-then **TV** for venues.
+**The order, as revised on 12 September 2026 (PD-064).** iPhone and iPad first, then the **web** — live
+since that morning — and then, instead of Android: **finish what exists**, because nobody has used any of it
+yet and a second platform doubles the surface nobody has looked at. Then **the rest of Apple**, the watch and
+then tvOS, which share the tokens, the pure Swift engine and the whole client and are new surfaces on a known
+stack. Then **Android**, which is a second implementation of everything, and Wear OS behind it. The
+**rating** stays last, not because it is least wanted but because OD-001 cannot close without real matches.
+
+Android is half the market and it waits; the deletion URL that unblocked Play is live and does not expire.
+The previous order put Android second, and the reasons for that — the market, the store fees — are still
+true. What changed is that three faults were found in shipped code by looking at it, none of which had a
+failing test, and all of which would have been duplicated onto a second platform.

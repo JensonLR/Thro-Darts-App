@@ -4013,3 +4013,27 @@ Also fixed here, from the same session's evidence: the web service in `render.ya
 copied from the API where it is right because ADR-013 puts migrations before the code that expects them. A
 static deploy runs no migration and cannot half-apply anything, so the web deploys itself now — with a build
 filter on `apps/web/**`, because this repository commits often and almost none of it touches those files.
+
+## A result can be annulled, and the fixture says why rather than going quiet
+
+The founder chose annulment with a reason on show, over leaving it out and over requiring a second
+administrator — the last of which is unusable in a league that has only ever named one, which is every
+league on THRØ today. The store has had `voidOutcome` since V014 with nothing calling it; it has a route
+now.
+
+**The safety in this is the visibility, not the authority.** A voided fixture used to reappear among the
+ones still to play, indistinguishable from one nobody had got round to, and a result that vanishes without
+trace is how a league stops trusting its own table. So `seasons.fixtures` carries `annulled` — the reason
+and when — and every surface prints "annulled, to be replayed — played under protest" where a fixture is
+open for that reason. The old result stays, superseded.
+
+Two things fell out of building it. `annulled` means *open*, and a first version kept reporting it after a
+replayed result was entered — a fixture showing a scoreline and an annulment at once, caught by the test
+written with it. And the new join was aliased `v`, which is already the venue: five tests failed at once
+with "table name v specified more than once", which is the cheapest kind of failure there is.
+
+Verified in a browser, not assumed: the organiser page refuses an annulment with no reason and **sends
+nothing**, and with one sends `{"supersedes": "…", "reason": "played under protest"}` to `/void` with the
+reason trimmed. A fixture open because it was annulled shows the reason where it is entered.
+
+Counts: API 29 suites (87 tests), 53 HTTP properties, 148 schema properties, client 772 tests.

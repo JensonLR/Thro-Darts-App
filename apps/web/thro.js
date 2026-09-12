@@ -408,19 +408,79 @@ async function mountOrganiser(where, signInEl) {
     head.append(make('div', 'row-name', `${f.home || 'A team'} ${score} ${f.away || 'A team'}`));
     const fix = make('button', 'quiet-button', 'Correct');
     fix.setAttribute('aria-expanded', 'false');
-    head.append(fix);
+    const annul = make('button', 'quiet-button', 'Annul');
+    head.append(fix, annul);
     row.append(head, make('div', 'row-meta', when(f.scheduledAt)));
 
     let open = null;
+    const shut = () => {
+      if (open) { open.remove(); open = null; }
+      fix.textContent = 'Correct'; fix.setAttribute('aria-expanded', 'false');
+      annul.textContent = 'Annul'; annul.setAttribute('aria-expanded', 'false');
+    };
     fix.onclick = () => {
-      if (open) { open.remove(); open = null; fix.textContent = 'Correct'; fix.setAttribute('aria-expanded', 'false'); return; }
+      const was = fix.getAttribute('aria-expanded') === 'true';
+      shut();
+      if (was) return;
       open = entry(f, redraw, d);
       fix.textContent = 'Leave it';
       fix.setAttribute('aria-expanded', 'true');
       row.append(open);
     };
+    annul.onclick = () => {
+      const was = annul.getAttribute('aria-expanded') === 'true';
+      shut();
+      if (was) return;
+      open = annulment(f, redraw, d);
+      annul.textContent = 'Leave it';
+      annul.setAttribute('aria-expanded', 'true');
+      row.append(open);
+    };
     li.append(row);
     return li;
+  }
+
+  /**
+   * Annulling a result (PD-065) — a different act from correcting one.
+   *
+   * A correction says the scoreline was wrong. This says the fixture should not have had a result at all:
+   * played under protest, abandoned, ordered again. So it asks for a reason and will not proceed without
+   * one, and the fixture comes back as open and annulled rather than as one nobody got round to.
+   */
+  function annulment(f, redraw, replacing) {
+    const box = make('div', 'entry');
+    box.append(make('p', 'quiet', 'The result comes off and the fixture is open again, with this reason on '
+      + 'it. The old result stays on the record, superseded — nothing is rubbed out.'));
+    const form = make('div', 'entry-form');
+    const why = make('input');
+    why.type = 'text';
+    why.placeholder = 'Why — e.g. played under protest';
+    why.style.flex = '1 1 16rem';
+    why.setAttribute('aria-label', 'Why this result is being annulled');
+    const go = make('button', 'primary', 'Annul it');
+    const said = make('p', 'note');
+    said.hidden = true;
+    go.onclick = async () => {
+      const reason = why.value.trim();
+      if (!reason) {
+        said.hidden = false;
+        said.textContent = 'An annulment says why. A result withdrawn without a reason is one nobody can answer for.';
+        return;
+      }
+      go.disabled = true;
+      try {
+        await authorised('POST', `/v1/fixtures/${encodeURIComponent(f.fixtureId)}/void`,
+                         { supersedes: replacing.outcomeId, reason });
+        said.hidden = false;
+        said.textContent = 'Annulled. The fixture is open again and says why.';
+        setTimeout(redraw, 900);
+      } catch (e) {
+        said.hidden = false; said.textContent = e.message; go.disabled = false;
+      }
+    };
+    form.append(why, go);
+    box.append(form, said);
+    return box;
   }
 
   /**
@@ -434,7 +494,8 @@ async function mountOrganiser(where, signInEl) {
     const box = make('div', 'entry');
     if (!replacing) {
       box.append(make('div', 'row-name', `${f.home || 'A team'} v ${f.away || 'A team'}`),
-                 make('div', 'row-meta', when(f.scheduledAt) + (f.venue ? ` · ${f.venue}` : '')));
+                 make('div', 'row-meta', when(f.scheduledAt) + (f.venue ? ` · ${f.venue}` : '')
+                   + (f.annulled ? ` · annulled, to be replayed — ${f.annulled.reason}` : '')));
     }
     const form = make('div', 'entry-form');
     const home = make('input'); home.type = 'number'; home.min = '0'; home.inputMode = 'numeric';

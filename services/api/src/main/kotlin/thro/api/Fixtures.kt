@@ -30,6 +30,20 @@ public class Fixtures(private val connection: Connection) {
         val outcomeId: UUID, val kind: String, val legsHome: Int?, val legsAway: Int?, val awardedToHome: Boolean?,
     )
 
+    /**
+     * A result that was annulled, and the fixture left open (PD-065).
+     *
+     * **Not a result, and not nothing.** Every reader in THRØ treats a voided outcome as no result — the
+     * tallies skip it, and so does [Decided] here — but a fixture whose result quietly vanished and
+     * reappeared under "still to play" is how a league stops trusting its own table. So the annulment is
+     * carried beside the absence: the reason, which the database has always required of a void, and when.
+     *
+     * **Whoever decided it is not named here.** This endpoint is public, and putting an official's name on
+     * a public page is a disclosure decision nobody has taken; `decided_by` is NOT NULL on the row, so the
+     * record has it and can answer for it (PD-065).
+     */
+    public data class Annulled(val reason: String, val at: Instant)
+
     public data class Fixture(
         val fixtureId: UUID,
         val divisionId: UUID?, val division: String?,
@@ -39,6 +53,8 @@ public class Fixtures(private val connection: Connection) {
         val home: String?, val away: String?,
         val venue: String?, val locality: String?,
         val decided: Decided?,
+        /** Set when the live outcome is a void: the fixture is open again, and says why. */
+        val annulled: Annulled?,
     )
 
     /** True when THRØ has this season at all, so a route can tell "no fixtures" from "no season". */
@@ -53,7 +69,8 @@ public class Fixtures(private val connection: Connection) {
             """
             SELECT f.fixture_id, f.division_id, d.name, f.scheduled_at, f.schedule_state,
                    h.name, a.name, v.name, v.locality,
-                   o.kind, o.legs_home, o.legs_away, (o.to_team_id = f.home_team_id), o.outcome_id
+                   o.kind, o.legs_home, o.legs_away, (o.to_team_id = f.home_team_id), o.outcome_id,
+                   annul.reason, annul.decided_at
               FROM competition.league_fixture f
               -- A private team is unnamed rather than absent: the join is left, so the fixture survives it.
               LEFT JOIN competition.team h ON h.team_id = f.home_team_id AND h.visibility = 'public'
@@ -65,6 +82,13 @@ public class Fixtures(private val connection: Connection) {
                      ON o.fixture_id = f.fixture_id AND o.kind <> 'void'
                     AND NOT EXISTS (SELECT 1 FROM competition.league_fixture_outcome s
                                      WHERE s.supersedes_outcome_id = o.outcome_id)
+              -- And the live void, which the tallies are right to ignore and a reader is not (PD-065).
+              -- Separately joined rather than folded into the one above, because these two are different
+              -- facts: one is what the fixture finished as, the other is that it finished as nothing.
+              LEFT JOIN competition.league_fixture_outcome annul
+                     ON annul.fixture_id = f.fixture_id AND annul.kind = 'void'
+                    AND NOT EXISTS (SELECT 1 FROM competition.league_fixture_outcome s
+                                     WHERE s.supersedes_outcome_id = annul.outcome_id)
              WHERE f.league_season_id = ?
              ORDER BY f.scheduled_at, h.name NULLS LAST, f.fixture_id
             """.trimIndent(),
@@ -87,6 +111,16 @@ public class Fixtures(private val connection: Connection) {
                                 val toHome = rs.getBoolean(13).takeUnless { _ -> rs.wasNull() }
                                 Decided(rs.getObject(14) as UUID, it, lh, la, toHome)
                             },
+                            // Only while the fixture is actually open. A void stays unsuperseded after a
+                            // replayed result is entered — V043 lets a new decision follow an annulment
+                            // without superseding it, because an annulment is a terminator and not a link
+                            // — so the row is still there and the fixture is no longer open. `annulled`
+                            // means "open, and here is why", which stops being true the moment a result
+                            // stands. Reporting both at once would have a fixture showing a scoreline and
+                            // an annulment side by side.
+                            annulled = if (kind != null) null else rs.getString(15)?.let { why ->
+                                Annulled(why, rs.getTimestamp(16).toInstant())
+                            },
                         )
                     }
                 }.toList()
@@ -101,10 +135,11 @@ public class Fixtures(private val connection: Connection) {
                     """"legsHome":${d.legsHome ?: "null"},"legsAway":${d.legsAway ?: "null"},""" +
                     """"awardedToHome":${d.awardedToHome?.toString() ?: "null"}}"""
             } ?: "null"
+            val annulled = f.annulled?.let { a -> """{"reason":${q(a.reason)},"at":"${a.at}"}""" } ?: "null"
             """{"fixtureId":"${f.fixtureId}","divisionId":${f.divisionId?.let { "\"$it\"" } ?: "null"},""" +
                 """"division":${q(f.division)},"scheduledAt":"${f.scheduledAt}","state":${q(f.state)},""" +
                 """"home":${q(f.home)},"away":${q(f.away)},"venue":${q(f.venue)},"locality":${q(f.locality)},""" +
-                """"decided":$decided}"""
+                """"decided":$decided,"annulled":$annulled}"""
         } + "]}"
     }
 }

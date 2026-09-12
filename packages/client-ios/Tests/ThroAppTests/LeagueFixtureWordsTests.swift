@@ -83,6 +83,26 @@ final class LeagueFixtureWordsTests: XCTestCase {
         XCTAssertFalse(said.contains("–"), said)
     }
 
+    func testAnAnnulledFixtureSaysSoAndSaysWhy() throws {
+        // PD-065. The whole point is that it does not read as a fixture nobody has got round to: a result
+        // that vanishes without trace is how a league stops trusting its own table.
+        let json = """
+        {"fixtureId":"55555555-5555-5555-5555-555555555552","divisionId":null,"division":"Division One",
+         "scheduledAt":"2026-09-17T19:00:00Z","state":"scheduled","home":"Feathers A","away":"Riverside A",
+         "venue":"The Feathers","locality":"Stockton","decided":null,
+         "annulled":{"reason":"played under protest","at":"2026-09-18T10:00:00Z"}}
+        """
+        let f = try Wire.decoder.decode(LeagueFixtures.Fixture.self, from: Data(json.utf8))
+        XCTAssertEqual(LeagueTableWords.sides(f), "Feathers A v Riverside A", "no result, so no scoreline")
+        let said = LeagueTableWords.when(f)
+        XCTAssertTrue(said.contains("annulled, to be replayed"), said)
+        XCTAssertTrue(said.contains("played under protest"), "the reason is the point")
+    }
+
+    func testAFixtureNobodyHasDecidedDoesNotClaimToBeAnnulled() throws {
+        XCTAssertFalse(LeagueTableWords.when(try fixture()).contains("annulled"))
+    }
+
     func testTheCountOfWhatIsLeftReadsAsEnglish() {
         XCTAssertEqual(LeagueTableWords.andMore(1), "And one more after those.")
         XCTAssertEqual(LeagueTableWords.andMore(4), "And 4 more after those.")

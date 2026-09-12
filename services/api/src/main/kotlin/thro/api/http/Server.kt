@@ -350,6 +350,32 @@ public fun Application.thro(deps: Deps) {
                 }
             }
         },
+        "leagues.void" to { r ->
+            val fixtureId = UUID.fromString(r.call.parameters["fixtureId"])
+            val orgs = Organisations(r.connection())
+            when (val fixture = orgs.fixtureRef(fixtureId)) {
+                null -> Http(404, """{"error":"THRØ has no such fixture."}""")
+                else -> leagueAdmin(r, fixture.leagueSeasonId) {
+                    val m = Json.parseObject(r.body)
+                    val reason = str(m, "reason").trim()
+                    when (val supersedes = supersededOutcome(m)) {
+                        is Named.NotAUuid -> Http(400, """{"error":"supersedes must be the outcomeId of the result being annulled."}""")
+                        is Named.Ok -> when {
+                            reason.isEmpty() ->
+                                // The database insists too; refusing here says which field, and a void with no
+                                // reason is the one shape of this that a league could not later account for.
+                                Http(400, """{"error":"An annulment says why. A result withdrawn without a reason is one nobody can answer for."}""")
+                            supersedes.id == null ->
+                                Http(409, """{"error":"There is no result on this fixture to annul."}""")
+                            else -> outcomely(superseding = true) {
+                                val id = orgs.voidOutcome(fixtureId, supersedes.id!!, reason, by = r.principal!!.subject)
+                                Http(200, """{"outcomeId":"$id","fixtureId":"$fixtureId","kind":"void","supersedes":${Contract.q(supersedes.id.toString())}}""")
+                            }
+                        }
+                    }
+                }
+            }
+        },
         // PD-056: a season's fixtures, publicly. Read as `app_read`, like the table it belongs beside.
         "seasons.fixtures" to { r ->
             r.role = DbRole.READ
