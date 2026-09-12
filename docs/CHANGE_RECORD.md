@@ -4671,3 +4671,66 @@ the way PD-041 already provides — the phone, by cable or AirPlay, with a perso
 answerable for the screen.
 
 Counts: 23 checks green (22 in `tools/`, plus `apps/ios/check_fonts.py`).
+
+## A breach plan, and a page a twelve-year-old can read
+
+The last two items on the DPIA's pre-launch list that do not need the founder. Both are writing
+rather than code — and both ended up producing a guard, which was not the plan and is the more
+useful half.
+
+### If there is a breach (`docs/legal/BREACH_PLAN.md`)
+
+The DPIA said this *"is a page, and it should exist before there is anything to breach"*. Two things
+in it are specific to THRØ and a generic plan would miss both.
+
+**A breach that does not reach the `safety` schema is very unlikely to be high risk**, and the
+severity table says why store by store: there is no email to phish, no phone to spam, no address, and
+tokens are SHA-256 hashes with a constraint enforcing the length. A breach that *does* reach `safety`
+is high risk from the first minute, because that is where a reporter's free text lives. Since PD-087
+there is less of it to lose.
+
+**And the uncomfortable one: THRØ has no way to contact anybody.** No email, no phone, no push token,
+and the in-app inbox is the secretary's work queue rather than a message channel. An Art 34
+notification would therefore be a public communication under Art 34(3)(c) — which permits one where
+individual notification would involve disproportionate effort, a condition THRØ meets by holding
+nothing to contact anybody with — plus **an in-app notice that does not exist**. That is now written
+down rather than discovered at 2am.
+
+*Corrected while writing it:* the first draft asserted no backups were configured. `DEPLOY.md` says
+otherwise — Neon point-in-time recovery in London, 7 days on the paid tier. The claim was replaced
+with the true and still-uncomfortable one: a recovery window is not a backup policy, because there is
+no copy anywhere Neon is not. The same reading fixed the ROPA's *"(region to confirm)"* — it is
+`aws-eu-west-2`, London, so no transfer question arises for the database at all.
+
+### If you're under 18 (`apps/web/under-18.html`)
+
+Children's-code Standard 4 wants privacy information *"in clear language suited to the age of the
+child"*; DSA Art 14(3) wants the conditions and restrictions on use *"in a way that minors can
+understand"*. One page answers both, because a young player needs the rules as much as the privacy —
+what THRØ knows, what it never knows, who can see their name, the rules, what they cannot do until
+18, and the two buttons if somebody is horrible to them, with Childline's number beside 999.
+
+**The reading age is measured, not claimed.** Flesch–Kincaid over the page's own prose:
+
+| | grade | words per sentence |
+| --- | --- | --- |
+| `under-18.html` | **3.6** | 10.1 |
+| `privacy.html` | 6.0 | 13.8 |
+| `terms.html` | 9.4 | 20.4 |
+
+That last row is the whole argument for the page existing.
+
+**`tools/check_a_child_can_read_it.py` holds it there**, because the failure being guarded against is
+not writing the page badly — it is the page decaying: a clause added for a solicitor, a sentence
+pasted across from the terms, and six months later it is the adult page with a friendlier heading.
+Nothing fails, because prose does not compile. The guard refuses a grade over 7, refuses any sentence
+over 30 words, and refuses any page on the site that does not link to it — Standard 4 asks for
+prominence as well as plain language.
+
+**It caught a 37-word sentence on its first run, in the page it was written to protect.** Splitting
+it took the page from 4.7 to 3.6. The two paragraphs addressed to an adult — the note for a parent
+and the draft disclaimer — are excluded and say on their face that they are, because holding a
+disclaimer to a child's reading age would tempt somebody to make it less precise.
+
+Counts: 24 checks green (23 in `tools/`, plus `apps/ios/check_fonts.py`). Three of the DPIA's seven
+pre-launch items are now done; the remaining four are the founder's.

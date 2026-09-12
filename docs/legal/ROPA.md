@@ -33,7 +33,7 @@ player.
 | **Data subjects** | Players, including children. |
 | **Recipients** | Apple and Google, as identity providers, at the moment of sign-in only. |
 | **Retention** | Until erasure is requested. `identity.erasure` records what was removed. |
-| **Transfers** | Hosting in the EEA (Frankfurt). See "Processors". |
+| **Transfers** | The database is in **London**; the API compute is in **Frankfurt** (Render, EEA) or London (Fly, per `DEPLOY.md`). No transfer outside the UK/EEA. See "Processors". |
 
 ### 2. Matches and results
 
@@ -86,7 +86,7 @@ player.
 | Processor | What for | Where |
 | --- | --- | --- |
 | Render | Hosting the API | Frankfurt (EEA) |
-| Neon | The PostgreSQL database | *(region to confirm on the account)* |
+| Neon | The PostgreSQL database | **London (`aws-eu-west-2`)** — read from `docs/runbooks/DEPLOY.md`. In the UK, so no transfer question arises for the database itself. |
 | Apple, Google | Identity providers at sign-in | Their own terms |
 | *(mail host — to be chosen)* | The `privacy@` / `safeguarding@` mailbox | See `docs/product/MAILBOX.md` |
 

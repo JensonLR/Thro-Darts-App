@@ -79,6 +79,15 @@ jobs:
       - name: The pub wall never signs in
         run: python3 tools/check_the_wall_never_signs_in.py
 
+      # Standard 4 asks for privacy information in language suited to the age of the child, and DSA
+      # Art 14(3) asks the same of the terms. The trouble with a page like that is not writing it,
+      # it is that it decays: a clause gets added, a sentence gets pasted across from terms.html,
+      # and six months later it is the adult page with a friendlier heading. Prose does not compile,
+      # so the reading age is measured. It caught a 37-word sentence on its first run, in the page
+      # it was written to protect.
+      - name: A child can read the page written for them
+        run: python3 tools/check_a_child_can_read_it.py
+
       # A transitive dependency is linkable, not nameable — and a type you can see is not a member
       # you can reach. Three macOS rounds at four minutes each, in one day: Geometry.swift naming
       # ThroMotion with only `import SwiftUI`, DartVisitTests naming Seat with

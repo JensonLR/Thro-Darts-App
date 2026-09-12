@@ -147,8 +147,12 @@ statutory deadline rather than a missed email. The address must not be published
 Tokens are hashed; passkeys are public keys; there is no email or phone to leak. Every request runs under a
 PostgreSQL role, so one area's bug cannot read another's tables.
 
-**Open:** a 72-hour breach plan exists nowhere. It is a page, and it should exist before there is anything
-to breach.
+**Written, 12 September 2026:** `docs/legal/BREACH_PLAN.md`. Two things in it are specific to THRØ and
+would be missed by a generic plan. First, **a breach that does not reach the `safety` schema is very
+unlikely to be high risk**, because there is no email to phish, no phone to spam, no address and no password
+to reuse — the severity table says so store by store. Second, and less comfortably: **THRØ has no way to
+contact anybody.** An Art 34 notification would have to be a public communication under Art 34(3)(c) plus an
+in-app notice that does not exist yet. That gap is now written down rather than discovered at the time.
 
 ## 4. Against the Children's code, standard by standard
 
@@ -157,7 +161,7 @@ to breach.
 | 1 | Best interests | The product's own rules already favour the child: unknown age is a minor, minors are not listed, pictures refused. |
 | 2 | DPIA | This document. |
 | 3 | Age-appropriate application | Bands applied at every exposure decision. **Assurance is weak** — see R3. |
-| 4 | Transparency | The privacy policy is written in plain English. **Not yet a child-facing version** — open. |
+| 4 | Transparency | **Met.** The privacy policy is plain English (grade 6.0); `apps/web/under-18.html` is the version written for a young player, measured at **grade 3.6** and held there by `tools/check_a_child_can_read_it.py`, which also refuses any page that does not link to it. |
 | 5 | Detrimental use | Nothing here is designed to be detrimental. |
 | 6 | Policies and standards | This, the ROPA, the terms. |
 | 7 | Default settings | **Met.** Audited surface by surface on 12 September 2026 — `docs/legal/DEFAULTS_AUDIT.md`. Every default examined was already the private one; two properties that were held only by a comment now have a guard and a test. |
@@ -168,20 +172,24 @@ to breach.
 | 12 | Profiling | Not built. Recorded at R4 so it cannot happen by omission. |
 | 13 | Nudge techniques | None. There is no streak, no notification pressure, no "your friends are playing". |
 | 14 | Connected toys | Not applicable. |
-| 15 | Online tools | Erasure and export exist; the reporting route exists in the app. **The mailbox does not.** |
+| 15 | Online tools | Erasure and export exist; the reporting route exists in the app, and `under-18.html` says where both are in words a child can follow. **The mailbox does not.** |
 
 ## 5. What must happen before launch
 
 1. ~~A retention period for safety reports.~~ **Done** (PD-087): two years after the decision, swept daily
    by the server itself, because a period nothing enforces is a sentence in a policy.
 2. **The mailbox**, so a DSAR can be received and answered inside a month. *(R7.)*
-3. **A 72-hour breach plan.** *(R8.)*
+3. ~~A 72-hour breach plan.~~ **Written** — `docs/legal/BREACH_PLAN.md`. It names its own three
+   dependencies: the mailbox, an in-app notice for Art 34 (not built), and a recovery window wider
+   than the free plan's.
 4. ~~A high-privacy defaults audit against Standard 7.~~ **Done** — `docs/legal/DEFAULTS_AUDIT.md`.
    It leaves one decision owed, and it is a real one: **may a live leg be shown on a public screen?**
    A named under-18 fixture on a pub wall is a safeguarding question, and answering it "only when
    every player is a confirmed adult" needs a consent route that does not exist yet.
-5. **A child-facing explanation** of what THRØ keeps — Standard 4, and DSA Art 14(3) wants the same thing
-   for the terms.
+5. ~~A child-facing explanation of what THRØ keeps.~~ **Written** — `apps/web/under-18.html` covers
+   both Standard 4 and DSA Art 14(3), because a young player needs the rules as much as the privacy.
+   Its reading age is measured rather than claimed, and a guard holds it. What it still wants is the
+   only test that counts: some actual young players reading it and saying which bits they skipped.
 6. **Art 28 processor terms** with Render, Neon and the mail host; **Art 27 EU representative** if EU users
    are targeted.
 7. **ICO registration**, tier 1.
