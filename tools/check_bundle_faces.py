@@ -34,6 +34,12 @@ import plistlib
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 PLIST = ROOT / "apps/ios/Support/Info.plist"
 FONTS = ROOT / "apps/ios/ThroDarts/Fonts"
+# The Apple TV target carries the same ten faces from the same folder — a folder *reference* in the
+# Xcode project rather than a second copy, so the bytes cannot drift. What differs is only the path
+# inside the bundle: a folder reference keeps its directory where a synchronised group flattens it.
+# Held here too, because the failure is the same one and is just as silent on a wall as on a phone.
+TV_PLIST = ROOT / "apps/ios/SupportTV/Info.plist"
+TV_PREFIX = "Fonts/"
 TYPOGRAPHY = ROOT / "packages/client-ios/Sources/ThroDesign/Typography.swift"
 
 # Keys whose absence takes a whole surface away without an error anywhere. Each is paired with what
@@ -118,6 +124,28 @@ def main() -> int:
             problems.append(f"{name} is in the target and UIAppFonts does not list it, so it "
                             f"ships unregistered. Only that weight goes missing, which reads as a "
                             f"design choice rather than a fault.")
+
+    # The Apple TV, against the same folder and the same ten names.
+    if not TV_PLIST.exists():
+        problems.append(f"{TV_PLIST.relative_to(ROOT)} is missing, so the venue screen has no Info.plist")
+    else:
+        tv = plistlib.loads(TV_PLIST.read_bytes())
+        tv_listed = tv.get("UIAppFonts", [])
+        if not tv_listed:
+            problems.append("the Apple TV target lists no UIAppFonts, so the biggest screen the brand "
+                            "gets draws in the system face — silently, and looking like a decision.")
+        for name in tv_listed:
+            if not name.startswith(TV_PREFIX):
+                problems.append(f"the Apple TV's UIAppFonts lists {name}; a folder reference keeps its "
+                                f"directory, so every entry there needs the {TV_PREFIX} prefix or "
+                                f"nothing registers.")
+            elif not (FONTS / name[len(TV_PREFIX):]).is_file():
+                problems.append(f"the Apple TV's UIAppFonts lists {name} and there is no such file in "
+                                f"{FONTS.relative_to(ROOT)}.")
+        for name in on_disk:
+            if TV_PREFIX + name not in tv_listed:
+                problems.append(f"{name} is in the shared folder and the Apple TV's UIAppFonts does not "
+                                f"list it, so that weight ships unregistered on the wall.")
 
     # The list the design system actually asks for, read from its own source.
     swift = TYPOGRAPHY.read_text()

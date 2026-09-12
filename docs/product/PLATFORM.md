@@ -107,7 +107,7 @@ and four to eight hours a month of the founder's time, in Germany rather than Lo
 | **iPhone** | Shipping | — |
 | **iPad** | Same binary; the layout pass is done to 43 call sites (PD-052), the tab bar and empty states are fixed, and it has been looked at on a device | Two columns where a screen earns them (a list beside the map), and what a tall screen does with genuinely spare room |
 | **Apple Watch** | **A watch app, shipping** (PD-078): the leg at a glance, fed from the phone over WatchConnectivity, and the Live Activity still reaches the Smart Stack on its own | Scoring *from* the wrist — a different thing, because a watch that scores is a second writer to the journal and needs events, not a projection. The engine is pure Swift and already builds for watchOS, so the rules come free; the sync does not |
-| **TV / monitor** | An external display shows the board at room size (`ThroExternalScene`), by cable or AirPlay | A tvOS target for a venue: the board, the fixture, the league table, with no keypad. Same design tokens |
+| **TV / monitor** | Two things, and they are different. A phone drives an external display at room size (`ThroExternalScene`), by cable or AirPlay, and that is where the **live board** is. And an **Apple TV app** (PD-079) shows the league's table, fixtures and results all evening with no phone involved, from the public routes, signing in to nothing | The live board on the Apple TV itself, which needs either a sign-in on a television or a public match stream — the second is a safeguarding decision and not a plumbing one. A layered tvOS app icon and top-shelf artwork before it can go to the store |
 | **Android** | Nothing yet; the design tokens already generate Kotlin | A Compose client. ADR-002 keeps a Kotlin scoring engine structurally parallel to the Swift one, which is the hard half already done |
 | **Wear OS** | — | Follows the Android client, same shape as the watch app |
 | **Android TV / Chromecast** | — | Follows the Android client; the tvOS layout ports |
@@ -116,7 +116,7 @@ and four to eight hours a month of the founder's time, in Germany rather than Lo
 **The order, as revised on 12 September 2026 (PD-064).** iPhone and iPad first, then the **web** — live
 since that morning — and then, instead of Android: **finish what exists**, because nobody has used any of it
 yet and a second platform doubles the surface nobody has looked at. Then **the rest of Apple** — the watch, done that
-same day, and then tvOS — which share the tokens, the pure Swift engine and the whole client and are new
+same day, and then tvOS, both done that week — which share the tokens, the pure Swift engine and the whole client and are new
 surfaces on a known stack. Then **Android**, which is a second implementation of everything, and Wear OS behind it. The
 **rating** stays last, not because it is least wanted but because OD-001 cannot close without real matches.
 

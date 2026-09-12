@@ -12,6 +12,8 @@
 		7A5E0000000000000000003C /* ThroLive.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 7A5E00000000000000000030 /* ThroLive.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		7A5E0000000000000000005B /* ThroWatchKit in Frameworks */ = {isa = PBXBuildFile; productRef = 7A5E0000000000000000005A /* ThroWatchKit */; };
 		7A5E0000000000000000005C /* ThroWatch.app in Embed Watch Content */ = {isa = PBXBuildFile; fileRef = 7A5E00000000000000000050 /* ThroWatch.app */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		7A5E0000000000000000006A /* ThroVenueKit in Frameworks */ = {isa = PBXBuildFile; productRef = 7A5E00000000000000000069 /* ThroVenueKit */; };
+		7A5E0000000000000000006C /* Fonts in Resources */ = {isa = PBXBuildFile; fileRef = 7A5E0000000000000000006B /* Fonts */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -60,6 +62,8 @@
 		7A5E00000000000000000002 /* ThroDarts.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = ThroDarts.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		7A5E00000000000000000030 /* ThroLive.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = ThroLive.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		7A5E00000000000000000050 /* ThroWatch.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = ThroWatch.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		7A5E00000000000000000060 /* ThroTV.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = ThroTV.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		7A5E0000000000000000006B /* Fonts */ = {isa = PBXFileReference; lastKnownFileType = folder; name = Fonts; path = ThroDarts/Fonts; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -76,6 +80,11 @@
 		7A5E00000000000000000051 /* ThroWatch */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			path = ThroWatch;
+			sourceTree = "<group>";
+		};
+		7A5E00000000000000000061 /* ThroTV */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = ThroTV;
 			sourceTree = "<group>";
 		};
 /* End PBXFileSystemSynchronizedRootGroup section */
@@ -105,6 +114,14 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		7A5E00000000000000000064 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				7A5E0000000000000000006A /* ThroVenueKit in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
@@ -114,6 +131,8 @@
 				7A5E00000000000000000003 /* ThroDarts */,
 				7A5E00000000000000000031 /* ThroLive */,
 				7A5E00000000000000000051 /* ThroWatch */,
+				7A5E00000000000000000061 /* ThroTV */,
+				7A5E0000000000000000006B /* Fonts */,
 				7A5E00000000000000000007 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -124,6 +143,7 @@
 				7A5E00000000000000000002 /* ThroDarts.app */,
 				7A5E00000000000000000030 /* ThroLive.appex */,
 				7A5E00000000000000000050 /* ThroWatch.app */,
+				7A5E00000000000000000060 /* ThroTV.app */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -205,6 +225,29 @@
 			productReference = 7A5E00000000000000000050 /* ThroWatch.app */;
 			productType = "com.apple.product-type.application";
 		};
+		7A5E00000000000000000062 /* ThroTV */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 7A5E00000000000000000066 /* Build configuration list for PBXNativeTarget "ThroTV" */;
+			buildPhases = (
+				7A5E00000000000000000063 /* Sources */,
+				7A5E00000000000000000064 /* Frameworks */,
+				7A5E00000000000000000065 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				7A5E00000000000000000061 /* ThroTV */,
+			);
+			name = ThroTV;
+			packageProductDependencies = (
+				7A5E00000000000000000069 /* ThroVenueKit */,
+			);
+			productName = ThroTV;
+			productReference = 7A5E00000000000000000060 /* ThroTV.app */;
+			productType = "com.apple.product-type.application";
+		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -222,6 +265,9 @@
 						CreatedOnToolsVersion = 16.0;
 					};
 					7A5E00000000000000000052 = {
+						CreatedOnToolsVersion = 16.0;
+					};
+					7A5E00000000000000000062 = {
 						CreatedOnToolsVersion = 16.0;
 					};
 				};
@@ -246,6 +292,7 @@
 				7A5E00000000000000000008 /* ThroDarts */,
 				7A5E00000000000000000032 /* ThroLive */,
 				7A5E00000000000000000052 /* ThroWatch */,
+				7A5E00000000000000000062 /* ThroTV */,
 			);
 		};
 /* End PBXProject section */
@@ -269,6 +316,14 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		7A5E00000000000000000065 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				7A5E0000000000000000006C /* Fonts in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -313,6 +368,13 @@
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 		7A5E00000000000000000053 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		7A5E00000000000000000063 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -607,6 +669,54 @@
 			};
 			name = Release;
 		};
+		7A5E00000000000000000067 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 2;
+				DEVELOPMENT_TEAM = 2XM324WPD5;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = SupportTV/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = "THRØ";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 0.1;
+				PRODUCT_BUNDLE_IDENTIFIER = app.thro.darts;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = appletvos;
+				SUPPORTED_PLATFORMS = "appletvos appletvsimulator";
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				TARGETED_DEVICE_FAMILY = 3;
+				TVOS_DEPLOYMENT_TARGET = 18.0;
+			};
+			name = Debug;
+		};
+		7A5E00000000000000000068 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 2;
+				DEVELOPMENT_TEAM = 2XM324WPD5;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = SupportTV/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = "THRØ";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 0.1;
+				PRODUCT_BUNDLE_IDENTIFIER = app.thro.darts;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = appletvos;
+				SUPPORTED_PLATFORMS = "appletvos appletvsimulator";
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				TARGETED_DEVICE_FAMILY = 3;
+				TVOS_DEPLOYMENT_TARGET = 18.0;
+			};
+			name = Release;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -624,6 +734,15 @@
 			buildConfigurations = (
 				7A5E00000000000000000011 /* Debug */,
 				7A5E00000000000000000012 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		7A5E00000000000000000066 /* Build configuration list for PBXNativeTarget "ThroTV" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				7A5E00000000000000000067 /* Debug */,
+				7A5E00000000000000000068 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
@@ -667,6 +786,10 @@
 		7A5E0000000000000000005A /* ThroWatchKit */ = {
 			isa = XCSwiftPackageProductDependency;
 			productName = ThroWatchKit;
+		};
+		7A5E00000000000000000069 /* ThroVenueKit */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = ThroVenueKit;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};

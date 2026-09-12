@@ -4275,3 +4275,40 @@ the end while the wrist keeps the result, and a launch saying nothing is on.
 
 Counts: client 807 tests (29 on a wrist), all 22 checks, Debug and Release both build for the simulator and
 the device, and the watch app for watchOS.
+
+## A league on a wall: the Apple TV app
+
+**The obvious tvOS app is the live scoreboard, and it is the wrong one.** A phone already drives a television
+at room size by cable or AirPlay (PD-041), so a tvOS app doing the same would be a second way to do the thing
+that works — and it cannot anyway: `stream.match` is authenticated, there is no good way to sign a pub's
+television in, and a *public* match stream is a safeguarding decision rather than plumbing. So the Apple TV
+does what a phone in a pocket cannot: it is on all evening with the league's table, its fixtures and its
+results, from the routes that are public because a published competition is published. It signs in to
+nothing and is handed a session store that cannot outlive the process.
+
+**Three rules, all from "nobody is holding this one".** It never scrolls — a table that does not fit turns
+pages, because a page turns by itself and a scroll view waits forever for a finger that is not coming. It
+never shows an empty panel, because twenty seconds of "no fixtures" is a screen that looks broken. And it
+says when it last heard, being the surface most likely to be left on for five hours with nobody to reload it:
+two minutes between reads against fifteen before it doubts itself, held by a test so the two cannot cross.
+
+**tvOS cost five edits and four were worth making anyway** — a colour picker and a drag gesture nobody
+performs from a sofa, a haptics guard that listed platforms instead of naming iOS, and a text metric a
+ten-foot interface does not have. The engine and the statistics needed nothing at all.
+
+**Four faults were found by looking at it on a real tvOS simulator against a real seeded API, and none had a
+failing test.** A chalk *rule* drawn straight through every league's name where a chalk *box* was meant. The
+phone's type scale on a six-metre screen — a league table in twenty-point type, legible in a screenshot and
+useless in a pub; it steps up the design system's own approved ladder now rather than a TV scale invented for
+the occasion. A team name smaller than its own figures. And a declared result indistinguishable from a played
+one, on the one surface where a stranger reads a scoreline with nobody to ask.
+
+The brand faces come from **one folder referenced twice**, not copied: two copies of a typeface are two
+things to keep true and the drift is silent. `check_bundle_faces.py` holds both plists against it.
+`check_screens_reachable.py` was wrong and is fixed — it only ever read the package, so a root screen mounted
+by an app target looked unreachable.
+
+Still to come: the layered tvOS app icon and top-shelf artwork the store wants, and an Apple TV registered to
+the team before a device build can sign.
+
+Counts: client 822 tests (15 on a wall), all 22 checks, and the Apple TV app builds for tvOS in CI.

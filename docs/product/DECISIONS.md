@@ -3500,3 +3500,102 @@ enrolment.
 Scoring from the wrist. Complications. A watch that shows the *next fixture* when nothing is live, which the
 projection already computes for the widgets and which would need the App Group's contents crossing the link
 rather than just the leg.
+
+## PD-079 — A league on a wall: the Apple TV app
+
+**12 September 2026**, the second and last of PD-064's "rest of Apple".
+
+### What an Apple TV is actually for, which is not the live board
+
+The obvious tvOS app is the scoreboard. It is the wrong one, for a reason worth writing down: **the live
+board on a television already works**, and has since PD-041 — a phone drives an external display by cable or
+AirPlay and draws `ThroVenueBoard` at room size. A tvOS app doing the same thing would be a second way to do
+the thing that works.
+
+It also **cannot** do it. `stream.match` is authenticated, by design, and there is no good way to sign a pub's
+television in — nor should there be, because whose account would it be. A *public* match stream is not
+plumbing: an under-18 fixture with names on it, on a pub wall, is exactly the kind of thing that gets decided
+before it is built.
+
+So the Apple TV does the thing a phone in somebody's pocket cannot: it is **on all evening**, showing the
+league's table, what is still to play and what has just been played, from the routes that are public because
+a league's published competition is published (PD-054, PD-056). It signs in to nothing. It is handed a
+session store that cannot outlive the process, so a pub television has no credential to leak and nothing for
+whoever picks up the remote to reach.
+
+### Three rules, all from "nobody is holding this one"
+
+1. **It never scrolls.** A table that does not fit turns pages, because a page turns by itself and a scroll
+   view waits forever for a finger that is not coming. Twelve rows a page, and both pages say which they are.
+2. **It never shows an empty panel.** Twenty seconds of "no fixtures" on a wall is twenty seconds of a screen
+   that looks broken, so a panel with nothing on it is not in the rotation at all. When *everything* is empty
+   that is a screen of its own, not a blank one.
+3. **It says when it last heard.** The rule the Lock Screen, the wall board and the wrist already follow, and
+   this is the surface most likely to be left on for five hours with nobody to reload it. Two minutes between
+   reads against fifteen before it doubts itself — the same shape as the stream's ping against the proxy
+   timeout, and held by a test so the two can never cross.
+
+The order is the table, then what is to play, then results: somebody looking up wants to know where their
+team is, then whether they are on next, and only then how last week went. A rotation that opened on results
+would be showing the least urgent thing to the most people.
+
+### Setup is one screen, once
+
+A league is picked with the remote and the season comes with it — `shownSeason` is the one running today,
+else the newest, which is a rule that already exists and is already what the phone shows. A second screen
+asking which season would be asking a landlord a question they have no way to get wrong. Only leagues that
+have published a season are offered, because offering one that would open on an empty wall is offering
+somebody a way to get it wrong. The choice is remembered in `UserDefaults`, so a television unplugged at
+closing is the same screen in the morning.
+
+### tvOS cost five edits, four of which were worth making anyway
+
+The whole design system, the network layer, the live surfaces, the engine and the statistics all build for
+tvOS. A `ColorPicker` and a `DragGesture` describe acts nobody performs from a sofa and were guarded where
+they already were for a watch; a ten-foot interface has no `largeTitle` metric, so it maps to `title1`; and
+the haptics guard read *UIKit but not watchOS*, which was true when watchOS was the only other platform and
+wrong the moment tvOS was tried — `UIImpactFeedbackGenerator` is an iOS type, so it says `os(iOS)` now and
+stops being a list that grows. The engine and the statistics needed nothing, which is the second platform in
+a row to *check* "the rules come free" rather than hope it.
+
+### Four faults found by looking at it, none of which had a failing test
+
+Running the thing against a real local API with a seeded season, on a real tvOS simulator, four times:
+
+1. **A chalk rule drawn straight through every league's name.** `ChalkRule` is a single horizontal line and
+   `ChalkBox` is the box; both are "a chalk shape" in the code and only one of them is a border.
+2. **The phone's type scale on a six-metre screen.** A league table in twenty-point type, legible in a
+   screenshot and useless in a pub. It now steps *up* `ThroTypeRole.sized`'s approved ladder — 96, 72, 56,
+   40 — which is the same ladder the scoring screen steps down when a phone is short of room. Not a TV scale
+   invented for the occasion.
+3. **The team name smaller than its own figures.** A table where "Grange A" reads smaller than the "2" beside
+   it answers the wrong question first.
+4. **A declared result indistinguishable from a played one.** Every other surface in THRØ says where a figure
+   came from; a wall is the one place a stranger reads a scoreline with nobody to ask, so it is the last place
+   to leave it out. `6–3 · declared`.
+
+### The brand faces, from one folder
+
+A league table on a pub wall in the system font would be *"generic slop"* on the biggest screen the brand
+ever gets. The tvOS target references `apps/ios/ThroDarts/Fonts` **as a folder** rather than holding a second
+copy — two copies of a typeface are two things to keep true and the drift is silent, because an unregistered
+face falls back and the screen just looks like every other app. `tools/check_bundle_faces.py` now holds both
+plists against the one folder, reading each PostScript name out of the file rather than trusting the
+filename. The paths carry a `Fonts/` prefix on the TV because a folder reference keeps its directory where a
+synchronised group flattens it, and the check holds that too.
+
+### Two checks were wrong, and one screen was not
+
+`check_screens_reachable.py` reported `ThroVenueScreen` unreachable. It was not: it is mounted by
+`apps/ios/ThroTV`, and the check only ever read the package — so it would have called **every** root screen
+unreachable if any had been named `…Screen`. It reads the app targets now, which is where a root is mounted
+and nowhere else. `check_controls_react.py` was right about the chooser's rows and the fix was one it
+suggested; a remote does not miss, but the module builds for a phone too.
+
+### Not done
+
+The **layered app icon and top-shelf artwork** tvOS wants for the store: a 5:3 parallax stack and two
+top-shelf images, which is a graphic-design job rather than a coding one. The app builds and runs without
+them. A **device build** also needs an Apple TV registered to the team — `xcodebuild` can create the App ID
+but cannot create a development profile for a platform with no device on it, which is the founder's step and
+not a defect. And the live board on the Apple TV itself, which is the safeguarding decision above.

@@ -12,8 +12,9 @@ is shaped to see, so it is checked here instead.
 
 Two checks, both mechanical:
 
-  1. **Every `…Screen` is constructed somewhere in Sources.** Zero construction sites means the
-     screen exists only in its own file and in its tests.
+  1. **Every `…Screen` is constructed somewhere** — in the package, or in one of the app targets
+     under `apps/ios`, which is where a root screen is mounted and nowhere else. Zero construction
+     sites means the screen exists only in its own file and in its tests.
   2. **Every case of a `…Route` enum is assigned somewhere in Sources.** A route case nothing
      assigns is a screen nothing navigates to, which is how the first defect happened.
 
@@ -28,6 +29,12 @@ import sys
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 SOURCES = ROOT / "packages/client-ios/Sources"
+# Screens are *declared* in the package and some are *mounted* by an app target — the phone's root
+# view, the venue screen an Apple TV opens on. Those targets are a dozen lines each and are the only
+# place a root is constructed, so a check that read only the package would call every root
+# unreachable. Found when the tvOS app was added: `ThroVenueScreen` is built in `apps/ios/ThroTV`
+# and nowhere else, which is correct and was reported as a defect.
+APPS = ROOT / "apps/ios"
 
 SCREEN = re.compile(r"^\s*(?:public\s+)?struct\s+(\w*Screen)\s*:\s*View\b", re.M)
 # Two spellings, because the two flows in this app chose different words for the same thing:
@@ -50,7 +57,8 @@ def main() -> int:
         sys.exit(f"check_screens_reachable: {SOURCES} is not a directory")
 
     texts = {path: path.read_text() for path in swift_files()}
-    everything = "\n".join(texts.values())
+    mounted = "\n".join(p.read_text() for p in sorted(APPS.rglob("*.swift"))) if APPS.is_dir() else ""
+    everything = "\n".join(texts.values()) + "\n" + mounted
     problems = []
 
     screens = {}
@@ -65,8 +73,9 @@ def main() -> int:
         built = len(re.findall(rf"\b{name}\s*\(", everything))
         if built == 0:
             problems.append(
-                f"{name} ({declared_in.relative_to(ROOT)}) is never constructed in Sources. "
-                f"It compiles and its tests may pass; nobody using the app can reach it."
+                f"{name} ({declared_in.relative_to(ROOT)}) is never constructed, in the package or "
+                f"in any app target. It compiles and its tests may pass; nobody using the app can "
+                f"reach it."
             )
 
     assigned = set(ASSIGNED.findall(everything))

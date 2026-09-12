@@ -41,6 +41,7 @@ let package = Package(
         .library(name: "ThroDesign", targets: ["ThroDesign"]),
         .library(name: "ThroLiveKit", targets: ["ThroLiveKit"]),
         .library(name: "ThroWatchKit", targets: ["ThroWatchKit"]),
+        .library(name: "ThroVenueKit", targets: ["ThroVenueKit"]),
         .library(name: "ThroJournal", targets: ["ThroJournal"]),
         .library(name: "ThroNet", targets: ["ThroNet"]),
         .library(name: "ThroPlay", targets: ["ThroPlay"]),
@@ -93,6 +94,23 @@ let package = Package(
         ),
         .testTarget(name: "ThroWatchKitTests",
                     dependencies: ["ThroWatchKit", "ThroLiveKit"], path: "Tests/ThroWatchKitTests"),
+
+        // A league on a wall (PD-079). The Apple TV app, and the rules that decide what a screen nobody is
+        // holding shows: pages rather than a scroll, no empty panel in the rotation, and the last-heard time
+        // on screen because this is the surface most likely to be left on all evening saying something that
+        // quietly stopped being true.
+        //
+        // It reaches the design system, unlike the watch's module: a TV has the room for the whole brand
+        // vocabulary and a league table drawn as a plain list would be the one surface in THRØ that looked
+        // like a spreadsheet, on the biggest screen it ever gets. It reaches ThroNet because everything it
+        // shows is public — the leagues, a season's table, its fixtures — and it never signs in.
+        .target(
+            name: "ThroVenueKit",
+            dependencies: ["ThroDesign", "ThroNet", .product(name: "ThroTokens", package: "design-tokens")],
+            path: "Sources/ThroVenueKit"
+        ),
+        .testTarget(name: "ThroVenueKitTests",
+                    dependencies: ["ThroVenueKit", "ThroNet"], path: "Tests/ThroVenueKitTests"),
 
         // ADR-006's on-device journal: SQLite under the measured durability configuration, verified
         // in force on every open, append-only by trigger, replayed through the engine. Reaches the

@@ -107,6 +107,11 @@ jobs:
           xcodebuild -scheme ThroEngine -destination 'generic/platform=tvOS Simulator' -quiet build
           cd ../statistics-swift
           xcodebuild -scheme ThroStatistics -destination 'generic/platform=tvOS Simulator' -quiet build
+      - name: The Apple TV app itself
+        run: |
+          xcodebuild -project apps/ios/ThroDarts.xcodeproj -scheme ThroTV \
+            -destination 'generic/platform=tvOS Simulator' -configuration Debug \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO -quiet build
       - name: The watch app itself
         run: |
           xcodebuild -project apps/ios/ThroDarts.xcodeproj -scheme ThroWatch \

@@ -33,6 +33,7 @@ ROWS = {
     "| On-device journal, Android |": ["packages/journal/src/test"],
     "| The Lock Screen, the wall and the Home Screen |": ["packages/client-ios/Tests/ThroLiveKitTests"],
     "| A leg on a wrist |": ["packages/client-ios/Tests/ThroWatchKitTests"],
+    "| A league on a wall |": ["packages/client-ios/Tests/ThroVenueKitTests"],
 }
 
 IOS = "packages/client-ios/Tests"
@@ -43,8 +44,9 @@ IOS = "packages/client-ios/Tests"
 ANCHORED = [
     ("docs/runbooks/CLIENT_IOS.md", r"(\d+) tests in all",
      [f"{IOS}/ThroDesignTests", f"{IOS}/ThroJournalTests", f"{IOS}/ThroPlayTests", f"{IOS}/ThroAppTests",
-      f"{IOS}/ThroLiveKitTests", f"{IOS}/ThroWatchKitTests"]),
+      f"{IOS}/ThroLiveKitTests", f"{IOS}/ThroWatchKitTests", f"{IOS}/ThroVenueKitTests"]),
     ("docs/runbooks/CLIENT_IOS.md", r"(\d+) on a wrist", [f"{IOS}/ThroWatchKitTests"]),
+    ("docs/runbooks/CLIENT_IOS.md", r"(\d+) on a wall", [f"{IOS}/ThroVenueKitTests"]),
     ("docs/runbooks/CLIENT_IOS.md", r"(\d+) Lock Screen", [f"{IOS}/ThroLiveKitTests"]),
     ("docs/runbooks/CLIENT_IOS.md", r"(\d+) design,", [f"{IOS}/ThroDesignTests"]),
     ("docs/runbooks/CLIENT_IOS.md", r"(\d+) journal,", [f"{IOS}/ThroJournalTests"]),
