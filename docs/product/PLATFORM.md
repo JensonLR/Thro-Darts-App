@@ -42,9 +42,16 @@ staging does today.
 | Lightsail | London | $7 | $7 | $12 |
 | Render (paid) | Frankfurt only | $7 | $25.75 | $39.25 |
 
-**Move to Fly London.** It is the only true London platform-as-a-service of the three, it is cheaper than
-Render at every size, and it has the 1 GB tier Render lacks. One caution: set `auto_stop_machines = off`, or
-Fly's proxy stops the machine under an idle-looking stream.
+**Fly London is the cheaper platform at every size** and the only true London one; if this were a fresh
+choice it would be Fly, with `auto_stop_machines = off` so its proxy does not stop the machine under an
+idle-looking stream.
+
+**It is not a fresh choice, and PD-057 revises this.** The API already runs on Render, the founder asked to
+stay there, and Frankfurt against London is tens of milliseconds for an app whose slowest step is a person
+throwing three darts. One platform and one dashboard is worth more than that to a single developer. The
+change actually worth making is **off the free instance** — it sleeps after fifteen idle minutes and a
+sleeping server drops a live match stream — at $7 a month. Revisit Fly at about a thousand players, where
+Render's curve turns: roughly $25 against $7, and $39 against $14 at ten thousand.
 
 ## The database
 
@@ -79,29 +86,34 @@ one line that runs away), UptimeRobot and a status page ($0).
 | | Now | Launch / 1k MAU | 10k MAU |
 | --- | --- | --- | --- |
 | Edge (Cloudflare) | $0 | $0 | $20 |
-| API (Fly London) | $6.46 | $6.66 | $14 |
+| API (Render Starter — PD-057) | $7 | $25.75 | $39.25 |
 | Database | $0 (Neon free) | $25 (Supabase Pro) | $32 |
 | CI | $0 | $0 | $0 |
 | Everything else | $0 | ~$0.30 | ~$68 |
 | Apple Developer Program | $8.25 | $8.25 | $8.25 |
-| **Total** | **~$15/mo** | **~$40/mo** | **~$142/mo** |
+| **Total** | **~$15/mo** | **~$59/mo** | **~$168/mo** |
 
-At 10k the alternative is Hetzner with self-managed Postgres at about $45 — about $100 cheaper and four to
-eight hours a month of the founder's time, in Germany rather than London. Pay the $100.
+Staying on Render costs about **$19 a month more at a thousand players and $25 more at ten thousand** than
+Fly would. That is the price of one platform instead of two, and it is worth paying now and not at ten
+thousand — which is why PD-057 sets the revisit at the first of those numbers rather than leaving it open.
+
+At 10k the alternative to all of it is Hetzner with self-managed Postgres at about $45 — roughly $120 cheaper
+and four to eight hours a month of the founder's time, in Germany rather than London. Pay the $120.
 
 ## The surfaces THRØ runs on
 
 | Surface | Today | What it would take |
 | --- | --- | --- |
 | **iPhone** | Shipping | — |
-| **iPad** | Same binary, and the layout pass has begun (PD-052): a readable column rather than a phone screen pulled apart, on ten screens of forty-three so far | Two-column layouts where the screen earns them (a list beside the map); the 33 screens the audit found still stretching |
+| **iPad** | Same binary; the layout pass is done to 43 call sites (PD-052), the tab bar and empty states are fixed, and it has been looked at on a device | Two columns where a screen earns them (a list beside the map), and what a tall screen does with genuinely spare room |
 | **Apple Watch** | The Live Activity reaches the Smart Stack; there is **no watch app** | A watchOS target: the scoreboard at a glance, then scoring from the wrist over WatchConnectivity. The engine is pure Swift and already shared, so the rules come free |
 | **TV / monitor** | An external display shows the board at room size (`ThroExternalScene`), by cable or AirPlay | A tvOS target for a venue: the board, the fixture, the league table, with no keypad. Same design tokens |
 | **Android** | Nothing yet; the design tokens already generate Kotlin | A Compose client. ADR-002 keeps a Kotlin scoring engine structurally parallel to the Swift one, which is the hard half already done |
 | **Wear OS** | — | Follows the Android client, same shape as the watch app |
 | **Android TV / Chromecast** | — | Follows the Android client; the tvOS layout ports |
-| **Web** | Nothing yet | Needed sooner than it looks: Google Play requires a **web account-deletion URL**, and the organiser subscription is best sold on the web (see MONEY.md) |
+| **Web** | Built (PD-056): the leagues, a season's table, its fixtures, and the account-deletion page Play requires. Static, on Render, `/v1` rewritten to the API so it is one origin | Sign-in, and with it the organiser's own surface — entering results from a laptop, which the PD-053 routes already allow |
 
-The order that serves the product: finish iPhone and iPad, then the **web** (because two commitments already
-depend on it), then **Android** (the second half of the market and cheaper store fees), then the **watch**
-(the most-wanted extra for a player at the oche), then **TV** for venues.
+The order the founder chose, and the reasons still hold: iPhone and iPad first, then the **web** — done to a
+first slice — then **Android** (the second half of the market, cheaper store fees, and now unblocked, because
+the deletion URL Play demands exists), then the **watch** (the most-wanted extra for a player at the oche),
+then **TV** for venues.

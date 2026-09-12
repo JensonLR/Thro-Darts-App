@@ -33,3 +33,35 @@ services:
         value: 2XM324WPD5.app.thro.darts
       - key: THRO_GOOGLE_CLIENT_ID
         sync: false            # optional until the Google OAuth iOS client exists
+
+  # The web (PD-056, PD-057): the pages are static and the API answers on the same origin, so the
+  # browser never makes a cross-origin request — no CORS, no preflight, no second host in the app's
+  # configuration, and no token in a query string. Render serves the directory and rewrites two paths
+  # to the API service:
+  #
+  #   /v1/*   the API itself, which is what `thro.js` calls with no host in front of it
+  #   /.well-known/apple-app-site-association   so universal links and passkeys key off THIS host
+  #
+  # The second is the one that is easy to forget. iOS offers a passkey for a domain only when that
+  # domain serves the association file, so the moment the pages live on thro.uk, thro.uk has to serve
+  # it — not the API's own hostname. The switch-over is in docs/runbooks/DEPLOY.md.
+  - type: web
+    name: thro-web
+    runtime: static
+    staticPublishPath: ./apps/web
+    buildCommand: ""
+    autoDeploy: false
+    routes:
+      - type: rewrite
+        source: /v1/*
+        destination: https://thro-api-staging.onrender.com/v1/*
+      - type: rewrite
+        source: /.well-known/apple-app-site-association
+        destination: https://thro-api-staging.onrender.com/.well-known/apple-app-site-association
+    headers:
+      - path: /*
+        name: X-Content-Type-Options
+        value: nosniff
+      - path: /*
+        name: Referrer-Policy
+        value: strict-origin-when-cross-origin

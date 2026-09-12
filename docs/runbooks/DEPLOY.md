@@ -32,6 +32,43 @@ provider hostname is fine because staging holds no real people. For production, 
 host — your own domain — **before** any real person registers a passkey, and set `THRO_RP_ID` to it
 from the first production deploy.
 
+## The web, and the domain (PD-056, PD-057)
+
+`render.yaml` carries two services now: the API, and **`thro-web`**, a free static site serving `apps/web`.
+Deploying it is the same Blueprint — Render picks the new service up. Two rewrites make the pages and the
+API one origin:
+
+| Path | Goes to | Why |
+|---|---|---|
+| `/v1/*` | the API service | `thro.js` calls `/v1/...` with no host, so the browser never makes a cross-origin request: no CORS, no preflight, no second host to configure, no token in a query string |
+| `/.well-known/apple-app-site-association` | the API service | iOS offers a passkey for a domain only when **that** domain serves the association file. The moment the pages live at a domain, the domain has to serve it |
+
+### Switching to `thro.uk`
+
+Six places name a host, and they change together or passkeys and universal links stop working. Do them in
+one sitting:
+
+1. **Register `thro.uk`** and point it at Render — a custom domain on **`thro-web`**, not on the API, since
+   the web is what sits in front.
+2. **`THRO_RP_ID` → `thro.uk`** in `render.yaml` and in the API service's environment.
+3. **`apps/ios/Support/ThroDarts.entitlements`** → `webcredentials:thro.uk`.
+4. **`apps/ios/Support/Info.plist`** → the base URL becomes `https://thro.uk`; the API answers there through
+   the rewrite, so the app needs no second host either.
+5. **Check the association file** actually serves from the new host:
+   `curl -s https://thro.uk/.well-known/apple-app-site-association` — it must return the app id, not a 404
+   from the static site.
+6. **Check the API** through the same origin: `curl -s https://thro.uk/v1/leagues | head -c 80`.
+
+**Every existing passkey stops working.** A passkey is bound to the relying-party id it was created under, so
+one made against `thro-api-staging.onrender.com` cannot be used against `thro.uk`. Anybody who has made one —
+which today is the founder, if anyone — signs in another way and makes a new one. Better now than after a
+hundred people have.
+
+**And take the API off the free instance at the same time.** A free Render service sleeps after fifteen idle
+minutes, and a sleeping server drops a live match stream (ADR-007), which is the one thing in THRØ that
+cannot tolerate it. Starter is $7 a month. PD-057 has the reasoning and the point at which Fly becomes worth
+the second platform.
+
 ## Path A — Neon + Render, no card
 
 **A1. The database (Neon) — done, 2026-09-10.** The project `THRØ` exists in London; `thro_app`

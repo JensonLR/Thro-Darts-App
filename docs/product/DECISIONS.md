@@ -2555,3 +2555,55 @@ Signing in on the web, and with it the organiser's own surface — entering resu
 routes behind PD-053 already allow and which is the obvious next piece. The privacy policy and terms, which
 are founder documents. And where it is hosted: Cloudflare Pages is free and already the plan, but the domain
 is the founder's to buy, and until there is one the deletion page has no address to give a store.
+
+## PD-057 — The address THRØ lives at, and what serves it
+
+**Recommendation to the founder, 2026-09-12**, asked for a domain and whether Render could be used. The
+purchase is theirs — this is the evidence and the shape that follows from it.
+
+### The domain: `thro.uk`
+
+**Available**, confirmed against Nominet's own register: *"No match for thro.uk. This domain name has not
+been registered."* Four letters, the brand exactly, nothing appended, and the country the app is for — every
+league in it is British. About £8–10 a year.
+
+What else was checked, so the choice can be read back:
+
+| Domain | State |
+|---|---|
+| **`thro.uk`** | **free** — the recommendation |
+| `thro.app` | taken (2015, GoDaddy nameservers). The obvious one, because the bundle id is `app.thro.darts`, and it is gone |
+| `thro.co.uk` | taken since 2014 by a domain broker (`brandselection.co.uk`), so it would cost a negotiation, not a registration |
+| `thro.io`, `thro.pub`, `thro.team`, `thro.games`, `thro.club`, `getthro.com` | taken |
+| `thro.bar` | free, and not recommended: a British darts player drinks in a pub, not a bar |
+| `throdarts.com`, `playthro.com` | free — worth £10 as a defensive second that redirects, not as the address |
+
+**The bundle id does not force `thro.app`.** `app.thro.darts` is only a reverse-DNS-shaped string; what has
+to match a domain is the associated-domains entitlement and the relying-party id, and those can be `thro.uk`.
+
+### Render, since the founder asked
+
+**Yes for the web, and it is the better answer than the plan.** A Render static site is free, deploys from
+the same repository, and — the part that matters — supports **rewrites**, so `/v1/*` is proxied to the API
+service. The pages and the API are then one origin, which is exactly what `thro.js` already assumes: no
+CORS, no preflight, no second host in the app's configuration, no token in a query string. One dashboard,
+one account they already have. `render.yaml` carries both services now.
+
+**And a second rewrite that is easy to forget**: `/.well-known/apple-app-site-association`. iOS offers a
+passkey for a domain only when that domain serves the association file, so the moment the pages live at
+`thro.uk`, `thro.uk` must serve it — not the API's own hostname.
+
+**Keep the API on Render for now**, and revise PD-051 accordingly. Fly London is nearer the players, but the
+honest difference between Frankfurt and London for this app is tens of milliseconds, and it is not worth a
+second platform while there is one developer. The change worth making is **off the free instance**: a free
+Render service sleeps after fifteen idle minutes, and a sleeping server drops a live match stream — which is
+the one thing in THRØ that cannot tolerate it. Starter is $7 a month.
+
+**Revisit at about a thousand players**, where the curves diverge: Render is roughly $25 a month at that size
+against Fly's $7, and $39 against $14 at ten thousand. That is the moment to move, not now.
+
+### What this does not decide
+
+The purchase itself, which needs a card. Whether to take `throdarts.com` defensively. And the switch-over,
+which is a short checklist in DEPLOY.md rather than a decision: the relying-party id, the entitlement, and
+the association file all name a host, and all three change together or passkeys stop working.
