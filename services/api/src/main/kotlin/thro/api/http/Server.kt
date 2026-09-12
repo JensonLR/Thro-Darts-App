@@ -711,6 +711,15 @@ private fun outcomely(superseding: Boolean = false, block: () -> Http): Http = t
         else Http(409, """{"error":"This fixture already has a result. Correcting one is a new decision that supersedes it: send its outcomeId as `supersedes`."}""")
     } else if (why.contains("supersede one of its own fixture")) {
         Http(409, """{"error":"That result belongs to a different fixture."}""")
+    } else if (why.contains("outcome_supersedes_once")) {
+        // **A 500 was reaching the caller here** (PD-067). `outcome_supersedes_once` is a unique index that
+        // stops two decisions both claiming to replace the same one, which would fork the chain — right,
+        // and it is the *database* noticing a stale write rather than the trigger. For a correction the
+        // trigger gets there first, because the newer result is live and unaccounted for; for an annulment
+        // it does not, because V043 excludes voids from that count and the annulled result is superseded
+        // already. So the index threw raw, and two officials annulling the same result — or one person
+        // pressing the button twice — got a server fault instead of an answer.
+        Http(409, """{"error":"That result has already been dealt with. Reload, and act on the one that is standing now."}""")
     } else if (why.contains("read from the match")) Http(409, """{"error":"This fixture was scored on THRØ, so its result is read from the match."}""")
     else throw e
 }

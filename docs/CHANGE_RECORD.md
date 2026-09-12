@@ -4064,3 +4064,27 @@ card is a bigger empty box, so neither is the answer. The diagnosis is now sharp
 state that is the only thing on the page should not be a card at all**, because a card is a container for
 content among other content. What it should be instead is a product decision and is going to the founder
 rather than being guessed at, with the numbers above as the evidence.
+
+## Annulling twice returned a 500, and only calling it twice would have found it
+
+The annulment route was exercised against a real server rather than a stub, with the wrong thing on purpose:
+no principal, no reason, nothing to annul, and then the same result annulled twice. The last one returned
+**500**.
+
+`outcome_supersedes_once` is a unique index stopping two decisions from both replacing the same one — a fork
+in the chain nothing downstream could read. Right constraint, unmapped error. A correction never reaches it
+because the trigger gets there first; an annulment does, because V043 keeps voids out of the live count and
+the named result is already superseded. So the index threw raw.
+
+It is the same 409 as every other stale write now — *"That result has already been dealt with"* — and the
+correction path gets the same mapping behind its trigger. Two officials annulling the same result, or one
+person pressing the button twice, are both ordinary; a 500 tells a league secretary the app broke when what
+happened is that somebody else got there first.
+
+**And the method is the point.** Nothing in the code looks wrong at any layer, so reading would not have
+found this, and no test existed to fail. It took calling the route with the wrong thing twice. The seed that
+made that possible is checked in now at `services/api/seed/demo_season.sql` — a season carrying a played
+result, a declared one, an award, an annulment and four fixtures to come — because a full test run rebuilds
+the local database and anything seeded by hand is gone by the next one.
+
+Counts: API 29 suites (88 tests), 148 schema properties, client 772 tests, all 22 checks.

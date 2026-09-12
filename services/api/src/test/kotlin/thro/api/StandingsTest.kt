@@ -450,6 +450,33 @@ class StandingsTest {
     }
 
     @Test
+    fun `a result cannot be annulled twice, and the database is what notices`() {
+        if (!configured) return
+        migrated().use { c ->
+            val orgs = Organisations(c)
+            val admin = orgs.createPlayer()
+            val s = season(orgs, admin)
+            val fixture = played(c, orgs, s, s.a, s.b, 5, 2, admin)
+            val standing = Fixtures(c).of(s.seasonId).single().decided!!.outcomeId
+            orgs.voidOutcome(fixture, standing, "played under protest", by = admin)
+
+            // Two officials annul the same result, or one presses the button twice. The trigger does not
+            // catch this — V043 keeps voids out of its live count and the annulled result is superseded
+            // already — so `outcome_supersedes_once` does, and it must, because two decisions replacing one
+            // decision is a fork in the chain that nothing downstream could read (PD-067).
+            val why = assertFailsWith<PSQLException> {
+                orgs.voidOutcome(fixture, standing, "again", by = admin)
+            }
+            assertTrue(why.message!!.contains("outcome_supersedes_once"), why.message!!)
+
+            // And the first annulment still stands, untouched.
+            val f = Fixtures(c).of(s.seasonId).single()
+            assertEquals(null, f.decided)
+            assertEquals("played under protest", f.annulled?.reason)
+        }
+    }
+
+    @Test
     fun `a fixture whose result was voided can be decided again`() {
         if (!configured) return
         migrated().use { c ->

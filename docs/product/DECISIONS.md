@@ -3005,3 +3005,31 @@ are now the right height.
 
 No test: this is a layout height in SwiftUI and the honest verification was building it, looking at it on an
 iPad, and looking again on a phone to be sure nothing moved there.
+
+## PD-067 — A stale annulment is an answer, and it was a server fault
+
+**Found by exercising the route against a real server, 12 September 2026** — not by a test, and not by
+reading the code. Annulling a result twice with the same outcome id returned **500**.
+
+`outcome_supersedes_once` is a unique index that stops two decisions both claiming to replace the same one.
+It is right and it matters: two outcomes superseding one outcome is a fork in a chain that nothing
+downstream could read. What was wrong is that nothing translated it.
+
+**Why a correction never hit this and an annulment does.** For a correction the trigger gets there first: the
+newer result is live and unaccounted for, so *"already has an outcome"* is raised and mapped to a 409. For an
+annulment the trigger does not fire at all — V043 keeps voids out of the live count, and the result being
+named is already superseded by the first void — so the insert reaches the index, which raised a constraint
+violation nothing was catching.
+
+It is now the same 409 as every other stale write, with the same instruction: *"That result has already been
+dealt with. Reload, and act on the one that is standing now."* The correction path gets it too, as a second
+line of defence behind the trigger.
+
+**How it is reachable:** two officials annulling the same result, or one person pressing the button twice.
+Both are ordinary. A 500 tells a league secretary that THRØ broke, when what happened is that somebody
+else got there first — and the difference between those two sentences is whether they trust the app with
+their season.
+
+Worth recording as a method rather than a fix: this class of fault — a real constraint, unmapped — cannot be
+found by reading, because the code looks correct at every layer. It was found by calling the route with the
+wrong thing twice.
