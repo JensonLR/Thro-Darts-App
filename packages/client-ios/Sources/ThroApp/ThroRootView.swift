@@ -1267,7 +1267,25 @@ public struct PlayLandingScreen: View {
     public var body: some View {
         VStack(spacing: 0) {
             TopBar("Play", large: true)
+            // **Play stays one column, and that was tried the other way** (PD-069). Splitting it into what
+            // you do and how it works halved the height of the content and left the page emptier than
+            // before, because Play's problem is that it has little to say and not that it is stacked — and
+            // it cut the one primary button on the screen to half width, which is the opposite of what a
+            // screen whose job is *start a match* wants. Reverted after looking at it.
             ScrollView {
+                VStack(alignment: .leading, spacing: 0) {
+                    doing
+                    howItWorks
+                }
+                .padding(.horizontal, ThroSpacing.spaceScreenGutter)
+                .padding(.bottom, ThroSpacing.spacing6)
+                .throReadable()
+            }
+        }
+        .background(ThroColor.colorBackgroundPrimary.ignoresSafeArea())
+    }
+
+    @ViewBuilder private var doing: some View {
                 VStack(alignment: .leading, spacing: 0) {
                     if let match = inProgress {
                         block { ContinueCard(match: match) { store.flow = .resume(match.id) } }
@@ -1290,6 +1308,21 @@ public struct PlayLandingScreen: View {
                         }
                     }
                     .throEntrance(1)
+                    if !store.matches.isEmpty {
+                        block {
+                            SectionHeader("Lately", meta: "\(store.matches.count) on this device")
+                            ForEach(store.matches.prefix(3)) { match in
+                                MatchRow(match: match) { store.flow = .resume(match.id) }
+                                ThroDivider()
+                            }
+                        }
+                        .throEntrance(3)
+                    }
+                }
+    }
+
+    @ViewBuilder private var howItWorks: some View {
+                VStack(alignment: .leading, spacing: 0) {
                     // A card rather than two loose sentences on bare paper. Settings is the screen in
                     // this app that reads as designed on a tablet, and the reason is that its content
                     // has body: rows in a card that fill the measure. Two paragraphs floating on a grey
@@ -1309,30 +1342,16 @@ public struct PlayLandingScreen: View {
                         }
                     }
                     .throEntrance(2)
-                    if !store.matches.isEmpty {
-                        block {
-                            SectionHeader("Lately", meta: "\(store.matches.count) on this device")
-                            ForEach(store.matches.prefix(3)) { match in
-                                MatchRow(match: match) { store.flow = .resume(match.id) }
-                                ThroDivider()
-                            }
-                        }
-                        .throEntrance(3)
-                    }
                 }
-                .padding(.bottom, ThroSpacing.spacing6)
-            }
-        }
-        .background(ThroColor.colorBackgroundPrimary.ignoresSafeArea())
     }
 
+    /// One block of the page. **No gutter and no measure of its own here**, unlike the other tabs:
+    /// `ThroBeside` applies both once around the pair, and a block that added its own would inset each
+    /// column inside the column it already has (PD-062).
     private func block<Content: View>(@ViewBuilder _ content: () -> Content) -> some View {
         VStack(alignment: .leading, spacing: ThroSpacing.spacing3) { content() }
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.vertical, ThroSpacing.spacing6)
-            .padding(.horizontal, ThroSpacing.spaceScreenGutter)
-            // The board above runs edge to edge; what is read under it sits in a column (PD-052).
-            .throReadable()
     }
 }
 
@@ -1410,9 +1429,41 @@ public struct YouScreen: View {
     }
 
     public var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 0) {
-                header
+        // You is two things under its header (PD-062): the people who play on this phone, and the teams
+        // kept on it. On a phone they run one after the other; on a screen with room the teams stop being
+        // below the fold and the page stops ending at 44% of a tablet. The width comes from out here
+        // because a geometry reader inside a scroll view takes all the height it can reach.
+        GeometryReader { proxy in
+            ScrollView {
+                VStack(alignment: .leading, spacing: 0) {
+                    header
+                    // Two columns only when there is somebody in the left one (PD-069). On a phone this
+                    // is stacked either way; on a tablet where nobody has played yet, splitting put the
+                    // teams on the right of an empty half.
+                    ThroBeside(width: proxy.size.width, split: !people.isEmpty) {
+                        whoPlays
+                    } aside: {
+                        teamsKept
+                    }
+                    .padding(.horizontal, ThroSpacing.spaceScreenGutter)
+                    Note("Matches scored on this phone stay on it, whoever is signed in. A rating is not in this build: what you see are the figures the darts produced (PD-018).")
+                        .padding(.top, ThroSpacing.spaceSectionGap)
+                        .padding(.horizontal, ThroSpacing.spaceScreenGutter)
+                        .padding(.bottom, ThroSpacing.spacing6)
+                        // The note belongs to the page rather than to either column, so it keeps the
+                        // single measure under both of them.
+                        .throReadable()
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                // Paper under the lists; the field behind the top shows only above the header.
+                .background(ThroColor.colorBackgroundPrimary)
+                .throEntrance(0)
+            }
+            .throBrandFieldBehind()
+        }
+    }
+
+    @ViewBuilder private var whoPlays: some View {
                 VStack(alignment: .leading, spacing: 0) {
                     if !people.isEmpty {
                         Eyebrow("Who plays on this phone").padding(.top, ThroSpacing.spacing6)
@@ -1434,6 +1485,11 @@ public struct YouScreen: View {
                             ThroDivider()
                         }
                     }
+                }
+    }
+
+    @ViewBuilder private var teamsKept: some View {
+                VStack(alignment: .leading, spacing: 0) {
                     // Nothing here yet is still something to look at: a card holds the sentence and the
                     // way out of it, where a line of grey text and a loose button left two thirds of a
                     // tablet with nothing on it (PD-052).
@@ -1467,21 +1523,7 @@ public struct YouScreen: View {
                             ThroDivider()
                         }
                     }
-                    Note("Matches scored on this phone stay on it, whoever is signed in. A rating is not in this build: what you see are the figures the darts produced (PD-018).")
-                        .padding(.top, ThroSpacing.spaceSectionGap)
                 }
-                .padding(.horizontal, ThroSpacing.spaceScreenGutter)
-                .padding(.bottom, ThroSpacing.spacing6)
-                // The last of the five tabs without the measure (PD-052). Home, Archive, Play and Live all
-                // had it, so You was the one screen in the tab set that stretched across a tablet.
-                .throReadable()
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            // Paper under the lists; the field behind the top shows only above the header.
-            .background(ThroColor.colorBackgroundPrimary)
-            .throEntrance(0)
-        }
-        .throBrandFieldBehind()
     }
 
     /// The top of the tab: the brand field, and on it whoever this phone is signed in as — or the

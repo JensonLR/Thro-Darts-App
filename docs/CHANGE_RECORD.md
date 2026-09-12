@@ -4114,3 +4114,25 @@ any of that — a `.buttonStyle(.plain)` with no pressed state — which is why 
 rather than one rolled by hand here.
 
 Counts: client 772 tests, all 22 checks.
+
+## Two columns need two things in them, and one of the two pages did not have them
+
+The two remaining short pages were put through PD-062's rule. One holds conditionally, one does not hold at
+all, and the failure is the useful half.
+
+**Play was reverted.** It looked like two things — what you do, and how it behaves — and split cleanly, and
+then it was looked at: the void got *bigger*. Halving the height of the content on a page whose problem is
+that it has little content leaves more empty page, and it cut the one primary button on a screen whose job
+is *start a match* to half width. Play was never stacked-when-it-should-be-side-by-side; it is just short.
+
+**You splits only when its left column has somebody in it.** It genuinely is two things — the people on this
+phone, the teams kept on it — and on a tablet where nobody had played, the teams sat to the right of an
+empty half. A hole where content should be reads as a page that failed, which is worse than a page with one
+thing on it. `ThroBeside` takes `split:` now and the caller answers: SwiftUI cannot ask a view whether it is
+empty, and a container that guessed would guess wrong.
+
+So the rule gained its missing half. Two columns need two things that are **both there** and **comparable in
+weight**. Width is necessary and not sufficient. The league table beside its fixtures and Discover's *out
+there* beside *yours* both pass; Play failed on weight and You could fail on presence.
+
+Counts: client 772 tests, all 22 checks.

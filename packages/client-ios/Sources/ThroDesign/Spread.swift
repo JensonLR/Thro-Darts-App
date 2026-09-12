@@ -69,17 +69,27 @@ public enum ThroSpread {
 /// scroll view and a geometry reader in one takes all the height it can reach.
 public struct ThroBeside<Lead: View, Aside: View>: View {
     private let width: CGFloat
+    private let split: Bool
     private let lead: Lead
     private let aside: Aside
 
-    public init(width: CGFloat, @ViewBuilder lead: () -> Lead, @ViewBuilder aside: () -> Aside) {
+    /// [split] is the caller saying whether there really are two things right now.
+    ///
+    /// **A half with nothing in it is worse than no split at all** (PD-069). Splitting on width alone put
+    /// the You tab's teams in the right-hand column with an empty left half on a tablet where nobody had
+    /// played yet — a hole where content should be, which reads as a page that failed rather than as a page
+    /// with one thing on it. SwiftUI cannot ask a view whether it is empty, so the caller answers: pass
+    /// false when the condition that fills one half is not met, and the pair stacks as it does on a phone.
+    public init(width: CGFloat, split: Bool = true,
+                @ViewBuilder lead: () -> Lead, @ViewBuilder aside: () -> Aside) {
         self.width = width
+        self.split = split
         self.lead = lead()
         self.aside = aside()
     }
 
     public var body: some View {
-        switch ThroSpread.arrangement(forWidth: width) {
+        switch split ? ThroSpread.arrangement(forWidth: width) : .stacked {
         case .sideBySide:
             HStack(alignment: .top, spacing: ThroSpread.gutter) {
                 lead.frame(maxWidth: .infinity, alignment: .topLeading)

@@ -3078,3 +3078,37 @@ Two things were wrong in the first build and are recorded because the fix is not
 sets no ink, so the label came out near-black on lit green until it was given chalk; and a keypad key is
 full width because it is one of twenty in a tray, which made one invitation read as a bar until it was sized
 to its own words.
+
+## PD-069 — Two columns need two things in them, and Play was not one
+
+**Tried and mostly reverted, 12 September 2026.** PD-062's rule — one thing, one column; two things, two
+columns — was applied to the two remaining short pages. One worked conditionally, one did not work at all,
+and the failure taught the rule something it was missing.
+
+### Play: reverted
+
+Play looked like two things — what you do, and how the thing you are about to do behaves — and split cleanly.
+Then it was looked at. **The void got bigger.** Halving the height of the content on a page whose problem is
+that it has little content leaves more empty page, not less; and it cut the one primary button on a screen
+whose entire job is *start a match* down to half width. Play's problem was never that it was stacked.
+
+Back to one column. Recorded rather than quietly dropped, because "it is two things" is a tempting reading of
+almost any page and this is what it costs when the two things are not comparable in weight.
+
+### You: split only when there is somebody in the left column
+
+You genuinely is two things under its header — the people who play on this phone, and the teams kept on it —
+and splitting it was right in principle and wrong on the tablet it was tried on, where nobody had played yet.
+The left column was empty and the teams sat to the right of a hole. **A half with nothing in it is worse
+than no split at all**: it reads as a page that failed rather than as a page with one thing on it.
+
+So `ThroBeside` takes `split:`, and the caller answers it. SwiftUI cannot ask a view whether it is empty, and
+a container that guessed would guess wrong; the screen knows which condition fills its half and says so. You
+passes `!people.isEmpty`, and stacks otherwise exactly as a phone does.
+
+### What the rule is now
+
+Two columns need **two things that are both there and comparable in weight**. Width is necessary and not
+sufficient: the league table beside its fixtures and Discover's *out there* beside *yours* both hold, because
+each half always has something and neither dwarfs the other. Play failed the second test and You could fail
+the first.
