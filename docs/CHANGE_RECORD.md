@@ -3655,3 +3655,30 @@ score so the foreign key is satisfied. It writes a match nobody played, with no 
 schema — the one place this codebase refuses to put anything that did not happen.
 
 Counts: client 746, API 29 suites (81 tests), HTTP 50 properties, schema 144, contrast 94 pairs.
+
+## A league can be run from THRØ, by whoever was named to run it (PD-053)
+
+The founder asked for the admin side of things for league owners. The authority was decided earlier tonight —
+a league's administrator is named and never self-appointed — but nothing in the server could act on it: the
+writers existed in Kotlin and no route mounted them, and `Rules.DEFAULT` held exactly one league action.
+
+Three routes now, all behind one new action, `league_season.administer`, granted the same way rearranging a
+fixture already is: a relation on the season, held in `authz.relation`, decided by the same Authorizer and
+audited by it, so a refusal is on the record beside the ones that were allowed. **Accepting a team into a
+season** is the act that puts a side in the table, since only an accepted affiliation is a row. **Awarding a
+fixture** goes to one of its two teams with a reason and never a scoreline. And **recording a result** does
+the thing worth saying plainly:
+
+> The caller does not choose what kind of result it is. The evidence does.
+
+A fixture with a match scored on THRØ behind it records a played result; one without records the official's
+declared word. A client cannot claim otherwise, because the server never asks it to — which is the only way
+PD-055's distinction survives contact with a phone that could just as easily send `"kind":"played"`.
+
+**Nothing here can grant the relation**, and that is the point rather than an omission. A test holds the
+whole loop at the database: creating a league does not make you its administrator — the case worth holding,
+because it is the one a reasonable person would assume — naming one lets them run it, and naming one names
+one rather than everybody. On a fresh deployment every league-admin route refuses everybody, exactly as the
+moderation queue does, and the runbook says how a name is added.
+
+Counts: client 746, API 29 suites (82 tests), HTTP 51 properties, schema 144, contrast 94 pairs.

@@ -51,6 +51,12 @@ deployment with the door open, whatever the variable says. It says so on every s
 is honoured. The production scheme (passkeys, short-lived access tokens, rotating refresh tokens, ADR-008)
 is founder decision FB-1 and replaces it; nothing in a deployment manifest may set that variable.
 
+**Running a league** (PD-053) needs its administrator named, and there is no route that does it: a league's
+administrator publishes a table a whole town reads as official, so it is granted out of band as a relation —
+`authz.relation`, subject the player, relation `admin`, object `league_season:<id>` — and revoked the same
+way, with the grant history kept either way. On a server where nobody has been named, every league-admin
+route refuses everybody, which is the state a fresh deployment is in.
+
 **Answering reports** (PD-050) needs the people who answer them named at boot:
 
 ```bash
@@ -107,6 +113,9 @@ routes are mounted from. In brief:
 | `POST /v1/blocks`, `DELETE /v1/blocks/{accountId}`, `GET /v1/blocks` | principal | Ask not to be reached by an account, lift it, and read the list. No reason is asked for and none is stored; a lift is marked and kept, so blocking again later is a new block; the list is ids only, because a block list names nobody it does not have to |
 | `POST /v1/me/terms` | principal | Accept the terms, recorded once per version with the version accepted — the only honest answer to what somebody agreed to |
 | `PUT /v1/me/profile` | principal | `displayName` and/or `ageBand` (adult or minor, self-declared, never back to unknown) |
+| `POST /v1/seasons/{leagueSeasonId}/affiliations/{affiliationId}` | an administrator of the season | Accept a team into the season (PD-053). Applied becomes accepted and never goes back; only an accepted team is a row in the table, so this is the act that puts a side in the league. 409 when that team is not waiting |
+| `POST /v1/fixtures/{fixtureId}/result` | an administrator of the season | The legs each side won (PD-055). **The caller does not choose the kind of result — the evidence does**: a fixture with a match scored on THRØ behind it records a `played` result, one without records the official's `declared` word, which counts identically in the table and is never evidence for a rating. A fixture that already has a result is 409, because correcting one is a second decision that supersedes the first |
+| `POST /v1/fixtures/{fixtureId}/award` | an administrator of the season | Award a fixture nobody played, to one of its two teams, with a reason and never a scoreline (ADR-012) |
 | `GET /v1/seasons/{leagueSeasonId}/standings?division` | anyone | A league season's table (PD-054, V041), computed on every read from each fixture's live outcome — the unsuperseded, non-void one — and the league's own approved `points` policy, or THRØ's standard of two a win and one a draw where it has none. Nothing is stored: `OrganisationTest` holds that no table in `competition` has "standing" in its name, so a table cannot drift from the results beneath it. Only affiliated teams are rows; a team that merely says it plays in the league (PD-049) never is. An award or walkover moves the points and never the legs. Every row says which step of the declared chain separated it from the one below, every division says how many fixtures have gone by with no result, and every table says whose rules ordered it. 409 when a league's own rules name something THRØ cannot apply, rather than a table ordered by rules the league did not write |
 | `GET /v1/events?from` | anyone | Open-entry events that have not started, with their public venues: the notice on the pub door. Entry counts and eligibility stay on `/v1/me/discovery` |
 | `POST /v1/matches` | principal | Send a match this phone scored (PD-040): the journal as it was written — visits, retractions, and an ending (PD-042) last — idempotent by (match, device, sequence); the other seat becomes a competitor THRØ holds no name for; recorded self-reported |

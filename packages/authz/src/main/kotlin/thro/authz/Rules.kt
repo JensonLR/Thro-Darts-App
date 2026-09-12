@@ -170,5 +170,11 @@ public object Rules {
         // a new date is a Secretary workflow with opponent acknowledgement, not a unilateral write,
         // so captains are not here.
         "league_fixture.rearrange" to Rule.AnyOf(listOf(Rule.Direct("admin"), Rule.Inherited("admin"))),
+
+        // Running a league season: accepting a team into it, and recording what a fixture finished as
+        // (PD-053, PD-055). The same shape as rearranging, and for the same reason — this is the league's
+        // own administration, not a captain's. Nothing in THRØ grants it to anybody who asks: a league
+        // administrator is named, never self-appointed.
+        "league_season.administer" to Rule.AnyOf(listOf(Rule.Direct("admin"), Rule.Inherited("admin"))),
     )
 }

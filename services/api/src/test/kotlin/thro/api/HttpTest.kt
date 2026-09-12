@@ -231,6 +231,15 @@ class HttpTest {
                 get("/v1/reports", subject = null).status.value == 401
                     && get("/v1/reports", subject = home).status.value == 403
                     && post("/v1/reports/${UUID.randomUUID()}/decisions", """{"outcome":"left","note":"Looked at it."}""", subject = home).status.value == 403)
+            // PD-053: running a league. Nothing in THRØ grants the relation these check for, so they are
+            // shut to everybody here — as they are on any server where nobody has been named. A fixture id
+            // is an unguessable uuid, so answering 404 for one nobody has discloses nothing worth hiding
+            // and tells an administrator who mistyped what actually went wrong.
+            check("running a league needs a principal, and a fixture or affiliation nobody has is a 404",
+                post("/v1/fixtures/${UUID.randomUUID()}/result", """{"legsHome":5,"legsAway":2}""", subject = null).status.value == 401
+                    && post("/v1/fixtures/${UUID.randomUUID()}/result", """{"legsHome":5,"legsAway":2}""", subject = home).status.value == 404
+                    && post("/v1/fixtures/${UUID.randomUUID()}/award", """{"toTeamId":"${UUID.randomUUID()}","reason":"nobody came"}""", subject = home).status.value == 404
+                    && post("/v1/seasons/${UUID.randomUUID()}/affiliations/${UUID.randomUUID()}", "{}", subject = home).status.value == 404)
             // PD-054: a league's table is public, as its competition is (PD-009), and no row on it is a
             // person. This database has no season, so the route's reachability and its refusals are what is
             // held here; the arithmetic is StandingsTest's, against real fixtures and real outcomes.
@@ -255,6 +264,6 @@ class HttpTest {
                     && roles.all { it in setOf("app_match", "app_competition", "app_read", "app_trust") })
         }
         println("  $passed HTTP properties held")
-        assertEquals(50, passed)
+        assertEquals(51, passed)
     }
 }

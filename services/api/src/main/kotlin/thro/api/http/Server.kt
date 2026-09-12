@@ -283,6 +283,65 @@ public fun Application.thro(deps: Deps) {
         "me.inbox" to { r -> Http(200, inboxJson(Secretary(r.connection()).inboxForPlayer(r.principal!!.subject, deps.now()))) },
         "team.inbox" to { r -> teamInbox(r.connection(), r.principal!!, r.call.parameters["teamId"], deps.now()) },
         "leagues" to { r -> r.role = DbRole.READ; Http(200, Leagues(r.connection()).let { it.json(it.all(r.call.request.queryParameters["locality"]?.take(80), deps.now())) }) },
+        // PD-053: running a league. Nothing here can grant the relation these check for — a league
+        // administrator is named out of band and never self-appointed — so on a server where nobody has
+        // been named, every one of these refuses.
+        "leagues.affiliation.accept" to { r ->
+            val affiliation = UUID.fromString(r.call.parameters["affiliationId"])
+            val orgs = Organisations(r.connection())
+            when (val season = orgs.seasonOfAffiliation(affiliation)) {
+                null -> Http(404, """{"error":"THRØ has no such affiliation."}""")
+                else -> leagueAdmin(r, season) {
+                    try {
+                        orgs.acceptAffiliation(affiliation, deps.now())
+                        Http(200, """{"affiliationId":"$affiliation","status":"accepted"}""")
+                    } catch (e: IllegalArgumentException) {
+                        Http(409, """{"error":"That team is not waiting to be accepted."}""")
+                    }
+                }
+            }
+        },
+        "leagues.result" to { r ->
+            val fixtureId = UUID.fromString(r.call.parameters["fixtureId"])
+            val orgs = Organisations(r.connection())
+            when (val fixture = orgs.fixtureRef(fixtureId)) {
+                null -> Http(404, """{"error":"THRØ has no such fixture."}""")
+                else -> leagueAdmin(r, fixture.leagueSeasonId) {
+                    val m = Json.parseObject(r.body)
+                    val home = (m["legsHome"] as? Number)?.toInt()
+                    val away = (m["legsAway"] as? Number)?.toInt()
+                    if (home == null || away == null) {
+                        Http(400, """{"error":"A result is two numbers: legsHome and legsAway."}""")
+                    } else {
+                        // PD-055: the evidence decides the kind, not the caller. A match scored on THRØ makes
+                        // this a played result; without one it is the official's declared word, which counts
+                        // the same in the table and is never evidence.
+                        val played = fixture.matchId != null
+                        outcomely {
+                            val id = if (played) orgs.recordPlayedResult(fixtureId, home, away, by = r.principal!!.subject)
+                                     else orgs.declareResult(fixtureId, home, away, by = r.principal!!.subject)
+                            Http(200, """{"outcomeId":"$id","fixtureId":"$fixtureId","kind":${Contract.q(if (played) "played" else "declared")}}""")
+                        }
+                    }
+                }
+            }
+        },
+        "leagues.award" to { r ->
+            val fixtureId = UUID.fromString(r.call.parameters["fixtureId"])
+            val orgs = Organisations(r.connection())
+            when (val fixture = orgs.fixtureRef(fixtureId)) {
+                null -> Http(404, """{"error":"THRØ has no such fixture."}""")
+                else -> leagueAdmin(r, fixture.leagueSeasonId) {
+                    val m = Json.parseObject(r.body)
+                    val to = try { UUID.fromString(str(m, "toTeamId")) } catch (e: IllegalArgumentException) { throw IllegalArgumentException("toTeamId must be a UUID") }
+                    val reason = str(m, "reason")
+                    outcomely {
+                        val id = orgs.awardFixture(fixtureId, to, reason, by = r.principal!!.subject)
+                        Http(200, """{"outcomeId":"$id","fixtureId":"$fixtureId","kind":"awarded"}""")
+                    }
+                }
+            }
+        },
         // PD-054: the table is arithmetic over the fixtures, so it is read as `app_read` and computed here
         // rather than kept anywhere. A season nobody has given rules to is ordered by THRØ's standard, and
         // the answer says so on its face.
@@ -559,7 +618,33 @@ private fun blocksJson(ids: List<java.util.UUID>): String =
 private fun teamly(status: Int = 400, block: () -> Http): Http = try { block() } catch (e: Teams.Refused) { Http(e.status ?: status, """{"error":${Contract.q(e.why)}}""") }
 
 /**
- * A table's refusal is an answer: there is no such season, or the league's own rules name something THRØ
+ * A route only a league season's administration may call (PD-053).
+ *
+ * The decision goes through the same Authorizer every other relation does and is audited by it, so a refusal
+ * is on the record beside the ones that were allowed. **Nothing in THRØ grants this relation**: a league
+ * administrator is named out of band, because an administrator publishes a table a whole town reads as
+ * official and the founder does not want that handed to whoever asks first.
+ */
+private fun leagueAdmin(r: Req, season: UUID, block: () -> Http): Http {
+    val decision = Relations(r.connection())
+        .decide(r.principal!!.subject, "league_season.administer", ObjectRef(ObjectType.LEAGUE_SEASON, season.toString()))
+    return if (decision.allowed) block() else Http(403, """{"error":"You do not administer this league season."}""")
+}
+
+/**
+ * A fixture already holding a result is a 409, not a 500. The database refuses a second live outcome — a new
+ * decision must supersede the one standing — and that is a thing the caller can act on rather than a fault.
+ */
+private fun outcomely(block: () -> Http): Http = try {
+    block()
+} catch (e: java.sql.SQLException) {
+    val why = e.message.orEmpty()
+    if (why.contains("already has an outcome")) Http(409, """{"error":"This fixture already has a result. Correcting one is a new decision that supersedes it."}""")
+    else if (why.contains("read from the match")) Http(409, """{"error":"This fixture was scored on THRØ, so its result is read from the match."}""")
+    else throw e
+}
+
+/** A table's refusal is an answer: there is no such season, or the league's own rules name something THRØ
  * cannot apply. The second is a 409 carrying the league's problem rather than a table quietly ordered by
  * somebody else's rules, which would be worse than no table at all.
  */

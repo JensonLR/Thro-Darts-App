@@ -474,6 +474,32 @@ public class Organisations(private val connection: Connection) {
         }
     }
 
+    /**
+     * What a route has to know about a fixture before it may touch it: which season's administration
+     * governs it, and whether a match was scored on THRØ for it — which is what decides whether a result
+     * recorded now is played or declared (PD-055), rather than the caller deciding.
+     */
+    public data class FixtureRef(val leagueSeasonId: UUID, val matchId: UUID?)
+
+    public fun fixtureRef(fixtureId: UUID): FixtureRef? =
+        connection.prepareStatement(
+            "SELECT league_season_id, match_id FROM competition.league_fixture WHERE fixture_id = ?",
+        ).use { ps ->
+            ps.setObject(1, fixtureId)
+            ps.executeQuery().use { rs ->
+                if (!rs.next()) null else FixtureRef(rs.getObject(1) as UUID, rs.getObject(2) as UUID?)
+            }
+        }
+
+    /** The season an affiliation is into, for the same reason. */
+    public fun seasonOfAffiliation(affiliationId: UUID): UUID? =
+        connection.prepareStatement(
+            "SELECT league_season_id FROM competition.team_affiliation WHERE affiliation_id = ?",
+        ).use { ps ->
+            ps.setObject(1, affiliationId)
+            ps.executeQuery().use { rs -> if (rs.next()) rs.getObject(1) as UUID else null }
+        }
+
     /** Rearranges a fixture. The original date is kept by the change log the trigger writes. */
     public fun rearrangeFixture(fixtureId: UUID, to: Instant, expectedVersion: Int, venueId: UUID? = null) {
         val n = connection.prepareStatement(

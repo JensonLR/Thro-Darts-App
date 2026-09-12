@@ -32,9 +32,9 @@ export PATH="$JAVA_HOME/bin:$PATH"
 | iCloud duplicates | removes `Foo 2.class` twins iCloud Drive leaves in `build/` — they break Gradle's test scan with "wrong name" | nothing to do; it is housekeeping |
 | ADR-013 | every migration runs as the owner; destructive statements and evidence rewrites carry their approval | read the FAIL line; it names the file and rule |
 | pure Kotlin packages | engine, statistics, competition, authz, trust, rating, organisation, journal | `gradle -p packages/<name> test` shows the failing test |
-| API suites | 15 suites against a real database, rebuilt from nothing every run (migration ledger included) | `gradle -p services/api test` and read `services/api/build/reports/tests/test/index.html` |
+| API suites | 29 suites against a real database, rebuilt from nothing every run (migration ledger included) | `gradle -p services/api test` and read `services/api/build/reports/tests/test/index.html` |
 | schema properties | 144 assertions against the database the API suites left at the current version | the script prints each FAIL with the expected and actual value |
-| Swift client | 581 tests across the iOS packages | `swift test --package-path packages/client-ios` |
+| Swift client | 746 tests across the iOS packages | `swift test --package-path packages/client-ios` |
 | repository checks | the README's test counts are the tests that exist | it names the row that drifted |
 
 ## Running the pieces yourself

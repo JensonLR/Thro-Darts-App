@@ -11,6 +11,8 @@ import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 import org.postgresql.util.PSQLException
+import thro.authz.ObjectRef
+import thro.authz.ObjectType
 
 /**
  * A league's table, against a real PostgreSQL (PD-054, V041).
@@ -345,6 +347,30 @@ class StandingsTest {
             // the top of a match would be an official overwriting evidence with a recollection.
             val why = assertFailsWith<PSQLException> { orgs.declareResult(fixture, 9, 0, by = admin) }
             assertTrue(why.message!!.contains("read from the match"), why.message!!)
+        }
+    }
+
+    @Test
+    fun `running a league is for whoever was named to run it, and for nobody else`() {
+        if (!configured) return
+        migrated().use { c ->
+            val orgs = Organisations(c)
+            val admin = orgs.createPlayer()
+            val stranger = orgs.createPlayer()
+            val s = season(orgs, admin)
+            val obj = ObjectRef(ObjectType.LEAGUE_SEASON, s.seasonId.toString())
+
+            // PD-053: a league administrator is named and never self-appointed, so the default is nobody —
+            // including the player who created the league, which is the case worth holding.
+            assertFalse(Relations(c).decide(admin, "league_season.administer", obj).allowed,
+                        "creating a league does not make you its administrator")
+            assertFalse(Relations(c).decide(stranger, "league_season.administer", obj).allowed)
+
+            Relations(c).grant(admin, "admin", obj)
+            assertTrue(Relations(c).decide(admin, "league_season.administer", obj).allowed,
+                       "and the person named to run it may")
+            assertFalse(Relations(c).decide(stranger, "league_season.administer", obj).allowed,
+                        "naming one administrator names one, not everybody")
         }
     }
 }
