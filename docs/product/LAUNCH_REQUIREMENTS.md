@@ -43,11 +43,20 @@ each claim, so that the ones that need a solicitor can be taken to one knowingly
    today. The same address answers the DSA point of contact below, so one mailbox closes two items — and
    it can be a forwarding alias long before it is a real inbox.
 
-4. **A privacy policy, linked in the app and in App Store Connect** (5.1.1(i)). *Founder + build.* Must say
-   what is collected, who receives it (Neon London, Render Frankfurt), how long it is kept, and how to
-   withdraw consent.
-5. **App privacy "nutrition" labels.** *Founder.* Name and email (from Apple/Google sign-in), user id, and
-   user content (match journals, photos) are *linked to you*; location is **not collected**; no tracking.
+4. **A privacy policy, linked in the app and in App Store Connect** (5.1.1(i)). *Founder + build.*
+   **Drafted 12 September 2026** at `apps/web/privacy.html`, live on the web, and a terms page beside it at
+   `apps/web/terms.html` for guideline 1.2. Both say what is collected, who receives it (Neon London, Render
+   Frankfurt), how long it is kept and how to withdraw — every claim checked against the code rather than
+   asserted, and the working is in [STORE_ANSWERS.md](STORE_ANSWERS.md).
+
+   **Still needed:** a legal name, an address, a contact, and a solicitor's read. The drafts say on their own
+   faces that they are drafts, and they should keep saying it until that has happened.
+5. **App privacy "nutrition" labels.** *Founder.* **Answered in full** in
+   [STORE_ANSWERS.md](STORE_ANSWERS.md), for Apple and for Play, with what each answer was checked against.
+
+   One correction to what this used to say: **no email is collected.** It never was stored, but THRØ was
+   *asking* Apple and Google for one and discarding it, which is a line on the label either way. PD-063
+   stopped it asking, so the answer is now a clean "not collected" rather than a defence.
 6. **Age rating questionnaire, including the social-media capability answers** — required for new
    submissions since September 2026, and the tiers are now 4+/9+/13+/16+/18+. *Founder.* Expect 13+ or 16+.
    **Do not enter the Kids Category**: its obligations persist even after leaving it.
