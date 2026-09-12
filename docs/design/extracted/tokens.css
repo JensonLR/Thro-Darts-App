@@ -137,6 +137,40 @@
 --color-chart-negative:var(--thro-error);
 --color-focus-ring:var(--thro-green-deep);
 --color-scrim:rgba(16,18,17,0.48);
+/* ---- The board (SLATE). A dark green field under one lamp, and the chalk on it.
+   These are semantic tokens and they FLIP, but both values are dark green: a board is a board in
+   either appearance, and what changes between traits is which dark green and which chalk, exactly as
+   a real board changes under the light in the room. That keeps the rule that `color*` flips and
+   `thro*` does not, so nothing has to paint a pigment to draw a board.
+   THE BOARD LAW: no drawing operation on a board may produce a pixel lighter than board-lit or
+   darker than board-sunken, except ink and status ink. So board-lit is the worst ground for every
+   light ink and board-sunken is the best, both are named, and the matrix below measures what
+   actually renders rather than an assumed midpoint. ---- */
+--color-board-lit:#174F3C;
+--color-board-field:#0F3D2E;
+--color-board-sunken:#0A2A20;
+--color-text-on-board:#F7F6F2;
+--color-text-on-board-secondary:#ADB9B3;
+--color-mark-on-board:#8FB3A4; /* the boundary ink: every rule, box and key edge on a board */
+/* Status ink ON A BOARD. `--color-status-error` #8C1D18 measures 1.52:1 against the board and is
+   unusable there — a bust drawn in it is a number nobody can read. Each of these is computed to
+   clear 4.5:1 against its own trait's `board-lit`, which is the worst ground the board has. Only
+   the two with a call site are here; the rest arrive with theirs. */
+--color-status-error-on-board:#F2A096;
+--color-status-warning-on-board:#E7B65C;
+/* League chalk ON A BOARD (PD-046). A pub's board is chalked in more than one colour, and so is the
+   leagues map: each league with teams on THRØ is drawn in a chalk of its own, round again after the
+   sixth, so two leagues side by side are never drawn alike. Identity and not status: none of these
+   means good or bad, which is why the status inks are not borrowed for it. Colour is never the only
+   thing that says which league, because the league's name is written wherever its chalk is. Each is
+   computed to clear 4.5:1 against its own trait's board-lit, the worst ground the board has. */
+--color-league-1-on-board:#F3D46E; /* yellow chalk */
+--color-league-2-on-board:#9DCCF2; /* blue chalk */
+--color-league-3-on-board:#F3A6CB; /* pink chalk */
+--color-league-4-on-board:#C8B4F4; /* lilac chalk */
+--color-league-5-on-board:#F6B48A; /* peach chalk */
+--color-league-6-on-board:#A6E3C8; /* mint chalk */
+--space-chalk-rule-weight:3px;
 }
 
 /* ---- Semantic aliases: DARK (scoring, live, venues, broadcast) ---- */
@@ -185,6 +219,20 @@
 --color-chart-negative:#E8756A;
 --color-focus-ring:var(--thro-green-onink);
 --color-scrim:rgba(8,10,9,0.64);
+--color-board-lit:#123A2C;
+--color-board-field:#0A2C21;
+--color-board-sunken:#071F18;
+--color-text-on-board:#EFEDE7;
+--color-text-on-board-secondary:#A8BDB2;
+--color-mark-on-board:#7FA695;
+--color-status-error-on-board:#EC9084;
+--color-status-warning-on-board:#DFAC50;
+--color-league-1-on-board:#EACB63;
+--color-league-2-on-board:#93C2E8;
+--color-league-3-on-board:#EA9BC1;
+--color-league-4-on-board:#BFA9EC;
+--color-league-5-on-board:#EDA97F;
+--color-league-6-on-board:#9BD9BD;
 }
 
 :root{

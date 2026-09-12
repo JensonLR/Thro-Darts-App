@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!-- Kept outside the target's synchronised source folder, like the app's and the extension's: a
+	     file-system-synchronised group would otherwise copy it into the bundle as a resource as well
+	     as reading it as the target's Info.plist. -->
+	<!-- **The same ten faces the phone carries, from the same folder.** The Xcode target references
+	     `ThroDarts/Fonts` as a folder rather than holding a second copy: two copies of a typeface are
+	     two things to keep true, and the failure when they drift is silent — an unregistered face falls
+	     back to the system's and the screen simply looks like every other app's.
+
+	     The paths carry the `Fonts/` prefix because a folder reference keeps its directory, where the
+	     phone's synchronised group flattens it. `tools/check_bundle_faces.py` holds both plists against
+	     the one folder on disk, and reads the PostScript name out of each file rather than trusting the
+	     filename. This is the biggest screen the brand ever gets; it is the last place to ship it in SF. -->
+	<key>UIAppFonts</key>
+	<array>
+		<string>Fonts/Archivo-Regular.ttf</string>
+		<string>Fonts/Archivo-Medium.ttf</string>
+		<string>Fonts/Archivo-SemiBold.ttf</string>
+		<string>Fonts/Archivo-Bold.ttf</string>
+		<string>Fonts/Archivo-ExtraBold.ttf</string>
+		<string>Fonts/Archivo-Black.ttf</string>
+		<string>Fonts/IBMPlexSansCondensed-Regular.ttf</string>
+		<string>Fonts/IBMPlexSansCondensed-Medium.ttf</string>
+		<string>Fonts/IBMPlexSansCondensed-SemiBold.ttf</string>
+		<string>Fonts/IBMPlexSansCondensed-Bold.ttf</string>
+	</array>
+	<key>THROAPIBaseURL</key>
+	<string>https://thro-api-staging.onrender.com</string>
+	<!-- No `THROGoogleClientID`, and no sign-in of any kind. A venue screen reads only what a league
+	     has published; there is nothing here for an account to unlock, and a pub television is the
+	     last device that should be holding one. -->
+	<key>ITSAppUsesNonExemptEncryption</key>
+	<false/>
+</dict>
+</plist>

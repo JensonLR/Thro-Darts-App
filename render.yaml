@@ -1,0 +1,77 @@
+# Render Blueprint — the no-card staging path (docs/runbooks/DEPLOY.md, path A).
+#
+# One web service built from the repository's Dockerfile, on Render's free instance type, in
+# Frankfurt (EU; ADR-011 allows UK/EU, and staging holds synthetic data only). The database is
+# not here: it is a Neon project in London, whose connection string is pasted into DATABASE_URL
+# in the Render dashboard. Migrations are a deploy step run from a developer's machine with
+# `gradle -p services/api migrate` against MIGRATE_DATABASE_URL (ADR-013), because the free
+# instance type has no pre-deploy hook.
+#
+# A free instance spins down after fifteen idle minutes and takes about a minute to wake, so the
+# first request after a quiet spell is slow and a live match stream (ADR-007) would drop.
+# That is acceptable for staging and not for production; production is Fly or a paid Render
+# instance, both of which need a card.
+services:
+  - type: web
+    name: thro-api-staging
+    runtime: docker
+    region: frankfurt
+    plan: free
+    dockerfilePath: ./Dockerfile
+    # No dockerCommand: Render's would replace the image's ENTRYPOINT as well as its CMD, and the
+    # first deploy died with status 128 trying to run a bare `serve`. The image's default is serve.
+    healthCheckPath: /healthz
+    autoDeploy: false
+    envVars:
+      - key: DATABASE_URL
+        sync: false            # the Neon connection string for the app's role, pasted in the dashboard
+      - key: THRO_RP_ID
+        value: thro-api-staging.onrender.com
+      - key: THRO_APPLE_CLIENT_ID
+        value: app.thro.darts
+      - key: THRO_APPLE_APP_IDS
+        value: 2XM324WPD5.app.thro.darts
+      - key: THRO_GOOGLE_CLIENT_ID
+        sync: false            # optional until the Google OAuth iOS client exists
+
+  # The web (PD-056, PD-057): the pages are static and the API answers on the same origin, so the
+  # browser never makes a cross-origin request — no CORS, no preflight, no second host in the app's
+  # configuration, and no token in a query string. Render serves the directory and rewrites two paths
+  # to the API service:
+  #
+  #   /v1/*   the API itself, which is what `thro.js` calls with no host in front of it
+  #   /.well-known/apple-app-site-association   so universal links and passkeys key off THIS host
+  #
+  # The second is the one that is easy to forget. iOS offers a passkey for a domain only when that
+  # domain serves the association file, so the moment the pages live on thro.uk, thro.uk has to serve
+  # it — not the API's own hostname. The switch-over is in docs/runbooks/DEPLOY.md.
+  - type: web
+    name: thro-web
+    runtime: static
+    staticPublishPath: ./apps/web
+    buildCommand: ""
+    # Unlike the API, the web deploys itself. A static deploy runs no migration and cannot half-apply
+    # anything: the worst case is the pages being briefly older than the API, which they are designed to
+    # survive because `thro.js` asks for what it needs and says so when a field is missing. The API keeps
+    # autoDeploy off because ADR-013 puts migrations before the code that expects them, run by hand.
+    autoDeploy: true
+    # And only when the web actually changed. This repository commits often and almost none of it touches
+    # these files; apps/web is self-contained down to its copy of tokens.css, which check_web_tokens.py
+    # holds to the generated one.
+    buildFilter:
+      paths:
+        - apps/web/**
+    routes:
+      - type: rewrite
+        source: /v1/*
+        destination: https://thro-api-staging.onrender.com/v1/*
+      - type: rewrite
+        source: /.well-known/apple-app-site-association
+        destination: https://thro-api-staging.onrender.com/.well-known/apple-app-site-association
+    headers:
+      - path: /*
+        name: X-Content-Type-Options
+        value: nosniff
+      - path: /*
+        name: Referrer-Policy
+        value: strict-origin-when-cross-origin

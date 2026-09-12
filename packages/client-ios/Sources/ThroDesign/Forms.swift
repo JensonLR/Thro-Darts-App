@@ -1,0 +1,341 @@
+import SwiftUI
+import ThroTokens
+
+// Forms and identity: components/forms/TextField.jsx, components/forms/SegmentedControl.jsx,
+// components/identity/PlayerIdentity.jsx and PlayerComparison.jsx.
+
+/// TextField.jsx. The export sets `outline: none` on the input and supplies nothing in its place —
+/// the audit's most serious finding. Nothing is removed here: the platform's focus behaviour stays.
+public struct ThroTextField: View {
+    private let label: String
+    @Binding private var text: String
+    private let placeholder: String
+    private let helper: String?
+    private let error: String?
+    private let icon: ThroIcon?
+
+    public init(_ label: String, text: Binding<String>, placeholder: String = "",
+                helper: String? = nil, error: String? = nil, icon: ThroIcon? = nil) {
+        self.label = label
+        self._text = text
+        self.placeholder = placeholder
+        self.helper = helper
+        self.error = error
+        self.icon = icon
+    }
+
+    public var body: some View {
+        VStack(alignment: .leading, spacing: ThroSpacing.spacing2) {
+            Text(label)
+                .thro(ThroTypography.labelStrong.weight(.semibold))
+                .foregroundStyle(ThroColor.colorTextSecondary)
+            HStack(spacing: ThroSpacing.spacing2) {
+                if let icon {
+                    Icon(icon, size: 18).foregroundStyle(ThroColor.colorTextSecondary)
+                }
+                TextField(placeholder, text: $text)
+                    .textFieldStyle(.plain)
+                    .thro(ThroTypography.body)
+                    .foregroundStyle(ThroColor.colorTextPrimary)
+                    .autocorrectionDisabled()
+            }
+            .padding(.horizontal, ThroSpacing.spacing4)
+            .frame(minHeight: 52)
+            .background(RoundedRectangle(cornerRadius: ThroSpacing.radiusField).fill(ThroColor.colorSurfacePrimary))
+            .overlay(RoundedRectangle(cornerRadius: ThroSpacing.radiusField)
+                .strokeBorder(error != nil ? ThroColor.colorStatusError : ThroColor.colorBorderStrong, lineWidth: 1))
+            if let message = error ?? helper {
+                HStack(spacing: 6) {
+                    if error != nil { Icon(.circleAlert, size: 13) }
+                    Text(message).thro(ThroTypography.metadata)
+                }
+                .foregroundStyle(error != nil ? ThroColor.colorStatusError : ThroColor.colorTextSecondary)
+            }
+        }
+    }
+}
+
+/// SegmentedControl.jsx, in THRØ's own hand. The export's segment is 40 high, below the 44 minimum
+/// the audit enforces (DESIGN_UNSPECIFIED, found mechanically); the segment here is the minimum.
+///
+/// **Not the platform pill.** The first version was a grey trough with a raised white pill — the
+/// system's segmented control with the serial numbers filed off, on a product whose whole identity
+/// is green board and chalk. The chosen segment is now a block of the brand's green with chalk
+/// text, on a paper trough with a strong hairline, square-cornered at `radiusControl`. It is the
+/// same statement the primary button makes, so a screen of choices and its one decision read as
+/// one family.
+public struct SegmentedControl<ID: Hashable>: View {
+    public struct Item: Identifiable {
+        public let id: ID
+        public let label: String
+        public init(_ id: ID, _ label: String) {
+            self.id = id
+            self.label = label
+        }
+    }
+
+    private let items: [Item]
+    @Binding private var selection: ID
+
+    public init(_ items: [Item], selection: Binding<ID>) {
+        self.items = items
+        self._selection = selection
+    }
+
+    /// `SegmentedControl([(301, "301"), (501, "501")], selection: $game)`.
+    public init(_ pairs: [(ID, String)], selection: Binding<ID>) {
+        self.init(pairs.map { Item($0.0, $0.1) }, selection: selection)
+    }
+
+    public var body: some View {
+        HStack(spacing: 0) {
+            ForEach(Array(items.enumerated()), id: \.element.id) { index, item in
+                let on = item.id == selection
+                Button { selection = item.id } label: {
+                    Text(item.label)
+                        .thro(ThroTypography.label.weight(on ? .bold : .medium))
+                        .foregroundStyle(on ? ThroColor.throChalk : ThroColor.colorTextPrimary)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.8)
+                        .padding(.horizontal, ThroSpacing.spacing2)
+                        // `maxHeight` as well as `minHeight` (PD-066): the fill is the selection, and a
+                        // fill that does not reach the top and bottom of its own cell reads as a smaller
+                        // control floating inside a larger one.
+                        .frame(maxWidth: .infinity, minHeight: ThroSpacing.touchTargetMinimum,
+                               maxHeight: .infinity)
+                        .background(on ? ThroColor.colorSurfaceBrand : Color.clear)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(ThroPressStyle(radius: 0, pressedFill: ThroColor.colorBackgroundSecondary, scales: false))
+                .accessibilityAddTraits(on ? [.isSelected] : [])
+                if index < items.count - 1 {
+                    Rectangle().fill(ThroColor.colorBorderStrong).frame(width: 1)
+                }
+            }
+        }
+        // **The control is as tall as a segment and no taller.** The dividers are `Rectangle`s, which are
+        // greedy: offered more height they take it, which made the whole control grow to whatever the
+        // parent had going spare while each segment's fill stayed at the touch minimum. On an iPad that
+        // drew a short green block with white above and below it — the selection not filling its own
+        // cell. `fixedSize` vertically makes the row report its ideal height instead of accepting what it
+        // is offered, so the segment sets the height and the dividers follow it (PD-066).
+        .fixedSize(horizontal: false, vertical: true)
+        .background(ThroColor.colorSurfacePrimary)
+        .clipShape(RoundedRectangle(cornerRadius: ThroSpacing.radiusControl, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: ThroSpacing.radiusControl, style: .continuous)
+            .strokeBorder(ThroColor.colorBorderStrong, lineWidth: 1))
+    }
+}
+
+/// What PlayerIdentity shows. Rating is optional and, under OD-001 (no validated rating model), is
+/// never supplied by this app.
+public struct PlayerRef: Equatable, Sendable {
+    public let name: String
+    public let rating: Int?
+    public let team: String?
+    public let region: String?
+    public let verified: Bool
+    /// Somebody THRØ may not name. The name is words standing in for one ("A player"), and a mark
+    /// made from those words' initials — "Ap" — drew a person who does not exist, so they are drawn
+    /// with the person glyph instead.
+    public let unnamed: Bool
+
+    public init(name: String, rating: Int? = nil, team: String? = nil, region: String? = nil, verified: Bool = false,
+                unnamed: Bool = false) {
+        self.name = name
+        self.rating = rating
+        self.team = team
+        self.region = region
+        self.verified = verified
+        self.unnamed = unnamed
+    }
+
+    /// Up to two initials, capitals whatever the name was typed in; empty for somebody unnamed.
+    var initials: String {
+        unnamed ? "" : name.split(separator: " ").prefix(2).compactMap { $0.first }.map(String.init).joined().uppercased()
+    }
+}
+
+/// PlayerIdentity.jsx: an initials mark, the name, and a metadata row.
+public struct PlayerIdentity: View {
+    public enum Size: Sendable { case small, medium, large }
+    public enum Align: Sendable { case leading, trailing }
+
+    private let player: PlayerRef
+    private let size: Size
+    private let align: Align
+    /// Their picture, when they have one (PD-014). Defaulted, so every call site that has no picture
+    /// to give draws exactly the initials it drew before.
+    private let picture: Image?
+
+    public init(_ player: PlayerRef, size: Size = .medium, align: Align = .leading,
+                picture: Image? = nil) {
+        self.player = player
+        self.size = size
+        self.align = align
+        self.picture = picture
+    }
+
+    private var mark: CGFloat {
+        switch size { case .small: return 32; case .medium: return 40; case .large: return 52 }
+    }
+    private var nameRole: ThroTypeRole {
+        switch size {
+        case .small: return ThroTypography.label
+        case .medium: return ThroTypography.heading3
+        case .large: return ThroTypography.heading2
+        }
+    }
+
+    public var body: some View {
+        HStack(spacing: ThroSpacing.spacing3) {
+            if align == .leading { initialsMark }
+            VStack(alignment: align == .leading ? .leading : .trailing, spacing: 2) {
+                HStack(spacing: 6) {
+                    Text(player.name)
+                        .thro(nameRole.weight(.bold).tracking(em: -0.005))
+                        .foregroundStyle(ThroColor.colorTextPrimary)
+                        .lineLimit(1)
+                        // A person's name is the last thing that should be cut short (PD-052): rosters,
+                        // friends and the hand-over screen all draw it, and a name shortened to "Christoph…"
+                        // is a worse row than one a size smaller.
+                        .minimumScaleFactor(0.75)
+                        .truncationMode(.tail)
+                    if player.verified {
+                        Icon(.circleCheck, size: 14)
+                            .foregroundStyle(ThroColor.colorStatusVerified)
+                            .accessibilityLabel("THRØ verified")
+                    }
+                }
+                HStack(spacing: 8) {
+                    if let rating = player.rating {
+                        Text(rating.formatted())
+                            .thro(ThroTypography.metadata.family(.sport).weight(.semibold))
+                            .foregroundStyle(ThroColor.colorTextPrimary)
+                    }
+                    if let team = player.team {
+                        Text(team).thro(ThroTypography.metadata.family(.sport)).foregroundStyle(ThroColor.colorTextSecondary)
+                    }
+                    if let region = player.region {
+                        Text(region).thro(ThroTypography.metadata.family(.sport)).foregroundStyle(ThroColor.colorTextSecondary)
+                    }
+                }
+            }
+            if align == .trailing { initialsMark }
+        }
+        .accessibilityElement(children: .combine)
+    }
+
+    private var initialsMark: some View {
+        PersonMark(initials: player.initials, size: mark, picture: picture)
+    }
+}
+
+/// The circle a person is drawn as: their picture when they have one, their initials when they do
+/// not.
+///
+/// **Extracted from `PlayerIdentity`, not drawn beside it.** A person already had a mark in this
+/// system, and adding a second one so a picture could be shown somewhere else would have left two
+/// things that must be kept looking alike. This is that same mark with more callers, so a person is
+/// the same object in a match, in a roster and on their own page. `Badge`'s rounded square stays a
+/// club's, and the two still never read as the same kind of thing in a list.
+///
+/// It says nothing about who *may* have a picture — `ImagePolicy` decides that, and it decides it
+/// where the picture is stored rather than where one is drawn.
+public struct PersonMark: View {
+    private let initials: String
+    private let size: CGFloat
+    private let picture: Image?
+
+    public init(initials: String, size: CGFloat = 40, picture: Image? = nil) {
+        self.initials = initials
+        self.size = size
+        self.picture = picture
+    }
+
+    public var body: some View {
+        Group {
+            if let picture {
+                picture
+                    .resizable()
+                    .aspectRatio(contentMode: .fill)
+                    .frame(width: size, height: size)
+                    .clipShape(Circle())
+            } else if initials.isEmpty {
+                // Nobody to take initials from: the person glyph, on the same circle.
+                Icon(.user, size: (size * 0.5).rounded())
+                    .foregroundStyle(ThroColor.colorTextSecondary)
+                    .frame(width: size, height: size)
+                    .background(Circle().fill(ThroColor.colorSurfaceSecondary))
+            } else {
+                Text(initials)
+                    .thro(ThroTypeRole(family: .sport, size: (size * 0.38).rounded(),
+                                       lineHeight: (size * 0.38).rounded(),
+                                       weight: .bold, relativeTo: .caption, tabularNumerals: true))
+                    .foregroundStyle(ThroColor.colorTextSecondary)
+                    .frame(width: size, height: size)
+                    .background(Circle().fill(ThroColor.colorSurfaceSecondary))
+            }
+        }
+        .overlay(Circle().strokeBorder(ThroColor.colorBorderStrong, lineWidth: 1))
+        .accessibilityHidden(true)
+    }
+}
+
+/// PlayerComparison.jsx: two identities either side of "vs", then rows of figures.
+public struct PlayerComparison: View {
+    public struct Row: Identifiable, Equatable, Sendable {
+        public let label: String
+        public let home: String
+        public let away: String
+        public var id: String { label }
+        public init(_ label: String, home: String, away: String) {
+            self.label = label
+            self.home = home
+            self.away = away
+        }
+    }
+
+    private let home: PlayerRef
+    private let away: PlayerRef
+    private let rows: [Row]
+
+    public init(home: PlayerRef, away: PlayerRef, rows: [Row] = []) {
+        self.home = home
+        self.away = away
+        self.rows = rows
+    }
+
+    public var body: some View {
+        VStack(spacing: 0) {
+            HStack(alignment: .top, spacing: ThroSpacing.spacing3) {
+                PlayerIdentity(home, size: .medium)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                Text("vs")
+                    .thro(ThroTypography.labelStrong.weight(.bold).uppercase(true).tracking(em: 0.08))
+                    .foregroundStyle(ThroColor.colorTextTertiary)
+                    .padding(.top, 10)
+                PlayerIdentity(away, size: .medium, align: .trailing)
+                    .frame(maxWidth: .infinity, alignment: .trailing)
+            }
+            .padding(.bottom, ThroSpacing.spacing4)
+            ForEach(rows) { row in
+                HStack(spacing: ThroSpacing.spacing3) {
+                    Text(row.home)
+                        .thro(ThroTypography.heading3.family(.sport).weight(.bold))
+                        .foregroundStyle(ThroColor.colorTextPrimary)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                    Eyebrow(row.label)
+                    Text(row.away)
+                        .thro(ThroTypography.heading3.family(.sport).weight(.bold))
+                        .foregroundStyle(ThroColor.colorTextPrimary)
+                        .frame(maxWidth: .infinity, alignment: .trailing)
+                }
+                .padding(.vertical, ThroSpacing.spacing3)
+                .overlay(alignment: .top) { Rectangle().fill(ThroColor.colorBorderDefault).frame(height: 1) }
+                .accessibilityElement(children: .combine)
+            }
+        }
+        .background(ThroColor.colorBackgroundPrimary)
+    }
+}

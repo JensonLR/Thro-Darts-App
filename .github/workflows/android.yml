@@ -1,0 +1,49 @@
+name: android
+
+# Linux, because Android's toolchain is Linux-native and this repository bills macOS minutes at ten times
+# the rate — the same reasoning that keeps every iOS check that CAN run on Linux off a Mac.
+on:
+  push:
+    branches: ["**"]
+    paths:
+      - "apps/android/**"
+      - "packages/client-android/**"
+      - "packages/engine/**"
+      - "packages/journal/**"
+      - "packages/design-tokens/**"
+      - ".github/workflows/android.yml"
+  pull_request:
+    paths:
+      - "apps/android/**"
+      - "packages/client-android/**"
+      - "packages/engine/**"
+      - "packages/journal/**"
+      - "packages/design-tokens/**"
+      - ".github/workflows/android.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  client:
+    name: The Android client builds
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+      # A pinned Gradle, not the runner's. AGP 9 requires Gradle 9 — AGP 8 reaches for an internal
+      # removed in Gradle 9.6, and the runner's Gradle is whatever the image happens to carry.
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "9.7.1"
+      - name: The rules the screens obey
+        run: |
+          cd apps/android
+          gradle :client:testDebugUnitTest --console=plain
+      - name: Assemble
+        run: |
+          cd apps/android
+          gradle :app:assembleDebug --console=plain

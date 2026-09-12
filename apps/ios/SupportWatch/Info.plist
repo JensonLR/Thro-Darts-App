@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!-- Kept outside the target's synchronised source folder, for the same reason the app's own plist
+	     and the widget extension's do: a file-system-synchronised group would otherwise copy it into
+	     the bundle as a resource as well as reading it as the target's Info.plist. -->
+
+	<!-- A single-target watch app, which is what watchOS 7 and later want. The two-target shape — an
+	     app bundle holding a WatchKit extension — is still accepted and is still what most of the
+	     internet describes; it exists for watchOS 6 and earlier, which this app does not support, and
+	     it would mean a third target to keep true for no gain. -->
+	<key>WKApplication</key>
+	<true/>
+	<!-- Which phone app this belongs to. It is what pairs the two: the system installs this alongside
+	     THRØ, and WatchConnectivity's `isWatchAppInstalled` on the phone is answered from it. -->
+	<key>WKCompanionAppBundleIdentifier</key>
+	<string>app.thro.darts</string>
+	<!-- No fonts. Archivo and IBM Plex Sans Condensed are registered by the phone app's `UIAppFonts`
+	     and are not on the watch; asking for one by name here would look right in a preview and fall
+	     back silently on a wrist. The Lock Screen and the widgets already take the same line — a brand
+	     is worth more than a font, and a wrong font is worse than none. -->
+</dict>
+</plist>

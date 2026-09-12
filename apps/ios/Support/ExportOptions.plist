@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<!-- How `xcodebuild -exportArchive` turns an archive into a TestFlight build.
+
+     `destination: upload` means the export command UPLOADS: when it finishes there is a build in
+     App Store Connect, and nothing has to be dragged into Transporter or clicked in the Organizer.
+     `manageAppVersionAndBuildNumber: false` because the build number is ours to set — Xcode's
+     helpful auto-increment rewrites the project file behind the commit, and a build number that
+     does not match what is committed is a build nobody can reproduce.
+
+     See docs/runbooks/TESTFLIGHT.md. -->
+<dict>
+	<key>method</key>
+	<string>app-store-connect</string>
+	<key>destination</key>
+	<string>upload</string>
+	<key>teamID</key>
+	<string>2XM324WPD5</string>
+	<key>uploadSymbols</key>
+	<true/>
+	<key>manageAppVersionAndBuildNumber</key>
+	<false/>
+	<key>signingStyle</key>
+	<string>automatic</string>
+</dict>
+</plist>

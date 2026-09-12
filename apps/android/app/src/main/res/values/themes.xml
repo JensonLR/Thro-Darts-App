@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The window's own background, before a single Compose frame has drawn. The same reason the iOS
+     target has a launch screen in the brand green: the first thing anybody sees must not be white. -->
+<resources>
+    <style name="Theme.Thro" parent="android:Theme.Material.NoActionBar">
+        <item name="android:windowBackground">@color/thro_green</item>
+        <item name="android:statusBarColor">@color/thro_green</item>
+        <item name="android:navigationBarColor">@color/thro_green</item>
+    </style>
+</resources>
