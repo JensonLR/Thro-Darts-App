@@ -677,7 +677,33 @@ public struct HomeScreen: View {
         .background(ThroColor.colorBackgroundPrimary.ignoresSafeArea())
     }
 
-    private var home: some View {
+    /// Nothing scored, nothing archived, and nothing wrong — the one state where Home has no content at
+    /// all, and the state PD-068 makes the field rather than a card on a sheet of cream.
+    private var nothingAtAll: Bool {
+        store.openProblem == nil && store.listProblem == nil && store.actionProblem == nil
+            && store.matches.isEmpty && store.archived.isEmpty
+    }
+
+    @ViewBuilder private var home: some View {
+        if nothingAtAll {
+            // The masthead stays: it is already the field, so the wordmark and the board below it read as
+            // one surface with a lamp in it rather than as a green strip above a green page. No scroll
+            // view, because there is nothing to scroll — and a page that scrolls past its own emptiness is
+            // how the card version came to look like a notice pinned to the top of a tablet.
+            VStack(spacing: 0) {
+                Masthead(line: mastheadLine).throEntrance(0)
+                ThroNothingYet(title: "No matches yet",
+                               message: "Score a match on this device and it will appear here. Nothing is "
+                                      + "sent anywhere unless you send it.",
+                               actionLabel: "Start match") { store.flow = .new }
+                    .throEntrance(1)
+            }
+        } else {
+            scrollingHome
+        }
+    }
+
+    private var scrollingHome: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 0) {
                 Masthead(line: mastheadLine).throEntrance(0)

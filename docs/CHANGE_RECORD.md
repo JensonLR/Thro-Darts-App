@@ -4088,3 +4088,29 @@ result, a declared one, an award, an annulment and four fixtures to come — bec
 the local database and anything seeded by hand is gone by the next one.
 
 Counts: API 29 suites (88 tests), 148 schema properties, client 772 tests, all 22 checks.
+
+## A page with nothing on it is the board now
+
+The founder was shown the measurements — Home on an iPad with nothing scored was a card with 77% of the page
+empty under it — and chose the field over a hero and over leaving it.
+
+`ThroNothingYet` is the board with the lamp above the middle, the invitation chalked under it and the action
+as a chalk key, built from `ThroBoard`, `ChalkKeyStyle` and the on-board inks that already exist. **A
+background has no size of its own to be too small**, which is precisely why it answers a question that a
+bigger card does not, and why centring — tried and rejected in the earlier pass — never could. Home keeps
+its masthead because that is already green, so the wordmark and the board read as one surface with a lamp in
+it; and there is no scroll view, because there is nothing to scroll.
+
+It is a state and not a size: identical on a phone, checked on both.
+
+Applied only where a page has nothing at all — Home with no matches, no archive and no problem. Play and You
+have content and are short, which is a different problem, and this does not pretend to solve it.
+
+Two things the first build got wrong, worth writing down: `ChalkKeyStyle` sets no ink, because a keypad key
+inherits the board's, so the label came out near-black on lit green; and a keypad key is full width because
+it is one of twenty in a tray, so one invitation read as a bar until it was sized to its own words. Both
+were found by looking at the crop, not by the build failing. `check_controls_react.py` caught a third before
+any of that — a `.buttonStyle(.plain)` with no pressed state — which is why the chalk key is the app's own
+rather than one rolled by hand here.
+
+Counts: client 772 tests, all 22 checks.

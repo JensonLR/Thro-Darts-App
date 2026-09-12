@@ -3033,3 +3033,48 @@ their season.
 Worth recording as a method rather than a fix: this class of fault — a real constraint, unmapped — cannot be
 found by reading, because the code looks correct at every layer. It was found by calling the route with the
 wrong thing twice.
+
+## PD-068 — A page with nothing on it is the board
+
+**Founder, 12 September 2026**, shown the measurements from the polish pass — Home on an iPad with nothing
+scored is a card with **77% of the page empty** beneath it, You 56%, Play 54% — and given three answers.
+They chose the field.
+
+### Why a card was the wrong shape, having been the right one
+
+PD-052 made every empty state a card, and that was correct: *no tournaments listed yet* sits under Discover
+beside leagues that do exist, and reads as one part of a page. It stops being correct when the empty state
+**is** the page. On a phone that card is most of the screen and looks like the page; on a tablet it is a
+notice in the corner of a sheet of cream. The same pass tried centring the card and rejected it — *"the same
+emptiness, redistributed"* — and a bigger card is a bigger empty box, so neither answer was available.
+
+**The field has no size of its own to be too small.** It is a background: it fills a phone, a tablet and a
+phone on its side by construction, which is exactly why it answers a question that scaling a box does not.
+It is also the surface the app opens on, so a first launch goes welcome → Home without leaving the green.
+
+### What it is
+
+`ThroNothingYet`: the board with its lamp a little above the middle, the invitation chalked under it, and
+the action as a chalk key. It uses `ThroBoard`, `ChalkKeyStyle` and the on-board inks that already exist —
+no second vocabulary, and no new colours to hold against the contrast floor.
+
+**It is a state and not a size.** The same on a phone as on a tablet, because a screen that changed shape by
+device is two designs to keep in step, and the point of the field is that it is one.
+
+**Home keeps its masthead**, which is already green: the wordmark and the board below read as one surface
+with a lamp in it rather than a green strip above a green page. And there is no scroll view, because there
+is nothing to scroll — a page that scrolls past its own emptiness is how the card came to look like a notice
+pinned to the top.
+
+### Where it applies, and where it does not
+
+Only where the page has **nothing at all**: Home with no matches, no archive and no problem. Play and You
+are not empty pages — Play has its invitation and its two explainers, You has a profile — so their 54% and
+56% are short pages rather than empty ones, and this decision does not cover them. Saying so rather than
+applying it everywhere: a page that has something to say and says it in a small space is a different problem
+from a page with nothing to say.
+
+Two things were wrong in the first build and are recorded because the fix is not obvious: `ChalkKeyStyle`
+sets no ink, so the label came out near-black on lit green until it was given chalk; and a keypad key is
+full width because it is one of twenty in a tray, which made one invitation read as a bar until it was sized
+to its own words.
