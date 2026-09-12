@@ -62,10 +62,27 @@ After a hundred people have signed in it costs each of them a sign-in.
 
 ### Step 1 — Put the web on Render (no domain needed)
 
-1. <https://dashboard.render.com> → **New → Blueprint** (or open the existing Blueprint).
-2. Connect `JensonLR/Thro-Darts-App`, branch `claude/thro-production-build-je2mkf`.
-3. Render reads `render.yaml`, finds **`thro-web`** beside the API, and creates it. Free, no card.
-4. When it goes green, check both halves — the pages, and the API through the same origin:
+**Do not apply the Blueprint a second time.** The API is already deployed and belongs to an earlier Blueprint
+instance, and Render will not let a new one adopt it: the *Associate existing services* option is greyed out
+and the only choice left is **Create all as new services**, which makes a duplicate API — `thro-api-staging-gbbk`
+beside the real one — and asks for `DATABASE_URL` again. `render.yaml` stays as the record of both services;
+the site is created on its own:
+
+1. <https://dashboard.render.com> → **New → Static Site**.
+2. Connect `JensonLR/Thro-Darts-App`; branch **`claude/thro-production-build-je2mkf`**.
+3. Name `thro-web`. **Build Command:** leave empty — there is nothing to build. **Publish Directory:**
+   `apps/web`. Create it; the free plan is enough.
+4. **Settings → Redirects and Rewrites**, and add two rules, both with Action **Rewrite**. Render's rule
+   syntax allows a full URL as a destination, which is what makes one origin possible:
+
+   | Source | Destination |
+   |---|---|
+   | `/v1/*` | `https://thro-api-staging.onrender.com/v1/*` |
+   | `/.well-known/apple-app-site-association` | `https://thro-api-staging.onrender.com/.well-known/apple-app-site-association` |
+
+   Render does not apply a rule to a path where a file already exists, so these cannot shadow the pages.
+
+5. When it goes green, check both halves — the pages, and the API through the same origin:
 
 ```bash
 curl -s -o /dev/null -w "pages %{http_code}\n" https://thro-web.onrender.com/delete-account.html
@@ -73,6 +90,24 @@ curl -s -o /dev/null -w "api   %{http_code}\n" https://thro-web.onrender.com/v1/
 ```
 
 Two 200s means the rewrite is working and the site is done until the domain arrives.
+
+### What the free `onrender.com` address does and does not give you
+
+Everything public works on it, today, with TLS and no card: the leagues, a season's table, its fixtures, and
+the account-deletion page. A store checking that deletion URL only needs it to load, so **Android is not
+blocked by the lack of a domain**.
+
+**Web sign-in is the one thing that cannot work on it**, and the reason is worth writing down because it
+looks like a bug otherwise. `onrender.com` is on the [Public Suffix List](https://publicsuffix.org/), so
+`thro-web.onrender.com` and `thro-api-staging.onrender.com` are two *different* registrable domains, the way
+`bbc.co.uk` and `itv.co.uk` are. A WebAuthn passkey belongs to one registrable domain, and the only thing
+these two share is `onrender.com` itself — which a browser refuses as a relying party, precisely because it
+is a public suffix. So a passkey cannot span them. Setting `THRO_RP_ID` to the web host would fix the web and
+break the iOS app, whose passkeys are bound to the API host.
+
+The answer is not a workaround, it is the domain: one name, `thro.uk`, with the pages and the API both under
+it, and one relying party for the phone and the laptop alike. Until then, ship the public pages and leave the
+organiser sign-in switched off.
 
 ### Step 2 — Register `thro.uk`
 
