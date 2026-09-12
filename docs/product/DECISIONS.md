@@ -2756,3 +2756,45 @@ That is the same finding as the tablet one recorded in PD-052, in a second place
 shape needs to spend its room differently, and THRØ currently spends it the same way everywhere.** It is
 noted here rather than fixed, because the fix is a design decision about what a masthead does when the screen
 is short — compress, move beside the content, or go — and that is worth choosing rather than defaulting into.
+
+## PD-061 — A short screen gets a masthead folded to one line
+
+**Founder, 2026-09-12**, asked what a masthead should do when the screen is short and chose **compress it**,
+and separately that a phone on its side is a case THRØ should be *good at* rather than merely not broken at:
+people prop a phone on a table beside a board, and the scoring screen already puts the keys beside the board
+in landscape, so the app has been promising landscape works for some time.
+
+### What it does
+
+`ThroMasthead.shape(forHeight:)` — below 500 points the mark and its line sit on one row at the heading2
+cap; at or above it they stack at the display cap, exactly as they always have. Every phone THRØ runs on is
+320 to 440 points tall on its side and 568 to 956 upright, and a tablet is 834 on its side, so the threshold
+has forty points of room either way and **a tablet keeps the full mark** — 834 points is taller than an
+upright SE and there is nothing to buy by taking it away.
+
+The rule is arithmetic on the screen, in the same shape `ThroStage` chooses between a board above its keys
+and a board beside them, because a number that can be tested is a decision that cannot quietly drift. The
+view cannot measure the window, so it reads iOS's vertical size class; **a test holds the two to the same
+answer on every device**, because two ways of saying one thing is how a rule becomes two rules.
+
+Looked at on an iPhone 17 Pro: Home's green band goes from 116 points to 51 of the 402 available, and the
+Continue button — which was off the bottom of the card — is on the screen. Portrait is pixel-identical.
+
+### And the welcome screen was clipping the way out
+
+Chasing this found a worse thing on the first screen of the app. The welcome is a fixed composition with no
+scroll view, deliberately — heading, ask, choices, slack shared between them, because the first screen is not
+a document. On a phone on its side it did not fit, and SwiftUI clipped **both ends**: the mark went off the
+top and *"Not now, just score"* went off the bottom. That is the control that gets a player past sign-in, and
+on a landscape phone there was no way to reach it.
+
+It now scrolls **only when it does not fit**: the column is given the viewport height as a minimum, so the
+two spacers expand exactly as they did and a portrait phone is unchanged to the pixel, and on a short screen
+the column grows past the viewport and the scroll view carries it rather than the layout eating the ends.
+The welcome's mark also takes the plain display cap on a short screen instead of 1.35×.
+
+### Still open
+
+What a **tablet** does with genuinely spare room — two columns where a screen earns them, a larger board —
+is untouched and stays PD-052's question. Folding a masthead buys back a strip; it does not answer what to do
+with a screen that has too much room rather than too little.

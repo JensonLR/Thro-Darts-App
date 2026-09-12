@@ -3919,3 +3919,32 @@ through the Simulator app's own Device menu — and with three devices booted th
 is frontmost, which is why the first two rotate attempts appeared to do nothing. And screenshots of a rotated
 device come back in the portrait framebuffer, so taps are still in portrait points while the image is
 sideways; the conversion is what made the second attempt land.
+
+## A phone on its side, made a case THRØ is good at rather than one it survives
+
+Put to the founder with three options and a preview of each; they chose to **compress the masthead** and said
+landscape should be a case the app is good at — people prop a phone beside a board, and the scoring screen
+has put the keys beside the board in landscape for some time, so the promise was already made.
+
+The masthead folds below 500 points of screen: the mark and its line on one row at the heading2 cap, stacked
+at the display cap above it. Every phone is 320–440 on its side and 568–956 upright and a tablet is 834, so
+the threshold has forty points either way and a tablet keeps the full mark. The rule is arithmetic in
+`ThroDesign`, the same shape `ThroStage`'s beside-or-stacked choice takes; the view reads iOS's vertical size
+class because it cannot measure the window, and **a test holds the two to the same answer on every device**,
+because two ways of saying one thing is how a rule becomes two.
+
+Looked at, not assumed: Home's green band goes from 116 points to 51 of the 402 there are, and Continue —
+which was off the bottom of the card — is on the screen. Portrait is pixel-identical, checked against the
+capture taken before the change.
+
+**And it found something worse on the first screen of the app.** The welcome is a fixed composition with no
+scroll view, on purpose. On a phone on its side it did not fit and SwiftUI clipped both ends: the mark off
+the top, and *"Not now, just score"* — the control that gets a player past sign-in — off the bottom. There
+was no way to decline sign-in on a landscape phone. It now scrolls only when it does not fit, by giving the
+column the viewport height as a minimum: the spacers expand as they always did, portrait is unchanged to the
+pixel, and a short screen scrolls instead of losing its ends.
+
+What a tablet does with spare room is untouched. Folding a masthead buys back a strip on a screen with too
+little; it says nothing about a screen with too much, and that stays PD-052's open question.
+
+Counts: client 755 tests (178 design), all 22 checks.

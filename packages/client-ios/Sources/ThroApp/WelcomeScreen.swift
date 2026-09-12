@@ -97,6 +97,8 @@ public struct WelcomeScreen: View {
         self.onDone = onDone
     }
 
+    @Environment(\.verticalSizeClass) private var verticalSizeClass
+
     public var body: some View {
         ThroBoard(lamp: UnitPoint(x: 0.5, y: 0.18), grainSeed: ThroBoardSeed.home) {
             // **Everything a hand touches is in the bottom half, everything it reads is in the top.**
@@ -106,17 +108,31 @@ public struct WelcomeScreen: View {
             // Masthead, ask, choices — with the slack SHARED between the first two gaps rather than
             // all of it dumped below the sentence. One spacer left a hole in the middle of the
             // screen with the writing pinned above it and the keys pinned below.
-            VStack(spacing: 0) {
-                masthead
-                Spacer(minLength: ThroSpacing.spacing5)
-                pitch
-                Spacer(minLength: ThroSpacing.spacing5)
-                choices
+            // **It scrolls only when it does not fit** (PD-061). The composition above is deliberate and
+            // must not become a document on a screen with room for it — so the column is given the
+            // viewport's height as a MINIMUM, which means the two spacers expand exactly as they always
+            // did and a portrait phone is unchanged to the pixel. On a phone held on its side the column
+            // grows past the viewport instead of being clipped at both ends, and the scroll view carries
+            // it. Clipped was what it did: the mark went off the top and *"Not now, just score"* — the
+            // way past sign-in — went off the bottom, on the first screen of the app.
+            GeometryReader { proxy in
+                ScrollView {
+                    VStack(spacing: 0) {
+                        masthead
+                        Spacer(minLength: ThroSpacing.spacing5)
+                        pitch
+                        Spacer(minLength: ThroSpacing.spacing5)
+                        choices
+                    }
+                    .padding(.horizontal, ThroSpacing.spaceScreenGutter)
+                    // The board bleeds; the welcome itself is a column, or on a tablet the two ways in
+                    // are a yard apart and the sentence under them is one line the width of a desk
+                    // (PD-052).
+                    .throReadable()
+                    .frame(minHeight: proxy.size.height)
+                }
+                .scrollBounceBehavior(.basedOnSize)
             }
-            .padding(.horizontal, ThroSpacing.spaceScreenGutter)
-            // The board bleeds; the welcome itself is a column, or on a tablet the two ways in are a
-            // yard apart and the sentence under them is one line the width of a desk (PD-052).
-            .throReadable()
         }
         // No `.ignoresSafeArea()` here. `ThroBoard` already bleeds its lamp, dust and vignette to
         // every edge while keeping its CONTENT inside the safe area — the distinction that exists
@@ -169,10 +185,17 @@ public struct WelcomeScreen: View {
 
     // MARK: - the heading
 
+    /// The welcome is a fixed composition — heading, ask, choices, with the slack shared between them —
+    /// and it has no scroll view, deliberately: the first screen of the app is not a document. On a phone
+    /// held on its side there is not enough height for the mark at 1.35× the display cap and everything
+    /// under it, and what falls off the bottom is *"Not now, just score"* — the way past sign-in. So the
+    /// mark takes the display cap plain on a short screen and the rule under it comes in tighter (PD-061).
     @ViewBuilder private var masthead: some View {
-        VStack(spacing: ThroSpacing.spacing4) {
+        let short = ThroMasthead.shape(verticalSizeClassIsCompact: verticalSizeClass == .compact) == .oneLine
+        VStack(spacing: short ? ThroSpacing.spacing2 : ThroSpacing.spacing4) {
             arriving(Beat.wordmark) {
-                ThroWordmark(capHeight: ThroTypography.display.capHeight * 1.35, color: ThroColor.colorTextOnBoard)
+                ThroWordmark(capHeight: ThroTypography.display.capHeight * (short ? 0.9 : 1.35),
+                             color: ThroColor.colorTextOnBoard)
                     .accessibilityLabel("THRØ")
             }
             ChalkRule(weight: ThroSpacing.spaceChalkRuleWeight, seedAngle: 41, trim: chalk)
@@ -180,7 +203,7 @@ public struct WelcomeScreen: View {
                 .frame(height: ThroSpacing.spaceChalkRuleWeight * 2)
                 .accessibilityHidden(true)
         }
-        .padding(.top, ThroSpacing.spacing6)
+        .padding(.top, short ? ThroSpacing.spacing3 : ThroSpacing.spacing6)
     }
 
     @ViewBuilder private var pitch: some View {

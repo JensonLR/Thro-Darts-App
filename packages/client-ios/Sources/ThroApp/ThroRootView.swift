@@ -831,22 +831,40 @@ public struct HomeScreen: View {
 struct Masthead: View {
     let line: String
 
+    /// A phone on its side gets the mark and its line on one row (PD-061). iOS's own signal for a short
+    /// screen, held to `ThroMasthead`'s height rule by a test rather than by hope.
+    @Environment(\.verticalSizeClass) private var verticalSizeClass
+
+    private var shape: ThroMasthead.Shape {
+        ThroMasthead.shape(verticalSizeClassIsCompact: verticalSizeClass == .compact)
+    }
+
     var body: some View {
-        VStack(alignment: .leading, spacing: ThroSpacing.spacing2) {
-            // The logo, not a font's Ø: THR in the face and the mark as the Ø, drawn live at the
-            // display role's cap height.
-            ThroWordmark(capHeight: ThroTypography.display.capHeight, color: ThroColor.throChalk)
-                .accessibilityAddTraits(.isHeader)
-            Text(line)
-                .thro(ThroTypography.label)
-                .foregroundStyle(ThroColor.throChalk.opacity(0.78))
-                .lineLimit(2)
-                .fixedSize(horizontal: false, vertical: true)
+        Group {
+            switch shape {
+            case .stacked:
+                VStack(alignment: .leading, spacing: ThroSpacing.spacing2) {
+                    // The logo, not a font's Ø: THR in the face and the mark as the Ø, drawn live at the
+                    // display role's cap height.
+                    ThroWordmark(capHeight: ThroTypography.display.capHeight, color: ThroColor.throChalk)
+                        .accessibilityAddTraits(.isHeader)
+                    line(ThroTypography.label, lines: 2)
+                }
+            case .oneLine:
+                // The mark keeps the baseline and the sentence sits beside it, so a landscape phone opens
+                // on its content rather than on a third of a screen of green. One line, not two: a
+                // masthead that wraps on a short screen is the thing this exists to stop.
+                HStack(alignment: .firstTextBaseline, spacing: ThroSpacing.spacing3) {
+                    ThroWordmark(capHeight: ThroTypography.heading2.capHeight, color: ThroColor.throChalk)
+                        .accessibilityAddTraits(.isHeader)
+                    line(ThroTypography.label, lines: 1)
+                    Spacer(minLength: 0)
+                }
+            }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.horizontal, ThroSpacing.spaceScreenGutter)
-        .padding(.top, ThroSpacing.spacing6)
-        .padding(.bottom, ThroSpacing.spacing6)
+        .padding(.vertical, shape == .oneLine ? ThroSpacing.spacing3 : ThroSpacing.spacing6)
         // **The brand field, and chalk on it.** The first draft of this used `throChalkSunken` for
         // the band — a *light* neutral — under `throChalk` text: 1.08:1, which is invisible. The
         // `thro*` primitives are the raw palette and are not appearance-aware; `chalk` is the
@@ -861,6 +879,15 @@ struct Masthead: View {
         .background {
             ThroColor.colorBackgroundBrand.ignoresSafeArea(edges: .top)
         }
+    }
+
+    /// The line under the mark, or beside it. One definition, so the two shapes cannot drift apart.
+    private func line(_ role: ThroTypeRole, lines: Int) -> some View {
+        Text(self.line)
+            .thro(role)
+            .foregroundStyle(ThroColor.throChalk.opacity(0.78))
+            .lineLimit(lines)
+            .fixedSize(horizontal: false, vertical: true)
     }
 }
 
