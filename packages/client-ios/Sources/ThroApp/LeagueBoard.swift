@@ -43,6 +43,8 @@ public struct LeaguesScreen: View {
     enum Sheet: Identifiable, Hashable {
         case team(UUID)
         case join
+        /// A league season's table (PD-054), carrying the league's name so the bar can say whose it is.
+        case table(UUID, String)
         var id: Self { self }
     }
 
@@ -87,6 +89,8 @@ public struct LeaguesScreen: View {
                 TeamFrontScreen(teams: teams, teamId: id, api: api, onBack: { sheet = nil })
             case .join:
                 JoinOrStartTeamScreen(teams: teams, api: api, onBack: { sheet = nil }) { made in sheet = .team(made.teamId) }
+            case .table(let season, let league):
+                LeagueTableScreen(seasonId: season, leagueName: league, api: api, onBack: { sheet = nil })
             }
         }
     }
@@ -294,7 +298,8 @@ public struct LeaguesScreen: View {
             if let league = b.leagues.first(where: { $0.id == id }), let key = b.atlas.leagues.first(where: { $0.id == id }) {
                 LeagueSummaryCard(league: league, chalk: key.chalk, divisions: b.atlas.divisions(of: id),
                                   said: b.atlas.said(in: id), distance: miles(to: league),
-                                  onTeam: { choose(.team($0), b) }, onClose: close)
+                                  onTeam: { choose(.team($0), b) },
+                                  onTable: { sheet = .table($0, league.name) }, onClose: close)
             } else { browse(b) }
         case .pub(let id):
             let here = b.atlas.teams(at: id)

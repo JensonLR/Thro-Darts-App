@@ -332,6 +332,9 @@ struct LeagueSummaryCard: View {
     var said: [LeagueAtlas.Entry] = []
     let distance: String?
     let onTeam: (UUID) -> Void
+    /// Opens the league's table for a season (PD-054). Defaulted, so a board that has no table to show —
+    /// a build with no server behind it — builds this card exactly as it did before.
+    var onTable: (UUID) -> Void = { _ in }
     let onClose: () -> Void
 
     var body: some View {
@@ -341,6 +344,17 @@ struct LeagueSummaryCard: View {
                        eyebrowColor: LeagueChalk.color(chalk), chalk: chalk, title: league.name,
                        line: LeagueBoardWords.leagueMeta(league, teams: teams, divisions: divisions.count, distance: distance),
                        onClose: onClose)
+            // The table is the thing a league member came for, so it is on the league's own card rather
+            // than a screen further in (PD-054).
+            if let season = league.shownSeason {
+                Button { onTable(season.leagueSeasonId) } label: {
+                    Text("TABLE").thro(ThroTypography.labelStrong.uppercase(true).tracking(em: 0.06))
+                        .foregroundStyle(ThroColor.colorTextOnBoard)
+                        .padding(.horizontal, ThroSpacing.spacing4)
+                }
+                .buttonStyle(ChalkKeyStyle(.lit, minHeight: ThroSpacing.touchTargetMinimum, seedAngle: 53))
+                .fixedSize()
+            }
             ForEach(divisions) { d in
                 VStack(alignment: .leading, spacing: ThroSpacing.spacing2) {
                     if divisions.count > 1 { Eyebrow(d.name, color: ThroColor.colorTextOnBoardSecondary) }

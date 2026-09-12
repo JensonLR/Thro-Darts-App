@@ -202,6 +202,7 @@ public struct ClubScreen: View {
                 }
                 .padding(.horizontal, ThroSpacing.spaceScreenGutter)
                 .padding(.bottom, ThroSpacing.spacing6)
+                .throReadable()
             }
         }
         // The screen arrives (PD-027): one beat, on the design's own curve,
@@ -414,6 +415,7 @@ public struct ClubMembersScreen: View {
                 }
                 .padding(.horizontal, ThroSpacing.spaceScreenGutter)
                 .padding(.bottom, ThroSpacing.spacing6)
+                .throReadable()
             }
         }
         // The screen arrives (PD-027): one beat, on the design's own curve,
@@ -527,6 +529,7 @@ public struct FixturesScreen: View {
                 }
                 .padding(.horizontal, ThroSpacing.spaceScreenGutter)
                 .padding(.bottom, ThroSpacing.spacing6)
+                .throReadable()
             }
         }
         // The screen arrives (PD-027): one beat, on the design's own curve,
@@ -744,6 +747,7 @@ public struct ProfileScreen: View {
                 }
                 .padding(.horizontal, ThroSpacing.spaceScreenGutter)
                 .padding(.bottom, ThroSpacing.spacing6)
+                .throReadable()
             }
         }
         // The screen arrives (PD-027): one beat, on the design's own curve,

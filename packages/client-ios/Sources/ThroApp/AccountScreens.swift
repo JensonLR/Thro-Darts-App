@@ -219,6 +219,7 @@ public struct InboxScreen: View {
                 }
                 .padding(.horizontal, ThroSpacing.spaceScreenGutter)
                 .padding(.vertical, ThroSpacing.spacing5)
+                .throReadable()
             }
         }
         .background(ThroColor.colorBackgroundPrimary.ignoresSafeArea())
@@ -297,6 +298,7 @@ public struct DiscoveryScreen: View {
                 }
                 .padding(.horizontal, ThroSpacing.spaceScreenGutter)
                 .padding(.vertical, ThroSpacing.spacing5)
+                .throReadable()
             }
         }
         .background(ThroColor.colorBackgroundPrimary.ignoresSafeArea())
@@ -398,6 +400,7 @@ public struct FriendsScreen: View {
                 }
                 .padding(.horizontal, ThroSpacing.spaceScreenGutter)
                 .padding(.vertical, ThroSpacing.spacing5)
+                .throReadable()
             }
         }
         .background(ThroColor.colorBackgroundPrimary.ignoresSafeArea())
