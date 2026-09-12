@@ -207,10 +207,11 @@ public struct AccentPicker: View {
             .padding(.horizontal, -4)
 
             HStack(spacing: ThroSpacing.spacing3) {
-                // `ColorPicker` does not exist on watchOS, and neither does the act: nobody sets a
-                // club's colours from a wrist. The swatches above are the whole control there — which
-                // is also the only arrangement a watch has room for (PD-072).
-                #if !os(watchOS)
+                // `ColorPicker` exists on neither watchOS nor tvOS, and neither does the act: nobody
+                // sets a club's colours from a wrist, and nobody drags a colour wheel with a remote.
+                // The swatches above are the whole control on both — which is also the only
+                // arrangement a watch has room for (PD-072, extended to the TV by PD-079).
+                #if !os(watchOS) && !os(tvOS)
                 ColorPicker(selection: custom, supportsOpacity: false) {
                     Text("Any other colour")
                         .thro(ThroTypography.body)

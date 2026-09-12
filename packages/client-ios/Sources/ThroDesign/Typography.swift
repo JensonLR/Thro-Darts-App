@@ -97,7 +97,15 @@ public enum ThroFont {
 extension Font.TextStyle {
     var uiKit: UIFont.TextStyle {
         switch self {
-        case .largeTitle: return .largeTitle
+        case .largeTitle:
+            // tvOS has no `largeTitle` metric: a ten-foot interface starts at `title1` and Apple never
+            // added a step above it. Only the *metric* changes — the size the design asks for is the
+            // design's, and this is the scale it grows on when the viewer raises their text size.
+            #if os(tvOS)
+            return .title1
+            #else
+            return .largeTitle
+            #endif
         case .title: return .title1
         case .title2: return .title2
         case .title3: return .title3

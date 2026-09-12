@@ -54,6 +54,12 @@ public struct ThroDrawer<Content: View>: View {
             .ignoresSafeArea(edges: .bottom)
         }
         .contentShape(Rectangle())
+        // A drag is a finger, and tvOS has no `DragGesture` because it has no finger. The drawer
+        // draws there — it is a shape with a grip and a gradient — and simply cannot be pulled,
+        // which is honest: nothing on a TV is meant to be, and a remote's swipe is a focus move
+        // rather than a drag. Everything a drawer holds is reachable another way on that platform
+        // or is not offered at all.
+        #if !os(tvOS)
         .simultaneousGesture(
             DragGesture(minimumDistance: 12)
                 .onEnded { value in
@@ -62,6 +68,7 @@ public struct ThroDrawer<Content: View>: View {
                     if dy < -48 { onDrag(.up) } else if dy > 48 { onDrag(.down) }
                 }
         )
+        #endif
     }
 }
 

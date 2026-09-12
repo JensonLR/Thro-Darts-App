@@ -242,9 +242,16 @@ public enum ThroHaptics {
 
     /// Whether a haptic is played at all. False on a Mac, in a test, and whenever the player has
     /// turned them off.
+    ///
+    /// **`#if os(iOS)`, and not a list of platforms that grows.** `UIImpactFeedbackGenerator` is an
+    /// iOS type: a watch has its own vocabulary through `WKInterfaceDevice`, a TV has nothing to
+    /// vibrate, and a Mac has nothing either. The guard used to read *UIKit but not watchOS*, which
+    /// was true when watchOS was the only other place this compiled and became wrong the moment tvOS
+    /// was tried — a condition that has to be edited for every new platform is a condition that will
+    /// be found by a build failure rather than by thinking.
     public static func play(_ event: Event, enabled: Bool = true) {
         guard enabled else { return }
-        #if canImport(UIKit) && !os(watchOS)
+        #if os(iOS)
         switch event {
         case .key:
             UIImpactFeedbackGenerator(style: .light).impactOccurred()
@@ -299,13 +306,13 @@ public enum ThroHaptics {
     /// unnamed intensities on another — and the intensities lived as literals in a scheduler.
     public final class Player {
         private let event: Event
-        #if canImport(UIKit) && !os(watchOS)
+        #if os(iOS)
         private let generator: UIImpactFeedbackGenerator?
         #endif
 
         public init(_ event: Event) {
             self.event = event
-            #if canImport(UIKit) && !os(watchOS)
+            #if os(iOS)
             switch event {
             case .strike, .matchWon: generator = UIImpactFeedbackGenerator(style: .heavy)
             case .stamp, .retracted: generator = UIImpactFeedbackGenerator(style: .rigid)
@@ -321,14 +328,14 @@ public enum ThroHaptics {
 
         /// Readies the engine. Costs nothing if it is already ready.
         public func prepare() {
-            #if canImport(UIKit) && !os(watchOS)
+            #if os(iOS)
             generator?.prepare()
             #endif
         }
 
         public func play(enabled: Bool = true) {
             guard enabled else { return }
-            #if canImport(UIKit) && !os(watchOS)
+            #if os(iOS)
             if let generator {
                 generator.impactOccurred(intensity: CGFloat(ThroHaptics.intensity(event)))
             } else {
