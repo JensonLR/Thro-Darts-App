@@ -71,6 +71,14 @@ jobs:
       - name: Every orientation offered has a layout behind it
         run: python3 tools/check_orientation_is_earned.py
 
+      # A pub television is the most exposed screen THRO has: nobody owns it, nobody signs out of
+      # it, and whoever picks up the remote is the operator. What keeps it safe is that it holds no
+      # credential, so it can only read the routes that name teams and venues and never a person.
+      # That was a comment at the top of Wall.swift until the Standard 7 audit; one import and one
+      # well-meaning line would have removed it with nothing failing.
+      - name: The pub wall never signs in
+        run: python3 tools/check_the_wall_never_signs_in.py
+
       # A transitive dependency is linkable, not nameable — and a type you can see is not a member
       # you can reach. Three macOS rounds at four minutes each, in one day: Geometry.swift naming
       # ThroMotion with only `import SwiftUI`, DartVisitTests naming Seat with

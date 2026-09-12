@@ -4616,3 +4616,58 @@ can accelerate a report out of the database. The test inserts decisions with an 
 
 The DPIA's R2 and item 1 of "what must happen before launch" now say this is built rather than needed, and
 the ROPA's retention row for the safety store states the period. Nine new tests; the whole API suite passes.
+
+## High-privacy defaults, audited surface by surface (Children's code Standard 7)
+
+The second of the two Children's-code gaps LAUNCH_REQUIREMENTS names, and the DPIA's item 4. The
+full audit is `docs/legal/DEFAULTS_AUDIT.md`; what follows is what it found.
+
+**Every default examined was already the private one**, which is a poor result for an audit unless it
+says exactly what it looked at and how it knows. So it does: every `@AppStorage` in the iOS sources
+was listed rather than remembered (eight; two are privacy-bearing), every unauthenticated route was
+read off `Api.kt`'s own `authenticated = false` flags rather than guessed, and the disclosure rule was
+read out of V016.
+
+**The rule that carries §1 is worth stating.** A person is named on a public surface only when
+`identity.player_may_be_disclosed` says so, and that needs a live claim **and** either guardian
+consent or self-consent from an account whose band actually says adult. An account is created
+`unknown` / `none`, so a new one is never nameable — and note the shape: **an unknown age behaves as
+a minor here without any code saying "minor"**, because it is what falls out when neither branch is
+satisfied. A rule that has to remember the unknown case is a rule that will forget it.
+
+**Found while auditing:** `Secretary.recordConsent` has **no production caller**. The secretary is
+built and not yet routed, so `player_may_be_disclosed` answers false for every player alive and no
+roster names anybody at all. That is the maximally private state, not a failure — but it is recorded
+because of what it implies for the route that will exist: recording consent must be something a
+person does on purpose, never a side effect of joining a team. One commit could make §1 untrue and
+nothing would fail.
+
+**Spotlight is on by default, and Standard 7 allows that only with a demonstrable reason.** Three
+facts were checked rather than assumed: the app writes to `CSSearchableIndex` only and donates no
+`NSUserActivity` (`isEligibleForPublicIndexing` appears nowhere in the codebase); it indexes nothing
+the phone does not already show; and turning it off deletes what was indexed rather than only
+stopping new writes. Diagnostics, the other privacy-bearing preference, is already off.
+
+### The one thing the audit changed, and why a comment was not enough
+
+`ThroVenueKit` — the whole Apple TV app — is safe because **it holds no credential**, so it can only
+read routes that name teams and venues and never a person. That was written in a comment at the top
+of `Wall.swift`. One import and one well-meaning line — *"the wall could show the live leg if it just
+had a token"* — would have removed the property, left the comment sitting there saying otherwise, and
+failed no test.
+
+`tools/check_the_wall_never_signs_in.py` now refuses any mention of a session store, a token, the
+keychain or the authenticated match stream anywhere in that package. **It was verified by breaking
+the wall on purpose** — a `SessionStore` added to `Wall.swift` — confirming it failed, and restoring
+the file. A guard that has never failed is a guard that might not work.
+
+### The decision the audit leaves owed
+
+**May a live leg be shown on a public screen?** `stream.match` is authenticated and stays that way.
+The question is not technical: a named under-18 fixture on a pub wall is a safeguarding question, and
+answering it *"only when every player is a confirmed adult"* requires a consent route that does not
+exist yet. §1 and §2 are the same piece of work. Until then a room that wants a live board gets it
+the way PD-041 already provides — the phone, by cable or AirPlay, with a person present and
+answerable for the screen.
+
+Counts: 23 checks green (22 in `tools/`, plus `apps/ios/check_fonts.py`).

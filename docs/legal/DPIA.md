@@ -60,6 +60,11 @@ though its fixture is still listed, because hiding it would leave a hole in a le
 member recorded as a minor is never listed to anyone but an admin, and — the load-bearing part — **an
 unknown age is treated as a minor** by every exposure rule.
 
+A person is named on a public surface only when a consent record exists — `identity.player_may_be_disclosed`
+requires a live claim **and** guardian consent, or self-consent from an account whose band actually says
+adult. An account starts `unknown`, so a new one is never nameable, and everybody else on a roster is
+counted rather than named. Audited in full at `docs/legal/DEFAULTS_AUDIT.md`.
+
 The residual risk is a **team name that identifies a child** ("Smith's under-16s"). Nothing in the system
 can detect that. *Mitigation is the safety route and an organiser's judgement, and it should be said out
 loud in the organiser guidance rather than assumed.*
@@ -155,7 +160,7 @@ to breach.
 | 4 | Transparency | The privacy policy is written in plain English. **Not yet a child-facing version** — open. |
 | 5 | Detrimental use | Nothing here is designed to be detrimental. |
 | 6 | Policies and standards | This, the ROPA, the terms. |
-| 7 | Default settings | **Open.** Needs an audit of every public surface for high-privacy defaults, one screen at a time. |
+| 7 | Default settings | **Met.** Audited surface by surface on 12 September 2026 — `docs/legal/DEFAULTS_AUDIT.md`. Every default examined was already the private one; two properties that were held only by a comment now have a guard and a test. |
 | 8 | Data minimisation | Strong. No email, no phone, no DOB, no stored location. |
 | 9 | Data sharing | Nothing is shared. No analytics on children, no advertising, no third-party SDKs in the client. |
 | 10 | Geolocation | **Met** — off by default, an obvious sign while in use, and Stop in the app (PD-086). |
@@ -171,7 +176,10 @@ to breach.
    by the server itself, because a period nothing enforces is a sentence in a policy.
 2. **The mailbox**, so a DSAR can be received and answered inside a month. *(R7.)*
 3. **A 72-hour breach plan.** *(R8.)*
-4. **A high-privacy defaults audit** against Standard 7, surface by surface.
+4. ~~A high-privacy defaults audit against Standard 7.~~ **Done** — `docs/legal/DEFAULTS_AUDIT.md`.
+   It leaves one decision owed, and it is a real one: **may a live leg be shown on a public screen?**
+   A named under-18 fixture on a pub wall is a safeguarding question, and answering it "only when
+   every player is a confirmed adult" needs a consent route that does not exist yet.
 5. **A child-facing explanation** of what THRØ keeps — Standard 4, and DSA Art 14(3) wants the same thing
    for the terms.
 6. **Art 28 processor terms** with Render, Neon and the mail host; **Art 27 EU representative** if EU users
