@@ -3772,3 +3772,13 @@ screen with something to say already fills. What a tablet should do with genuine
 PD-052 as open, because it is a design question and not a rule.
 
 Counts: client 746, API 29 suites (82 tests), HTTP 51 properties, schema 144, contrast 94 pairs.
+
+## Every empty state in the app is a card now
+
+Fifteen uses across eight files, one component. `EmptyState` drew its title, its sentence and its action on
+bare paper, which on a phone reads as restraint and on a tablet reads as a page that failed to load. It is
+the card surface every other card in the app uses now — the same raised fill, radius and hairline — so
+*nothing here yet* looks like a decision. Home, the blocked list, a league with no results, a club with no
+fixtures: all of them, from one change.
+
+Counts: client 746, API 29 suites (82 tests), HTTP 51 properties, schema 144, contrast 94 pairs.

@@ -370,8 +370,17 @@ public struct EmptyState: View {
                 ThroButton(actionLabel, variant: .primary, action: onAction)
             }
         }
-        .padding(.vertical, ThroSpacing.spacing8)
+        // A card, not a sentence on bare paper. An empty state is the emptiest a screen ever looks, and on
+        // a tablet it was a line of text adrift in two thirds of a page (PD-052). The surface is the one
+        // every card in the app uses, so *nothing here yet* reads as a decision rather than a page that
+        // failed to load.
+        .padding(ThroSpacing.spacing5)
         .frame(maxWidth: .infinity, alignment: .leading)
+        .background(ThroColor.colorBackgroundRaised)
+        .clipShape(RoundedRectangle(cornerRadius: ThroSpacing.radiusCard, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: ThroSpacing.radiusCard, style: .continuous)
+            .strokeBorder(ThroColor.colorBorderDefault, lineWidth: 1))
+        .padding(.vertical, ThroSpacing.spacing4)
     }
 }
 
