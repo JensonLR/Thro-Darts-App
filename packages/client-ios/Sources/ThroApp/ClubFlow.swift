@@ -643,6 +643,7 @@ public struct ClubsFlow: View {
                                onServerTeam: { route = .serverTeam($0) },
                                onJoinOrStart: { route = .joinOrStart },
                                onUseLocation: { nearby.useMyLocation() },
+                               onStopLocation: { nearby.stopUsingLocation() },
                                onRetry: { Task { await nearby.load(api, force: true); await teams.loadMine(api, signedIn: signedIn) } })
                     .task { await nearby.load(api); if case .idle = teams.mine { await teams.loadMine(api, signedIn: signedIn) } }
             }

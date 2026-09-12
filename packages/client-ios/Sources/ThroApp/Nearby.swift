@@ -113,6 +113,29 @@ public enum NearbyLogic {
         case denied
         case located(lat: Double, lon: Double)
     }
+
+    /// Whether the phone's location is being used **right now**, for the sign that says so (PD-086).
+    ///
+    /// The ICO's Children's code, Standard 10: geolocation off by default, and *"an obvious sign for
+    /// children when location tracking is active"*. THRØ does not track — it asks once per grant and holds
+    /// one fix — but the standard is about the child knowing, not about the technique, and a fix that is
+    /// ordering the list in front of them is their location being used.
+    public static func usingLocation(_ place: Place) -> Bool {
+        switch place {
+        case .asking, .located: return true
+        case .unknown, .denied: return false
+        }
+    }
+
+    /// The sign itself. Two states, because "finding you" and "using where you are" are different facts and
+    /// a child reading one when the other is true has been told something untrue.
+    public static func locationSign(_ place: Place) -> String? {
+        switch place {
+        case .asking: return "Finding where you are"
+        case .located: return "Using your location to order this list"
+        case .unknown, .denied: return nil
+        }
+    }
 }
 
 /// The Discover tab's knowledge: the leagues and events from the server, and where the phone is if
@@ -166,6 +189,17 @@ public final class Nearby: NSObject, ObservableObject, CLLocationManagerDelegate
         case .denied, .restricted: place = .denied
         default: place = .asking; m.requestLocation()
         }
+    }
+
+    /// Stops using the location and forgets the fix.
+    ///
+    /// **In the app, not only in Settings.** Standard 10 again: a child has to be able to turn it off where
+    /// they turned it on. Sending them to iOS Settings to undo something they did on this screen is the
+    /// kind of asymmetry the code exists to stop. Nothing was stored, so forgetting it is the whole of it —
+    /// the list simply goes back to the order it had before.
+    public func stopUsingLocation() {
+        manager?.stopUpdatingLocation()
+        place = .unknown
     }
 
     private func adopt(status: CLAuthorizationStatus) {

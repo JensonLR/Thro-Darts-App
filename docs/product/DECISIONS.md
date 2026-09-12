@@ -3942,3 +3942,33 @@ holds that the word "nobody" cannot appear once somebody has.
 iOS also has the share card, the disputed badge on it, and the undo path from a disputed result. Android has
 the label and the two rows. What it does **not** have is any way for this to reach anybody else — no upload,
 no claim by code, no league. A confirmed result on this phone is a confirmed result on this phone.
+
+## PD-086 — An obvious sign that the location is being used
+
+**12 September 2026.** One of the two gaps LAUNCH_REQUIREMENTS names against the ICO's Children's code,
+closed.
+
+Standard 10 asks for two things: geolocation **off by default**, and *"an obvious sign for children when
+location tracking is active"*. The first was always true — THRØ never asks until somebody presses the
+button. The second was not there at all.
+
+**THRØ does not track, and that is not the point.** It asks once per grant and holds one fix. The standard
+is about the child knowing, not about the technique, and a fix that is ordering the list in front of them is
+their location being used. Arguing otherwise would be reading a rule about children for what it lets you
+avoid.
+
+So Discover shows a sign whenever it is in use, in two states — *"Finding where you are"* while it is being
+asked for, *"Using your location to order this list"* once it is held — because those are different facts
+and a child reading one when the other is true has been told something untrue.
+
+**And a Stop beside it, in the app.** A child who can see that it is on and can only turn it off in iOS
+Settings has been told, not given a choice; sending somebody to Settings to undo what they did on this
+screen is exactly the asymmetry the code exists to stop. Nothing was stored, so forgetting the fix is the
+whole of it — the list goes back to the order it had.
+
+A test holds the property that matters more than either string: **every state shows something about
+location** — either the way to turn it on, or the sign that it is on with the way to stop. A state showing
+neither would be location quietly in use, which is the thing being legislated against.
+
+What is still open under the code: **high-privacy defaults on every public surface** (Standard 7), and the
+DPIA itself, which is a written assessment rather than code.

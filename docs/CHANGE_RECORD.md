@@ -4537,3 +4537,21 @@ scans, turned up in the Android build directory and broke dexing with *Type thro
 multiple times*.
 
 Counts: client 824 tests on iOS, 19 on Android, all 22 checks.
+
+## An obvious sign that the location is being used
+
+The ICO's Children's code, Standard 10, asks for geolocation off by default and an obvious sign while it is
+in use. Off by default it always was; the sign was not there at all.
+
+THRØ does not track — one fix per grant — and that is not the point. The standard is about the child
+knowing, and a fix ordering the list in front of them is their location being used; arguing otherwise would
+be reading a rule about children for what it lets you avoid. Discover now says so in two states, because
+"finding you" and "using where you are" are different facts, and puts **Stop** beside it — in the app, not
+only in iOS Settings, because a child who can see it is on and can only turn it off elsewhere has been told
+rather than given a choice.
+
+The test that matters is not either string: **every state shows something about location**, either the way
+to turn it on or the sign that it is on with the way to stop. A state showing neither would be location
+quietly in use.
+
+Counts: client 828 tests on iOS, 19 on Android, all 22 checks.

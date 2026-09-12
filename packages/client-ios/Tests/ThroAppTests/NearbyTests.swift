@@ -146,3 +146,48 @@ extension NearbyTests {
         XCTAssertEqual(LeaguesPlot.clustered(pins, degreesPerPoint: 0).count, 4, "no scale yet: every pin its own marker")
     }
 }
+
+// MARK: - the sign that location is in use (PD-086, Children's code Standard 10)
+
+extension NearbyTests {
+
+    func testTheSignIsShownWheneverTheLocationIsBeingUsedAndNeverOtherwise() {
+        // Standard 10 wants an obvious sign while location is in use. THRØ does not track — one fix per
+        // grant — but the standard is about the child knowing, and a fix ordering the list in front of them
+        // is their location being used.
+        XCTAssertFalse(NearbyLogic.usingLocation(.unknown))
+        XCTAssertFalse(NearbyLogic.usingLocation(.denied))
+        XCTAssertTrue(NearbyLogic.usingLocation(.asking))
+        XCTAssertTrue(NearbyLogic.usingLocation(.located(lat: 54.5, lon: -1.2)))
+    }
+
+    func testTheSignSaysWhichOfTheTwoThingsIsHappening() {
+        // "Finding you" and "using where you are" are different facts, and a child reading one when the
+        // other is true has been told something untrue.
+        XCTAssertEqual(NearbyLogic.locationSign(.asking), "Finding where you are")
+        XCTAssertEqual(NearbyLogic.locationSign(.located(lat: 0, lon: 0)),
+                       "Using your location to order this list")
+        XCTAssertNil(NearbyLogic.locationSign(.unknown))
+        XCTAssertNil(NearbyLogic.locationSign(.denied), "a refusal is not location being used")
+    }
+
+    func testTheSignAndTheOfferAreNeverBothAbsent() {
+        // Every state shows the player something about location: either the way to turn it on, or the sign
+        // that it is on with the way to stop. A state showing neither would be location quietly in use.
+        for place in [NearbyLogic.Place.unknown, .asking, .denied, .located(lat: 1, lon: 1)] {
+            XCTAssertTrue(DiscoverScreen.offersLocation(place) || NearbyLogic.locationSign(place) != nil,
+                          "\(place) offers nothing")
+        }
+    }
+
+    @MainActor func testStoppingForgetsTheFixSoTheListGoesBack() {
+        // In the app, not only in iOS Settings: a child has to be able to turn it off where they turned it
+        // on. Nothing was stored, so forgetting it is the whole of it.
+        let nearby = Nearby(leagues: .loaded([]), place: .located(lat: 54.5, lon: -1.2))
+        XCTAssertTrue(NearbyLogic.usingLocation(nearby.place))
+        nearby.stopUsingLocation()
+        XCTAssertEqual(nearby.place, .unknown)
+        XCTAssertFalse(NearbyLogic.usingLocation(nearby.place))
+        XCTAssertTrue(DiscoverScreen.offersLocation(nearby.place), "and it can be turned back on")
+    }
+}

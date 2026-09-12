@@ -68,9 +68,12 @@ each claim, so that the ones that need a solicitor can be taken to one knowingly
    a DSAR process answering inside a month, and a 72-hour breach plan. A DPO is not required at this size;
    a **record of processing (ROPA) is**, because children's data is involved.
 8. **A DPIA, because the ICO's Children's code applies.** *Founder + build.* THRØ is "likely to be accessed
-   by children". Against the code's standards, two gaps stand out: **geolocation must be off by default and
-   show an in-use indicator while it is on** (Standard 10) — it is opt-in but shows no indicator — and
-   **high-privacy defaults** must hold on every public surface (Standard 7). Consent age is 13 in the UK and
+   by children". Against the code's standards: **geolocation must be off by default and show an in-use
+   indicator while it is on** (Standard 10) — off by default it always was, and **the indicator is now
+   built** (PD-086): whenever the phone's location is being used, Discover says so and offers Stop beside
+   it, in the app rather than only in iOS Settings. What remains under the code is **high-privacy defaults**
+   on every public surface (Standard 7), and the DPIA document itself, which is a written assessment rather
+   than code. Consent age is 13 in the UK and
    16 in several EU states unless lowered.
 9. **Digital Services Act, if any EU user.** *Founder + build.* A published single point of contact
    (Art 12), terms that state restrictions **and explain them in a way a minor can understand** (Art 14(3)),

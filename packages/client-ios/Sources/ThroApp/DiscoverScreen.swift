@@ -24,6 +24,7 @@ public struct DiscoverScreen: View {
     private let onCreate: () -> Void
     private let onLeague: (UUID?) -> Void
     private let onUseLocation: () -> Void
+    private let onStopLocation: () -> Void
     private let onRetry: () -> Void
 
     public init(nearby: Nearby, teams: TeamsModel, signedIn: Bool = false, clubs: [Club],
@@ -32,6 +33,7 @@ public struct DiscoverScreen: View {
                 onLeague: @escaping (UUID?) -> Void = { _ in },
                 onServerTeam: @escaping (UUID) -> Void = { _ in }, onJoinOrStart: @escaping () -> Void = {},
                 onUseLocation: @escaping () -> Void = {},
+                onStopLocation: @escaping () -> Void = {},
                 onRetry: @escaping () -> Void = {}) {
         self.nearby = nearby
         self.teams = teams
@@ -44,6 +46,7 @@ public struct DiscoverScreen: View {
         self.onCreate = onCreate
         self.onLeague = onLeague
         self.onUseLocation = onUseLocation
+        self.onStopLocation = onStopLocation
         self.onRetry = onRetry
     }
 
@@ -95,6 +98,31 @@ public struct DiscoverScreen: View {
                     .thro(ThroTypography.body)
                     .foregroundStyle(ThroColor.colorTextOnBoardSecondary)
                     .fixedSize(horizontal: false, vertical: true)
+                // The sign, whenever the phone's location is in use, with the way to stop beside it. Never
+                // a passive line: a child who can see that it is on and cannot turn it off here has been
+                // told, not given a choice (Children's code Standard 10, PD-086).
+                if let sign = NearbyLogic.locationSign(nearby.place) {
+                    HStack(spacing: ThroSpacing.spacing2) {
+                        Icon(.compass, size: 14)
+                        Text(sign)
+                            .thro(ThroTypography.metadata)
+                            .fixedSize(horizontal: false, vertical: true)
+                        Spacer(minLength: ThroSpacing.spacing2)
+                        Button(action: onStopLocation) {
+                            Text("Stop")
+                                .thro(ThroTypography.labelStrong.uppercase(true).tracking(em: 0.06))
+                                .padding(.horizontal, ThroSpacing.spacing2)
+                                .frame(minHeight: ThroSpacing.touchTargetMinimum)
+                                .contentShape(Rectangle())
+                        }
+                        .buttonStyle(ChalkKeyStyle(.field, minHeight: ThroSpacing.touchTargetMinimum, seedAngle: 7))
+                        .fixedSize()
+                    }
+                    .foregroundStyle(ThroColor.colorTextOnBoard)
+                    .padding(.top, ThroSpacing.spacing1)
+                    .accessibilityElement(children: .combine)
+                    .accessibilityLabel("\(sign). Double tap Stop to turn it off.")
+                }
                 if DiscoverScreen.offersLocation(nearby.place) {
                     Button(action: onUseLocation) {
                         HStack(spacing: ThroSpacing.spacing2) {
