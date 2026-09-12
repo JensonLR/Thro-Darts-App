@@ -106,7 +106,7 @@ and four to eight hours a month of the founder's time, in Germany rather than Lo
 | --- | --- | --- |
 | **iPhone** | Shipping | — |
 | **iPad** | Same binary; the layout pass is done to 43 call sites (PD-052), the tab bar and empty states are fixed, and it has been looked at on a device | Two columns where a screen earns them (a list beside the map), and what a tall screen does with genuinely spare room |
-| **Apple Watch** | The Live Activity reaches the Smart Stack; there is **no watch app** | A watchOS target: the scoreboard at a glance, then scoring from the wrist over WatchConnectivity. The engine is pure Swift and already shared, so the rules come free |
+| **Apple Watch** | **A watch app, shipping** (PD-078): the leg at a glance, fed from the phone over WatchConnectivity, and the Live Activity still reaches the Smart Stack on its own | Scoring *from* the wrist — a different thing, because a watch that scores is a second writer to the journal and needs events, not a projection. The engine is pure Swift and already builds for watchOS, so the rules come free; the sync does not |
 | **TV / monitor** | An external display shows the board at room size (`ThroExternalScene`), by cable or AirPlay | A tvOS target for a venue: the board, the fixture, the league table, with no keypad. Same design tokens |
 | **Android** | Nothing yet; the design tokens already generate Kotlin | A Compose client. ADR-002 keeps a Kotlin scoring engine structurally parallel to the Swift one, which is the hard half already done |
 | **Wear OS** | — | Follows the Android client, same shape as the watch app |
@@ -115,9 +115,9 @@ and four to eight hours a month of the founder's time, in Germany rather than Lo
 
 **The order, as revised on 12 September 2026 (PD-064).** iPhone and iPad first, then the **web** — live
 since that morning — and then, instead of Android: **finish what exists**, because nobody has used any of it
-yet and a second platform doubles the surface nobody has looked at. Then **the rest of Apple**, the watch and
-then tvOS, which share the tokens, the pure Swift engine and the whole client and are new surfaces on a known
-stack. Then **Android**, which is a second implementation of everything, and Wear OS behind it. The
+yet and a second platform doubles the surface nobody has looked at. Then **the rest of Apple** — the watch, done that
+same day, and then tvOS — which share the tokens, the pure Swift engine and the whole client and are new
+surfaces on a known stack. Then **Android**, which is a second implementation of everything, and Wear OS behind it. The
 **rating** stays last, not because it is least wanted but because OD-001 cannot close without real matches.
 
 Android is half the market and it waits; the deletion URL that unblocked Play is live and does not expire.

@@ -14,9 +14,9 @@
             buildForAnalyzing = "YES">
             <BuildableReference
                BuildableIdentifier = "primary"
-               BlueprintIdentifier = "7A5E00000000000000000008"
-               BuildableName = "ThroDarts.app"
-               BlueprintName = "ThroDarts"
+               BlueprintIdentifier = "7A5E00000000000000000052"
+               BuildableName = "ThroWatch.app"
+               BlueprintName = "ThroWatch"
                ReferencedContainer = "container:ThroDarts.xcodeproj">
             </BuildableReference>
          </BuildActionEntry>
@@ -44,9 +44,9 @@
          runnableDebuggingMode = "0">
          <BuildableReference
             BuildableIdentifier = "primary"
-            BlueprintIdentifier = "7A5E00000000000000000008"
-            BuildableName = "ThroDarts.app"
-            BlueprintName = "ThroDarts"
+            BlueprintIdentifier = "7A5E00000000000000000052"
+            BuildableName = "ThroWatch.app"
+            BlueprintName = "ThroWatch"
             ReferencedContainer = "container:ThroDarts.xcodeproj">
          </BuildableReference>
       </BuildableProductRunnable>
@@ -61,9 +61,9 @@
          runnableDebuggingMode = "0">
          <BuildableReference
             BuildableIdentifier = "primary"
-            BlueprintIdentifier = "7A5E00000000000000000008"
-            BuildableName = "ThroDarts.app"
-            BlueprintName = "ThroDarts"
+            BlueprintIdentifier = "7A5E00000000000000000052"
+            BuildableName = "ThroWatch.app"
+            BlueprintName = "ThroWatch"
             ReferencedContainer = "container:ThroDarts.xcodeproj">
          </BuildableReference>
       </BuildableProductRunnable>

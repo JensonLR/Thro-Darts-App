@@ -72,12 +72,28 @@ public enum ThroLiveCopy {
             return "Score may be out of date — open THRØ"
         }
         if let thrower = state.thrower {
-            if !state.checkout.isEmpty {
-                return "\(state.name(thrower)) to throw · checkout \(state.checkout.joined(separator: " "))"
+            let route = route(state, stale: stale)
+            if !route.isEmpty {
+                return "\(state.name(thrower)) to throw · checkout \(route.joined(separator: " "))"
             }
             return "\(state.name(thrower)) to throw"
         }
         return "Between legs"
+    }
+
+    /// The finish to show, or nothing.
+    ///
+    /// **A route belongs to whoever is on the oche, and is only as true as the number it was worked out
+    /// from.** So it is empty when there is no finish, when the leg is decided, when nobody is throwing,
+    /// and when the score may have stopped being current — telling somebody to throw treble nineteen,
+    /// double twelve at a remainder that has moved is worse than telling them nothing, and the surface
+    /// most likely to be acted on is the one on their wrist.
+    ///
+    /// The caption has always obeyed all of that, inside its own control flow, which meant a surface
+    /// that drew the route on a line of its own silently got none of it. Now both ask.
+    public static func route(_ state: ThroLiveState, stale: Bool) -> [String] {
+        guard state.winner == nil, state.thrower != nil, !stale else { return [] }
+        return state.checkout
     }
 
     /// The legs, as a scoreline. Never a running average or any other figure: this surface cannot

@@ -64,13 +64,16 @@ jobs:
         run: swift test --package-path packages/client-ios
 
   watch-ready:
-    name: The design system still builds for the watch
-    # There is no watch app yet (PD-064 puts it after the polish pass). This is the foundation for
-    # one, and a foundation nobody compiles rots: the whole design system, the scoring engine and the
-    # statistics all build for watchOS today, and the only two things that did not were a trait
-    # resolution with nothing to resolve on a watch and a colour picker nobody uses from a wrist
-    # (PD-072). Without this step the next iOS-only API to arrive would put that back without anybody
-    # noticing until the watch target existed and the bill came due all at once.
+    name: The watch app and the modules under it build for watchOS
+    # The watch app exists now (PD-078). The three module steps below predate it and stay: they were
+    # here when there was no watch target at all, because a foundation nobody compiles rots — and the
+    # only two things that had gone were a trait resolution with nothing to resolve on a watch and a
+    # colour picker nobody uses from a wrist (PD-072). They are also the fast half: a broken module
+    # says which module, where a failing app build says only that the app failed.
+    #
+    # The design system is still built even though the watch app does not link it. It is the
+    # foundation for the day a wrist does more than glance, and the bill for letting it rot arrives
+    # all at once.
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
@@ -86,6 +89,11 @@ jobs:
         run: |
           cd packages/engine-swift
           xcodebuild -scheme ThroEngine -destination 'generic/platform=watchOS Simulator' -quiet build
+      - name: The watch app itself
+        run: |
+          xcodebuild -project apps/ios/ThroDarts.xcodeproj -scheme ThroWatch \
+            -destination 'generic/platform=watchOS Simulator' -configuration Debug \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO -quiet build
 
   ios-app:
     name: iOS app builds for the simulator
@@ -93,6 +101,10 @@ jobs:
     # macOS proves the packages compile for macOS; only xcodebuild against the iOS SDK proves they
     # compile for the phone, where SwiftUI's availability differs. Unsigned, because CI has no team;
     # the founder's Mac signs it.
+    #
+    # This also builds the watch app and embeds it, because the phone app depends on it — so the two
+    # cannot drift apart without a red build, which is the whole reason the watch is a dependency
+    # rather than a thing somebody remembers to build.
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4

@@ -3367,3 +3367,121 @@ weight that comment exists to keep out.
 **Not done yet:** the watchOS target in the Xcode project, and WatchConnectivity to feed the state across.
 The view and its rules are the part worth getting right first; the target is thirteen lines mounting a
 module, which is how the iOS app is built too.
+
+## PD-078 — The watch app: a target, and the link that feeds it
+
+**12 September 2026.** PD-077 built the view; this is the app it lives in and the thing that tells it what to
+draw. Together they finish the first of PD-064's "rest of Apple".
+
+### The target is thirteen lines, because everything real is in a package
+
+`apps/ios/ThroWatch/ThroWatchApp.swift` mounts `ThroWatchRoot` and opens the link. That is all of it — the
+same shape as the phone's target (nineteen lines) and the widget extension's (twenty-two). A **single-target
+watch app**, which is what watchOS 7 and later want; the two-target shape with a WatchKit extension inside an
+app bundle is still accepted, is still what most of the internet describes, and exists for watchOS 6 — a
+third target to keep true for nothing.
+
+It is a **dependency of the phone app**, embedded through a Copy Files phase at `ThroDarts.app/Watch/`. Not
+an optional extra somebody remembers to build: the phone target cannot build without it, so CI cannot go
+green while the watch is broken. `dstSubfolderSpec = 16` with `dstPath = $(CONTENTS_FOLDER_PATH)/Watch`, and
+the wrong value there — `13`, where extensions go — produces an app that builds, installs, and simply never
+puts anything on a watch.
+
+**The whole `xcodebuild` matrix was run before this was called done**, because the founder's phone build had
+been broken by a project-file mistake four hours earlier and this touches the same file: Debug, Personal and
+Release for the simulator; Debug for a device with automatic provisioning, which registered
+`app.thro.darts.watchkitapp` and signed it; and the phone's three entitlements re-read off the signed binary
+to prove nothing was disturbed.
+
+### Application context, and why that is not a sync policy
+
+WatchConnectivity offers three ways to move a dictionary. `sendMessage` needs the counterpart reachable at
+that instant, which a watch with its screen off is not. `transferUserInfo` is a **FIFO queue** — a wrist that
+was out of range walks forward through every dead score in order, and a scoreboard reading 180 because that
+is where the replay has got to is worse than one reading nothing. `updateApplicationContext` keeps exactly
+one dictionary, replaces it on every write, and hands the latest over the moment the counterpart next runs.
+
+**That is last-write-wins, and it does not touch the rule that sync is never last-write-wins.** Nothing on
+the watch is a source of truth: it has no journal, it writes nothing back, and it holds the same projection
+the Lock Screen and the widgets hold. There is no second writer to conflict with. The day a watch can
+*score*, this transport stops being sufficient and a leg from a wrist becomes journal events like any other —
+which is exactly why "scoring from the wrist" is written down as a separate, larger thing and not as the
+obvious next commit.
+
+**Staleness is judged on the receiving clock.** The message carries no timestamp; the watch notes when it
+arrived. Two devices are two clocks, and a wrist that trusted the sender's would be wrong by the skew — and
+the number it is judging is a number somebody is about to believe.
+
+### One line in the one place a leg leaves the app
+
+`LiveBoard` already was *"the one place ThroPlay talks to the outside"* — the Lock Screen, the wall screen.
+The wrist is one more of those, so it is one line in each of `start`, `update`, `finish`, and nothing
+subscribes to anything. **`finish` is the one asymmetry**: the wall is cleared outright and the wrist is sent
+the finished leg. A room reading a decided scoreline as though it were live is the failure the wall exists to
+avoid; a watch is on the arm of somebody who was there, and *"Ann wins"* is what they want on it for the walk
+back to the table — which is why the Lock Screen lingers too.
+
+The sender holds **one** pending dictionary until the session is up, because activation is asynchronous and
+the very first thing a launch says is *"nothing is on"*. Without that, a phone killed mid-leg would leave
+that leg on a wrist forever. One dictionary is not a queue; it is the transport's own rule, a moment earlier.
+
+### The words are different because the drawing is
+
+The Lock Screen writes *"Jenson R. to throw · checkout T19 D12"*. **The first build of the wrist showed that
+sentence under a route it had already drawn in green, under a numeral already twice the size of the other
+player's** — three ways of saying one thing, on the surface with the least room of any of them. It was
+obvious in the simulator and invisible in the code.
+
+So the wrist's line says only what the drawing cannot: the leg is decided, the link has gone quiet, nobody is
+on the oche. Otherwise it says nothing. The **precedence is `ThroLiveCopy`'s and is held against it by a
+test** — decided outranks stale, stale outranks the rest — so this is the same rule with an empty bottom of
+the list, not a second opinion. The legs go from two small digits beside two big ones to one scoreline,
+`2–1`, taken from `ThroLiveCopy.legs` so three surfaces cannot disagree about the separator.
+
+### `-ThroWristDemo`
+
+A DEBUG-only launch argument that puts a leg on a wrist with no phone attached, so the layout can be looked
+at. The phone has had `-ThroScreen` for the same reason from the beginning, and the reason is this entry:
+both faults above were found by looking, and neither had a failing test. DEBUG only, because a fictional
+score on a release build is a score somebody could believe.
+
+### Three faults found by looking, none of which had a failing test
+
+All three were invisible in the code and obvious on a watch, which is the argument for the demo flag and for
+this project's rule about looking before calling something done.
+
+1. **The route was said twice** — drawn in green on its own line and appended to the caption underneath.
+2. **A stale score kept its route.** The wrist warned "may be out of date" above a finish it still showed. A
+   route is only as true as the remainder it was worked out from. The caption had always dropped it when
+   stale — inside its own control flow, so a surface drawing the route on its own line silently got none of
+   the rule. It is now `ThroLiveCopy.route(state, stale:)`, which both ask, and which is empty when the leg
+   is decided, when **nobody is on the oche**, and when the score may have stopped being current. The third
+   of those was a third instance of the same fault, found the same way one screenshot later.
+3. **The winner was drawn as the quiet one.** Emphasis followed *is throwing*, and nobody throws once it is
+   won, so a decided leg dimmed both numerals — the screen's answer to the only question left, in the
+   background colour. The subject of the screen is now the winner, then the thrower, then nobody.
+
+### And `Personal` is gone
+
+**It broke this change, in a second and entirely different way from PD-075's.** A custom build
+configuration is compiled as **release** by the Swift package build regardless of what
+`SWIFT_ACTIVE_COMPILATION_CONDITIONS` the Xcode targets set. So under `Personal`, `#if DEBUG` was *true* in
+the app target and *false* in the package it links — and `-ThroWristDemo`, which compiled under Debug and
+under Release, failed to compile under Personal alone.
+
+PD-075 had already found that `Personal` signed against an empty entitlements file, made it identical to
+`Debug`, and said it should be retired the next time the project file was open. It was open. All three of
+its configurations were confirmed byte-identical to their `Debug` counterparts first, so the retirement
+changes nothing except that the trap is gone; the scheme's Run action moves to `Debug`, which is the
+configuration that was proven to carry all three entitlements.
+
+**Two configurations that must stay identical are one configuration and a trap.** That is the general rule
+this leaves behind, and `tools/check_app_group.py` now states the simple version — every configuration of
+every target signs with the real entitlements — instead of carrying an exception for a case that ended at
+enrolment.
+
+### Not done
+
+Scoring from the wrist. Complications. A watch that shows the *next fixture* when nothing is live, which the
+projection already computes for the widgets and which would need the App Group's contents crossing the link
+rather than just the leg.

@@ -4229,3 +4229,43 @@ extension links it.
 Still to come: the watchOS target in the Xcode project and the connectivity to feed it.
 
 Counts: client 780 tests (6 on a wrist), all 22 checks.
+
+## A watch app, and the third build configuration retired
+
+**The watch app ships.** `apps/ios/ThroWatch` is thirteen lines mounting a package module, the same shape as
+the phone target and the widget extension, and it is a **dependency of the phone app** rather than an
+optional extra — CI cannot go green while the watch is broken. Debug and Release were built for the
+simulator, Debug for a device with automatic provisioning (which registered `app.thro.darts.watchkitapp` on
+its own), and the phone's three entitlements re-read off the signed binary to prove nothing was disturbed,
+because a project-file mistake had broken that same build four hours earlier.
+
+**The link is `updateApplicationContext`**, which keeps one dictionary and replaces it, because a scoreboard
+wants the latest truth: `sendMessage` needs a watch that is awake, and `transferUserInfo` is a queue that
+would walk a returning wrist forward through every dead score in order. That is last-write-wins and it does
+not bend the rule about sync, because nothing on the watch is a source of truth — no journal, nothing written
+back, the same projection the Lock Screen holds. Staleness is judged on the receiving clock, never on a
+timestamp in the message: two devices are two clocks. The sender holds one pending dictionary until
+activation completes, or the very first thing a launch says — *nothing is on* — would be dropped, and a phone
+killed mid-leg would leave that leg on a wrist forever. One line joins `LiveBoard`, which already was the one
+place a leg leaves the app; the wall is cleared at the end and the wrist is sent the finished leg, because a
+room reading a decided scoreline as live is the failure the wall exists to avoid and a watch is on the arm of
+somebody who was there.
+
+**Three faults were found by looking at it on a watch, and none had a failing test.** The route was said
+twice. A stale score kept showing its finish — a route is only as true as the remainder behind it, and the
+caption had always dropped it *inside a sentence*, so a surface drawing the route on its own line got none of
+the rule; it is now `ThroLiveCopy.route`, which both surfaces ask, and which is also empty when nobody is on
+the oche, which was the same fault a third time. And a decided leg dimmed both numerals, because emphasis
+followed "is throwing" and nobody throws once it is won — so the answer to the only question left was drawn
+in the quiet colour. `-ThroWristDemo` exists for exactly this: a DEBUG-only launch argument that puts a leg
+on a wrist with no phone attached, confirmed absent from a Release binary.
+
+**And `Personal` is retired.** It broke this change in a second way, unrelated to PD-075's: a custom
+configuration is compiled as *release* by the Swift package build whatever the Xcode targets set, so
+`#if DEBUG` was true in the app target and false in the package it links, and code that built under Debug and
+Release failed under Personal alone. Its three configurations were confirmed byte-identical to Debug first;
+the scheme's Run action moves to Debug. Two configurations that must stay identical are one configuration and
+a trap.
+
+Counts: client 803 tests (29 on a wrist), all 22 checks, Debug and Release both build for the simulator and
+the device, and the watch app for watchOS.

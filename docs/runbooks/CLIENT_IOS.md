@@ -1,7 +1,7 @@
 # Running the iOS client
 
 > **Verification status, 2026-09-07.** Every package compiles and every test passes on macOS CI —
-> 780 tests in all: 184 design, 105 journal, 101 scoring session and share card, 359 opening, app and teams, 25 Lock Screen, wall and widgets, 6 on a wrist — and the
+> 803 tests in all: 184 design, 105 journal, 101 scoring session and share card, 359 opening, app and teams, 25 Lock Screen, wall and widgets, 29 on a wrist — and the
 > Xcode app builds for the iOS simulator on
 > CI with Xcode 26.6, on every push that touches them. **The app has run on a phone**: the founder's,
 > the evening of 2026-09-05, a full best-of-3 from setup to result, in dark mode, on an iPhone 14 Pro Max
@@ -45,16 +45,23 @@ cannot dismiss, and the screenshot you get back is that alert over whatever was 
 
 ## Running it on the phone, step by step
 
-**On a free Apple team — a "Personal Team" in Xcode — the normal configuration will not sign.**
-Apple does not let a personal team use Sign in with Apple, Associated Domains or App Groups, and
-this app carries all three (the group since the Live Activity, the other two since sign-in). Until
-you are in the Apple Developer Program, build with the `Personal` configuration, which grants none
-of them: in Xcode, **Product → Scheme → Edit Scheme… → Run → Info → Build Configuration → Personal**,
-then run. What that costs on the phone: Sign in with Apple and passkeys refuse (they need the
-capabilities), the wall and the widgets have no shared container and show their empty state; **Sign
-in with Google works**, and so does everything else. Enrolling in the Developer Program
-(<https://developer.apple.com/programs/enroll/>) lifts all of it and is a precondition of
-TestFlight and the App Store in any case; afterwards switch the scheme back to `Debug`.
+**There are two build configurations, Debug and Release, and the scheme runs Debug.** There used to
+be a third, `Personal`, for a free Apple team — Apple does not let a personal team use Sign in with
+Apple, Associated Domains or App Groups, and this app carries all three, so `Personal` signed against
+an empty entitlements file and granted none of them.
+
+**It was retired on 12 September 2026 (PD-078), and it is worth knowing why so nobody adds it back.**
+It stopped being correct the day the founder enrolled, and nothing said so: the scheme's Run action
+used it, so pressing ▶ produced a build with no capabilities at all, and every symptom looked like a
+broken feature rather than a build (PD-075). Then it broke a second time and differently — a *custom*
+configuration is compiled as **release** by the Swift package build, whatever `SWIFT_ACTIVE_COMPILATION_CONDITIONS`
+the Xcode targets set, so `#if DEBUG` was true in the app target and false in the packages it links,
+and code that compiled under Debug and Release failed under Personal alone. Two configurations that
+must stay identical are one configuration and a trap.
+
+If you are ever on a free team again, the honest answer is to enrol
+(<https://developer.apple.com/programs/enroll/>): it is a precondition of TestFlight and the App
+Store in any case.
 
 
 Written for someone who has never used Xcode. The phone has already run the durability probe, so the
@@ -119,8 +126,11 @@ Xcode → Settings → Accounts; nothing in the project needs to change.
 8. In the middle of the window, under the heading **TARGETS**, click **ThroDarts** (the row with the
    app icon). Not the row under PROJECT.
 9. Click the **Signing & Capabilities** tab along the top of that panel.
-10. **Automatically manage signing** should be ticked. In the **Team** menu choose your own name —
-    the *Personal Team* you used for ThroProbe.
+10. **Automatically manage signing** should be ticked. In the **Team** menu choose your enrolled
+    team. There are three bundle identifiers to sign now — `app.thro.darts`, `.live` and
+    `.watchkitapp` — and Xcode registers all three by itself the first time. If its UI gets stuck on
+    a capability it cannot determine, one command-line build with `-allowProvisioningUpdates` does
+    the registration without the UI: see **When Xcode's signing UI is stuck** below.
 11. If red text appears saying the bundle identifier is not available, click into **Bundle
     Identifier**, replace `app.thro.darts` with `com.thro.ThroDarts` (your ThroProbe identifier used
     `com.thro`, so this will be free), and press Return. The red text goes away.
@@ -141,6 +151,44 @@ and on **ThroLive**; they must be the same group or the widgets read an empty co
 not in, the app quietly writes nothing, and the widgets show their empty state. The app, the Lock
 Screen scoreboard and everything else work exactly as before — only the Home Screen widget is blank.
 There is no crash and no error to chase.
+
+#### When Xcode's signing UI is stuck
+
+Xcode sometimes refuses to build with three errors that look like three problems and are one:
+
+```
+The capability associated with "ASSOCIATED_DOMAINS" could not be determined
+Provisioning profile "iOS Team Provisioning Profile: app.thro.darts" doesn't include the Associated Domains capability
+… doesn't include the Sign In with Apple capability
+```
+
+**The second and third are inferences from the first, not observations.** Xcode keeps a local cache
+of what each capability *is*; when that cache is empty it cannot decide whether the profile covers
+something it cannot name, so it reports the profile as lacking it. The App ID is usually fine — check
+once at <https://developer.apple.com/account/resources/identifiers/> and then stop looking.
+
+The way through is to let the command line do the registration, which uses the same account and none
+of the UI:
+
+```bash
+xcodebuild -project apps/ios/ThroDarts.xcodeproj -scheme ThroDarts -configuration Debug -destination 'generic/platform=iOS' -allowProvisioningUpdates build
+```
+
+That creates or repairs whatever App IDs and profiles are missing — including
+`app.thro.darts.watchkitapp` the first time the watch app is built — and Xcode picks them up
+afterwards. To go straight from there onto the phone without touching Xcode at all, `xcrun devicectl
+device install app --device <name> <path-to-.app>` then `… process launch`.
+
+To prove a build really carries its capabilities rather than believing a green tick:
+
+```bash
+codesign -d --entitlements :- ~/Library/Developer/Xcode/DerivedData/ThroDarts-*/Build/Products/Debug-iphoneos/ThroDarts.app
+```
+
+Three things must be in it: `com.apple.developer.applesignin`,
+`com.apple.developer.associated-domains` and `com.apple.security.application-groups`. **Check the
+`.app`'s timestamp before you believe what it says** — DerivedData keeps more than one, and reading a
+six-day-old bundle once produced a confident and completely wrong diagnosis.
 
 ### 3. Run it
 
@@ -271,7 +319,8 @@ Then, in this order, because each one needs the one before it:
 |---|---|---|---|
 | 1 | **Score a match** | Start match → two names → **Start scoring** → throw one visit | Nothing |
 | 2 | **Lock Screen and Dynamic Island** | **Stay on the scoring screen** and lock the phone. Both remainders are on the Lock Screen; swipe up to the Home Screen and they are in the Dynamic Island | Live Activities on for THRØ, and the scoring screen still open — the scoreboard lasts exactly as long as that screen, so backing out of a match takes it down on purpose |
-| 3 | **Apple Watch** | With the same match running, raise your wrist and swipe to the Smart Stack | An Apple Watch paired. There is no watch app — this is the Live Activity reaching the watch by itself |
+| 3 | **Apple Watch, the Smart Stack** | With the same match running, raise your wrist and swipe to the Smart Stack | An Apple Watch paired. This is the Live Activity reaching the watch by itself, with no watch app involved |
+| 3b | **Apple Watch, the app** | Open THRØ on the watch while a match is being scored. It shows the leg; with nothing on, it says so. Lock the phone and it keeps what it was last told; leave it two and a half minutes without a dart and the caption says the score may be out of date | The watch app installed — it goes on with the phone app, but the watch has to be told to install it the first time (Watch app → All Apps) |
 | 4 | **Venue TV mode** | Plug in an HDMI adapter, or Control Centre → **Screen Mirroring** → an Apple TV. The board fills the screen at room size while the phone keeps the keypad | A cable or an AirPlay receiver. **No app can turn this on for you.** If the readiness screen says *Blocked* here, the build cannot be given a screen at all and mirroring is all you will get |
 | 5 | **Share card** | Finish the match → on the result screen, **Share the result**. Opening a finished match from Home lands on the same screen | A finished match — won, retired **or** abandoned. An abandoned one gets a card too: no scoreline, and a line saying nothing is claimed about who won |
 | 6 | **Home Screen widget** | Long-press the Home Screen → **+** → THRØ → the small or the medium | The App Group (below). Add it once; it redraws itself |

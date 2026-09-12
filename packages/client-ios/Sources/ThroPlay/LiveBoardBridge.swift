@@ -1,6 +1,7 @@
 import Foundation
 import ThroJournal
 import ThroLiveKit
+import ThroWatchKit
 
 /// The one place `ThroPlay` talks to ActivityKit, so every platform guard is here rather than
 /// scattered through a view.
@@ -18,6 +19,7 @@ public struct LiveBoard {
     func start(_ session: MatchSession) {
         guard session.winner == nil, session.ending == nil else { return }
         ThroVenue.shared.show(session.liveState, format: session.liveFormat)
+        ThroWristLink.shared.send(session.liveState, format: session.liveFormat)
         #if os(iOS)
         // A finished match gets no scoreboard: there is nothing live about it, and the result
         // screen is where a result belongs.
@@ -30,6 +32,7 @@ public struct LiveBoard {
 
     func update(_ state: ThroLiveState) {
         ThroVenue.shared.show(state, format: ThroVenue.shared.format)
+        ThroWristLink.shared.send(state, format: ThroVenue.shared.format)
         #if os(iOS)
         ThroLiveScoreboard.shared.update(state)
         #endif
@@ -42,6 +45,12 @@ public struct LiveBoard {
     /// unlike the Lock Screen there is nobody holding it to notice.
     func finish(_ session: MatchSession) {
         ThroVenue.shared.clear()
+        // The wrist is sent the finished leg rather than cleared, and is the one outside surface
+        // treated that way. A wall screen is read by a room who did not see it happen; a watch is on
+        // the arm of somebody who did, and *"Ann wins"* is what they want on it for the walk back to
+        // the table. `ThroLiveCopy` names the winner instead of a thrower, so it cannot be misread
+        // as still running — which is exactly why the Lock Screen lingers too.
+        ThroWristLink.shared.send(session.liveState, format: session.liveFormat)
         #if os(iOS)
         ThroLiveScoreboard.shared.end(session.liveState)
         #endif
@@ -50,8 +59,16 @@ public struct LiveBoard {
     /// Clears anything a previous launch left behind.
     public static func clearStale() {
         ThroVenue.shared.clear()
+        ThroWristLink.shared.send(nil, format: "")
         #if os(iOS)
         ThroLiveScoreboard.shared.endAnythingLeftOver()
         #endif
+    }
+
+    /// Opens the link to the watch, if this phone has one. Once, at launch, and before anything is
+    /// sent: the context a watch is handed on waking is whatever was last left on an activated
+    /// session, so a phone that never activated leaves nothing and a wrist opened mid-leg is blank.
+    public static func openTheWrist() {
+        ThroWristLink.shared.start()
     }
 }

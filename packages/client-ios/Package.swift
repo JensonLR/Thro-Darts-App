@@ -8,7 +8,8 @@ import PackageDescription
 // no compile-time dependency on the network layer, checked in CI via the module dependency graph."
 // The network target is ThroNet, and nothing the scoring path depends on may depend on it:
 // ThroJournal reaches only the engine and SQLite; ThroPlay reaches the journal, the engine, the
-// statistics and the design system; ThroNet reaches Foundation and nothing of ours.
+// statistics, the design system and the surfaces outside the app it hands a leg to; ThroNet reaches
+// Foundation and nothing of ours.
 // Only ThroApp reaches ThroNet. `tools/check_absence_claims.py` holds the direction.
 //
 // Apple platforms only, because SwiftUI and the asset catalogue are. The engine and the statistics
@@ -78,8 +79,13 @@ let package = Package(
 
         // A leg on a wrist (PD-077). Draws `ThroLiveState` — the same state the Lock Screen, the widgets
         // and an external display draw — in the arrangement a nearly-square screen read at arm's length
-        // wants. Its own target rather than a view inside ThroLiveKit, which is deliberately the lightest
-        // here because a widget extension links it.
+        // wants, and carries **both ends of the link that feeds it**: the phone sends from here and the
+        // watch receives here, so the payload's shape cannot be written in one module and misread in
+        // another.
+        //
+        // Its own target rather than a view inside ThroLiveKit, which is deliberately the lightest here
+        // because a widget extension links it — and an extension that pulled in WatchConnectivity and a
+        // watch layout would be carrying two things it can never use.
         .target(
             name: "ThroWatchKit",
             dependencies: ["ThroLiveKit", .product(name: "ThroTokens", package: "design-tokens")],
@@ -104,7 +110,9 @@ let package = Package(
         .target(
             name: "ThroPlay",
             dependencies: [
-                "ThroDesign", "ThroJournal", "ThroLiveKit",
+                // ThroWatchKit, not for its views but for the link: `LiveBoard` is the one place a leg
+                // is handed to everything outside the app, and the wrist is one more of those.
+                "ThroDesign", "ThroJournal", "ThroLiveKit", "ThroWatchKit",
                 .product(name: "ThroTokens", package: "design-tokens"),
                 .product(name: "ThroEngine", package: "engine-swift"),
                 .product(name: "ThroStatistics", package: "statistics-swift"),

@@ -398,6 +398,7 @@ public struct ThroRootView: View {
             reindex()
             // A scoreboard that outlived the app that started it is a score nobody is keeping. On a
             // cold launch the in-memory handle is gone, so anything still running is orphaned.
+            LiveBoard.openTheWrist()
             LiveBoard.clearStale()
             project()
             collect()
