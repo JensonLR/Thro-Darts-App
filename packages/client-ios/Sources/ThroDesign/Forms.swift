@@ -98,7 +98,11 @@ public struct SegmentedControl<ID: Hashable>: View {
                         .lineLimit(1)
                         .minimumScaleFactor(0.8)
                         .padding(.horizontal, ThroSpacing.spacing2)
-                        .frame(maxWidth: .infinity, minHeight: ThroSpacing.touchTargetMinimum)
+                        // `maxHeight` as well as `minHeight` (PD-066): the fill is the selection, and a
+                        // fill that does not reach the top and bottom of its own cell reads as a smaller
+                        // control floating inside a larger one.
+                        .frame(maxWidth: .infinity, minHeight: ThroSpacing.touchTargetMinimum,
+                               maxHeight: .infinity)
                         .background(on ? ThroColor.colorSurfaceBrand : Color.clear)
                         .contentShape(Rectangle())
                 }
@@ -109,6 +113,13 @@ public struct SegmentedControl<ID: Hashable>: View {
                 }
             }
         }
+        // **The control is as tall as a segment and no taller.** The dividers are `Rectangle`s, which are
+        // greedy: offered more height they take it, which made the whole control grow to whatever the
+        // parent had going spare while each segment's fill stayed at the touch minimum. On an iPad that
+        // drew a short green block with white above and below it — the selection not filling its own
+        // cell. `fixedSize` vertically makes the row report its ideal height instead of accepting what it
+        // is offered, so the segment sets the height and the dividers follow it (PD-066).
+        .fixedSize(horizontal: false, vertical: true)
         .background(ThroColor.colorSurfacePrimary)
         .clipShape(RoundedRectangle(cornerRadius: ThroSpacing.radiusControl, style: .continuous))
         .overlay(RoundedRectangle(cornerRadius: ThroSpacing.radiusControl, style: .continuous)

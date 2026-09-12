@@ -4037,3 +4037,30 @@ nothing**, and with one sends `{"supersedes": "…", "reason": "played under pro
 reason trimmed. A fixture open because it was annulled shows the reason where it is entered.
 
 Counts: API 29 suites (87 tests), 53 HTTP properties, 148 schema properties, client 772 tests.
+
+## The selected segment did not fill its own cell
+
+First thing the polish pass turned up, and it was on every device. The chosen segment's green stopped short
+of the top and bottom of its cell while the dividers either side ran the full height past it — a smaller
+control floating inside a larger one, on the screen where a player picks 501 and best of five.
+
+A `Rectangle` is greedy. The dividers are rectangles a point wide with no height given, so they take
+whatever is offered; the segments carry a `minHeight` and no maximum, so they do not. The control grew to
+whatever spare height the parent had and the selection stayed at the touch minimum. A phone had no spare
+height to hand it, which is why this survived to an iPad to be seen.
+
+The row reports its ideal height now instead of accepting what it is offered, and the fill may reach the
+full height of its cell. The setup screen came in tighter as a side effect: four rows that were each about
+twice their proper height are the right height.
+
+**And the empty-state finding, which is not fixed here.** Home on an iPad with nothing scored is a small
+card with 77% of the page empty beneath it; You is 56%, Play 54%. This is the emptiest the app can be, and
+the earlier pass (PD-052) already made these read as decisions rather than failures by giving them cards —
+on a phone. The cards did not transfer: a card that is 90% of a phone's width and a quarter of its height is
+a notice in the corner of a tablet.
+
+Centring was tried in that earlier pass and rejected — *"the same emptiness, redistributed"* — and a bigger
+card is a bigger empty box, so neither is the answer. The diagnosis is now sharper than it was: **an empty
+state that is the only thing on the page should not be a card at all**, because a card is a container for
+content among other content. What it should be instead is a product decision and is going to the founder
+rather than being guessed at, with the numbers above as the evidence.

@@ -2977,3 +2977,31 @@ side.
 
 A reason is required and refused with a sentence rather than a validation error: *"An annulment says why. A
 result withdrawn without a reason is one nobody can answer for."*
+
+## PD-066 — A segmented control is as tall as a segment
+
+**Found by looking, 12 September 2026**, in the polish pass the founder asked for.
+
+The chosen segment's green fill did not reach the top and bottom of its own cell. On an iPad's match setup
+it drew a short green block with white above and below it, and the dividers either side ran the full height
+past it — a smaller control floating inside a larger one, on the screen where a player picks 501 and best of
+five.
+
+**The cause is that a `Rectangle` is greedy.** The dividers between segments are rectangles one point wide
+with no height given, so offered more height they take it; the segments carry `minHeight` and no maximum, so
+they do not. The control therefore grew to whatever the parent had going spare while the selection stayed at
+the touch minimum, and the gap between the two was the white band. It was wrong on a phone as well and
+invisible there, because a phone had no spare height to hand it.
+
+Two changes, both true independently: the row reports its ideal height rather than accepting what it is
+offered, so a segment sets the height and the dividers follow; and the segment's fill is allowed to reach
+the full height of its cell. The first stops the control growing at all, the second means the fill matches
+its cell even if some future parent forces a taller row.
+
+**Why this counts as more than a pixel.** The fill *is* the selection — it is the only thing that says which
+of 301, 501 and 701 is chosen — and a selection that does not fill the thing it selects reads as a rendering
+fault. The setup screen also got shorter, because four rows that were each about twice their proper height
+are now the right height.
+
+No test: this is a layout height in SwiftUI and the honest verification was building it, looking at it on an
+iPad, and looking again on a phone to be sure nothing moved there.
