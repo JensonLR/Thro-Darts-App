@@ -60,6 +60,29 @@ against, and a stable home for passkeys and universal links.
 the host changes, every existing passkey stops working. Today that costs nothing, because nobody has one.
 After a hundred people have signed in it costs each of them a sign-in.
 
+### Web Service or Static Site?
+
+Render offers both and they are different jobs, not two ways of doing one:
+
+- A **Web Service** is a process that runs. That is the API: a JVM holding connections, answering `/v1`.
+- A **Static Site** is files on a CDN. That is the pages: no process, nothing to wake, free, and fast from
+  the first request whatever the API is doing.
+
+**Take the Static Site.** The pages have no server in them — that was the point of building them without a
+framework — and a static site never sleeps, which matters when the page a store checks is a deletion URL.
+
+### What buying the domain later actually costs
+
+Nothing is thrown away, and nothing is re-architected. The web client hardcodes no host at all: it calls
+`/v1/...` with no origin in front, so it is already correct for whatever name it is served under. When the
+domain arrives:
+
+1. Add `thro.uk` to the static site in Render (Step 3), and point the DNS.
+2. Change three values: `THRO_RP_ID` in the API's environment, `webcredentials:` in the app's entitlement,
+   and the base URL in the app's `Info.plist`. Rebuild the app.
+
+That is the whole migration. Ten minutes, and no code the web depends on moves.
+
 ### Step 1 — Put the web on Render (no domain needed)
 
 **Do not apply the Blueprint a second time.** The API is already deployed and belongs to an earlier Blueprint
@@ -105,9 +128,17 @@ these two share is `onrender.com` itself — which a browser refuses as a relyin
 is a public suffix. So a passkey cannot span them. Setting `THRO_RP_ID` to the web host would fix the web and
 break the iOS app, whose passkeys are bound to the API host.
 
-The answer is not a workaround, it is the domain: one name, `thro.uk`, with the pages and the API both under
-it, and one relying party for the phone and the laptop alike. Until then, ship the public pages and leave the
-organiser sign-in switched off.
+**There is exactly one workaround, and it is not worth taking.** Serve the pages from the API service itself
+— Ktor serving `apps/web` at `/` — and the browser's origin becomes the API's own host, so one relying party
+covers the phone and the laptop and web sign-in works today. What it costs: the public pages inherit the API
+service's spin-down, so on the free instance the account-deletion page a store reviewer opens could take a
+minute to answer or time out, and every page waits on a JVM instead of a CDN. Trading a fast public site for
+a sign-in that nobody needs yet — there is not one named league administrator in existence — is the wrong way
+round.
+
+So: ship the public pages on a static site, leave the organiser sign-in switched off, and let the domain fix
+it properly. One name, `thro.uk`, pages and API both under it, one relying party for the phone and the laptop
+alike.
 
 ### Step 2 — Register `thro.uk`
 
