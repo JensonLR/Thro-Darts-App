@@ -225,7 +225,9 @@ struct CardLine: View {
     var body: some View {
         HStack(alignment: .top, spacing: ThroSpacing.spacing3) {
             IconTile(icon: icon, tone: tone)
-            Text(text)
+            // LocalizedStringKey, so emphasis in the sentence is emphasis and not four asterisks — the
+            // same bargain `Note` makes. A string with no emphasis in it renders exactly as before.
+            Text(LocalizedStringKey(text))
                 .thro(ThroTypography.body)
                 .foregroundStyle(ThroColor.colorTextPrimary)
                 .fixedSize(horizontal: false, vertical: true)

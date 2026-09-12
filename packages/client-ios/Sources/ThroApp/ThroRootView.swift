@@ -374,6 +374,13 @@ public struct ThroRootView: View {
         // the journal has opened. None of those is a moment to move the screen, so the router holds
         // it and this takes it when SwiftUI is next evaluating.
         .onOpenURL { router.open($0) }
+        // Debug builds only: `-ThroScreen tab/discover` opens on a named screen, through the same
+        // router a link uses, so a script can look at a surface nobody can tap its way to.
+        .task {
+            #if DEBUG
+            ScreenshotScreen.goIfAsked()
+            #endif
+        }
         // Look for a stored sign-in as the app starts, rather than waiting for somebody to open the
         // account screen: the welcome cannot decide whether to appear until this has answered.
         .task { await account?.start() }
@@ -1230,14 +1237,23 @@ public struct PlayLandingScreen: View {
                         }
                     }
                     .throEntrance(1)
+                    // A card rather than two loose sentences on bare paper. Settings is the screen in
+                    // this app that reads as designed on a tablet, and the reason is that its content
+                    // has body: rows in a card that fill the measure. Two paragraphs floating on a grey
+                    // field are the same words with nothing holding them (PD-052).
                     block {
-                        SectionHeader("How this works")
-                        Note("**Every visit is committed to this device before the screen changes.** "
-                             + "A crash between two darts loses nothing, because the score you can "
-                             + "see has already been written down.")
-                        Note("**Your matches stay on this phone.** Nothing here is uploaded. The only "
-                             + "thing this build sends anywhere is a sign-in, if you choose to make one "
-                             + "under Settings, and your matches are yours until you export them.")
+                        CardGroup("How this works") {
+                            CardLine(icon: .filePen,
+                                     text: "**Every visit is committed to this device before the screen "
+                                         + "changes.** A crash between two darts loses nothing, because the "
+                                         + "score you can see has already been written down.")
+                            CardDivider()
+                            CardLine(icon: .lock,
+                                     text: "**Your matches stay on this phone.** Nothing here is uploaded. "
+                                         + "The only thing this build sends anywhere is a sign-in, if you "
+                                         + "choose to make one under Settings, and your matches are yours "
+                                         + "until you export them.")
+                        }
                     }
                     .throEntrance(2)
                     if !store.matches.isEmpty {
@@ -1365,17 +1381,23 @@ public struct YouScreen: View {
                             ThroDivider()
                         }
                     }
-                    Eyebrow("Teams you keep").padding(.top, ThroSpacing.spaceSectionGap)
+                    // Nothing here yet is still something to look at: a card holds the sentence and the
+                    // way out of it, where a line of grey text and a loose button left two thirds of a
+                    // tablet with nothing on it (PD-052).
                     if clubs.isEmpty {
-                        Text("None on this phone. Start one under Discover and its roster and fixtures are kept here.")
-                            .thro(ThroTypography.body)
-                            .foregroundStyle(ThroColor.colorTextSecondary)
-                            .fixedSize(horizontal: false, vertical: true)
-                            .padding(.top, ThroSpacing.spacing2)
-                        ThroButton("Start a team", variant: .secondary, size: .large,
-                                   fullWidth: true, action: onClubs)
-                            .padding(.top, ThroSpacing.spacing4)
+                        CardGroup("Teams you keep") {
+                            CardLine(icon: .users,
+                                     text: "**None on this phone yet.** Start one under Discover and its "
+                                         + "roster and fixtures are kept here.")
+                            CardDivider()
+                            CardPad {
+                                ThroButton("Start a team", variant: .secondary, size: .large,
+                                           fullWidth: true, action: onClubs)
+                            }
+                        }
+                        .padding(.top, ThroSpacing.spaceSectionGap)
                     } else {
+                        Eyebrow("Teams you keep").padding(.top, ThroSpacing.spaceSectionGap)
                         ThroDivider().padding(.top, ThroSpacing.spacing2)
                         ForEach(clubs) { club in
                             Button(action: onClubs) {

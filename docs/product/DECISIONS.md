@@ -2352,9 +2352,25 @@ board still running the full width behind it. Two things that looking found and 
   The bar is the screen's edge and keeps the width of it; the tabs now sit in the same measure the content
   does. Fixed and looked at again.
 - **Width was the easier half.** A tablet screen is also *tall*, and a phone's vertical rhythm leaves large
-  voids down the middle of one — most visible on a screen with an empty state. The measure cannot fix that,
-  and nothing in this decision does yet. It is the next piece of work, and it is a design question rather
-  than a rule: what a screen with room to spare should *do* with it.
+  voids down the middle of one. The founder's words: *we don't want a ridiculous amount of negative space.*
+
+### What a screen does with height it does not need
+
+**Centring the content in the room was tried and rejected.** A `ThroRoom` container held short content in the
+middle of the page instead of under the bar. Built, looked at, and worse: the same emptiness redistributed,
+an island with voids above *and* below. The component was deleted rather than left lying about.
+
+**What works is body, and Settings already had it.** Settings is the screen that reads as designed on a
+tablet, and the reason is not its length — it is that its content sits in cards with substance rather than
+sentences on bare paper. Play's *how this works* and You's *teams you keep* are cards now, in the same
+vocabulary, and both read as composed rather than adrift.
+
+**And the honest part: most of the remaining void is an empty state, not a layout.** The screens that look
+emptiest are the ones with nothing in them — no matches scored, no teams kept. Discover fills its page with
+the map and Settings fills its page with rows. A screen with something to say fills; the work was making
+*nothing yet* look like a decision rather than a page that failed to load. What a tablet should do with the
+room when there is genuinely little to say — a second column, a larger board — is still open, and is a
+design question rather than a rule to be written here.
 
 **Not fixed, and deliberately not guessed at**: the 400-point brand band behind Home, You and your own profile
 is 60% of an iPhone SE's height. On the iPad it is harmless — the page's own paper covers it from the header

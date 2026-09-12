@@ -3742,3 +3742,33 @@ put V042 on a screen: every row's evidence column reads nought, because a secret
 match anybody scored on THRØ.
 
 Counts: client 746, API 29 suites (82 tests), HTTP 51 properties, schema 144, contrast 94 pairs.
+
+## A ridiculous amount of negative space, and what actually fixed it
+
+The founder, on the tablet screenshots: *the designs should be utterly beautiful and engaging in our brand
+style — we don't want a ridiculous amount of negative space.* They were looking at Play, where two thirds of
+an iPad was empty grey.
+
+**First, a way to look at any screen at all.** Every screen here is reached by tapping and a simulator driven
+from a script cannot tap, which is why most surfaces were being changed unseen. `-ThroScreen tab/discover` is
+a Debug-only launch argument that opens the app on a named screen through **the same parser a real link goes
+through** (ADR-011), so it can reach exactly the screens a link can and there is no second grammar to keep in
+step. Six screens were then looked at rather than reasoned about.
+
+**The first fix was wrong, and was deleted.** A `ThroRoom` container centred short content in the room instead
+of leaving it under the bar. Built, installed, looked at: worse. The same emptiness, redistributed — an island
+with voids above and below. It is not in the tree.
+
+**The second was right, and Settings had been demonstrating it all along.** Settings reads as designed on a
+tablet because its content has body: rows in cards that fill the measure. Play's *how this works* was two
+paragraphs floating on grey; it is a card with two icon-tiled lines now. You's *teams you keep*, in the empty
+case, was a sentence and a loose button; it is a card holding both. `CardLine` learned to render emphasis the
+way `Note` already did, so the bold in those sentences is bold rather than four asterisks.
+
+**And the honest part.** Most of what is left is an empty state rather than a layout. Those screens are the
+emptiest the app can be — nothing scored, no teams — while Discover fills its page with the map and Settings
+with rows. The work here made *nothing yet* look like a decision instead of a page that failed to load; a
+screen with something to say already fills. What a tablet should do with genuine spare room is recorded in
+PD-052 as open, because it is a design question and not a rule.
+
+Counts: client 746, API 29 suites (82 tests), HTTP 51 properties, schema 144, contrast 94 pairs.
