@@ -21,6 +21,28 @@
 | `packages/client-ios` → `ThroApp` | Home, tabs, Settings, the root view, the opening (PD-007), and the club, league, tournament and profile screens under Discover (PD-009, PD-010) | 346 app tests on macOS, every push: 9 on **what a league table says about itself** (PD-054) — the figures are the server's, and these are the sentences printed beside them, because a table that cannot say why it reads as it does is a table nobody can check. 3 on **what a report promises the person who raised it** (PD-050) — that it names the hour it will be answered by rather than quoting a policy at somebody, that one raised by or about a child says it is looked at first and never left to sit, and that a blocked account is named by nobody: enough of its id to tell two apart and no more. 26 on the wire and the account (sign-in, refresh, passkeys, the inbox and discovery decoding; who is signed in known at once from the last profile THRØ gave for that session, offline included; a session THRØ no longer honours signing the phone out and forgetting the person; no change to the account — a name, an erasure — ever taking its page off the screen, and an erasure that fails saying so where it was asked — with a scripted server and no device), 4 on the opening holding for the account without ever trapping anybody, and the slate Settings opens on, 19 on the opening (timeline, the tagline's read time, cues, easings, geometry, the throw, the chalk stroke, the wall's dust, the dart), 15 on Home's reading of the journal, the device identity, the shelf and what a delete refuses to do (PD-026), 5 on the club rules the screens obey, 14 on the mapping between the club book and those screens, 7 on who may have a picture, who is told why not, and what a page's top bar offers, 16 on a club, a league and a tournament being three different things, 10 on the knockout draw — the seeding identities for every bracket to 256, the byes, a whole tournament played through, and a knockout match that cannot end level — 10 on double elimination, including a whole one played out and every entrant but the champion checked to have lost exactly twice, and 11 on groups then knockout, including that nobody is drawn against their own group in the first round across all fifteen setups, and that the note shown to a tournament with no shape yet says something different to each of its three readers — the table's arithmetic and its total ordering, where each result came from, and what each tournament shape counts. 26 on **what this build can show you on the phone it is running on** — five states told apart, an unasked permission never reported as a refusal nor answered with a trip to iPhone Settings, every row carrying a sentence you could find something by, the four rows with nowhere to send anybody never growing a button, and every complete match counted as shareable including an abandoned one, which the first version of that count got wrong. 7 on **how a visit is entered and where a player finds the choice** — an unknown stored notation falls back to the default rather than guessing, switching twice comes back, and no two notations describe themselves the same way in a label, in speech or in the sentence under the Settings row. 11 on **a player's own page** — that a bounded figure reaches it still marked as a range, which the old mapping quietly dropped; that the headline figure is found by the label the figures actually carry rather than a literal typed at the call site; that a profile's mark is bigger than a roster row's; and that a club member with no average gets a dash with a reason beside it rather than a zero. The layouts themselves are drawn, not tested — and until 2026-09-07 nothing checked that a screen could be reached at all, which is how the club editor sat unroutable |
 | `apps/ios/ThroDarts.xcodeproj` | the app target: thirteen lines that mount `ThroApp`, the ten embedded faces with their licences, the icon and the launch screen (PD-006) | `xcodebuild` for the iOS simulator, every push; `check_fonts.py` on Linux, every push |
 
+## Looking at a screen without a hand on the device
+
+Every screen here is reached by tapping, and a simulator driven from a script cannot tap — which is how
+most surfaces came to be changed unseen. Two Debug-only launch arguments fix that, and between them they
+reach almost everything:
+
+```bash
+xcrun simctl install <device> path/to/ThroDarts.app
+xcrun simctl launch  <device> app.thro.darts -ThroScreenshotAccount adult -ThroScreen tab/discover
+xcrun simctl io      <device> screenshot shot.png     # give the opening ~7 seconds first
+```
+
+`-ThroScreenshotAccount` stands up a signed-in account over a transport that answers from memory
+(`adult`, `new` or `failing`). `-ThroScreen` takes a `thro://` address **without its scheme** —
+`tab/home`, `tab/play`, `tab/live`, `tab/discover`, `tab/you`, `settings` — and is read by the same parser
+a real link goes through (ADR-011), so it can reach exactly the screens a link can and there is no second
+grammar to keep in step. Neither is compiled into a Release build.
+
+Two things worth knowing. Build with `-configuration Debug`, or the arguments are not in the binary. And
+do **not** navigate with `xcrun simctl openurl`: iOS raises an *Open in "THRØ"?* confirmation that a script
+cannot dismiss, and the screenshot you get back is that alert over whatever was already on screen.
+
 ## Running it on the phone, step by step
 
 **On a free Apple team — a "Personal Team" in Xcode — the normal configuration will not sign.**
