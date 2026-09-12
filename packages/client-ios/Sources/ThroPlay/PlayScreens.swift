@@ -340,7 +340,14 @@ public struct MatchReadyScreen: View {
             .padding(.top, ThroSpacing.spacing5)
             .padding(.bottom, ThroSpacing.spacing4)
             .padding(.horizontal, ThroSpacing.spaceScreenGutter)
-            .throReadable()
+            // **Wider than the reading measure, on purpose** (PD-070). The slate holds the screen, which is
+            // right — but held to 560 points it held a tablet's *height* at a phone's *width*, and drew a
+            // portrait-phone-shaped green box with three lines floating in the middle of it. A slate's
+            // subject is two names either side of a mark, which is width; PD-052 allows exactly this, for
+            // a screen whose subject is the width, by not using the measure. Capped so it does not become
+            // a wall on a 13-inch tablet.
+            .frame(maxWidth: ThroSpread.measure)
+            .frame(maxWidth: .infinity)
             ThroBottomAction {
                 ThroButton(session.visits.isEmpty ? "Start scoring" : "Continue scoring",
                            variant: .primary, size: .large, fullWidth: true, action: onStart)

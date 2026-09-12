@@ -4136,3 +4136,20 @@ weight**. Width is necessary and not sufficient. The league table beside its fix
 there* beside *yours* both pass; Play failed on weight and You could fail on presence.
 
 Counts: client 772 tests, all 22 checks.
+
+## Match ready was a phone-shaped box on a tablet
+
+Found by playing a match through on an iPad rather than by reading anything. *Match ready* is a fixture on a
+slate that holds the screen, and it was also held to the 560-point reading measure — so it held a tablet's
+height at a phone's width and drew a portrait-phone-shaped green box, 430 by 800, with three lines in the
+middle of it.
+
+The measure is for prose. A slate's subject is two names either side of a mark, which is width, and PD-052
+carves out precisely this case. It uses the width now, capped so a 13-inch tablet does not get a wall. At
+834 points it is about square and reads as a board with the fixture chalked on it. A phone is unchanged.
+
+**And the scoring screen was looked at and left alone.** Head at the top, keys at the bottom, a large field
+between: that is `ThroStage` doing what it is specified to do, and the space between is the board's own
+surface rather than a void. Recorded so the next pass does not rediscover it as a fault.
+
+Counts: client 772 tests, all 22 checks.

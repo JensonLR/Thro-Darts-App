@@ -3112,3 +3112,29 @@ Two columns need **two things that are both there and comparable in weight**. Wi
 sufficient: the league table beside its fixtures and Discover's *out there* beside *yours* both hold, because
 each half always has something and neither dwarfs the other. Play failed the second test and You could fail
 the first.
+
+## PD-070 — A slate's subject is width, so it is not held to the reading measure
+
+**Found by playing a match on a tablet, 12 September 2026.**
+
+*Match ready* is a fixture written on a slate, and the slate is meant to hold the screen — no scroll, no
+field of paper under one button. It was also held to `ThroReadable`'s 560 points, so on an iPad it held a
+**tablet's height at a phone's width**: a portrait-phone-shaped green box, 430 by 800, with three lines
+floating in the middle of it.
+
+The measure exists for prose. **A slate's subject is two names either side of a mark**, which is width, and
+PD-052 already carves out exactly this — *"a screen whose subject IS the width says so by not using this"*.
+So it uses the width, capped at `ThroSpread.measure` so it does not become a wall on a 13-inch tablet.
+
+At 834 points the slate is now about square, and it reads as a board with the fixture chalked on it rather
+than as a phone screen someone stretched. Nothing changes on a phone, where the width was never the
+constraint.
+
+### And the scoring screen, looked at and left alone
+
+Same session, same tablet: the scoring screen puts the head at the top, the keys at the bottom and a large
+field between them. That is `ThroStage` doing exactly what it is specified to do — a tablet held upright
+stays stacked and gets the biggest number on the ladder — and the space between is the board's own field,
+which is the surface and not a void. It has 1,056 screens of arithmetic behind it and a written rationale
+for every part. **Looked at, behaving as designed, not touched**, recorded so the next pass does not
+rediscover it as a fault.
