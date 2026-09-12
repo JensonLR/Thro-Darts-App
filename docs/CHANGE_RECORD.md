@@ -3682,3 +3682,32 @@ one rather than everybody. On a fresh deployment every league-admin route refuse
 moderation queue does, and the runbook says how a name is added.
 
 Counts: client 746, API 29 suites (82 tests), HTTP 51 properties, schema 144, contrast 94 pairs.
+
+## Looking at it on a tablet, which is the only way this was ever going to be settled
+
+Every layout change tonight had been compiled and none of it had been seen. The founder's standing note on
+this work is *look in the simulator before calling it done*, so the app was built for an iPad Pro 11-inch and
+opened.
+
+**The measure holds.** Home and the Welcome both put their content in a centred column of about 560 points on
+an 834-point screen, with the brand field and the board still running the full width behind it. That is what
+the forty-three call sites were for, and it is doing what it was supposed to do.
+
+**The tab bar spread, exactly as the audit said**, and reading the code had not made it real: five small
+marks a hand's width apart along the bottom of a tablet. The bar is the screen's edge and keeps the width of
+it; the five tabs are not, and they now sit in the same measure the content does, centred, with the bar's
+paper and hairline still running the whole way. Built again and looked at again: the tabs cluster in the
+middle and the bar is unchanged.
+
+**And width turned out to be the easier half.** A tablet screen is also tall, and a phone's vertical rhythm
+leaves long empty runs down the middle of one — most obvious on a screen whose state is empty. No measure
+fixes that. It is recorded in PD-052 as the next piece of work and as a design question rather than a rule:
+what a screen with room to spare should *do* with the room.
+
+Two smaller things the session learned by looking. The 400-point brand band is harmless on an iPad, because
+the page's own paper covers it from the header down — which says nothing about a phone in landscape, the case
+the audit actually flagged, and that has still not been looked at. And `xcrun simctl openurl` raises an
+"Open in THRØ?" confirmation the simulator will not dismiss without a tap, which is why two captures came
+back as a flat green field before the cause was understood rather than explained away.
+
+Counts: client 746, API 29 suites (82 tests), HTTP 51 properties, schema 144, contrast 94 pairs.

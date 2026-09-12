@@ -2344,9 +2344,23 @@ from five edits. The organisation row's meta is a three-part join that never fit
 wraps rather than shrinking to nothing. And the league table's seven number columns now scale with the
 reader's text size, where they were literals that stayed put while the numerals inside them grew.
 
+**Looked at, on an iPad Pro 11-inch, rather than assumed.** The measure holds: Home and the Welcome both put
+their content in a centred column of about 560 points on an 834-point screen, with the brand field and the
+board still running the full width behind it. Two things that looking found and reading could not:
+
+- **The tab bar spread**, exactly as the audit said — five small marks a hand's width apart across a tablet.
+  The bar is the screen's edge and keeps the width of it; the tabs now sit in the same measure the content
+  does. Fixed and looked at again.
+- **Width was the easier half.** A tablet screen is also *tall*, and a phone's vertical rhythm leaves large
+  voids down the middle of one — most visible on a screen with an empty state. The measure cannot fix that,
+  and nothing in this decision does yet. It is the next piece of work, and it is a design question rather
+  than a rule: what a screen with room to spare should *do* with it.
+
 **Not fixed, and deliberately not guessed at**: the 400-point brand band behind Home, You and your own profile
-is 60% of an iPhone SE's height and covers a phone in landscape entirely. It is a visual constant, and the
-right number for it comes from looking at it on a device — not from arithmetic in a commit message.
+is 60% of an iPhone SE's height. On the iPad it is harmless — the page's own paper covers it from the header
+down — but that says nothing about a phone in landscape, which is the case the audit flagged and which has
+not been looked at. It is a visual constant, and the right number for it comes from looking at it on a
+device, not from arithmetic in a commit message.
 
 ### What this does not decide
 

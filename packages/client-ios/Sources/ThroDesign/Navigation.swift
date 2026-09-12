@@ -170,6 +170,11 @@ public struct BottomBar: View {
                 .accessibilityAddTraits(on ? [.isSelected] : [])
             }
         }
+        // The bar is the screen's edge and stays the width of it; the five tabs are not, and spread across
+        // a tablet into five small marks a hand's width apart (PD-052). They sit in the same measure the
+        // content does, centred, with the bar's paper and hairline still running the whole way.
+        .frame(maxWidth: ThroReadable.measure)
+        .frame(maxWidth: .infinity)
         .padding(.top, ThroSpacing.spacing2)
         .padding(.bottom, 10)
         .background(ThroColor.colorBackgroundPrimary)
