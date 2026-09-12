@@ -3297,3 +3297,23 @@ The Xcode errors the founder pasted — *"the capability associated with APPLE_I
 determined"*, *"doesn't include the Associated Domains capability"* — are stale in the same way. The profile
 they name was regenerated at 15:40 and does carry all three; the runbook already warned that these messages
 outlive the fault.
+
+## PD-076 — The Apple scope comes off, on its own, now sign-in is proven
+
+**12 September 2026.** PD-063 removed the sign-in scopes THRØ asks for and never reads. PD-073 put Apple's
+back the same day, when Sign in with Apple failed on the founder's phone and the scope change was the only
+thing that had touched that path — recorded as *unproven rather than wrong*, to come off again once somebody
+had watched sign-in work.
+
+Sign-in works. The cause was PD-075: the `Personal` build configuration signing against an empty entitlements
+file. Nothing to do with the scope.
+
+So `.fullName` is off again, **on its own, with nothing else moving**, and installed on the founder's phone
+in that state — so a single attempt settles it rather than another day of variables. If it fails, one line
+goes back and the answer is unambiguous.
+
+**What the revert was worth, given it turned out to be unnecessary.** It cost a line and bought the ability
+to say, that evening, "the only change to this path today is not in the build you are testing". That was
+worth having while three explanations were live. Reverting under uncertainty and re-applying under evidence
+is not indecision — it is the only order that produces an answer, when the thing cannot be tested where the
+work happens.
