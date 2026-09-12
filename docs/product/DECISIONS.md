@@ -3683,3 +3683,70 @@ reason to touch them. The dart's flights dissolving as the mark becomes type was
 stills it looks like a fade, but the frames either side show it already trailing and smeared, and **a still
 is the wrong evidence for a 120 ms motion**. Changing it on that evidence would be tuning to the tool rather
 than to the film.
+
+## PD-081 — Android's first screen exists to prove something
+
+**12 September 2026.** The last platform in PD-064's order, and the first one where the foundation was
+written years — in this project's compressed time, months — before anything could run it.
+
+### What was already true and had never run
+
+ADR-002 keeps a **Kotlin scoring engine structurally parallel to the Swift one**, held to the same
+conformance corpus. `packages/journal` is the Kotlin half of ADR-006's on-device journal: the same schema,
+the same triggers, the same replay, 39 tests. `build.py` has been emitting `ThroTokens.kt` — Compose
+`Color`, `dp` and `sp` — beside the Swift and the CSS all along.
+
+None of it had ever been on a phone. So the first Android screen shows the board, the wordmark, and one
+line: **`141: T20 T19 D12`**, worked out at runtime by `thro-engine`. A welcome screen saying "Android,
+coming soon" would have proved nothing; this one proves the composite build reaches the real engine, that
+the generated tokens compile into Compose, and that the brand survives the crossing.
+
+### The SDK, and a licence that is not mine to accept
+
+Nothing Android was installed on this machine. The download is about 2.5 GB, which is the founder's
+bandwidth, and installing it means **accepting Google's SDK licence agreements on their behalf**, which is a
+legal act rather than a click. Asked, and answered. Recorded here because the next person to automate an SDK
+install should ask too.
+
+### Three versions that are not free choices
+
+- **Gradle 9.7.1** is what this Mac has and what every other Kotlin package here uses.
+- **AGP 9.0.0**, because AGP 8.x *cannot run on it*: it reaches for
+  `org.gradle.api.problems.internal.InternalProblems`, removed in Gradle 9.6, and says so at configuration
+  time. The alternative was pinning Gradle 9.5 through a wrapper, and this repository has no wrappers
+  anywhere on purpose.
+- **No `org.jetbrains.kotlin.android` plugin**, because AGP 9 carries Kotlin support itself and errors if it
+  is applied as well.
+
+Each of those was found by running the build and reading what it said, which took three attempts and no
+guessing about a compatibility matrix.
+
+### The shape, which is the iOS shape
+
+`apps/android/app` is an activity and nothing else — the same nineteen lines as `apps/ios/ThroDarts` and for
+the same reason. Everything real is `packages/client-android`. The engine and the journal are **composite
+builds**, so they are the same projects the JVM tests run rather than copies; the client is a plain module,
+because an Android library in a composite build cannot be consumed by an Android application without
+publishing it first.
+
+The tokens are compiled **from where they are generated**. `packages/design-tokens/generated` is a source
+directory of the client module, so one `build.py` run feeds three platforms and there is no copy here to
+forget to update.
+
+### The journal will not be a second implementation
+
+`packages/journal`'s README is careful that its tests run on the JVM's SQLite and not Android's. **The
+`sqlite-jdbc` JAR ships Android natives** — `org/sqlite/native/Linux-Android/aarch64/libsqlitejdbc.so` —
+so the Android client can run the same journal code, the same schema and the same triggers as the JVM tests,
+against the same SQLite build. That is a genuinely better position than reimplementing against
+`android.database.sqlite`, and it is checked rather than assumed: the natives are in the JAR on disk.
+
+It is **not wired up yet**, and when it is, ADR-006's outstanding measurement on a real Android device stays
+outstanding. A bundled SQLite on an emulator says nothing about a phone's storage, which is the whole point
+of that measurement.
+
+### Not done
+
+Everything else. There is no scoring screen, no journal on the phone, no keypad, no accounts, no chalk grain
+on the board. What exists is the floor, and it is a floor that CI now builds on every push — on Linux,
+because Android's toolchain is Linux-native and macOS minutes here cost ten times as much.

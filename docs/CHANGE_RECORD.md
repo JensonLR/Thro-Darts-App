@@ -4360,3 +4360,29 @@ The icon is on the tvOS home screen. What is left for the store is an Apple TV r
 is what a development provisioning profile for that platform needs and what `xcodebuild` cannot conjure.
 
 Counts: client 824 tests, all 22 checks.
+
+## Android's first screen exists to prove something
+
+The Kotlin scoring engine, the Kotlin journal and the Compose colour tokens have all existed and been tested
+for a while, and none of them had ever run on a phone. So the first Android screen is the board, the
+wordmark, and **`141: T20 T19 D12`** — worked out at runtime by `thro-engine`, the same Gradle project the
+conformance corpus runs against. A screen saying "Android, coming soon" would have proved nothing; this one
+proves the composite build reaches the real engine, the generated tokens compile into Compose, and the brand
+survives the crossing.
+
+The SDK was not installed on this machine, and installing it means accepting Google's licences on the
+founder's behalf — a legal act rather than a click, so it was asked about first.
+
+Three versions turned out not to be free choices, each found by running the build and reading it: Gradle
+9.7.1 is what the machine has; AGP 8 **cannot run on it** (it reaches for a Gradle internal removed in 9.6);
+and AGP 9 carries Kotlin support itself, so applying the Kotlin Android plugin beside it is an error.
+
+The shape is the iOS shape — an activity and nothing else in `apps/android`, everything real in
+`packages/client-android` — with the engine and journal as composite builds rather than copies, and the
+design tokens compiled from the directory `build.py` generates them into.
+
+And one useful finding: `sqlite-jdbc` **ships Android natives**, so when the journal is wired up it can be
+the same journal the JVM tests exercise rather than a reimplementation against `android.database.sqlite`.
+ADR-006's measurement on a real Android device stays outstanding either way.
+
+Counts: client 824 tests, all 22 checks; the Android client builds on Linux in CI.
