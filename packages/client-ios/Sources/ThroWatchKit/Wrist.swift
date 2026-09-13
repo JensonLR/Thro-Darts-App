@@ -2,6 +2,7 @@ import Combine
 import Foundation
 import SwiftUI
 import ThroLiveKit
+import ThroDesign
 import ThroTokens
 
 // What this watch is showing, and the screen that shows it.
@@ -117,10 +118,7 @@ public struct ThroWatchRoot: View {
     /// seconds by somebody who will believe it.
     private var waiting: some View {
         VStack(spacing: 4) {
-            Text("THRØ")
-                .font(.system(size: 26, weight: .black))
-                .tracking(3)
-                .foregroundStyle(ThroColor.throChalk)
+            ThroWordmark(capHeight: 20, color: ThroColor.throChalk)
             Text(ThroWatchWords.nothingOn)
                 .font(.system(size: 14, weight: .semibold))
                 .foregroundStyle(ThroColor.throChalk.opacity(0.8))

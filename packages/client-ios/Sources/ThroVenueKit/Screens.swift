@@ -76,9 +76,7 @@ public struct ThroVenueUnconfigured: View {
     public var body: some View {
         ThroBoard(lamp: UnitPoint(x: 0.5, y: 0.3), grainSeed: 0x404) {
             VStack(alignment: .leading, spacing: ThroSpacing.spacing4) {
-                Text("THRØ")
-                    .thro(ThroTypography.display)
-                    .foregroundStyle(ThroColor.colorTextOnBoard)
+                ThroWordmark(capHeight: 72, color: ThroColor.colorTextOnBoard)
                 Text("This screen has not been told where THRØ is.")
                     .thro(ThroTypography.heading2)
                     .foregroundStyle(ThroColor.throChalk.opacity(0.8))

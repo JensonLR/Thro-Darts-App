@@ -1,5 +1,6 @@
 import Foundation
 import SwiftUI
+import ThroDesign
 import ThroTokens
 
 // The board on the wall.
@@ -132,10 +133,7 @@ public struct ThroVenueBoard: View {
     /// showing nothing.
     private var waiting: some View {
         VStack(spacing: 18) {
-            Text("THRØ")
-                .font(.system(size: 96, weight: .black))
-                .tracking(6)
-                .foregroundStyle(ThroColor.throChalk)
+            ThroWordmark(capHeight: 72, color: ThroColor.throChalk)
             Text("No match on this phone")
                 .font(.system(size: 26, weight: .medium))
                 .foregroundStyle(ThroColor.throChalk.opacity(0.55))

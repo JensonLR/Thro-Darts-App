@@ -4983,3 +4983,60 @@ only the view mounted on it is new. It wants thirty seconds with a real cable be
 and that is said here rather than left to be assumed from a green test run.
 
 Counts: 844 client tests (5 new), 24 checks green.
+
+## A pub screen with no adapter, and the logo that was not the logo (PD-090)
+
+**The founder's objection was right.** An HDMI adapter is a bad answer: it is a thing to buy, a thing to
+plug in, and a phone tied up all evening. The requirement it fails is that the person who sets the screen
+up **goes home at eleven**.
+
+`apps/web/wall.html` is the answer, and it is possible only because of PD-088's shape: every route a wall
+reads is public and unauthenticated, so there is no session to establish and no token to leave on a
+television a hundred strangers walk past. A URL is typed once into the set's own browser and the board runs
+with nobody in the room. Cable is now the *last* option in the instructions, not the first.
+
+It carries the app's own rules rather than a second opinion of them: the same two clocks (120s and 10s),
+the same interleave so a live game is never more than one panel away, the same fallback to a **team** name
+where a player has not agreed to be named. It keeps the screen awake with `navigator.wakeLock`, remembers
+the season through a power cut, and — found while pointing it at the live server — treats a **404 on the
+live route as "no live games" rather than a fault**, because a venue's bookmark outlives a deployment and
+an older THRØ has no such route. Complaining about that on a wall all evening would be the newer page
+arguing with the older server in front of the customers.
+
+### And then the logo
+
+*"You aren't using the correct name logo as that's the text O symbol."* Correct, and worse than the one
+page it was said about.
+
+THRØ's Ø is a dart through a ring at measured proportions the app has drawn live since PD-006. A typeface's
+Ø is a letter with a stroke through it. **Eleven web files and five app screens were wearing the wrong
+one.** The five in the app are the interesting part, because they are all **second screens** — the Lock
+Screen widget, the external display board, the Apple TV's two screens, the watch. The phone's own screens
+were all correct. The surfaces nobody demos got a quick `Text("THRØ")`.
+
+`ThroWordmark` already existed and was simply not being used; `ThroLiveKit` and `ThroWatchKit` gained a
+`ThroDesign` dependency to reach it, which is source and not resources and therefore costs binary size
+rather than a widget's runtime budget.
+
+**Three more things fell out of looking properly**, which is the founder's actual point about doing this
+across every screen:
+
+- The site had **three different header patterns**, two pages with **no brand at all** (`fixtures.html` and
+  `table.html`, which are the two most likely to be screenshotted and shared) and one page with its title
+  above its eyebrow, alone in the site.
+- I wrote **two brand colours from memory** as CSS fallbacks and got both wrong — `#C9A227` for a bronze
+  that is `#C9975C`, `#4ADE80` for a green that is `#57A385`. They would only ever have appeared on old
+  television browsers, which is to say on the devices nobody tests. `check_brand.py` now compares every
+  fallback against its token.
+- The Apple TV's league chooser set the **season label in `ThroTypography.metadata`** — a phone role, on a
+  television. It rendered smaller than the locality beside it: the one fact that tells two Stockton leagues
+  apart, in the least readable type on the screen. The same mistake the league table made before the type
+  scale was stepped up for the wall.
+
+**Two sources of truth for the wordmark disagree** and this did not reconcile them.
+`docs/design/brand/render_wordmark.py` says `0.53 / 0.30 / 0.067` and calls itself an unconfirmed candidate
+measured off the founder's artwork; the Swift says `0.524 / 0.255 / 0.065` and is what has been on the
+founder's phone for weeks. The generator reads the Swift, because shipped wins — but somebody should decide
+which is the artwork, and it is written here rather than papered over.
+
+Counts: 844 client tests, 26 checks green (two new: the generated web wordmark, and the brand).

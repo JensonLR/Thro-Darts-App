@@ -95,6 +95,17 @@ jobs:
       - name: The launcher icon is still the mark
         run: python3 tools/make_android_icon.py --check
 
+      # The founder looked at a new page and said "that is not the logo, that is the text with the
+      # slashed O in it". They were right, and it was true of every page on the site and of five
+      # screens in the app — all of them second screens: the Lock Screen, the external board, the
+      # Apple TV and the watch. Typing THRO is easier than referencing an asset and it looks nearly
+      # right, so it will happen again unless something refuses it.
+      - name: The web's wordmark is the one the app draws
+        run: python3 tools/make_web_wordmark.py --check
+
+      - name: The brand is the mark, and the colours are the tokens
+        run: python3 tools/check_brand.py
+
       # A transitive dependency is linkable, not nameable — and a type you can see is not a member
       # you can reach. Three macOS rounds at four minutes each, in one day: Geometry.swift naming
       # ThroMotion with only `import SwiftUI`, DartVisitTests naming Seat with

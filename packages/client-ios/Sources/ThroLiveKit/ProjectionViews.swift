@@ -1,4 +1,5 @@
 import SwiftUI
+import ThroDesign
 import ThroTokens
 
 // What a widget draws, and the words it uses.
@@ -158,10 +159,9 @@ public struct ThroWidgetBoard: View {
     /// the one thing somebody looking at a darts widget on a Tuesday actually wants.
     private var waiting: some View {
         VStack(alignment: .leading, spacing: 4) {
-            Text("THRØ")
-                .font(.system(size: wide ? 17 : 15, weight: .black))
-                .tracking(2)
-                .foregroundStyle(ThroColor.throChalk)
+            // The mark, not the typeface's Ø. Cap height rather than a font size, because that is
+            // what the wordmark is measured in (`ThroWordmark`).
+            ThroWordmark(capHeight: wide ? 13 : 11, color: ThroColor.throChalk)
             if let projection, let (title, detail) = ThroWidgetCopy.fixture(projection, now: now) {
                 Text(title)
                     .font(.system(size: wide ? 15 : 13, weight: .semibold))

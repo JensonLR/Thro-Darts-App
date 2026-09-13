@@ -4129,3 +4129,49 @@ its failure mode named.
 **Live**, not Settings: it is something somebody does on a match night with a telly in front of them, not a
 preference set once. The season is held under the **same key the Apple TV app uses**, so a venue that
 starts with a phone and later buys the box does not set it up again.
+
+
+## PD-090 — A pub screen needs no adapter, and the brand is the mark
+
+**13 September 2026**, on two founder observations in one sitting: *"What's the best route without having
+to use a HDMI adapter? Not a great experience for users"*, and — of the page built in answer — *"you aren't
+using the correct name logo as that's the text O symbol."*
+
+### A URL, not a cable
+
+The routes a wall reads are **public and unauthenticated** (PD-088), which means the cheapest client that
+can draw a board is a browser. So `apps/web/wall.html` is the board, and the ranking of ways to get THRØ
+onto a pub screen is now:
+
+| | |
+| --- | --- |
+| **The telly's own browser** | A URL, typed once. **No phone in the room**, nothing plugged in, nothing to unplug at closing, and it costs nothing. Most sets from the last decade have one. |
+| **A £30 stick** | Fire TV or Google TV, where the set has no browser or a bad one. Same properties. |
+| **AirPlay to the set itself** | Many LG, Samsung and Sony sets from 2019 have AirPlay 2 built in — no box, no cable. Ties up a phone, and dies where guest Wi-Fi isolates clients. |
+| **Apple TV + the tvOS app** | The best of all once THRØ is on the App Store, because then a landlord just installs it. £150. |
+| **HDMI from a phone** | Never wrong, always works, and the worst experience: an adapter, and a phone tied up all evening. |
+
+The founder's objection was right and the cable has moved to last. **The requirement it was failing is that
+the person who sets the screen up goes home at eleven** — anything needing their phone is not a pub board.
+
+### The brand is the mark
+
+THRØ's Ø is **a dart through a ring** at measured proportions, which the app has drawn live since PD-006.
+A typeface's Ø is a letter with a stroke across it. They are two different logos and **the wrong one was
+on eleven web files and five app screens.**
+
+The five in the app are the tell: the Lock Screen widget, the external display board, the Apple TV's two
+screens and the watch. Every one a **second screen**. The phone's own screens all drew the mark properly,
+because those are the ones that get looked at.
+
+`tools/make_web_wordmark.py` generates `apps/web/wordmark.svg` from `MarkGeometry.Ratios.wordmark` —
+the same generator bargain as the Android icon — and `ThroWordmark` already existed for the app; the five
+screens simply were not using it. `tools/check_brand.py` refuses both mistakes from here on.
+
+**Two source-of-truth notes that came out of it.** `docs/design/brand/render_wordmark.py` carries
+`0.53 / 0.30 / 0.067` and calls itself an unconfirmed candidate; the Swift carries
+`0.524 / 0.255 / 0.065` and is what has been on the founder's phone for weeks. The shipped one wins and
+the discrepancy is left standing rather than quietly reconciled — somebody should decide which is the
+artwork. And the site had **three different header patterns**, two pages with no brand at all
+(`fixtures.html`, `table.html` — the two most likely to be screenshotted) and one with its title above its
+eyebrow. There is one pattern now.

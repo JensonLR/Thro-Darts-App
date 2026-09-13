@@ -73,7 +73,11 @@ let package = Package(
         // handed to it by the app, which is also what keeps it inside ActivityKit's 4 KB budget.
         .target(
             name: "ThroLiveKit",
-            dependencies: [.product(name: "ThroTokens", package: "design-tokens")],
+            // ThroDesign for `ThroWordmark` and nothing else. A widget has a 30 MB *runtime* budget and
+            // this is source, not resources — ThroDesign bundles none — so what it costs is binary size,
+            // which is worth paying: the two surfaces here are the Lock Screen and a **pub television**,
+            // and both were drawing the brand as the typeface's Ø rather than the mark.
+            dependencies: ["ThroDesign", .product(name: "ThroTokens", package: "design-tokens")],
             path: "Sources/ThroLiveKit"
         ),
         .testTarget(name: "ThroLiveKitTests", dependencies: ["ThroLiveKit"], path: "Tests/ThroLiveKitTests"),
@@ -89,7 +93,7 @@ let package = Package(
         // watch layout would be carrying two things it can never use.
         .target(
             name: "ThroWatchKit",
-            dependencies: ["ThroLiveKit", .product(name: "ThroTokens", package: "design-tokens")],
+            dependencies: ["ThroDesign", "ThroLiveKit", .product(name: "ThroTokens", package: "design-tokens")],
             path: "Sources/ThroWatchKit"
         ),
         .testTarget(name: "ThroWatchKitTests",

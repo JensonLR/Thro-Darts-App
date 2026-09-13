@@ -27,9 +27,7 @@ public struct ThroVenueChooser: View {
     public var body: some View {
         ThroBoard(lamp: UnitPoint(x: 0.5, y: 0.16), grainSeed: 0xC0DE) {
             VStack(alignment: .leading, spacing: ThroSpacing.spacing6) {
-                Text("THRØ")
-                    .thro(ThroTypography.display)
-                    .foregroundStyle(ThroColor.colorTextOnBoard)
+                ThroWordmark(capHeight: 72, color: ThroColor.colorTextOnBoard)
                 Text("Which league is this screen for?")
                     .thro(ThroTypography.heading2)
                     .foregroundStyle(ThroColor.throChalk.opacity(0.85))
@@ -105,9 +103,14 @@ public struct ThroVenueChooser: View {
                     .lineLimit(1)
             }
             if let season = league.shownSeason {
+                // **`metadata` is a phone role and it does not belong on a television.** At room size it
+                // rendered the season smaller than the locality beside it — the one fact on the row that
+                // tells two Stockton leagues apart, set in the least readable type on the screen. This is
+                // the same mistake the league table made before the type scale was stepped up for the
+                // wall, and it is the reason `ThroVenueType` exists.
                 Text(season.label)
-                    .thro(ThroTypography.metadata)
-                    .opacity(0.6)
+                    .thro(ThroTypography.bodyLarge)
+                    .opacity(0.55)
                     .lineLimit(1)
             }
         }

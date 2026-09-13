@@ -24,6 +24,17 @@ body {
   padding-block: 28px 32px;
 }
 .field a { color: var(--color-text-on-board); }
+/* The brand, on every page, as the mark and never as type.
+   THRØ's Ø is a dart through a ring at measured proportions (`MarkGeometry.Ratios.wordmark`, which the
+   app draws live). A typeface's Ø is a letter with a stroke through it, and setting the name in a font
+   was putting a different logo on the brand's green — `tools/make_web_wordmark.py` generates the real
+   one and `check_brand.py` refuses a page that goes back to type. */
+.brand { display: block; height: 22px; width: auto; margin: 0 0 10px; }
+.brand-link { display: inline-block; line-height: 0; text-decoration: none; }
+.field .brand { opacity: 0.92; }
+/* The front page wears it at size: it is the only page whose subject is the product itself. */
+.brand-hero { height: 56px; margin-bottom: 14px; }
+
 .wordmark {
   font-family: var(--font-sport);
   font-weight: var(--font-weight-extrabold);

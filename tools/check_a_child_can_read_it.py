@@ -123,11 +123,21 @@ def main() -> int:
                 f"a {length}-word sentence — split it:\n      “{sentence[:150]}…”"
             )
 
-    # Prominence. Every page on the site offers a way to it; this one need not link to itself.
+    # Prominence. Every page a person *reads* offers a way to it.
+    #
+    # `wall.html` is exempt and the reason is not convenience. It is a **display**: a board on a pub
+    # television, driven by nobody, with `cursor: none` and no pointer in the room. A link on it could
+    # not be followed by anybody, and Standard 4 asks for prominence *to a reader*. Adding one would
+    # satisfy this check and help no child, which is the worst kind of compliance — so the exemption is
+    # written here, in the guard, where somebody adding the next display surface will see it and have to
+    # decide rather than copy.
+    #
+    # What protects a young player on that screen is PD-088, not a link: an under-18 is never named on it.
+    DISPLAYS = {"wall.html"}
     unlinked = [
         path.name
         for path in sorted(WEB.glob("*.html"))
-        if path != PAGE and "under-18.html" not in path.read_text()
+        if path != PAGE and path.name not in DISPLAYS and "under-18.html" not in path.read_text()
     ]
     if unlinked:
         failures.append(

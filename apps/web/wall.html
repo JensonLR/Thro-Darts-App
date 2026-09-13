@@ -1,0 +1,97 @@
+<!doctype html>
+<html lang="en-GB">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>THRØ on the wall</title>
+<meta name="description" content="A league's table, fixtures and games in play, on the screen in the room.">
+<meta name="robots" content="noindex">
+<!-- Deliberately no Open Graph block, unlike every other page here. This is a display and not something
+     anybody shares a link to; a preview card would be for a reader who does not exist. -->
+<link rel="stylesheet" href="tokens.css">
+<style>
+  /* Self-contained rather than reusing thro.css, and that is the point of the page: a television's
+     browser fetches one stylesheet and one script and never needs anything else. thro.css is built for
+     a document somebody reads at thirty centimetres; nothing on this screen is read closer than four
+     metres, so it shares the tokens and none of the type. */
+  :root { color-scheme: dark; }
+  html, body { height: 100%; margin: 0; }
+  body {
+    background: var(--color-board-field);
+    color: var(--color-text-on-board);
+    font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    /* The lamp above centre, the same three stops the app draws (PD-081). */
+    background-image: radial-gradient(120% 120% at 50% 18%,
+                      var(--color-board-lit) 0%, var(--color-board-field) 55%, var(--color-board-sunken) 100%);
+    overflow: hidden;
+  }
+  /* Everything scales off the viewport width, so one page fills a 720p telly, a 1080p one and a 4K one
+     without a media query: a wall is always read from about its own width away. */
+  .screen { height: 100%; display: flex; flex-direction: column; padding: 3.2vw 4vw 2.4vw; box-sizing: border-box; }
+  header { display: flex; align-items: baseline; justify-content: space-between; }
+  #league { font-size: 3.6vw; font-weight: 900; letter-spacing: -0.02em; margin: 0; }
+  /* The real wordmark, not the typeface's Ø. On a television this is the only brand mark in the room
+     and the difference between a dart through a ring and a stroked letter is visible from the bar. */
+  .mark { height: 2.4vw; width: auto; opacity: 0.6; }
+  #wall { flex: 1; display: flex; flex-direction: column; justify-content: flex-start; min-height: 0; }
+  .panel { display: flex; flex-direction: column; height: 100%; }
+  .panel-head { display: flex; align-items: baseline; justify-content: space-between; margin: 2.2vw 0 1.4vw; }
+  .panel-head h2 { font-size: 2.8vw; font-weight: 800; margin: 0; }
+  .page { font-size: 1.2vw; opacity: 0.5; }
+  h2 { font-size: 2.8vw; font-weight: 800; margin: 0 0 1vw; }
+
+  .wall-table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
+  .wall-table td { padding: 0.75vw 0; border-bottom: 1px solid rgba(247,246,242,0.08); }
+  .pos { width: 4vw; font-size: 2vw; opacity: 0.5; }
+  /* The team's name is the largest thing after the heading, because it is what somebody looks up to
+     find. An earlier build of the app had it smaller than the number beside it, which answers the
+     wrong question first. */
+  .team { font-size: 2.6vw; font-weight: 700; }
+  .num { width: 5vw; text-align: right; font-size: 2vw; opacity: 0.7; }
+  .points { width: 7vw; text-align: right; font-size: 2.8vw; font-weight: 800; }
+  .aside { text-align: right; font-size: 1.7vw; opacity: 0.65; padding-left: 2vw; white-space: nowrap; }
+
+  .games { flex: 1; display: flex; flex-direction: column; justify-content: space-evenly; }
+  .game { display: flex; align-items: center; gap: 2vw; }
+  .side { flex: 1; min-width: 0; }
+  .side.right { text-align: right; }
+  .side-name { font-size: 1.8vw; opacity: 0.75; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .side-score { font-size: 6vw; font-weight: 900; line-height: 1; opacity: 0.45; font-variant-numeric: tabular-nums; }
+  .side-score.throwing { opacity: 1; }
+  .legs { text-align: center; min-width: 12vw; }
+  .legs-score { font-size: 2.6vw; font-weight: 800; opacity: 0.7; }
+  .legs-label { font-size: 1.1vw; letter-spacing: 0.2em; opacity: 0.4; }
+
+  .saying { font-size: 1.8vw; opacity: 0.7; max-width: 60ch; }
+  .foot { font-size: 1.2vw; opacity: 0.45; margin-top: auto; }
+  footer { font-size: 1.2vw; opacity: 0.45; padding-top: 1.2vw; }
+  footer.trouble { color: var(--thro-bronze-onink, #C9975C); opacity: 0.9; }
+
+  .choices { display: flex; flex-direction: column; gap: 1vw; margin-top: 2vw; max-width: 70ch; }
+  .choice {
+    display: flex; flex-direction: column; align-items: flex-start; gap: 0.3vw;
+    background: rgba(247,246,242,0.10); color: inherit; border: 0; border-radius: 0.8vw;
+    padding: 1.4vw 1.8vw; font: inherit; text-align: left; cursor: pointer;
+  }
+  /* A television is driven by a remote, which moves focus rather than a pointer. Without a visible
+     focus ring the chooser is unusable on the exact device this page is for. */
+  .choice:focus-visible, .choice:hover { background: rgba(247,246,242,0.20); outline: 0.2vw solid var(--thro-green-onink, #57A385); }
+  .choice-name { font-size: 2.2vw; font-weight: 700; }
+  .choice-season { font-size: 1.4vw; opacity: 0.6; }
+
+  /* Once a league is chosen the page is a board and nothing else: no cursor to leave on screen. */
+  body.wall-on { cursor: none; }
+</style>
+</head>
+<body>
+<div class="screen">
+  <header>
+    <p id="league">&nbsp;</p>
+    <img class="mark" src="wordmark.svg" alt="THRØ" width="428" height="134">
+  </header>
+  <main id="wall"><p class="saying">Reading…</p></main>
+  <footer id="foot"></footer>
+</div>
+<script src="wall.js"></script>
+</body>
+</html>
