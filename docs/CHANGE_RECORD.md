@@ -5210,3 +5210,19 @@ person to answer.
 PD-093 counted 25 call sites in the system face. There were 29.
 
 Counts: 844 client tests; 28 checks green.
+
+## CI was red for eight pushes, and nobody read it (V045's consent scopes, in the suite that was not updated)
+
+**The schema workflow failed on every push from `5c65c58`**, the commit that gave consent a scope (V045, PD-088). One
+of its database properties still said *"a self-created adult may be disclosed"* with nothing behind it but the
+account itself — exactly the reading V045 removed, because making an account is consent to THRØ holding what was
+typed, not to being named in public. The Kotlin suites that met the same rule were changed in that commit.
+`services/api/test/schema_properties.sh` runs only in CI's schema workflow, not under `gradle test`, and it was not.
+Then CI went unread for eight pushes, which is the part that must not happen again.
+
+The property now asserts the rule both ways — an adult with only an account may not be disclosed, and one who
+agreed to be listed may — and the minor's check stops passing for the wrong reason. Since V045 it had said no
+because nobody had agreed to be listed at all; it now gives the minor a listing agreement of their own and still
+expects no, because that is a guardian's to give.
+
+Run locally against the migrated database: 149 passed, 0 failed.

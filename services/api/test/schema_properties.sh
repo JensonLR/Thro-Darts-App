@@ -670,7 +670,9 @@ n=$($PSQL -c "SELECT count(*) FROM information_schema.role_table_grants
 check "transitions, deliveries, artefacts and task events are append-only for every application role" "$n" "0"
 n=$($PSQL -c "SELECT prosecdef::int FROM pg_proc WHERE proname='submission_moves_only_with_evidence';")
 check "the transition trigger runs as the owner, so it alone projects the state" "$n" "1"
-# The disclosure gate: a self-created adult passes; a claimed minor with only their own consent does not; an unclaimed player never does.
+# The disclosure gate. Since V045 (PD-088) making an account is consent to THRØ holding what was typed and not to being
+# named in public, so a self-created adult passes only once they have agreed to be listed; a claimed minor does not pass
+# on their own agreement, because that is a guardian's to give; an unclaimed player never does.
 ADULT=$($PSQL -c "SELECT gen_random_uuid();"); MINOR=$($PSQL -c "SELECT gen_random_uuid();"); PA=$($PSQL -c "SELECT gen_random_uuid();"); PM=$($PSQL -c "SELECT gen_random_uuid();"); PU=$($PSQL -c "SELECT gen_random_uuid();")
 $PSQL -c "SET ROLE app_competition;
   INSERT INTO identity.account (account_id, display_name, age_band, age_assurance) VALUES ('$ADULT','An Adult','adult','self_declared');
@@ -678,8 +680,12 @@ $PSQL -c "SET ROLE app_competition;
   INSERT INTO competition.player (player_id) VALUES ('$PA'), ('$PM'), ('$PU');
   INSERT INTO identity.player_claim (claim_id, player_id, account_id, method) VALUES (gen_random_uuid(),'$PA','$ADULT','self_created');
   INSERT INTO identity.player_claim (claim_id, player_id, account_id, method) VALUES (gen_random_uuid(),'$PM','$MINOR','self_created');" >/dev/null 2>&1
-check "a self-created adult may be disclosed" "$($PSQL -c "SELECT identity.player_may_be_disclosed('$PA');")" "t"
-check "a minor with only their own consent may not" "$($PSQL -c "SELECT identity.player_may_be_disclosed('$PM');")" "f"
+check "a self-created adult who has only made an account may not be disclosed" "$($PSQL -c "SELECT identity.player_may_be_disclosed('$PA');")" "f"
+$PSQL -c "SET ROLE app_competition;
+  INSERT INTO identity.consent_record (account_id, basis, scope, given_by, artefact_ref) VALUES ('$ADULT','self','listing','$ADULT','in_app_tap');
+  INSERT INTO identity.consent_record (account_id, basis, scope, given_by, artefact_ref) VALUES ('$MINOR','self','listing','$MINOR','in_app_tap');" >/dev/null 2>&1
+check "a self-created adult who agreed to be listed may be disclosed" "$($PSQL -c "SELECT identity.player_may_be_disclosed('$PA');")" "t"
+check "a minor who agreed to be listed themselves still may not" "$($PSQL -c "SELECT identity.player_may_be_disclosed('$PM');")" "f"
 check "an unclaimed player never may" "$($PSQL -c "SELECT identity.player_may_be_disclosed('$PU');")" "f"
 
 echo "== provenance for imported rows (V027, PD-033) =="
