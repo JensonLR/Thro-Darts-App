@@ -5304,3 +5304,22 @@ did not answer** `/healthz` in three two-minute attempts on 13 September, longer
 Render's dashboard will say why; this session cannot see it.
 
 Counts: API 106 tests (29 passkey properties, 54 HTTP), schema properties 149, 29 checks green.
+
+## Production at V046, migrated from here with a restore point first (PD-095)
+
+The founder asked for the updates to be run. From this workspace, on 13 September 2026:
+
+- **A restore point first**: Neon branch `restore-point-before-8dce733-20260913-1615` (`br-gentle-block-zal9jk26`),
+  production as of 16:02:53 UTC — its last write before the migration — confirmed `ready` before anything changed.
+- **The migration**: `gradle -p services/api migrate` as the deploy user, with the connection from `.env.local`:
+  `migrated V043 -> V046`, and the application roles granted to `thro_app`. The league seeds ran after it and added
+  nothing, as they should when nothing in them has changed.
+- **Checked on production afterwards, read-only**: the ledger holds 46 migrations; both sweeps exist, the new one and
+  the old one forwarding to it; 5 accounts, 5 consent records (all `holding`, being account-creation records) and 329
+  leagues — the same counts as before.
+- **The API already running kept working on the new schema.** `/healthz` answered `V046` with no `codeVersion` in its
+  answer, which is the build from before PD-095 — exactly the case V046's forwarding function was kept for. It had not
+  answered for over ten minutes earlier in the afternoon; this time it woke in 44 seconds.
+
+**Still to do:** the new API is not deployed, because Render was not reachable from this session; and the pipeline
+waits on its three secrets, which the founder adds — nothing here puts credentials into GitHub.
