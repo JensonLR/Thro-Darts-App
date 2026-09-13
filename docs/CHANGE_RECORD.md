@@ -4858,3 +4858,46 @@ from the inside — a green suite.
 `age_band = 'adult'`. The defect was about adults and about lawful basis, not about safeguarding.
 
 Counts: 106 API tests (9 new in `LiveBoardTest`), the whole suite green, all checks green.
+
+### The pub wall shows the darts (PD-088, the client half)
+
+`GET /v1/seasons/{id}/live` needs no account, so `ThroVenueKit` reads it without gaining anything to
+leak and `check_the_wall_never_signs_in.py` still passes untouched.
+
+**Two clocks, and the difference is the design.** The table refreshes every two minutes; the games every
+**ten seconds**. A league table changes on the night it changes and a leg changes while somebody is
+looking at it, so a single cadence would give either a stale board or a table read twelve times more often
+than a table moves. They are separate `.task`s for the same reason: a slow table read must not hold up the
+one thing on the screen that is supposed to move.
+
+**The rotation changes while darts are in the air.** PD-079's order — table, to play, results — is right
+for a quiet afternoon and wrong at nine o'clock, when what the room is looking up *for* is the leg ten feet
+away. So a live page is interleaved between every other panel: at twenty seconds a dwell nobody waits more
+than forty to see it. With nothing in play the rotation is byte-for-byte what it was, which a test asserts
+by comparing the two panel lists directly — otherwise this would be a change to PD-079 rather than an
+addition to it.
+
+**An unnamed side shows its team, not a gap.** This is the design decision worth arguing with, and it was
+settled by looking at the screen: a row reading "Not named" beside three rows with names makes the one
+person who has not agreed the conspicuous one, which is the opposite of what the rule is for. Their team's
+name is published anyway, so the wall shows *The Sun Inn* — and it reads as a side rather than a redaction.
+Only when the team is private too does it come to "Not named", and then it is honest. When the *whole page*
+is teams, one sentence at the foot says why; with even one named player it is suppressed, because beside a
+name it would read as an explanation of that person.
+
+**Whose throw it is, as brightness rather than a word.** From six metres the question is *who is on* and
+the answer wants to be readable without reading. Between legs neither side is brightened, which a test
+holds, because a wall that left the last thrower lit would be asserting something untrue for a minute at a
+time.
+
+*Found by looking at it on a television, which is the only way it could have been found:* the first build
+let the games fall in a tight column and left two thirds of a 4K screen empty underneath. That is a phone
+layout on a wall. `Spacer` between rows rather than fixed spacing, so two games spread and four still fit
+without any of them shrinking.
+
+`-ThroVenueLiveDemo [named|anonymous|mixed]` seeds a board without a league night, DEBUG only, the same
+shape as `-ThroWristDemo`. It returns instead of polling, so the seeded board cannot be wiped by an empty
+read two seconds later — and the three cases are the three worth looking at, the mixture being the one that
+shows whether an unnamed side reads as a choice or as a fault.
+
+Counts: 839 client tests (26 on a wall, 11 new), 106 API tests, 24 checks green.

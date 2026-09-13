@@ -246,6 +246,44 @@ public struct LeagueFixtures: Decodable, Sendable, Equatable {
     public var decided: [Fixture] { fixtures.filter { $0.decided != nil }.reversed() }
 }
 
+/// A game in play, as a public screen gets it (PD-088).
+///
+/// **Every name is optional and that is the design, not laxity.** The server sends a player's name only
+/// where `identity.player_may_be_shown_live` allows — an adult who has said yes, and nobody else — and
+/// omits the key entirely otherwise. A client that forgets to handle the missing case draws nothing, which
+/// is the safe failure. There is deliberately no placeholder in the payload for a screen to mistake for a
+/// name, and none of these should ever be defaulted to a string at the decode.
+public struct LiveGame: Decodable, Sendable, Equatable, Identifiable {
+    public let matchId: UUID
+    /// Nil when the team is private. Its game is still listed — hiding it would leave a hole in the night.
+    public let homeTeam: String?
+    public let awayTeam: String?
+    public let venue: String?
+    /// The player, where THRØ may name them. Nil is the ordinary case, not an error.
+    public let homeName: String?
+    public let awayName: String?
+    public let homeRemaining: Int
+    public let awayRemaining: Int
+    public let homeLegs: Int
+    public let awayLegs: Int
+    /// "home", "away", or nil between legs.
+    public let thrower: String?
+
+    public var id: UUID { matchId }
+
+    /// True when neither player may be named. The board still has a game, played by two teams.
+    public var teamsOnly: Bool { homeName == nil && awayName == nil }
+
+    public init(matchId: UUID, homeTeam: String?, awayTeam: String?, venue: String?,
+                homeName: String?, awayName: String?,
+                homeRemaining: Int, awayRemaining: Int, homeLegs: Int, awayLegs: Int, thrower: String?) {
+        self.matchId = matchId; self.homeTeam = homeTeam; self.awayTeam = awayTeam; self.venue = venue
+        self.homeName = homeName; self.awayName = awayName
+        self.homeRemaining = homeRemaining; self.awayRemaining = awayRemaining
+        self.homeLegs = homeLegs; self.awayLegs = awayLegs; self.thrower = thrower
+    }
+}
+
 public struct LeagueStandings: Decodable, Sendable, Equatable {
 
     /// Which rules ordered the table. Never absent: a standard nobody can see is a standard THRØ imposed.
@@ -894,6 +932,17 @@ public actor ThroAPI {
         let (data, http) = try await send("GET", path, bearer: session?.accessToken)
         guard http.statusCode == 200 else { throw APIError.status(http.statusCode, String(decoding: data, as: UTF8.self)) }
         return try decode(data)
+    }
+
+    /// The games in play in a season, for a screen in the room (PD-088). No session needed, because the
+    /// screen it is for has nobody signed in to it — which is the property that makes a pub television
+    /// safe, and the reason this is a separate route rather than a relaxation of `stream.match`.
+    public func live(season: UUID) async throws -> [LiveGame] {
+        struct Envelope: Decodable { let games: [LiveGame] }
+        let path = "/v1/seasons/\(season.uuidString.lowercased())/live"
+        let (data, http) = try await send("GET", path, bearer: session?.accessToken)
+        guard http.statusCode == 200 else { throw APIError.status(http.statusCode, String(decoding: data, as: UTF8.self)) }
+        return try (decode(data) as Envelope).games
     }
 
     /// Open-entry events that have not started (the notice on the pub door). No session needed.

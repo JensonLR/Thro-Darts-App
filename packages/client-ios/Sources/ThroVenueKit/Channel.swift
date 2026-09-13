@@ -25,12 +25,15 @@ public enum ThroVenuePanel: Equatable, Identifiable {
     case toPlay(page: Int, of: Int, fixtures: [LeagueFixtures.Fixture])
     /// Results, most recent first.
     case results(page: Int, of: Int, fixtures: [LeagueFixtures.Fixture])
+    /// Games being played right now (PD-088).
+    case live(page: Int, of: Int, games: [LiveGame])
 
     public var id: String {
         switch self {
         case let .table(division, page, _, _): return "table:\(division):\(page)"
         case let .toPlay(page, _, _): return "toPlay:\(page)"
         case let .results(page, _, _): return "results:\(page)"
+        case let .live(page, _, _): return "live:\(page)"
         }
     }
 }
@@ -42,6 +45,9 @@ public enum ThroVenueRota {
     public static let tableRows = 12
     /// Fixtures on one page. Fewer, because each is two team names, a date and a venue.
     public static let fixtureRows = 8
+    /// Games in play on one page. Fewer again: a live row is two sides and two big numbers, and the
+    /// numbers are the whole reason somebody looked up. Four fills a television without shrinking them.
+    public static let liveRows = 4
     /// How long one panel holds. Long enough to read a table twice from six metres away, short enough
     /// that somebody glancing up twice in an evening sees a different thing.
     public static let dwell: TimeInterval = 20
@@ -55,7 +61,9 @@ public enum ThroVenueRota {
     /// **Order is the argument.** Somebody looking up wants to know where their team is, then whether they
     /// are on next, and only then how last week went. A rotation that opened on results would be showing
     /// the least urgent thing to the most people.
-    public static func panels(standings: LeagueStandings?, fixtures: LeagueFixtures?) -> [ThroVenuePanel] {
+    public static func panels(standings: LeagueStandings?,
+                              fixtures: LeagueFixtures?,
+                              live: [LiveGame] = []) -> [ThroVenuePanel] {
         var panels: [ThroVenuePanel] = []
 
         for division in standings?.divisions ?? [] where !division.rows.isEmpty {
@@ -75,7 +83,43 @@ public enum ThroVenueRota {
             panels.append(.results(page: index + 1, of: pageCount(decided.count, per: fixtureRows), fixtures: page))
         }
 
-        return panels
+        return interleaving(livePanels(live), through: panels)
+    }
+
+    static func livePanels(_ live: [LiveGame]) -> [ThroVenuePanel] {
+        paginate(live, per: liveRows).enumerated().map { index, page in
+            .live(page: index + 1, of: pageCount(live.count, per: liveRows), games: page)
+        }
+    }
+
+    /// Live panels first, and again between each of the others.
+    ///
+    /// **The rotation's order was already an argument and this changes it while darts are in the air.**
+    /// The standing order — table, then what is to play, then what was played — is right for a quiet
+    /// afternoon. It is wrong at nine o'clock on a Tuesday, when the thing everybody in the room is
+    /// looking up at the screen *for* is the leg happening ten feet away. A live panel that had to wait
+    /// its turn behind two pages of last week's results would be a live board in name.
+    ///
+    /// So while anything is in play a live page is never more than one panel away: at twenty seconds a
+    /// dwell, nobody waits more than forty. With nothing in play this returns the rotation untouched,
+    /// which is why an empty league night looks exactly as it did before PD-088.
+    static func interleaving(_ live: [ThroVenuePanel], through rest: [ThroVenuePanel]) -> [ThroVenuePanel] {
+        guard !live.isEmpty else { return rest }
+        guard !rest.isEmpty else { return live }
+        var out: [ThroVenuePanel] = []
+        var next = 0
+        for panel in rest {
+            out.append(live[next % live.count])
+            next += 1
+            out.append(panel)
+        }
+        // Any live page the interleave did not reach — more games than there are other panels — goes on
+        // the end, so a busy night with an empty table still shows every game.
+        while next < live.count {
+            out.append(live[next])
+            next += 1
+        }
+        return out
     }
 
     /// The panel showing at a given moment, given when the rotation started. Nil when there is nothing to
@@ -106,6 +150,34 @@ public enum ThroVenueWords {
     /// is shown and the side is called what it honestly is.
     public static func sides(_ fixture: LeagueFixtures.Fixture) -> String {
         "\(fixture.home ?? "Not named") v \(fixture.away ?? "Not named")"
+    }
+
+    /// One side of a live game: the player if THRØ may name them, else the team they play for (PD-088).
+    ///
+    /// **The fallback is a real answer, not an apology.** A player who has not agreed to be named is
+    /// playing for a team whose name is published anyway, so the room sees *"The Sun Inn"* rather than a
+    /// gap or a placeholder — and somebody standing at the oche is not made conspicuous by being the one
+    /// row on the wall that says "Not named". Only when the team is private too does it come to that, and
+    /// then it is honest: THRØ has nothing it may put there.
+    public static func side(name: String?, team: String?) -> String {
+        name ?? team ?? "Not named"
+    }
+
+    /// Whether this side is at the oche. Drawn as an emphasis rather than a word: on a wall the useful
+    /// question is "who is throwing" and the useful answer is a bright number, not a label to read.
+    public static func atTheOche(_ game: LiveGame, home: Bool) -> Bool {
+        game.thrower == (home ? "home" : "away")
+    }
+
+    /// What a live page says about itself when the whole page is teams and no people.
+    ///
+    /// Said once at the foot of the panel rather than against each row, because repeating it four times
+    /// would make an ordinary state look like four faults. It is worth saying at all so that nobody in
+    /// the room concludes THRØ does not know who is playing.
+    public static func whyTeams(_ games: [LiveGame]) -> String? {
+        games.allSatisfy(\.teamsOnly) && !games.isEmpty
+            ? "Players are named here once they have said they are happy to be."
+            : nil
     }
 
     /// The result, in the form a notice board uses. Never a bare pair of numbers for something nobody
@@ -148,6 +220,8 @@ public enum ThroVenueWords {
         return "\(minutes) minute\(minutes == 1 ? "" : "s") ago"
     }
 
+    public static let nowPlaying = "Playing now"
+    public static let legs = "LEGS"
     public static let nothingYet = "Nothing to show yet"
     public static let nothingYetHint = "When this league has a table or a fixture list, it appears here."
     public static let toPlay = "To play"

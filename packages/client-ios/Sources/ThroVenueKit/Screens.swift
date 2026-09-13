@@ -109,7 +109,7 @@ public struct ThroVenueChannel: View {
     }
 
     private var panels: [ThroVenuePanel] {
-        ThroVenueRota.panels(standings: wall.standings, fixtures: wall.fixtures)
+        ThroVenueRota.panels(standings: wall.standings, fixtures: wall.fixtures, live: wall.live)
     }
 
     public var body: some View {
@@ -133,6 +133,8 @@ public struct ThroVenueChannel: View {
         .animation(.easeInOut(duration: 0.35), value: ThroVenueRota.showing(panels, since: startedAt, now: now))
         .onReceive(tick) { now = $0 }
         .task(id: season) { await wall.watch(season: season) }
+        // Its own task, because its own clock: ten seconds against the table's two minutes (PD-088).
+        .task(id: season) { await wall.watchLive(season: season) }
     }
 
     private var head: some View {
@@ -199,6 +201,8 @@ public struct ThroVenueChannel: View {
         case let .results(page, of, fixtures):
             ThroVenueFixtures(title: ThroVenueWords.results, page: page, of: of, fixtures: fixtures,
                               showing: .results, now: now)
+        case let .live(page, of, games):
+            ThroVenueLive(page: page, of: of, games: games)
         }
     }
 }
@@ -391,5 +395,113 @@ struct ThroVenueHeading: View {
             }
             Spacer(minLength: 0)
         }
+    }
+}
+
+/// Games being played right now (PD-088).
+///
+/// **The remaining scores are the biggest thing on this screen**, bigger than a league table's team names,
+/// because they are the only figures on the wall that change while somebody is watching and the only ones
+/// a person at the bar checks against the board across the room. Everything else here is context for them.
+public struct ThroVenueLive: View {
+    private let page: Int
+    private let of: Int
+    private let games: [LiveGame]
+
+    public init(page: Int, of: Int, games: [LiveGame]) {
+        self.page = page
+        self.of = of
+        self.games = games
+    }
+
+    public var body: some View {
+        VStack(alignment: .leading, spacing: ThroSpacing.spacing6) {
+            HStack(alignment: .firstTextBaseline) {
+                Text(ThroVenueWords.nowPlaying)
+                    .thro(ThroVenueType.panel)
+                    .foregroundStyle(ThroColor.colorTextOnBoard)
+                Spacer()
+                if of > 1 {
+                    Text("\(page) of \(of)")
+                        .thro(ThroVenueType.foot)
+                        .foregroundStyle(ThroColor.throChalk.opacity(0.5))
+                }
+            }
+
+            // **The games take the height, rather than stacking at the top.**
+            //
+            // The first build let them fall in a tight column and left two thirds of a 4K television
+            // empty under them. That is a phone layout on a wall: on a screen somebody reads from six
+            // metres, whitespace between rows is what separates one game from the next, and a gap at the
+            // bottom is a gap where a game could have been legible.
+            //
+            // A `Spacer` between rows rather than a fixed spacing, so two games spread and four games
+            // still fit without any of them shrinking.
+            VStack(spacing: 0) {
+                ForEach(Array(games.enumerated()), id: \.element.id) { index, game in
+                    if index > 0 { Spacer(minLength: ThroSpacing.spacing5) }
+                    ThroVenueLiveRow(game: game)
+                }
+            }
+            .frame(maxHeight: .infinity)
+
+            // Said once, at the foot, and only when the whole page is teams — see `whyTeams`.
+            if let why = ThroVenueWords.whyTeams(games) {
+                Text(why)
+                    .thro(ThroVenueType.foot)
+                    .foregroundStyle(ThroColor.throChalk.opacity(0.5))
+                    .lineLimit(2)
+            }
+        }
+        // Claims the board rather than sitting at the top of it.
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+    }
+}
+
+/// One game in play.
+struct ThroVenueLiveRow: View {
+    let game: LiveGame
+
+    var body: some View {
+        HStack(alignment: .center, spacing: ThroSpacing.spacing4) {
+            sideView(name: game.homeName, team: game.homeTeam,
+                     remaining: game.homeRemaining, throwing: ThroVenueWords.atTheOche(game, home: true),
+                     alignment: .leading)
+
+            VStack(spacing: 0) {
+                Text("\(game.homeLegs)–\(game.awayLegs)")
+                    .thro(ThroVenueType.figure)
+                    .foregroundStyle(ThroColor.throChalk.opacity(0.7))
+                Text(ThroVenueWords.legs)
+                    .thro(ThroVenueType.foot)
+                    .foregroundStyle(ThroColor.throChalk.opacity(0.45))
+            }
+            .frame(minWidth: 140)
+
+            sideView(name: game.awayName, team: game.awayTeam,
+                     remaining: game.awayRemaining, throwing: ThroVenueWords.atTheOche(game, home: false),
+                     alignment: .trailing)
+        }
+    }
+
+    @ViewBuilder
+    private func sideView(name: String?, team: String?, remaining: Int,
+                          throwing: Bool, alignment: HorizontalAlignment) -> some View {
+        VStack(alignment: alignment, spacing: 0) {
+            Text(ThroVenueWords.side(name: name, team: team))
+                .thro(ThroVenueType.aside)
+                // A player who may not be named shows their team, and the two read the same weight on
+                // purpose: nobody at the oche should be the one row on the wall that looks redacted.
+                .foregroundStyle(ThroColor.throChalk.opacity(0.75))
+                .lineLimit(1)
+                .minimumScaleFactor(0.6)
+            Text("\(remaining)")
+                .thro(ThroVenueType.league)
+                // Whose throw it is, said as brightness rather than a label. On a wall the question is
+                // "who is on" and the answer wants to be readable from the bar without reading a word.
+                .foregroundStyle(throwing ? ThroColor.colorTextOnBoard : ThroColor.throChalk.opacity(0.45))
+                .monospacedDigit()
+        }
+        .frame(maxWidth: .infinity, alignment: alignment == .leading ? .leading : .trailing)
     }
 }
