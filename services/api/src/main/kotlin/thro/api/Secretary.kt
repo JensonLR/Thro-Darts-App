@@ -131,12 +131,31 @@ public class Secretary(private val connection: Connection) {
         ).use { ps -> ps.setObject(1, taskId); ps.setString(2, requirement); ps.setObject(3, by); ps.setString(4, note); ps.executeUpdate() }
     }
 
-    /** A consent artefact with an actor. Closes the player's consent task when one is open. */
-    public fun recordConsent(accountId: UUID, basis: String, givenBy: UUID, artefactRef: String): UUID {
+    /**
+     * A consent artefact with an actor. Closes the player's consent task when one is open.
+     *
+     * @param scope what was consented to (V045). Defaults to `listing`, because that is what a
+     *   registration needs and what every existing caller meant — being named on a league's roster.
+     *   **Not `holding`**: that one is written by the account-creation trigger and by nothing else, and a
+     *   secretary recording it here would be recording that somebody agreed to something by existing.
+     *   **Not `live` either**, from this path: a live consent is the person's own answer in the app,
+     *   never a form somebody else filed on their behalf.
+     */
+    public fun recordConsent(
+        accountId: UUID,
+        basis: String,
+        givenBy: UUID,
+        artefactRef: String,
+        scope: String = "listing",
+    ): UUID {
+        require(scope == "listing") { "the secretary records a listing consent; live is the person's own answer" }
         val id = UUID.randomUUID()
         connection.prepareStatement(
-            "INSERT INTO identity.consent_record (consent_id, account_id, basis, given_by, artefact_ref) VALUES (?, ?, ?, ?, ?)",
-        ).use { ps -> ps.setObject(1, id); ps.setObject(2, accountId); ps.setString(3, basis); ps.setObject(4, givenBy); ps.setString(5, artefactRef); ps.executeUpdate() }
+            "INSERT INTO identity.consent_record (consent_id, account_id, basis, scope, given_by, artefact_ref) VALUES (?, ?, ?, ?, ?, ?)",
+        ).use { ps ->
+            ps.setObject(1, id); ps.setObject(2, accountId); ps.setString(3, basis); ps.setString(4, scope)
+            ps.setObject(5, givenBy); ps.setString(6, artefactRef); ps.executeUpdate()
+        }
         connection.prepareStatement(
             """
             SELECT t.task_id FROM competition.admin_task t

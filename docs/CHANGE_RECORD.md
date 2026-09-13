@@ -4807,3 +4807,54 @@ skips. CI and anybody outside those folders keeps `build/`, so nothing about the
 them.
 
 Counts: Android 27 client tests + 39 journal, 24 checks green, and one generator with a `--check` in CI.
+
+## A game on a public screen, and the consent defect it uncovered (PD-088, V045)
+
+The founder answered the question the defaults audit left owed — *"if it's legal all games should be live
+shown"* — and the conditional was the whole of the work.
+
+**The line, in the schema rather than a handler.** `identity.player_may_be_shown_live` names an adult who
+has said so themselves, and nobody else. It differs from `player_may_be_disclosed` in exactly one way:
+**there is no guardian branch.** A team page publishes a fact about membership; a live board publishes
+where a named person is standing at nine o'clock on a Tuesday, to a room of strangers. A guardian may agree
+to the first. Nobody can agree to the second on a child's behalf when THRØ cannot verify they are the
+guardian — which the DPIA already recorded at R3.
+
+Every game is still on the board. What varies is whether the two people are named: a player who has not
+said yes appears as the **team** they play for, which is public anyway. Nothing hidden, no game missing.
+
+`GET /v1/seasons/{id}/live` is unauthenticated, so the pub wall still holds no credential and
+`check_the_wall_never_signs_in.py` still passes. It serves a **derived snapshot**, never the evidence log —
+`stream.match` stays authenticated, so a public screen cannot read a match's visits even in principle. The
+name columns are `CASE WHEN identity.player_may_be_shown_live(...) THEN … END`, so there is no path by
+which forgetting a check produces a name, only one by which it produces nothing.
+
+### And then the part that mattered more
+
+Adding a scope forced the question *what do the existing consent records mean*, and the answer contradicted
+the Standard 7 audit written nine days earlier.
+
+`identity.account_consent_starts_honest` (V016) writes a `self` consent on every self-created account, with
+the artefact `account_creation`. Its comment is honest about meaning consent to **holding** what somebody
+typed. `player_may_be_disclosed` was reading it as consent to being **named on a public page**. Under Art
+4(11) consent must be specific and informed and that record is neither, as consent to publication — so
+**an adult who signed in and claimed a THRØ ID was publicly nameable having never been asked.**
+
+Defaulting the new column to `listing` would have cemented exactly that. Three scopes instead — `holding`,
+`listing`, `live` — and neither gate accepts `holding`.
+
+**The audit had said the opposite**, and `docs/legal/DEFAULTS_AUDIT.md` now carries the correction in full
+rather than a quiet edit. The lesson is specific and worth having: the audit traced callers in Kotlin and
+stopped. In a system that puts its rules in the database on purpose, *what writes this table* is a question
+about triggers as much as about application code, and a grep of one language answers half of it.
+
+**Three existing tests were passing for the wrong reason.** `TeamsTest`, `MatchRecordsTest` and
+`SecretaryTest` all had names asserting *"only the consenting adult is named"* while none of their fixtures
+made anybody consent. Not one assertion was weakened: each fixture now makes the person say yes through the
+production path, which is what the test's own name claimed all along. That is what a wrong audit looks like
+from the inside — a green suite.
+
+**For children, nothing changed and nothing was wrong.** The self branch has always required
+`age_band = 'adult'`. The defect was about adults and about lawful basis, not about safeguarding.
+
+Counts: 106 API tests (9 new in `LiveBoardTest`), the whole suite green, all checks green.

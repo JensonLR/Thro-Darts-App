@@ -34,10 +34,12 @@ import java.time.temporal.ChronoUnit
 import java.util.UUID
 import thro.api.Accounts
 import thro.api.CommandHandler
+import thro.api.Consent
 import thro.api.CommandResult
 import thro.api.Discovery
 import thro.api.Events
 import thro.api.Fixtures
+import thro.api.LiveBoard
 import thro.api.Friends
 import thro.api.Teams
 import thro.api.Leagues
@@ -242,6 +244,24 @@ public fun Application.thro(deps: Deps) {
                     Http(200, """{"decisionId":"$decision","reportId":"$report"}""")
                 }
             }
+        },
+        "me.consent" to { r ->
+            withAccount(r) { a ->
+                val body = Json.parseObject(r.body)
+                val scope = Consent.Scope.of(body["scope"] as? String)
+                if (scope == null) Http(400, """{"error":"scope must be listing or live"}""")
+                else {
+                    val answer = Consent(r.connection(), deps.now).say(a, scope, body["given"] as? Boolean ?: false)
+                    val why = answer.refusedBecause?.let { ""","why":${'$'}{Contract.q(it)}""" } ?: ""
+                    Http(200, """{"scope":${'$'}{Contract.q(scope.stored)},"given":${'$'}{answer.given}${'$'}why}""")
+                }
+            }
+        },
+        "seasons.live" to { r ->
+            r.role = DbRole.READ
+            val season = UUID.fromString(r.call.parameters["leagueSeasonId"])
+            val limit = (r.call.request.queryParameters["limit"]?.toIntOrNull() ?: 20).coerceIn(1, 20)
+            Http(200, liveJson(LiveBoard(r.connection()).inPlay(season, limit)))
         },
         "me.terms" to { r ->
             withAccount(r) { a ->
@@ -918,6 +938,29 @@ private fun teamInbox(c: Connection, p: Principal, teamId: String?, now: Instant
     if (!decision.allowed) return Http(403, """{"error":"you do not run this team"}""")
     return Http(200, inboxJson(Secretary(c).inbox(team, now)))
 }
+
+/**
+ * A game in play, as a public screen gets it.
+ *
+ * A player THRØ may not name is **absent from the JSON**, not present as an empty string or a
+ * placeholder. A client that forgets to handle the missing key draws nothing, which is the safe
+ * failure; one that received `""` would have to know to treat it specially, and would eventually not.
+ */
+private fun liveJson(panels: List<LiveBoard.Panel>): String =
+    """{"games":[""" + panels.joinToString(",") { p ->
+        buildString {
+            append("""{"matchId":${'$'}{Contract.q(p.matchId.toString())}""")
+            p.homeTeam?.let { append(""","homeTeam":${'$'}{Contract.q(it)}""") }
+            p.awayTeam?.let { append(""","awayTeam":${'$'}{Contract.q(it)}""") }
+            p.venue?.let { append(""","venue":${'$'}{Contract.q(it)}""") }
+            p.homeName?.let { append(""","homeName":${'$'}{Contract.q(it)}""") }
+            p.awayName?.let { append(""","awayName":${'$'}{Contract.q(it)}""") }
+            append(""","homeRemaining":${'$'}{p.homeRemaining},"awayRemaining":${'$'}{p.awayRemaining}""")
+            append(""","homeLegs":${'$'}{p.homeLegs},"awayLegs":${'$'}{p.awayLegs}""")
+            p.thrower?.let { append(""","thrower":${'$'}{Contract.q(it)}""") }
+            append("}")
+        }
+    } + "]}"
 
 private fun inboxJson(sections: Map<thro.competition.InboxSection, List<Secretary.InboxItem>>): String =
     "{\"sections\":{" + sections.entries.joinToString(",") { (s, items) ->

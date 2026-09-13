@@ -60,10 +60,12 @@ though its fixture is still listed, because hiding it would leave a hole in a le
 member recorded as a minor is never listed to anyone but an admin, and — the load-bearing part — **an
 unknown age is treated as a minor** by every exposure rule.
 
-A person is named on a public surface only when a consent record exists — `identity.player_may_be_disclosed`
-requires a live claim **and** guardian consent, or self-consent from an account whose band actually says
-adult. An account starts `unknown`, so a new one is never nameable, and everybody else on a roster is
-counted rather than named. Audited in full at `docs/legal/DEFAULTS_AUDIT.md`.
+A person is named on a public surface only when a consent record **of the right scope** exists —
+`identity.player_may_be_disclosed` requires a live claim and a `listing` consent, given by a guardian or by
+an adult for themselves. The scope matters, and was added in V045 after the defaults audit found that an
+`account_creation` record was being read as consent to publication; the correction is written out in
+`docs/legal/DEFAULTS_AUDIT.md`. An account starts `unknown`, so a new one is never nameable, and everybody
+else on a roster is counted rather than named.
 
 The residual risk is a **team name that identifies a child** ("Smith's under-16s"). Nothing in the system
 can detect that. *Mitigation is the safety route and an organiser's judgement, and it should be said out

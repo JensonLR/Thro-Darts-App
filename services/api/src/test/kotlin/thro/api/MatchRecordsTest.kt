@@ -251,7 +251,12 @@ class MatchRecordsTest {
             fun signedIn(name: String, adult: Boolean): UUID {
                 val session = accounts.signIn("apple", "apple-subject-seat-${UUID.randomUUID()}", UUID.randomUUID())
                 accounts.setDisplayName(session.accountId, name)
-                if (adult) Friends(c, { at }).declareAge(session.accountId, "adult")
+                if (adult) {
+                    Friends(c, { at }).declareAge(session.accountId, "adult")
+                    // And says they may be named. Signing in does not say it — V045 — and the assertion
+                    // below is "an adult who has said so", so the fixture has to make them say so.
+                    Consent(c).say(session.accountId, Consent.Scope.LISTING, yes = true)
+                }
                 return session.playerId ?: error("signing in made no competitor")
             }
             val sam = signedIn("Sam Cross", adult = true)

@@ -247,6 +247,30 @@ public object Contract {
                               404 to "no such report"),
         ),
         Endpoint(
+            id = "me.consent", method = "POST", path = "/v1/me/consent", authenticated = true,
+            summary = "Say whether you may be named",
+            description = "Two separate answers (PD-088). `listing` is being named on your team's public page; " +
+                "`live` is being named on a screen while you are playing, which says where you are at the time and " +
+                "is therefore asked for on its own. Only for yourself: a guardian's consent is recorded by a named " +
+                "person through the secretary, never by a caller asserting it here. Saying no revokes and keeps the " +
+                "record, so what somebody agreed to and when is answerable. `live` is refused for anyone not " +
+                "recorded as an adult, with the sentence to show them.",
+            request = Schema("""{"type":"object","required":["scope","given"],"properties":{"scope":{"enum":["listing","live"]},"given":{"type":"boolean"}}}"""),
+            responses = mapOf(200 to "scope, given, and why not when it was refused", 400 to "no such scope",
+                              401 to "no principal", 403 to "the development principal has no account"),
+        ),
+        Endpoint(
+            id = "seasons.live", method = "GET", path = "/v1/seasons/{leagueSeasonId}/live", authenticated = false,
+            summary = "The games in play in this season, for a screen in the room (PD-088)",
+            description = "Every match with a visit in it and no outcome yet: the two teams, the venue, the legs, " +
+                "the remainders and whose throw it is. A player is **named only** where " +
+                "`identity.player_may_be_shown_live` allows — an adult who has said yes, and nobody else; a minor " +
+                "and an unknown age are both null, never a placeholder. A private team is unnamed and its game is " +
+                "still listed. Needs no account, because the screen it is for has nobody signed in to it.",
+            query = listOf("limit" to "at most this many, default 20, capped at 20"),
+            responses = mapOf(200 to "games", 400 to "not a UUID"),
+        ),
+        Endpoint(
             id = "me.terms", method = "POST", path = "/v1/me/terms", authenticated = true,
             summary = "Accept the terms (PD-050)",
             description = "Recorded once per version, with the version accepted, because that is the only honest answer to "

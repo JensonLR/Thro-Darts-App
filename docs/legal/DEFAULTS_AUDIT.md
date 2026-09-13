@@ -42,14 +42,49 @@ out when neither branch is satisfied.
 Everybody else on a roster is **counted and not named**. `TeamsTest` holds it —
 *"a team is started, filled by code, and names only those who may be named"*.
 
-**One thing found while auditing, and it is worth writing down.** `Secretary.recordConsent` is the
-only code in the repository that writes a consent record, and it has **no production caller** — the
-secretary module is built but not yet routed over HTTP. So today `player_may_be_disclosed` answers
-false for every player alive, and no roster names anybody at all. That is not a Standard 7 failure;
-it is the maximally private state. It is recorded here because of what it implies for the route that
-will eventually exist: **recording consent must be a thing a person does on purpose, never a side
-effect of joining a team.** If entering a team code ever writes a consent record, this entire
-section becomes untrue in one commit and nothing would fail.
+### Corrected, 13 September 2026 — this section was wrong when first written
+
+The original audit reported that `Secretary.recordConsent` is the only code that writes a consent record,
+that it has no production caller, and that therefore no roster named anybody at all. **The first two were
+true and the conclusion was false.** There is a second writer, and the audit missed it: a database trigger,
+`identity.account_consent_starts_honest` (V016), writes a `self` consent record on **every self-created
+account**, with the artefact `account_creation`.
+
+So the real position at the time of the audit was the opposite of the one reported: **any adult who signed
+in and claimed a THRØ ID was nameable on a public team page, having never been asked.** The trigger's own
+comment is honest about what it means — *"A person who creates their own account has, by that act,
+consented to THRØ holding what they typed"* — and it is right about that. What was wrong was
+`player_may_be_disclosed` reading that record as consent to something else entirely. Under Art 4(11)
+consent must be specific and informed, and a record whose artefact is literally `account_creation` is
+neither, as consent to publication.
+
+**Fixed in V045 (PD-088)**, which was written for the live board and found this on the way. A consent
+record now carries a **scope**:
+
+| | |
+| --- | --- |
+| `holding` | THRØ may keep what you typed. Given by making an account, and by nothing else. |
+| `listing` | You may be named on your team's public page. |
+| `live` | You may be named on a screen while you are playing. |
+
+Neither gate accepts `holding`. So the sentence this section originally claimed — *nobody is named until
+they say so* — is now true, and true because of a rule rather than because a route had not been built.
+
+**The lesson, which is why this is written out rather than quietly edited.** The audit traced callers in
+Kotlin and stopped. In a system that puts its rules in the database on purpose, *"what writes this table"*
+is a question about triggers as much as about application code, and a grep of one language answers half of
+it. `TeamsTest`, `MatchRecordsTest` and `SecretaryTest` all had names asserting *"only the consenting adult
+is named"* while none of their fixtures made anybody consent — three tests passing for the wrong reason,
+which is what a wrong audit looks like from the inside.
+
+**What still stands:** for **children** the default was high-privacy throughout and still is. The
+self-consent branch requires `age_band = 'adult'`, so a minor was never disclosed by the trigger's record,
+and an unknown age never was either. Standard 7 was met for the people Standard 7 is about. The defect was
+about adults, and it was a lawful-basis defect rather than a safeguarding one.
+
+**And the original point survives:** recording consent must be something a person does on purpose, never a
+side effect. That is now enforced rather than hoped for — and note that a side effect nobody was looking at
+is exactly how it went wrong the first time.
 
 ## 2. The pub television
 
@@ -63,11 +98,17 @@ a session store, a token, the keychain, or the authenticated match stream anywhe
 `ThroVenueKit`. The guard was verified by breaking the wall on purpose — adding a `SessionStore` to
 `Wall.swift` — and confirming it failed, before restoring the file.
 
-**The open decision, stated as a decision rather than a gap.** `stream.match` is authenticated, so
-the wall cannot show a **live leg**, and that is deliberate: *an under-18 fixture named on a pub wall
-is a safeguarding question, not a plumbing one.* Somebody has to decide it before it is built. A
-room that wants a live board today gets it the way PD-041 already provides — the phone, by cable or
-AirPlay, where a person is present and answerable for the screen.
+**Decided, 13 September 2026 (PD-088).** The founder's answer to *may a live leg be shown on a public
+screen* was *"if it's legal all games should be live shown"*, and V045 is where the conditional went.
+The wall now reads `GET /v1/seasons/{id}/live`, which is unauthenticated — so §2's property is
+untouched, the wall still holds no credential — and which names a player **only** where
+`identity.player_may_be_shown_live` allows: an adult who has said yes, for themselves, and nobody
+else. No guardian branch, because a live board publishes where a named person is at the time and
+THRØ cannot verify a guardian. A player who has not said yes is shown as the **team** they play for,
+which is public anyway.
+
+`stream.match` remains authenticated and unchanged; the board is a derived snapshot, not the evidence
+log, so a public screen cannot read a match's visits even in principle.
 
 ## 3. Location
 
@@ -168,13 +209,16 @@ Nothing else. Every default examined was already the private one, and the audit'
 note about the consent route that does not exist yet and §2's decision that has not been made yet —
 both of which are places where the *next* commit is the risk, not this one.
 
-## The one decision still owed
+## The decision that was owed, and what answering it cost
 
-**May a live leg be shown on a public screen, and under what conditions?** Not built, deliberately.
-The question is not technical: it is whether a named under-18 fixture may appear on a pub wall, and
-if the answer is "only when every player on it is a confirmed adult", then THRØ needs a way to know
-that — which today it does not, because §1's consent route does not exist. The two are the same
-piece of work.
+**May a live leg be shown on a public screen?** Answered on 13 September 2026 — see §2 — and the two
+things this audit said were the same piece of work turned out to be exactly that. Building the consent
+route for the live board is what exposed §1's defect, because writing the scope column forced somebody
+to ask what the existing records actually meant.
+
+That is worth keeping in view: the audit's most useful output was not either of its verdicts. It was
+naming a thing as unbuilt, which meant that when it was built, somebody read the surrounding code
+properly.
 
 ---
 

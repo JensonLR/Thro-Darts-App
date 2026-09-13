@@ -15,11 +15,18 @@ class TeamsTest {
     private fun migrated(): Connection = TestDatabase.migrated()
 
     /** An account made the way sign-in makes one, with its self-created player. */
-    private fun person(c: Connection, name: String, band: String): UUID {
+    /**
+     * @param agrees whether this person has said they may be named on a public page. **Not implied by
+     *   having an account** since V045: making an account consents to THRØ holding what you typed, and
+     *   nothing more. Before that, every fixture here got public listing for free and these tests passed
+     *   for the wrong reason — their names said "only the consenting adult" while nobody had consented.
+     */
+    private fun person(c: Connection, name: String, band: String, agrees: Boolean = false): UUID {
         val account = UUID.randomUUID()
         c.createStatement().use { st ->
             st.execute("INSERT INTO identity.account (account_id, display_name, age_band, age_assurance) VALUES ('$account', '$name', '$band', ${if (band == "unknown") "'none'" else "'self_declared'"})")
         }
+        if (agrees) Consent(c).say(account, Consent.Scope.LISTING, yes = true)
         val org = Organisations(c)
         val player = org.createPlayer(source = "self", by = account)
         org.claim(player, account, "self_created")
@@ -32,7 +39,7 @@ class TeamsTest {
         migrated().use { c ->
             var now = Instant.parse("2026-09-10T21:00:00Z")
             val teams = Teams(c) { now }
-            val jenson = person(c, "Jenson R.", "adult"); val ethan = person(c, "Ethan T.", "unknown"); val kid = person(c, "Young", "minor")
+            val jenson = person(c, "Jenson R.", "adult", agrees = true); val ethan = person(c, "Ethan T.", "unknown"); val kid = person(c, "Young", "minor")
             val team = teams.create(jenson, "  The Sun Inn ", "Stockton-on-Tees")
             assertEquals("The Sun Inn", team.name); assertEquals("admin", team.role); assertEquals(1, team.members)
             assertEquals(listOf("The Sun Inn"), teams.mine(jenson).map { it.name })
@@ -74,7 +81,7 @@ class TeamsTest {
         migrated().use { c ->
             var now = Instant.parse("2026-09-11T20:00:00Z")
             val teams = Teams(c) { now }
-            val admin = person(c, "Jenson R.", "adult"); val ethan = person(c, "Ethan T.", "adult"); val sam = person(c, "Sam C.", "adult")
+            val admin = person(c, "Jenson R.", "adult", agrees = true); val ethan = person(c, "Ethan T.", "adult", agrees = true); val sam = person(c, "Sam C.", "adult", agrees = true)
             val team = teams.create(admin, "The Bell", "Stockton-on-Tees")
             val code = teams.invite(admin, team.teamId).code
             now = now.plusSeconds(60); teams.join(ethan, code); teams.join(sam, code)

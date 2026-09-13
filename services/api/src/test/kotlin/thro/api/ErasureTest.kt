@@ -63,7 +63,7 @@ class ErasureTest {
             c.createStatement().use { st ->
                 st.execute("UPDATE identity.account SET age_band = 'adult', age_assurance = 'self_declared' WHERE account_id = '$jenson'")
                 st.execute("INSERT INTO identity.device (device_id, account_id, label) VALUES ('$device', '$jenson', 'Jenson''s iPhone')")
-                st.execute("INSERT INTO identity.consent_record (consent_id, account_id, basis, given_by, artefact_ref) VALUES ('${UUID.randomUUID()}', '$jenson', 'self', '$jenson', 'roster')")
+                st.execute("INSERT INTO identity.consent_record (consent_id, account_id, basis, scope, given_by, artefact_ref) VALUES ('${UUID.randomUUID()}', '$jenson', 'self', 'listing', '$jenson', 'roster')")
             }
             val ethan = accounts.signIn("apple", "apple-subject-ethan-0002", UUID.randomUUID()).accountId
             accounts.setDisplayName(ethan, "Ethan T.")

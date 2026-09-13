@@ -4021,3 +4021,62 @@ nobody would know which was in force.
 `decision_is_kept` refuses UPDATE as well. That is the guarantee working — there is no way to make a
 decision look older than it is, so nobody can accelerate a report out of the database — and the test now
 inserts decisions with an explicit `decided_at` instead.
+
+
+## PD-088 — A game on a public screen
+
+**13 September 2026.** The founder, asked whether a live leg may be shown on a public screen:
+*"If it's legal all games should be live shown."*
+
+The conditional is the whole of the work, so here is where the line went and why.
+
+**Yes, for an adult who has said so.** A person playing a league fixture, named on a screen in the pub they
+are standing in, having agreed to it. That is the product working as intended and it rests on the strongest
+lawful basis available: their own consent, given for this purpose, withdrawable at any time and effective
+at the next read rather than the next season.
+
+**No, for a child.** Not because a statute says so in terms, but because of what a live board publishes
+that a result does not: **where a named person is, right now**, to whoever is in the room. A league
+publishes results; it does not broadcast a child's location on a Tuesday evening. The Children's code puts
+the burden on the controller to show a use is in the child's best interests, and THRØ cannot discharge it
+here — least of all through a guardian's consent, because the DPIA already records (R3) that THRØ has **no
+way to verify a guardian**. So `identity.player_may_be_shown_live` has no guardian branch, where
+`player_may_be_disclosed` does. That difference is the decision.
+
+**And no for an unknown age**, which is the rule the whole system already turns on and is load-bearing
+precisely because it is the ordinary case rather than the exotic one.
+
+**What the room actually sees.** Every game, always — that part of the founder's answer is met in full. A
+board shows the two **teams**, the venue, the legs, the remainders and whose throw it is, because a
+league's own published competition is public (PD-054). What varies is whether the two people are named.
+Nothing is hidden and no game is missing; a person is simply not named until they have said yes.
+
+### The defect this uncovered, which was worse than the feature was interesting
+
+Adding a `scope` to consent forced the question *what do the existing consent records mean?* — and the
+answer was not the one the Standard 7 audit had reported nine days earlier.
+
+`identity.account_consent_starts_honest` (V016) writes a `self` consent on every self-created account,
+artefact `account_creation`. Its comment is honest: making an account consents to THRØ **holding** what you
+typed. But `player_may_be_disclosed` read that same record as consent to being **named on a public page**,
+which is a different thing, and which Art 4(11) requires to be specific and informed. **So an adult who
+signed in and claimed a THRØ ID was publicly nameable having never been asked.**
+
+A `listing` default on the new column would have cemented it. Three scopes instead:
+
+| | |
+| --- | --- |
+| `holding` | THRØ may keep what you typed. Given by making an account, and by nothing else. |
+| `listing` | You may be named on your team's public page. |
+| `live` | You may be named on a screen while you are playing. |
+
+Neither gate accepts `holding`, so nobody is named anywhere until they have said the specific thing.
+
+**Three existing tests were passing for the wrong reason** and their own names said so —
+*"only the consenting adult is named"*, *"an adult who has said so is named"*, *"an adult with a claimed
+account and their own consent"* — while not one of their fixtures made anybody consent. None was weakened:
+each now makes the person actually say yes, which is what the test claimed all along.
+
+**For children nothing changed and nothing was wrong.** The self branch has always required
+`age_band = 'adult'`, so the trigger's record never disclosed a minor or an unknown age. The defect was a
+lawful-basis defect about adults, not a safeguarding one.

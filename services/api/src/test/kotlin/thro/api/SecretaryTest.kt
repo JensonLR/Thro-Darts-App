@@ -102,6 +102,9 @@ class SecretaryTest {
         }
         val samAccount = account("Sam Wilson", "adult", "self")
         val sam = orgs.createPlayer(source = "self"); orgs.claim(sam, samAccount, "self_created")
+        // The check below is that "an adult with a claimed account **and their own consent** is missing
+        // nothing", and since V045 that consent has to be given rather than implied by having signed up.
+        Consent(c).say(samAccount, Consent.Scope.LISTING, yes = true)
         val joAccount = account("Jo Bloggs", "unknown", "team_admin")           // typed in by the captain; unclaimed
         val jo = orgs.createPlayer(source = "team_admin", by = ade)
         val kimAccount = account("Kim Park", "minor", "self")
@@ -271,7 +274,9 @@ class SecretaryTest {
         orgs.supersedePolicy(policyV1, LocalDate.of(2026, 10, 31)); orgs.approvePolicy(policyV2, by = lee)
         check("an in-flight task still cites the version it was made under", c.prepareStatement("SELECT policy_id FROM competition.admin_task WHERE task_id = ?")
             .use { ps -> ps.setObject(1, kimTask); ps.executeQuery().use { rs -> rs.next(); rs.getObject(1) == policyV1 } })
-        val pat = orgs.createPlayer(source = "self").also { orgs.claim(it, account("Pat Ng", "adult", "self"), "self_created") }
+        val patAccount = account("Pat Ng", "adult", "self")
+        Consent(c).say(patAccount, Consent.Scope.LISTING, yes = true)
+        val pat = orgs.createPlayer(source = "self").also { orgs.claim(it, patAccount, "self_created") }
         orgs.addMember(riverside, pat, from = Instant.parse("2026-11-05T18:00:00Z"))
         val patTask = sec.reconcileTeam(riverside, Instant.parse("2026-11-05T19:00:00Z"), by = ade).single()
         check("a new member after v2 is assessed under v2", c.prepareStatement("SELECT policy_id FROM competition.admin_task WHERE task_id = ?")
