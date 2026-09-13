@@ -1,10 +1,10 @@
-"""The wordmark as a candidate: THR from Archivo ExtraBold's own outlines, the Ø as the mark with the
-proportions the wordmark gives it (a heavier ring than the standalone mark). NOT shipped until the
-founder confirms the face — see README.md.
+"""The wordmark's reference rendering: THR from Archivo ExtraBold's own outlines, the Ø as the mark with
+the proportions the wordmark gives it (a heavier ring than the standalone mark) — PD-091.
 
-Measured against the founder's 2000 px wordmark, in units of the cap height C: letters set at C with
-0.10 C between inked edges; ring outer radius 0.53 C, inner 0.30 C, centred on the cap midline; dart
-half-width 0.067 C, full width to the ring's outer edge, tapering to points 0.95 C from the centre at 45°.
+In units of the cap height C: letters set at C with 0.10 C between inked edges; ring outer radius 0.524 C,
+inner 0.255 C, centred on the cap midline; dart half-width 0.065 C, full width to the ring's outer edge,
+tapering to points 0.95 C from the centre at 45°. Those numbers are read from `MarkGeometry.Ratios.wordmark`
+below rather than restated, so this rendering cannot drift from the one the app draws.
 
 Usage:
   python3 docs/design/brand/render_wordmark.py <repo root>   # previews + SVG into candidates/
@@ -18,7 +18,20 @@ from ttf_outlines import TTF, quad_segments, contour_to_pdf, rasterise, write_pn
 from render_mark import R_OUT, R_IN, HALF_W, TIP, GREEN, CHALK, INK, hexagon
 
 FACE = "apps/ios/ThroDarts/Fonts/Archivo-ExtraBold.ttf"
-GAP, RING_OUT, RING_IN, BAR, TIPS = 0.10, 0.53, 0.30, 0.067, 0.95
+# The Ø's proportions are READ from the Swift the app draws with, not stated here (PD-091).
+#
+# This file used to carry 0.53 / 0.30 / 0.067, measured off the supplied raster on 6 September. Two days
+# later the app's `MarkGeometry.Ratios.wordmark` was measured off Archivo ExtraBold's own glyphs instead —
+# its O is 0.524 of the cap in outer radius with a 0.269 side stroke, its H stem 0.261 — so that the ring
+# carries the weight of the T, H and R it sits beside: 0.524 / 0.255 / 0.065. Both were honest
+# measurements of different things, and having two of them is how the web came to disagree with the phone.
+# There is one now, and it lives in the Swift.
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "..", "tools"))
+from make_web_wordmark import wordmark_ratios, gap as _wordmark_gap  # noqa: E402
+
+_RATIOS = wordmark_ratios()
+GAP, RING_OUT, RING_IN, BAR, TIPS = (_wordmark_gap(), _RATIOS["ringOuter"], _RATIOS["ringInner"],
+                                     _RATIOS["halfWidth"], _RATIOS["tip"])
 K = math.sqrt(0.5)
 
 def wordmark_geometry(font, C):
@@ -77,7 +90,7 @@ def wordmark_svg(path, font, C, fg):
     cx, cy, ro, ri = ring
     pts = " ".join(f"{x:.2f},{y:.2f}" for x, y in (tx(*p) for p in dart))
     svg = (f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {width:.0f} {top - bottom:.0f}" width="{width:.0f}" height="{top - bottom:.0f}">\n'
-           f'  <!-- THRØ wordmark CANDIDATE: THR from Archivo ExtraBold outlines; Ø from the mark geometry at the wordmark\'s proportions. Not confirmed by the founder. -->\n'
+           f'  <!-- THRØ wordmark, reference rendering: THR from Archivo ExtraBold outlines; Ø from MarkGeometry.Ratios.wordmark (PD-091). -->\n'
            f'  <path d="{" ".join(d)}" fill="{col}" fill-rule="nonzero"/>\n'
            f'  <circle cx="{cx:.2f}" cy="{top - cy:.2f}" r="{(ro + ri)/2:.2f}" fill="none" stroke="{col}" stroke-width="{ro - ri:.2f}"/>\n'
            f'  <polygon points="{pts}" fill="{col}"/>\n</svg>\n')

@@ -5040,3 +5040,18 @@ founder's phone for weeks. The generator reads the Swift, because shipped wins �
 which is the artwork, and it is written here rather than papered over.
 
 Counts: 844 client tests, 26 checks green (two new: the generated web wordmark, and the brand).
+
+## One wordmark, not two (PD-091)
+
+PD-090 left a question open and framed it badly. It said the two sets of proportions for the wordmark's Ø
+were "an unconfirmed candidate" against "what shipped", and that shipped wins. The history says something
+better: `ea67fe6` measured the Ø off the supplied raster on 6 September, and two days later the Swift was
+**deliberately re-measured off Archivo ExtraBold's own O and H stem** so the ring would carry the weight of
+the letters beside it. The comment above `MarkGeometry` records the measurement — cap 206 px at 300 pt, H stem
+0.261, O 0.524 outer with a 0.269 side stroke.
+
+So the decision is not a tie-break. The raster's letters are lighter than the static face, its ring is
+lighter with them, and nothing THRØ ships uses the raster's letters. `render_wordmark.py` now imports
+`wordmark_ratios()` from `tools/make_web_wordmark.py`, which reads the Swift, and the committed candidate
+PNG, SVG and splash preview were regenerated from it. Three places that described one logo now describe it
+from one source.

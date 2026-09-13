@@ -4175,3 +4175,41 @@ the discrepancy is left standing rather than quietly reconciled — somebody sho
 artwork. And the site had **three different header patterns**, two pages with no brand at all
 (`fixtures.html`, `table.html` — the two most likely to be screenshotted) and one with its title above its
 eyebrow. There is one pattern now.
+
+
+## PD-091 — The wordmark's Ø carries the letters' weight
+
+**13 September 2026, on delegated authority.** The founder's instruction was *"Choose best recommendation &
+proceed"*, on the question PD-090 left open: two measurements of the wordmark's Ø disagreed, and the
+generators were reading different ones.
+
+### The two numbers
+
+| In cap heights | ring outer | ring inner | stroke | dart half-width |
+| --- | --- | --- | --- | --- |
+| The supplied raster, measured 6 September (`render_wordmark.py`) | 0.53 | 0.30 | 0.23 | 0.067 |
+| Archivo ExtraBold's own glyphs, measured 8 September (`MarkGeometry.Ratios.wordmark`) | 0.524 | 0.255 | 0.269 | 0.065 |
+
+The outer radii agree to within 1%. The strokes do not.
+
+### Decided
+
+**The glyph-measured numbers are the wordmark**, and `render_wordmark.py` now reads them from the Swift
+instead of holding its own. Every generator — the reference rendering, `apps/web/wordmark.svg` and the app's
+opening — is one drawing.
+
+The reason is not that those numbers shipped. PD-090 said that, and it was the weaker argument. It is that
+the two measurements were of different things and only one of them is the thing THRØ draws. The supplied
+raster's letters run a few percent lighter and narrower than Archivo ExtraBold's static face, so its ring is
+lighter too. Every rendering THRØ ships sets THR in the static face at full weight. A ring measured off the
+raster would be lighter than the H's stem beside it — 0.23 against 0.261 — and the ring measured off the face
+matches it at 0.269. **A wordmark whose Ø is thinner than its letters reads as two pieces.**
+
+### The face
+
+Archivo ExtraBold, read from the supplied image. It has been in the opening on the founder's phone since
+6 September, and when the founder compared the web against the app on 13 September the objection was to the
+Ø and not to the letters. That is recorded as the evidence it is, not as a formal sign-off.
+
+If master vector files arrive they supersede both measurements, and `render_mark.py`,
+`render_wordmark.py`, `make_web_wordmark.py` and `make_android_icon.py` should all be pointed at them.

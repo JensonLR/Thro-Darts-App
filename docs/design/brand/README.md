@@ -16,21 +16,33 @@ flight at the tail. The export's Splash screen references these as `assets/mark-
 - `ttf_outlines.py` — a small TrueType reader: glyph outlines, flattening, PDF paths, a nonzero
   rasteriser, PNG output. No kerning, no shaping; enough for four letters.
 - `render_wordmark.py` — the wordmark: THR from `Archivo-ExtraBold.ttf`'s own outlines, 0.10 of the cap
-  height between letters, and the Ø from the mark's geometry at the proportions the supplied wordmark
-  gives it (ring outer 0.53 and inner 0.30 of the cap height, dart half-width 0.067, tips 0.95 from the
-  centre). `python3 docs/design/brand/render_wordmark.py <repo root>` writes `candidates/` — the
+  height between letters, and the Ø at the wordmark's own proportions — ring outer 0.524 and inner 0.255
+  of the cap height, dart half-width 0.065, tips 0.95 from the centre — **read from
+  `MarkGeometry.Ratios.wordmark`**, so the reference rendering, the app's opening and `apps/web/wordmark.svg`
+  are one drawing (PD-091). `python3 docs/design/brand/render_wordmark.py <repo root>` writes `candidates/` — the
   wordmark as PNG and SVG and a phone-sized preview of the Splash composition. The app draws the same
   geometry live in its opening (`LaunchSequence.swift`, `WordmarkGeometry`); nothing here ships.
 - `thro-mark-green.svg`, `thro-mark-chalk.svg` — the mark reconstruction, for reference and review.
 - `candidates/` — the wordmark reconstruction and the launch-screen preview, for the founder to check.
 
-## The judgement to confirm
+## The two judgements, and how they were settled (PD-091)
 
-The wordmark's face is read from the supplied image as Archivo ExtraBold — the brand's own UI family at
-its heavy weight. The forms match (square terminals, the R's straight leg, the H's proportions); the
-letters in the supplied image run a few percent narrower than the static face. The founder confirms or
-corrects this on the phone (runbook, next-run checklist item 8). If the face is wrong, the opening's
-letters change face in one place.
+**The face is Archivo ExtraBold** — the brand's own UI family at its heavy weight, read from the supplied
+image: square terminals, the R's straight leg, the H's proportions. The letters in that image run a few
+percent narrower than the static face. It has been on the founder's phone in the opening since 6 September,
+and when the founder compared the web against the app on 13 September the objection was to the **Ø**, not to
+the letters.
+
+**The Ø has the letters' weight, not the raster's.** There were two measurements. The supplied image gave a
+ring of 0.53 / 0.30 of the cap (stroke 0.23); Archivo ExtraBold's own glyphs give an O of 0.524 with a 0.269
+side stroke and an H stem of 0.261. The outer radii agree to within 1%; the strokes do not, and the reason is
+in the paragraph above — the raster's letters are lighter than the static face, so its ring is too. Every
+rendering THRØ actually ships sets THR in the static face at full weight, so a ring measured off the raster
+would be visibly lighter than the stems beside it. **0.524 / 0.255 / 0.065 is the wordmark**, and
+`render_wordmark.py` now reads it from the Swift rather than holding its own.
+
+If the master vectors below arrive, they supersede both measurements and every generator should be pointed
+at them.
 
 ## The opening
 
