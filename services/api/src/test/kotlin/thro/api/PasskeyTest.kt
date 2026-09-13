@@ -222,11 +222,32 @@ class PasskeyTest {
             val stolen = register(ch9, clientData("webauthn.create", "x"), authData(rpId, UP_UV_AT, 0, cred2, coseKey(kp2)), id = cred2)
             check("a challenge issued to an account cannot be finished by an anonymous caller", stolen.status.value == 401 && stolen.bodyAsText().contains("another account"))
 
+            // --- the sweep (V026, V046) ----------------------------------------------------------------
+            // The application's clock issues and judges a challenge; V026's sweep read the database's alone.
+            // This test's clock is fixed, so once the real one ran a day past it the sweep removed a live
+            // challenge between issuing it and spending it, and the origin check above failed on 13 September
+            // 2026 with no change to any code. Rows are written directly so that each clock can be put where
+            // the property needs it, whatever the date is when this runs.
+            fun challengeExpiring(expiry: String): UUID = UUID.randomUUID().also { id ->
+                c.prepareStatement("INSERT INTO identity.webauthn_challenge (challenge_id, kind, challenge, device_id, expires_at) VALUES (?, 'assert', decode(repeat('ab', 32), 'hex'), ?, $expiry)")
+                    .use { ps -> ps.setObject(1, id); ps.setObject(2, device); ps.executeUpdate() }
+            }
+            fun sweepAt(at: String) = c.prepareStatement("SELECT identity.sweep_challenges(?::timestamptz)").use { ps -> ps.setString(1, at); ps.executeQuery().close() }
+            fun stillThere(id: UUID) = c.prepareStatement("SELECT count(*) FROM identity.webauthn_challenge WHERE challenge_id = ?").use { ps -> ps.setObject(1, id); ps.executeQuery().use { rs -> rs.next(); rs.getInt(1) == 1 } }
+            val longGone = challengeExpiring("timestamptz '2000-01-01T00:00:00Z'")
+            sweepAt("1999-12-31T00:00:00Z")
+            check("the database's clock alone does not sweep a challenge the application's clock still holds", stillThere(longGone))
+            sweepAt(clock.toString())
+            check("a challenge both clocks agree is a day expired is swept", !stillThere(longGone))
+            val live = challengeExpiring("clock_timestamp() + interval '5 minutes'")
+            sweepAt("2999-01-01T00:00:00Z")
+            check("and claiming a later time does not sweep a challenge the database's clock still holds", stillThere(live))
+
             // --- the association file -----------------------------------------------------------------
             val aasa = client.get("/.well-known/apple-app-site-association")
             check("this host tells iOS which app may use its passkeys", aasa.status.value == 200 && aasa.bodyAsText() == """{"webcredentials":{"apps":["TEAMID.app.example"]}}""")
         }
         println("  $passed passkey properties held")
-        assertEquals(25, passed)
+        assertEquals(28, passed)
     }
 }

@@ -5055,3 +5055,47 @@ lighter with them, and nothing THRØ ships uses the raster's letters. `render_wo
 `wordmark_ratios()` from `tools/make_web_wordmark.py`, which reads the Swift, and the committed candidate
 PNG, SVG and splash preview were regenerated from it. Three places that described one logo now describe it
 from one source.
+
+## Two tests that would have failed by themselves, and the clock that armed them (V046)
+
+**Nothing had changed and `PasskeyTest` failed.** It was green when the day began; by the afternoon of 13 September
+it failed on every run, alone or in the suite — and at the commit before that day's API work, and at the one
+before that. Bisecting found no commit because there was none to find.
+
+**Two clocks judged one challenge.** The application issues a WebAuthn challenge with an expiry read from its own
+clock and refuses it by the same clock. V026's sweep, which runs each time a challenge is issued, read only the
+database's clock and removed anything more than a day past its expiry. In production the two clocks agree to
+within seconds and the day's grace hides the join. `PasskeyTest` fixes its clock at 2026-09-12T10:00Z, so from
+10:05Z on 13 September real time was more than a day past the test's challenges: the test's second request for
+options swept its first challenge before the test spent it, and the check that a registration from another
+origin is refused was answered "unknown, expired or already used challenge" instead.
+
+**The fix is one rule, not a moved date.** V046 has the application pass its time to the sweep, and the sweep
+removes only what is a day expired by the *earlier* of that time and the database's. A challenge the application
+still holds is never swept from under it, and an application that claimed a later time still could not sweep a
+live challenge early. Moving the test's date forward would have passed today and set the same trap for next
+year. Three new checks pin the rule with rows written directly, so they hold whatever the date is when they run
+(25 passkey properties become 28). The function it replaces was also `SECURITY DEFINER` under the caller's search
+path — what V033 fixed in two other functions — and the new one pins its path.
+
+**Then the question was which other test was waiting.** A suite that goes red by itself is worse than one that
+fails for a reason, because it teaches people to re-run red. In a scratch worktree every date literal in the API
+tests and the seed data was moved back 52 weeks — whole weeks, so each date keeps its weekday — and the suite run
+against a database whose clock had not moved: the same as running today's suite a year after it was written. A
+first, careless attempt moved only `2026-` strings and produced eight failures, six of them its own doing (a
+`LocalDate.of(2026, …)` left behind, a Saturday turned into a Friday). The careful one produced two:
+
+- `PasskeyTest`, above.
+- `SecretaryTest`'s *"a consent task is owed by the player, not the team"* read Kim's inbox without a time, so it
+  read the real clock, while the task's due date sits on the test's fixed calendar. Once real time passed that
+  date the task would have left Upcoming and the check failed. The server was never wrong — both inbox routes pass
+  `deps.now()` — the test left its own time out. It now reads the inbox at the moment Kim's task was made.
+
+With both fixed the suite ran again with every date moved back **156 weeks**: 106 tests, no failures. It will not
+go red by itself for at least three years.
+
+**The method, for next time** a test gains a fixed clock beside a database default: a worktree, a
+weekday-preserving shift over `services/api/src/test` and `services/api/seed`, and **one suite at a time** —
+`TestDatabase` resets the single shared `postgres` database, so two runs at once trample each other.
+
+Counts: API 106 tests, 0 failures; `check_migrations` passes with V046's replacement marked (ADR-013).

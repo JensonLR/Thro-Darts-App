@@ -115,7 +115,11 @@ public class Accounts(
      * an account. The device id is bookkeeping — it is whatever the caller said — not a control.
      */
     public fun newChallenge(kind: String, deviceId: UUID, accountId: UUID? = null): Challenge {
-        connection.prepareStatement("SELECT identity.sweep_challenges()").use { it.executeQuery().close() }
+        // The sweep is told this clock's time and removes only what both clocks agree is a day expired
+        // (V046). Reading the database's alone swept a live challenge whenever the two were a day apart.
+        connection.prepareStatement("SELECT identity.sweep_challenges(?)").use { ps ->
+            ps.setObject(1, Timestamp.from(now())); ps.executeQuery().close()
+        }
         val id = UUID.randomUUID()
         val bytes = ByteArray(32).also(random::nextBytes)
         val handle = if (kind == "register" && accountId == null) ByteArray(32).also(random::nextBytes) else null

@@ -251,7 +251,10 @@ class SecretaryTest {
         val kimTask = sec.reconcileTeam(riverside, t0.plusSeconds(5), by = ade).single()
         val kimAssessed = sec.assessRegistration(kimTask, by = ade)
         check("a minor with their own account is missing only consent", kimAssessed.missing == setOf(RegistrationFact.CONSENT))
-        val kimConsentTask = sec.inboxForPlayer(kim)[InboxSection.UPCOMING]?.singleOrNull { it.kind == "consent_required" }
+        // Read at the moment Kim's task was made. Given no time, the inbox reads the real clock, and the task
+        // is due on this test's fixed calendar — so once real time passed that date the task left Upcoming and
+        // this check failed with nothing changed. Found by running the suite with every date moved back a year.
+        val kimConsentTask = sec.inboxForPlayer(kim, t0.plusSeconds(5))[InboxSection.UPCOMING]?.singleOrNull { it.kind == "consent_required" }
         check("a consent task is owed by the player, not the team", kimConsentTask != null && taskState(kimConsentTask.taskId) == "open")
         // A self consent from a minor is not enough: unknown is not adult, and minor is not adult.
         sec.recordConsent(kimAccount, "self", givenBy = kimAccount, artefactRef = "in_app_tap")
