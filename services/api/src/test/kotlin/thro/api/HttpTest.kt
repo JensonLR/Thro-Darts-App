@@ -263,6 +263,9 @@ class HttpTest {
             // --- health and the contract ------------------------------------------------------------
             val health = get("/healthz", subject = null)
             check("health reports the ledger's version without a principal", health.status.value == 200 && health.bodyAsText().contains("\"schemaVersion\":\"V%03d\"".format(Migrations.currentVersion(c))))
+            check("health says which code is answering, so a deploy can tell the new API from the one it replaced",
+                health.bodyAsText().contains("\"codeVersion\":\"V%03d\"".format(Migrations.files().maxOf { Migrations.versionOf(it) })) &&
+                    health.bodyAsText().contains("\"commit\":"))
             val served = get("/openapi.json", subject = null).bodyAsText()
             check("the served contract lists every endpoint the server mounts, and no other",
                 Contract.endpoints.all { served.contains("\"operationId\":\"${it.id}\"") } && Regex("\"operationId\"").findAll(served).count() == Contract.endpoints.size)
@@ -275,6 +278,6 @@ class HttpTest {
                     && roles.all { it in setOf("app_match", "app_competition", "app_read", "app_trust") })
         }
         println("  $passed HTTP properties held")
-        assertEquals(53, passed)
+        assertEquals(54, passed)
     }
 }

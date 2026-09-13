@@ -3,9 +3,9 @@
 # One web service built from the repository's Dockerfile, on Render's free instance type, in
 # Frankfurt (EU; ADR-011 allows UK/EU, and staging holds synthetic data only). The database is
 # not here: it is a Neon project in London, whose connection string is pasted into DATABASE_URL
-# in the Render dashboard. Migrations are a deploy step run from a developer's machine with
-# `gradle -p services/api migrate` against MIGRATE_DATABASE_URL (ADR-013), because the free
-# instance type has no pre-deploy hook.
+# in the Render dashboard. Migrations run before each deploy in `.github/workflows/deploy-api.yml`
+# (ADR-013, PD-095), which then deploys through the deploy hook — the free instance type has no
+# pre-deploy hook of its own, which is why autoDeploy stays off below.
 #
 # A free instance spins down after fifteen idle minutes and takes about a minute to wake, so the
 # first request after a quiet spell is slow and a live match stream (ADR-007) would drop.
@@ -21,6 +21,7 @@ services:
     # No dockerCommand: Render's would replace the image's ENTRYPOINT as well as its CMD, and the
     # first deploy died with status 128 trying to run a bare `serve`. The image's default is serve.
     healthCheckPath: /healthz
+    # Deploys come from deploy-api.yml, after the migration and for exactly the migrated commit (PD-095).
     autoDeploy: false
     envVars:
       - key: DATABASE_URL

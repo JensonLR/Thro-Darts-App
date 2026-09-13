@@ -44,6 +44,12 @@ EVIDENCE_DML = re.compile(r"^(UPDATE|DELETE\s+FROM)\s+evidence\.", re.IGNORECASE
 BEFORE_ROLE_OK = re.compile(r"^(CREATE\s+SCHEMA\s+\w+\s+AUTHORIZATION\s+thro_owner|CREATE\s+EXTENSION\b)", re.IGNORECASE)
 DESTRUCTIVE_MARKER = re.compile(r"^--\s*APPROVED-DESTRUCTIVE:\s*(\S.{19,})$", re.MULTILINE)
 REWRITE_MARKER = re.compile(r"^--\s*APPROVED-EVIDENCE-REWRITE\s*\((pseudonymisation|erasure)\):\s*(\S.{19,})$", re.MULTILINE)
+# A function made and removed in one file (PD-095). ADR-013: "No migration both adds and removes in one step", and
+# deploys are migration-first, so the API still serving during a deploy must keep everything it calls. V046 was first
+# written to create `sweep_challenges(timestamptz)` and remove `sweep_challenges()` in one step — which the running
+# API called — and the destructive marker let it through, because a marker asks for a reason, not for the right one.
+CREATES_FUNCTION = re.compile(r"^CREATE\s+(?:OR\s+REPLACE\s+)?FUNCTION\s+([\w.]+)\s*\(", re.IGNORECASE)
+DROPS_FUNCTION = re.compile(r"^DROP\s+FUNCTION\s+(?:IF\s+EXISTS\s+)?([\w.]+)", re.IGNORECASE)
 
 
 def strip_comments(sql: str) -> str:
@@ -87,6 +93,13 @@ def destructive(stmt: str) -> str | None:
     return None
 
 
+def adds_and_removes(stmts: list[str]) -> list[str]:
+    """Functions a single migration both creates and drops: an expand and a contract in one step (ADR-013)."""
+    made = {m.group(1).lower() for st in stmts if (m := CREATES_FUNCTION.match(st))}
+    gone = {m.group(1).lower() for st in stmts if (m := DROPS_FUNCTION.match(st))}
+    return sorted(made & gone)
+
+
 def main() -> int:
     files = sorted(MIGRATIONS.glob("*.sql"))
     findings: list[str] = []
@@ -106,6 +119,14 @@ def main() -> int:
                 findings.append(f"{f.name}: an owned statement runs before SET ROLE thro_owner (ADR-013: DDL runs as the owner)")
             if not stmts or not stmts[-1].upper().startswith("RESET ROLE"):
                 findings.append(f"{f.name}: the last statement is not RESET ROLE")
+
+        both = adds_and_removes(stmts)
+        if both:
+            findings.append(
+                f"{f.name}: creates and drops {', '.join(both)} in one migration. ADR-013 is expand then contract, a separate "
+                "deployment each: the API still serving during a deploy calls the old one. Keep it (forwarding if need be) "
+                "and remove it in a later migration, once no deployed API calls it."
+            )
 
         hits = sorted({d for st in stmts if (d := destructive(st))})
         if hits and not DESTRUCTIVE_MARKER.search(text):

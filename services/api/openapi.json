@@ -7,7 +7,7 @@
     "get":{"operationId":"aasa","summary":"Apple's association file for this host","description":"webcredentials for the configured app ids, so iOS offers passkeys for this relying party. 404 when no app id is configured.","parameters":[],"responses":{"200":{"description":"the association file"},"404":{"description":"no app ids configured"}}}
   },
   "/healthz":{
-    "get":{"operationId":"health","summary":"Liveness, and the schema version the database stands at","description":"Unauthenticated. Reports the migration ledger's current version; a database the code cannot serve is a 503.","parameters":[],"responses":{"200":{"description":"ok, with schemaVersion"},"503":{"description":"database unreachable or behind the code"}}}
+    "get":{"operationId":"health","summary":"Liveness, the schema version the database stands at, and which code is answering","description":"Unauthenticated. Reports the migration ledger's current version; a database the code cannot serve is a 503. Also the newest migration this code carries (codeVersion) and the commit it was built from where the host names one (commit), so a deploy can tell the new API from the one it replaced: after a migration both answer at the same schemaVersion (PD-095).","parameters":[],"responses":{"200":{"description":"ok, with schemaVersion, codeVersion and commit"},"503":{"description":"database unreachable or behind the code"}}}
   },
   "/openapi.json":{
     "get":{"operationId":"openapi","summary":"This document","description":"Rendered from the same registry the routes are mounted from.","parameters":[],"responses":{"200":{"description":"OpenAPI 3.1 document"}}}

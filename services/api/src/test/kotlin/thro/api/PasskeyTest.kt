@@ -242,12 +242,17 @@ class PasskeyTest {
             val live = challengeExpiring("clock_timestamp() + interval '5 minutes'")
             sweepAt("2999-01-01T00:00:00Z")
             check("and claiming a later time does not sweep a challenge the database's clock still holds", stillThere(live))
+            // Migrations run before the code that expects them (ADR-013), so during a deploy the API still serving
+            // predates V046 and calls the sweep with no argument (PD-095). Removing it would fail every passkey
+            // ceremony on that API until the new one came up.
+            check("an API from before V046 still has the sweep it calls",
+                runCatching { c.createStatement().use { it.executeQuery("SELECT identity.sweep_challenges()").close() } }.isSuccess)
 
             // --- the association file -----------------------------------------------------------------
             val aasa = client.get("/.well-known/apple-app-site-association")
             check("this host tells iOS which app may use its passkeys", aasa.status.value == 200 && aasa.bodyAsText() == """{"webcredentials":{"apps":["TEAMID.app.example"]}}""")
         }
         println("  $passed passkey properties held")
-        assertEquals(28, passed)
+        assertEquals(29, passed)
     }
 }

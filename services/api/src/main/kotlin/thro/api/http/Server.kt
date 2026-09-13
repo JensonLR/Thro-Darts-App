@@ -524,13 +524,19 @@ private fun matchRead(r: Req, deps: Deps, matchId: UUID): Http = MatchRecords(r.
     m.summary(matchId, r.principal!!.subject)?.let { Http(200, m.json(it)) } ?: Http(404, """{"error":"That match is not one of yours."}""")
 }
 
+/** The commit this image was built from, where the host says so — Render sets `RENDER_GIT_COMMIT` (PD-095). */
+private val builtFrom: String? = System.getenv("RENDER_GIT_COMMIT")?.trim()?.takeIf { Regex("[0-9a-f]{7,40}").matches(it) }
+
 private fun health(deps: Deps): Http = try {
     deps.connect().use { c ->
         c.createStatement().use { it.execute("SET ROLE " + DbRole.READ.sql) }
         val v = Migrations.currentVersion(c)
         val latest = Migrations.files().maxOfOrNull { Migrations.versionOf(it) }
         if (v == null || (latest != null && v < latest)) Http(503, """{"database":"behind the code","schemaVersion":${v ?: "null"},"codeVersion":${latest ?: "null"}}""")
-        else Http(200, """{"database":"ok","schemaVersion":"V${"%03d".format(v)}"}""")
+        // Which code is answering, as well as which schema (PD-095). Once a migration has run, the API being replaced
+        // and the one replacing it answer at the same schema version, so a deploy waiting on the schema alone could not
+        // tell whether the new code had come up. The commit is the host's word for it; the code's own version is the rest.
+        else Http(200, """{"database":"ok","schemaVersion":"V${"%03d".format(v)}","codeVersion":${latest?.let { "\"V${"%03d".format(it)}\"" } ?: "null"},"commit":${builtFrom?.let { "\"$it\"" } ?: "null"}}""")
     }
 } catch (e: Exception) {
     // The detail — host, user, the driver's words — is for the log, not for an unauthenticated caller.

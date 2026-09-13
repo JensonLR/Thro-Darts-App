@@ -4337,3 +4337,40 @@ so it has no way to send anybody a message.
 - **The web front page shows the same notice**, from the same file.
 - **Not on Android yet.** The Android client has no network code at all; its notice waits for its first network
   feature, and that is recorded as the gap it is.
+
+## PD-095 — The API deploys itself
+
+**13 September 2026.** The founder asked why the database and the API were waiting on a person to update them when
+the hosts could be driven from here, and chose the free route with no approval step.
+
+### What was true
+
+- Migrations reached Neon only when somebody ran `gradle -p services/api migrate` from a laptop (ADR-013), and the
+  API deployed only when somebody pressed deploy in Render: `autoDeploy: false`, because Render's free instance has
+  no pre-deploy step in which to run a migration. On 13 September the repository was three migrations ahead of
+  production — V046 against V043.
+- Neon is reachable from this workspace. Render is not.
+- **As first written, V046 removed a database function the running API calls.** Migrating before deploying — the
+  order ADR-013 requires — would have broken passkey sign-in on the running API for the length of the deploy.
+
+### Decided
+
+- **A GitHub pipeline deploys the API**, on every push that changes what the API is built from and on demand: the
+  API's checks (migration discipline, the schema properties, the API tests), then a **restore point** of production
+  as a Neon branch, then the **migration**, then a **deploy of exactly that commit** through Render's deploy hook,
+  then **proof** that the new API answers at the new schema.
+- **No approval step.** Every run is guarded instead: the checks must pass, the restore point comes first, a failed
+  migration stops the deploy while the running API keeps serving, and a deploy that does not come back healthy fails
+  the run where somebody will see it. When real players' data is in Neon, a one-click approval can be put on the job
+  without changing anything else.
+- **Three secrets, added once by the founder**: the Neon deploy user's connection, a Neon API key and the deploy
+  hook. Until all three exist the pipeline runs the checks and stops, and says so.
+- **Every migration keeps the running API working.** Migrations run before the code that expects them, so a
+  migration must leave the API it is about to replace working for the length of a deploy: add first, remove later.
+  V046 now keeps the old function, forwarding to the new one, and a later migration removes it.
+- **`/healthz` names the code as well as the schema** — `codeVersion`, and `commit` where Render gives it — because
+  once a migration has run, the old API and the new one answer at the same schema version.
+- **Restore points are kept three deep**, named for the commit they came before, and the pipeline only ever removes
+  its own.
+- **On a paid Render instance** Render could run the migration itself before each deploy. The checks and the restore
+  point would still earn their place, so that would change the deploy step, not the pipeline.

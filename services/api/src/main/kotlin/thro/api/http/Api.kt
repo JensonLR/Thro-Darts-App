@@ -342,9 +342,12 @@ public object Contract {
         ),
         Endpoint(
             id = "health", method = "GET", path = "/healthz", authenticated = false,
-            summary = "Liveness, and the schema version the database stands at",
-            description = "Unauthenticated. Reports the migration ledger's current version; a database the code cannot serve is a 503.",
-            responses = mapOf(200 to "ok, with schemaVersion", 503 to "database unreachable or behind the code"),
+            summary = "Liveness, the schema version the database stands at, and which code is answering",
+            description = "Unauthenticated. Reports the migration ledger's current version; a database the code cannot serve is a 503. " +
+                "Also the newest migration this code carries (codeVersion) and the commit it was built from where the host names one " +
+                "(commit), so a deploy can tell the new API from the one it replaced: after a migration both answer at the same " +
+                "schemaVersion (PD-095).",
+            responses = mapOf(200 to "ok, with schemaVersion, codeVersion and commit", 503 to "database unreachable or behind the code"),
         ),
         Endpoint(
             id = "openapi", method = "GET", path = "/openapi.json", authenticated = false,

@@ -5265,3 +5265,42 @@ has been drafted in advance.
 only way to reach somebody who plays only on Android. That is recorded in the breach plan as the gap it is.
 
 Counts: 858 client tests (fourteen new); 29 checks green.
+
+## The API deploys itself, and the migration that would have broken it (PD-095)
+
+*"There must be a way we can automate these updates if you are connected to render & neon already!?"* Neon, yes: its
+connector reached the production project, and a read-only look found it at **V043** with the repository at V046.
+Render, no: it was not among this session's connectors, before or after the founder added it mid-session, so nothing
+here can deploy. The founder chose a free pipeline with no approval step.
+
+**`.github/workflows/deploy-api.yml`** runs on every push that changes what the API is built from, and on demand: the
+API's checks; a restore point of production, as a Neon branch named for the commit, keeping the newest three and only
+ever removing its own; the migration; the league seeds; a deploy of exactly that commit through Render's deploy hook
+(`?ref=`, which Render's documentation describes); and a wait until `/healthz` answers from that commit.
+`tools/deploy_api.py` holds the steps — standard library only, with a dry run that prints the requests and never the
+hook's key. Until the founder adds three secrets — the Neon deploy user's connection, a Neon API key and the deploy
+hook — it runs the checks and stops with **Not deployed**.
+
+**Automating it found a defect that doing it by hand had hidden.** V046, as committed that afternoon, created the
+two-clock sweep and **dropped the one-clock sweep the running API calls**. Migrating before deploying, the order
+ADR-013 requires, would have failed every passkey ceremony on the running API until the new one came up. ADR-013
+already forbids it — *"No migration both adds and removes in one step"* — but the migration guard only asked for a
+reason, and the reason given did not mention the running API. V046 now keeps the old function, forwarding to the new
+one with the database's own time, and `check_migrations.py` fails any migration that creates and drops the same
+function: shown catching V046 as first written, and passing every other migration. V046 had reached no database that
+outlives a test, so changing it breaks no ledger.
+
+**`/healthz` now names the code as well as the schema** — `codeVersion`, and `commit` where Render sets
+`RENDER_GIT_COMMIT`. After a migration the old API and the new one answer at the same schema version, so a deploy
+waiting on the schema alone could not tell whether the new code had come up. The committed contract was regenerated
+and reviewed: only the health operation's words changed.
+
+**Checked on production before any run, without changing it:** V045's new unique index on live consents would fail on
+duplicates, and production has none; V044 and V046 change no existing rows.
+
+**Not done, and why:** the migration itself. Migrating without deploying would leave the new schema under the old API
+for as long as a deploy waited, and nothing here can deploy — the first pipeline run does both. And **the staging API
+did not answer** `/healthz` in three two-minute attempts on 13 September, longer than a free instance takes to wake.
+Render's dashboard will say why; this session cannot see it.
+
+Counts: API 106 tests (29 passkey properties, 54 HTTP), schema properties 149, 29 checks green.

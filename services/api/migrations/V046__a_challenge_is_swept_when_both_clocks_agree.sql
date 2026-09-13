@@ -19,6 +19,15 @@
 -- **And the path is pinned.** V026's function was SECURITY DEFINER with the caller's search path —
 -- V033 names why that is wrong and fixed the two functions it found, and this one was missed. Its body
 -- is already schema-qualified; pinning the path closes the rest, the same way.
+--
+-- **The one-clock version stays, and forwards to this one.** Migrations run before the code that expects
+-- them (ADR-013), so for the length of a deploy the API still serving is the one that calls
+-- `identity.sweep_challenges()` with no argument. As first written this migration removed that function,
+-- which would have failed every passkey ceremony on the running API until the new one came up. It was
+-- caught before it reached any database that outlives a test, when the deploy was automated (PD-095) and
+-- the gap between migrating and deploying stopped being somebody's attention span and became a pipeline's.
+-- It now asks the two-clock version with the database's own time, which is exactly what it did before. A
+-- later migration removes it, once no deployed API calls it.
 
 SET ROLE thro_owner;
 
@@ -37,8 +46,12 @@ GRANT EXECUTE ON FUNCTION identity.sweep_challenges(timestamptz) TO app_competit
 COMMENT ON FUNCTION identity.sweep_challenges(timestamptz) IS
   'Removes challenges a day expired by the earlier of the caller''s clock and the database''s. Nothing either still holds.';
 
--- The one-clock version goes, so there is no second way to sweep.
--- APPROVED-DESTRUCTIVE: the zero-argument `identity.sweep_challenges()` is replaced by `sweep_challenges(timestamptz)` in this same migration, its one caller (`Accounts.newChallenge`) moves with it, and no table or row is touched — a function holds nothing.
-DROP FUNCTION identity.sweep_challenges();
+CREATE OR REPLACE FUNCTION identity.sweep_challenges() RETURNS int
+LANGUAGE sql SECURITY DEFINER SET search_path = pg_catalog, pg_temp AS $$
+  SELECT identity.sweep_challenges(clock_timestamp())
+$$;
+
+COMMENT ON FUNCTION identity.sweep_challenges() IS
+  'The sweep an API from before V046 calls, forwarding with the database''s own time. Removed once no deployed API calls it.';
 
 RESET ROLE;

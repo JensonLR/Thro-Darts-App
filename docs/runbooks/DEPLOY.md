@@ -8,7 +8,7 @@ before the image serves. Two paths share everything but the compute host:
 | Database | **Neon**, London (`aws-eu-west-2`), free plan | **Neon**, London, pay-as-you-go (7-day restore) |
 | Compute | **Render** free web service, Frankfurt | **Fly.io** `shared-cpu-1x`, London (`lhr`) |
 | Card needed | no | yes (Fly requires one for every organisation) |
-| Migrations run | from your Mac: `gradle -p services/api migrate` | by Fly's release command, from the image |
+| Migrations run | by the deploy-api pipeline, before it deploys (PD-095); from a Mac only if it cannot | by Fly's release command, from the image |
 | Cost | £0 | about $3.50 a month for the machine |
 | Public host | `thro-api-staging.onrender.com` | `thro-api-staging.fly.dev` / your domain |
 
@@ -231,8 +231,10 @@ the founder's notes):
 - `MIGRATE_DATABASE_URL` = `postgres://neondb_owner:<password>@ep-small-mountain-zavde3ff.c-2.eu-west-2.aws.neon.tech/neondb?sslmode=require`
 - `DATABASE_URL` = `postgres://thro_app:<password>@ep-small-mountain-zavde3ff.c-2.eu-west-2.aws.neon.tech/neondb?sslmode=require`
 
-**A2. Migrate from your Mac — whenever a new migration lands.** The ledger applies only what is
-new; running it with nothing new is harmless and says so.
+**A2. Migrate — the pipeline does this now (PD-095).** Every push that changes the API migrates, seeds and then
+deploys; see **The API deploys itself** at the end of this runbook. What follows is the same step by hand, from a Mac,
+for when the pipeline cannot run. The ledger applies only what is new; running it with nothing new is harmless and
+says so.
 ```bash
 export MIGRATE_DATABASE_URL='postgres://neondb_owner:<password>@ep-small-mountain-zavde3ff.c-2.eu-west-2.aws.neon.tech/neondb?sslmode=require'
 export APP_DB_USER='thro_app'
@@ -331,3 +333,49 @@ Neon's restore window (six hours free, seven days paid) covers the database itse
 - Rate limiting on the sign-in routes, object storage (media), push (APNs) and the scheduled
   restore drill are not configured.
 - Production needs a card wherever it runs, and a domain before the first real passkey.
+
+## The API deploys itself (PD-095)
+
+Since 13 September 2026 a push that changes the API runs `.github/workflows/deploy-api.yml`: the API's checks, a
+restore point of production (a Neon branch named `restore-point-before-<commit>-<time>`), the migration, a deploy of
+exactly that commit through Render's deploy hook, and a wait until `/healthz` answers from that commit at the new
+schema. It can also be run by hand: **Actions → deploy-api → Run workflow**.
+
+**It needs three secrets, once.** In a terminal, in the repository, each command asks for the value:
+
+```bash
+gh secret set MIGRATE_DATABASE_URL
+```
+
+Paste the value of `DATABASE_URL_UNPOOLED` from `.env.local` — the deploy user's connection, the one `migrate` has
+always used.
+
+```bash
+gh secret set NEON_API_KEY
+```
+
+Create the key in Neon: **Account settings → API keys → Create new API key**.
+
+```bash
+gh secret set RENDER_DEPLOY_HOOK_URL
+```
+
+From Render: **thro-api-staging → Settings → Deploy Hook**. Treat it like a password — anybody holding it can
+redeploy the API.
+
+Until all three exist, the workflow runs the checks and stops with **Not deployed** in the run's summary.
+
+**If a run fails, where it stopped says what was touched:**
+
+- **The checks**: nothing.
+- **The restore point**: nothing. Usually the Neon API key.
+- **The migration**: the API already serving keeps serving, because every migration leaves it working (PD-095).
+  Each migration is its own transaction, so the ledger says how far it got, and the restore point is the way back
+  if one has to be undone.
+- **The deploy or the wait**: the database is migrated and the API it replaced is still answering. Render's deploy
+  log says why; run the workflow again once it is fixed.
+
+**The restore point** is production as it was just before that deploy. Neon can restore the production branch from
+it, which discards everything written since — the last resort, not the first. The pipeline keeps the newest three
+and never removes a branch it did not make.
+
