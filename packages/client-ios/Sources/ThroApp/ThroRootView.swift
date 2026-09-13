@@ -1761,6 +1761,13 @@ public struct LiveScreen: View {
                         }
                         .throEntrance(1)
                     }
+                    // A league on the pub screen (PD-089). Needs a server to read the leagues from, so
+                    // it is offered only where there is one — a build with no server would show a
+                    // chooser that can never fill.
+                    if let api {
+                        block { WallSection(api: api) }
+                            .throEntrance(2)
+                    }
                     if !upcoming.isEmpty {
                         block {
                             SectionHeader("Still to play", meta: "\(upcoming.count)")

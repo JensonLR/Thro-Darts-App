@@ -4941,3 +4941,45 @@ rule that saved a pointless refactor: when a control looks broken, try the known
 control before touching anything.
 
 Counts: 839 client tests, 106 API tests, 24 checks green.
+
+## The pub screen, from a phone (PD-089)
+
+The founder asked how to do the Apple TV part via mobile. The answer turned out to need almost no new
+machinery: iOS already creates an external-display scene for a cable **or for AirPlay mirroring**, and the
+match board has used it since PD-041. This decides what goes on that scene when the phone is not scoring —
+the same league channel the Apple TV shows, from the same package, over the same public routes.
+
+**Three decisions, and each is a line somebody could reasonably have drawn elsewhere.**
+
+*The match wins the screen.* A league table while a game is being scored ten feet away would be the app
+deciding the standings matter more than the darts.
+
+*The wall's client holds no session and no persistent device id.* The phone has a signed-in client a few
+lines away and passing it would work today, because every route the wall reads is public. The Apple TV has
+"a screen in a room of strangers sees what a stranger sees" **structurally** — it cannot sign in. The phone
+can, so the property has to be arranged rather than inherited, or the first public route that starts
+answering an authenticated caller differently will find a pub television as its surface.
+
+*No button turns the television on.* No iOS API can start screen mirroring; only the person can, from
+Control Centre. `AVRoutePickerView` looks like the answer and is a media route picker for `AVPlayer` that
+does not mirror a screen. So the app takes the choice of league and says the words that get somebody to a
+picture — cable first, because pub guest Wi-Fi isolates clients and kills AirPlay discovery, and a landlord
+who tries wireless first and fails concludes the app is broken.
+
+The season is held under the **same key the Apple TV app uses**, so a venue that starts with a phone and
+later buys the box does not set it up twice. `ThroApp` gained a `ThroVenueKit` dependency and the app
+target's scene file names exactly one module — the deciding is in the package where it can be tested, and
+the UIKit file stays fifty lines of plumbing.
+
+**What was verified, and what was not.** The choosing logic, the sessionless client and the remembered
+season have five tests. The phone flow was driven on a simulator: the section on Live, the picker reading
+the three real leagues off the live server, the choice taken and the copy changing to name it. The channel
+itself was photographed at room size on the Apple TV, and it is the identical view.
+
+**The one thing not photographed is the external window actually painting.** The Simulator attaches a
+TVOut display and `simctl io --display 2` then answers *"Timeout waiting for screen surfaces"* — the
+surface will not render for a headless capture. The mechanism is PD-041's, unchanged and already shipping;
+only the view mounted on it is new. It wants thirty seconds with a real cable before anybody calls it done,
+and that is said here rather than left to be assumed from a green test run.
+
+Counts: 844 client tests (5 new), 24 checks green.

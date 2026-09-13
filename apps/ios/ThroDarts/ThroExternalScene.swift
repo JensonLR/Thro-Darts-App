@@ -1,8 +1,8 @@
 import SwiftUI
-import ThroLiveKit
+import ThroApp
 import UIKit
 
-// Club TV mode: the match on the wall.
+// Club TV mode: the match on the wall — and, since PD-089, the league when no match is on it.
 //
 // **`UIScreen.screens` is deprecated (iOS 16.0), and so is the `.windowExternalDisplay` role.** The
 // current model is a scene the system creates for you — `windowExternalDisplayNonInteractive`,
@@ -41,30 +41,8 @@ final class ThroVenueSceneDelegate: NSObject, UIWindowSceneDelegate {
                options: UIScene.ConnectionOptions) {
         guard let windowScene = scene as? UIWindowScene else { return }
         let window = UIWindow(windowScene: windowScene)
-        window.rootViewController = UIHostingController(rootView: ThroVenueScreen())
+        window.rootViewController = UIHostingController(rootView: ThroWallScene())
         window.isHidden = false
         self.window = window
-    }
-}
-
-/// The board, watching the one venue state the scoring screen writes to.
-///
-/// A timer ticks so staleness is noticed without anything else happening. On a phone the Lock Screen
-/// is refreshed by the system when its `staleDate` passes; a `UIWindow` on a wall is refreshed by
-/// nobody, and a room reading a score that quietly stopped being true is the failure this surface
-/// exists to avoid.
-private struct ThroVenueScreen: View {
-    @ObservedObject private var venue = ThroVenue.shared
-    @State private var now = Date()
-
-    private let tick = Timer.publish(every: 5, on: .main, in: .common).autoconnect()
-
-    var body: some View {
-        ThroVenueBoard(state: venue.state,
-                       format: venue.format,
-                       stale: venue.isStale(now: now))
-            .onReceive(tick) { now = $0 }
-            .statusBarHidden()
-            .persistentSystemOverlays(.hidden)
     }
 }

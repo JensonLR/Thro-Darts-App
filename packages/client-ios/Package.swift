@@ -156,7 +156,9 @@ let package = Package(
             name: "ThroApp",
             dependencies: [
                 "ThroNet",
-                "ThroDesign", "ThroJournal", "ThroPlay", "ThroLiveKit",
+                // The phone drives a pub television too (PD-089), and what it puts there is the same
+                // channel the Apple TV shows. One implementation, two ways of reaching a screen.
+                "ThroDesign", "ThroJournal", "ThroPlay", "ThroLiveKit", "ThroVenueKit",
                 .product(name: "ThroTokens", package: "design-tokens"),
                 // Named, not reached through ThroJournal: a watched match is replayed here (PD-044).
                 .product(name: "ThroEngine", package: "engine-swift"),

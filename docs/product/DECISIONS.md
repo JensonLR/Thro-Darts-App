@@ -4080,3 +4080,52 @@ each now makes the person actually say yes, which is what the test claimed all a
 **For children nothing changed and nothing was wrong.** The self branch has always required
 `age_band = 'adult'`, so the trigger's record never disclosed a minor or an unknown age. The defect was a
 lawful-basis defect about adults, not a safeguarding one.
+
+
+## PD-089 — The pub screen, from a phone
+
+**13 September 2026**, on the founder's ask: *"How to do the Apple TV part via mobile."*
+
+**The Apple TV app is not replaced and should not be.** A room that keeps a screen on all season wants the
+box: it needs no phone in the building, nothing to plug in, and it survives somebody going home. But it is
+£150 of hardware that has to be registered to a developer team, and neither of those is true of the room
+that wants a live board *this* Tuesday. That room has a telly, an HDMI socket, and a landlord with an
+iPhone.
+
+**Nothing new had to be invented.** iOS creates a `windowExternalDisplayNonInteractive` scene for a cable
+**or for AirPlay mirroring**, and the match board has reached a wall that way since PD-041. All PD-089 does
+is decide what goes on that scene when this phone is *not* scoring: the same league channel the Apple TV
+shows, from the same `ThroVenueKit`, reading the same public routes. One implementation, two ways of
+reaching a screen.
+
+### The three decisions in it
+
+**The match wins the screen.** If a match is being scored on this phone, the room is watching that match
+and the board shows it. A league table in that moment would be the app deciding the game ten feet away
+matters less than the standings. When the match ends the league comes back.
+
+**The wall's client holds no session, and no device identity.** The phone has a signed-in `ThroAPI` a few
+lines away and passing it would work today, because every route the wall reads is public. It is not passed.
+The Apple TV has *"a screen in a room of strangers sees what a stranger sees"* structurally — it cannot sign
+in — and the phone must have it by arrangement, or the first public route that starts returning more to an
+authenticated caller will find the pub television as its surface. The device id is fresh each launch for
+the same reason: nothing the wall asks for is about a device, so there is nothing for it to be, and a
+persistent one would be a correlatable identifier attached to reads made on behalf of a room.
+
+**There is no button that turns the television on**, and somebody will look for one. No iOS API can start
+screen mirroring — only the person can, from Control Centre — and `AVRoutePickerView`, which looks exactly
+like the answer, is a *media* route picker for `AVPlayer` and does not mirror a screen at all. So the app
+does the two things it honestly can: it takes the choice of league, and it says the words that get somebody
+from there to a picture. A control labelled "Cast to TV" that could not cast would be a promise the app
+cannot keep.
+
+**Cable before AirPlay, in the instructions.** Pub guest Wi-Fi commonly isolates clients from each other,
+which kills AirPlay discovery stone dead. A landlord who tries the wireless way first and fails concludes
+the app is broken, so the £20 adapter that never drops out is listed first and the wireless way second with
+its failure mode named.
+
+### Where it lives
+
+**Live**, not Settings: it is something somebody does on a match night with a telly in front of them, not a
+preference set once. The season is held under the **same key the Apple TV app uses**, so a venue that
+starts with a phone and later buys the box does not set it up again.

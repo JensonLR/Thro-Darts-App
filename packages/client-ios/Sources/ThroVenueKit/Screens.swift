@@ -180,15 +180,8 @@ public struct ThroVenueChannel: View {
     }
 
     private var nothing: some View {
-        VStack(alignment: .leading, spacing: ThroSpacing.spacing4) {
-            Text(ThroVenueWords.nothingYet)
-                .thro(ThroVenueType.panel)
-                .foregroundStyle(ThroColor.colorTextOnBoard)
-            Text(ThroVenueWords.nothingYetHint)
-                .thro(ThroVenueType.aside)
-                .foregroundStyle(ThroColor.throChalk.opacity(0.7))
-        }
-        .padding(.top, ThroSpacing.spaceSectionGap)
+        ThroVenueSaying(title: ThroVenueWords.nothingYet, hint: ThroVenueWords.nothingYetHint)
+            .padding(.top, ThroSpacing.spaceSectionGap)
     }
 
     @ViewBuilder private func body(of panel: ThroVenuePanel) -> some View {
@@ -503,5 +496,51 @@ struct ThroVenueLiveRow: View {
                 .monospacedDigit()
         }
         .frame(maxWidth: .infinity, alignment: alignment == .leading ? .leading : .trailing)
+    }
+}
+
+/// Two lines at room size: a heading, and what to do about it.
+///
+/// Public because the phone puts the same thing on a television when nobody has chosen a season yet
+/// (PD-089), and a wall that said it in different words depending on which device drew it would be two
+/// products. The type roles are the wall's, not the phone's — six metres, not thirty centimetres.
+public struct ThroVenueSaying: View {
+    private let title: String
+    private let hint: String
+
+    public init(title: String, hint: String) {
+        self.title = title
+        self.hint = hint
+    }
+
+    public var body: some View {
+        VStack(alignment: .leading, spacing: ThroSpacing.spacing4) {
+            Text(title)
+                .thro(ThroVenueType.panel)
+                .foregroundStyle(ThroColor.colorTextOnBoard)
+            Text(hint)
+                .thro(ThroVenueType.aside)
+                .foregroundStyle(ThroColor.throChalk.opacity(0.7))
+        }
+    }
+}
+
+/// A whole screen with nothing on it yet: the board, and the two lines.
+public struct ThroVenueEmptyWall: View {
+    private let title: String
+    private let hint: String
+
+    public init(title: String, hint: String) {
+        self.title = title
+        self.hint = hint
+    }
+
+    public var body: some View {
+        ThroBoard(lamp: UnitPoint(x: 0.5, y: 0.18), grainSeed: 0xE1E1) {
+            ThroVenueSaying(title: title, hint: hint)
+                .padding(.horizontal, ThroSpacing.spaceSectionGap * 2)
+                .padding(.vertical, ThroSpacing.spaceSectionGap)
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
+        }
     }
 }
