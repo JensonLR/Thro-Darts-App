@@ -182,6 +182,33 @@ public final class AccountStore: ObservableObject {
         await change("Saving") { try await self.api.declareAge(adult: true) }
     }
 
+    /// The sentence the server sent back when it refused, until the next thing is tapped (PD-088).
+    ///
+    /// Held rather than thrown, because a refusal here is not an error: it is an answer, and it is the
+    /// only place a young player is told *why* their name will not appear on a screen. Losing it in a
+    /// generic failure state would leave them with a switch that flicks back and no reason.
+    @Published public private(set) var consentRefused: String?
+
+    public func dismissConsentRefusal() { consentRefused = nil }
+
+    /// Say whether this person may be named, for one scope.
+    ///
+    /// The profile is re-read afterwards rather than the switch being set optimistically, so what the
+    /// screen shows is what the server holds. A consent switch is exactly the wrong place to guess: if
+    /// the write failed, a screen that had already moved would be telling somebody they are visible when
+    /// they are not, or private when they are not.
+    public func say(consent scope: String, given: Bool) async {
+        consentRefused = nil
+        var refused: String?
+        await change(given ? "Saving" : "Taking it back") {
+            refused = try await self.api.say(consent: scope, given: given)
+            // Re-read rather than set the switch optimistically. `change` adopts what comes back, so
+            // the screen shows what the server holds and not what the phone hoped.
+            return try await self.api.me()
+        }
+        consentRefused = refused
+    }
+
     public func signOut() async {
         working = "Signing out"
         await api.signOut()

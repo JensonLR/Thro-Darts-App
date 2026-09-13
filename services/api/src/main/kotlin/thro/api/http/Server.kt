@@ -763,10 +763,15 @@ private fun profile(c: Connection, deps: Deps, p: Principal): Http {
     // of their own. A fact the client has to remember to go and ask for is a fact some build ships without.
     val terms = """"termsVersion":${Contract.q(Safety.TERMS_VERSION)}"""
     val account = p.accountId
-        ?: return Http(200, """{"accountId":null,"playerId":"${p.subject}","displayName":null,"named":false,"ageBand":"unknown",$terms,"acceptedTerms":false,"note":"development principal: no account"}""")
+        ?: return Http(200, """{"accountId":null,"playerId":"${p.subject}","displayName":null,"named":false,"ageBand":"unknown",$terms,"acceptedTerms":false,"consents":[],"note":"development principal: no account"}""")
     val pr = Accounts(c, deps.now).profile(account) ?: return Http(404, """{"error":"no such account"}""")
     val accepted = Safety(c, deps.now).hasAcceptedTerms(account)
-    return Http(200, """{"accountId":"${pr.accountId}","playerId":${pr.playerId?.let { "\"$it\"" } ?: "null"},"displayName":${Contract.q(pr.displayName)},"named":${pr.named},"ageBand":${Contract.q(pr.ageBand)},"credentials":${pr.credentials},$terms,"acceptedTerms":$accepted}""")
+    // What they have agreed to, for the same reason the terms travel here (PD-050, PD-088): a screen
+    // with a switch on it has to know which way the switch is set, and a fact the client must remember
+    // to go and ask for separately is a fact some build ships without.
+    val given = Consent(c, deps.now).given(account)
+    val consents = given.joinToString(",") { Contract.q(it.stored) }
+    return Http(200, """{"accountId":"${pr.accountId}","playerId":${pr.playerId?.let { "\"$it\"" } ?: "null"},"displayName":${Contract.q(pr.displayName)},"named":${pr.named},"ageBand":${Contract.q(pr.ageBand)},"credentials":${pr.credentials},$terms,"acceptedTerms":$accepted,"consents":[$consents]}""")
 }
 
 /**

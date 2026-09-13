@@ -164,6 +164,7 @@ public struct YourProfileScreen: View {
                         Snackbar(problem, tone: .error, actionLabel: "OK") { account.dismissProblem() }
                     }
                     band
+                    beingSeen
                     CardGroup("Friends") {
                         CardRow(icon: .users, label: "Friends", value: friendsLine) { showing = .friends }
                         CardDivider()
@@ -305,6 +306,45 @@ public struct YourProfileScreen: View {
             CardGroup("Your age band") {
                 CardInfoRow(icon: .shield, label: "Age band", value: profile.ageBand == "adult" ? "18 or over" : "Under 18")
             }
+        }
+    }
+
+    /// Who may see your name, in two separate answers (PD-088).
+    ///
+    /// **Off unless the person says otherwise, and nothing here is pre-ticked.** A switch found already
+    /// on is not consent — it is a setting somebody has to notice in order to undo — and that is exactly
+    /// the defect V045 removed, where making an account was read as agreeing to be published.
+    ///
+    /// **Two switches rather than one "be visible".** A team's page and a pub television are not the same
+    /// offer. Somebody may reasonably want their name on their side's page all season and not on a screen
+    /// in the room while they are standing in it, and a single control would make them choose between
+    /// both and neither.
+    ///
+    /// It sits directly under the age band because that is what governs it: the second switch is refused
+    /// for anybody not recorded as an adult, and reading the two together is how that makes sense.
+    @ViewBuilder private var beingSeen: some View {
+        CardGroup("Who can see your name",
+                  footnote: profile.ageBand == "adult"
+                      ? "Off unless you say so. Your team, your fixtures and your results are published "
+                        + "either way — these are only about your name appearing beside them. Turn either "
+                        + "one off and it stops everywhere, at the next refresh."
+                      // Short, because the server's own sentence says the rest when the switch is
+                      // actually pressed. The two used to be identical and the screen said the same
+                      // paragraph twice — once as standing context and once as an answer.
+                      : "A live screen is for players 18 or over. Your results are published either way.") {
+            CardToggleRow(icon: .users, label: "On my team's page",
+                          isOn: Binding(get: { profile.mayBeListed },
+                                        set: { on in Task { await account.say(consent: "listing", given: on) } }))
+            CardDivider()
+            CardToggleRow(icon: .radio, label: "On a screen while I play",
+                          isOn: Binding(get: { profile.mayBeShownLive },
+                                        set: { on in Task { await account.say(consent: "live", given: on) } }))
+        }
+        .disabled(account.working != nil)
+        // The server's own sentence where it refused, shown as a message rather than an error: a refusal
+        // here is an answer, and this is the only place a young player is told the reason for it.
+        if let why = account.consentRefused {
+            Snackbar(why, tone: .neutral, actionLabel: "OK") { account.dismissConsentRefusal() }
         }
     }
 

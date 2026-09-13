@@ -4901,3 +4901,43 @@ read two seconds later — and the three cases are the three worth looking at, t
 shows whether an unnamed side reads as a choice or as a fault.
 
 Counts: 839 client tests (26 on a wall, 11 new), 106 API tests, 24 checks green.
+
+### And the phone asks (PD-088, the last piece)
+
+The consent route existed on the server and nothing called it, which is the same shape of gap the Standard
+7 audit had just been wrong about: a rule with no way to satisfy it. `Who can see your name` sits in the
+profile, directly under the age band, because the age band is what governs it.
+
+**Two switches, not one.** A team's page and a pub television are not the same offer, and somebody may
+reasonably want their name on their side's page all season and not on a screen in the room while they are
+standing in it. One control would make them choose between both and neither.
+
+**Both off, and nothing pre-ticked.** A switch found already on is not consent — it is a setting somebody
+has to notice in order to undo — which is exactly the defect V045 removed.
+
+The profile now carries `consents`, for the same reason it already carried the terms version: a screen with
+a switch on it has to know which way the switch is set, and a fact the client must remember to go and ask
+for separately is a fact some build ships without. It is optional in the Swift type and **absent reads as
+neither**, which is the safe way round — a switch shown off when it is on is a moment's confusion; one
+shown on when it is off is a lie about who can see you.
+
+The write is never optimistic. `say` posts, then re-reads the profile and adopts what comes back, so the
+screen shows what the server holds. A consent switch is the wrong place to guess.
+
+*Two things found by looking at it on a phone:*
+
+- Both labels wrapped to two lines. Under the header "Who can see your name" they read better as
+  completions of it anyway — "On my team's page", "On a screen while I play".
+- For an under-18 the same paragraph appeared twice: once as the group's standing footnote and once as the
+  answer when the switch was pressed. The footnote is now one line and the server's sentence carries the
+  explanation, which is the right division — brief context, full reason on the action.
+
+*And a false alarm worth recording, because it cost more than the feature did.* The switches appeared
+completely inert under a synthetic tap: the binding's `set` never fired, verified with a diagnostic that
+logged nothing. Before changing any of it, the same test was run against **"Keep screen awake" in
+Settings** — shipped, working, identical `CardToggleRow` in an identical `CardGroup` — and that did not
+respond either. The tap was the problem, not the code; a short drag across the switch works on both. The
+rule that saved a pointless refactor: when a control looks broken, try the known-good instance of the same
+control before touching anything.
+
+Counts: 839 client tests, 106 API tests, 24 checks green.

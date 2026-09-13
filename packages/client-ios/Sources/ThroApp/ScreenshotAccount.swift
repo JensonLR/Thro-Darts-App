@@ -43,12 +43,28 @@ enum ScreenshotAccount {
         private var band: String
         private let credentials: Int
         private let failing: Bool
+        /// Nothing is pre-agreed, which is the whole point of PD-088: a switch found already on is not
+        /// consent. A screenshot that staged them on would be a screenshot of the defect V045 removed.
+        private var consents: Set<String> = []
+
+        /// Kept in step with `Consent.WHY_NOT_LIVE` by hand — there is no shared string between a Kotlin
+        /// server and a Swift stage, and a stage that invented its own wording would be a screenshot of
+        /// a sentence nobody ever sees.
+        static let whyNotLive = "A live screen can be seen by anyone in the room, so THRØ only names "
+            + "players who are 18 or over and have said yes. Your results are published the same as "
+            + "everybody else's."
 
         init(_ who: String) {
             failing = who == "failing"
-            if who == "new" {
+            switch who {
+            case "new":
                 name = nil; band = "unknown"; credentials = 1
-            } else {
+            // The under-18 account, which PD-088 gave a reason to be able to look at: it is the only
+            // state where the live switch refuses, and the refusal is the one sentence in the app that
+            // a young player reads about why their name will not be on a screen.
+            case "minor":
+                name = "Sam C."; band = "minor"; credentials = 2
+            default:
                 name = "Jenson R."; band = "adult"; credentials = 2
             }
         }
@@ -93,6 +109,17 @@ enum ScreenshotAccount {
                 if let n = sent["displayName"] as? String { name = n }
                 if let b = sent["ageBand"] as? String { band = b }
                 return (200, profile)
+            // PD-088, staged with the same rule the server applies: `live` is refused for anyone not
+            // recorded as an adult, and the sentence comes back rather than an error.
+            case ("POST", "/v1/me/consent"):
+                let sent = body.flatMap { try? JSONSerialization.jsonObject(with: $0) as? [String: Any] } ?? [:]
+                let scope = sent["scope"] as? String ?? ""
+                let given = sent["given"] as? Bool ?? false
+                if given, scope == "live", band != "adult" {
+                    return (200, #"{"scope":"live","given":false,"why":"\#(Self.whyNotLive)"}"#)
+                }
+                if given { consents.insert(scope) } else { consents.remove(scope) }
+                return (200, #"{"scope":"\#(scope)","given":\#(given)}"#)
             case ("DELETE", "/v1/me"):
                 if failing { return (500, #"{"error":"the account could not be erased"}"#) }
                 return (200, #"{"erased":true,"credentials":\#(credentials),"sessions":3,"devices":1,"friendships":1,"claims":1,"consents":1}"#)
@@ -123,7 +150,8 @@ enum ScreenshotAccount {
 
         private var profile: String {
             let n = name.map { "\"\($0)\"" } ?? "\"New player\""
-            return #"{"accountId":"\#(Stage.accountId.uuidString.lowercased())","playerId":"\#(Stage.playerId.uuidString.lowercased())","displayName":\#(n),"named":\#(name != nil),"ageBand":"\#(band)","credentials":\#(credentials)}"#
+            let agreed = consents.map { "\"\($0)\"" }.joined(separator: ",")
+            return #"{"accountId":"\#(Stage.accountId.uuidString.lowercased())","playerId":"\#(Stage.playerId.uuidString.lowercased())","displayName":\#(n),"named":\#(name != nil),"ageBand":"\#(band)","credentials":\#(credentials),"consents":[\#(agreed)]}"#
         }
     }
 

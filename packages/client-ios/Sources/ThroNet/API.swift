@@ -86,12 +86,22 @@ public struct Profile: Codable, Sendable, Equatable {
     /// person would be shown as nobody because the terms had changed since they last opened the app.
     public let termsVersion: String?
     public let acceptedTerms: Bool?
+    /// What this person has agreed to be named in: `listing`, `live`, both, or neither (PD-088).
+    ///
+    /// Optional for the same reason as the two above — a cache written by an older build must still
+    /// decode — and **absent reads as neither**, which is the safe way round: a switch shown off when it
+    /// is on is a moment's confusion, and one shown on when it is off is a lie about who can see you.
+    public let consents: [String]?
+
+    public var mayBeListed: Bool { consents?.contains("listing") ?? false }
+    public var mayBeShownLive: Bool { consents?.contains("live") ?? false }
 
     public init(accountId: UUID?, playerId: UUID?, displayName: String?, named: Bool, ageBand: String, credentials: Int?,
-                termsVersion: String? = nil, acceptedTerms: Bool? = nil) {
+                termsVersion: String? = nil, acceptedTerms: Bool? = nil, consents: [String]? = nil) {
         self.accountId = accountId; self.playerId = playerId; self.displayName = displayName
         self.named = named; self.ageBand = ageBand; self.credentials = credentials
         self.termsVersion = termsVersion; self.acceptedTerms = acceptedTerms
+        self.consents = consents
     }
 }
 
@@ -932,6 +942,17 @@ public actor ThroAPI {
         let (data, http) = try await send("GET", path, bearer: session?.accessToken)
         guard http.statusCode == 200 else { throw APIError.status(http.statusCode, String(decoding: data, as: UTF8.self)) }
         return try decode(data)
+    }
+
+    /// Say whether you may be named, for one scope (PD-088). Returns the sentence to show when it was
+    /// refused — which happens for `live` when the account is not recorded as an adult.
+    @discardableResult
+    public func say(consent scope: String, given: Bool) async throws -> String? {
+        let body = try JSONSerialization.data(withJSONObject: ["scope": scope, "given": given])
+        let (data, http) = try await send("POST", "/v1/me/consent", body: body, bearer: session?.accessToken)
+        guard http.statusCode == 200 else { throw APIError.status(http.statusCode, String(decoding: data, as: UTF8.self)) }
+        struct Answer: Decodable { let given: Bool; let why: String? }
+        return try (decode(data) as Answer).why
     }
 
     /// The games in play in a season, for a screen in the room (PD-088). No session needed, because the
