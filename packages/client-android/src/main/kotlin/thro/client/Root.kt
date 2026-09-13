@@ -1,9 +1,13 @@
 package thro.client
 
+import androidx.activity.compose.BackHandler
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.graphics.ColorFilter
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -13,11 +17,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.TextStyle
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 
 // The Android client's one route (PD-081, PD-083).
 //
@@ -56,24 +57,44 @@ public fun ThroAndroidRoot() {
             // without one. Saying so is better than a keypad that quietly forgets.
             trouble != null -> Trouble(trouble!!)
             open == null -> Waiting()
-            playing != null && playing.state.isComplete -> ThroResultScreen(playing) {
-                session = null
-                carryOn = null
-                kept = ThroMatchList.rows(open.journal)
-            }
-            playing != null -> ThroScoringScreen(playing) {
-                session = null
-                kept = ThroMatchList.rows(open.journal)
-            }
-            showingKept -> ThroMatchesScreen(
-                rows = kept,
-                onCarryOn = { row ->
-                    session = ThroSession.resume(open.journal, row.record)
-                    showingKept = false
+            playing != null && playing.state.isComplete -> {
+                val finished = {
+                    session = null
                     carryOn = null
-                },
-                onBack = { showingKept = false },
-            )
+                    kept = ThroMatchList.rows(open.journal)
+                }
+                // Back from a result is the result's own Done, not the launcher.
+                BackHandler(onBack = finished)
+                ThroResultScreen(playing, finished)
+            }
+            playing != null -> {
+                // **Back leaves the keypad, not the app** (PD-093). With no handler, the system's back — the edge
+                // swipe that gesture navigation puts under every thumb — closed the activity in the middle of a leg.
+                // Nothing was lost, because every visit is already in the journal, but the scorer landed on the
+                // phone's home screen with no word about the match. Back now goes to the first screen, which offers
+                // the match as "Carry on", exactly as it would after the app had been closed.
+                BackHandler {
+                    session = null
+                    carryOn = ThroAndroidWords.carryOn(open.journal)
+                    kept = ThroMatchList.rows(open.journal)
+                }
+                ThroScoringScreen(playing) {
+                    session = null
+                    kept = ThroMatchList.rows(open.journal)
+                }
+            }
+            showingKept -> {
+                BackHandler { showingKept = false }
+                ThroMatchesScreen(
+                    rows = kept,
+                    onCarryOn = { row ->
+                        session = ThroSession.resume(open.journal, row.record)
+                        showingKept = false
+                        carryOn = null
+                    },
+                    onBack = { showingKept = false },
+                )
+            }
             else -> ThroSetupScreen(
                 carryOn = carryOn,
                 onCarryOn = {
@@ -96,11 +117,13 @@ public fun ThroAndroidRoot() {
 @Composable
 private fun Waiting() {
     ThroBoard {
-        BasicText(
-            "THRØ",
-            style = TextStyle(color = LocalThroColors.current.colorTextOnBoard, fontSize = 56.sp,
-                              fontWeight = FontWeight.Black, letterSpacing = 4.sp),
-            modifier = Modifier.align(Alignment.Center),
+        // The wordmark, not the name in a font: a dart through a ring, generated from the geometry the
+        // app draws (`tools/make_web_wordmark.py`) and tinted so it follows the palette.
+        Image(
+            painter = painterResource(R.drawable.thro_wordmark),
+            contentDescription = "THRØ",
+            colorFilter = ColorFilter.tint(LocalThroColors.current.colorTextOnBoard),
+            modifier = Modifier.align(Alignment.Center).width(220.dp),
         )
     }
 }
@@ -114,13 +137,9 @@ private fun Trouble(message: String) {
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
-            BasicText("THRØ cannot keep a record on this phone", style = TextStyle(
-                color = colors.colorTextOnBoard, fontSize = 22.sp, fontWeight = FontWeight.Bold,
-                textAlign = TextAlign.Center,
-            ))
-            BasicText(message, style = TextStyle(
-                color = colors.throBronzeOnink, fontSize = 14.sp, textAlign = TextAlign.Center,
-            ))
+            ThroText("THRØ cannot keep a record on this phone", ThroTypography.heading3, colors.colorTextOnBoard,
+                     align = TextAlign.Center)
+            ThroText(message, ThroTypography.metadata, colors.throBronzeOnink, align = TextAlign.Center)
         }
     }
 }

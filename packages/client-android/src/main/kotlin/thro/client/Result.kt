@@ -10,15 +10,12 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import thro.journal.Seat
 
 // A finished match, on Android (PD-084, PD-085).
@@ -39,21 +36,19 @@ public fun ThroResultScreen(session: ThroSession, onAgain: () -> Unit) {
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
-            BasicText(ThroResultWords.winner(session), style = TextStyle(
-                color = colors.colorTextOnBoard, fontSize = 40.sp, fontWeight = FontWeight.Black,
-                textAlign = TextAlign.Center,
-            ))
-            BasicText(ThroResultWords.scoreline(session), style = TextStyle(
-                color = colors.throGreenOnink, fontSize = 52.sp, fontWeight = FontWeight.Black,
-            ))
-            BasicText(ThroResultWords.verified(session), style = TextStyle(
-                color = when (ThroResultWords.label(session)) {
+            ThroText(ThroResultWords.winner(session), ThroTypography.display, colors.colorTextOnBoard,
+                     align = TextAlign.Center)
+            ThroText(ThroResultWords.scoreline(session), ThroTypography.ratingHero, colors.throGreenOnink)
+            ThroText(
+                ThroResultWords.verified(session),
+                ThroTypography.metadata,
+                when (ThroResultWords.label(session)) {
                     ThroVerification.DISPUTED -> colors.throDisputed
                     ThroVerification.BOTH_CONFIRMED -> colors.throGreenOnink
                     ThroVerification.SELF_REPORTED -> colors.throChalk.copy(alpha = 0.6f)
                 },
-                fontSize = 14.sp, textAlign = TextAlign.Center,
-            ))
+                align = TextAlign.Center,
+            )
 
             // Two rows, one per competitor, and each says only what that person has said. Never a single
             // "confirm" button: one press cannot mean two people, and the whole value of the label is that
@@ -71,9 +66,7 @@ public fun ThroResultScreen(session: ThroSession, onAgain: () -> Unit) {
                     .padding(vertical = 16.dp),
                 contentAlignment = Alignment.Center,
             ) {
-                BasicText("Another", style = TextStyle(
-                    color = colors.throChalk, fontSize = 20.sp, fontWeight = FontWeight.Bold,
-                ))
+                ThroText("Another", ThroTypography.heading3, colors.throChalk)
             }
         }
     }
@@ -90,9 +83,8 @@ private fun Attestation(session: ThroSession, seat: Seat) {
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        BasicText(session.name(seat), modifier = Modifier.weight(1f), style = TextStyle(
-            color = colors.throChalk.copy(alpha = 0.85f), fontSize = 16.sp, fontWeight = FontWeight.SemiBold,
-        ))
+        ThroText(session.name(seat), ThroTypography.body.weight(FontWeight.SemiBold),
+                 colors.throChalk.copy(alpha = 0.85f), modifier = Modifier.weight(1f))
         Choice("Agree", lit = agreed, colour = colors.throGreenOnink) { session.attest(seat, true) }
         Choice("Dispute", lit = refused, colour = colors.throDisputed) { session.attest(seat, false) }
     }
@@ -108,10 +100,8 @@ private fun Choice(label: String, lit: Boolean, colour: androidx.compose.ui.grap
             .clickable { onPress() }
             .padding(horizontal = 14.dp, vertical = 10.dp),
     ) {
-        BasicText(label, style = TextStyle(
-            color = if (lit) colour else colors.throChalk.copy(alpha = 0.7f),
-            fontSize = 14.sp, fontWeight = if (lit) FontWeight.Bold else FontWeight.Normal,
-        ))
+        ThroText(label, ThroTypography.labelStrong.weight(if (lit) FontWeight.Bold else FontWeight.Normal),
+                 if (lit) colour else colors.throChalk.copy(alpha = 0.7f))
     }
 }
 

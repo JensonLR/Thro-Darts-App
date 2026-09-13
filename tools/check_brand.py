@@ -89,8 +89,48 @@ def brand_as_swift_text() -> list[str]:
     return found
 
 
+ANDROID = ROOT / "packages/client-android/src/main/kotlin"
+
+
+def swift_system_type() -> list[str]:
+    """Text set in the system face, on a surface the brand's faces could reach (PD-093).
+
+    The second screens used `Font.system(size:)` because the widget and the watch did not carry the faces.
+    They do now, and `ThroTypeRole.fixed(_:)` is the fixed-size form those surfaces need. An SF Symbol is
+    still sized with `.font(.system(size:))` — that is Apple's way to size a symbol, not a choice of
+    typeface — so a line that sizes an `Image(systemName:)` is not text and is not counted.
+    """
+    found = []
+    for path in sorted(SWIFT.rglob("*.swift")):
+        if path.name == "Typography.swift":
+            continue
+        for number, line in enumerate(path.read_text().splitlines(), start=1):
+            if ".font(.system(" in line and "Image(systemName:" not in line:
+                found.append(f"{path.relative_to(ROOT)}:{number} sets text in the system face.")
+    return found
+
+
+def android_type() -> list[str]:
+    """Android text outside the type roles, and the brand set as a word (PD-093)."""
+    found = []
+    for path in sorted(ANDROID.rglob("*.kt")):
+        if path.name == "Typography.kt":
+            continue
+        text = path.read_text()
+        for number, line in enumerate(text.splitlines(), start=1):
+            if re.search(r"fontSize\s*=\s*\d+(\.\d+)?\.sp", line):
+                found.append(f"{path.relative_to(ROOT)}:{number} picks a font size by hand. Use ThroTypography.")
+        for m in re.finditer(r'Text\(\s*"' + BRAND + '"', text):
+            found.append(f"{path.relative_to(ROOT)}:{text[:m.start()].count(chr(10)) + 1} draws the brand with a font. "
+                         f"Use R.drawable.thro_wordmark.")
+    return found
+
+
 def main() -> int:
     complaints: list[str] = []
+
+    for offender in swift_system_type() + android_type():
+        complaints.append(offender)
 
     for offender in brand_as_swift_text():
         complaints.append(

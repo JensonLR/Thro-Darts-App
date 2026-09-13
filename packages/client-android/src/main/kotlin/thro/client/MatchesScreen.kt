@@ -13,14 +13,11 @@ import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 
 // Every match this phone has kept, on a screen.
 //
@@ -47,24 +44,18 @@ public fun ThroMatchesScreen(
                 Modifier.fillMaxWidth().padding(top = 8.dp, bottom = 14.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                BasicText("Your darts", modifier = Modifier.weight(1f), style = TextStyle(
-                    color = colors.colorTextOnBoard, fontSize = 30.sp, fontWeight = FontWeight.Black,
-                ))
+                ThroText("Your darts", ThroTypography.heading1, colors.colorTextOnBoard, modifier = Modifier.weight(1f))
                 Box(
                     Modifier.clickable { onBack() }.padding(horizontal = 8.dp, vertical = 6.dp),
                 ) {
-                    BasicText("Done", style = TextStyle(
-                        color = colors.throGreenOnink, fontSize = 17.sp, fontWeight = FontWeight.Bold,
-                    ))
+                    ThroText("Done", ThroTypography.body.weight(FontWeight.Bold), colors.throGreenOnink)
                 }
             }
 
             if (rows.isEmpty()) {
                 // Not "no matches" — they know that. What they do not know is that this phone is going to
                 // keep them, which is the reason to score one here rather than on a beer mat.
-                BasicText(ThroMatchList.NOTHING_YET, style = TextStyle(
-                    color = colors.throChalk.copy(alpha = 0.65f), fontSize = 17.sp,
-                ))
+                ThroText(ThroMatchList.NOTHING_YET, ThroTypography.body, colors.throChalk.copy(alpha = 0.65f))
                 return@Column
             }
 
@@ -87,44 +78,33 @@ private fun MatchRow(row: ThroMatchRow, onCarryOn: (ThroMatchRow) -> Unit) {
     ) {
         Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                BasicText(row.title, modifier = Modifier.weight(1f), style = TextStyle(
-                    color = colors.colorTextOnBoard, fontSize = 18.sp, fontWeight = FontWeight.SemiBold,
-                ))
+                ThroText(row.title, ThroTypography.bodyLarge.weight(FontWeight.SemiBold), colors.colorTextOnBoard,
+                         modifier = Modifier.weight(1f))
                 // The score in the same green the result screen gives it, so a glance down the list and a
                 // glance at a result are reading the same thing. Absent when it cannot be trusted.
                 row.score?.let {
-                    BasicText(it, style = TextStyle(
-                        color = colors.throGreenOnink, fontSize = 20.sp, fontWeight = FontWeight.Black,
-                    ))
+                    ThroText(it, ThroTypography.heading3.family(ThroTypeRole.Family.SPORT), colors.throGreenOnink)
                 }
             }
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                BasicText(ThroMatchList.day(row.record.startedAt), style = TextStyle(
-                    color = colors.throChalk.copy(alpha = 0.55f), fontSize = 13.sp,
-                ))
-                BasicText(row.status, style = TextStyle(
-                    color = if (row.unreadable != null) colors.throDisputed
-                            else colors.throChalk.copy(alpha = 0.55f),
-                    fontSize = 13.sp,
-                    fontWeight = if (row.unreadable != null) FontWeight.Bold else FontWeight.Normal,
-                ))
+                ThroText(ThroMatchList.day(row.record.startedAt), ThroTypography.metadata,
+                         colors.throChalk.copy(alpha = 0.55f))
+                ThroText(
+                    row.status,
+                    ThroTypography.metadata.weight(if (row.unreadable != null) FontWeight.Bold else FontWeight.Normal),
+                    if (row.unreadable != null) colors.throDisputed else colors.throChalk.copy(alpha = 0.55f),
+                )
                 row.wonBy?.let {
-                    BasicText("$it won", style = TextStyle(
-                        color = colors.throGreenOnink.copy(alpha = 0.85f), fontSize = 13.sp,
-                    ))
+                    ThroText("$it won", ThroTypography.metadata, colors.throGreenOnink.copy(alpha = 0.85f))
                 }
             }
             // The reason, in full, under the row. A status word alone would tell somebody their match is
             // broken without telling them anything they could act on or repeat to us.
             row.unreadable?.let {
-                BasicText(it, style = TextStyle(
-                    color = colors.throDisputed.copy(alpha = 0.8f), fontSize = 12.sp,
-                ))
+                ThroText(it, ThroTypography.metadata, colors.throDisputed.copy(alpha = 0.8f))
             }
             if (carryOnable) {
-                BasicText("Tap to carry on", style = TextStyle(
-                    color = colors.throGreenOnink, fontSize = 13.sp, fontWeight = FontWeight.Bold,
-                ))
+                ThroText("Tap to carry on", ThroTypography.labelStrong, colors.throGreenOnink)
             }
         }
     }

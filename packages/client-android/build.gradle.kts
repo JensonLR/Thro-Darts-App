@@ -13,16 +13,32 @@ android {
     namespace = "thro.client"
     compileSdk = 36
     defaultConfig { minSdk = 26 }
-    buildFeatures { compose = true }
+    // `androidResources` on purpose: the brand's faces and the wordmark are resources of this module,
+    // referenced as `thro.client.R`, and AGP 9 does not generate an R class for a library by default.
+    buildFeatures {
+        compose = true
+        androidResources = true
+    }
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
     }
     sourceSets["main"].kotlin.srcDir("../design-tokens/generated")
-    // A literal path, not `layout.buildDirectory.dir(...)`: AGP 9 refuses a Provider here because Android
-    // Studio cannot tell generated directories from static ones through one. The task dependency it would
-    // have carried is wired by hand below, which the error message says is the trade.
-    sourceSets["main"].jniLibs.srcDir("build/generated/sqliteJniLibs")
+    // A `File`, not a Provider: AGP 9 refuses a Provider here because Android Studio cannot tell generated
+    // directories from static ones through one, and the task dependency it would have carried is wired by
+    // hand below.
+    //
+    // **And not a literal `"build/…"` either, which is what this was, and it was wrong.** `settings.gradle.kts`
+    // moves every build directory to `build.nosync` so iCloud does not sync it. A literal path kept pointing at
+    // `build/generated/…`, which nothing writes to any more — so the copy tasks filled `build.nosync` and the
+    // source sets read an empty directory, silently. The fonts were the symptom that showed; the SQLite
+    // natives use the same line. Resolving the build directory here, after settings has moved it, points the
+    // source set at the directory the task actually fills.
+    val generated = project.layout.buildDirectory.dir("generated").get().asFile
+    sourceSets["main"].jniLibs.srcDir(generated.resolve("sqliteJniLibs"))
+    // The brand's faces, and their licences, copied out of the one directory they live in (below).
+    sourceSets["main"].res.srcDir(generated.resolve("throFontRes"))
+    sourceSets["main"].assets.srcDir(generated.resolve("throFontAssets"))
 }
 
 // SQLite's native library, out of the JAR and into the APK.
@@ -53,6 +69,27 @@ val extractSqliteNatives by tasks.registering(Copy::class) {
 
 tasks.named("preBuild") { dependsOn(extractSqliteNatives) }
 
+// The brand's two families, out of `apps/ios/ThroDarts/Fonts` and into the APK (PD-093).
+//
+// **Copied at build time, not committed a second time**, for the reason the SQLite natives are: one copy
+// of a binary is one copy that can be right. Android wants resource names in lower case with no hyphens, so
+// `Archivo-ExtraBold.ttf` arrives as `archivo_extrabold.ttf`. The SIL Open Font License asks that the faces
+// travel with their licence, so the two OFL texts go into the APK's assets beside them.
+val throFonts by tasks.registering(Copy::class) {
+    from("../../apps/ios/ThroDarts/Fonts") {
+        include("*.ttf")
+        rename { it.lowercase().replace('-', '_') }
+    }
+    into(layout.buildDirectory.dir("generated/throFontRes/font"))
+}
+
+val throFontLicences by tasks.registering(Copy::class) {
+    from("../../apps/ios/ThroDarts/Fonts") { include("OFL-*.txt") }
+    into(layout.buildDirectory.dir("generated/throFontAssets/licences"))
+}
+
+tasks.named("preBuild") { dependsOn(throFonts, throFontLicences) }
+
 // The rules the screens obey run on the JVM, so they are tested there. Nothing in `ThroScoringWords` or
 // `ThroSetupWords` needs a device, and a rule nothing checks is a rule that comes back.
 android {
@@ -77,4 +114,6 @@ dependencies {
     implementation("androidx.compose.ui:ui-graphics:1.7.5")
     implementation("androidx.compose.ui:ui-text:1.7.5")
     implementation("androidx.compose.foundation:foundation:1.7.5")
+    // `BackHandler`, at the version the app target already carries (PD-093).
+    implementation("androidx.activity:activity-compose:1.9.3")
 }

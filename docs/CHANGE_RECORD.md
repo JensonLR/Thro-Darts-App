@@ -5129,3 +5129,57 @@ after the opening: the first round caught the launch sequence mid-flight, and a 
 with nothing on it.
 
 Counts: 844 client tests.
+
+## The brand's faces on every surface, and an Android that could not open its journal (PD-093)
+
+**Where the type was wrong.** The phone's own screens were set in Archivo and IBM Plex Sans Condensed; the
+surfaces around them were not. The Lock Screen widget and Live Activity, the external-display board, the venue
+board and the watch set 25 pieces of text with `Font.system(size:)`, and Android set every string in Roboto at
+twelve hand-picked sizes. It is PD-090's pattern one layer down: the surfaces nobody demos got the quick option.
+
+**iOS.** The widget extension and the watch app now copy the Fonts folder in their own Resources phases and
+register the ten faces in their own plists — a widget draws in its own process, so the app's `UIAppFonts`
+registers nothing there. The watch's plist had said "No fonts" and explained why, correctly for a watch without
+the files; the comment now says what changed. `ThroTypeRole.fixed(_:)` keeps a role's face and weight at a size
+the surface fixes, and the 25 call sites use it. `check_fonts.py` had only ever read the phone's plist, which is
+how two bundles went without faces and nothing noticed; it now checks the widget, the watch and the TV, plist and
+Resources phase both. The one `.alert` among the app's destructive questions is a confirmation dialog like the rest.
+
+**Android.** `Typography.kt` transcribes the iOS roles and `ThroText` draws them. The build copies the faces and
+their OFL licences from `apps/ios/ThroDarts/Fonts`, so there is one set of files. `check_type_parity.py` fails
+when the two platforms' roles differ; `check_brand.py` now also fails on a Kotlin `fontSize = N.sp` and on the
+brand set as Kotlin text; and `make_web_wordmark.py` generates the Android vector wordmark beside the web's SVG.
+
+**And a regression of mine, found on the way.** `7c10426` moved Android's build directories to `build.nosync` so
+iCloud would stop littering them, and the source set that feeds the SQLite natives into the APK still named
+`build/…` as a literal. Nothing wrote there any more, so **every APK after that commit shipped without
+`libsqlitejdbc.so`**: the journal cannot open on a device, and no JVM test can see it. The emulator check made at
+the time passed only because a stale `build/` still held the old natives. Source sets now take the resolved build
+directory, and `:app:verifyApkCarriesTheJournal` runs after every `assembleDebug` and fails the build when no ABI
+carries the library — shown failing on an APK without it and passing on the real one. On the emulator, from a
+fresh install: a visit scored, the journal went from one match to two, and Your darts read them back.
+
+**Then the emulator, with the faces in.** Four more things, each fixed and looked at again:
+
+- The status bar's clock and battery were dark grey on the dark board. `enableEdgeToEdge()` with no arguments
+  takes its icons from the phone's light or dark setting; every Android screen is the green board, so they are
+  now always light.
+- The screen the app opens onto had no mark on it. It carries the wordmark, top left, from the generated vector.
+- The scoring keys were sized by their labels, so with the new roles Enter and Undo came out shorter than the
+  digits beside them, and every row stood in a band of empty board. Every key fills its row.
+- **The system back closed the app in the middle of a leg** — the edge swipe that gesture navigation puts under
+  every thumb. Nothing was lost, since every visit is already in the journal, but the scorer landed on the phone's
+  home screen with no word about the match. Back now leaves scoring for the first screen, which offers the match
+  as "Carry on"; back from Your darts and from a result goes where their own buttons go. It needed
+  `androidx.activity:activity-compose` in the client, at the version the app target already carried.
+
+**The watch, looked at.** `-ThroWristDemo` showed "No leg on". The watch simulator is now paired with the phone
+simulator, and the phone's last word — that nothing is on — waited on the session and cleared the demo leg the
+moment the link activated. A demo is a watch with no phone, so with the flag set the link is not started (DEBUG
+only). The live and won glances were then captured, in the brand's faces.
+
+**Not yet looked at with the faces in:** the Live Activity on the Lock Screen and the Apple TV board. Neither is
+reachable from a launch argument, and both are next.
+
+Counts: 844 client tests; 27 Android tests; 28 checks green; ten faces in the phone app, the widget extension and
+the watch app.

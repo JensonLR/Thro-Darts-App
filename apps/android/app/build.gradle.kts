@@ -1,3 +1,6 @@
+import java.io.File
+import java.util.zip.ZipFile
+
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.plugin.compose")
@@ -37,3 +40,36 @@ dependencies {
     implementation("androidx.compose.ui:ui-graphics:1.7.5")
     implementation("androidx.compose.foundation:foundation:1.7.5")
 }
+
+// **The APK carries the journal's native library, or the build fails** (PD-093).
+//
+// On 13 September a build-directory move (`build.nosync`, 7c10426) left the client's jniLibs source set naming a
+// directory nothing wrote to any more. Every APK built after it contained no libsqlitejdbc.so, so on a phone the
+// journal could not open and the app would say it cannot keep a record — and no test could see it, because the
+// JVM unit tests load the driver from the host. It passed an emulator check that morning only because a stale
+// `build/` from an earlier build still held the natives, and that directory was deleted minutes later.
+//
+// So the property is checked where it lives — in the APK — every time one is assembled, locally and in CI.
+val verifyApkCarriesTheJournal by tasks.registering {
+    group = "verification"
+    description = "Fails when the debug APK carries no libsqlitejdbc.so for any ABI."
+    val apk = providers.gradleProperty("verifyApk").map { File(it) }
+        .orElse(layout.buildDirectory.file("outputs/apk/debug/app-debug.apk").map { it.asFile })
+    inputs.property("apkPath", apk.map { it.absolutePath })
+    doLast {
+        val file = apk.get()
+        if (!file.exists()) throw GradleException("No APK at ${file.path} to check.")
+        val natives = ZipFile(file).use { zip ->
+            zip.entries().asSequence().map { it.name }
+                .filter { Regex("lib/[^/]+/libsqlitejdbc\\.so").matches(it) }.toList()
+        }
+        if (natives.isEmpty()) {
+            throw GradleException(
+                "${file.name} carries no libsqlitejdbc.so. On a device the journal cannot open and THRØ cannot " +
+                    "keep a record. Check the client's jniLibs source set against the real build directory.",
+            )
+        }
+        logger.lifecycle("the APK carries the journal: ${natives.joinToString()}")
+    }
+}
+tasks.named { it == "assembleDebug" }.configureEach { finalizedBy(verifyApkCarriesTheJournal) }

@@ -4262,3 +4262,43 @@ screenshots.
 `-ThroOrientation landscape` (DEBUG) asks the app's own scene to turn, beside `-ThroScreen` and
 `-ThroScreenshotAccount`. `xcrun simctl` cannot rotate a simulator and the Simulator offered no rotate item on
 this machine — and a layout nobody can reach is a layout nobody looks at.
+
+## PD-093 — The brand's faces, on every surface
+
+**13 September 2026.** Part of the founder's brand check across *"all screens pop ups & pages"*. PD-090 and
+PD-091 put the true mark on every page; this is the type, and what else turned up while looking.
+
+### What was wrong
+
+- **The second screens were set in the system face.** The Lock Screen widget and Live Activity, the board on an
+  external display, the venue board and the watch drew their text with `Font.system(size:)` — 25 call sites — so
+  the score on the Lock Screen was in a different typeface from the score on the phone. The widget and the watch
+  are separate bundles and carried no faces. The watch's plist said in a comment that it should have none: right
+  about its premise, since asking for a face nobody registered falls back silently, and wrong in its conclusion.
+- **Android was set entirely in Roboto** — twelve sizes chosen by hand, five of them off the approved scale, and
+  none of it in Archivo or IBM Plex Sans Condensed.
+- **One destructive question was an alert.** Removing a team asked "Cancel / Remove" from the middle of the
+  screen, where every other destructive question rises from the bottom, names what goes and says how to keep it.
+- **On the Android emulator, with the faces in:** the clock and battery icons were dark grey on the dark board;
+  the screen the app opens onto carried no mark; the scoring keys were sized by their labels, so Enter and Undo
+  stood shorter than the digits beside them; and the system back — the edge swipe — closed the app in the middle
+  of a leg.
+
+### Decided
+
+- **Every bundle that draws text carries both families** — phone, widget extension, watch and TV — and
+  `check_fonts.py` fails a build where a target's plist or Resources phase leaves them out.
+- **A surface the system sizes keeps the face and fixes only the size.** `ThroTypeRole.fixed(_:)` is for the Lock
+  Screen, a Live Activity, a wrist and a wall, whose boxes Apple or a television sets. Inside the app, text still
+  grows with Dynamic Type through `.thro(_:)` (ADR-010).
+- **Android's type roles are iOS's roles**, transcribed into `Typography.kt`. Two copies are unavoidable while the
+  weights and trackings live in Swift rather than in the token source, so `check_type_parity.py` fails on any role
+  whose family, size, weight, tracking, case or numerals differ between them.
+- **`check_brand.py` holds it:** Swift text in `.font(.system(…))` (an SF Symbol's size is exempt), a Kotlin
+  `fontSize = N.sp`, and "THRØ" set as Kotlin text all fail.
+- **A destructive question is a confirmation dialog**, whose button says what it removes ("Remove Ethan T.") and
+  whose way back says "Keep them".
+- **Android:** the system icons are always light, because every Android screen is the green board; the first
+  screen wears the wordmark, top left, from the generated vector; every scoring key fills its row; and back leaves
+  the keypad for the first screen, which offers the match as "Carry on". Nothing is lost by that — every visit is
+  already in the journal.
