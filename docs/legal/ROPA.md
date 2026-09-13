@@ -33,7 +33,7 @@ player.
 | **Data subjects** | Players, including children. |
 | **Recipients** | Apple and Google, as identity providers, at the moment of sign-in only. |
 | **Retention** | Until erasure is requested. `identity.erasure` records what was removed. |
-| **Transfers** | The database is in **London**; the API compute is in **Frankfurt** (Render, EEA) or London (Fly, per `DEPLOY.md`). No transfer outside the UK/EEA. See "Processors". |
+| **Transfers** | The database is in **London**; the API compute is in **Frankfurt** (Render, EEA) or London (Fly, per `DEPLOY.md`). **Requests reach Render through Cloudflare's network first** (checked 13 Sep 2026; see "Processors"), so whether anything leaves the UK/EEA is for Render's and Cloudflare's terms to settle — not yet confirmed. |
 
 ### 2. Matches and results
 
@@ -63,7 +63,7 @@ player.
 | **Lawful basis** | Legal obligation and legitimate interests — the safety of users, including children. |
 | **Categories of data** | `report` (who reported, about whom or what, the reason), `block` (who blocked whom, and when it was lifted), `decision` (the outcome, a note, who decided). |
 | **Special category risk** | A free-text reason or note **may** contain special-category data, because a reporter writes what they think matters. This is the highest-risk store in the system and the DPIA treats it as such. |
-| **Retention** | **Two years after the report is decided** (PD-087), swept daily by the server. An undecided report is kept indefinitely — deleting one would hide that nobody answered it. What survives a forgotten report is a count of decisions by outcome against the subject, with no text and no reporter. |
+| **Retention** | **Two years after the report is decided** (PD-087), swept daily by the server. An undecided report is kept indefinitely — deleting one would hide that nobody answered it. What survives a forgotten report is a count of decisions by outcome against the subject, with no text and no reporter. **Not yet working in production (13 Sep 2026):** since V044 reached production that day, the sweep has failed at every server start with *permission denied for table decision_tally* — the function runs with the server's own rights, which do not reach the tally. Production held no reports when this was found, so nothing has yet been kept past the period; the fix is recorded in the change record. |
 
 ### 5. Location
 
@@ -85,8 +85,8 @@ player.
 
 | Processor | What for | Where |
 | --- | --- | --- |
-| Render | Hosting the API | Frankfurt (EEA) |
-| Render (static site) | Serving the public web pages, and `notice.json`, which the iPhone app reads at launch and on returning to the front to learn whether there is a notice about people's information (PD-094). The request carries nothing about the person; the host sees the internet address it came from, as for any page | Render's CDN — **where it serves from is to be confirmed**, alongside the Art 28 terms |
+| Render | Hosting the API | Frankfurt (EEA) for the compute. **Requests reach it through Cloudflare's network first**: the hostname resolves through `cdn.cloudflare.net`, and a test request on 13 Sep 2026 was answered by Cloudflare's London data centre (`server: cloudflare`, `cf-ray … -LHR`). A proxy answering at that layer ends the encrypted connection at its edge, so each request's contents pass through Cloudflare on the way |
+| Render (static site) | Serving the public web pages, and `notice.json`, which the iPhone app reads at launch and on returning to the front to learn whether there is a notice about people's information (PD-094). The request carries nothing about the person; the host sees the internet address it came from, as for any page | **Cloudflare's network, in front of Render** — checked 13 Sep 2026: responses carry `server: cloudflare`, and a test request was answered by Cloudflare's London data centre (`cf-ray … -LHR`); Cloudflare answers each visitor from a data centre near them. On a cache miss the edge fetches the page from Render's origin, **whose location Render's static-site documentation does not give**, and that documentation describes no region setting. Still to confirm, with the Art 28 terms: Render's sub-processor list (its DPA, Exhibit B) and the transfer terms |
 | Neon | The PostgreSQL database | **London (`aws-eu-west-2`)** — read from `docs/runbooks/DEPLOY.md`. In the UK, so no transfer question arises for the database itself. |
 | Apple, Google | Identity providers at sign-in | Their own terms |
 | *(mail host — to be chosen)* | The `privacy@` / `safeguarding@` mailbox | See `docs/product/MAILBOX.md` |
@@ -104,5 +104,5 @@ Written processor terms under Art 28 are **outstanding** for each of these and a
 
 ---
 
-*Read from the migrations and the live schema on 12 September 2026. Re-read it before filing anything: the
-schema moves.*
+*Read from the migrations and the live schema on 12 September 2026; the transfers, the retention sweep and both Render
+rows checked against production on 13 September 2026. Re-read it before filing anything: the schema moves.*

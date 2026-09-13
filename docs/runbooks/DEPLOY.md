@@ -361,7 +361,10 @@ gh secret set RENDER_DEPLOY_HOOK_URL
 ```
 
 From Render: **thro-api-staging → Settings → Deploy Hook**. Treat it like a password — anybody holding it can
-redeploy the API.
+redeploy the API. Render's documentation, read 13 September 2026: the hook takes a plain `GET` or `POST`, answers `200`
+with the new deploy's id, deploys one commit when `ref=<sha>` is appended — which is how the pipeline deploys exactly
+the commit it migrated — and **Regenerate Hook** on the same page replaces a leaked one. Render's connector in a Claude
+session has no call that reads a hook, so it is copied from the dashboard by hand.
 
 Until all three exist, the workflow runs the checks and stops with **Not deployed** in the run's summary.
 
@@ -376,6 +379,39 @@ Until all three exist, the workflow runs the checks and stops with **Not deploye
   log says why; run the workflow again once it is fixed.
 
 **The restore point** is production as it was just before that deploy. Neon can restore the production branch from
-it, which discards everything written since — the last resort, not the first. The pipeline keeps the newest three
-and never removes a branch it did not make.
+it, which discards everything written since — the last resort, not the first. The pipeline keeps the newest three,
+and **it tells its own by name, not by who made them**: every branch of production whose name starts
+`restore-point-before-` counts. A restore point taken by hand under that name is one of the three and is removed in its
+turn. Two were taken that way on 13 September (`br-gentle-block-zal9jk26` and `br-bitter-block-zat2etp8`), and the
+pipeline's second run would remove the first. Until that changes, give a hand-made restore point another name if it
+has to outlast three deploys.
+
+## When the API is up and answers nothing
+
+Render's health check is `/healthz`, and `/healthz` answers **503** when the database is older than the newest
+migration in the image. Render stops sending an instance traffic after 15 seconds of failed checks, and does not put a
+deploy live whose checks never pass. So an image ahead of its migrations is not a degraded API: **it is no API.**
+
+That is what happened on 13 September, pieced together from Render's logs, Neon's ledger and an earlier session's
+probes. Three manual deploys that day carried migrations production did not have. The first, at 07:47 (`d054db4`),
+had not gone live when the next cancelled it fourteen minutes later. The last, at 12:11 (`c716b72`), never passed its
+check and Render ended it *Timed Out* — the 503 doing its job. The middle one, `5c65c58`, with migrations to V045, went
+live at 08:07 against V043 and answered requests that morning; why Render put it live, its logs do not say. In the
+afternoon it did not answer: three two-minute probes from 15:28 got no response at all, while an instance had been up
+since 15:26 and had reached the database. It answered about four seconds after V046 reached Neon at 16:37.
+
+**So the API is never deployed ahead of its migrations** — which is what Render's *Deploy latest commit* does whenever
+the branch carries a migration production has not had. The pipeline migrates first; by hand, migrate and then call the
+deploy hook with `ref=`.
+
+**`render.yaml` deploys the API as well.** The API service belongs to a Blueprint whose *Auto Sync* was on when last
+seen — two `blueprint_sync` deploys on 12 September show it — and while it is on, a push that changes `render.yaml`
+redeploys the API at once, outside the pipeline, with no restore point and no migration. And a sync adds and changes variables but **never removes
+one**, as Render's Blueprint documentation says. That is why `THRO_RP_ORIGINS` is still set on the service: an
+accidental `tools/host.py --set thro.uk` was committed and synced on 12 September, and reverting `render.yaml` took the
+key out of the file but not off the service. Since then the staging API has named `thro-api-staging.onrender.com` as
+its relying party while accepting only `https://thro.uk` and `https://api.thro.uk` as origins — its own log line says so
+at every start — and `WebAuthn.kt` refuses any other origin, so a passkey from the app, whose associated domain is
+`thro-api-staging.onrender.com`, should be refused. Not tried on a device from here. *Auto Sync* is on the Blueprint's
+Settings page; the variable is under the API service's Environment.
 

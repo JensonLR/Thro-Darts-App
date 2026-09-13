@@ -14,7 +14,7 @@ which is the whole reason this is written down.
 | Where | Free arrangement | With `thro.uk` |
 |---|---|---|
 | `render.yaml` → `THRO_RP_ID` | `thro-api-staging.onrender.com` | **`thro.uk`** |
-| `render.yaml` → `THRO_RP_ORIGINS` | absent (the code defaults to `https://<rp id>`) | `https://thro.uk,https://api.thro.uk` |
+| `render.yaml` → `THRO_RP_ORIGINS` | absent (the code defaults to `https://<rp id>`) — **but still set on the staging service since 12 September**; see step 6 | `https://thro.uk,https://api.thro.uk` |
 | `Info.plist` → `THROAPIBaseURL` | `https://thro-api-staging.onrender.com` | **`https://api.thro.uk`** |
 | `ThroDarts.entitlements` → `webcredentials:` | `thro-api-staging.onrender.com` | **`thro.uk`** |
 | `render.yaml` → the two rewrite destinations | the API service's own hostname | **unchanged** |
@@ -53,9 +53,12 @@ every push, so a half-finished switch fails the build rather than reaching a tes
 5. **At the registrar:** add the records Render shows. **A records only — Render is IPv4-only, so delete
    any AAAA record**, or the site answers for some people and not others, intermittently, which is the
    worst way to find out.
-6. **In Render — the API service's environment:** set `THRO_RP_ID` to `thro.uk` and `THRO_RP_ORIGINS` to
-   `https://thro.uk,https://api.thro.uk`. `render.yaml` carries these, but a service already created from a
-   blueprint does not pick up an edited value without a sync — set them in the dashboard and confirm.
+6. **In Render — the API service's environment:** confirm `THRO_RP_ID` is `thro.uk` and `THRO_RP_ORIGINS` is
+   `https://thro.uk,https://api.thro.uk`. The API service belongs to a Blueprint whose *Auto Sync* was on when last
+   seen (12 September), and while it is on, the commit from step 2 reaches it the moment it is pushed — **before** steps 3–5 have given the domain an address. Do steps
+   2–6 in one sitting, or set *Auto Sync* to No on the Blueprint's Settings page first. A sync adds and changes
+   variables and never removes one, which is why `THRO_RP_ORIGINS` is already set on the staging service
+   (DEPLOY.md, *When the API is up and answers nothing*).
 7. **Move the API off the free instance** ($7/mo, PD-057). A free instance sleeps after fifteen idle minutes
    and a sleeping server drops a live match stream (ADR-007). This is not optional at launch.
 8. **Rebuild and ship the app** with the new `Info.plist` and entitlement.

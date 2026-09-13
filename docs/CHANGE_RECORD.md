@@ -5323,3 +5323,72 @@ The founder asked for the updates to be run. From this workspace, on 13 Septembe
 
 **Still to do:** the new API is not deployed, because Render was not reachable from this session; and the pipeline
 waits on its three secrets, which the founder adds — nothing here puts credentials into GitHub.
+
+## The API deployed from here, why it had stopped answering, and what its logs said next
+
+The founder asked, on 13 September 2026, for Render to be looked at and the API deployed through the connectors.
+**Render's connector works in this session**: workspace `tea-d9kfea9t0dsc739juas0`, and the API is
+`srv-dah9rnu7bikc73cs5ts0` — free, Frankfurt, Docker, linked to this branch, auto-deploy off, health check `/healthz`.
+The connector has no call for a service's events, its environment or its deploy hook, and returned no request logs and
+no metrics for this service; what follows is from its deploys, its app and build logs, Neon's ledger, and the probes an
+earlier session ran.
+
+**Why it stopped answering.** `/healthz` answers 503 when the database is older than the newest migration in the image,
+and Render, whose health check it is, stops sending traffic to an instance that fails it. Three manual deploys that day
+carried migrations production did not have — Neon's ledger has V044 to V046 applied at 16:37:33. `d054db4` (V044) had
+not gone live when the next deploy cancelled it, fourteen minutes after it started; `c716b72` (V045), at 12:11, never
+passed and ended *Timed Out*; but `5c65c58` (V045) went live at 08:07 against V043. It served that morning —
+`/v1/leagues` answered 200 at 09:39 — and in the afternoon did not answer: three two-minute probes from 15:28 got no
+response while an instance had been up since 15:26 and had reached the database (its retention sweep got Postgres's
+*function does not exist*). It answered about four seconds after V046 landed. **Not explained:** why Render put
+`5c65c58` live at 08:07. Its logs give no reason; the one visible difference is that neither of that deploy's instances
+logged the sweep's failure, which every instance started after them did, and Neon's own logs are not available in
+this region.
+
+**A restore point first**, though this deploy migrated nothing: the pipeline takes one before every deploy, and the
+server starts a sweep that deletes reports. Before it, a read-only count: production holds 0 reports and 0 decisions,
+so the sweep had nothing to take. Neon `restore-point-before-9b0d93b-20260913-1656` (`br-bitter-block-zat2etp8`),
+production as of 16:57:21 UTC, was confirmed `ready` before the deploy.
+
+**Deployed**: `dep-dajddqojo6nc73de27rg`, commit `9b0d93b`, started 17:01:31, live at 17:03:42. `/healthz` at 17:05:48
+answered `{"database":"ok","schemaVersion":"V046","codeVersion":"V046","commit":"9b0d93b034acaec29f16fd1d33cbb569216b5198"}`.
+The association file names the app, `/v1/leagues` answers 200 directly and through the static site's rewrite, and the
+served `openapi.json` has the committed file's SHA-256.
+
+**Found in the new build's first minute, not fixed: the retention sweep cannot run in production.** Both instances that
+started logged *permission denied for table decision_tally*. `safety.forget_decided` (V044) is not `SECURITY DEFINER`,
+so it runs with the rights of the server's database user, `thro_app`, and no application role can write the tally; its
+owner, `thro_owner`, can. The tests never saw it: every one of them, including the one named for *the sweep the server
+runs*, calls it on `TestDatabase`'s connection, which is the `postgres` superuser in CI. And the fix is not simply
+`SECURITY DEFINER`. The function takes its period as an argument, and `app_competition` — which `thro_app` inherits —
+may insert a decision with any `decided_at`, since no trigger or check refuses a past one: a definer function any
+request role can call would let it give an undecided report a decision dated three years ago and forget it the same
+minute. The fix is one migration that closes both, and a test that runs the sweep as the server's user. It is put to
+the founder rather than shipped, because the pipeline will carry the next API push to production by itself.
+
+**Found, not fixed:**
+- **`THRO_RP_ORIGINS` is still set on the API service**: `https://thro.uk,https://api.thro.uk`, against a relying party
+  of `thro-api-staging.onrender.com`, as the server prints at every start. An accidental `--set thro.uk` reached the
+  service by Blueprint sync on 12 September (`cf72033`): from 12:08 UTC the server named `thro.uk` itself as its
+  relying party. Reverting `render.yaml` (`ac0a58f`) put the relying party back at 12:34 but took `THRO_RP_ORIGINS` out
+  of the file and not off the service, because a sync never removes a variable — every start since has printed the
+  mismatch. `WebAuthn.kt` refuses any origin not in that list, so a passkey from the app should be refused on staging.
+  Not tried on a device.
+- **`render.yaml` deploys the API outside the pipeline.** The Blueprint's *Auto Sync* was on when last seen — two
+  `blueprint_sync` deploys on 12 September — and while it is on, a push that changes the file redeploys the API with no
+  restore point and no migration. The connector cannot read the setting. `GOING_LIVE.md` assumed a sync had to be asked
+  for; it now says what is true, including that the domain switch reaches the API the moment it is pushed.
+- **The pipeline tells its restore points by name only**, so the two taken by hand today count among its three, and its
+  second run would delete `br-gentle-block-zal9jk26`. `DEPLOY.md` said it never removes a branch it did not make; it
+  now says what the code does.
+
+**The static site, for the record of processing:** its responses carry `server: cloudflare` and were answered from
+Cloudflare's London data centre, and so were the API's. Render's static-site documentation gives no region and no origin
+location, and its sub-processor list is in its DPA, which could not be read from here. `ROPA.md` now says what was
+checked and what is left to confirm, no longer says there is no transfer outside the UK/EEA without that confirmation,
+and says the retention sweep is not yet working.
+
+**Still to do:** the founder adds the three secrets, and deploy-api then runs from the Actions tab. The retention fix,
+`THRO_RP_ORIGINS` and *Auto Sync* wait on the founder. And `thro.uk` exists now — Nominet's registry records it
+registered at 17:25 UTC — so `GOING_LIVE.md` comes next, with *Auto Sync* in mind: while it is on, pushing the switch
+moves the API's relying party at once.
