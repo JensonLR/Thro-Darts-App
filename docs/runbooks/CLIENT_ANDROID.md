@@ -73,6 +73,32 @@ The design tokens are compiled **from where they are generated**: `packages/desi
 source directory of the client module, so `build.py` feeds Swift, Kotlin and CSS from one run and there is no
 copy here to forget.
 
+### The screens
+
+`Root.kt` holds the whole of the navigation, which is four states and no library:
+
+| | |
+| --- | --- |
+| **Setup** | Two names and a start, plus *Carry on* when a match is half-scored and *Your darts · n* when the phone is holding any. Both are offered rather than taken: a match left three weeks ago is not the one somebody just opened the app to start. |
+| **Scoring** | The keypad. Engine, then journal, then screen, never another order. |
+| **Result** | Who won, and who has said so (PD-011). |
+| **Your darts** | Every match the journal holds, newest first — `ThroMatchList` builds the rows and `ThroMatchesScreen` draws them. Tapping an unfinished one carries it on. |
+
+`ThroMatchList` is deliberately parallel to iOS's `AppStore.HomeMatch`, down to the status words: **three,
+not two**, because an abandoned match is finished and is not a result. A match whose rows will not replay
+is listed with the reason where its score would be, and with no score at all.
+
+### The launcher icon
+
+Generated, never exported. `tools/make_android_icon.py` reads `MarkGeometry.Ratios.mark` out of the Swift
+and the colours out of the design tokens, and writes the adaptive icon, a monochrome layer for Android 13
+themed icons, and the background colour. CI runs it with `--check`, so a change to the mark that has not
+been regenerated fails the build rather than leaving two versions of the brand in the product.
+
+Android guarantees only the central **72×72dp of its 108dp canvas**; the rest is margin a launcher may crop
+or parallax away. So 72 is treated as the icon exactly as 1024 is on iOS, which puts the mark's tips at the
+same 92% of the visible radius on both.
+
 ## The journal, and the two things it took (PD-082)
 
 The client runs `packages/journal` — the same package the 39 JVM tests exercise, against the same SQLite
