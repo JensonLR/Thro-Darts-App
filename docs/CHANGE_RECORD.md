@@ -5264,4 +5264,4 @@ has been drafted in advance.
 **Not on Android.** The Android client has no network code at all, so until it gains some, the public page is the
 only way to reach somebody who plays only on Android. That is recorded in the breach plan as the gap it is.
 
-Counts: 858 client tests (fourteen new); 30 checks green.
+Counts: 858 client tests (fourteen new); 29 checks green.
