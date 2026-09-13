@@ -91,13 +91,13 @@ public struct ThroVenueBoard: View {
             .frame(maxHeight: .infinity)
 
             Text(ThroLiveCopy.caption(state, stale: stale))
-                .font(.system(size: 34, weight: stale ? .bold : .semibold))
+                .font(ThroTypography.label.weight(stale ? .bold : .semibold).fixed(34))
                 .foregroundStyle(stale ? ThroColor.throBronzeOnink : ThroColor.throChalk.opacity(0.85))
                 .lineLimit(1)
                 .minimumScaleFactor(0.5)
                 .padding(.bottom, 8)
             Text(format.uppercased())
-                .font(.system(size: 20, weight: .medium))
+                .font(ThroTypography.metadata.weight(.medium).fixed(20))
                 .tracking(3)
                 .foregroundStyle(ThroColor.throChalk.opacity(0.45))
                 .padding(.bottom, 36)
@@ -108,19 +108,19 @@ public struct ThroVenueBoard: View {
     private func side(name: String, remaining: Int, legs: Int, throwing: Bool) -> some View {
         VStack(spacing: 10) {
             Text(name.uppercased())
-                .font(.system(size: 40, weight: throwing ? .heavy : .semibold))
+                .font(ThroTypography.heading1.weight(throwing ? .heavy : .semibold).fixed(40))
                 .tracking(2)
                 .foregroundStyle(ThroColor.throChalk.opacity(throwing ? 1 : 0.6))
                 .lineLimit(1)
                 .minimumScaleFactor(0.4)
             Text("\(remaining)")
-                .font(.system(size: 220, weight: .black))
+                .font(ThroTypography.boardHero.fixed(220))
                 .monospacedDigit()
                 .foregroundStyle(ThroColor.throChalk)
                 .lineLimit(1)
                 .minimumScaleFactor(0.4)
             Text("\(legs)")
-                .font(.system(size: 44, weight: .bold))
+                .font(ThroTypography.sportHero.fixed(44))
                 .monospacedDigit()
                 .foregroundStyle(throwing ? ThroColor.throGreenOnink : ThroColor.throChalk.opacity(0.45))
         }
@@ -135,7 +135,7 @@ public struct ThroVenueBoard: View {
         VStack(spacing: 18) {
             ThroWordmark(capHeight: 72, color: ThroColor.throChalk)
             Text("No match on this phone")
-                .font(.system(size: 26, weight: .medium))
+                .font(ThroTypography.bodyLarge.weight(.medium).fixed(26))
                 .foregroundStyle(ThroColor.throChalk.opacity(0.55))
         }
     }

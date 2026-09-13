@@ -120,10 +120,10 @@ public struct ThroWatchRoot: View {
         VStack(spacing: 4) {
             ThroWordmark(capHeight: 20, color: ThroColor.throChalk)
             Text(ThroWatchWords.nothingOn)
-                .font(.system(size: 14, weight: .semibold))
+                .font(ThroTypography.label.fixed(14))
                 .foregroundStyle(ThroColor.throChalk.opacity(0.8))
             Text(ThroWatchWords.nothingOnHint)
-                .font(.system(size: 11))
+                .font(ThroTypography.metadata.fixed(11))
                 .foregroundStyle(ThroColor.throChalk.opacity(0.55))
                 .multilineTextAlignment(.center)
                 .fixedSize(horizontal: false, vertical: true)

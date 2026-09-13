@@ -1,4 +1,5 @@
 import SwiftUI
+import ThroDesign
 import ThroTokens
 
 // The scoreboard, drawn.
@@ -37,18 +38,18 @@ public struct ThroLiveSide: View {
                     .fill(throwing ? ThroColor.throGreenOnink : Color.clear)
                     .frame(width: 6, height: 6)
                 Text(name)
-                    .font(.system(size: compact ? 12 : 13, weight: throwing ? .semibold : .regular))
+                    .font(ThroTypography.label.weight(throwing ? .semibold : .regular).fixed(compact ? 12 : 13))
                     .foregroundStyle(ThroColor.throChalk.opacity(throwing ? 1 : 0.72))
                     .lineLimit(1)
             }
             Text("\(remaining)")
-                .font(.system(size: compact ? 26 : 34, weight: .heavy, design: .default))
+                .font(ThroTypography.sportHero.fixed(compact ? 26 : 34))
                 .monospacedDigit()
                 .foregroundStyle(ThroColor.throChalk)
                 .lineLimit(1)
                 .minimumScaleFactor(0.6)
             Text("\(legs)")
-                .font(.system(size: 11, weight: .semibold))
+                .font(ThroTypography.sportHero.weight(.semibold).fixed(11))
                 .monospacedDigit()
                 .foregroundStyle(ThroColor.throChalk.opacity(0.6))
         }
@@ -81,14 +82,14 @@ public struct ThroLiveBoard: View {
                              throwing: ThroLiveCopy.isThrowing(state, .away))
             }
             Text(ThroLiveCopy.caption(state, stale: stale))
-                .font(.system(size: 12, weight: stale ? .semibold : .regular))
+                .font(ThroTypography.metadata.weight(stale ? .semibold : .regular).fixed(12))
                 // A stale caption is not decoration and is not an error either — it is the surface
                 // saying what it knows. Pending is the app's colour for exactly that.
                 .foregroundStyle(stale ? ThroColor.throBronzeOnink : ThroColor.throChalk.opacity(0.72))
                 .lineLimit(2)
                 .fixedSize(horizontal: false, vertical: true)
             Text(format)
-                .font(.system(size: 10, weight: .medium))
+                .font(ThroTypography.metadata.weight(.medium).fixed(10))
                 .foregroundStyle(ThroColor.throChalk.opacity(0.5))
                 .lineLimit(1)
         }

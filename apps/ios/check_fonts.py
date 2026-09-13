@@ -68,6 +68,26 @@ for lic, needle in (("OFL-Archivo.txt", "Archivo"), ("OFL-IBMPlex.txt", "IBM")):
         if "SIL OPEN FONT LICENSE Version 1.1" not in t or needle not in t.splitlines()[0]:
             fail(f"{lic} is not the SIL Open Font License 1.1 text for {needle}")
 
+# Every bundle that draws text carries the faces and registers them (PD-093).
+#
+# The phone app takes them from its synchronised ThroDarts/ folder. The widget extension, the watch app and the
+# TV app are separate bundles: each registers only what its own plist lists, and only if its own Resources
+# phase copies the files. The widget and the watch carried none until PD-093 — so the Lock Screen and the wrist
+# were set in the system face — and nothing noticed, because this check only ever read the phone's plist.
+PBX = (ROOT / "ThroDarts.xcodeproj" / "project.pbxproj").read_text()
+for target, support in (("ThroLive", "SupportLive"), ("ThroWatch", "SupportWatch"), ("ThroTV", "SupportTV")):
+    sub = plistlib.loads((ROOT / support / "Info.plist").read_bytes()).get("UIAppFonts", [])
+    wanted = sorted(f"Fonts/{f}" for f in present)
+    if sorted(sub) != wanted:
+        fail(f"{support}/Info.plist UIAppFonts must list every face as Fonts/<file>: "
+             f"missing {sorted(set(wanted) - set(sub))}, extra {sorted(set(sub) - set(wanted))}")
+    body = re.search(r"/\* %s \*/ = \{\s*isa = PBXNativeTarget;(.*?)\n\t\t\};" % target, PBX, re.S)
+    phase = body and re.search(r"(\w+) /\* Resources \*/,", body.group(1))
+    files = phase and re.search(r"%s /\* Resources \*/ = \{\s*isa = PBXResourcesBuildPhase;.*?files = \((.*?)\);"
+                                % phase.group(1), PBX, re.S)
+    if not files or "Fonts in Resources" not in files.group(1):
+        fail(f"{target}'s Resources phase does not copy the Fonts folder, so its plist would name faces it does not carry")
+
 launch = plist.get("UILaunchScreen", {})
 if "UIColorName" not in launch: fail("UILaunchScreen has no UIColorName; the static launch screen is the brand field (PD-007)")
 for key, folder in (("UIColorName", ".colorset"), ("UIImageName", ".imageset")):
@@ -99,4 +119,4 @@ for extra in set(present_sounds) - set(expected): fail(f"{extra}.wav ships but n
 
 if failures:
     sys.exit(1)
-print(f"OK: {len(present)} faces listed and shipped, {len(file_faces)} PostScript names agree with ThroFont, licences present, launch assets and icon in place, {len(expected)} sounds present")
+print(f"OK: {len(present)} faces listed and shipped in the phone, widget, watch and TV, {len(file_faces)} PostScript names agree with ThroFont, licences present, launch assets and icon in place, {len(expected)} sounds present")

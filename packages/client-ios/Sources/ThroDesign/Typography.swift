@@ -168,6 +168,22 @@ public struct ThroTypeRole: Equatable, Sendable {
         return tabularNumerals ? base.monospacedDigit() : base
     }
 
+    /// This role's face at a size the **surface** fixes, not the reader (PD-093).
+    ///
+    /// A widget, a Live Activity, a watch glance and a board on a wall are laid out to a box the system
+    /// sizes — Apple fixes the Lock Screen's geometry, not THRØ — so a role that grew with Dynamic Type there
+    /// would clip rather than enlarge. Those surfaces reached for `Font.system(size:)` for exactly that
+    /// reason and dropped the brand's faces in doing so, which is how the Lock Screen's score came to be in
+    /// a different typeface from the score on the phone. This keeps the family and the weight and fixes
+    /// only the size. **Every screen inside the app still uses `.thro(_:)`**, where text must scale (ADR-010).
+    public func fixed(_ points: CGFloat) -> Font {
+        ThroFont.reportSubstitutionIfNeeded()
+        let base = ThroFont.customFacesRegistered
+            ? Font.custom(ThroFont.faceName(family, weight: weight), fixedSize: points)
+            : Font.system(size: points, weight: weight)
+        return tabularNumerals ? base.monospacedDigit() : base
+    }
+
     public var tracking: CGFloat { size * trackingEm }
 
     /// The height of this role's capitals at the user's text size: the family's measured cap ratio

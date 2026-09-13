@@ -14,6 +14,8 @@
 		7A5E0000000000000000005C /* ThroWatch.app in Embed Watch Content */ = {isa = PBXBuildFile; fileRef = 7A5E00000000000000000050 /* ThroWatch.app */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		7A5E0000000000000000006A /* ThroVenueKit in Frameworks */ = {isa = PBXBuildFile; productRef = 7A5E00000000000000000069 /* ThroVenueKit */; };
 		7A5E0000000000000000006C /* Fonts in Resources */ = {isa = PBXBuildFile; fileRef = 7A5E0000000000000000006B /* Fonts */; };
+		7A5E0000000000000000006D /* Fonts in Resources */ = {isa = PBXBuildFile; fileRef = 7A5E0000000000000000006B /* Fonts */; };
+		7A5E0000000000000000006E /* Fonts in Resources */ = {isa = PBXBuildFile; fileRef = 7A5E0000000000000000006B /* Fonts */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -309,6 +311,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				7A5E0000000000000000006D /* Fonts in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -316,6 +319,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				7A5E0000000000000000006E /* Fonts in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

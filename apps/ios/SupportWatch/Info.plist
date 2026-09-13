@@ -16,9 +16,23 @@
 	     THRØ, and WatchConnectivity's `isWatchAppInstalled` on the phone is answered from it. -->
 	<key>WKCompanionAppBundleIdentifier</key>
 	<string>app.thro.darts</string>
-	<!-- No fonts. Archivo and IBM Plex Sans Condensed are registered by the phone app's `UIAppFonts`
-	     and are not on the watch; asking for one by name here would look right in a preview and fall
-	     back silently on a wrist. The Lock Screen and the widgets already take the same line — a brand
-	     is worth more than a font, and a wrong font is worse than none. -->
+	<!-- The brand's faces, bundled (PD-093). This used to say "No fonts", and its reasoning was right for
+	     its premise: the faces were registered only by the phone app's UIAppFonts, so asking for one here
+	     would look right in a preview and fall back silently on a wrist. The fix for that is to put them on
+	     the wrist, not to give the watch a different typeface from the phone. `check_fonts.py` now holds
+	     every target that draws text to carrying them. -->
+	<key>UIAppFonts</key>
+	<array>
+		<string>Fonts/Archivo-Regular.ttf</string>
+		<string>Fonts/Archivo-Medium.ttf</string>
+		<string>Fonts/Archivo-SemiBold.ttf</string>
+		<string>Fonts/Archivo-Bold.ttf</string>
+		<string>Fonts/Archivo-ExtraBold.ttf</string>
+		<string>Fonts/Archivo-Black.ttf</string>
+		<string>Fonts/IBMPlexSansCondensed-Regular.ttf</string>
+		<string>Fonts/IBMPlexSansCondensed-Medium.ttf</string>
+		<string>Fonts/IBMPlexSansCondensed-SemiBold.ttf</string>
+		<string>Fonts/IBMPlexSansCondensed-Bold.ttf</string>
+	</array>
 </dict>
 </plist>

@@ -1,4 +1,5 @@
 import SwiftUI
+import ThroDesign
 import ThroLiveKit
 import ThroTokens
 
@@ -67,7 +68,7 @@ public struct ThroWatchGlance: View {
                 // stopped being current**. That rule used to live inside the caption's sentence, where a
                 // surface drawing the route on its own line could not see it.
                 Text(route.joined(separator: " · "))
-                    .font(.system(size: 19, weight: .bold))
+                    .font(ThroTypography.sportHero.fixed(19))
                     .foregroundStyle(ThroColor.throGreenOnink)
                     .lineLimit(1)
                     .minimumScaleFactor(0.6)
@@ -81,13 +82,13 @@ public struct ThroWatchGlance: View {
                 // The legs once, as a scoreline, because that is how a darts match is read — and not
                 // twice, beside each player, where two small digits are noise rather than a score.
                 Text(ThroLiveCopy.legs(state))
-                    .font(.system(size: 13, weight: .semibold))
+                    .font(ThroTypography.sportHero.weight(.semibold).fixed(13))
                     .monospacedDigit()
                     .foregroundStyle(ThroColor.throChalk.opacity(0.55))
                     .accessibilityLabel("Legs, \(state.homeLegs) to \(state.awayLegs)")
                 if let note = ThroWatchWords.note(state, stale: stale) {
                     Text(note)
-                        .font(.system(size: 12, weight: stale ? .semibold : .regular))
+                        .font(ThroTypography.metadata.weight(stale ? .semibold : .regular).fixed(12))
                         .foregroundStyle(stale ? ThroColor.throBronzeOnink : ThroColor.throChalk.opacity(0.8))
                         .lineLimit(2)
                         .minimumScaleFactor(0.8)
@@ -107,13 +108,13 @@ public struct ThroWatchGlance: View {
         let throwing = emphasised(seat)
         HStack(alignment: .firstTextBaseline, spacing: 7) {
             Text("\(state.remaining(seat))")
-                .font(.system(size: leadingSide ? 54 : 32, weight: .heavy))
+                .font(ThroTypography.sportHero.fixed(leadingSide ? 54 : 32))
                 .monospacedDigit()
                 .foregroundStyle(ThroColor.throChalk.opacity(throwing ? 1 : 0.7))
                 .lineLimit(1)
                 .minimumScaleFactor(0.5)
             Text(state.name(seat))
-                .font(.system(size: leadingSide ? 14 : 12, weight: throwing ? .semibold : .regular))
+                .font(ThroTypography.label.weight(throwing ? .semibold : .regular).fixed(leadingSide ? 14 : 12))
                 .foregroundStyle(ThroColor.throChalk.opacity(throwing ? 0.95 : 0.6))
                 .lineLimit(1)
                 .minimumScaleFactor(0.7)

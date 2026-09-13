@@ -1092,12 +1092,19 @@ public struct TeamsScreen: View {
         .background(ThroColor.colorBackgroundPrimary.ignoresSafeArea())
         // Removing a team is not undoable and takes fixtures with it, so it is confirmed with the
         // number in the question rather than with a bare "are you sure".
-        .alert("Remove \(removing?.name ?? "")?", isPresented: confirming) {
-            Button("Cancel", role: .cancel) { removing = nil }
-            Button("Remove", role: .destructive) {
+        //
+        // **A confirmation dialog, like every other destructive question in the app.** This was the one
+        // `.alert` among them: a box in the middle of the screen reading "Cancel" and "Remove", where the
+        // other seven rise from the bottom and name what goes — "Remove Ethan T.", "Delete for good" — and
+        // say "Keep" for the way back. On a tablet an alert also floats free of the row that asked, where a
+        // dialog is anchored to it. A destructive button should say exactly what it destroys.
+        .confirmationDialog("Remove \(removing?.name ?? "this team")?", isPresented: confirming,
+                            titleVisibility: .visible) {
+            Button("Remove \(removing?.name ?? "the team")", role: .destructive) {
                 if let team = removing { onRemove?(team) }
                 removing = nil
             }
+            Button("Keep them", role: .cancel) { removing = nil }
         } message: {
             let lost = removing.map(fixturesLost) ?? 0
             Text(lost == 0
