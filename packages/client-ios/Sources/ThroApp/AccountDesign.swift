@@ -278,8 +278,9 @@ struct AccountSlate: View {
         case .signedIn(let name, let band, let friends):
             // One line, the You tab's own: it wrapped when it tried to list what was behind the row.
             let age = band == "adult" ? "18 or over" : band == "minor" ? "Under 18" : "Age not said yet"
-            let mates = friends.map { $0 == 1 ? "1 friend" : "\($0) friends" } ?? "Your profile"
-            return (name ?? "No name yet", "\(age) · \(mates)")
+            // Nothing where the count is unknown — the You tab's own rule, which it now actually shares (PD-092).
+            let mates = friends.map { $0 == 1 ? "1 friend" : "\($0) friends" }
+            return (name ?? "No name yet", [age, mates].compactMap { $0 }.joined(separator: " · "))
         }
     }
 

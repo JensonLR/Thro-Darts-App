@@ -379,6 +379,7 @@ public struct ThroRootView: View {
         .task {
             #if DEBUG
             ScreenshotScreen.goIfAsked()
+            ScreenshotScreen.orientIfAsked()
             #endif
         }
         // Look for a stored sign-in as the app starts, rather than waiting for somebody to open the
@@ -904,7 +905,11 @@ struct Masthead: View {
         // 21 recorded exceptions. Chalk measures 11.24:1 light and 8.75:1 dark at full strength,
         // and 6.61 / 5.39 for the line beneath it. `build.py` now checks that pair on every push.
         .background {
-            ThroColor.colorBackgroundBrand.ignoresSafeArea(edges: .top)
+            // The top *and the sides* (PD-092). Only the top was released, which was right upright and wrong
+            // on its side: the Dynamic Island takes about 59 points at each end, the header is laid out inside
+            // them, and the page's paper showed as two notches at the top corners above a board that ran to
+            // the glass.
+            ThroColor.colorBackgroundBrand.ignoresSafeArea(edges: [.top, .horizontal])
         }
     }
 
@@ -1364,6 +1369,10 @@ public struct PlayLandingScreen: View {
 /// person expects their own things to be — so it is listed here and one tap goes to it. The tab
 /// itself is not renamed: the tab set is the export's.
 public struct YouScreen: View {
+    /// Whether the phone is on its side, by PD-061's one rule for a short screen — the one the mastheads
+    /// already fold on. The You header was the only top-of-page that did not (PD-092).
+    @Environment(\.verticalSizeClass) private var verticalSizeClass
+
     /// What the You tab knows about the account, flattened so the screen needs no store.
     public enum Account: Equatable {
         /// The build names no server.
@@ -1424,8 +1433,11 @@ public struct YouScreen: View {
         case .signedIn(let name, let band, let friends):
             let who = name ?? "No name yet"
             let age = band == "adult" ? "18 or over" : band == "minor" ? "Under 18" : "Age not said yet"
-            let mates = friends.map { $0 == 1 ? "1 friend" : "\($0) friends" } ?? "Friends"
-            return ("You", who, "\(age) · \(mates)")
+            // **A count nobody has been told is not a count** (PD-092). When the friends had not been read,
+            // this said the bare word "Friends", and beside "Age not said yet" that read as a figure cut off
+            // mid-number. Saying nothing is what not knowing looks like — the rule every statistic here keeps.
+            let mates = friends.map { $0 == 1 ? "1 friend" : "\($0) friends" }
+            return ("You", who, [age, mates].compactMap { $0 }.joined(separator: " · "))
         }
     }
 
@@ -1444,7 +1456,8 @@ public struct YouScreen: View {
                     ThroBeside(width: proxy.size.width, split: !people.isEmpty) {
                         whoPlays
                     } aside: {
-                        teamsKept
+                        teamsKept(beside: ThroSpread.arrangement(forWidth: proxy.size.width,
+                                                                 split: !people.isEmpty) == .sideBySide)
                     }
                     .padding(.horizontal, ThroSpacing.spaceScreenGutter)
                     Note("Matches scored on this phone stay on it, whoever is signed in. A rating is not in this build: what you see are the figures the darts produced (PD-018).")
@@ -1467,7 +1480,7 @@ public struct YouScreen: View {
     @ViewBuilder private var whoPlays: some View {
                 VStack(alignment: .leading, spacing: 0) {
                     if !people.isEmpty {
-                        Eyebrow("Who plays on this phone").padding(.top, ThroSpacing.spacing6)
+                        Eyebrow("Who plays on this phone").padding(.top, Self.columnTop)
                         ThroDivider().padding(.top, ThroSpacing.spacing2)
                         ForEach(people) { person in
                             Button { onPerson(person) } label: {
@@ -1489,7 +1502,14 @@ public struct YouScreen: View {
                 }
     }
 
-    @ViewBuilder private var teamsKept: some View {
+    /// Where each column's first heading sits under the header. One number for both, so beside each other
+    /// they start on the same line — they did not, by eight points, because the left used `spacing6` and the
+    /// right a section gap, and on a phone turned sideways the two headings visibly stepped (PD-092).
+    private static let columnTop = ThroSpacing.spacing6
+
+    /// - Parameter beside: whether this column is next to the people rather than under them. Stacked, the
+    ///   teams keep the section gap that separates them from the list above, exactly as they always had.
+    @ViewBuilder private func teamsKept(beside: Bool) -> some View {
                 VStack(alignment: .leading, spacing: 0) {
                     // Nothing here yet is still something to look at: a card holds the sentence and the
                     // way out of it, where a line of grey text and a loose button left two thirds of a
@@ -1505,9 +1525,9 @@ public struct YouScreen: View {
                                            fullWidth: true, action: onClubs)
                             }
                         }
-                        .padding(.top, ThroSpacing.spaceSectionGap)
+                        .padding(.top, beside ? Self.columnTop : ThroSpacing.spaceSectionGap)
                     } else {
-                        Eyebrow("Teams you keep").padding(.top, ThroSpacing.spaceSectionGap)
+                        Eyebrow("Teams you keep").padding(.top, beside ? Self.columnTop : ThroSpacing.spaceSectionGap)
                         ThroDivider().padding(.top, ThroSpacing.spacing2)
                         ForEach(clubs) { club in
                             Button(action: onClubs) {
@@ -1533,7 +1553,8 @@ public struct YouScreen: View {
     /// your profile do, with you on it.
     private var header: some View {
         let w = YouScreen.words(account)
-        return VStack(alignment: .leading, spacing: ThroSpacing.spacing4) {
+        let oneLine = ThroMasthead.shape(verticalSizeClassIsCompact: verticalSizeClass == .compact) == .oneLine
+        return VStack(alignment: .leading, spacing: oneLine ? ThroSpacing.spacing2 : ThroSpacing.spacing4) {
             HStack(alignment: .center) {
                 Eyebrow(w.eyebrow, color: ThroColor.throChalk.opacity(0.78))
                 Spacer()
@@ -1545,43 +1566,65 @@ public struct YouScreen: View {
                 .buttonStyle(ThroPressStyle(radius: ThroSpacing.radiusStatus))
                 .accessibilityLabel("Settings")
             }
-            HStack(alignment: .center, spacing: ThroSpacing.spacing4) {
-                if case .signedIn(let name, _, _) = account {
-                    PersonMark(initials: AccountSlate.initials(name), size: 64, picture: picture)
+            if oneLine {
+                // **On its side, who you are and what you can do about it share a row** (PD-092). Upright this
+                // header is a seventh of the screen; turned sideways its three rows took half of a 402-point
+                // phone before the first name on the page — the proportion PD-061 folded every masthead to
+                // avoid, on the one top-of-page it had not reached.
+                HStack(alignment: .center, spacing: ThroSpacing.spacing4) {
+                    identity(title: w.title, detail: w.detail, mark: 48)
+                    Spacer(minLength: ThroSpacing.spacing4)
+                    actions
                 }
-                VStack(alignment: .leading, spacing: ThroSpacing.spacing1) {
-                    Text(w.title)
-                        .thro(ThroTypography.heading1.family(.sport).weight(.bold).tracking(em: 0))
-                        .foregroundStyle(ThroColor.throChalk)
-                        .fixedSize(horizontal: false, vertical: true)
-                    Text(w.detail)
-                        .thro(ThroTypography.body)
-                        .foregroundStyle(ThroColor.throChalk.opacity(0.78))
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-            }
-            switch account {
-            case .signedOut:
-                slateButton("SIGN IN", lit: true, seed: 11, action: onAccount)
-            case .signedIn:
-                HStack(spacing: ThroSpacing.spacing3) {
-                    slateButton("FRIENDS", lit: true, seed: 13, action: onFriends)
-                    // **PROFILE, and it goes to the profile.** It used to say ACCOUNT and open a
-                    // settings list, from which the profile was another row — five steps to the
-                    // page that is about you, on the tab called You.
-                    slateButton("PROFILE", lit: false, seed: 17, action: onProfile)
-                }
-            case .unverified:
-                slateButton("TRY AGAIN", lit: true, seed: 19, action: onRetry)
-            case .none, .busy:
-                EmptyView()
+            } else {
+                identity(title: w.title, detail: w.detail, mark: 64)
+                actions
             }
         }
         .padding(.horizontal, ThroSpacing.spaceScreenGutter)
         .padding(.top, ThroSpacing.spacing2)
-        .padding(.bottom, ThroSpacing.spacing6)
+        .padding(.bottom, oneLine ? ThroSpacing.spacing4 : ThroSpacing.spacing6)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(ThroColor.colorBackgroundBrand)
+    }
+
+    /// The face and the two lines beside it. One definition, for the header's two shapes.
+    private func identity(title: String, detail: String, mark: CGFloat) -> some View {
+        HStack(alignment: .center, spacing: ThroSpacing.spacing4) {
+            if case .signedIn(let name, _, _) = account {
+                PersonMark(initials: AccountSlate.initials(name), size: mark, picture: picture)
+            }
+            VStack(alignment: .leading, spacing: ThroSpacing.spacing1) {
+                Text(title)
+                    .thro(ThroTypography.heading1.family(.sport).weight(.bold).tracking(em: 0))
+                    .foregroundStyle(ThroColor.throChalk)
+                    .fixedSize(horizontal: false, vertical: true)
+                Text(detail)
+                    .thro(ThroTypography.body)
+                    .foregroundStyle(ThroColor.throChalk.opacity(0.78))
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+    }
+
+    /// What the header offers, by account state. One definition, for the header's two shapes.
+    @ViewBuilder private var actions: some View {
+        switch account {
+        case .signedOut:
+            slateButton("SIGN IN", lit: true, seed: 11, action: onAccount)
+        case .signedIn:
+            HStack(spacing: ThroSpacing.spacing3) {
+                slateButton("FRIENDS", lit: true, seed: 13, action: onFriends)
+                // **PROFILE, and it goes to the profile.** It used to say ACCOUNT and open a
+                // settings list, from which the profile was another row — five steps to the
+                // page that is about you, on the tab called You.
+                slateButton("PROFILE", lit: false, seed: 17, action: onProfile)
+            }
+        case .unverified:
+            slateButton("TRY AGAIN", lit: true, seed: 19, action: onRetry)
+        case .none, .busy:
+            EmptyView()
+        }
     }
 
     private func slateButton(_ label: String, lit: Bool, seed: Double, action: @escaping () -> Void) -> some View {

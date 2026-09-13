@@ -117,8 +117,11 @@ public struct LeaguesScreen: View {
 
     private func board(_ b: Board) -> some View {
         ZStack(alignment: .bottom) {
+            // The map runs to the glass on every side it touches — the top and, on a phone turned sideways,
+            // both ends (PD-092). Releasing only the top left the paper showing in the Dynamic Island's
+            // 59 points at each end, framing the map in two stripes of cream.
             map(b)
-                .ignoresSafeArea(edges: .top)
+                .ignoresSafeArea(edges: [.top, .horizontal])
                 .ignoresSafeArea(.keyboard)
             VStack {
                 HStack {

@@ -52,7 +52,11 @@ public struct DiscoverScreen: View {
 
     public var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            TopBar("Discover", actions: clubs.isEmpty ? [] : [TopBar.Action(icon: .plus, label: "Start a team", action: onCreate)])
+            // Large, as the approved export draws it (`screens-discover.jsx`: `large: true`) and as Play and Live already
+            // are (PD-092). It went compact in 4d3b225 with no decision recorded; turned sideways the large bar now folds to
+            // this same compact row, so the height it costs is only spent on an upright phone.
+            TopBar("Discover", actions: clubs.isEmpty ? [] : [TopBar.Action(icon: .plus, label: "Start a team", action: onCreate)],
+                   large: true)
             // Discover is two things, and says so on a screen with room for two (PD-062): what is out
             // there — the leagues near you and the tournaments taking entries — and what is yours. On a
             // phone they run one after the other as they always have; on a tablet the second half stops

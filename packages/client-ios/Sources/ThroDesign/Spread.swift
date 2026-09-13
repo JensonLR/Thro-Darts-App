@@ -56,6 +56,13 @@ public enum ThroSpread {
         width >= narrowest ? .sideBySide : .stacked
     }
 
+    /// The arrangement for a pair that may not really be two things right now — `ThroBeside`'s own question,
+    /// public so the content of a column can ask it too. The You tab's second column aligns its first heading
+    /// with the first column's, and must do that only when the two are actually beside each other (PD-092).
+    public static func arrangement(forWidth width: CGFloat, split: Bool) -> Arrangement {
+        split ? arrangement(forWidth: width) : .stacked
+    }
+
     /// How wide one of the two columns is on a screen this wide. Meaningless when stacked, where each half
     /// gets `ThroReadable.measure` like any other page.
     public static func columnWidth(forWidth width: CGFloat) -> CGFloat {
@@ -89,7 +96,7 @@ public struct ThroBeside<Lead: View, Aside: View>: View {
     }
 
     public var body: some View {
-        switch split ? ThroSpread.arrangement(forWidth: width) : .stacked {
+        switch ThroSpread.arrangement(forWidth: width, split: split) {
         case .sideBySide:
             HStack(alignment: .top, spacing: ThroSpread.gutter) {
                 lead.frame(maxWidth: .infinity, alignment: .topLeading)

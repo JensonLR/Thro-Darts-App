@@ -24,7 +24,7 @@
 ## Looking at a screen without a hand on the device
 
 Every screen here is reached by tapping, and a simulator driven from a script cannot tap — which is how
-most surfaces came to be changed unseen. Two Debug-only launch arguments fix that, and between them they
+most surfaces came to be changed unseen. Debug-only launch arguments fix that, and between them they
 reach almost everything:
 
 ```bash
@@ -35,9 +35,13 @@ xcrun simctl io      <device> screenshot shot.png     # give the opening ~7 seco
 
 `-ThroScreenshotAccount` stands up a signed-in account over a transport that answers from memory
 (`adult`, `new` or `failing`). `-ThroScreen` takes a `thro://` address **without its scheme** —
-`tab/home`, `tab/play`, `tab/live`, `tab/discover`, `tab/you`, `settings` — and is read by the same parser
+`tab/home`, `tab/play`, `tab/live`, `tab/discover`, `tab/you`, `settings`, `new` — and is read by the same parser
 a real link goes through (ADR-011), so it can reach exactly the screens a link can and there is no second
 grammar to keep in step. Neither is compiled into a Release build.
+
+**On its side** (PD-092): add `-ThroOrientation landscape`, which asks the app's own scene to turn. `xcrun simctl`
+cannot rotate a simulator, and the Simulator's Device menu may offer no rotate item at all. The screenshot still
+comes back in the portrait framebuffer, so turn it before judging it: `sips -r 270 shot.png`.
 
 Two things worth knowing. Build with `-configuration Debug`, or the arguments are not in the binary. And
 do **not** navigate with `xcrun simctl openurl`: iOS raises an *Open in "THRØ"?* confirmation that a script

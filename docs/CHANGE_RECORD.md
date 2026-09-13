@@ -5099,3 +5099,33 @@ weekday-preserving shift over `services/api/src/test` and `services/api/seed`, a
 `TestDatabase` resets the single shared `postgres` database, so two runs at once trample each other.
 
 Counts: API 106 tests, 0 failures; `check_migrations` passes with V046's replacement marked (ADR-013).
+
+## A phone on its side (PD-092)
+
+*"Sideways views on phone need work too"*, with the You tab and Home in landscape. Every tab was looked at on
+its side, and Settings and match setup with them.
+
+**The green stopped short of the glass.** Turned sideways, an iPhone keeps about 59 points at each end for the
+Dynamic Island and the corners, and every band of colour was laid out inside them: Home's masthead showed the
+page's paper as two notches at its top corners, and the hairlines under the title bars and over the tab bar
+stopped a thumb's width from each edge. Backgrounds and hairlines — masthead, title bar, tab bar, bottom action,
+drawer, league map — now ignore the horizontal safe area. Nothing a hand touches does.
+
+**The You tab was a portrait page on its side.** Its header folds to one row on a short screen by PD-061's rule,
+its two columns start level, and with nobody on the phone there is no second column to stand beside nothing.
+
+**"Age not said yet · Friends"** was an unread friends count rendered as a label, and `FriendsTests` asserted
+that exact string — the defect, pinned by its own test. The test now pins the rule: an unknown count says nothing,
+and none says "0 friends". The account slate's "Your profile", a second wrong answer to the same unknown, went with it.
+
+**The large titles and the tab bar fold with the masthead.** Sideways, a tab's label moves beside its icon in
+one row of `touchTargetMinimum`, and every tab's content gains 26 points. Discover's title is large, as the
+design draws it and as Play's and Live's are.
+
+**Looking at it needed a way in.** `xcrun simctl` cannot rotate a simulator and the Simulator's Device menu had
+no rotate item, so `-ThroOrientation landscape` asks the app's own scene to turn (DEBUG only). A screenshot still
+comes back in the portrait framebuffer and is turned with `sips -r 270`. Captures wait for three identical frames
+after the opening: the first round caught the launch sequence mid-flight, and a frame of it looked like a screen
+with nothing on it.
+
+Counts: 844 client tests.

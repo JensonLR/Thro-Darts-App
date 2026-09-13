@@ -1,5 +1,8 @@
 #if DEBUG
 import Foundation
+#if os(iOS)
+import UIKit
+#endif
 
 /// The screen to open on, for looking at one without a hand on the device.
 ///
@@ -23,5 +26,37 @@ enum ScreenshotScreen {
               let route = ThroRoute(url: url) else { return }
         ThroRouter.shared.go(route)
     }
+
+    static let orientationArgument = "-ThroOrientation"
+
+    /// Turns the app on its side, for looking at a landscape layout without a hand on the device (PD-092).
+    ///
+    ///     xcrun simctl launch <device> app.thro.darts -ThroScreen tab/you -ThroOrientation landscape
+    ///
+    /// **Why this and not the Simulator's Rotate command.** That turns whichever simulator window is in front,
+    /// and with two booted — two sessions on one machine — the one in front is not necessarily the one being
+    /// checked. This asks *this app's* scene to rotate, so it can only ever turn the device it runs on.
+    ///
+    /// `simctl io … screenshot` keeps the device's portrait frame, so the image comes back sideways; turn it
+    /// with `sips -r 270` before looking.
+    @MainActor static func orientIfAsked(arguments: [String] = ProcessInfo.processInfo.arguments) {
+        #if os(iOS)
+        guard let i = arguments.firstIndex(of: orientationArgument), arguments.indices.contains(i + 1),
+              arguments[i + 1] == "landscape" else { return }
+        // On the first pass through the root view the scene may not have connected yet. One more turn of the
+        // main actor is enough; with no scene to receive it, the request is simply not made.
+        if !turnSideways() { Task { @MainActor in _ = turnSideways() } }
+        #endif
+    }
+
+    #if os(iOS)
+    @MainActor private static func turnSideways() -> Bool {
+        guard let scene = UIApplication.shared.connectedScenes
+            .compactMap({ $0 as? UIWindowScene })
+            .first(where: { $0.session.role == .windowApplication }) else { return false }
+        scene.requestGeometryUpdate(.iOS(interfaceOrientations: .landscapeRight)) { _ in }
+        return true
+    }
+    #endif
 }
 #endif

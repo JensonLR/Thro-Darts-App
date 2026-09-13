@@ -219,13 +219,17 @@ public struct ThroBottomAction<Content: View>: View {
 
     public var body: some View {
         VStack(spacing: 0) {
+            // The hairline and the paper run to the glass on a phone turned sideways, as the tab bar's do
+            // (PD-092). Upright the side insets are zero and nothing moves; the divider stays in the stack so
+            // the action's height is exactly what it was.
             ThroDivider()
+                .ignoresSafeArea(edges: .horizontal)
             content
                 .padding(.horizontal, ThroSpacing.spaceScreenGutter)
                 .padding(.top, ThroSpacing.spacing4)
                 .padding(.bottom, ThroSpacing.spacing3)
         }
-        .background(ThroColor.colorBackgroundPrimary.ignoresSafeArea(edges: .bottom))
+        .background(ThroColor.colorBackgroundPrimary.ignoresSafeArea(edges: [.bottom, .horizontal]))
     }
 }
 

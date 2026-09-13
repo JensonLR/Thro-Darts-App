@@ -86,7 +86,14 @@ final class FriendsTests: XCTestCase {
         XCTAssertEqual(YouScreen.words(.signedOut).title, "Sign in to carry your darts with you")
         XCTAssertEqual(YouScreen.words(.signedIn(name: "Jenson R.", ageBand: "adult", friends: 1)).detail, "18 or over · 1 friend")
         XCTAssertEqual(YouScreen.words(.signedIn(name: nil, ageBand: "unknown", friends: nil)).title, "No name yet")
-        XCTAssertEqual(YouScreen.words(.signedIn(name: nil, ageBand: "unknown", friends: nil)).detail, "Age not said yet · Friends")
+        // A friends count nobody has read yet says nothing. This line used to assert "Age not said yet · Friends"
+        // — the defect itself, pinned: beside the age, the bare word read as a number cut off (PD-092).
+        let unknown = YouScreen.words(.signedIn(name: nil, ageBand: "unknown", friends: nil)).detail
+        XCTAssertEqual(unknown, "Age not said yet")
+        XCTAssertFalse(unknown.hasSuffix("·") || unknown.hasSuffix("Friends"),
+                       "an unknown count must never render as a label where the number would be")
+        XCTAssertEqual(YouScreen.words(.signedIn(name: nil, ageBand: "adult", friends: 0)).detail, "18 or over · 0 friends",
+                       "a count of nothing that is known is still a count, and says so")
         XCTAssertEqual(YouScreen.words(.none).detail, "This build names no server, so what you score stays here.")
     }
 }

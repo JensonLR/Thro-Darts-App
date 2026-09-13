@@ -4213,3 +4213,52 @@ Archivo ExtraBold, read from the supplied image. It has been in the opening on t
 
 If master vector files arrive they supersede both measurements, and `render_mark.py`,
 `render_wordmark.py`, `make_web_wordmark.py` and `make_android_icon.py` should all be pointed at them.
+
+## PD-092 — A phone on its side
+
+**13 September 2026.** The founder's words were *"Sideways views on phone need work too"*, with two
+screenshots of an iPhone on its side: the You tab and Home.
+
+### What was wrong
+
+Every tab was looked at sideways, and Settings and match setup with them — not only the two screens in the
+screenshots.
+
+- **The green stopped short of the glass.** On its side an iPhone keeps about 59 points at each end for the
+  Dynamic Island and the corners, and every band of colour — Home's masthead, the title bars, the tab bar, a
+  bottom action, a drawer, the league map — was laid out inside that inset. The page's paper showed as notches
+  at the corners, and hairlines ended a thumb's width from the edge.
+- **The You header was a portrait header.** Its identity stacked over the Friends and Profile buttons, which
+  took a large share of a screen 390 points tall before the first row of anything.
+- **"Age not said yet · Friends".** A friends count that had not been read was shown as the bare word
+  "Friends", which beside the age read as a figure cut off; the account slate said "Your profile" for the same
+  unknown. The test beside it asserted the defect's exact string.
+- **Two columns with their headings at different heights.** The teams column kept a gap meant for stacking
+  when it stood beside the people column, and it was split off beside empty space when nobody was on the phone.
+- **Nothing else folded.** The masthead has folded on a short screen since PD-061; the large titles on Play,
+  Live and Discover did not, and neither did the tab bar, which asked for 70 points — a label under its icon,
+  and its margins — of the 390, under every tab.
+
+### Decided
+
+- **A short screen folds by one rule.** `ThroMasthead.shape(verticalSizeClassIsCompact:)` (PD-061) now decides
+  the masthead, the You header, the large titles and the tab bar together, so nothing folds while its neighbour
+  stands. Upright, nothing moved but Discover's title.
+- **Colour to the glass, content to the safe area.** A band of colour is the edge of the screen; what sits on it
+  is not, and stays where a hand can reach it and the island cannot cover it.
+- **An unknown count says nothing.** Where the friends have not been read the line is just the age. Where there
+  are none it says "0 friends": a count of nothing that is known is still a count.
+- **On its side, each tab's label sits beside its icon**, the way the system's own tab bar does it, in one row
+  `touchTargetMinimum` (44 points) tall with no margin. Every tab's content gains 26 points.
+- **Discover's title is large, like Play's and Live's.** It was the only top-level tab with a compact title,
+  which the fold made visible, and the design source (`screens-discover.jsx`) draws it large.
+- **Not changed: a title does not move to its content's column.** Home, Play and Live set their cards in a
+  centred reading measure, so on its side a title sits to the left of the column below it. Aligning it would
+  make the title jump on the way to You or Discover, which spread across the width. A title that stays put from
+  tab to tab is the better of the two.
+
+### How to look at it
+
+`-ThroOrientation landscape` (DEBUG) asks the app's own scene to turn, beside `-ThroScreen` and
+`-ThroScreenshotAccount`. `xcrun simctl` cannot rotate a simulator and the Simulator offered no rotate item on
+this machine — and a layout nobody can reach is a layout nobody looks at.

@@ -51,7 +51,9 @@ public struct ThroDrawer<Content: View>: View {
             }
             .clipShape(UnevenRoundedRectangle(topLeadingRadius: ThroSpacing.radiusSheet,
                                               topTrailingRadius: ThroSpacing.radiusSheet, style: .continuous))
-            .ignoresSafeArea(edges: .bottom)
+            // Down to the glass, and across it on a phone turned sideways: a full-width sheet upright was a
+            // full-width sheet only upright, and on its side became a card with the map past both ends (PD-092).
+            .ignoresSafeArea(edges: [.bottom, .horizontal])
         }
         .contentShape(Rectangle())
         // A drag is a finger, and tvOS has no `DragGesture` because it has no finger. The drawer

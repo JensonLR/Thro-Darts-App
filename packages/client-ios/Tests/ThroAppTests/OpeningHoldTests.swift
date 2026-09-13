@@ -29,6 +29,9 @@ final class OpeningHoldTests: XCTestCase {
         XCTAssertEqual(AccountSlate.words(.signedIn(name: "Jenson R.", ageBand: "adult", friends: 1)).title, "Jenson R.")
         XCTAssertEqual(AccountSlate.words(.signedIn(name: nil, ageBand: "unknown", friends: nil)).title, "No name yet")
         XCTAssertTrue(AccountSlate.words(.signedIn(name: nil, ageBand: "unknown", friends: nil)).detail.hasPrefix("Age not said yet"))
+        // And no placeholder where the count would be: this slate said "Your profile" and the You tab said
+        // "Friends" — two different wrong answers to one unknown (PD-092). Both now say nothing.
+        XCTAssertEqual(AccountSlate.words(.signedIn(name: nil, ageBand: "unknown", friends: nil)).detail, "Age not said yet")
         XCTAssertEqual(AccountSlate.words(.signedOut).title, "Sign in")
         XCTAssertEqual(AccountSlate.words(.unverified).title, "Signed in on this phone")
         XCTAssertEqual(AccountSlate.initials("Jenson Raper"), "JR")

@@ -33,8 +33,19 @@ public struct TopBar: View {
         self.large = large
     }
 
+    /// Whether the phone is on its side, by PD-061's rule for a short screen.
+    @Environment(\.verticalSizeClass) private var verticalSizeClass
+
+    /// **Large upright, compact on its side** (PD-092). A large bar spends a row on a heading-one title beneath
+    /// its buttons: a seventh of an upright phone, and a quarter of one turned sideways before anything on the
+    /// page. The mastheads already fold on exactly this rule (PD-061); the bars were the last top-of-page that
+    /// did not. Folded, the title and the actions share one row — the compact bar every pushed screen uses.
+    private var showsLarge: Bool {
+        large && ThroMasthead.shape(verticalSizeClassIsCompact: verticalSizeClass == .compact) == .stacked
+    }
+
     public var body: some View {
-        VStack(alignment: .leading, spacing: large ? ThroSpacing.spacing2 : 0) {
+        VStack(alignment: .leading, spacing: showsLarge ? ThroSpacing.spacing2 : 0) {
             HStack(spacing: ThroSpacing.spacing3) {
                 if let onBack {
                     Button(action: onBack) {
@@ -47,7 +58,7 @@ public struct TopBar: View {
                     .padding(.leading, -ThroSpacing.spacing3)
                     .accessibilityLabel("Back")
                 }
-                if large {
+                if showsLarge {
                     Spacer(minLength: 0)
                 } else {
                     VStack(alignment: .leading, spacing: 0) {
@@ -75,7 +86,7 @@ public struct TopBar: View {
                     }
                 }
             }
-            if large {
+            if showsLarge {
                 VStack(alignment: .leading, spacing: 0) {
                     if let eyebrow { Eyebrow(eyebrow) }
                     Text(title)
@@ -87,9 +98,12 @@ public struct TopBar: View {
         .padding(EdgeInsets(top: ThroSpacing.spacing3, leading: ThroSpacing.spaceScreenGutter,
                             bottom: ThroSpacing.spacing4, trailing: ThroSpacing.spaceScreenGutter))
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(ThroColor.colorBackgroundPrimary)
+        // Paper and hairline to the glass on a phone turned sideways, as the bottom bar's are (PD-092): the bar is
+        // laid out inside the Dynamic Island's insets and its hairline stopped short of both edges.
+        .background(ThroColor.colorBackgroundPrimary.ignoresSafeArea(edges: .horizontal))
         .overlay(alignment: .bottom) {
             Rectangle().fill(ThroColor.colorBorderDefault).frame(height: ThroSpacing.borderWidthHairline)
+                .ignoresSafeArea(edges: .horizontal)
         }
     }
 }
@@ -135,13 +149,32 @@ public struct BottomBar: View {
         self.onChange = onChange
     }
 
+    @Environment(\.verticalSizeClass) private var verticalSizeClass
+
+    /// **On its side, each label goes beside its icon** (PD-092), the way the system's own tab bar does it.
+    /// A phone turned sideways is about 390 points tall, and a label stacked under its icon asked for 52 of
+    /// them plus the bar's margins — on every tab, under every screen, the content was cut short by the bar.
+    /// Side by side the tabs need one line: `touchTargetMinimum`, the height Apple gives a tap target, and no
+    /// margin above or below it. The rule is the masthead's (PD-061), so the bar folds when the large title does.
+    private var sideways: Bool {
+        ThroMasthead.shape(verticalSizeClassIsCompact: verticalSizeClass == .compact) == .oneLine
+    }
+
+    private var item: AnyLayout {
+        sideways ? AnyLayout(HStackLayout(spacing: ThroSpacing.spacing2))
+                 : AnyLayout(VStackLayout(spacing: ThroSpacing.spacing1))
+    }
+
+    /// How far the tabs sit below the bar's top edge, which is where the selected tab's mark is drawn.
+    private var inset: CGFloat { sideways ? 0 : ThroSpacing.spacing2 }
+
     public var body: some View {
         HStack(spacing: 0) {
             ForEach(Tab.allCases) { tab in
                 let on = tab == selection
                 Button { onChange(tab) } label: {
-                    VStack(spacing: ThroSpacing.spacing1) {
-                        Icon(tab.icon, size: 24)
+                    item {
+                        Icon(tab.icon, size: sideways ? 20 : 24)
                             .overlay(alignment: .topTrailing) {
                                 if badges.contains(tab) {
                                     Circle()
@@ -153,14 +186,14 @@ public struct BottomBar: View {
                         Text(tab.label)
                             .thro(ThroTypography.metadata.weight(on ? .bold : .medium).tracking(em: 0.02))
                     }
-                    .frame(maxWidth: .infinity, minHeight: 52)
+                    .frame(maxWidth: .infinity, minHeight: sideways ? ThroSpacing.touchTargetMinimum : 52)
                     .foregroundStyle(on ? ThroColor.colorTextPrimary : ThroColor.colorTextSecondary)
                     .overlay(alignment: .top) {
                         if on {
                             Rectangle()
                                 .fill(ThroColor.colorTextPrimary)
                                 .frame(width: 22, height: 2)
-                                .offset(y: -ThroSpacing.spacing2)
+                                .offset(y: -inset)
                         }
                     }
                     .contentShape(Rectangle())
@@ -175,11 +208,18 @@ public struct BottomBar: View {
         // content does, centred, with the bar's paper and hairline still running the whole way.
         .frame(maxWidth: ThroReadable.measure)
         .frame(maxWidth: .infinity)
-        .padding(.top, ThroSpacing.spacing2)
-        .padding(.bottom, 10)
-        .background(ThroColor.colorBackgroundPrimary)
+        .padding(.top, inset)
+        .padding(.bottom, sideways ? 0 : 10)
+        // **To the glass, not to the safe area.** The comment above promised the paper and hairline run the
+        // whole way, and on an upright phone they did — its side insets are zero. Turned on its side, the
+        // Dynamic Island takes about 59 points at each end, the bar is laid out inside them, and the
+        // hairline stopped a thumb's width short of both edges while the board above it ran to the glass.
+        // Only the horizontal edges are released, so nothing upright moves; the hairline stays an overlay
+        // so it still draws over the selected tab's mark exactly as it did.
+        .background(ThroColor.colorBackgroundPrimary.ignoresSafeArea(edges: .horizontal))
         .overlay(alignment: .top) {
             Rectangle().fill(ThroColor.colorBorderDefault).frame(height: ThroSpacing.borderWidthHairline)
+                .ignoresSafeArea(edges: .horizontal)
         }
     }
 }
