@@ -8,6 +8,7 @@ domain exists, which is the trap this exists to close:
   - `render.yaml`            THRO_RP_ID — the relying party a passkey is bound to
   - `Info.plist`             THROAPIBaseURL — the host the app sends requests to
   - `ThroDarts.entitlements` webcredentials: — the domain the phone fetches the association file from
+  - `Info.plist`             THROWebBaseURL — the public web site the app reads a notice from (PD-094)
 
 Before a domain there is one host and all three carry it. After a domain there are two, because a
 registrable domain may serve its API from a subdomain: the app talks to `api.thro.uk` while the
@@ -43,9 +44,15 @@ ENTS = ROOT / "apps/ios/Support/ThroDarts.entitlements"
 # rewrite target that never changes — the API keeps answering on it either way.
 API_SERVICE_HOST = "thro-api-staging.onrender.com"
 
+# The static site's own Render hostname, which the service was given when it was created in the dashboard
+# (docs/runbooks/DEPLOY.md). The app reads the notice about people's information from here (PD-094): a static site
+# answers whatever the API is doing, and the API may be the thing switched off on the day a notice is needed.
+WEB_SERVICE_HOST = "thro-web-q7ys.onrender.com"
+
 RP_ID = re.compile(r"(- key: THRO_RP_ID\n\s+value: )(\S+)")
 RP_ORIGINS = re.compile(r"(- key: THRO_RP_ORIGINS\n\s+value: )(\S+)")
 BASE_URL = re.compile(r"(<key>THROAPIBaseURL</key>\s*\n\s*<string>)([^<]+)(</string>)")
+WEB_BASE = re.compile(r"(<key>THROWebBaseURL</key>\s*\n\s*<string>)([^<]+)(</string>)")
 WEBCRED = re.compile(r"(<string>webcredentials:)([^<]+)(</string>)")
 
 
@@ -62,24 +69,27 @@ def arrangement(domain: str | None) -> dict[str, str]:
             "rp_origins": f"https://{API_SERVICE_HOST}",
             "base_url": f"https://{API_SERVICE_HOST}",
             "webcredentials": API_SERVICE_HOST,
+            "web_base": f"https://{WEB_SERVICE_HOST}",
         }
     return {
         "rp_id": domain,
         "rp_origins": f"https://{domain},https://api.{domain}",
         "base_url": f"https://api.{domain}",
         "webcredentials": domain,
+        "web_base": f"https://{domain}",
     }
 
 
 def read() -> dict[str, str | None]:
     render, plist, ents = RENDER.read_text(), PLIST.read_text(), ENTS.read_text()
     rp, origins = RP_ID.search(render), RP_ORIGINS.search(render)
-    base, cred = BASE_URL.search(plist), WEBCRED.search(ents)
+    base, cred, web = BASE_URL.search(plist), WEBCRED.search(ents), WEB_BASE.search(plist)
     return {
         "rp_id": rp.group(2) if rp else None,
         "rp_origins": origins.group(2) if origins else None,
         "base_url": base.group(2) if base else None,
         "webcredentials": cred.group(2) if cred else None,
+        "web_base": web.group(2) if web else None,
     }
 
 
@@ -131,7 +141,7 @@ def check() -> int:
         print("  fix: python3 tools/host.py --set " + domain[4:])
         return 1
 
-    for key in ("rp_id", "base_url", "webcredentials"):
+    for key in ("rp_id", "base_url", "webcredentials", "web_base"):
         if found[key] != want[key]:
             problems.append(f"  {key}: found {found[key]!r}, {where} wants {want[key]!r}")
     # Origins may be absent on the free tier, where the code defaults to https://<rp id>. With a
@@ -166,7 +176,7 @@ def check() -> int:
         print("\n".join(problems))
         print("  fix: python3 tools/host.py --set <domain>   (or --set-free)")
         return 1
-    print(f"OK host: {where}, and all three places agree ({found['rp_id']}).")
+    print(f"OK host: {where}, and every place agrees ({found['rp_id']}; the web at {found['web_base']}).")
     return 0
 
 
@@ -187,12 +197,13 @@ def apply(domain: str | None) -> int:
             lambda m: m.group(1) + want["rp_id"] + f"\n      - key: THRO_RP_ORIGINS\n        value: {want['rp_origins']}",
             render, count=1)
     plist = BASE_URL.sub(lambda m: m.group(1) + want["base_url"] + m.group(3), plist, count=1)
+    plist = WEB_BASE.sub(lambda m: m.group(1) + want["web_base"] + m.group(3), plist, count=1)
     ents = WEBCRED.sub(lambda m: m.group(1) + want["webcredentials"] + m.group(3), ents, count=1)
 
     RENDER.write_text(render); PLIST.write_text(plist); ENTS.write_text(ents)
 
     print(f"host: set to {'the domain ' + domain if domain else 'the free subdomain'}")
-    for k in ("rp_id", "rp_origins", "base_url", "webcredentials"):
+    for k in ("rp_id", "rp_origins", "base_url", "webcredentials", "web_base"):
         print(f"  {k} = {want[k]}")
     if domain:
         print()

@@ -5226,3 +5226,42 @@ because nobody had agreed to be listed at all; it now gives the minor a listing 
 expects no, because that is a guardian's to give.
 
 Run locally against the migrated database: 149 passed, 0 failed.
+
+## A notice about your data, when there is one to give (PD-094)
+
+**The breach plan named one piece of engineering it depended on, and it did not exist.** UK GDPR Art 34 asks THRØ
+to tell people without undue delay when a breach is likely to put them at high risk, and THRØ holds no email
+address, no phone number and no push token — on purpose — so the app is the only way to reach anybody.
+
+**The notice is a file on the public web site**, `apps/web/notice.json`, not an API route or a database row: the
+day it is needed may be the day the API is switched off. Before building on that, the live site was checked
+against this branch — `wordmark.svg`, `index.html` and `thro.css` matched byte for byte, last modified at the
+previous push — so publishing really is an edit and a push. The committed file says `"active": false`, and nothing
+has been drafted in advance.
+
+- **The web.** `notice.html` and `notice-under-18.html` read the file and say plainly when there is no notice; the
+  front page shows a card when there is one. Looked at in a browser with a rehearsal notice served from a local copy,
+  in both themes and at phone width, and with the committed file.
+- **The iPhone.** `ServiceNotice` (ThroNet) reads the file by the same rules as `thro.js`, and a test reads the
+  committed file through it so the two cannot drift. `ServiceNotices` asks at launch and on every return to the
+  front, at most once a minute; a notice already read stays up when a look fails, and goes when the site says there
+  is none. The card sits under Home's masthead. Seen on the simulator against a local copy: the adult account read
+  the adult title, a minor the under-18 one; **Read what happened** opened the adult page in Safari; **Put away**
+  took the card off Home, and a relaunch — which asked for the file once — kept it off.
+- **The request says nothing about who is asking**: no device id, no account, no token, no cookie, no cached copy.
+  Tested, and said on the privacy page and in the under-18 page's own words.
+- **`tools/check_notice.py`** runs in CI and checks a draft before it is pushed: the file parses, a live notice has
+  every field for both readers, `published` is a date, a time and a zone (a bare date reads differently in Python,
+  a browser and the app, so it is refused), and the under-18 words read at the level `under-18.html` is held to.
+  Shown passing a good rehearsal and failing adult words (grade 27.9), a missing under-18 part, a bare date and a
+  broken file. `check_a_child_can_read_it.py` now shares its measurement, and gives the same grade as before.
+- **`THROWebBaseURL`** is the fifth value `tools/host.py` keeps; a `--set thro.uk` round trip returns the repo byte
+  for byte to where it was.
+- **The records**: `BREACH_PLAN.md` closes the gap and says how to publish, `DEFAULTS_AUDIT.md` §9 explains why
+  this one request is on and not a preference, and `ROPA.md` names the static site as a processor — with where
+  Render's CDN serves from **still to be confirmed**.
+
+**Not on Android.** The Android client has no network code at all, so until it gains some, the public page is the
+only way to reach somebody who plays only on Android. That is recorded in the breach plan as the gap it is.
+
+Counts: 858 client tests (fourteen new); 30 checks green.

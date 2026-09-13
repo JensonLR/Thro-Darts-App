@@ -89,22 +89,29 @@ def sentences(text: str) -> list[str]:
     return [s.strip() for s in re.split(r"[.!?]+(?:\s|$)", text) if s.strip()]
 
 
+def reading(text: str) -> tuple[float, list[str], float, float] | None:
+    """Flesch–Kincaid grade over `text`, with its sentences and the two ratios behind the grade; None when there
+    is no prose to measure. `check_notice.py` holds a live notice's under-18 words to the same measure."""
+    lines = sentences(text)
+    words = re.findall(r"[A-Za-z'’]+", text)
+    if not lines or not words:
+        return None
+    words_per_sentence = len(words) / len(lines)
+    syllables_per_word = sum(syllables(word) for word in words) / len(words)
+    return 0.39 * words_per_sentence + 11.8 * syllables_per_word - 15.59, lines, words_per_sentence, syllables_per_word
+
+
 def main() -> int:
     if not PAGE.exists():
         print(f"  FAIL  {PAGE.relative_to(ROOT)} is missing — Standard 4 and DSA Art 14(3) need it")
         return 1
 
     text = for_the_child(prose(PAGE.read_text()))
-    lines = sentences(text)
-    words = re.findall(r"[A-Za-z'’]+", text)
-    if not lines or not words:
+    measured = reading(text)
+    if measured is None:
         print(f"  FAIL  {PAGE.relative_to(ROOT)} has no prose in it")
         return 1
-
-    syllable_total = sum(syllables(word) for word in words)
-    words_per_sentence = len(words) / len(lines)
-    syllables_per_word = syllable_total / len(words)
-    grade = 0.39 * words_per_sentence + 11.8 * syllables_per_word - 15.59
+    grade, lines, words_per_sentence, syllables_per_word = measured
 
     failures: list[str] = []
 

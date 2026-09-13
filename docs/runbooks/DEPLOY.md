@@ -43,6 +43,11 @@ API one origin:
 | `/v1/*` | the API service | `thro.js` calls `/v1/...` with no host, so the browser never makes a cross-origin request: no CORS, no preflight, no second host to configure, no token in a query string |
 | `/.well-known/apple-app-site-association` | the API service | iOS offers a passkey for a domain only when **that** domain serves the association file. The moment the pages live at a domain, the domain has to serve it |
 
+**The web site is also where the notice about people's information lives** (PD-094): `notice.json`,
+`notice.html` and `notice-under-18.html`. The app reads the file from `THROWebBaseURL` in its `Info.plist` — the
+static site's own host, not the API's, because a notice has to work on the day the API is switched off — and
+`tools/host.py` keeps that key with the other hosts. How to publish a notice is in `docs/legal/BREACH_PLAN.md`.
+
 ### They are two different things
 
 Render and the domain are not alternatives, and it is worth saying plainly because the question came up:

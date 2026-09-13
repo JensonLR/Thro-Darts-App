@@ -86,6 +86,7 @@ player.
 | Processor | What for | Where |
 | --- | --- | --- |
 | Render | Hosting the API | Frankfurt (EEA) |
+| Render (static site) | Serving the public web pages, and `notice.json`, which the iPhone app reads at launch and on returning to the front to learn whether there is a notice about people's information (PD-094). The request carries nothing about the person; the host sees the internet address it came from, as for any page | Render's CDN — **where it serves from is to be confirmed**, alongside the Art 28 terms |
 | Neon | The PostgreSQL database | **London (`aws-eu-west-2`)** — read from `docs/runbooks/DEPLOY.md`. In the UK, so no transfer question arises for the database itself. |
 | Apple, Google | Identity providers at sign-in | Their own terms |
 | *(mail host — to be chosen)* | The `privacy@` / `safeguarding@` mailbox | See `docs/product/MAILBOX.md` |

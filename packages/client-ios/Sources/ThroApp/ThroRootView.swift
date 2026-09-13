@@ -296,6 +296,9 @@ public struct ThroRootView: View {
     /// The You tab's Friends button opens the account screen on Friends rather than on its front.
     @State private var openingFriends = false
     @StateObject private var accountHolder = AccountHolder()
+    /// The notice about people's information (PD-094), asked at launch and on every return to the front.
+    @StateObject private var notices = ServiceNotices()
+    @Environment(\.scenePhase) private var scenePhase
     /// The matches this person has on THRØ (PD-043), for the Live tab.
     @StateObject private var throMatches = ThroMatchesModel()
     /// The matches this phone is sharing live as they are scored (PD-044).
@@ -385,6 +388,12 @@ public struct ThroRootView: View {
         // Look for a stored sign-in as the app starts, rather than waiting for somebody to open the
         // account screen: the welcome cannot decide whether to appear until this has answered.
         .task { await account?.start() }
+        // The notice about people's information (PD-094), read from the web site rather than the API: at launch,
+        // and whenever the app comes back to the front, at most once a minute.
+        .task { await notices.refresh() }
+        .onChange(of: scenePhase) { _, phase in
+            if phase == .active { Task { await notices.refresh() } }
+        }
         // Matches shared live go up as they are scored (PD-044); idle while nothing is shared.
         .task { await shareLoop() }
         // A tapped Spotlight result arrives as a user activity rather than a URL, and is the one
@@ -591,7 +600,14 @@ public struct ThroRootView: View {
 
     @ViewBuilder private var tabContent: some View {
         switch store.tab {
-        case .home: HomeScreen(store: store)
+        case .home:
+            // Under 18, an age nobody has said, and nobody signed in all read the under-18 words (PD-094).
+            let reader = notices.showing?.forReader(ageBand: account?.profile?.ageBand)
+            HomeScreen(store: store, notice: reader?.words,
+                       onReadNotice: {
+                           if let reader, let page = notices.page(underEighteen: reader.underEighteen) { openURL(page) }
+                       },
+                       onPutAwayNotice: { notices.putAway() })
         case .play: PlayLandingScreen(store: store)
         case .live:
             LiveScreen(store: store, clubs: clubs.clubs,
@@ -658,8 +674,28 @@ public struct HomeScreen: View {
     /// The match a delete has been asked for and not yet confirmed.
     @State private var confirmingDelete: AppStore.HomeMatch?
     @State private var showingArchive = false
+    /// The notice about people's information, in this reader's words, when there is one to show (PD-094).
+    private let notice: ServiceNotice.Words?
+    private let onReadNotice: () -> Void
+    private let onPutAwayNotice: () -> Void
 
-    public init(store: AppStore) { self.store = store }
+    public init(store: AppStore, notice: ServiceNotice.Words? = nil,
+                onReadNotice: @escaping () -> Void = {}, onPutAwayNotice: @escaping () -> Void = {}) {
+        self.store = store
+        self.notice = notice
+        self.onReadNotice = onReadNotice
+        self.onPutAwayNotice = onPutAwayNotice
+    }
+
+    /// Directly under the masthead, whatever else Home is showing: somebody with no matches and no account is
+    /// exactly as entitled to be told (PD-094).
+    @ViewBuilder private var noticeCard: some View {
+        if let notice {
+            ServiceNoticeCard(words: notice, onRead: onReadNotice, onPutAway: onPutAwayNotice)
+                .padding(.horizontal, ThroSpacing.spaceScreenGutter)
+                .padding(.top, ThroSpacing.spacing4)
+        }
+    }
 
     /// The match to offer to continue: the newest one still open. A match that ended short is not
     /// one of these — `complete` is true for it — so the card never offers to resume something the
@@ -694,6 +730,7 @@ public struct HomeScreen: View {
             // how the card version came to look like a notice pinned to the top of a tablet.
             VStack(spacing: 0) {
                 Masthead(line: mastheadLine).throEntrance(0)
+                noticeCard
                 ThroNothingYet(title: "No matches yet",
                                message: "Score a match on this device and it will appear here. Nothing is "
                                       + "sent anywhere unless you send it.",
@@ -709,6 +746,7 @@ public struct HomeScreen: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 0) {
                 Masthead(line: mastheadLine).throEntrance(0)
+                noticeCard
                 FontSubstitutionNotice()
                     .padding(.horizontal, ThroSpacing.spaceScreenGutter)
                     .padding(.top, ThroSpacing.spacing4)

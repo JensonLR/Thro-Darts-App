@@ -537,4 +537,79 @@ async function mountOrganiser(where, signInEl) {
   await draw();
 }
 
-window.THRO = { mountLeagues, mountTable, mountFixtures, mountOrganiser, signInWithPasskey, whoAmI, signOut, session, authorised, passkeysPossible };
+// --- a notice about people's information (PD-094) ----------------------------------------------
+//
+// Read from notice.json beside these pages and never from the API: the day a notice is needed may be the day
+// the API is switched off, and this site answers whatever the API is doing. Anything short of a readable,
+// active notice draws nothing — half a breach notice is worse than none. The shape is written down in
+// docs/legal/BREACH_PLAN.md, and tools/check_notice.py holds the file to it on every push.
+
+function usableNotice(n) {
+  const words = (s) => typeof s === 'string' && s.trim() !== '';
+  const paragraphs = (a) => Array.isArray(a) && a.length > 0 && a.every(words);
+  const part = (p) => !!p && words(p.title) && words(p.summary) && paragraphs(p.body);
+  return !!n && n.format === 1 && n.active === true && words(n.id) && words(n.published) && part(n) && part(n.under18);
+}
+
+async function readNotice() {
+  try {
+    const res = await fetch('notice.json', { cache: 'no-store', headers: { Accept: 'application/json' } });
+    if (!res.ok) return null;
+    const n = await res.json();
+    return usableNotice(n) ? n : null;
+  } catch {
+    return null;
+  }
+}
+
+function publishedOn(iso) {
+  const d = new Date(iso);
+  return Number.isNaN(d.getTime()) ? '' : d.toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' });
+}
+
+// The card at the top of the front page: the title, the summary, and the way to both pages. A web page knows
+// nobody's age, so it offers the under-18 words beside the full ones rather than choosing.
+async function mountNoticeBanner(where) {
+  const n = await readNotice();
+  if (!n) return;
+  const box = make('section', 'notice');
+  const title = make('p', 'notice-title', n.title);
+  title.id = 'notice-title';
+  box.setAttribute('aria-labelledby', 'notice-title');
+  const full = make('a', null, 'Read what happened');
+  full.href = 'notice.html';
+  const young = make('a', null, "If you're under 18");
+  young.href = 'notice-under-18.html';
+  const links = make('p', 'notice-links');
+  links.append(full, ' · ', young);
+  box.append(title, make('p', 'notice-summary', n.summary), links);
+  where.replaceChildren(box);
+}
+
+// The whole notice, for an adult or in the words kept for under-18s.
+async function mountNotice(where, reader) {
+  const young = reader === 'under18';
+  const n = await readNotice();
+  if (!n) {
+    where.replaceChildren(
+      make('p', null, young
+        ? 'There is nothing to tell you right now.'
+        : 'There is no notice about your information at the moment.'),
+      make('p', 'quiet', young
+        ? 'THRØ has no way to send you a message. If something ever goes wrong with your information, this page and the app will say so.'
+        : 'THRØ holds no email address or phone number for anybody, so it cannot write to you. If something ever goes wrong with the information it keeps, this page will explain it and the app will show it on its front screen.'),
+    );
+    return;
+  }
+  const part = young ? n.under18 : n;
+  const box = make('article', 'notice');
+  box.append(
+    make('p', 'notice-title', part.title),
+    make('p', 'notice-when', `Published ${publishedOn(n.published)}`),
+    make('p', 'notice-summary', part.summary),
+    ...part.body.map((paragraph) => make('p', null, paragraph)),
+  );
+  where.replaceChildren(box);
+}
+
+window.THRO = { mountLeagues, mountTable, mountFixtures, mountOrganiser, mountNotice, mountNoticeBanner, signInWithPasskey, whoAmI, signOut, session, authorised, passkeysPossible };

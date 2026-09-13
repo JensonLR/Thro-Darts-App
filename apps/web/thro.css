@@ -125,3 +125,19 @@ button.primary { font: inherit; font-weight: var(--font-weight-semibold); paddin
 button.primary:disabled { opacity: 1; background: var(--color-text-tertiary); cursor: default; }
 button.quiet-button { font: inherit; padding: 8px 0; color: var(--color-text-brand);
                       background: none; border: 0; cursor: pointer; text-decoration: underline; }
+
+/* A notice about people's information (PD-094). Drawn only from notice.json, and only while a notice is live. The
+   warning surface says "read this" without borrowing the error colour: a notice is not a fault on the page. Both
+   tokens have dark values, so the card reads in either theme. */
+.notice {
+  background: var(--color-status-warning-surface);
+  border-left: 4px solid var(--color-status-warning);
+  border-radius: var(--radius-card);
+  padding: 14px 16px;
+  margin: 20px 0;
+  color: var(--color-text-primary);
+}
+.notice p { margin: 0 0 10px; }
+.notice p:last-child { margin-bottom: 0; }
+.notice .notice-title { font-weight: var(--font-weight-bold); font-size: 18px; margin-bottom: 4px; }
+.notice .notice-when { color: var(--color-text-secondary); font-size: 14px; }

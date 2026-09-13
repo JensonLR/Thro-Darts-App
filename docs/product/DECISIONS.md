@@ -4303,3 +4303,37 @@ PD-091 put the true mark on every page; this is the type, and what else turned u
   screen wears the wordmark, top left, from the generated vector; every scoring key fills its row; and back leaves
   the keypad for the first screen, which offers the match as "Carry on". Nothing is lost by that — every visit is
   already in the journal.
+
+## PD-094 — A notice about your data, when there is one to give
+
+**13 September 2026.** From `docs/legal/BREACH_PLAN.md`, which names the in-app notice as *"the one piece of
+engineering this plan depends on"*. UK GDPR Art 34 requires telling people without undue delay when a breach is
+likely to put them at high risk, and THRØ holds no email address, no phone number and no push token — on purpose —
+so it has no way to send anybody a message.
+
+### Decided
+
+- **The notice is a file on the public web site**: `apps/web/notice.json`, with the full account at `notice.html`
+  and one written for under-18s at `notice-under-18.html`. Not an API route and not a database row: the day a
+  notice is needed may be the day the API is switched off to contain the breach, and a static site answers whatever
+  the API is doing. It deploys itself from this branch when `apps/web` changes — checked against the live site on
+  13 September — so publishing is editing one file and pushing it, which can be done from GitHub's own editor with
+  no deploy, no migration and no terminal.
+- **Nothing is on it today.** The file says `"active": false` and the pages say there is no notice. A notice must
+  not be drafted in advance by guessing what the breach will be.
+- **The app shows it on Home, under the masthead**, whatever else Home is showing — including to somebody with no
+  matches and no account. It asks at launch and whenever the app comes back to the front.
+- **It asks without saying who is asking.** The request carries no device id, no account and no token. A notice
+  meant for everybody is not a reason to learn who read it.
+- **Anything short of a readable, active notice is never shown**: a file that will not parse, a format this build
+  does not know, missing words for either reader. Half a breach notice is worse than none. A notice already read
+  **stays up** when a later look cannot reach the site, and goes when the site says there is none — an inactive
+  file, or no file.
+- **Under 18, or an age nobody has said, gets the under-18 page.** Unknown is not adult, and the ICO expects the
+  words to be theirs.
+- **It can be put away, and it comes back when it changes.** Putting it away hides that notice; an updated notice
+  carries a new id and shows again. A banner that could never be put away would sit on Home for weeks, and one that
+  stayed away through an update would hide the update.
+- **The web front page shows the same notice**, from the same file.
+- **Not on Android yet.** The Android client has no network code at all; its notice waits for its first network
+  feature, and that is recorded as the gap it is.

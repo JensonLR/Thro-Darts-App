@@ -119,15 +119,50 @@ So an Art 34 notification is:
    notification "would involve disproportionate effort" — a condition THRØ meets not by choosing to
    be lazy but by holding nothing to contact anybody with. A page at `thro.uk`, linked from the app's
    own front, in the plain English the privacy policy already uses.
-2. **An in-app notice**, which does not exist and would have to be built. It is a banner on Home
-   fetched from a public route; it is perhaps a day's work, and the day to spend it is not the day of
-   the breach. *This is a known gap and is recorded as one.*
+2. **An in-app notice** (PD-094): a card on the iPhone's Home, under the masthead, read from `notice.json` on
+   the public web site and opening the full account in words for an adult or for an under-18. Publishing it is
+   editing one file — see **Publishing a notice**, below.
 3. **The safeguarding route**, `safeguarding@thro.uk`, for anybody whose report may have been in
    scope — because "your allegation may have been read" is not a thing to put on a public page.
 
 **Children first.** The ICO's expectation for children is higher than for adults and the language
 must be theirs: what happened, what it means for them, what to do, in words a twelve-year-old reads
 once. `docs/legal/` should hold the child-facing version alongside the adult one before it is needed.
+
+## Publishing a notice
+
+**One file, `apps/web/notice.json`, and a push.** The web site deploys itself from this branch when `apps/web`
+changes, and it answers whatever the API is doing — which matters, because the API may be the thing that was
+switched off. GitHub's own editor is enough: no terminal, no deploy, no database.
+
+```json
+{
+  "format": 1,
+  "active": true,
+  "id": "2026-10-01",
+  "published": "2026-10-01T09:00:00Z",
+  "title": "What happened, in a few words",
+  "summary": "One or two sentences: what happened, and whether anybody needs to do anything.",
+  "body": ["What happened.", "What it means for the people it affects.", "What to do, and who to ask."],
+  "under18": {
+    "title": "The same, for a young player",
+    "summary": "One or two short sentences.",
+    "body": ["The same facts, in words a twelve-year-old reads once."]
+  }
+}
+```
+
+- **Every field is needed.** A notice missing any of them is shown nowhere: the app and the pages show nothing
+  rather than half a notice. `python3 tools/check_notice.py draft.json` checks a draft before it is pushed,
+  including that the under-18 words read at the level `under-18.html` is held to.
+- **`published` is a date, a time and a zone**, like `"2026-10-01T09:00:00Z"` — never `"1 October"`.
+- **To update a notice, change its `id`.** Anybody who put the old one away is shown the new one.
+- **To take it down, set `"active": false`.** The card leaves each phone's Home the next time it looks, and both
+  pages say there is no notice.
+- **Who sees what.** The app shows the title and the summary — the under-18 words to anybody under 18, or whose
+  age nobody has said, or who is not signed in — with a button to the full page. The web front page shows the
+  adult title and summary with links to both pages. The request for the file carries no device id, account or
+  token; the web host sees the internet address it came from, as it does for any page.
 
 ## Working out what happened
 
@@ -155,8 +190,9 @@ once. `docs/legal/` should hold the child-facing version alongside the adult one
 
 - **The mailbox does not exist**, so §"Do you tell the people" has no `safeguarding@` behind it yet.
   It is item 2 on the DPIA's pre-launch list.
-- **The in-app notice does not exist.** Art 34 would need it, and it is the one piece of engineering
-  this plan depends on.
+- ~~**The in-app notice does not exist.**~~ **Built** on 13 September 2026 (PD-094), for the iPhone. **Android
+  does not have it**: the Android client has no network code at all, so until it gains some, the public page is
+  the only way to reach somebody who plays only on Android.
 - **Recovery is Neon's, and on the free plan it is thin.** The current path is Neon's point-in-time
   recovery in London (`aws-eu-west-2`); the paid tier documented in `DEPLOY.md` gives **7 days** and
   the free one gives less. That is a recovery window, not a backup policy: there is no copy anywhere

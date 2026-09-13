@@ -30,6 +30,7 @@
   </div>
 </header>
 <main class="measure">
+  <div id="notice"></div>
   <label for="q" class="quiet">Find a league by name or town</label>
   <input id="q" type="search" placeholder="Stockton, Teesside, Thursday…" autocomplete="off">
   <p id="count" class="quiet" style="margin-top:8px"></p>
@@ -41,6 +42,7 @@
 </footer>
 <script src="thro.js"></script>
 <script>
+  THRO.mountNoticeBanner(document.getElementById('notice'));
   THRO.mountLeagues(document.getElementById('leagues'), document.getElementById('q'), document.getElementById('count'));
 </script>
 </body>

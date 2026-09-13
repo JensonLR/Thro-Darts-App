@@ -106,6 +106,12 @@ jobs:
       - name: The brand is the mark, and the colours are the tokens
         run: python3 tools/check_brand.py
 
+      # A breach notice is published under pressure by editing one file. The app and the pages show nothing for a
+      # file they cannot read, so a missing comma would publish silence; and a notice's words for under-18s must
+      # read at a child's level, as under-18.html is held to (PD-094).
+      - name: The notice about people's information can be read, by everybody it is for
+        run: python3 tools/check_notice.py
+
       # A transitive dependency is linkable, not nameable — and a type you can see is not a member
       # you can reach. Three macOS rounds at four minutes each, in one day: Geometry.swift naming
       # ThroMotion with only `import SwiftUI`, DartVisitTests naming Seat with

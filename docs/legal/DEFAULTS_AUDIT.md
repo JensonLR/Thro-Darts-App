@@ -209,6 +209,22 @@ Nothing else. Every default examined was already the private one, and the audit'
 note about the consent route that does not exist yet and §2's decision that has not been made yet —
 both of which are places where the *next* commit is the risk, not this one.
 
+## 9. The notice about people's information
+
+*Added 13 September 2026, with PD-094.* The iPhone app now reads one file on its own: at launch, and whenever it
+comes back to the front (at most once a minute), it asks THRØ's public web site for `notice.json`, to learn
+whether there is a notice about people's information. **It is on, and it is not a preference.** The duty it
+serves — telling people without undue delay when a breach puts them at high risk (UK GDPR Art 34) — is owed to
+everybody, including somebody who has never signed in, and a switch nobody knew to turn on would defeat it.
+
+What keeps it the private default all the same:
+
+- **The request carries nothing about the person**: no device id, no account, no token, no cookie, no copy kept
+  from an earlier answer. The web host sees the internet address it came from, as it does for any page.
+- **Nothing about the answer is stored** except, on the phone, the id of a notice somebody put away.
+- **A child is not shown the adult words.** Under 18, an age nobody has said, and nobody signed in all get the
+  under-18 summary and page.
+
 ## The decision that was owed, and what answering it cost
 
 **May a live leg be shown on a public screen?** Answered on 13 September 2026 — see §2 — and the two
