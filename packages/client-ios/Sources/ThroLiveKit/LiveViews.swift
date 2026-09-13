@@ -100,6 +100,25 @@ public struct ThroLiveBoard: View {
 
 /// The two colours the system needs by name, so a widget extension can dress a Live Activity in
 /// THRØ's field without linking the whole token package itself.
+/// The Dynamic Island's type (PD-093).
+///
+/// The island's regions have to be built in the extension, because `DynamicIsland` exists only there — and that
+/// is how they became the last text on a live surface still set in the system face. The four lines sat outside
+/// this package, where the change that moved everything else to the brand's faces did not look, and where the
+/// guard did not look either. What they are set in belongs here, beside the rest of the board's type.
+public enum ThroLiveType {
+    /// The caption under the expanded island: the same words the Lock Screen shows.
+    public static func caption(stale: Bool) -> Font {
+        ThroTypography.metadata.weight(stale ? .semibold : .regular).fixed(12)
+    }
+
+    /// A remaining score either side of the camera, in the sport face the board's scores are set in.
+    public static var compactFigure: Font { ThroTypography.sportHero.fixed(13) }
+
+    /// The one figure the minimal presentation has room for.
+    public static var minimalFigure: Font { ThroTypography.sportHero.fixed(12) }
+}
+
 public enum ThroLivePalette {
     /// The board's own dark green — the same field the app's masthead stands on.
     public static var field: Color { ThroColor.colorBackgroundBrand }

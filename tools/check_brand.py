@@ -66,7 +66,22 @@ def brand_as_text(markup: str) -> list[str]:
     return found
 
 
-SWIFT = ROOT / "packages/client-ios/Sources"
+# The Swift the brand is drawn in: the packages, and the app targets that sit outside them. The second was missing
+# until PD-093 was checked on a device: the Dynamic Island — the one part of a Live Activity that has to be drawn
+# in the extension itself, in `apps/ios/ThroLive` — was still set in the system face after this guard had passed.
+SWIFT_ROOTS = (ROOT / "packages/client-ios/Sources", ROOT / "apps/ios")
+
+
+def swift_files() -> list[pathlib.Path]:
+    """Every Swift source in those places, skipping anything a build wrote."""
+    found = []
+    for root in SWIFT_ROOTS:
+        for path in sorted(root.rglob("*.swift")):
+            parts = path.relative_to(ROOT).parts
+            if any(part in {"build", ".build", "DerivedData"} or part.endswith(".nosync") for part in parts):
+                continue
+            found.append(path)
+    return found
 # `ThroWordmark` is the one place the name may be composed from letters, because it is the thing that
 # draws the mark. `LaunchSequence` animates the same composition into being.
 DRAWS_THE_MARK = {"Slate.swift", "LaunchSequence.swift"}
@@ -80,7 +95,7 @@ def brand_as_swift_text() -> list[str]:
     properly, which is the shape of this defect — the surfaces nobody demos got a quick `Text`.
     """
     found = []
-    for path in sorted(SWIFT.rglob("*.swift")):
+    for path in swift_files():
         if path.name in DRAWS_THE_MARK:
             continue
         for number, line in enumerate(path.read_text().splitlines(), start=1):
@@ -101,7 +116,7 @@ def swift_system_type() -> list[str]:
     typeface — so a line that sizes an `Image(systemName:)` is not text and is not counted.
     """
     found = []
-    for path in sorted(SWIFT.rglob("*.swift")):
+    for path in swift_files():
         if path.name == "Typography.swift":
             continue
         for number, line in enumerate(path.read_text().splitlines(), start=1):

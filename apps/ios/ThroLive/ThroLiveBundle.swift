@@ -49,21 +49,21 @@ struct ThroMatchLiveActivity: Widget {
                 }
                 DynamicIslandExpandedRegion(.bottom) {
                     Text(ThroLiveCopy.caption(context.state, stale: context.isStale))
-                        .font(.system(size: 12, weight: context.isStale ? .semibold : .regular))
+                        .font(ThroLiveType.caption(stale: context.isStale))
                         .foregroundStyle(context.isStale ? ThroLivePalette.onField : .secondary)
                         .lineLimit(2)
                 }
             } compactLeading: {
                 Text("\(context.state.homeRemaining)")
-                    .font(.system(size: 13, weight: .heavy)).monospacedDigit()
+                    .font(ThroLiveType.compactFigure).monospacedDigit()
             } compactTrailing: {
                 Text("\(context.state.awayRemaining)")
-                    .font(.system(size: 13, weight: .heavy)).monospacedDigit()
+                    .font(ThroLiveType.compactFigure).monospacedDigit()
             } minimal: {
                 // The minimal presentation is about 45×37 points. One number fits; two do not, and
                 // an image larger than the presentation can stop the activity starting at all.
                 Text("\(context.state.thrower.map(context.state.remaining) ?? context.state.homeRemaining)")
-                    .font(.system(size: 12, weight: .heavy)).monospacedDigit()
+                    .font(ThroLiveType.minimalFigure).monospacedDigit()
             }
             .widgetURL(URL(string: context.attributes.matchURL))
             .keylineTint(ThroLivePalette.onField)

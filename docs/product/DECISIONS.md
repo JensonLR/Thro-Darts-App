@@ -4271,10 +4271,11 @@ PD-091 put the true mark on every page; this is the type, and what else turned u
 ### What was wrong
 
 - **The second screens were set in the system face.** The Lock Screen widget and Live Activity, the board on an
-  external display, the venue board and the watch drew their text with `Font.system(size:)` — 25 call sites — so
-  the score on the Lock Screen was in a different typeface from the score on the phone. The widget and the watch
-  are separate bundles and carried no faces. The watch's plist said in a comment that it should have none: right
-  about its premise, since asking for a face nobody registered falls back silently, and wrong in its conclusion.
+  external display, the venue board and the watch drew their text with `Font.system(size:)` — 29 call sites, four
+  of them in the Dynamic Island and found only after the first commit — so the score on the Lock Screen was in a
+  different typeface from the score on the phone. The widget and the watch are separate bundles and carried no
+  faces. The watch's plist said in a comment that it should have none: right about its premise, since asking for a
+  face nobody registered falls back silently, and wrong in its conclusion.
 - **Android was set entirely in Roboto** — twelve sizes chosen by hand, five of them off the approved scale, and
   none of it in Archivo or IBM Plex Sans Condensed.
 - **One destructive question was an alert.** Removing a team asked "Cancel / Remove" from the middle of the

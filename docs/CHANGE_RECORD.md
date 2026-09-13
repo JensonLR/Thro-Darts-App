@@ -5183,3 +5183,30 @@ reachable from a launch argument, and both are next.
 
 Counts: 844 client tests; 27 Android tests; 28 checks green; ten faces in the phone app, the widget extension and
 the watch app.
+
+## The Dynamic Island was still in the system face, and the guard could not see it (PD-093)
+
+PD-093's record said the Live Activity was set in the brand's faces. The Lock Screen presentation was; the
+**Dynamic Island** was not. Its regions have to be built in the widget extension itself — `DynamicIsland` exists
+only there — so its four lines of text live in `apps/ios/ThroLive/ThroLiveBundle.swift`, outside the package the
+change swept, and `check_brand.py` read only `packages/client-ios/Sources`. The guard passed because it was not
+looking. It was found while getting ready to look at the Live Activity on a simulator, the step the record had
+named as not yet done.
+
+- `check_brand.py` now reads the app targets under `apps/ios` as well, skipping anything a build wrote. Run
+  before the fix, it failed on exactly those four lines; after it, it passes.
+- The island's type is `ThroLiveType`, in `ThroLiveKit` beside the rest of the board's type: the caption in the
+  metadata role, and the compact and minimal figures in the sport face at the sizes they had.
+- The widened guard reads `apps/ios/ThroTV` too and finds no system-face text there. No PD-093 change reaches the
+  television, which links `ThroVenueKit` and not `ThroLiveKit`, so the record's other "not yet looked at" — the
+  Apple TV board — was a board already in the brand's faces.
+
+**Looked at, this time.** With a match being scored on the simulator, the island's compact figures were set beside
+the same figures rendered in IBM Plex Sans Condensed Bold and in SF Pro Heavy at the crop's own scale: they are
+the first, glyph for glyph. The Lock Screen shows the scores in the sport face and the names and caption in
+Archivo. iOS put up its one-time *"Allow Live Activities from THRØ?"* under the board, and that was left for a
+person to answer.
+
+PD-093 counted 25 call sites in the system face. There were 29.
+
+Counts: 844 client tests; 28 checks green.
