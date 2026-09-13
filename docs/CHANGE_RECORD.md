@@ -4734,3 +4734,76 @@ disclaimer to a child's reading age would tempt somebody to make it less precise
 
 Counts: 24 checks green (23 in `tools/`, plus `apps/ios/check_fonts.py`). Three of the DPIA's seven
 pre-launch items are now done; the remaining four are the founder's.
+
+## Android keeps your darts, and stops wearing somebody else's logo
+
+Two gaps on the Android client, both of which had been true since it was built and neither of which was
+about scoring.
+
+### The journal was keeping every match and the app showed none of them
+
+`Journal.matches()` has existed since ADR-006. The Android client never called it: you could score a match
+and then never see it again, which makes the app a calculator rather than a record. `ThroMatchList` reads
+it, and `ThroMatchesScreen` draws it — no account, no network, because the journal is the phone's own and
+always was.
+
+**Structurally parallel to iOS on purpose.** `AppStore.HomeMatch` carries the record, the two leg counts,
+whether it is complete, how it ended and — the interesting one — *why it could not be read when it could
+not*. Two clients that word the same fact differently are two products, and the second is the one nobody
+checks. So the states, the words and the ordering are the phone's:
+
+- **Three status words, not two.** An abandoned match is finished and is **not a result**. "In progress"
+  would be wrong because the keypad is shut; "Finished" would imply a result PD-016 says it has none of.
+- **Retiring is losing**, so the row names the *other* player. A test holds it, because the wrong way round
+  prints the loser as the winner on a permanent record.
+- **A match that will not replay stays on the list**, with the reason where its score would be — and with
+  no score at all, because a figure read off a journal that will not open is a number with nothing behind
+  it. The test for this writes a `handicap_adjustment` row straight into the SQLite file with plain SQL
+  (INSERT is permitted; the append-only triggers forbid UPDATE and DELETE), which is the real
+  forward-compatibility case `UNKNOWN_ROW_KIND` exists for, and asserts the row comes back saying so.
+
+*Two defects found by the tests, both mine.* The play-out fixture alternated HOME/AWAY and silently stopped
+finishing after leg one, because the leg starter alternates and `enter` gives the visit to whoever is
+actually at the oche — a fixture that assumes the order tests a different match from the one being played.
+And the date test asserted `3 Sep` and got `3 Sept`: CLDR changed September's abbreviation in `en-GB` and
+the JDK follows it. That is the platform being right. `day()` now takes a `Locale` and the test asserts the
+*property* — the year is absent this year and present in another — which is what it was ever about. Worth
+noting that the desktop JDK and the Android emulator disagree on that abbreviation, so the string-matching
+version would have passed one and failed the other.
+
+### The launcher icon was the default Android robot
+
+`res/` had no icon in it, so Android supplied its own — the first thing anybody saw of THRØ on that
+platform was somebody else's logo, on the brand's green.
+
+**Generated, not exported.** `tools/make_android_icon.py` reads `MarkGeometry.Ratios.mark` out of
+`Geometry.swift` and the two colours out of the generated tokens, and writes the adaptive icon, a
+monochrome layer for Android 13 themed icons, and the background colour. Change a ratio and re-run and the
+icon moves with the mark; `--check` in CI fails if somebody changed one and did not.
+
+The ratios were **verified against the shipped iOS icon** rather than trusted: scanning the centre row of
+`AppIcon.png` gives an outer ring radius of 0.2607 of the canvas and an inner of 0.1797, whose quotient is
+0.689 against the ratios' 0.687, and a bar half-width of 0.040 of the unit once the 45° cut is divided out.
+The corner pixel is `#0F3D2E`, which is `color-board-field` exactly, and the mark is `#F7F6F2`, which is
+`thro-chalk`.
+
+**The scale is the decision worth recording.** iOS gets 1024 square and the tips reach 92% of the way to
+the edge. Android gives 108×108dp of which only the central **72×72dp is guaranteed visible**. Filling 108
+would put the tips outside every circular mask on the market, so 72 is treated as the icon exactly as 1024
+is on iOS — which lands the tips at 92% of *that* radius. The same drawing, at the same proportion, in the
+space each platform actually shows. Checked by rendering the generated path under both a circular and a
+squircle mask before installing it, and then on the emulator's recents card.
+
+*Found on the first build:* XML forbids two consecutive hyphens anywhere inside a comment, and the comment
+naming the CSS custom property the colour came from began with exactly that. AAPT is strict about it.
+
+### And the iCloud duplicates, permanently
+
+`Foo 2.class` beside `Foo.class` has broken dexing three times on this branch — *"Type … is defined
+multiple times"* — for a file nobody wrote. It is iCloud Drive resolving its own conflict inside
+`~/Documents`. `apps/android/settings.gradle.kts` now names the build directory `build.nosync` **only when
+the checkout is inside a folder a sync client watches**, which is the one name every macOS sync client
+skips. CI and anybody outside those folders keeps `build/`, so nothing about the build's shape changes for
+them.
+
+Counts: Android 27 client tests + 39 journal, 24 checks green, and one generator with a `--check` in CI.

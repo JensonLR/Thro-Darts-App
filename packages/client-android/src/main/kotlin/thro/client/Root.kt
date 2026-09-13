@@ -32,12 +32,17 @@ public fun ThroAndroidRoot() {
     var trouble by remember { mutableStateOf<String?>(null) }
     var session by remember { mutableStateOf<ThroSession?>(null) }
     var carryOn by remember { mutableStateOf<ThroCarryOn?>(null) }
+    // Read when the list is opened and when a match ends, rather than held and mutated. The journal is
+    // the only record; a cached list is a second one, and a second record is a record that can be wrong.
+    var kept by remember { mutableStateOf<List<ThroMatchRow>>(emptyList()) }
+    var showingKept by remember { mutableStateOf(false) }
 
     LaunchedEffect(Unit) {
         ThroStore.open(context).fold(
             onSuccess = {
                 store = it
                 carryOn = ThroAndroidWords.carryOn(it.journal)
+                kept = ThroMatchList.rows(it.journal)
             },
             onFailure = { trouble = ThroAndroidWords.journalRefused(it) },
         )
@@ -54,13 +59,31 @@ public fun ThroAndroidRoot() {
             playing != null && playing.state.isComplete -> ThroResultScreen(playing) {
                 session = null
                 carryOn = null
+                kept = ThroMatchList.rows(open.journal)
             }
-            playing != null -> ThroScoringScreen(playing) { session = null }
+            playing != null -> ThroScoringScreen(playing) {
+                session = null
+                kept = ThroMatchList.rows(open.journal)
+            }
+            showingKept -> ThroMatchesScreen(
+                rows = kept,
+                onCarryOn = { row ->
+                    session = ThroSession.resume(open.journal, row.record)
+                    showingKept = false
+                    carryOn = null
+                },
+                onBack = { showingKept = false },
+            )
             else -> ThroSetupScreen(
                 carryOn = carryOn,
                 onCarryOn = {
                     ThroSession.resumable(open.journal)?.let { session = ThroSession.resume(open.journal, it) }
                     carryOn = null
+                },
+                kept = kept.size,
+                onSeeKept = {
+                    kept = ThroMatchList.rows(open.journal)
+                    showingKept = true
                 },
             ) { home, away ->
                 session = ThroSession.start(open.journal, home, away)

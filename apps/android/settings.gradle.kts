@@ -26,3 +26,17 @@ include(":app")
 // an Android application without publishing it.
 include(":client")
 project(":client").projectDir = file("../../packages/client-android")
+
+// iCloud Drive syncs ~/Documents, and it resolves a conflict by leaving `Foo 2.class` beside
+// `Foo.class`. Gradle then hands D8 both and dexing fails with *"Type … is defined multiple times"* —
+// three times on this branch, each costing a clean and a rebuild, for a file nobody wrote.
+//
+// macOS's own escape hatch is a directory whose name ends `.nosync`, which the sync clients skip. This
+// applies it **only when the checkout is somewhere a sync client watches**, so CI and anybody outside
+// ~/Documents keeps the ordinary `build/` and nothing about the build's shape changes for them.
+val synced = rootDir.absolutePath.let { path ->
+    listOf("/Documents/", "/Dropbox/", "/Library/CloudStorage/", "/Google Drive/").any { it in path }
+}
+if (synced) {
+    gradle.beforeProject { layout.buildDirectory.set(layout.projectDirectory.dir("build.nosync")) }
+}

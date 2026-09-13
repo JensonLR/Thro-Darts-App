@@ -31,6 +31,10 @@ import androidx.compose.ui.unit.sp
 public fun ThroSetupScreen(
     carryOn: ThroCarryOn? = null,
     onCarryOn: () -> Unit = {},
+    /// How many matches this phone is holding. Zero hides the way in entirely: a door to an empty room
+    /// is worse than no door, because somebody opens it once and learns not to.
+    kept: Int = 0,
+    onSeeKept: () -> Unit = {},
     onStart: (String, String) -> Unit,
 ) {
     var home by remember { mutableStateOf("") }
@@ -85,6 +89,16 @@ public fun ThroSetupScreen(
                     fontSize = 20.sp, fontWeight = FontWeight.Bold,
                 ))
             }
+            if (kept > 0) {
+                Box(
+                    Modifier.fillMaxWidth().clickable { onSeeKept() }.padding(vertical = 6.dp),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    BasicText(ThroSetupWords.kept(kept), style = TextStyle(
+                        color = colors.throGreenOnink, fontSize = 15.sp, fontWeight = FontWeight.SemiBold,
+                    ))
+                }
+            }
         }
     }
 }
@@ -119,6 +133,10 @@ public data class ThroCarryOn(val line: String)
 public object ThroSetupWords {
     /// Trailing spaces are not part of anybody's name, and a name that is only spaces is not a name.
     public fun tidy(name: String): String = name.trim()
+
+    /// The way in to the list, counted rather than named — *"Your darts"* alone gives no reason to press it
+    /// and *"1 matches"* is the oldest bug in software.
+    public fun kept(n: Int): String = if (n == 1) "Your darts · 1 match" else "Your darts · $n matches"
 
     /// **Both named, and not the same person.** The engine refuses a competitor playing itself with a
     /// `require`, which would crash rather than explain — so it never gets the chance.

@@ -50,8 +50,14 @@ cd apps/android && gradle :app:assembleDebug
 emulator -avd thro-pixel -no-boot-anim -gpu swiftshader_indirect
 ```
 
+**Why the glob on the path.** On a checkout inside iCloud, Dropbox or Google Drive the build directory
+is `build.nosync/` rather than `build/` — the sync client resolves its own conflicts by leaving
+`Foo 2.class` beside `Foo.class`, Gradle hands D8 both, and dexing fails with *"Type … is defined multiple
+times"*. `apps/android/settings.gradle.kts` renames the directory only on such a checkout, because a name
+ending `.nosync` is the one thing every macOS sync client agrees to skip. Elsewhere it is `build/` as usual.
+
 ```bash
-adb install -r apps/android/app/build/outputs/apk/debug/app-debug.apk && adb shell am start -n app.thro.darts/.MainActivity
+adb install -r "$(ls apps/android/app/build*/outputs/apk/debug/app-debug.apk | head -1)" && adb shell am start -n app.thro.darts/.MainActivity
 ```
 
 A screenshot comes back with `adb exec-out screencap -p > shot.png`.

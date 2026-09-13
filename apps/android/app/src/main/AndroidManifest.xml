@@ -3,6 +3,8 @@
     <application
         android:label="THRØ"
         android:supportsRtl="true"
+        android:icon="@mipmap/ic_launcher"
+        android:roundIcon="@mipmap/ic_launcher_round"
         android:theme="@style/Theme.Thro">
         <activity
             android:name=".MainActivity"

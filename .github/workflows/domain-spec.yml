@@ -88,6 +88,13 @@ jobs:
       - name: A child can read the page written for them
         run: python3 tools/check_a_child_can_read_it.py
 
+      # The Android launcher icon is generated from MarkGeometry.Ratios.mark and the design tokens,
+      # not exported as a bitmap, so a change to the mark moves it. This fails if somebody changed
+      # the ratios and did not re-run the generator — which would leave two versions of the mark in
+      # the product, one of them on every Android home screen.
+      - name: The launcher icon is still the mark
+        run: python3 tools/make_android_icon.py --check
+
       # A transitive dependency is linkable, not nameable — and a type you can see is not a member
       # you can reach. Three macOS rounds at four minutes each, in one day: Geometry.swift naming
       # ThroMotion with only `import SwiftUI`, DartVisitTests naming Seat with
