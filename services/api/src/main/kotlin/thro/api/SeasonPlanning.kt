@@ -42,6 +42,29 @@ public class SeasonPlanning(private val connection: Connection) {
         /** The day a fixture falls on is the day in the UK, where the leagues are, not the day in UTC. */
         private val LEAGUE_TIME: ZoneId = ZoneId.of("Europe/London")
 
+        /** A season as asked for, read strictly: its label, its dates, and the names of its divisions in order. */
+        public fun parseOpening(raw: Any?): Opening {
+            val m = raw as? Map<*, *> ?: throw IllegalArgumentException("A league starts with its first season: send it as `season`, with a label and dates.")
+            val label = (m["label"] as? String)?.trim().orEmpty()
+            require(label.length in 1..40) { "A season's label is 1 to 40 characters, such as 2026-27." }
+            fun day(key: String): LocalDate = try { LocalDate.parse(m[key] as? String ?: throw IllegalArgumentException("A season has a $key date.")) }
+                catch (e: DateTimeParseException) { throw IllegalArgumentException("$key is not a date, such as 2026-09-01.") }
+            val starts = day("startsOn")
+            val ends = day("endsOn")
+            require(!ends.isBefore(starts)) { "A season ends on or after the day it starts." }
+            require(!ends.isAfter(starts.plusYears(2))) { "A season longer than two years is more likely a mistake than a season." }
+            val raw = m["divisions"]
+            val divisions = when (raw) {
+                null -> emptyList()
+                is List<*> -> raw.map { (it as? String)?.trim().orEmpty() }
+                else -> throw IllegalArgumentException("A season's divisions are a list of names.")
+            }
+            require(divisions.size <= 12) { "A season has at most 12 divisions." }
+            require(divisions.all { it.length in 1..40 }) { "A division's name is 1 to 40 characters." }
+            require(divisions.map { it.lowercase() }.toSet().size == divisions.size) { "Two divisions in a season cannot share a name." }
+            return Opening(label, starts, ends, divisions)
+        }
+
         /** The request, read strictly: anything of the wrong shape is a 400 before any row is looked at. */
         public fun parse(body: Map<String, Any?>): List<Wanted> {
             val list = body["fixtures"] as? List<*>
@@ -63,6 +86,124 @@ public class SeasonPlanning(private val connection: Connection) {
             }
         }
     }
+
+    // --- a league started on THRØ (PD-100) --------------------------------------------------------------------
+
+    public data class Opening(val label: String, val startsOn: LocalDate, val endsOn: LocalDate, val divisions: List<String>)
+    public data class Started(val leagueId: UUID, val league: String, val season: Season)
+    public data class Added(val teamId: UUID, val affiliationId: UUID, val name: String, val divisionId: UUID?)
+    public data class Run(val leagueSeasonId: UUID, val leagueId: UUID, val league: String, val label: String, val startsOn: LocalDate, val endsOn: LocalDate)
+
+    /**
+     * Starts a league, its first season and that season's divisions, and makes whoever started it the season's
+     * administrator — all at once or not at all.
+     *
+     * This is the counterpart of PD-053, not an exception to it. A league THRØ lists from somewhere else already
+     * has somebody who runs it, and appointing oneself would be pretending to be them; a league somebody starts
+     * here has nobody else it could belong to. The league records who started it, and that is what lets the same
+     * person open its next season.
+     */
+    public fun startLeague(player: UUID, name: String, locality: String?, opening: Opening): Started {
+        val clean = name.trim()
+        require(clean.length in 2..80) { "A league's name is 2 to 80 characters." }
+        return together {
+            val league = Organisations(connection).createLeague(clean, locality?.trim()?.takeIf { it.isNotEmpty() }, by = player)
+            Started(league, clean, openFor(league, opening, player))
+        }
+    }
+
+    /** The next season of a league somebody started here. Only they open it; a listed league is nobody's to open. */
+    public fun openSeason(player: UUID, leagueId: UUID, opening: Opening): Started {
+        val (name, startedBy) = connection.prepareStatement("SELECT name, created_by FROM competition.league WHERE league_id = ?").use { ps ->
+            ps.setObject(1, leagueId)
+            ps.executeQuery().use { rs -> if (rs.next()) rs.getString(1) to (rs.getObject(2) as UUID?) else throw Refused(404, "THRØ has no such league.") }
+        }
+        when (startedBy) {
+            null -> throw Refused(403, "THRØ lists this league from elsewhere, so its seasons are opened by the person named to run it, not by whoever asks.")
+            player -> {}
+            else -> throw Refused(403, "Only the person who started this league opens its seasons.")
+        }
+        return together { Started(leagueId, name, openFor(leagueId, opening, player)) }
+    }
+
+    private fun openFor(leagueId: UUID, opening: Opening, player: UUID): Season {
+        val taken = connection.prepareStatement("SELECT 1 FROM competition.league_season WHERE league_id = ? AND lower(label) = lower(?)").use { ps ->
+            ps.setObject(1, leagueId); ps.setString(2, opening.label); ps.executeQuery().use { it.next() }
+        }
+        if (taken) throw Refused(409, "This league already has a season called ${opening.label}.")
+        val orgs = Organisations(connection)
+        val season = orgs.openSeason(leagueId, opening.label, opening.startsOn, opening.endsOn)
+        opening.divisions.forEachIndexed { i, d -> orgs.createDivision(season, d, i + 1) }
+        Relations(connection).grant(player, "admin", thro.authz.ObjectRef(thro.authz.ObjectType.LEAGUE_SEASON, season.toString()), by = player)
+        return season(season)!!
+    }
+
+    /**
+     * A team the league itself adds, in the season at once: the league is the one letting it in, so there is no
+     * application to accept. It is a listed team — nobody runs it yet — and a captain can take it on later the way
+     * any listed team is taken on.
+     */
+    public fun addTeam(leagueSeasonId: UUID, name: String, divisionId: UUID?, by: UUID, at: Instant): Added {
+        val clean = name.trim()
+        require(clean.length in 2..60) { "A team's name is 2 to 60 characters." }
+        val season = season(leagueSeasonId) ?: throw Refused(404, "THRØ has no such league season.")
+        if (divisionId != null && season.divisions.none { it.divisionId == divisionId }) throw Refused(422, "That division is not in this season.")
+        if (divisionId == null && season.divisions.isNotEmpty()) throw Refused(422, "This season has divisions. Say which one ${clean} plays in.")
+        if (season.teams.any { it.name.equals(clean, ignoreCase = true) }) throw Refused(409, "This season already has a team called ${clean}.")
+        return together {
+            val orgs = Organisations(connection)
+            val team = orgs.createTeam(clean, by = by)
+            val affiliation = orgs.affiliate(team, leagueSeasonId, divisionId, from = at, by = by)
+            orgs.acceptAffiliation(affiliation, at)
+            Added(team, affiliation, clean, divisionId)
+        }
+    }
+
+    /** The seasons this person administers directly, newest first, so an organiser can find their way back. */
+    public fun seasonsRunBy(player: UUID): List<Run> =
+        connection.prepareStatement(
+            """
+            SELECT ls.league_season_id, l.league_id, l.name, ls.label, ls.starts_on, ls.ends_on
+              FROM authz.relation r
+              JOIN competition.league_season ls ON ls.league_season_id::text = r.object_id
+              JOIN competition.league l ON l.league_id = ls.league_id
+             WHERE r.subject_id = ? AND r.relation = 'admin' AND r.object_type = 'league_season' AND r.revoked_at IS NULL
+             ORDER BY ls.starts_on DESC, l.name
+            """.trimIndent(),
+        ).use { ps ->
+            ps.setObject(1, player)
+            ps.executeQuery().use { rs ->
+                generateSequence {
+                    if (rs.next()) Run(rs.getObject(1) as UUID, rs.getObject(2) as UUID, rs.getString(3), rs.getString(4),
+                                       rs.getObject(5, LocalDate::class.java), rs.getObject(6, LocalDate::class.java)) else null
+                }.toList()
+            }
+        }
+
+    private fun <T> together(block: () -> T): T {
+        val wasAuto = connection.autoCommit
+        connection.autoCommit = false
+        try {
+            val out = block()
+            connection.commit()
+            return out
+        } catch (e: Exception) {
+            connection.rollback()
+            throw e
+        } finally {
+            connection.autoCommit = wasAuto
+        }
+    }
+
+    public fun json(s: Started): String = """{"leagueId":"${s.leagueId}","league":${thro.api.http.Contract.q(s.league)},"season":${json(s.season)}}"""
+
+    public fun json(a: Added): String =
+        """{"teamId":"${a.teamId}","affiliationId":"${a.affiliationId}","name":${thro.api.http.Contract.q(a.name)},"divisionId":${a.divisionId?.let { "\"$it\"" } ?: "null"},"status":"accepted"}"""
+
+    public fun runsJson(runs: List<Run>): String =
+        """{"seasons":[""" + runs.joinToString(",") {
+            """{"leagueSeasonId":"${it.leagueSeasonId}","leagueId":"${it.leagueId}","league":${thro.api.http.Contract.q(it.league)},"label":${thro.api.http.Contract.q(it.label)},"startsOn":"${it.startsOn}","endsOn":"${it.endsOn}"}"""
+        } + "]}"
 
     public fun season(id: UUID): Season? {
         val head = connection.prepareStatement(

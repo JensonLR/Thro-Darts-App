@@ -338,6 +338,91 @@ function signOut() { session.clear(); }
 
 
 // --- running a league ----------------------------------------------------------------------------
+
+/**
+ * The organiser's front door, when the address names no season (PD-100): sign in, the seasons you run, and a
+ * league of your own to start. A league THRØ lists from elsewhere is not offered here to be taken on — its
+ * organiser is named, never self-appointed (PD-053).
+ */
+async function mountLobby(where, signInEl) {
+  const draw = async () => {
+    if (!session.get()) {
+      signInEl.replaceChildren(make('p', 'quiet', 'Signing in uses a passkey — the same one the app uses. Nothing is typed.'));
+      const button = make('button', 'primary', 'Sign in with a passkey');
+      button.onclick = async () => {
+        button.disabled = true;
+        try { await signInWithPasskey(); await draw(); }
+        catch (e) { signInEl.append(make('p', 'note', e.message)); button.disabled = false; }
+      };
+      signInEl.append(button);
+      where.replaceChildren(make('p', 'quiet', 'Sign in to run a league.'));
+      return;
+    }
+    signInEl.replaceChildren();
+    const out = make('button', 'quiet-button', 'Sign out');
+    out.onclick = () => { signOut(); draw(); };
+    signInEl.append(out);
+
+    let mine;
+    try { mine = await authorised('GET', '/v1/me/seasons'); } catch (e) { fail(where, e); return; }
+    const parts = [make('h2', null, 'Seasons you run')];
+    if (!mine.seasons.length) {
+      parts.push(make('p', 'quiet', 'None yet. Start a league below.'));
+    } else {
+      const list = make('ul', 'rows');
+      for (const s of mine.seasons) {
+        const li = make('li');
+        const link = make('a', 'row-name', `${s.league} · ${s.label}`);
+        link.href = `organiser.html?season=${encodeURIComponent(s.leagueSeasonId)}`;
+        li.append(link, make('div', 'row-meta', `${s.startsOn} to ${s.endsOn}`));
+        list.append(li);
+      }
+      parts.push(list);
+    }
+    parts.push(starter());
+    where.replaceChildren(...parts);
+  };
+
+  function starter() {
+    const box = make('div', 'entry');
+    box.append(make('h2', null, 'Start a league'),
+      make('p', 'quiet', 'A league you start here is yours to run: its seasons, its teams, its fixtures and results.'));
+    const field = (text, input) => { const l = make('label', 'quiet', text + ' '); l.append(input); return l; };
+    const input = (type, placeholder) => { const i = make('input'); i.type = type; if (placeholder) i.placeholder = placeholder; return i; };
+    const name = input('text', 'League name'); name.maxLength = 80;
+    const locality = input('text', 'Town, optional');
+    const label = input('text', 'Season, e.g. 2026-27'); label.maxLength = 40;
+    const starts = input('date'); const ends = input('date');
+    const divisions = input('text', 'Divisions, comma-separated, optional');
+    const go = make('button', 'primary', 'Start it');
+    const said = make('p', 'note'); said.hidden = true;
+    go.onclick = async () => {
+      const body = {
+        name: name.value.trim(),
+        ...(locality.value.trim() ? { locality: locality.value.trim() } : {}),
+        season: {
+          label: label.value.trim(), startsOn: starts.value, endsOn: ends.value,
+          divisions: divisions.value.split(',').map(d => d.trim()).filter(Boolean),
+        },
+      };
+      if (body.name.length < 2 || !body.season.label || !starts.value || !ends.value) {
+        said.hidden = false; said.textContent = 'A league needs a name, and its first season a label and two dates.'; return;
+      }
+      go.disabled = true;
+      try {
+        const started = await authorised('POST', '/v1/leagues', body);
+        location.href = `organiser.html?season=${encodeURIComponent(started.season.leagueSeasonId)}`;
+      } catch (e) { said.hidden = false; said.textContent = e.message; go.disabled = false; }
+    };
+    const form = make('div', 'entry-form');
+    form.style.flexWrap = 'wrap';
+    form.append(name, locality, label, field('Starts', starts), field('Ends', ends), divisions, go);
+    box.append(form, said);
+    return box;
+  }
+
+  await draw();
+}
 //
 // The surface a league secretary actually wants: a laptop, a keyboard, and the week's results typed in one
 // sitting. The routes behind it are PD-053's, and nothing here can grant the relation they check — an
@@ -346,7 +431,7 @@ function signOut() { session.clear(); }
 
 async function mountOrganiser(where, signInEl) {
   const season = new URLSearchParams(location.search).get('season');
-  if (!season) { fail(where, new Error('This address names no season.')); return; }
+  if (!season) { await mountLobby(where, signInEl); return; }
 
   const draw = async () => {
     if (!session.get()) {
@@ -409,6 +494,7 @@ async function mountOrganiser(where, signInEl) {
     const accepted = plan.teams.filter(t => t.status === 'accepted');
     const out = [make('h2', null, 'Teams'),
       make('p', 'quiet', `${accepted.length} in the season${waiting.length ? `, ${waiting.length} waiting to be let in` : ''}.`)];
+    out.push(teamAdder(plan, redraw));
     if (!waiting.length) return out;
     const list = make('ul', 'rows');
     for (const t of waiting) {
@@ -431,6 +517,38 @@ async function mountOrganiser(where, signInEl) {
     }
     out.push(list);
     return out;
+  }
+
+  /**
+   * A team the league adds itself (PD-100), in the season at once. In a season with divisions it names one.
+   */
+  function teamAdder(plan, redraw) {
+    const form = make('div', 'entry-form');
+    const name = make('input'); name.type = 'text'; name.placeholder = 'Team name'; name.maxLength = 60;
+    name.setAttribute('aria-label', 'The new team’s name');
+    form.append(name);
+    let division = null;
+    if (plan.divisions.length) {
+      division = make('select');
+      division.setAttribute('aria-label', 'Which division it plays in');
+      for (const d of plan.divisions) division.append(new Option(d.name, d.divisionId));
+      form.append(division);
+    }
+    const add = make('button', 'quiet-button', 'Add a team');
+    const said = make('p', 'note'); said.hidden = true;
+    add.onclick = async () => {
+      if (name.value.trim().length < 2) { said.hidden = false; said.textContent = 'A team’s name is at least two characters.'; return; }
+      add.disabled = true;
+      try {
+        await authorised('POST', `/v1/seasons/${encodeURIComponent(plan.leagueSeasonId)}/teams`,
+                         { name: name.value.trim(), ...(division ? { divisionId: division.value } : {}) });
+        redraw();
+      } catch (e) { said.hidden = false; said.textContent = e.message; add.disabled = false; }
+    };
+    form.append(add);
+    const box = make('div');
+    box.append(form, said);
+    return box;
   }
 
   /**

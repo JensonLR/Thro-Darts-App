@@ -416,6 +416,39 @@ public fun Application.thro(deps: Deps) {
                 else -> leagueAdmin(r, season) { Http(200, planning.json(s)) }
             }
         },
+        // PD-100: a league started on THRØ is run by whoever starts it. A listed league stays named-only (PD-053).
+        "leagues.start" to { r ->
+            planned {
+                val m = Json.parseObject(r.body)
+                val name = m["name"] as? String ?: throw IllegalArgumentException("A league has a name.")
+                val opening = SeasonPlanning.parseOpening(m["season"])
+                SeasonPlanning(r.connection()).let { p -> Http(200, p.json(p.startLeague(r.principal!!.subject, name, m["locality"] as? String, opening))) }
+            }
+        },
+        "leagues.season.open" to { r ->
+            planned {
+                val league = UUID.fromString(r.call.parameters["leagueId"])
+                val opening = SeasonPlanning.parseOpening(Json.parseObject(r.body))
+                SeasonPlanning(r.connection()).let { p -> Http(200, p.json(p.openSeason(r.principal!!.subject, league, opening))) }
+            }
+        },
+        "seasons.teams.add" to { r ->
+            val season = UUID.fromString(r.call.parameters["leagueSeasonId"])
+            val planning = SeasonPlanning(r.connection())
+            when (planning.season(season)) {
+                null -> Http(404, """{"error":"THRØ has no such league season."}""")
+                else -> leagueAdmin(r, season) {
+                    planned {
+                        val m = Json.parseObject(r.body)
+                        val division = (m["divisionId"] as? String)?.let {
+                            try { UUID.fromString(it) } catch (e: IllegalArgumentException) { throw IllegalArgumentException("divisionId must be a UUID.") }
+                        }
+                        Http(200, planning.json(planning.addTeam(season, m["name"] as? String ?: "", division, r.principal!!.subject, deps.now())))
+                    }
+                }
+            }
+        },
+        "me.seasons" to { r -> SeasonPlanning(r.connection()).let { Http(200, it.runsJson(it.seasonsRunBy(r.principal!!.subject))) } },
         "seasons.fixtures.schedule" to { r ->
             val season = UUID.fromString(r.call.parameters["leagueSeasonId"])
             val planning = SeasonPlanning(r.connection())

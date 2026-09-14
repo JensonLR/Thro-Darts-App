@@ -5590,3 +5590,32 @@ drawn up as a round robin shown in full before it is sent. `node --check` passes
 for 2, 3, 4, 5, 6, 8, 11 and 12 teams, one way and home and away: every pairing once or twice with home and away
 swapped, no team twice in a round, byes for odd divisions, and home fixtures equal for every team when home and away.
 **Not checked in a browser**: signing in needs a passkey on `thro.uk`, which a local page cannot perform.
+
+**Deployed.** CI was green on 98e58ce, `deploy-api` among it, and `https://api.thro.uk/healthz` answered with that
+commit. `THRO_MODERATORS` was set on the API to the founder's account through the Render connector, at his word; the
+deploy it started went live and `/healthz` answered ok after it.
+
+## A league of your own (PD-100)
+
+**Asked to name himself organiser of Redcar and District 2026, the founder said no**: a test league he controls, not a
+real one he would be pretending to run. Nothing could start a league or open a season, so that was built next.
+
+**The test first.** `LeagueStartingTest` failed on its first check, `POST /v1/leagues` being absent — after a first
+run that did not compile, because a Kotlin test name cannot hold a semicolon. Then 25 checks:
+
+- starting a league needs a principal, a name, and a first season whose dates run forwards, for at most two years,
+  with no two divisions of one name — each shape wrong a 400;
+- it starts with its season and divisions, the starter runs the season and nobody else does, the starter finds it in
+  `/v1/me/seasons` with the league's name, a stranger's list is empty, and the league is public like any other;
+- adding a team is the administrator's, needs a name and a division of this season, is accepted at once, and a second
+  team with the same name, in any case, is a 409;
+- the loop closes: a fixture between the added teams, a result, and both teams in the table;
+- the next season is the starter's alone, runs as theirs, cannot repeat a label, and a league nobody has is a 404;
+- and a league THRØ lists from elsewhere cannot have a season opened in it by whoever asks, with the refusal saying
+  that its organiser is named.
+
+The whole API suite then ran with the contract regenerated for the four routes: 113 tests, 0 failures.
+
+**The web.** `organiser.html` without a season is now a front door: sign in, the seasons you run as links, and *Start
+a league*, which goes to the new season's page when it is made. A season's *Teams* has *Add a team*. `node --check`
+passes; like PD-099's page it is **not checked in a browser**, for the same passkey reason.

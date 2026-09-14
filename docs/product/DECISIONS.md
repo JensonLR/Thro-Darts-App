@@ -4490,3 +4490,37 @@ nothing to show. The founder chose to close that gap first.
 - Two identical lists sent at the same instant can both pass the "already scheduled" check; there is no unique
   constraint behind it.
 - A one-way round robin cannot give every team the same number of home fixtures; home and away can, and is the default.
+
+## PD-100 — A league started on THRØ is run by whoever starts it
+
+**14 September 2026.** With fixtures possible (PD-099), the founder was asked whether to name himself organiser of the
+one season still running, Redcar and District 2026. He declined: better a test league he controls than a real one he
+would be pretending to run. Nothing could start a league or open a season, so this was the gap.
+
+### Decided
+
+- **Whoever starts a league on THRØ administers it**: `POST /v1/leagues` makes the league, its first season and that
+  season's divisions together, and grants its starter `admin` on the season — the same shape as a team started on
+  THRØ, whose starter is its admin.
+- **This is PD-053's counterpart, not an exception.** A league THRØ lists from elsewhere already has somebody who runs
+  it, so its organiser is still named out of band and never self-appointed. A league somebody starts here has nobody
+  else it could belong to. The league's `created_by` is what tells the two apart: set for a started league, empty for
+  a listed one.
+- **The next season is the starter's alone** (`POST /v1/leagues/{id}/seasons`), and a listed league refuses everybody
+  here, saying why. Two seasons with one label in a league are a 409.
+- **A season's administrator adds teams directly** (`POST /v1/seasons/{id}/teams`): the league letting a team in
+  itself, so it is accepted at once. It is a listed team nobody runs yet, which a captain can take on later. In a
+  season with divisions it names one; a second team with the same name is a 409.
+- **An organiser can find their way back**: `GET /v1/me/seasons` lists the seasons they administer directly.
+- **On the web**, `organiser.html` with no season is the organiser's front door — sign in, the seasons you run, and
+  *Start a league* — and each season's *Teams* has *Add a team*.
+- A season is at most two years long and has at most twelve divisions, because longer and more are likelier to be
+  mistakes than leagues.
+
+### Not decided here
+
+- A started league is public on `/v1/leagues` like any other. A league made to test with is visible to everybody
+  until something lets a league be private or closed; the founder's test league should be named as one.
+- A season an administrator reaches only through a hierarchy is not in `/v1/me/seasons`.
+- Nothing can end, rename or hand over a started league, or revoke its starter; `Relations.revoke` exists and no route
+  reaches it.

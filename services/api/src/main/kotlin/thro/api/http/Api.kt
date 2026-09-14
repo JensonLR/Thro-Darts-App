@@ -444,6 +444,41 @@ public object Contract {
             responses = mapOf(200 to "leagues, newest season first"),
         ),
         Endpoint(
+            id = "leagues.start", method = "POST", path = "/v1/leagues", authenticated = true,
+            summary = "Start a league on THRØ, with its first season, and run it (PD-100)",
+            description = "The league, its first season and that season's divisions, together or not at all, and whoever "
+                + "starts it becomes the season's administrator. A league THRØ lists from elsewhere is not this: it already "
+                + "has somebody who runs it, and is run only by the person named for it (PD-053).",
+            request = Schema("""{"type":"object","required":["name","season"],"properties":{"name":{"type":"string","minLength":2,"maxLength":80},"locality":{"type":"string"},"season":{"type":"object","required":["label","startsOn","endsOn"],"properties":{"label":{"type":"string","minLength":1,"maxLength":40},"startsOn":{"type":"string","format":"date"},"endsOn":{"type":"string","format":"date"},"divisions":{"type":"array","maxItems":12,"items":{"type":"string"}}}}}}"""),
+            responses = mapOf(200 to "the league and its first season", 400 to "a name, label, date or division of the wrong shape", 401 to "no principal"),
+        ),
+        Endpoint(
+            id = "leagues.season.open", method = "POST", path = "/v1/leagues/{leagueId}/seasons", authenticated = true,
+            summary = "Open the next season of a league started on THRØ (PD-100)",
+            description = "Only the person who started the league opens its seasons, and becomes each one's administrator. "
+                + "A league THRØ lists from elsewhere refuses everybody here, and says why.",
+            request = Schema("""{"type":"object","required":["label","startsOn","endsOn"],"properties":{"label":{"type":"string","minLength":1,"maxLength":40},"startsOn":{"type":"string","format":"date"},"endsOn":{"type":"string","format":"date"},"divisions":{"type":"array","maxItems":12,"items":{"type":"string"}}}}"""),
+            responses = mapOf(200 to "the league and the season opened", 400 to "a label, date or division of the wrong shape", 401 to "no principal",
+                              403 to "you did not start this league, or THRØ lists it from elsewhere", 404 to "no such league",
+                              409 to "this league already has a season with that label"),
+        ),
+        Endpoint(
+            id = "seasons.teams.add", method = "POST", path = "/v1/seasons/{leagueSeasonId}/teams", authenticated = true,
+            summary = "Add a team to a league season, in it at once (PD-100)",
+            description = "The league letting a team in itself, so there is no application to accept. The team is a listed "
+                + "one that nobody runs yet. In a season with divisions it names one of them.",
+            request = Schema("""{"type":"object","required":["name"],"properties":{"name":{"type":"string","minLength":2,"maxLength":60},"divisionId":{"type":"string","format":"uuid"}}}"""),
+            responses = mapOf(200 to "the team, accepted into the season", 400 to "no name, or divisionId is not a UUID", 401 to "no principal",
+                              403 to "you do not administer this league season", 404 to "no such league season",
+                              409 to "the season already has a team with that name", 422 to "the division is not this season's, or none was named"),
+        ),
+        Endpoint(
+            id = "me.seasons", method = "GET", path = "/v1/me/seasons", authenticated = true,
+            summary = "The league seasons you administer (PD-100)",
+            description = "Newest first, with the league's name, so an organiser can find their way back to the season they run.",
+            responses = mapOf(200 to "the seasons", 401 to "no principal"),
+        ),
+        Endpoint(
             id = "leagues.affiliation.accept", method = "POST",
             path = "/v1/seasons/{leagueSeasonId}/affiliations/{affiliationId}", authenticated = true,
             summary = "Accept a team into a league season (PD-053)",
