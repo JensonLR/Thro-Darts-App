@@ -58,6 +58,7 @@ import thro.api.Json
 import thro.api.Migrations
 import thro.api.OrganisationCommands
 import thro.api.Organisations
+import thro.api.SeasonPlanning
 import thro.api.Relations
 import thro.api.Secretary
 import thro.api.VisitCommand
@@ -403,6 +404,29 @@ public fun Application.thro(deps: Deps) {
             Fixtures(r.connection()).let { f ->
                 if (!f.seasonExists(season)) Http(404, """{"error":"THRØ has no such league season."}""")
                 else Http(200, f.json(f.of(season)))
+            }
+        },
+        // PD-099: what running a season needs before any result — its teams, and its fixtures. The season is looked
+        // for first, so a mistyped one is a 404 rather than a refusal that reads like a permission.
+        "seasons.teams" to { r ->
+            val season = UUID.fromString(r.call.parameters["leagueSeasonId"])
+            val planning = SeasonPlanning(r.connection())
+            when (val s = planning.season(season)) {
+                null -> Http(404, """{"error":"THRØ has no such league season."}""")
+                else -> leagueAdmin(r, season) { Http(200, planning.json(s)) }
+            }
+        },
+        "seasons.fixtures.schedule" to { r ->
+            val season = UUID.fromString(r.call.parameters["leagueSeasonId"])
+            val planning = SeasonPlanning(r.connection())
+            when (planning.season(season)) {
+                null -> Http(404, """{"error":"THRØ has no such league season."}""")
+                else -> leagueAdmin(r, season) {
+                    planned {
+                        val wanted = SeasonPlanning.parse(Json.parseObject(r.body))
+                        Http(200, planning.json(planning.schedule(season, wanted, by = r.principal!!.subject)))
+                    }
+                }
             }
         },
         // PD-054: the table is arithmetic over the fixtures, so it is read as `app_read` and computed here
@@ -755,6 +779,11 @@ private fun outcomely(superseding: Boolean = false, block: () -> Http): Http = t
  * somebody else's rules, which would be worse than no table at all.
  */
 private fun tabled(block: () -> Http): Http = try { block() } catch (e: LeagueTable.Refused) {
+    Http(e.status, """{"error":${Contract.q(e.why)}}""")
+}
+
+/** A season's plan refused is an answer: which fixture, and why it cannot be played (PD-099). */
+private fun planned(block: () -> Http): Http = try { block() } catch (e: SeasonPlanning.Refused) {
     Http(e.status, """{"error":${Contract.q(e.why)}}""")
 }
 

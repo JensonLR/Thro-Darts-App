@@ -4456,3 +4456,37 @@ binary carries. Repeating CI's archive and export on the Mac showed `get-task-al
 
 - A new target with its own entitlements has to be added to the stamping step by hand. The upload check catches the
   app's sign-in entitlements going missing, not a future extension's.
+
+## PD-099 — A season gets its fixtures, from the person who runs it
+
+**14 September 2026.** Production held five league seasons and not one fixture, and nothing in THRØ could make one:
+`Organisations.scheduleFixture` existed and no route reached it, and the directory import left every team *applied*.
+So the result entry, the table, the live board, the web's fixture pages and the television app were built and had
+nothing to show. The founder chose to close that gap first.
+
+### Decided
+
+- **A season's administrator gives it its fixtures**, through `POST /v1/seasons/{id}/fixtures` — the same named
+  administrator who enters its results (PD-053), and nobody else. Naming one is still out of band.
+- **A list, written together or not at all.** One fixture that cannot be played refuses the list and says which, so an
+  organiser never has to work out which half went in.
+- **A fixture is held to what the table already assumes.** Both teams accepted into the season (the tallies count no
+  other), the same division (the teams' own when omitted), a day inside the season as it falls in the UK, not a team
+  against itself, not a team twice at one moment, not the same fixture twice in the list. One already scheduled
+  between the same teams at the same moment is a 409, so a list sent twice plays nothing twice.
+- **The administrator sees the season before the league has decided it**: `GET /v1/seasons/{id}/teams` lists every
+  team that asked in, waiting or accepted, with its division and the affiliation id accepting it needs. It is not
+  public, because the public fixture list and table show only what the league has decided.
+- **On the web organiser page** (`organiser.html?season=`): *Teams*, with *Let in* for each team waiting; and *Add
+  fixtures*, one at a time or a division drawn up as a round robin — weekly, home and away by default — shown in full
+  before anything is sent. The draw is generated in the page; the server checks every fixture again.
+- **No schema change.** The rules are in Kotlin, not a trigger, because the tests that build tables insert fixtures
+  directly and a trigger would have to be taught about each of them; the route is the only writer outside tests.
+
+### Not decided here
+
+- Importing a league's published fixture list rather than drawing one up. The round robin is what a new league wants;
+  an existing one already has its fixtures somewhere, and reading them in is the next step if a pilot league asks.
+- Two identical lists sent at the same instant can both pass the "already scheduled" check; there is no unique
+  constraint behind it.
+- A one-way round robin cannot give every team the same number of home fixtures; home and away can, and is the default.

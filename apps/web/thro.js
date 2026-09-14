@@ -367,15 +367,23 @@ async function mountOrganiser(where, signInEl) {
     out.onclick = () => { signOut(); draw(); };
     signInEl.append(out);
 
-    let data;
-    try { data = await read(`/v1/seasons/${encodeURIComponent(season)}/fixtures`); }
-    catch (e) { fail(where, e); return; }
+    // The season as its administrator sees it (PD-099): its dates, divisions and every team that asked in. It is
+    // also the page's one question about authority — somebody who does not run this season is told so here,
+    // once, rather than by every button refusing in turn.
+    let plan, data;
+    try {
+      plan = await authorised('GET', `/v1/seasons/${encodeURIComponent(season)}/teams`);
+      data = await read(`/v1/seasons/${encodeURIComponent(season)}/fixtures`);
+    } catch (e) { fail(where, e); return; }
 
     const todo = (data.fixtures || []).filter(f => !f.decided);
     const done = (data.fixtures || []).filter(f => f.decided);
-    const parts = [];
+    const parts = [...teamsSection(plan, draw)];
 
-    if (!todo.length) {
+    if (!(data.fixtures || []).length) {
+      parts.push(make('h2', null, 'Fixtures'),
+                 make('p', null, 'This season has no fixtures yet. Let its teams in above, then add them below.'));
+    } else if (!todo.length) {
       parts.push(make('p', null, 'Every fixture in this season has a result.'));
     } else {
       parts.push(make('h2', null, `${todo.length} to enter`));
@@ -388,8 +396,162 @@ async function mountOrganiser(where, signInEl) {
       parts.push(list);
       parts.push(make('p', 'quiet', 'Correcting a result does not rub the old one out: it records a second decision, with your name on it, that supersedes the first.'));
     }
+    parts.push(scheduler(plan, draw));
     where.replaceChildren(...parts);
   };
+
+  /**
+   * The teams that asked into the season (PD-099). Only an accepted team is in the league: its fixtures count and
+   * it is a row in the table. So a team still waiting gets one button, and the accepted ones are a count.
+   */
+  function teamsSection(plan, redraw) {
+    const waiting = plan.teams.filter(t => t.status !== 'accepted');
+    const accepted = plan.teams.filter(t => t.status === 'accepted');
+    const out = [make('h2', null, 'Teams'),
+      make('p', 'quiet', `${accepted.length} in the season${waiting.length ? `, ${waiting.length} waiting to be let in` : ''}.`)];
+    if (!waiting.length) return out;
+    const list = make('ul', 'rows');
+    for (const t of waiting) {
+      const li = make('li');
+      const head = make('div', 'row-head');
+      const division = plan.divisions.find(d => d.divisionId === t.divisionId);
+      head.append(make('div', 'row-name', t.name + (division ? ` · ${division.name}` : '')));
+      const let_in = make('button', 'primary', 'Let in');
+      const said = make('p', 'note'); said.hidden = true;
+      let_in.onclick = async () => {
+        let_in.disabled = true;
+        try {
+          await authorised('POST', `/v1/seasons/${encodeURIComponent(plan.leagueSeasonId)}/affiliations/${encodeURIComponent(t.affiliationId)}`, {});
+          redraw();
+        } catch (e) { said.hidden = false; said.textContent = e.message; let_in.disabled = false; }
+      };
+      head.append(let_in);
+      li.append(head, said);
+      list.append(li);
+    }
+    out.push(list);
+    return out;
+  }
+
+  /**
+   * Every pairing of [ids] once, in rounds, by the circle method — or twice, the second half with home and away
+   * swapped. A bye fills an odd division, so a team sits out one round rather than a round being lost.
+   */
+  function roundRobin(ids, homeAndAway) {
+    const ring = ids.slice();
+    if (ring.length % 2) ring.push(null);
+    const n = ring.length;
+    const rounds = [];
+    for (let r = 0; r < n - 1; r++) {
+      const pairs = [];
+      for (let i = 0; i < n / 2; i++) {
+        const a = ring[i], b = ring[n - 1 - i];
+        // Alternating who is at home by round keeps the fixed team from being at home all season.
+        if (a && b) pairs.push(r % 2 === 0 ? [a, b] : [b, a]);
+      }
+      rounds.push(pairs);
+      ring.splice(1, 0, ring.pop());
+    }
+    if (homeAndAway) rounds.push(...rounds.map(pairs => pairs.map(([h, a]) => [a, h])));
+    return rounds;
+  }
+
+  /**
+   * Adding fixtures (PD-099): one at a time, or a whole division drawn as a round robin and looked at before it
+   * is sent. Nothing is written until the organiser presses the button under the list they can see, and the
+   * server checks every fixture again — accepted teams, one division, inside the season — refusing the whole list
+   * if any one cannot be played.
+   */
+  function scheduler(plan, redraw) {
+    const box = make('div', 'entry');
+    box.append(make('h2', null, 'Add fixtures'));
+    const accepted = plan.teams.filter(t => t.status === 'accepted');
+    if (accepted.length < 2) {
+      box.append(make('p', 'quiet', 'A fixture needs two teams in the season. Let them in first.'));
+      return box;
+    }
+    const named = id => (plan.teams.find(t => t.teamId === id) || {}).name || 'A team';
+    const label = (text, input) => { const l = make('label', 'quiet', text + ' '); l.append(input); return l; };
+    const select = (options, blank) => {
+      const s = make('select');
+      if (blank) s.append(new Option(blank, ''));
+      for (const [value, text] of options) s.append(new Option(text, value));
+      return s;
+    };
+    const instant = (day, time) => new Date(`${day}T${time}`).toISOString();
+
+    // Which division's teams to draw from. A season without divisions is one pool.
+    const pools = plan.divisions.length
+      ? plan.divisions.map(d => [d.divisionId, d.name])
+      : [['', 'All teams']];
+    const pool = select(pools);
+    const inPool = () => accepted.filter(t => (t.divisionId || '') === pool.value);
+    const said = make('p', 'note'); said.hidden = true;
+    const say = text => { said.hidden = false; said.textContent = text; };
+
+    const send = async (fixtures, button) => {
+      button.disabled = true;
+      try {
+        const made = await authorised('POST', `/v1/seasons/${encodeURIComponent(plan.leagueSeasonId)}/fixtures`, { fixtures });
+        say(`${made.created.length} fixture${made.created.length === 1 ? '' : 's'} added.`);
+        setTimeout(redraw, 900);
+      } catch (e) { say(e.message); button.disabled = false; }
+    };
+
+    // One fixture.
+    const one = make('div', 'entry-form');
+    const home = select([], 'Home'), away = select([], 'Away');
+    const day = make('input'); day.type = 'date'; day.min = plan.startsOn; day.max = plan.endsOn;
+    const time = make('input'); time.type = 'time'; time.value = '19:30';
+    const add = make('button', 'primary', 'Add');
+    const refill = () => {
+      for (const s of [home, away]) {
+        s.replaceChildren(new Option(s === home ? 'Home' : 'Away', ''));
+        for (const t of inPool()) s.append(new Option(t.name, t.teamId));
+      }
+    };
+    add.onclick = () => {
+      if (!home.value || !away.value || !day.value || !time.value) { say('A fixture is a home team, an away team, a day and a time.'); return; }
+      send([{ homeTeamId: home.value, awayTeamId: away.value, scheduledAt: instant(day.value, time.value),
+              ...(pool.value ? { divisionId: pool.value } : {}) }], add);
+    };
+    one.append(home, make('span', 'v', 'v'), away, day, time, add);
+
+    // A whole division.
+    const whole = make('div', 'entry-form');
+    const first = make('input'); first.type = 'date'; first.min = plan.startsOn; first.max = plan.endsOn;
+    const wholeTime = make('input'); wholeTime.type = 'time'; wholeTime.value = '19:30';
+    const twice = make('input'); twice.type = 'checkbox'; twice.checked = true;
+    const draw_up = make('button', 'quiet-button', 'Draw it up');
+    const preview = make('div');
+    draw_up.onclick = () => {
+      const teams = inPool();
+      if (teams.length < 2) { say('This division has fewer than two teams in the season.'); return; }
+      if (!first.value || !wholeTime.value) { say('Say which day the first round is on, and at what time.'); return; }
+      const [y, m, d] = first.value.split('-').map(Number);
+      const [hh, mm] = wholeTime.value.split(':').map(Number);
+      const fixtures = [];
+      roundRobin(teams.map(t => t.teamId), twice.checked).forEach((pairs, round) => {
+        // Weekly, on the same weekday, by the calendar — so a clock change moves nobody's start time.
+        const at = new Date(y, m - 1, d + 7 * round, hh, mm).toISOString();
+        for (const [h, a] of pairs) fixtures.push({ homeTeamId: h, awayTeamId: a, scheduledAt: at, ...(pool.value ? { divisionId: pool.value } : {}) });
+      });
+      const list = make('ul', 'rows');
+      for (const f of fixtures) list.append(make('li', 'row-meta', `${when(f.scheduledAt)} · ${named(f.homeTeamId)} v ${named(f.awayTeamId)}`));
+      const create = make('button', 'primary', `Add these ${fixtures.length} fixtures`);
+      create.onclick = () => send(fixtures, create);
+      preview.replaceChildren(make('p', 'quiet', `${fixtures.length} fixtures, weekly. Nothing is added until you press the button under the list.`), list, create);
+    };
+    whole.append(label('First round', first), wholeTime, label('Home and away', twice), draw_up);
+
+    pool.onchange = () => { refill(); preview.replaceChildren(); };
+    refill();
+    box.append(label('Division', pool),
+               make('p', 'quiet', 'One fixture'), one,
+               make('p', 'quiet', `Or the whole division as a round robin, inside the season (${plan.startsOn} to ${plan.endsOn})`), whole,
+               preview, said);
+    return box;
+  }
 
   /**
    * A result already in, with a way to correct it (PD-059).

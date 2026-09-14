@@ -503,6 +503,32 @@ public object Contract {
                               409 to "this fixture has no standing result, or the one you named is no longer it"),
         ),
         Endpoint(
+            id = "seasons.teams", method = "GET", path = "/v1/seasons/{leagueSeasonId}/teams", authenticated = true,
+            summary = "A league season as its administrator runs it: its dates, divisions and every team that asked in (PD-099)",
+            description = "Waiting and accepted alike, each with the division it asked for and the affiliationId that "
+                + "accepting it needs. The public fixture list and table show only what the league has decided; this is "
+                + "the season before that, so it is for the season's administrator alone. A season nobody has is a 404 "
+                + "whoever asks, so a mistyped address does not read as a refusal.",
+            responses = mapOf(200 to "the season, its divisions and its teams", 400 to "not a UUID", 401 to "no principal",
+                              403 to "you do not administer this league season", 404 to "no such league season"),
+        ),
+        Endpoint(
+            id = "seasons.fixtures.schedule", method = "POST", path = "/v1/seasons/{leagueSeasonId}/fixtures", authenticated = true,
+            summary = "Give a league season its fixtures (PD-099)",
+            description = "A list of fixtures, written together or not at all: one that cannot be played refuses the "
+                + "list and says which. Each is between two teams the league has **accepted** into this season — a "
+                + "team still waiting is not in the league, and a fixture it played would count in nobody's table — "
+                + "in the same division, on a day inside the season's dates as they fall in the UK. The division may be "
+                + "omitted, and is then the teams' own. The venue is the home team's at the time of the fixture, and "
+                + "is frozen on it. A fixture already scheduled between the same teams at the same moment is a 409, so "
+                + "sending a list twice does not play every match twice.",
+            request = Schema("""{"type":"object","required":["fixtures"],"properties":{"fixtures":{"type":"array","minItems":1,"maxItems":400,"items":{"type":"object","required":["homeTeamId","awayTeamId","scheduledAt"],"properties":{"homeTeamId":{"type":"string","format":"uuid"},"awayTeamId":{"type":"string","format":"uuid"},"scheduledAt":{"type":"string","format":"date-time"},"divisionId":{"type":"string","format":"uuid"}}}}}}"""),
+            responses = mapOf(200 to "the fixtures created", 400 to "not a list of fixtures, or a field of the wrong shape",
+                              401 to "no principal", 403 to "you do not administer this league season",
+                              404 to "no such league season", 409 to "a fixture in the list is already scheduled",
+                              422 to "a fixture in the list cannot be played, and which"),
+        ),
+        Endpoint(
             id = "seasons.fixtures", method = "GET", path = "/v1/seasons/{leagueSeasonId}/fixtures",
             authenticated = false,
             summary = "A league season's fixtures, played and still to play (PD-056)",

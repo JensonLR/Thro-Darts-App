@@ -5558,3 +5558,35 @@ TestFlight build 8 (run 34836519724, 2dcbb15) is the first built against `api.th
 Apple processed it to VALID, and it is in Founders beside 7. **Still open from GOING_LIVE:** step 7, the paid instance —
 the founder chose to wait, so the API still sleeps after fifteen idle minutes. Passkeys made under the Render hostname no
 longer work; Sign in with Apple is unaffected.
+
+## A season gets its fixtures (PD-099)
+
+**What was missing, found by counting production.** Five league seasons, 329 leagues, 44 teams — and 0 fixtures, 0
+results, 0 registrations, because no route created a fixture and the directory import leaves teams applied. Every
+surface built on fixtures was finished and idle.
+
+**The test first.** `FixtureSchedulingTest` (34 checks, then 35) was run before any code and failed on its first check,
+the new route being absent. It holds, at the HTTP layer:
+
+- who may look and schedule: no principal 401, anybody but the season's administrator 403, a season nobody has 404 —
+  looked for first, so a mistyped address does not read as a refusal;
+- the shape: not a list, an empty list, a date that is not a date, a team id that is not a UUID, more than 400 — each 400;
+- the rules, each 422 with the fixture's number: a team still waiting (named), a team that never asked in, a team
+  against itself, a day before the season or after it (its last day is inside), teams in different divisions, a
+  division neither team is in, the same fixture twice in the list, a team twice at one moment;
+- all or nothing: a list with one bad fixture writes none of it;
+- that a list sent twice is a 409 and plays nothing twice;
+- and the point of it: the fixtures appear on the season's public list in the teams' division, at home at the home
+  team's venue, a result goes in against one, and the season's table has its rows.
+
+`HttpTest` regenerated the committed contract (`services/api/openapi.json`) for the two routes and passed. After a
+`gradle clean` — iCloud had left eleven `* 2.class` duplicates in the build, which Gradle's executor tripped on as
+`NoClassDefFoundError` — the whole API suite ran: 112 tests, 0 failures.
+
+**The web.** `organiser.html` asks for the season's teams once on sign-in and says there, rather than button by
+button, when the person does not run it. It shows *Teams* with *Let in* for each team waiting, says a season with no
+fixtures has none yet instead of "every fixture has a result", and adds *Add fixtures*: one fixture, or a division
+drawn up as a round robin shown in full before it is sent. `node --check` passes. The round robin was run on its own
+for 2, 3, 4, 5, 6, 8, 11 and 12 teams, one way and home and away: every pairing once or twice with home and away
+swapped, no team twice in a round, byes for odd divisions, and home fixtures equal for every team when home and away.
+**Not checked in a browser**: signing in needs a passkey on `thro.uk`, which a local page cannot perform.
