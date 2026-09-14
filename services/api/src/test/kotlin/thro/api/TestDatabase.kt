@@ -52,6 +52,30 @@ public object TestDatabase {
         DriverManager.getConnection("jdbc:postgresql://$host:${env("PGPORT", "5432")}/${env("PGDATABASE", "postgres")}", env("PGUSER", "postgres"), "")
 
     /**
+     * A connection the way the server connects in production: a login role holding the application roles and nothing
+     * else (`thro_app`, which `Migrate.kt` grants them), with no `SET ROLE` of its own.
+     *
+     * Every other connection a suite gets belongs to the superuser, and a superuser passes every privilege check, so a
+     * rule about *who* may do something cannot fail on it. V044's retention sweep was refused in production on
+     * 13 September 2026 and passed every test here, for exactly that reason.
+     */
+    public fun asServer(): Connection {
+        connect().use { c ->
+            // Roles belong to the cluster and outlive a run, while every migration makes the application roles again —
+            // so the role is made once, and its memberships are granted every time, by the function Migrate.kt grants
+            // them to `thro_app` with.
+            c.createStatement().use { st ->
+                st.execute("DO \$\$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = '$SERVER') " +
+                           "THEN CREATE ROLE $SERVER LOGIN; END IF; END \$\$")
+            }
+            grantApplicationRoles(c, SERVER)
+        }
+        return DriverManager.getConnection("jdbc:postgresql://$host:${env("PGPORT", "5432")}/${env("PGDATABASE", "postgres")}", SERVER, "")
+    }
+
+    private const val SERVER = "thro_server_test"
+
+    /**
      * A database migrated only as far as `V<upTo>`, so a test can populate it the way the world
      * looked then and prove that the next migration loses nothing. [apply] runs the rest.
      */

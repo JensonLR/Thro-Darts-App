@@ -337,7 +337,7 @@ Neon's restore window (six hours free, seven days paid) covers the database itse
 ## The API deploys itself (PD-095)
 
 Since 13 September 2026 a push that changes the API runs `.github/workflows/deploy-api.yml`: the API's checks, a
-restore point of production (a Neon branch named `restore-point-before-<commit>-<time>`), the migration, a deploy of
+restore point of production (a Neon branch named `pipeline-restore-point-before-<commit>-<time>`), the migration, a deploy of
 exactly that commit through Render's deploy hook, and a wait until `/healthz` answers from that commit at the new
 schema. It can also be run by hand: **Actions → deploy-api → Run workflow**.
 
@@ -379,12 +379,12 @@ Until all three exist, the workflow runs the checks and stops with **Not deploye
   log says why; run the workflow again once it is fixed.
 
 **The restore point** is production as it was just before that deploy. Neon can restore the production branch from
-it, which discards everything written since — the last resort, not the first. The pipeline keeps the newest three,
-and **it tells its own by name, not by who made them**: every branch of production whose name starts
-`restore-point-before-` counts. A restore point taken by hand under that name is one of the three and is removed in its
-turn. Two were taken that way on 13 September (`br-gentle-block-zal9jk26` and `br-bitter-block-zat2etp8`), and the
-pipeline's second run would remove the first. Until that changes, give a hand-made restore point another name if it
-has to outlast three deploys.
+it, which discards everything written since — the last resort, not the first. The pipeline keeps the newest three of
+its own, and **it knows its own by name**: `pipeline-restore-point-before-<commit>-<time>`. Until 14 September its
+restore points were named `restore-point-before-…`, like the ones people take by hand, so the two taken that way on
+13 September (`br-gentle-block-zal9jk26` and `br-bitter-block-zat2etp8`) would have been removed in turn. A restore
+point taken by hand keeps the `restore-point-before-` name and the pipeline never removes it —
+`tools/check_restore_points.py` holds that — so never give one by hand the pipeline's prefix.
 
 ## When the API is up and answers nothing
 
@@ -407,11 +407,13 @@ deploy hook with `ref=`.
 **`render.yaml` deploys the API as well.** The API service belongs to a Blueprint whose *Auto Sync* was on when last
 seen — two `blueprint_sync` deploys on 12 September show it — and while it is on, a push that changes `render.yaml`
 redeploys the API at once, outside the pipeline, with no restore point and no migration. And a sync adds and changes variables but **never removes
-one**, as Render's Blueprint documentation says. That is why `THRO_RP_ORIGINS` is still set on the service: an
+one**, as Render's Blueprint documentation says. That is how `THRO_RP_ORIGINS` stayed on the service: an
 accidental `tools/host.py --set thro.uk` was committed and synced on 12 September, and reverting `render.yaml` took the
-key out of the file but not off the service. Since then the staging API has named `thro-api-staging.onrender.com` as
-its relying party while accepting only `https://thro.uk` and `https://api.thro.uk` as origins — its own log line says so
-at every start — and `WebAuthn.kt` refuses any other origin, so a passkey from the app, whose associated domain is
-`thro-api-staging.onrender.com`, should be refused. Not tried on a device from here. *Auto Sync* is on the Blueprint's
+key out of the file but not off the service. From then until 14 September the staging API named
+`thro-api-staging.onrender.com` as its relying party while accepting only `https://thro.uk` and `https://api.thro.uk` as
+origins — its own log line said so at every start — and `WebAuthn.kt` refuses any other origin, so a passkey from the
+app, whose associated domain is `thro-api-staging.onrender.com`, would have been refused (not tried on a device). On 14
+September the variable was set to `https://thro-api-staging.onrender.com`, and the server's log line has named that
+origin since. Setting it deployed the branch as it stood, which is why it went before anything carrying a migration. *Auto Sync* is on the Blueprint's
 Settings page; the variable is under the API service's Environment.
 

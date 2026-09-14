@@ -5396,3 +5396,36 @@ and it says the retention sweep is not yet working.
 `THRO_RP_ORIGINS` and *Auto Sync* wait on the founder. And `thro.uk` exists now — Nominet's registry records it
 registered at 17:25 UTC — so `GOING_LIVE.md` comes next, with *Auto Sync* in mind: while it is on, pushing the switch
 moves the API's relying party at once.
+
+## The sweep runs and nobody can aim it, and the pipeline keeps to its own restore points (V047, PD-096)
+
+The founder's answers on 14 September 2026 to what the deploy found: fix the retention sweep in full, give the
+pipeline's restore points a name of their own, put the staging API's passkey origin right, and bring the breach notice
+to Android. The deploy secrets are not in yet, and the founder is turning the Blueprint's *Auto Sync* off before the
+domain switch.
+
+**Staging's passkey origin went first**, because it had to land before anything carrying a migration was pushed: a
+change to a Render environment variable deploys the branch as it stands. It was set through the connector — merged with
+the others, not replacing them — to `https://thro-api-staging.onrender.com`. Render deployed `ed491a6`, which carries no
+migration and the same API code, and the new instance printed `passkeys: relying party thro-api-staging.onrender.com,
+origins [https://thro-api-staging.onrender.com]`; `/healthz` answered from `ed491a6` at V046.
+
+**The sweep (V047).** Five tests came first, each seen failing for its own reason against V046: the sweep on the
+server's own connection (*permission denied for table decision_tally*, production's error); a one-day period and a NULL
+period, both run without complaint; a decision inserted three years in the past, accepted; and the read role getting
+through the function as far as the tally. Three schema properties failed the same way. V047 then makes the function run
+with its owner's rights with its search path pinned, lets only `app_competition` call it, refuses a period shorter than
+two years or none at all, and adds a trigger that refuses a decision dated other than now unless a superuser inserts it.
+The NULL case was not in the plan put to the founder: it turned up while writing the floor, because NULL is not less
+than anything. `TestDatabase.asServer()` connects as the server does, through the grant `Migrate.kt` now shares with it.
+
+**The restore points.** `tools/check_restore_points.py` runs the real `restore-point` step against a stand-in for Neon's
+API, with the pipeline's own restore points interleaved by date with two taken by hand. Under the old name it asked Neon
+to remove both hand-made ones; under `pipeline-restore-point-before-` it removes only its own three oldest. The
+pipeline's checks now run it.
+
+Counts: API 111 tests (5 new; the retention suite has 14), schema properties 152 (3 new), 47 migrations checked.
+
+**Not done:** V047 is not in production. It goes with the pipeline's first real run, after that run's restore point, and
+the running API keeps logging the refusal until then — at no cost while production holds no reports. The Android notice
+is the next piece.

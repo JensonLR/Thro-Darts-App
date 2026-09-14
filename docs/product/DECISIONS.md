@@ -4374,3 +4374,36 @@ the hosts could be driven from here, and chose the free route with no approval s
   its own.
 - **On a paid Render instance** Render could run the migration itself before each deploy. The checks and the restore
   point would still earn their place, so that would change the deploy step, not the pipeline.
+- **Amended 14 September 2026: the pipeline's restore points carry a name of their own.** They were
+  `restore-point-before-…`, the name a restore point taken by hand also carries, and the pipeline chose what to remove
+  by that name alone. Its own are now `pipeline-restore-point-before-…`, and `tools/check_restore_points.py`, in the
+  pipeline's checks, holds that it never removes one it did not make.
+
+## PD-096 — The sweep runs, and nobody can aim it
+
+**14 September 2026.** Deploying the API on 13 September showed PD-087's retention sweep failing at every start of the
+server: *permission denied for table decision_tally*. The founder chose the full fix.
+
+### What was true
+
+- `safety.forget_decided` (V044) ran with its caller's rights. The server calls it on its own connection, as `thro_app`,
+  and no application role may write the tally, so in production it never ran. Every test called it as the superuser,
+  which passes every privilege check.
+- Running it with its owner's rights was the obvious fix and, by itself, a bad one. Its period was an argument, so a
+  caller could have asked for a day — or for NULL, which a comparison lets through, and which forgets every decided
+  report there is. And `app_competition` could insert a decision with any date, and an old decision is what makes a
+  report old enough to forget.
+
+### Decided
+
+- **The sweep runs with its owner's rights** (V047: `SECURITY DEFINER`, search path pinned), and only `app_competition`
+  may call it. The read role asking for it is refused.
+- **The period is the founder's, and no shorter.** Two years or longer; anything less, or no period at all, is refused
+  with the reason. Shortening it is now a migration; lengthening it is still `Retention.KEEP`.
+- **A decision carries the database's time.** Nobody but a superuser may insert one dated otherwise. The moderation queue
+  never gave a decision a date, so it is unchanged.
+- **A rule about who may do something is tested as whoever does it.** `TestDatabase.asServer()` connects the way the
+  server does — a login role holding the application roles, granted by the same function `Migrate.kt` uses — because a
+  superuser cannot fail a privilege check.
+- **It reaches production through the pipeline**, which takes a restore point and migrates before its next deploy. Until
+  then the running API keeps logging the refusal, and nothing is lost by the wait: production holds no reports.

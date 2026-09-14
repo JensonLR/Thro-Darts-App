@@ -14,7 +14,7 @@ which is the whole reason this is written down.
 | Where | Free arrangement | With `thro.uk` |
 |---|---|---|
 | `render.yaml` → `THRO_RP_ID` | `thro-api-staging.onrender.com` | **`thro.uk`** |
-| `render.yaml` → `THRO_RP_ORIGINS` | absent (the code defaults to `https://<rp id>`) — **but still set on the staging service since 12 September**; see step 6 | `https://thro.uk,https://api.thro.uk` |
+| `render.yaml` → `THRO_RP_ORIGINS` | absent (the code defaults to `https://<rp id>`) — **but set on the staging service**, since 14 September to its own origin; see step 6 | `https://thro.uk,https://api.thro.uk` |
 | `Info.plist` → `THROAPIBaseURL` | `https://thro-api-staging.onrender.com` | **`https://api.thro.uk`** |
 | `ThroDarts.entitlements` → `webcredentials:` | `thro-api-staging.onrender.com` | **`thro.uk`** |
 | `render.yaml` → the two rewrite destinations | the API service's own hostname | **unchanged** |
@@ -57,8 +57,9 @@ every push, so a half-finished switch fails the build rather than reaching a tes
    `https://thro.uk,https://api.thro.uk`. The API service belongs to a Blueprint whose *Auto Sync* was on when last
    seen (12 September), and while it is on, the commit from step 2 reaches it the moment it is pushed — **before** steps 3–5 have given the domain an address. Do steps
    2–6 in one sitting, or set *Auto Sync* to No on the Blueprint's Settings page first. A sync adds and changes
-   variables and never removes one, which is why `THRO_RP_ORIGINS` is already set on the staging service
-   (DEPLOY.md, *When the API is up and answers nothing*).
+   variables and never removes one: `THRO_RP_ORIGINS` stayed on the staging service after `render.yaml` dropped it,
+   and since 14 September it is set there to the staging host's own origin (DEPLOY.md, *When the API is up and answers
+   nothing*) — so it has to change in the dashboard, not only in the file.
 7. **Move the API off the free instance** ($7/mo, PD-057). A free instance sleeps after fifteen idle minutes
    and a sleeping server drops a live match stream (ADR-007). This is not optional at launch.
 8. **Rebuild and ship the app** with the new `Info.plist` and entitlement.

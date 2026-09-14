@@ -781,6 +781,20 @@ r=$($PSQL -c "UPDATE safety.decision SET outcome='left' WHERE report_id='$RP';" 
 if echo "$r" | grep -qi 'is kept'; then ok "and a decision is answered by making another, never by editing it"
 else bad "and a decision is answered by making another, never by editing it" "${r:-a decision was rewritten}"; fi
 
+# V047 (PD-096): the sweep forgets a report two years after its newest decision, so a decision dated in the past is a
+# report made old enough to forget. The date is the database's, the period is the founder's, and the door is one role's.
+r=$($PSQL -c "SET ROLE app_competition; INSERT INTO safety.decision (report_id, outcome, note, decided_by, decided_at) VALUES ('$RP','left','dated three years ago','$RB', now() - interval '3 years');" 2>&1)
+if echo "$r" | grep -qi 'dated when it is made'; then ok "a decision cannot be dated in the past, which is what the sweep forgets"
+else bad "a decision cannot be dated in the past, which is what the sweep forgets" "${r:-a decision dated three years ago was accepted}"; fi
+
+r=$($PSQL -c "SELECT safety.forget_decided(interval '1 day');" 2>&1)
+if echo "$r" | grep -qi 'two years'; then ok "the sweep refuses a shorter period than the founder's, even from the owner"
+else bad "the sweep refuses a shorter period than the founder's, even from the owner" "${r:-a one-day sweep ran}"; fi
+
+r=$($PSQL -c "SET ROLE app_read; SELECT safety.forget_decided();" 2>&1)
+if echo "$r" | grep -qi 'permission denied for function'; then ok "and only the role the server's sweep runs under may start it"
+else bad "and only the role the server's sweep runs under may start it" "${r:-the read role started the sweep}"; fi
+
 $PSQL -c "SET ROLE app_competition; INSERT INTO safety.block (blocker_id, blocked_id) VALUES ('$RA','$RB');" >/dev/null 2>&1
 check "the read role can ask whether two people are blocked" "$($PSQL -c "SET ROLE app_read; SELECT safety.is_blocked('$RB','$RA');")" "t"
 

@@ -190,6 +190,89 @@ class RetentionTest {
     }
 
     @Test
+    fun `the sweep runs on the server's own connection, not only on a superuser's`() {
+        if (!configured) return
+        // Every test above calls the sweep on the superuser's connection, which passes every privilege check. The
+        // server calls it on its own, and on 13 September 2026 production refused it: *permission denied for table
+        // decision_tally*. This is that connection.
+        migrated().use { c ->
+            val ann = account(c, "Ann")
+            decidedReport(c, ann, ann, days = 800)
+            TestDatabase.asServer().use { server ->
+                assertEquals(1, thro.api.http.Retention.sweep(server))
+            }
+            assertEquals(0, count(c, "SELECT count(*) FROM safety.report"))
+        }
+    }
+
+    @Test
+    fun `nobody may ask for a shorter period than the founder's`() {
+        if (!configured) return
+        // Once the sweep runs with its owner's rights, a period its caller could shorten would hand that caller the
+        // deletion the append-only guarantee exists to refuse. Asked for a day, it forgets nothing and says why.
+        migrated().use { c ->
+            val ann = account(c, "Ann")
+            decidedReport(c, ann, ann, days = 800)
+            assertTrue(assertFailsWith<Exception> { forget(c, older = "1 day") }.message!!.contains("two years"))
+            assertEquals(1, count(c, "SELECT count(*) FROM safety.report"))
+        }
+    }
+
+    @Test
+    fun `and an absent period is not a way round it`() {
+        if (!configured) return
+        // NULL is not less than two years — it is not anything — so a floor written as a comparison lets it through, and
+        // a sweep asked for no period at all forgets every decided report there is. A decision a month old shows it.
+        migrated().use { c ->
+            val ann = account(c, "Ann")
+            decidedReport(c, ann, ann, days = 30)
+            assertTrue(assertFailsWith<Exception> {
+                c.createStatement().use { st -> st.executeQuery("SELECT safety.forget_decided(NULL)").use { } }
+            }.message!!.contains("two years"))
+            assertEquals(1, count(c, "SELECT count(*) FROM safety.report"))
+        }
+    }
+
+    @Test
+    fun `a request cannot date a decision in the past`() {
+        if (!configured) return
+        // Backdating was already refused — a decision is never updated — but one could still be *inserted* with an old
+        // date, and an old decision is exactly what the sweep forgets. A request could have given an undecided report
+        // a decision three years old and had the report forgotten the same minute.
+        migrated().use { c ->
+            val ann = account(c, "Ann")
+            val report = Safety(c).report(ann, "account", ann, "Something was said.").reportId
+            TestDatabase.asServer().use { server ->
+                server.createStatement().use { st -> st.execute("SET ROLE app_competition") }
+                assertTrue(assertFailsWith<Exception> {
+                    server.createStatement().use { st ->
+                        st.execute("INSERT INTO safety.decision (report_id, outcome, note, decided_by, decided_at) " +
+                                   "VALUES ('$report', 'hidden', 'Looked at it.', '$ann', clock_timestamp() - interval '3 years')")
+                    }
+                }.message!!.contains("dated when it is made"))
+                // And the moderation queue's own way of deciding — no date given, so the database's — still works.
+                Safety(server).decide(report, "hidden", "Looked at it.", ann)
+            }
+            assertEquals(1, count(c, "SELECT count(*) FROM safety.decision"))
+        }
+    }
+
+    @Test
+    fun `only the role the sweep runs under may start it`() {
+        if (!configured) return
+        // A request that reads is not a request that forgets. The read role asking for the sweep is refused before any
+        // of it runs.
+        migrated().use {
+            TestDatabase.asServer().use { server ->
+                server.createStatement().use { st -> st.execute("SET ROLE app_read") }
+                assertTrue(assertFailsWith<Exception> {
+                    server.createStatement().use { st -> st.executeQuery("SELECT safety.forget_decided()").use { } }
+                }.message!!.contains("permission denied for function"))
+            }
+        }
+    }
+
+    @Test
     fun `the door closes behind it`() {
         if (!configured) return
         migrated().use { c ->

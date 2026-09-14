@@ -31,8 +31,11 @@ import urllib.request
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 NEON = "https://console.neon.tech/api/v2"
 
-# The branches this pipeline makes are named with this, and they are the only branches it will ever remove.
-PREFIX = "restore-point-before-"
+# The branches this pipeline makes are named with this, and they are the only branches it will ever remove. It is not the
+# name a person gives a restore point taken by hand (`restore-point-before-…`): until 14 September 2026 the two were one,
+# so the pipeline counted hand-made restore points among its own three and would have removed them in turn.
+# tools/check_restore_points.py holds it.
+PREFIX = "pipeline-restore-point-before-"
 # How many restore points to keep. Neon's history already covers the last six hours; these outlast it, and a
 # free project has room for a handful of branches, not an unbounded pile.
 KEEP = 3

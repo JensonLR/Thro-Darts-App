@@ -1,5 +1,17 @@
 package thro.api
 
+import java.sql.Connection
+
+/**
+ * The application roles, granted to a user the server connects as. One place, because a test that connects as the
+ * server does (`TestDatabase.asServer`) has to hold exactly what production grants — a copy of this list in a test would
+ * go on passing after this one changed.
+ */
+internal fun grantApplicationRoles(c: Connection, user: String) {
+    c.createStatement().use { st ->
+        st.execute("GRANT app_match, app_trust, app_rating, app_read, app_competition TO \"${user.replace("\"", "")}\"")
+    }
+}
 
 /**
  * The deploy step ADR-013 requires: bring the database to this image's version, then exit.
@@ -25,9 +37,7 @@ public fun main() {
         // then this one user holds the union, granted here rather than by hand.
         val appUser = env("APP_DB_USER") ?: env("DATABASE_URL")?.let { Db.target(env).user }
         if (appUser != null && appUser != target.user) {
-            c.createStatement().use { st ->
-                st.execute("GRANT app_match, app_trust, app_rating, app_read, app_competition TO \"${appUser.replace("\"", "")}\"")
-            }
+            grantApplicationRoles(c, appUser)
             println("application roles granted to $appUser")
         }
     }
