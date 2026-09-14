@@ -5619,3 +5619,27 @@ The whole API suite then ran with the contract regenerated for the four routes: 
 **The web.** `organiser.html` without a season is now a front door: sign in, the seasons you run as links, and *Start
 a league*, which goes to the new season's page when it is made. A season's *Teams* has *Add a team*. `node --check`
 passes; like PD-099's page it is **not checked in a browser**, for the same passkey reason.
+
+**Deployed.** CI green on 3c415db, `deploy-api` completed success, and `https://api.thro.uk/healthz` answered with it.
+
+## Reports answered from a page (PD-101)
+
+**The queue had no reader.** Reports and decisions existed at the server since PD-050, refused to everybody because no
+moderator was named, and carried an id where a name belonged. The founder was named moderator on the API through the
+Render connector; its deploy went live and `/healthz` answered ok.
+
+**The test first.** A new `SafetyTest` case reports an account, a team, a venue, a league, a match and a team that is not
+there, then reads the queue **as `app_competition`** — the role the server narrows to — rather than as the test's owner,
+since tests connecting as the owner have hidden missing grants before. It did not compile against the old queue, which
+had no name to read. With the name added: the account by its display name, the team, venue and league by theirs, the
+match as *A match*, and the missing team as *Not on THRØ any more*. The queue's JSON now carries `subject`. The whole API
+suite: 114 tests, 0 failures.
+
+**Not tested at HTTP as a moderator.** Reaching the queue over HTTP needs a principal with an account, which the
+development authenticator does not have; `HttpTest` still holds that it refuses a stranger and anyone without a
+principal. The JSON field is one line beside the domain query the test reads.
+
+**The web.** `moderation.html`: sign in, the reports waiting and then those answered, each with its name, reason and
+due hour, and an answer with a reason. It says on its face that hiding and suspending are not done by THRØ yet. The
+organiser's front door now uses the same sign-in gate. `node --check` passes; **not checked in a browser**, for the
+passkey reason as before.

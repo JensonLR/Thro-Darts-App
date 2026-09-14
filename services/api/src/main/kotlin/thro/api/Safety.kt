@@ -25,7 +25,11 @@ public class Safety(private val connection: Connection, private val now: () -> I
 
     public data class Report(val reportId: UUID, val subjectKind: String, val subjectId: UUID,
                              val reason: String, val urgent: Boolean, val reportedAt: Instant, val answerDueAt: Instant)
-    public data class Queued(val report: Report, val decisions: Int)
+    /**
+     * A report as the person answering it needs it: with [subject], the name somebody read (PD-101). A moderator
+     * cannot judge an id, and the name is exactly the thing most reports are about.
+     */
+    public data class Queued(val report: Report, val decisions: Int, val subject: String)
 
     public companion object {
         /** What can be reported: the things a person writes that another person reads. */
@@ -63,7 +67,17 @@ public class Safety(private val connection: Connection, private val now: () -> I
     public fun queue(limit: Int = 50): List<Queued> =
         connection.prepareStatement(
             """SELECT r.report_id, r.subject_kind, r.subject_id, r.reason, r.urgent, r.reported_at, r.answer_due_at,
-                      (SELECT count(*) FROM safety.decision d WHERE d.report_id = r.report_id)
+                      (SELECT count(*) FROM safety.decision d WHERE d.report_id = r.report_id),
+                      -- The name somebody read (PD-101). A match names nobody: the report says what happened,
+                      -- and the people in it are not the moderator's to browse from a queue.
+                      CASE r.subject_kind
+                        WHEN 'account' THEN (SELECT coalesce(nullif(a.display_name, ''), 'An account with no name')
+                                               FROM identity.account a WHERE a.account_id = r.subject_id)
+                        WHEN 'team'    THEN (SELECT t.name FROM competition.team t WHERE t.team_id = r.subject_id)
+                        WHEN 'venue'   THEN (SELECT v.name FROM competition.venue v WHERE v.venue_id = r.subject_id)
+                        WHEN 'league'  THEN (SELECT l.name FROM competition.league l WHERE l.league_id = r.subject_id)
+                        WHEN 'match'   THEN 'A match'
+                      END
                  FROM safety.report r
                 ORDER BY (SELECT count(*) FROM safety.decision d WHERE d.report_id = r.report_id) ASC,
                          r.urgent DESC, r.answer_due_at ASC
@@ -77,6 +91,7 @@ public class Safety(private val connection: Connection, private val now: () -> I
                         Report(rs.getObject(1) as UUID, rs.getString(2), rs.getObject(3) as UUID, rs.getString(4),
                                rs.getBoolean(5), rs.getTimestamp(6).toInstant(), rs.getTimestamp(7).toInstant()),
                         rs.getInt(8),
+                        rs.getString(9) ?: "Not on THRØ any more",
                     )
                 }.toList()
             }

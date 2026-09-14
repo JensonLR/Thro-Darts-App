@@ -337,6 +337,99 @@ async function whoAmI() { return authorised('GET', '/v1/me'); }
 function signOut() { session.clear(); }
 
 
+/**
+ * The sign-in gate every signed-in page shares: a passkey button when nobody is signed in, a sign-out button when
+ * somebody is. Answers whether the page may go on to draw.
+ */
+function signInGate(signInEl, where, prompt, redraw) {
+  if (!session.get()) {
+    signInEl.replaceChildren(make('p', 'quiet', 'Signing in uses a passkey — the same one the app uses. Nothing is typed.'));
+    const button = make('button', 'primary', 'Sign in with a passkey');
+    button.onclick = async () => {
+      button.disabled = true;
+      try { await signInWithPasskey(); await redraw(); }
+      catch (e) { signInEl.append(make('p', 'note', e.message)); button.disabled = false; }
+    };
+    signInEl.append(button);
+    where.replaceChildren(make('p', 'quiet', prompt));
+    return false;
+  }
+  signInEl.replaceChildren();
+  const out = make('button', 'quiet-button', 'Sign out');
+  out.onclick = () => { signOut(); redraw(); };
+  signInEl.append(out);
+  return true;
+}
+
+// --- answering reports ---------------------------------------------------------------------------
+//
+// The queue a moderator works (PD-050, PD-101): what was reported, by the name somebody read, why, and when the
+// answer is due — the urgent first. Only the accounts named in THRO_MODERATORS may read it, so everybody else is
+// told that once rather than shown an empty page.
+
+const ANSWERS = [
+  ['left', 'Leave it — nothing wrong'],
+  ['hidden', 'Hide it'],
+  ['corrected', 'Corrected'],
+  ['account_suspended', 'Suspend the account'],
+  ['not_upheld', 'Not upheld'],
+];
+
+async function mountModeration(where, signInEl) {
+  const draw = async () => {
+    if (!signInGate(signInEl, where, 'Sign in to answer reports.', draw)) return;
+    let data;
+    try { data = await authorised('GET', '/v1/reports'); } catch (e) { fail(where, e); return; }
+    const open = data.reports.filter(r => r.decisions === 0);
+    const answered = data.reports.filter(r => r.decisions > 0);
+    const parts = [
+      make('p', 'quiet', 'A decision is recorded, with your name and reason, and kept. THRØ does not yet hide a name or '
+        + 'suspend an account by itself: do that, then record it here.'),
+      make('h2', null, open.length ? `${open.length} to answer` : 'Nothing waiting'),
+    ];
+    for (const r of open) parts.push(card(r, draw));
+    if (answered.length) {
+      parts.push(make('h2', null, `${answered.length} answered`));
+      for (const r of answered) parts.push(card(r, draw));
+    }
+    where.replaceChildren(...parts);
+  };
+
+  function card(r, redraw) {
+    const box = make('div', 'entry');
+    const kind = { account: 'Account', team: 'Team', venue: 'Venue', league: 'League', match: 'Match' }[r.subjectKind] || r.subjectKind;
+    box.append(
+      make('div', 'row-name', `${r.urgent ? 'URGENT · ' : ''}${kind}: ${r.subject}`),
+      make('p', null, `“${r.reason}”`),
+      make('div', 'row-meta', `Reported ${when(r.reportedAt)} · answer by ${when(r.answerDueAt)}`
+        + (r.decisions ? ` · answered ${r.decisions} time${r.decisions === 1 ? '' : 's'}` : '')),
+    );
+    const form = make('div', 'entry-form');
+    const answer = make('select');
+    answer.setAttribute('aria-label', 'Your answer');
+    for (const [value, text] of ANSWERS) answer.append(new Option(text, value));
+    const note = make('input'); note.type = 'text'; note.placeholder = 'Why — this is kept'; note.maxLength = 1000;
+    note.style.flex = '1 1 16rem';
+    note.setAttribute('aria-label', 'Why you decided this');
+    const save = make('button', 'primary', r.decisions ? 'Answer again' : 'Record');
+    const said = make('p', 'note'); said.hidden = true;
+    save.onclick = async () => {
+      if (note.value.trim().length < 3) { said.hidden = false; said.textContent = 'Say why, so the decision can be read back.'; return; }
+      save.disabled = true;
+      try {
+        await authorised('POST', `/v1/reports/${encodeURIComponent(r.reportId)}/decisions`, { outcome: answer.value, note: note.value.trim() });
+        said.hidden = false; said.textContent = 'Recorded.';
+        setTimeout(redraw, 700);
+      } catch (e) { said.hidden = false; said.textContent = e.message; save.disabled = false; }
+    };
+    form.append(answer, note, save);
+    box.append(form, said);
+    return box;
+  }
+
+  await draw();
+}
+
 // --- running a league ----------------------------------------------------------------------------
 
 /**
@@ -346,22 +439,7 @@ function signOut() { session.clear(); }
  */
 async function mountLobby(where, signInEl) {
   const draw = async () => {
-    if (!session.get()) {
-      signInEl.replaceChildren(make('p', 'quiet', 'Signing in uses a passkey — the same one the app uses. Nothing is typed.'));
-      const button = make('button', 'primary', 'Sign in with a passkey');
-      button.onclick = async () => {
-        button.disabled = true;
-        try { await signInWithPasskey(); await draw(); }
-        catch (e) { signInEl.append(make('p', 'note', e.message)); button.disabled = false; }
-      };
-      signInEl.append(button);
-      where.replaceChildren(make('p', 'quiet', 'Sign in to run a league.'));
-      return;
-    }
-    signInEl.replaceChildren();
-    const out = make('button', 'quiet-button', 'Sign out');
-    out.onclick = () => { signOut(); draw(); };
-    signInEl.append(out);
+    if (!signInGate(signInEl, where, 'Sign in to run a league.', draw)) return;
 
     let mine;
     try { mine = await authorised('GET', '/v1/me/seasons'); } catch (e) { fail(where, e); return; }
@@ -892,4 +970,4 @@ async function mountNotice(where, reader) {
   where.replaceChildren(box);
 }
 
-window.THRO = { mountLeagues, mountTable, mountFixtures, mountOrganiser, mountNotice, mountNoticeBanner, signInWithPasskey, whoAmI, signOut, session, authorised, passkeysPossible };
+window.THRO = { mountLeagues, mountTable, mountFixtures, mountOrganiser, mountModeration, mountNotice, mountNoticeBanner, signInWithPasskey, whoAmI, signOut, session, authorised, passkeysPossible };

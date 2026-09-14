@@ -726,7 +726,7 @@ private fun withModerator(r: Req, moderators: Set<UUID>, block: (UUID) -> Http):
 private fun queueJson(queued: List<Safety.Queued>): String =
     "{\"reports\":[" + queued.joinToString(",") { q ->
         """{"reportId":"${q.report.reportId}","subjectKind":${Contract.q(q.report.subjectKind)},""" +
-            """"subjectId":"${q.report.subjectId}","reason":${Contract.q(q.report.reason)},""" +
+            """"subjectId":"${q.report.subjectId}","subject":${Contract.q(q.subject)},"reason":${Contract.q(q.report.reason)},""" +
             """"urgent":${q.report.urgent},"reportedAt":"${q.report.reportedAt}",""" +
             """"answerDueAt":"${q.report.answerDueAt}","decisions":${q.decisions}}"""
     } + "]}"

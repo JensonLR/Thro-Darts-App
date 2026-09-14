@@ -4524,3 +4524,28 @@ would be pretending to run. Nothing could start a league or open a season, so th
 - A season an administrator reaches only through a hierarchy is not in `/v1/me/seasons`.
 - Nothing can end, rename or hand over a started league, or revoke its starter; `Relations.revoke` exists and no route
   reaches it.
+
+## PD-101 — Reports are answered from a page, by name
+
+**14 September 2026.** Players could report and block (PD-050), and the server kept a queue and took decisions, but
+nothing showed the queue to anybody: no page, and no moderator named. The stores expect reports to be answered. The
+founder was named as the moderator (`THRO_MODERATORS`, his account) at his word.
+
+### Decided
+
+- **The queue says what was reported, by the name somebody read.** A moderator cannot judge an id. An account shows
+  its display name, or *An account with no name*; a team, venue or league its name; something no longer there says so.
+- **A match names nobody.** A report about a match says what happened; the people in it are not the moderator's to
+  browse from a queue.
+- **`moderation.html`** is the page: sign in with a passkey, the reports waiting first and then those answered, each
+  with its name, reason, and the hour its answer is due, and an answer with a reason that is kept. Somebody who is not
+  a moderator is told so once.
+- **The page says plainly that a decision is only a record.** *Hide it* and *Suspend the account* hide and suspend
+  nothing yet; the moderator does that, then records it. Saying otherwise would be a page that lies about safety.
+- The organiser and moderation pages share one sign-in gate.
+
+### Not decided here
+
+- **Making a decision do what it says**: hiding a name, suspending an account. Until then a report about a name is
+  answered by the moderator correcting it by hand.
+- Who else moderates. `THRO_MODERATORS` is a list set on the server, deliberately not a table (PD-050).

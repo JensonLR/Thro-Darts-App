@@ -64,6 +64,43 @@ class SafetyTest {
         }
     }
 
+    /**
+     * A moderator cannot answer a report about an id (PD-101). The queue says what was reported, by the name another
+     * person would have read — and it is read as the role the server narrows to, not as the test's owner, because a
+     * grant the owner has and the server lacks is exactly how a queue works here and 500s in production.
+     */
+    @Test
+    fun `the queue says what was reported, by the name somebody read`() {
+        if (!configured) return
+        migrated().use { c ->
+            val at = Instant.parse("2026-09-14T15:00:00Z")
+            val orgs = Organisations(c)
+            val ann = account(c, "Ann")
+            val rude = account(c, "Rude Name 1")
+            val team = orgs.createTeam("A Rude Name", "Stockton-on-Tees")
+            val venue = orgs.createVenue("The Rude Arms")
+            val league = orgs.createLeague("The Rude League")
+            val gone = UUID.randomUUID()
+            val safety = Safety(c) { at }
+            val reports = mapOf(
+                "account" to safety.report(ann, "account", rude, "Their name is a slur."),
+                "team" to safety.report(ann, "team", team, "The team name is a slur."),
+                "venue" to safety.report(ann, "venue", venue, "The venue name is a slur."),
+                "league" to safety.report(ann, "league", league, "The league name is a slur."),
+                "match" to safety.report(ann, "match", UUID.randomUUID(), "They threatened me after the match."),
+                "gone" to safety.report(ann, "team", gone, "A team that is no longer there."),
+            )
+            c.createStatement().use { it.execute("SET ROLE app_competition") }
+            val labels = safety.queue().associate { it.report.reportId to it.subject }
+            assertEquals("Rude Name 1", labels[reports.getValue("account").reportId], "an account by its display name")
+            assertEquals("A Rude Name", labels[reports.getValue("team").reportId], "a team by its name")
+            assertEquals("The Rude Arms", labels[reports.getValue("venue").reportId], "a venue by its name")
+            assertEquals("The Rude League", labels[reports.getValue("league").reportId], "a league by its name")
+            assertEquals("A match", labels[reports.getValue("match").reportId], "a match names nobody in it")
+            assertEquals("Not on THRØ any more", labels[reports.getValue("gone").reportId], "something no longer there says so")
+        }
+    }
+
     @Test
     fun `a report raised by or about a child goes to the front of the queue`() {
         if (!configured) return
