@@ -20,7 +20,6 @@ import datetime as dt
 import json
 import os
 import pathlib
-import plistlib
 import re
 import sys
 import time
@@ -91,12 +90,18 @@ def latest_migration() -> int:
 
 
 def api_base() -> str:
-    """API_URL when set, else the host the app itself is built against — which `tools/host.py` keeps."""
+    """API_URL when set, else the API service's own Render hostname.
+
+    Not the host the app is built against. That was the default until the domain switch was first run, when the app
+    moved to `api.thro.uk` before the name had an address — and the next deploy would have waited on a name that did
+    not resolve. The deploy hook deploys the service, and the service answers on its own hostname whatever the public
+    name is doing, so that is where a deploy is proved."""
     explicit = os.environ.get("API_URL", "").strip()
     if explicit:
         return explicit.rstrip("/")
-    with open(ROOT / "apps/ios/Support/Info.plist", "rb") as f:
-        return str(plistlib.load(f)["THROAPIBaseURL"]).rstrip("/")
+    sys.path.insert(0, str(ROOT / "tools"))
+    from host import API_SERVICE_HOST
+    return f"https://{API_SERVICE_HOST}"
 
 
 # --- the steps -----------------------------------------------------------------------------------------------

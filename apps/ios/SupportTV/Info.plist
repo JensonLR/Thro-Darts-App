@@ -28,7 +28,7 @@
 		<string>Fonts/IBMPlexSansCondensed-Bold.ttf</string>
 	</array>
 	<key>THROAPIBaseURL</key>
-	<string>https://thro-api-staging.onrender.com</string>
+	<string>https://api.thro.uk</string>
 	<!-- No `THROGoogleClientID`, and no sign-in of any kind. A venue screen reads only what a league
 	     has published; there is nothing here for an account to unlock, and a pub television is the
 	     last device that should be holding one. -->

@@ -7,4 +7,4 @@ package thro.client
 // this disagrees with the rest.
 
 /** The public web site: a static site, which answers whatever the API is doing. The notice is read from here. */
-public const val THRO_WEB_BASE_URL: String = "https://thro-web-q7ys.onrender.com"
+public const val THRO_WEB_BASE_URL: String = "https://thro.uk"

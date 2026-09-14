@@ -21,7 +21,7 @@
 		     identifier 2XM324WPD5.app.thro.darts is not associated with domain
 		     thro-api-staging.onrender.com" on a phone where the association file was being served
 		     correctly the whole time. Plain form: Apple's CDN fetches it, and it works for everyone. -->
-		<string>webcredentials:thro-api-staging.onrender.com</string>
+		<string>webcredentials:thro.uk</string>
 	</array>
 	<key>com.apple.security.application-groups</key>
 	<array>

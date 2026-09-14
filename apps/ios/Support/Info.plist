@@ -80,12 +80,12 @@
 	     ThroRoute reads these paths and the same paths under https://, so adopting universal links
 	     later is a hosting decision rather than a code change. -->
 	<key>THROAPIBaseURL</key>
-	<string>https://thro-api-staging.onrender.com</string>
+	<string>https://api.thro.uk</string>
 	<!-- The public web site, where the notice about people's information is read from (PD-094). Not the API:
 	     the day a notice is needed may be the day the API is switched off. tools/host.py keeps this with the
 	     other hosts. -->
 	<key>THROWebBaseURL</key>
-	<string>https://thro-web-q7ys.onrender.com</string>
+	<string>https://thro.uk</string>
 	<key>THROGoogleClientID</key>
 	<string>582675551910-rvvhkvlm6rebbf4cclaomauog24sth8m.apps.googleusercontent.com</string>
 	<key>CFBundleURLTypes</key>

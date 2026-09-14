@@ -10,6 +10,7 @@ domain exists, which is the trap this exists to close:
   - `ThroDarts.entitlements` webcredentials: — the domain the phone fetches the association file from
   - `Info.plist`             THROWebBaseURL — the public web site the app reads a notice from (PD-094)
   - `Hosts.kt`               THRO_WEB_BASE_URL — the same web site, for the Android app (PD-097)
+  - `SupportTV/Info.plist`   THROAPIBaseURL — the host the Apple TV app reads a league's public pages from
 
 Before a domain there is one host and all three carry it. After a domain there are two, because a
 registrable domain may serve its API from a subdomain: the app talks to `api.thro.uk` while the
@@ -41,6 +42,9 @@ RENDER = ROOT / "render.yaml"
 PLIST = ROOT / "apps/ios/Support/Info.plist"
 ENTS = ROOT / "apps/ios/Support/ThroDarts.entitlements"
 ANDROID = ROOT / "packages/client-android/src/main/kotlin/thro/client/Hosts.kt"
+# The Apple TV app talks to the same API as the phone. It was missed when the switch was written, and found on the day
+# the switch was first run: the phone moved to api.thro.uk and the television stayed on the Render hostname.
+TV_PLIST = ROOT / "apps/ios/SupportTV/Info.plist"
 
 # The API service's own Render hostname. This is the free-tier public host AND, after a domain, the
 # rewrite target that never changes — the API keeps answering on it either way.
@@ -74,6 +78,7 @@ def arrangement(domain: str | None) -> dict[str, str]:
             "webcredentials": API_SERVICE_HOST,
             "web_base": f"https://{WEB_SERVICE_HOST}",
             "android_web_base": f"https://{WEB_SERVICE_HOST}",
+            "tv_base_url": f"https://{API_SERVICE_HOST}",
         }
     return {
         "rp_id": domain,
@@ -82,6 +87,7 @@ def arrangement(domain: str | None) -> dict[str, str]:
         "webcredentials": domain,
         "web_base": f"https://{domain}",
         "android_web_base": f"https://{domain}",
+        "tv_base_url": f"https://api.{domain}",
     }
 
 
@@ -90,7 +96,9 @@ def read() -> dict[str, str | None]:
     rp, origins = RP_ID.search(render), RP_ORIGINS.search(render)
     base, cred, web = BASE_URL.search(plist), WEBCRED.search(ents), WEB_BASE.search(plist)
     android = ANDROID_WEB_BASE.search(ANDROID.read_text())
+    tv = BASE_URL.search(TV_PLIST.read_text())
     return {
+        "tv_base_url": tv.group(2) if tv else None,
         "rp_id": rp.group(2) if rp else None,
         "rp_origins": origins.group(2) if origins else None,
         "base_url": base.group(2) if base else None,
@@ -148,7 +156,7 @@ def check() -> int:
         print("  fix: python3 tools/host.py --set " + domain[4:])
         return 1
 
-    for key in ("rp_id", "base_url", "webcredentials", "web_base", "android_web_base"):
+    for key in ("rp_id", "base_url", "webcredentials", "web_base", "android_web_base", "tv_base_url"):
         if found[key] != want[key]:
             problems.append(f"  {key}: found {found[key]!r}, {where} wants {want[key]!r}")
     # Origins may be absent on the free tier, where the code defaults to https://<rp id>. With a
@@ -208,11 +216,13 @@ def apply(domain: str | None) -> int:
     ents = WEBCRED.sub(lambda m: m.group(1) + want["webcredentials"] + m.group(3), ents, count=1)
     android = ANDROID_WEB_BASE.sub(lambda m: m.group(1) + want["android_web_base"] + m.group(3), ANDROID.read_text(),
                                    count=1)
+    tv = BASE_URL.sub(lambda m: m.group(1) + want["tv_base_url"] + m.group(3), TV_PLIST.read_text(), count=1)
 
     RENDER.write_text(render); PLIST.write_text(plist); ENTS.write_text(ents); ANDROID.write_text(android)
+    TV_PLIST.write_text(tv)
 
     print(f"host: set to {'the domain ' + domain if domain else 'the free subdomain'}")
-    for k in ("rp_id", "rp_origins", "base_url", "webcredentials", "web_base", "android_web_base"):
+    for k in ("rp_id", "rp_origins", "base_url", "webcredentials", "web_base", "android_web_base", "tv_base_url"):
         print(f"  {k} = {want[k]}")
     if domain:
         print()

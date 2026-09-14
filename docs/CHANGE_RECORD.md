@@ -5514,3 +5514,26 @@ the new one.
 Checked afterwards from outside the pipeline: `/healthz` answers `database` ok, `schemaVersion` V047, `codeVersion`
 V047, commit d2a0a29b402b602d766204a0ac2c0f4a99cb1d7f. Neon lists the new restore point, and both hand-made ones —
 `br-gentle-block-zal9jk26` and `br-bitter-block-zat2etp8` — are still there, as PD-095's prefix promised.
+
+## The domain switch, run for the first time — and the two places it would have missed
+
+The founder turned Blueprint Auto Sync off, so this commit reaches the API only through the dashboard. Then
+`python3 tools/host.py --set thro.uk` (PD-058): the relying party `thro.uk` with origins `https://thro.uk,https://api.thro.uk`
+in `render.yaml`, the iPhone's API at `https://api.thro.uk`, its passkey domain `thro.uk`, and the web for the notice at
+`https://thro.uk` on both phones. The rewrites still address the API service's own hostname, as designed.
+
+**Looking for what still named the old hosts found two things the switch did not own.**
+
+- **The Apple TV app's `THROAPIBaseURL`** stayed on `thro-api-staging.onrender.com`. It would have kept working, since
+  the service answers on its own name, but the phone and the television would have spoken to two different names while
+  the check said every place agreed. `host.py` holds it now as a seventh value. In a copy, `--set-free` returned all six
+  files byte for byte to the last commit, and `--set thro.uk` returned them byte for byte to this one.
+- **The deploy pipeline's wait read the iPhone's API address.** After the switch that is `api.thro.uk`, which has no
+  address until the DNS is done, so the next `deploy-api` run would have waited on a name that did not resolve and
+  failed after a good deploy. `deploy_api.py` now proves a deploy on the service's own hostname, which the deploy hook
+  deploys and which answers whatever the public name is doing. `API_URL` still overrides it.
+
+**Until the founder's half is done, a TestFlight build from this commit points at a name with no address.** Build 7,
+already on phones, is unaffected: it was built against the Render hostname. The rest is in GOING_LIVE, steps 3–9:
+custom domains on both Render services, the records at GoDaddy (A records only), `THRO_RP_ID` and `THRO_RP_ORIGINS` in
+the API's dashboard, the paid instance, and then a new build and the association file checked on the domain.
