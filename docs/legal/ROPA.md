@@ -91,7 +91,11 @@ player.
 | Apple, Google | Identity providers at sign-in | Their own terms |
 | *(mail host — to be chosen)* | The `privacy@` / `safeguarding@` mailbox | See `docs/product/MAILBOX.md` |
 
-Written processor terms under Art 28 are on the founder's list. Render's DPA says it supplements Render's Terms of Service, and its trust page offers a GDPR DPA under *Request Documents*; whether that suffices or a signed copy is needed is for the solicitor. For the others the terms are **outstanding**.
+Written processor terms under Art 28, as of 14 Sep 2026:
+
+- **Render — obtained.** The founder requested Render's GDPR DPA from its trust page (*Request Documents*) and holds the copy. It says it supplements Render's Terms of Service; whether that suffices or a signed copy is needed is for the solicitor.
+- **Neon — part of its terms, copy to keep.** Neon says its DPA is embedded in its terms of service, and publishes it at `neon.com/pdf/DPA.pdf` for download and separate signature; transfers rest on the Data Privacy Framework. The founder is to save the PDF. Whether acceptance through the terms suffices is for the solicitor.
+- **The mail host — outstanding** until one is chosen (`docs/product/MAILBOX.md`). A personal Gmail account used as the inbox would come under no business processor terms.
 
 ## Technical and organisational measures
 

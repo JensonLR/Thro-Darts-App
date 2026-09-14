@@ -27,8 +27,15 @@ first is the only one that matters:
 | **Google Workspace** | ~£5.20/mo | Only worth it if you want Drive and Docs too. You already know the interface, which is a real advantage. |
 | **Cloudflare Email Routing + Gmail** | free | **Read the catch.** Routing is *inbound only*. Mail to `privacy@thro.uk` lands in your Gmail for nothing, but replying **as** that address needs an outbound SMTP relay Gmail can verify (Brevo or similar, free tier). Until that is set up, every reply comes from `jensonlewis0@gmail.com` — which for a statutory privacy contact looks careless and, worse, teaches people to write to a personal address. |
 
-**The honest recommendation is Fastmail.** The free path is fine for a week; it is the wrong answer for an
-address printed in a privacy policy.
+**Revised 14 Sep 2026, on cost.** Fastmail is free only for a 30-day trial, the founder wants no monthly bill yet, and
+Zoho Mail's free plan was not offered to the founder at sign-up. What is left:
+
+| | Cost | Verdict |
+| --- | --- | --- |
+| **ImprovMX + Brevo + Gmail** | free | **For the test period.** ImprovMX's free plan forwards up to 25 addresses on one domain into Gmail (receive only, 500 forwards a day), with MX records at GoDaddy, so the nameservers stay put. Brevo's free plan relays up to 300 a day and signs as `thro.uk`, and Gmail's *Send mail as* uses it, so replies come from `privacy@thro.uk`. **The catch is where the mail lives**: a personal Gmail account holding data-subject requests and safeguarding reports, under no business processor terms — a question for the solicitor, and a reason to move before launch. |
+| **Migadu Micro** | $19/yr | **Before launch.** A real mailbox with IMAP, unlimited addresses, from a Swiss host with its own processor terms. 20 outgoing and 200 incoming a day. |
+
+Whichever is picked, the DNS below is the same shape — copy the host's own values, not these placeholders.
 
 ## The DNS records
 
