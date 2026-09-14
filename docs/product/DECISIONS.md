@@ -4432,3 +4432,27 @@ not to wait.
 - **`tools/host.py` keeps Android's web address with the others** (`Hosts.kt`), so the domain switch moves it too.
 - **A debuggable build may read a local copy** — `--es thro.webBaseUrl`, plain HTTP to the emulator's address for the host
   and nowhere else — as the iPhone's Debug build takes `-ThroWebBaseURL`. A release build cannot.
+
+## PD-098 — A TestFlight build carries its entitlements, or it is not uploaded
+
+**14 September 2026.** The first build the pipeline uploaded (build 6) could not sign in with Apple on the founder's
+iPhone: error 1000. The App ID, the profile and the entitlements file were all right. The binary had no entitlements at
+all, because the archive is built with `CODE_SIGNING_ALLOWED=NO`, which writes none, and export signs with only what the
+binary carries. Repeating CI's archive and export on the Mac showed `get-task-allow` and nothing else.
+
+### Decided
+
+- **The archive stays certificate-free, and its entitlements are stamped back on before export**, with an ad-hoc
+  `codesign --sign -` of the widget extension and then the app, from the same entitlements files the project uses. A
+  signed archive would need a development certificate on every runner; ad-hoc signing inside the build is refused on the
+  iOS 26 SDK. The same export, read the same way, carries Sign in with Apple, the passkey domain and the App Group.
+- **The upload refuses a build without Sign in with Apple or the passkey domain.** The archive is signed once into a
+  folder and read before it is signed to upload, because an upload leaves nothing to look inside. A build nobody can sign
+  in to is worse than none. Run against build 6's export the check refuses it; against the fixed export it passes.
+- **The App Group still only reports** (unchanged): everything but the widgets works without it.
+- **The step names the bundles it stamps**, and fails saying so if a target is renamed, rather than stamping nothing.
+
+### Not decided here
+
+- A new target with its own entitlements has to be added to the stamping step by hand. The upload check catches the
+  app's sign-in entitlements going missing, not a future extension's.

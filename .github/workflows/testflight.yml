@@ -20,9 +20,11 @@ name: testflight
 #   IOS_DIST_P12_PASSWORD its password
 # docs/runbooks/TESTFLIGHT.md says where each comes from. None of them may ever appear in the repository.
 #
-# Signing: the archive is built unsigned and signed at export by Xcode's automatic signing, using the API
-# key — a cloud-managed Apple Distribution certificate if the key's role allows, the imported .p12 if one
-# was given. The build number is this workflow's run number, so every upload is newer than the last.
+# Signing: the archive is built without a certificate, its entitlements are stamped back on with an ad-hoc
+# signature, and it is signed at export by Xcode's automatic signing, using the API key — a cloud-managed
+# Apple Distribution certificate if the key's role allows, the imported .p12 if one was given. Export keeps
+# only the entitlements the binary already carries, so without the stamp the app ships with none (PD-098).
+# The build number is this workflow's run number, so every upload is newer than the last.
 
 on:
   workflow_dispatch:
@@ -125,12 +127,81 @@ jobs:
           security list-keychains -d user -s "$keychain" login.keychain-db
           rm -f "$RUNNER_TEMP/dist.p12"
 
-      - name: Archive, unsigned
+      - name: Archive, without a certificate
         run: |
           xcodebuild -project apps/ios/ThroDarts.xcodeproj -scheme ThroDarts -configuration Release \
             -destination 'generic/platform=iOS' -archivePath "$RUNNER_TEMP/ThroDarts.xcarchive" \
             CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" \
             CURRENT_PROJECT_VERSION=${{ github.run_number }} -quiet archive
+
+      # **Export signs with the entitlements the binary already carries, and this archive carries none**
+      # (PD-098). CODE_SIGNING_ALLOWED=NO skips writing them, so build 6 reached TestFlight without Sign in
+      # with Apple, its passkey domain or its App Group, and Sign in with Apple failed on the phone with
+      # Apple's error 1000. An ad-hoc signature costs no certificate and puts them back; export then replaces
+      # it with the distribution signature and keeps them. Xcode refuses ad-hoc signing inside the build on
+      # the iOS 26 SDK, so it is done here, afterwards — the extension first, because signing the app seals
+      # what is inside it.
+      - name: Put the entitlements back on the archive
+        run: |
+          app="$RUNNER_TEMP/ThroDarts.xcarchive/Products/Applications/ThroDarts.app"
+          live="$app/PlugIns/ThroLive.appex"
+          for bundle in "$live" "$app"; do
+            [ -d "$bundle" ] || { echo "::error::$(basename "$bundle") is not in the archive, so its entitlements cannot be put back. A target was renamed; this step names bundles."; exit 1; }
+          done
+          codesign --force --sign - --entitlements apps/ios/SupportLive/ThroLive.entitlements "$live"
+          codesign --force --sign - --entitlements apps/ios/Support/ThroDarts.entitlements "$app"
+
+      # **Nothing reaches a tester until the signed app is known to carry them.** An upload leaves no file
+      # to look inside, so the archive is signed once into a folder and read, and only then signed again
+      # to upload. Sign in with Apple and the passkey domain refuse the upload: without them nobody can
+      # sign in, and the build is worse than none. The App Group only reports, as it always has — every
+      # thing but the widgets works without it.
+      - name: Sign, and refuse a build that cannot sign in
+        run: |
+          cat > "$RUNNER_TEMP/CheckOptions.plist" <<PLIST
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0"><dict>
+            <key>method</key><string>app-store-connect</string>
+            <key>destination</key><string>export</string>
+            <key>signingStyle</key><string>automatic</string>
+            <key>teamID</key><string>${TEAM_ID}</string>
+            <key>manageAppVersionAndBuildNumber</key><false/>
+            <key>uploadSymbols</key><false/>
+          </dict></plist>
+          PLIST
+          xcodebuild -exportArchive -archivePath "$RUNNER_TEMP/ThroDarts.xcarchive" \
+            -exportOptionsPlist "$RUNNER_TEMP/CheckOptions.plist" -exportPath "$RUNNER_TEMP/check" \
+            -allowProvisioningUpdates \
+            -authenticationKeyPath "$HOME/private_keys/AuthKey_${ASC_KEY_ID}.p8" \
+            -authenticationKeyID "$ASC_KEY_ID" -authenticationKeyIssuerID "$ASC_ISSUER_ID" -quiet
+          ipa=$(find "$RUNNER_TEMP/check" -maxdepth 1 -name '*.ipa' -print -quit)
+          [ -n "$ipa" ] || { echo "::error::The signed export left no .ipa to check."; exit 1; }
+          work="$RUNNER_TEMP/signed" && rm -rf "$work" && mkdir -p "$work" && unzip -qq "$ipa" -d "$work"
+          entitlements() { codesign -d --entitlements - --xml "$1" 2>/dev/null; }
+          app=$(find "$work/Payload" -maxdepth 1 -name '*.app' -print -quit)
+          refused=""
+          for key in com.apple.developer.applesignin com.apple.developer.associated-domains; do
+            if entitlements "$app" | grep -q "<key>$key</key>"; then
+              echo "- $key: present in ThroDarts.app" >> "$GITHUB_STEP_SUMMARY"
+            else
+              refused="$refused $key"
+            fi
+          done
+          for bundle in "$app" "$app"/PlugIns/*.appex; do
+            [ -e "$bundle" ] || continue
+            if entitlements "$bundle" | grep -q 'group.app.thro.darts'; then
+              echo "- App Group: present in $(basename "$bundle")" >> "$GITHUB_STEP_SUMMARY"
+            else
+              echo "- **App Group MISSING from $(basename "$bundle").** The widgets will read an empty container and draw nothing. Tick App Groups on the \`app.thro.darts\` App ID (docs/runbooks/TESTFLIGHT.md) and run again; nothing else in the app is affected." >> "$GITHUB_STEP_SUMMARY"
+            fi
+          done
+          rm -rf "$work" "$RUNNER_TEMP/check"
+          if [ -n "$refused" ]; then
+            echo "- **Not uploaded: the signed app is missing$refused.** Nobody could sign in to this build." >> "$GITHUB_STEP_SUMMARY"
+            echo "::error::The signed app is missing$refused, so it was not uploaded. Check the capability is ticked on the app.thro.darts App ID and that the entitlements step above ran (docs/runbooks/TESTFLIGHT.md)."
+            exit 1
+          fi
 
       - name: Sign and upload to App Store Connect
         run: |
@@ -151,43 +222,6 @@ jobs:
             -allowProvisioningUpdates -allowProvisioningDeviceRegistration \
             -authenticationKeyPath "$HOME/private_keys/AuthKey_${ASC_KEY_ID}.p8" \
             -authenticationKeyID "$ASC_KEY_ID" -authenticationKeyIssuerID "$ASC_ISSUER_ID"
-
-      # A build whose App Group did not survive signing installs, launches and behaves perfectly —
-      # and its widgets read an empty container and draw nothing, with no error anywhere. The app
-      # itself says so (Settings → What you can see on this phone), but only after the founder has
-      # installed it and gone looking. This says it here.
-      #
-      # It reports and never gates. The entitlement is held in the source by
-      # tools/check_app_group.py on every push, so a miss here is a signing question rather than a
-      # code one, and refusing to upload a build that is otherwise good would be the wrong trade —
-      # everything except the widgets works without it.
-      - name: Say whether the App Group survived signing
-        if: always()
-        run: |
-          set +e
-          ipa=$(find "$RUNNER_TEMP/export" -maxdepth 2 -name '*.ipa' -print -quit 2>/dev/null)
-          if [ -z "$ipa" ]; then
-            echo "- App Group: not checked — the export left no .ipa to look inside (it uploads directly)." >> "$GITHUB_STEP_SUMMARY"
-            exit 0
-          fi
-          work="$RUNNER_TEMP/appgroup"
-          rm -rf "$work" && mkdir -p "$work"
-          unzip -qq "$ipa" -d "$work" 2>/dev/null
-          missing=""
-          for binary in "$work"/Payload/*.app "$work"/Payload/*.app/PlugIns/*.appex; do
-            [ -e "$binary" ] || continue
-            name=$(basename "$binary")
-            if codesign -d --entitlements :- "$binary" 2>/dev/null | grep -q 'group.app.thro.darts'; then
-              echo "- App Group: present in $name" >> "$GITHUB_STEP_SUMMARY"
-            else
-              missing="$missing $name"
-            fi
-          done
-          if [ -n "$missing" ]; then
-            echo "- **App Group MISSING from:$missing.** The widgets will read an empty container and draw nothing. Tick App Groups on the \`app.thro.darts\` App ID (docs/runbooks/TESTFLIGHT.md) and run again; nothing else in the app is affected." >> "$GITHUB_STEP_SUMMARY"
-          fi
-          rm -rf "$work"
-          exit 0
 
       - name: Say what was uploaded
         run: |

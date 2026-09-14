@@ -5466,3 +5466,34 @@ The README's Android row, the defaults audit, the breach plan, the store answers
 GOING_LIVE's table now say what is true.
 
 Counts: Android client 42 tests (15 new).
+
+## TestFlight builds lost every entitlement at signing, and now cannot (PD-098)
+
+**The pipeline uploaded for the first time, and the build could not sign in.** Run 5 failed to authenticate
+with App Store Connect: the key and issuer were tested from the founder's Mac with a hand-signed token and Apple
+answered 200, so the stored copy of a secret was wrong; the founder set all three again from known values and run 6
+uploaded build 6, which Apple processed to VALID and put in the internal Founders group. On the founder's iPhone,
+Sign in with Apple said *Apple could not finish the sign-in* — `ASAuthorizationError.unknown`, 1000.
+
+**The binary had no entitlements.** Everything anyone reads said the right thing: Apple lists `APPLE_ID_AUTH`,
+associated domains and app groups on the `app.thro.darts` App ID, and the entitlements file asks for all three. The
+workflow archives with `CODE_SIGNING_ALLOWED=NO`, which writes no entitlements into the binary — the archived app is
+"not signed at all" — and `-exportArchive` signs with what the binary already carries. Proved on this Mac by
+repeating CI's archive and exporting it to a folder with the same key: the app and the widget extension carried
+`get-task-allow` and nothing else. No Sign in with Apple, no passkey domain, no App Group. The workflow's own App
+Group report could not have said so: the export uploads directly and left nothing to look inside, and it wrote that
+into the summary as designed.
+
+**Fixed by putting them back before export.** Ad-hoc signing inside the build is refused on the iOS 26.5 SDK
+(tried: *Ad Hoc code signing is not allowed*), so a step after the archive signs the widget extension and then the
+app with `codesign --sign -` and their entitlements files. The same export of that archive, read the same way, carried
+`com.apple.developer.applesignin`, `associated-domains` and the App Group in the app, and the App Group in the
+extension, with the right application identifiers.
+
+**And the upload now refuses a build without them.** The archive is signed once into a folder and read before it is
+signed again to upload. Missing Sign in with Apple or the passkey domain stops the run before anything reaches a
+tester; the App Group still only reports, as it did.
+
+TESTFLIGHT.md says what error 1000 means on a TestFlight build and how to read a build's entitlements by hand.
+
+Counts: unchanged; the proof is the export's entitlements, read on this Mac, and build 7's run.

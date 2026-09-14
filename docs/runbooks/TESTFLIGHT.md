@@ -239,18 +239,27 @@ to report a problem. **The app says so instead**: Settings → *What you can see
 *Home Screen and Lock Screen widgets* row reads **Blocked** with the reason, rather than **Working**
 or **Ready**.
 
-**The run says so too, when it can.** After the upload, the workflow looks inside the signed app
-and its widget extension for `group.app.thro.darts` and writes what it found into the run's summary
-— *App Group: present in ThroDarts.app*, or a line naming what it is missing from. It reports and
-never blocks: everything except the widgets works without it, so refusing to upload an otherwise
-good build would be the wrong trade. When the export uploads directly and leaves no file to look
-inside, the summary says that rather than implying a pass.
+**The run says so too.** Before uploading, the workflow signs the app once into a folder, looks
+inside the app and its widget extension, and writes what it found into the run's summary — *App
+Group: present in ThroDarts.app*, or a line naming what it is missing from. The App Group only
+reports: everything except the widgets works without it. **Sign in with Apple and the passkey
+domain refuse the upload** — a build nobody can sign in to is worse than no build (PD-098).
 
 If the widgets are empty: the entitlement is in the source (`apps/ios/Support/ThroDarts.entitlements` and
 `apps/ios/SupportLive/ThroLive.entitlements`, held on every push by `tools/check_app_group.py`), so
 the loss is in signing, not in the code. Check that the `app.thro.darts` App ID has **App Groups**
-ticked (step 2), then run the workflow again — the archive is built unsigned and signed at export,
-so a capability added on Apple's side takes effect on the next run with no code change. Nothing else
+ticked (step 2), then run the workflow again — a capability added on Apple's side takes effect on
+the next run with no code change.
+
+## If Sign in with Apple says "Apple could not finish the sign-in" on a TestFlight build
+
+That sentence is Apple's error 1000, and on a phone signed in to its Apple Account it means **the
+binary was signed without the Sign in with Apple entitlement**. Build 6 was: the archive is built with
+signing switched off, which writes no entitlements into it, and export signs with only what the binary
+already carries — so it shipped with none, while the App ID, the profile and the entitlements file were
+all correct (PD-098). The workflow now stamps the entitlements back onto the archive before export and
+refuses to upload a build without them, so this should not recur. To check a build by hand, export it
+to a folder and read the app: `codesign -d --entitlements - --xml Payload/ThroDarts.app`. Nothing else
 in the app depends on it: scoring, the Lock Screen, the wall, the share card and the fixtures all
 work without it.
 
