@@ -5384,9 +5384,13 @@ the founder rather than shipped, because the pipeline will carry the next API pu
 
 **The static site, for the record of processing:** its responses carry `server: cloudflare` and were answered from
 Cloudflare's London data centre, and so were the API's. Render's static-site documentation gives no region and no origin
-location, and its sub-processor list is in its DPA, which could not be read from here. `ROPA.md` now says what was
-checked and what is left to confirm, no longer says there is no transfer outside the UK/EEA without that confirmation,
-and says the retention sweep is not yet working.
+location. Render's own terms settle the rest, read in a browser because a plain fetch returns only the pages' frame:
+its DPA (§6.1) says its primary processing operations take place in the United States and that transfer there is
+necessary, under the EU-US Data Privacy Framework or, failing that, the EU standard contractual clauses with a UK
+Addendum; its trust page lists four sub-processors — AWS, Google Cloud, Cloudflare and ClickHouse, each a US entity —
+and says Render is certified under the Data Privacy Framework including the UK Extension. So `ROPA.md`'s *no transfer
+outside the UK/EEA* was wrong on Render's own terms. It now says so and names the mechanism for the solicitor to judge,
+and it says the retention sweep is not yet working.
 
 **Still to do:** the founder adds the three secrets, and deploy-api then runs from the Actions tab. The retention fix,
 `THRO_RP_ORIGINS` and *Auto Sync* wait on the founder. And `thro.uk` exists now — Nominet's registry records it

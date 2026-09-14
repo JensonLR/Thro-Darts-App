@@ -33,7 +33,7 @@ player.
 | **Data subjects** | Players, including children. |
 | **Recipients** | Apple and Google, as identity providers, at the moment of sign-in only. |
 | **Retention** | Until erasure is requested. `identity.erasure` records what was removed. |
-| **Transfers** | The database is in **London**; the API compute is in **Frankfurt** (Render, EEA) or London (Fly, per `DEPLOY.md`). **Requests reach Render through Cloudflare's network first** (checked 13 Sep 2026; see "Processors"), so whether anything leaves the UK/EEA is for Render's and Cloudflare's terms to settle — not yet confirmed. |
+| **Transfers** | The database is in **London**; the API compute is in **Frankfurt** (Render, EEA) or London (Fly, per `DEPLOY.md`). **Render's own terms provide for transfer to the US all the same**: its DPA (§6.1, last modified 19 Dec 2024) says Render's primary processing operations take place in the United States and that transfer there is necessary to provide the service — made under the EU-US Data Privacy Framework or, failing that, the EU standard contractual clauses, with a UK Addendum (its Exhibit D); Render's trust page says it is certified under the Data Privacy Framework including the UK Extension. Requests also reach Render through Cloudflare's network first (see "Processors"). Read 13 Sep 2026; whether this suffices is for the solicitor. |
 
 ### 2. Matches and results
 
@@ -85,13 +85,13 @@ player.
 
 | Processor | What for | Where |
 | --- | --- | --- |
-| Render | Hosting the API | Frankfurt (EEA) for the compute. **Requests reach it through Cloudflare's network first**: the hostname resolves through `cdn.cloudflare.net`, and a test request on 13 Sep 2026 was answered by Cloudflare's London data centre (`server: cloudflare`, `cf-ray … -LHR`). A proxy answering at that layer ends the encrypted connection at its edge, so each request's contents pass through Cloudflare on the way |
-| Render (static site) | Serving the public web pages, and `notice.json`, which the iPhone app reads at launch and on returning to the front to learn whether there is a notice about people's information (PD-094). The request carries nothing about the person; the host sees the internet address it came from, as for any page | **Cloudflare's network, in front of Render** — checked 13 Sep 2026: responses carry `server: cloudflare`, and a test request was answered by Cloudflare's London data centre (`cf-ray … -LHR`); Cloudflare answers each visitor from a data centre near them. On a cache miss the edge fetches the page from Render's origin, **whose location Render's static-site documentation does not give**, and that documentation describes no region setting. Still to confirm, with the Art 28 terms: Render's sub-processor list (its DPA, Exhibit B) and the transfer terms |
-| Neon | The PostgreSQL database | **London (`aws-eu-west-2`)** — read from `docs/runbooks/DEPLOY.md`. In the UK, so no transfer question arises for the database itself. |
+| Render | Hosting the API | Frankfurt (EEA) for the compute. **Requests reach it through Cloudflare's network first**: the hostname resolves through `cdn.cloudflare.net`, and a test request on 13 Sep 2026 was answered by Cloudflare's London data centre (`server: cloudflare`, `cf-ray … -LHR`). A proxy answering at that layer ends the encrypted connection at its edge, so each request's contents pass through Cloudflare on the way. Render is a US company whose DPA provides for transfer to the US — see *Transfers* above |
+| Render (static site) | Serving the public web pages, and `notice.json`, which the iPhone app reads at launch and on returning to the front to learn whether there is a notice about people's information (PD-094). The request carries nothing about the person; the host sees the internet address it came from, as for any page | **Cloudflare's network, in front of Render** — checked 13 Sep 2026: responses carry `server: cloudflare`, and a test request was answered by Cloudflare's London data centre (`cf-ray … -LHR`); Cloudflare answers each visitor from a data centre near them. On a cache miss the edge fetches the page from Render's origin, **whose location Render's static-site documentation does not give**, and that documentation describes no region setting. Render's DPA sends its sub-processor list to its trust page, which names AWS, Google Cloud, Cloudflare and ClickHouse, each a US entity (read 13 Sep 2026); the transfer terms are under *Transfers* above |
+| Neon | The PostgreSQL database | **London (`aws-eu-west-2`)** — read from `docs/runbooks/DEPLOY.md`. That is where the data is stored; Neon's own processor terms have not been read, so whether a transfer question arises is not yet checked. |
 | Apple, Google | Identity providers at sign-in | Their own terms |
 | *(mail host — to be chosen)* | The `privacy@` / `safeguarding@` mailbox | See `docs/product/MAILBOX.md` |
 
-Written processor terms under Art 28 are **outstanding** for each of these and are on the founder's list.
+Written processor terms under Art 28 are on the founder's list. Render's DPA says it supplements Render's Terms of Service, and its trust page offers a GDPR DPA under *Request Documents*; whether that suffices or a signed copy is needed is for the solicitor. For the others the terms are **outstanding**.
 
 ## Technical and organisational measures
 
