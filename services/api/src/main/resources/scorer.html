@@ -1,0 +1,447 @@
+<!doctype html>
+<html lang="en-GB" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>THRØ — playtest scorer</title>
+<style>
+/* Tokens taken from the approved THRØ design system. Values are not invented here; where this
+   harness needs something the system does not specify, it is left plain rather than designed. */
+:root{
+  --thro-chalk:#F7F6F2; --thro-ink:#101211; --thro-ink-raised:#1B1F1D; --thro-ink-sunken:#080A09;
+  --thro-ink-hairline:#2C312E; --thro-green:#0F3D2E; --thro-green-deep:#174F3C;
+  --thro-green-onink:#57A385; --thro-live:#F0654B; --thro-pewter:#717875;
+  --color-text-primary:var(--thro-chalk); --color-text-secondary:#A7ADAA; --color-text-tertiary:#7C8380;
+  --color-background-primary:var(--thro-ink); --color-surface-primary:var(--thro-ink-raised);
+  --color-surface-secondary:var(--thro-ink-sunken); --color-border-default:var(--thro-ink-hairline);
+  --color-surface-brand:var(--thro-green-deep);
+  --font-ui:"Archivo","Archivo Variable",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --font-sport:"IBM Plex Sans Condensed","Archivo",system-ui,sans-serif;
+  --spacing-2:8px; --spacing-3:12px; --spacing-4:16px; --spacing-5:20px; --spacing-6:24px;
+  --radius-large:10px; --touch-target-scoring:64px;
+  --motion-duration-instant:80ms;
+}
+@media (prefers-reduced-motion:reduce){ :root{ --motion-duration-instant:0ms } }
+*{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+body{
+  background:var(--color-background-primary); color:var(--color-text-primary);
+  font-family:var(--font-ui); min-height:100dvh; display:flex; flex-direction:column;
+  padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+}
+.sport{font-family:var(--font-sport);font-variant-numeric:tabular-nums lining-nums}
+.eyebrow{
+  font-size:13px;line-height:16px;letter-spacing:.09em;text-transform:uppercase;
+  font-weight:600;color:var(--color-text-secondary)
+}
+.harness{
+  background:#2C2314;color:#DFA53A;font-size:12px;padding:6px var(--spacing-5);
+  text-align:center;border-bottom:1px solid var(--color-border-default)
+}
+header{padding:var(--spacing-4) var(--spacing-5);border-bottom:1px solid var(--color-border-default)}
+.players{display:flex;align-items:flex-start;gap:var(--spacing-4)}
+.player{flex:1;min-width:0}
+.player .name{
+  font-size:15px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis
+}
+.player.away{text-align:right}
+.player .legs{font-size:13px;color:var(--color-text-secondary);margin-top:2px}
+.player.active .name{color:var(--thro-green-onink)}
+.legscore{font-size:34px;line-height:32px;font-weight:700;letter-spacing:-.02em}
+main{flex:1;display:flex;flex-direction:column;justify-content:center;align-items:center;
+     padding:var(--spacing-5);gap:0}
+.remaining{font-size:96px;line-height:88px;font-weight:700;letter-spacing:-.03em}
+.turn{margin-top:var(--spacing-3);text-align:center}
+.checkout{
+  margin-top:var(--spacing-4);padding:var(--spacing-3) var(--spacing-4);
+  border:2px solid var(--thro-green-onink);border-radius:var(--radius-large);
+  text-align:center;background:#152E25
+}
+.checkout .val{font-family:var(--font-sport);font-size:32px;font-weight:700;line-height:1}
+.entry{
+  min-height:30px;margin-top:var(--spacing-3);font-family:var(--font-sport);
+  font-size:25px;font-weight:600;color:var(--color-text-secondary)
+}
+.entry.empty{visibility:hidden}
+.msg{margin-top:var(--spacing-3);font-size:15px;text-align:center;min-height:22px;max-width:34ch}
+.msg.error{color:var(--thro-live)}
+.msg.ok{color:var(--thro-green-onink)}
+.pad{padding:var(--spacing-4) var(--spacing-5);display:flex;flex-direction:column;gap:var(--spacing-2)}
+.quick{display:grid;grid-template-columns:repeat(6,1fr);gap:var(--spacing-2)}
+.grid{display:grid;grid-template-columns:repeat(3,1fr);gap:var(--spacing-2)}
+button{
+  font-family:var(--font-sport);font-variant-numeric:tabular-nums;
+  background:var(--color-surface-primary);color:var(--color-text-primary);
+  border:1px solid var(--color-border-default);border-radius:var(--radius-large);
+  font-size:25px;font-weight:600;cursor:pointer;
+  min-height:var(--touch-target-scoring);
+  transition:transform var(--motion-duration-instant) cubic-bezier(.2,.9,.1,1),
+             background var(--motion-duration-instant) ease
+}
+button:active{transform:scale(.97);background:var(--color-surface-secondary)}
+button:focus-visible{outline:2px solid var(--thro-chalk);outline-offset:2px}
+.quick button{min-height:44px;font-size:15px;background:var(--color-surface-secondary)}
+.label{font-family:var(--font-ui);font-size:15px;font-weight:700;letter-spacing:.04em;text-transform:uppercase}
+.enter{
+  min-height:var(--touch-target-scoring);background:var(--color-surface-brand);
+  border:0;color:var(--thro-chalk);font-family:var(--font-ui);font-size:18px;font-weight:700;
+  letter-spacing:.04em;text-transform:uppercase;border-radius:var(--radius-large)
+}
+.enter[disabled]{opacity:.45;cursor:not-allowed}
+.setup{padding:var(--spacing-6) var(--spacing-5);display:flex;flex-direction:column;gap:var(--spacing-4);max-width:420px;margin:0 auto;width:100%}
+input{
+  font-family:var(--font-ui);font-size:17px;padding:14px var(--spacing-4);
+  background:var(--color-surface-primary);color:var(--color-text-primary);
+  border:1px solid var(--color-border-default);border-radius:6px;width:100%
+}
+.hide{display:none!important}
+/* Trust is evidence quality, never prestige, so it is stated plainly and never decorated. */
+.trust{font-size:11px;letter-spacing:.06em;text-transform:uppercase;opacity:.7;text-align:center;
+  max-width:150px;line-height:1.3}
+.confirm{position:fixed;inset:0;background:rgba(0,0,0,.72);display:flex;align-items:center;
+  justify-content:center;padding:var(--spacing-5);z-index:20}
+.confirmcard{background:var(--thro-ink-raised);border:1px solid var(--color-border-default);
+  border-radius:12px;padding:var(--spacing-5);max-width:340px;width:100%}
+.confirmcard h2{font-size:19px;font-weight:700;margin-bottom:var(--spacing-2)}
+.confirmcard p{font-size:14px;opacity:.8;line-height:1.45;margin-bottom:var(--spacing-4)}
+.confirmrow{display:flex;gap:var(--spacing-2)}
+.confirmrow button{flex:1}
+.stats{position:fixed;inset:0;background:var(--thro-ink);overflow-y:auto;
+  padding:var(--spacing-5);z-index:10}
+/* Secondary actions still meet the 44px minimum target; only the scoring keys get the 64px one. */
+.secondary{min-height:var(--touch-target-minimum);font-family:var(--font-ui);font-size:13px;
+  font-weight:700;letter-spacing:.06em;text-transform:uppercase;padding:0 var(--spacing-4);
+  background:var(--color-surface-secondary)}
+.statsbar{display:flex;align-items:center;justify-content:space-between;gap:var(--spacing-4);
+  margin-bottom:var(--spacing-4)}
+.statgrid{display:grid;grid-template-columns:1fr 1fr;gap:var(--spacing-3);margin-bottom:var(--spacing-5)}
+.stat{padding:var(--spacing-3);border:1px solid rgba(255,255,255,.14);border-radius:8px}
+.stat .k{font-size:12px;letter-spacing:.06em;text-transform:uppercase;opacity:.72;margin-bottom:4px}
+.stat .v{font-family:var(--font-sport,inherit);font-size:26px;line-height:1.1}
+/* A bounded figure is a range and is never rendered as a point value. */
+.stat.bounded .v{font-size:20px}
+.stat.unavailable .v{font-size:15px;opacity:.72;font-family:var(--font-ui,inherit)}
+.stat .n{font-size:12px;opacity:.66;margin-top:6px;line-height:1.35}
+.stat .basis{font-size:11px;letter-spacing:.08em;text-transform:uppercase;opacity:.55;margin-top:6px}
+</style>
+</head>
+<body>
+<div class="harness">Playtest harness — online only. Not the product.</div>
+
+<section class="setup" id="setup">
+  <div>
+    <div class="eyebrow">THRØ</div>
+    <h1 style="font-size:32px;line-height:36px;font-weight:700;margin-top:4px">New match</h1>
+    <p style="color:var(--color-text-secondary);font-size:15px;margin-top:8px">
+      501, straight in, double out. First to 5 legs.</p>
+  </div>
+  <label class="eyebrow" for="home">Home</label>
+  <input id="home" value="Home" autocomplete="off">
+  <label class="eyebrow" for="away">Away</label>
+  <input id="away" value="Away" autocomplete="off">
+  <button class="enter" id="start">Start match</button>
+</section>
+
+<div id="game" class="hide" style="display:flex;flex-direction:column;flex:1">
+  <header>
+    <div class="players">
+      <div class="player home" id="pHome">
+        <div class="name" id="nHome">Home</div>
+        <div class="legs"><span class="sport" id="lHome">0</span> legs</div>
+      </div>
+      <div style="display:flex;flex-direction:column;align-items:center;gap:6px">
+        <div class="sport legscore" id="legScore">0–0</div>
+        <button class="secondary" id="showStats">Stats</button>
+        <div class="trust" id="trust" role="status" aria-live="polite"></div>
+      </div>
+      <div class="player away" id="pAway">
+        <div class="name" id="nAway">Away</div>
+        <div class="legs"><span class="sport" id="lAway">0</span> legs</div>
+      </div>
+    </div>
+  </header>
+
+  <main>
+    <div class="eyebrow" id="throwerLabel">To throw</div>
+    <div class="sport remaining" id="remaining">501</div>
+    <div class="checkout hide" id="checkout">
+      <div class="eyebrow" style="color:var(--thro-green-onink)">Checkout available</div>
+      <div class="val sport" id="checkoutVal">—</div>
+    </div>
+    <div class="sport entry empty" id="entry">Enter score</div>
+    <div class="msg" id="msg" role="status" aria-live="polite"></div>
+  </main>
+
+  <div class="pad">
+    <div class="quick" id="quick"></div>
+    <div class="grid" id="digits"></div>
+    <button class="enter" id="enter" disabled>Enter score</button>
+  </div>
+</div>
+
+<section class="stats hide" id="stats" aria-labelledby="statsHeading">
+  <div class="statsbar">
+    <div class="eyebrow" id="statsHeading">Statistics</div>
+    <button class="secondary" id="closeStats" aria-label="Close statistics">Close</button>
+  </div>
+  <div id="statsBody"></div>
+</section>
+
+<script>
+const S = { matchId:null, entry:"", state:null };
+const $ = id => document.getElementById(id);
+
+// The checkout set is the engine's, mirrored here only to decide whether to SHOW the prompt.
+// It is advice: nothing about what is displayed is ever recorded as evidence.
+const BOGEY = new Set([159,162,163,165,166,168,169]);
+const checkable = v => v >= 2 && v <= 170 && !BOGEY.has(v);
+
+async function post(url, body){
+  const r = await fetch(url, {method:"POST",headers:{"Content-Type":"application/json"},
+    body:JSON.stringify(body||{})});
+  return r.json();
+}
+
+$("start").onclick = async () => {
+  const r = await post("/api/match", {home:$("home").value||"Home", away:$("away").value||"Away"});
+  S.matchId = r.matchId;
+  $("nHome").textContent = r.home; $("nAway").textContent = r.away;
+  $("setup").classList.add("hide"); $("game").classList.remove("hide");
+  const s = await (await fetch("/api/match/"+S.matchId)).json();
+  render(s.state);
+};
+
+function render(st){
+  S.state = st;
+  const throwerIsHome = st.thrower === st.home;
+  const rem = throwerIsHome ? st.remainingHome : st.remainingAway;
+  $("remaining").textContent = st.winner ? "—" : rem;
+  $("lHome").textContent = st.legsHome; $("lAway").textContent = st.legsAway;
+  $("legScore").textContent = st.legsHome + "–" + st.legsAway;
+  $("pHome").classList.toggle("active", throwerIsHome && !st.winner);
+  $("pAway").classList.toggle("active", !throwerIsHome && !st.winner);
+  $("throwerLabel").textContent = st.winner
+    ? (st.winner + " wins the match")
+    : (st.thrower + " to throw · leg " + st.currentLeg);
+  const show = !st.winner && checkable(rem);
+  $("checkout").classList.toggle("hide", !show);
+  if (show) $("checkoutVal").textContent = rem;
+  document.querySelectorAll(".pad button").forEach(b => b.disabled = !!st.winner);
+  if (st.winner) { $("enter").disabled = true; $("entry").textContent = "Match complete"; }
+}
+
+function setEntry(v){
+  S.entry = v;
+  const e = $("entry");
+  e.textContent = v === "" ? "" : v;
+  e.classList.toggle("empty", v === "");
+  $("enter").textContent = v === "" ? "Enter score" : "Enter " + v;
+  $("enter").disabled = v === "" || (S.state && !!S.state.winner);
+}
+
+async function submit(total, dartsUsed, dartsAtDouble){
+  // Captured before the visit is applied: after it, the thrower has already rotated.
+  const thrower = S.state.thrower;
+  const legBefore = S.state.currentLeg;
+  const r = await post("/api/match/"+S.matchId+"/visit",
+    {player:S.state.thrower, visitTotal:total,
+     dartsUsed:dartsUsed ?? null, dartsAtDouble:dartsAtDouble ?? null});
+  const m = $("msg");
+  if (r.error){ m.className="msg error"; m.textContent = r.error; return; }
+  const o = r.outcome;
+  if (o.result === "refused"){
+    m.className = "msg error";
+    m.textContent = {
+      IMPOSSIBLE_VISIT_TOTAL: total + " cannot be scored with three darts.",
+      VISIT_TOTAL_OUT_OF_RANGE: "A visit cannot exceed 180.",
+      NOT_YOUR_TURN: "It is not that player's turn.",
+      MATCH_COMPLETE: "The match is already complete.",
+      DARTS_USED_INVALID: "Only a leg-winning visit can use fewer than three darts.",
+      DARTS_AT_DOUBLE_INVALID: "That number of darts at a double is not possible from this score."
+    }[o.reason] || o.reason;
+  } else if (o.effect === "bust"){
+    m.className = "msg error";
+    m.textContent = {
+      BELOW_ZERO: "Bust. Score restored.",
+      REMAINDER_ONE: "Bust — that leaves 1. Score restored.",
+      NOT_CHECKOUT_POSSIBLE: "Bust — " + total + " cannot be finished on a double. Score restored."
+    }[o.reason] || "Bust. Score restored.";
+  } else if (o.effect === "leg_won" || o.effect === "match_won"){
+    m.className = "msg ok";
+    m.textContent = o.effect === "match_won" ? "Match won." : "Leg won.";
+    // The leg that was just won is the one the OTHER player is asked to confirm. Under PD-002 a
+    // result nobody else stands behind still counts in the record but never moves a rating.
+    pendingLeg = legBefore;
+    legWinner = thrower;
+  } else { m.className="msg"; m.textContent = ""; }
+  setEntry("");
+  render(r.state);
+  if (pendingLeg) askConfirmation(pendingLeg);
+}
+
+let pendingLeg = null;
+let legWinner = null;
+
+// The confirming player is the one who did NOT throw the winning darts. Asking the scorer to
+// confirm their own leg would be the self-confirmation the trust model explicitly refuses to count.
+function askConfirmation(leg){
+  const who = legWinner === S.state.home ? S.state.away : S.state.home;
+  const el = document.createElement("div");
+  el.className = "confirm";
+  el.innerHTML =
+    '<div class="confirmcard" role="dialog" aria-modal="true" aria-labelledby="cfTitle">' +
+      '<h2 id="cfTitle">Leg ' + leg + '</h2>' +
+      '<p><strong>' + who + '</strong>, do you agree with how leg ' + leg + ' was scored? ' +
+      'Confirming is what lets this match count toward a rating. It stands in the record either way, ' +
+      'and you can confirm later — the next leg does not wait for this.</p>' +
+      '<div class="confirmrow">' +
+        '<button class="secondary" id="cfLater">Not now</button>' +
+        '<button class="secondary" id="cfNo">Disagree</button>' +
+        '<button class="enter" id="cfYes">Confirm</button>' +
+      '</div></div>';
+  document.body.appendChild(el);
+  const send = async (attested) => {
+    const r = await post("/api/match/" + S.matchId + "/attest",
+                         {leg: leg, player: who, attested: attested});
+    if (r.trust) renderTrust(r.trust);
+    el.remove();
+  };
+  el.querySelector("#cfYes").onclick = () => send(true);
+  el.querySelector("#cfNo").onclick = () => send(false);
+  // PD-002 is explicit that confirmation is ASYNCHRONOUS — it can arrive hours later, when either
+  // player next reaches a network. A prompt that blocks the next leg until someone answers
+  // contradicts the decision it implements, and at a real board the opponent is often not holding
+  // the phone. Deferring costs the match nothing except, for now, its rating eligibility.
+  el.querySelector("#cfLater").onclick = () => el.remove();
+  el.addEventListener("click", (e) => { if (e.target === el) el.remove(); });
+  pendingLeg = null;
+}
+
+function renderTrust(t){
+  const el = $("trust");
+  if (!el || !t) return;
+  el.textContent = t.eligible ? "Counts toward rating" : "Not yet rateable";
+  el.title = t.verificationLabel || "";
+}
+
+// Two different questions, asked when they actually apply.
+//
+// Darts AT A DOUBLE is asked on every visit that BEGAN on a finish, whether or not it ended in one:
+// a player on 40 who throws a single 20 and misses has attempted a double, and if that attempt is
+// never recorded the checkout percentage computed from the log is silently inflated.
+//
+// Darts USED is asked only when the visit wins the leg, because that is the only visit whose dart
+// count is ambiguous — every other visit throws three.
+async function enter(){
+  const total = parseInt(S.entry, 10);
+  if (isNaN(total)) return;
+  await commit(total);
+}
+
+async function commit(total){
+  const throwerIsHome = S.state.thrower === S.state.home;
+  const rem = throwerIsHome ? S.state.remainingHome : S.state.remainingAway;
+  const wasOnAFinish = checkable(rem);
+  const finished = rem - total === 0 && wasOnAFinish;
+
+  let darts = null;
+  let atDouble = null;
+
+  if (finished){
+    darts = ask("Darts used to check out?", [1,2,3], 3);
+    if (darts === undefined) return;                       // cancelled: record nothing
+    const opts = [1,2,3].filter(n => darts === null || n <= darts);
+    atDouble = ask("Darts thrown at a double?", opts, Math.min(1, darts || 1));
+    if (atDouble === undefined) return;
+  } else if (wasOnAFinish){
+    atDouble = ask("Darts thrown at a double?", [0,1,2,3], 0);
+    if (atDouble === undefined) return;
+  }
+  await submit(total, darts, atDouble);
+}
+
+// Returns a number, or null for "unknown" — which is recorded as unknown and never inferred.
+// Returns undefined if the player cancels, in which case nothing is submitted at all.
+function ask(question, options, preset){
+  const answer = prompt(question + " (" + options.join("/") + ", or leave blank if unsure)",
+                        String(preset));
+  if (answer === null) return undefined;
+  if (answer.trim() === "") return null;
+  const n = parseInt(answer, 10);
+  return options.includes(n) ? n : null;
+}
+
+const quick = [180,140,100,60,45,26];
+quick.forEach(q => {
+  const b = document.createElement("button");
+  b.textContent = q; b.onclick = () => commit(q);
+  $("quick").appendChild(b);
+});
+[1,2,3,4,5,6,7,8,9].forEach(d => {
+  const b = document.createElement("button");
+  b.textContent = d;
+  b.onclick = () => setEntry((S.entry + d).slice(0,3));
+  $("digits").appendChild(b);
+});
+const miss = document.createElement("button");
+miss.className = "label"; miss.textContent = "Miss";
+miss.onclick = () => commit(0);
+$("digits").appendChild(miss);
+const zero = document.createElement("button");
+zero.textContent = "0"; zero.onclick = () => setEntry((S.entry + "0").slice(0,3));
+$("digits").appendChild(zero);
+const clear = document.createElement("button");
+clear.className = "label"; clear.textContent = "Clear";
+clear.setAttribute("aria-label","Clear the entry");
+clear.onclick = () => setEntry("");
+$("digits").appendChild(clear);
+$("enter").onclick = enter;
+
+// The figures come from the server, which derives them by replaying the log through the engine.
+// Nothing is computed here: a statistic invented by the client would have no evidence behind it.
+const LABELS = {
+  threeDartAverage:"3-dart average", firstNineAverage:"First 9 average",
+  checkoutPercentage:"Checkout %", doublesAttempted:"Doubles thrown at",
+  highestCheckout:"Highest checkout", maximums:"180s", hundredPlus:"100+",
+  oneFortyPlus:"140+", bestLegInVisits:"Best leg (visits)",
+  finishRateFromCheckable:"Finish rate from a finish"
+};
+const PCT = new Set(["checkoutPercentage","finishRateFromCheckable"]);
+
+function statCard(key, st){
+  const cls = st.basis === "EXACT" ? "" : st.basis === "BOUNDED" ? "bounded" : "unavailable";
+  const unit = PCT.has(key) ? "%" : "";
+  let v;
+  if (st.basis === "EXACT") v = st.value + unit;
+  else if (st.basis === "BOUNDED") v = st.lower + unit + " – " + st.upper + unit;
+  else v = "Not available";
+  const basis = st.basis === "EXACT" ? "Exact"
+              : st.basis === "BOUNDED" ? "Range — the exact figure is not known"
+              : "";
+  return '<div class="stat ' + cls + '">' +
+           '<div class="k">' + LABELS[key] + '</div>' +
+           '<div class="v">' + v + '</div>' +
+           (basis ? '<div class="basis">' + basis + '</div>' : '') +
+           (st.note ? '<div class="n">' + st.note + '</div>' : '') +
+         '</div>';
+}
+
+function renderStats(all){
+  const side = (name, figures) =>
+    '<div class="eyebrow" style="margin-bottom:var(--spacing-3)">' + name + '</div>' +
+    '<div class="statgrid">' +
+      Object.keys(LABELS).map(k => figures[k] ? statCard(k, figures[k]) : "").join("") +
+    '</div>';
+  $("statsBody").innerHTML =
+    side(S.state.home, all.home) + side(S.state.away, all.away);
+}
+
+$("showStats").onclick = async () => {
+  const r = await fetch("/api/match/" + S.matchId + "/stats").then(x => x.json());
+  if (r.error){ $("statsBody").textContent = r.error; }
+  else renderStats(r);
+  $("stats").classList.remove("hide");
+};
+$("closeStats").onclick = () => $("stats").classList.add("hide");
+</script>
+</body>
+</html>

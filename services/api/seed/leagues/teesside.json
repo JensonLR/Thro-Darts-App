@@ -1,0 +1,554 @@
+{
+  "retrieved_on": "2026-09-10",
+  "method": "public HTML pages read with a browser user agent; LeagueRepublic's JSON web services need a Gold plan",
+  "personal_data": "none: team pages, which list players, were not read",
+  "leagues": [
+    {
+      "key": "stockton-thursday",
+      "name": "Stockton and District Thursday Night Darts League",
+      "short_name": "Stockton Thursday Night Darts",
+      "locality": "Stockton-on-Tees",
+      "night": "Thursday",
+      "platform": "LeagueRepublic",
+      "url": "https://stocktonthursdaydarts.leaguerepublic.com/",
+      "notes": "A 2026/2027 season exists on the site with no fixture group published yet (season id 362696044). Cups: Knock Out Cup and Plate, Memorial Cup and Plate — not imported; a cup is a tournament, not a division.",
+      "seasons": [
+        {
+          "label": "2023-2024",
+          "starts_on": "2023-09-01",
+          "ends_on": "2024-05-31",
+          "span_basis": "approximate: read from the season label; the source publishes no season dates",
+          "divisions": [
+            {
+              "name": "Thursday Night Darts League",
+              "ordinal": 1,
+              "source_url": "https://stocktonthursdaydarts.leaguerepublic.com/fg/1_792360183.html",
+              "teams": [
+                "Blue Bell",
+                "Dolphin",
+                "Golden Jubilee",
+                "Hoptimist A",
+                "Hoptimist B",
+                "Myton",
+                "Portrack",
+                "Sheraton A",
+                "Sheraton B",
+                "Station A",
+                "Station B",
+                "Station C",
+                "Sun Inn",
+                "Thornaby F.C"
+              ]
+            }
+          ]
+        },
+        {
+          "label": "2024-2025",
+          "starts_on": "2024-09-01",
+          "ends_on": "2025-05-31",
+          "span_basis": "approximate: read from the season label; the source publishes no season dates",
+          "divisions": [
+            {
+              "name": "Thursday Night Darts League",
+              "ordinal": 1,
+              "source_url": "https://stocktonthursdaydarts.leaguerepublic.com/fg/1_214157127.html",
+              "teams": [
+                "Blue Bell",
+                "Buffs",
+                "Dolphin",
+                "Eagle Inn",
+                "Golden Jubilee",
+                "Hoptimist A",
+                "Hoptimist B",
+                "Myton",
+                "Portrack",
+                "Sheraton A",
+                "Sheraton B",
+                "Station A",
+                "Station B",
+                "Station C",
+                "Sun Inn",
+                "Thornaby F.C"
+              ]
+            }
+          ]
+        },
+        {
+          "label": "2025-2026",
+          "starts_on": "2025-09-01",
+          "ends_on": "2026-05-31",
+          "span_basis": "approximate: read from the season label; the source publishes no season dates",
+          "divisions": [
+            {
+              "name": "Thursday Night Darts League",
+              "ordinal": 1,
+              "source_url": "https://stocktonthursdaydarts.leaguerepublic.com/fg/1_148988748.html",
+              "teams": [
+                "Blue Bell",
+                "Buffs",
+                "Dolphin",
+                "Eagle Inn",
+                "Elm Tree Social Club",
+                "George And Dragon",
+                "Golden Jubilee",
+                "Hoptimist A",
+                "Hoptimist B",
+                "Myton",
+                "Portrack",
+                "Sheraton A",
+                "Sheraton B",
+                "Station A",
+                "Station B",
+                "Station C",
+                "Sun Inn",
+                "Thornaby F.C"
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "key": "stockton-monday-mixed",
+      "name": "Stockton & District Monday Night Mixed Darts League",
+      "short_name": "Stockton Monday Mixed",
+      "locality": "Stockton-on-Tees",
+      "night": "Monday",
+      "platform": "LeagueRepublic",
+      "url": "https://stocktonmondaynightdartsleague.leaguerepublic.com/",
+      "notes": "",
+      "seasons": [
+        {
+          "label": "2025-2026",
+          "starts_on": "2025-09-01",
+          "ends_on": "2026-05-31",
+          "span_basis": "approximate: read from the season label; the source publishes no season dates",
+          "divisions": [
+            {
+              "name": "2025-2026",
+              "ordinal": 1,
+              "source_url": "https://stocktonmondaynightdartsleague.leaguerepublic.com/fg/1_62157456.html",
+              "teams": [
+                "Maltby CC Pathfinders",
+                "Sheraton A",
+                "Sheraton B",
+                "The Hoptimist",
+                "The Station",
+                "The Union A",
+                "The Union B",
+                "Thornaby F.C"
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "key": "redcar-district",
+      "name": "Redcar and District Darts League",
+      "short_name": "Redcar Darts League",
+      "locality": "Redcar",
+      "night": null,
+      "platform": "LeagueRepublic",
+      "url": "https://redcardarts.leaguerepublic.com/",
+      "notes": "Seasons back to Summer League 2015 exist on the site; only the current one is imported.",
+      "seasons": [
+        {
+          "label": "Redcar Darts League 2026",
+          "starts_on": "2026-01-01",
+          "ends_on": "2026-12-31",
+          "span_basis": "approximate: read from the season label; the source publishes no season dates",
+          "divisions": [
+            {
+              "name": "Division 1",
+              "ordinal": 1,
+              "source_url": "https://redcardarts.leaguerepublic.com/fg/1_888678899.html",
+              "teams": [
+                "Cleveland Bay",
+                "Coatham Road Social Club",
+                "Corus Yellows",
+                "Kingfisher",
+                "Marske Cricket Club",
+                "New Marske Reds",
+                "New Marske Sports Club",
+                "O' Gradys",
+                "The Crown and Anchor",
+                "The Starting Gate",
+                "Zetland"
+              ]
+            },
+            {
+              "name": "Division 2",
+              "ordinal": 2,
+              "source_url": "https://redcardarts.leaguerepublic.com/fg/1_326353936.html",
+              "teams": [
+                "Corus Limes",
+                "Corus Orange",
+                "Corus Whites",
+                "Hop and Grape",
+                "Lakes Social Club B",
+                "Lobster",
+                "Simians",
+                "The Cleveland",
+                "The Stockton",
+                "The Wacky"
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "venues": [
+    {
+      "key": "hoptimist",
+      "name": "The Hoptimist",
+      "locality": "Stockton-on-Tees",
+      "latitude": 54.5617285,
+      "longitude": -1.3145152,
+      "osm": "way/1261858592",
+      "postcode": "TS18 1ES",
+      "source": "OpenStreetMap via Nominatim",
+      "retrieved_on": "2026-09-10"
+    },
+    {
+      "key": "portrack",
+      "name": "The Portrack",
+      "locality": "Stockton-on-Tees",
+      "latitude": 54.570452,
+      "longitude": -1.3022331,
+      "osm": "node/476795542",
+      "postcode": "TS18 2HS",
+      "source": "OpenStreetMap via Nominatim",
+      "retrieved_on": "2026-09-10"
+    },
+    {
+      "key": "myton-house",
+      "name": "Myton House",
+      "locality": "Ingleby Barwick",
+      "latitude": 54.5189997,
+      "longitude": -1.3161344,
+      "osm": "way/199260027",
+      "postcode": "TS17 0WB",
+      "source": "OpenStreetMap via Nominatim",
+      "retrieved_on": "2026-09-10"
+    },
+    {
+      "key": "blue-bell",
+      "name": "The Blue Bell",
+      "locality": "Egglescliffe",
+      "latitude": 54.5122671,
+      "longitude": -1.3547167,
+      "osm": "way/514308622",
+      "postcode": "TS16 0JF",
+      "source": "OpenStreetMap via Nominatim",
+      "retrieved_on": "2026-09-10"
+    },
+    {
+      "key": "golden-jubilee",
+      "name": "Golden Jubilee",
+      "locality": "Yarm",
+      "latitude": 54.4968329,
+      "longitude": -1.3435262,
+      "osm": "way/260037663",
+      "postcode": "TS15 9XN",
+      "source": "OpenStreetMap via Nominatim",
+      "retrieved_on": "2026-09-10"
+    },
+    {
+      "key": "thomas-sheraton",
+      "name": "The Thomas Sheraton",
+      "locality": "Stockton-on-Tees",
+      "latitude": 54.5613574,
+      "longitude": -1.3131986,
+      "osm": "way/99788997",
+      "postcode": "TS18 1BH",
+      "source": "OpenStreetMap via Nominatim",
+      "retrieved_on": "2026-09-10"
+    },
+    {
+      "key": "dolphin",
+      "name": "The Dolphin",
+      "locality": "Stockton-on-Tees",
+      "latitude": 54.5685345,
+      "longitude": -1.3074074,
+      "osm": "way/1360172970",
+      "postcode": "TS18 2DS",
+      "source": "OpenStreetMap via Nominatim",
+      "retrieved_on": "2026-09-10"
+    },
+    {
+      "key": "thornaby-fc",
+      "name": "Thornaby Football Club",
+      "locality": "Thornaby",
+      "latitude": 54.5526721,
+      "longitude": -1.2820639,
+      "osm": "way/39644537",
+      "postcode": "TS17 7JU",
+      "source": "OpenStreetMap via Nominatim",
+      "retrieved_on": "2026-09-10"
+    },
+    {
+      "key": "sun-inn",
+      "name": "The Sun Inn",
+      "locality": "Stockton-on-Tees",
+      "latitude": 54.5655947,
+      "longitude": -1.3118501,
+      "osm": "way/99782298",
+      "postcode": "TS18 1SU",
+      "source": "OpenStreetMap via Nominatim",
+      "retrieved_on": "2026-09-10"
+    },
+    {
+      "key": "pathfinders",
+      "name": "Pathfinders",
+      "locality": "Maltby",
+      "latitude": 54.5139265,
+      "longitude": -1.279527,
+      "osm": "node/368375139",
+      "postcode": "TS8 0BA",
+      "source": "OpenStreetMap via Nominatim",
+      "retrieved_on": "2026-09-10"
+    },
+    {
+      "key": "cleveland-bay",
+      "name": "The Cleveland Bay",
+      "locality": "Redcar",
+      "latitude": 54.6091892,
+      "longitude": -1.0526612,
+      "osm": "way/1093078403",
+      "postcode": "TS10 2DG",
+      "source": "OpenStreetMap via Nominatim",
+      "retrieved_on": "2026-09-10"
+    },
+    {
+      "key": "marske-cc",
+      "name": "Marske Cricket Club",
+      "locality": "Marske-by-the-Sea",
+      "latitude": 54.5906818,
+      "longitude": -1.0130172,
+      "osm": "way/1284243321",
+      "postcode": null,
+      "source": "OpenStreetMap via Nominatim",
+      "retrieved_on": "2026-09-10"
+    },
+    {
+      "key": "new-marske-sc",
+      "name": "New Marske Sports Club",
+      "locality": "New Marske",
+      "latitude": 54.5832027,
+      "longitude": -1.0368425,
+      "osm": "node/293975133",
+      "postcode": "TS11 8EH",
+      "source": "OpenStreetMap via Nominatim",
+      "retrieved_on": "2026-09-10"
+    },
+    {
+      "key": "ogradys",
+      "name": "O'Gradys",
+      "locality": "Redcar",
+      "latitude": 54.6187037,
+      "longitude": -1.0710791,
+      "osm": "way/911030030",
+      "postcode": "TS10 1AE",
+      "source": "OpenStreetMap via Nominatim",
+      "retrieved_on": "2026-09-10"
+    },
+    {
+      "key": "starting-gate",
+      "name": "Starting Gate",
+      "locality": "Redcar",
+      "latitude": 54.5938809,
+      "longitude": -1.0695323,
+      "osm": "node/1686593828",
+      "postcode": "TS10 4PF",
+      "source": "OpenStreetMap via Nominatim",
+      "retrieved_on": "2026-09-10"
+    },
+    {
+      "key": "zetland",
+      "name": "The Zetland Hotel",
+      "locality": "Marske-by-the-Sea",
+      "latitude": 54.5883503,
+      "longitude": -1.0188438,
+      "osm": "way/1055901489",
+      "postcode": "TS11 6JQ",
+      "source": "OpenStreetMap via Nominatim",
+      "retrieved_on": "2026-09-10"
+    },
+    {
+      "key": "lobster",
+      "name": "The Lobster",
+      "locality": "Redcar",
+      "latitude": 54.6173881,
+      "longitude": -1.0763763,
+      "osm": "node/3426177370",
+      "postcode": "TS10 1QZ",
+      "source": "OpenStreetMap via Nominatim",
+      "retrieved_on": "2026-09-10"
+    },
+    {
+      "key": "the-stockton",
+      "name": "The Stockton",
+      "locality": "Redcar",
+      "latitude": 54.6173334,
+      "longitude": -1.061709,
+      "osm": "way/991632770",
+      "postcode": "TS10 3DH",
+      "source": "OpenStreetMap via Nominatim",
+      "retrieved_on": "2026-09-10"
+    }
+  ],
+  "team_venues": [
+    {
+      "league": "stockton-thursday",
+      "team": "Hoptimist A",
+      "venue": "hoptimist",
+      "basis": "inferred from the team's name"
+    },
+    {
+      "league": "stockton-thursday",
+      "team": "Hoptimist B",
+      "venue": "hoptimist",
+      "basis": "inferred from the team's name"
+    },
+    {
+      "league": "stockton-thursday",
+      "team": "Portrack",
+      "venue": "portrack",
+      "basis": "inferred from the team's name"
+    },
+    {
+      "league": "stockton-thursday",
+      "team": "Myton",
+      "venue": "myton-house",
+      "basis": "inferred from the team's name"
+    },
+    {
+      "league": "stockton-thursday",
+      "team": "Blue Bell",
+      "venue": "blue-bell",
+      "basis": "inferred from the team's name; the only Blue Bell pub in the borough on OpenStreetMap"
+    },
+    {
+      "league": "stockton-thursday",
+      "team": "Golden Jubilee",
+      "venue": "golden-jubilee",
+      "basis": "inferred from the team's name"
+    },
+    {
+      "league": "stockton-thursday",
+      "team": "Sheraton A",
+      "venue": "thomas-sheraton",
+      "basis": "inferred from the team's name"
+    },
+    {
+      "league": "stockton-thursday",
+      "team": "Sheraton B",
+      "venue": "thomas-sheraton",
+      "basis": "inferred from the team's name"
+    },
+    {
+      "league": "stockton-thursday",
+      "team": "Dolphin",
+      "venue": "dolphin",
+      "basis": "inferred from the team's name"
+    },
+    {
+      "league": "stockton-thursday",
+      "team": "Thornaby F.C",
+      "venue": "thornaby-fc",
+      "basis": "inferred from the team's name"
+    },
+    {
+      "league": "stockton-thursday",
+      "team": "Sun Inn",
+      "venue": "sun-inn",
+      "basis": "inferred from the team's name"
+    },
+    {
+      "league": "stockton-monday-mixed",
+      "team": "The Hoptimist",
+      "venue": "hoptimist",
+      "basis": "inferred from the team's name"
+    },
+    {
+      "league": "stockton-monday-mixed",
+      "team": "Sheraton A",
+      "venue": "thomas-sheraton",
+      "basis": "inferred from the team's name"
+    },
+    {
+      "league": "stockton-monday-mixed",
+      "team": "Sheraton B",
+      "venue": "thomas-sheraton",
+      "basis": "inferred from the team's name"
+    },
+    {
+      "league": "stockton-monday-mixed",
+      "team": "Thornaby F.C",
+      "venue": "thornaby-fc",
+      "basis": "inferred from the team's name"
+    },
+    {
+      "league": "stockton-monday-mixed",
+      "team": "Maltby CC Pathfinders",
+      "venue": "pathfinders",
+      "basis": "inferred from the team's name"
+    },
+    {
+      "league": "redcar-district",
+      "team": "Cleveland Bay",
+      "venue": "cleveland-bay",
+      "basis": "inferred from the team's name"
+    },
+    {
+      "league": "redcar-district",
+      "team": "Marske Cricket Club",
+      "venue": "marske-cc",
+      "basis": "inferred from the team's name"
+    },
+    {
+      "league": "redcar-district",
+      "team": "New Marske Sports Club",
+      "venue": "new-marske-sc",
+      "basis": "inferred from the team's name"
+    },
+    {
+      "league": "redcar-district",
+      "team": "New Marske Reds",
+      "venue": "new-marske-sc",
+      "basis": "inferred from the team's name"
+    },
+    {
+      "league": "redcar-district",
+      "team": "O' Gradys",
+      "venue": "ogradys",
+      "basis": "inferred from the team's name"
+    },
+    {
+      "league": "redcar-district",
+      "team": "The Starting Gate",
+      "venue": "starting-gate",
+      "basis": "inferred from the team's name"
+    },
+    {
+      "league": "redcar-district",
+      "team": "Zetland",
+      "venue": "zetland",
+      "basis": "inferred from the team's name"
+    },
+    {
+      "league": "redcar-district",
+      "team": "Lobster",
+      "venue": "lobster",
+      "basis": "inferred from the team's name"
+    },
+    {
+      "league": "redcar-district",
+      "team": "The Stockton",
+      "venue": "the-stockton",
+      "basis": "inferred from the team's name"
+    }
+  ]
+}

@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!-- Kept outside the target's synchronised source folder, for the same reason the app's own plist
+	     and the widget extension's do: a file-system-synchronised group would otherwise copy it into
+	     the bundle as a resource as well as reading it as the target's Info.plist. -->
+
+	<!-- A single-target watch app, which is what watchOS 7 and later want. The two-target shape — an
+	     app bundle holding a WatchKit extension — is still accepted and is still what most of the
+	     internet describes; it exists for watchOS 6 and earlier, which this app does not support, and
+	     it would mean a third target to keep true for no gain. -->
+	<key>WKApplication</key>
+	<true/>
+	<!-- Which phone app this belongs to. It is what pairs the two: the system installs this alongside
+	     THRØ, and WatchConnectivity's `isWatchAppInstalled` on the phone is answered from it. -->
+	<key>WKCompanionAppBundleIdentifier</key>
+	<string>app.thro.darts</string>
+	<!-- The brand's faces, bundled (PD-093). This used to say "No fonts", and its reasoning was right for
+	     its premise: the faces were registered only by the phone app's UIAppFonts, so asking for one here
+	     would look right in a preview and fall back silently on a wrist. The fix for that is to put them on
+	     the wrist, not to give the watch a different typeface from the phone. `check_fonts.py` now holds
+	     every target that draws text to carrying them. -->
+	<key>UIAppFonts</key>
+	<array>
+		<string>Fonts/Archivo-Regular.ttf</string>
+		<string>Fonts/Archivo-Medium.ttf</string>
+		<string>Fonts/Archivo-SemiBold.ttf</string>
+		<string>Fonts/Archivo-Bold.ttf</string>
+		<string>Fonts/Archivo-ExtraBold.ttf</string>
+		<string>Fonts/Archivo-Black.ttf</string>
+		<string>Fonts/IBMPlexSansCondensed-Regular.ttf</string>
+		<string>Fonts/IBMPlexSansCondensed-Medium.ttf</string>
+		<string>Fonts/IBMPlexSansCondensed-SemiBold.ttf</string>
+		<string>Fonts/IBMPlexSansCondensed-Bold.ttf</string>
+	</array>
+</dict>
+</plist>

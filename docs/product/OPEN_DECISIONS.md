@@ -1,0 +1,550 @@
+# THRØ — Open Decisions Register
+
+Decisions recorded here are **not yet made**. The purpose of this register is to stop them
+being made accidentally, by implementation convenience, in a screen or a migration.
+
+If you are implementing and you find yourself needing one of these answered, do not pick a
+value and move on. Either keep the decision out of the domain (make it configurable,
+optional, or deferred), or escalate it.
+
+**Status key:** `OPEN` — no decision. `ASSUMED` — a working assumption is in use and is
+recorded here so it can be revisited. `DECIDED` — resolved; move to the decision register
+or an ADR.
+
+**Nine more are waiting in `IOS_PLATFORM_OPPORTUNITIES.md`** and are deliberately not numbered
+here yet: the Apple Watch scope, club TV mode, the deployment target, whether and when there is a
+backend, the realtime architecture, how an extension reads the app's data, Live Activity scope,
+where share cards are rendered, and the identity mechanism. They are stated there in full with
+options, a recommendation and a slot to fill in. They become OD-### entries if the founder wants
+them tracked here rather than answered in one pass — minting numbers for decisions nobody has been
+asked yet would put nine `OPEN` rows in this register on engineering's say-so, which is the
+opposite of what it is for.
+
+---
+
+## OD-001 — Final THRØ Rating model
+**Status:** OPEN · **Impact:** product, competitive integrity, credibility
+
+The rating model is not decided and is explicitly not automatically Elo, and never the
+3-dart average. Candidates must be evaluated in a research harness against predictive
+accuracy, calibration, cold start, uncertainty quality, gaming resistance and small-sample
+behaviour. Match outcome remains the primary competitive anchor unless empirical evidence
+justifies otherwise.
+
+**Must not be decided by:** shipping a placeholder rating to fill the UI.
+**Blocked until:** the Rating Research Laboratory produces evidence (Gate 8).
+**Interim position:** any rating produced before that gate is internal and non-public.
+
+## OD-002 — Competitive band taxonomy
+**Status:** OPEN · **Impact:** product, brand, player dignity
+
+The design supports an optional band label (`RatingHero` has an optional `band` prop). The
+sample data uses "Elite Amateur", which is fixture content at the lowest source precedence
+and is **not** an approved taxonomy.
+
+**Resolved for now by:** the band prop being optional — implementation can proceed without
+naming bands. Do not introduce a band enum into the domain model until the taxonomy is
+approved.
+
+## OD-003 — Final Form representation
+**Status: HALF CLOSED, 2026-09-07 — the scalar decided by the founder as PD-018; the sequence still open.**
+· **Impact:** product, domain
+
+The design shows Form as a separate number alongside Rating (`form` prop on `RatingHero`)
+and as a recent results sequence (`FormIndicator` with W/L results). Whether Form is
+ultimately a rating-like scalar, a windowed performance measure, or both, was undecided.
+
+**PD-018 decided the number: a windowed performance measure, and never a rating-like scalar.**
+Recent form is a three-dart average over the last ten *completed legs*, computed by the same audited
+`Statistics.threeDartAverage` a single match uses, labelled with its window and with the words "Not
+a rating" beside it. Nothing seeds a rating from it, and OD-001 is untouched.
+
+**Still open: the W/L sequence.** `FormIndicator` draws a run of recent results, and whether THRØ
+shows one — and what a retirement or an abandonment looks like in it now that PD-016 makes both real
+— is not decided. That is a design and product question, not an engineering one, and nothing has
+been built for it.
+
+**Must not be decided by:** hardwiring a formula into a core aggregate. That constraint was kept:
+Form lives in `Statistics` with its own `Form` type carrying the sample beside the figure, in both
+the Kotlin and the Swift, and no aggregate knows about it.
+
+## OD-004 — Rating establishment threshold
+**Status:** OPEN · **Impact:** product, rating credibility
+
+`Confidence` defaults to `required = 10` matches. This is a **component default, not an
+approved threshold**. The provisional → established transition, and how uncertainty decays
+with inactivity, are part of OD-001.
+
+## OD-005 — Dart-level evidence capture requirements
+**Status:** DECIDED — see PD-001 · **Impact:** competitive integrity, statistics honesty, product
+
+**Resolved by the founder.** The capture rule is: ask for darts at a double on every visit that
+*began* on a checkout number, whether or not it ended in one, and additionally for darts used on a
+visit that wins a leg. An earlier reading asked only on a successful checkout, which would have
+recorded every hit and no miss — biasing checkout percentage upward rather than merely leaving it
+uncomputable. The original text of this decision is kept below for the record.
+
+The approved scoring flow captures **visit totals only**. This is correct and deliberate:
+THRØ must never invent dart-level evidence. The open question is which *additional
+optional* capture, if any, is required for a match to support the statistics the product
+displays — in particular darts-used-to-finish and doubles-attempted.
+
+This is the sharpest open decision in the foundation because it determines which
+statistics THRØ can honestly show. See the Gate 0 acceptance report.
+
+**Must not be decided by:** inferring darts from visit totals. That is forbidden.
+
+## OD-006 — Quarantine as a user-visible state
+**Status:** OPEN · **Impact:** trust, design fidelity
+
+The trust model requires a `quarantined` state for suspicious evidence. The approved
+`VerificationState` component implements eight states and does **not** include it. The
+domain needs quarantine regardless; whether and how it is surfaced to players (as opposed
+to organisers and reviewers) is a design decision that the approved system has not yet made.
+
+**Must not be decided by:** silently adding a ninth visual state. Follow the design
+deviation process: identify the rule, state the problem, propose the smallest compliant
+change, document it.
+
+## OD-007 — Bronze semantic scope
+**Status:** OPEN · **Impact:** brand
+
+Bronze (`#A8753B`) is rare and reserved for enduring achievements. The precise set of
+achievements that earn it is not enumerated.
+
+**Must not be decided by:** using bronze for general emphasis or for any recurring state.
+
+## OD-008 — Shadow commercial gating
+**Status:** OPEN · **Impact:** monetisation, product
+
+Whether Shadow is a premium capability, and at what boundary, is undecided. Shadow is fully
+designed (4 screens) but sits behind the evidence requirement — it may only be built from
+sufficient legitimate player evidence.
+
+## OD-009 — Payments, platform rules and fee structure
+**Status:** OPEN · **Impact:** legal, economics, store compliance
+
+Entry fee, platform fee, refunds, organiser payouts and tax treatment are undecided, and
+Apple/Google payment policy for real-world event entry must be researched against current
+policy at implementation time rather than assumed.
+
+**Must not be decided by:** guessing store policy. Separate entry fee, platform fee,
+refund state, payout state, payment state and registration state in the model regardless.
+
+## OD-010 — Safeguarding obligations
+**Status:** OPEN · **Impact:** legal, safety, architecture
+
+Darts includes minors. The specific jurisdictional obligations (age assurance, visibility
+of minors, adult–minor contact, broadcast of minors, parental consent, data rules) must be
+researched against primary sources before launch. The architecture must support age-aware
+behaviour from the start.
+
+**Must not be decided by:** inventing a legal conclusion.
+
+## OD-011 — Font licensing and packaging
+**Status:** RESOLVED for iOS by PD-006 (2026-09-06); the founder's legal sign-off is the one open thread · **Impact:** legal, design fidelity, performance
+
+**Resolved by:** both families are published under the SIL Open Font License, Version 1.1 — Archivo
+by Omnibus-Type, IBM Plex by IBM — and the founder directed that the fonts be used. The iOS app embeds
+ten unmodified static faces with each family's licence text beside them (`apps/ios/ThroDarts/Fonts`),
+which is what the licence's conditions ask; PD-006 quotes them. Android has no client yet. This
+register records the licence's text, not a legal conclusion; a final read by whoever signs for THRØ's
+legal position is the founder's to arrange.
+
+*As first recorded:*
+
+Archivo and IBM Plex Sans Condensed are the approved families. The design kit loads them
+from a CDN-derived bundle; the design system itself states production must embed the
+binaries locally. Licence terms for embedding in shipped iOS and Android binaries must be
+confirmed, and the referenced handoff document `handoff/TYPOGRAPHY_TOKENS.md` was not
+available in this environment.
+
+## OD-012 — Product naming and future rename risk
+**Status:** ASSUMED · **Impact:** brand
+
+The working product name remains THRØ and must not be changed during implementation. A
+future rename has been discussed. Working assumption: keep the name centralised (branding
+and copy constants) and out of business logic, so a rename stays manageable.
+
+## OD-013 — Whether a retirement may inform a rating
+**Status:** OPEN · **Impact:** rating credibility, player fairness
+
+PD-002 settles the eligibility floor as `participant-confirmed` and says `outcome_type` must be
+`played`. It does not name **`retired`**, which is the one genuinely arguable outcome: darts were
+thrown and a real performance exists, but the match did not finish, so the sample is truncated in a
+way that correlates with the very thing a rating measures — a player retiring while losing is not
+the same event as one retiring while winning.
+
+**Resolved for now by:** excluding it. `EligibilityPolicy.informing` defaults to `played` alone, so
+the conservative reading is what ships. Admitting retirements is a policy value plus a rating
+recomputation, which the architecture supports because rating is a replayable projection.
+
+**Sharpened, not closed, by PD-016 (2026-09-07).** A retirement is now a real thing a player can
+record on the phone, so there are retired matches for this policy to exclude rather than a
+hypothetical. Two things follow that a future answer will want:
+
+- **The data exists to decide it.** A person's history counts retirements apart from matches played
+  out, and the journal records **which seat retired** — so "retiring while losing" and "retiring
+  while winning" are distinguishable, which is the asymmetry this entry says makes the question
+  arguable at all.
+- **Abandonment does not extend this question.** PD-016's other ending has no winner at all, so
+  there is no result for a rating to be informed by. It is excluded because there is nothing to
+  include, not as a policy choice, and it must never acquire one.
+
+**Must not be decided by:** an implementation quietly adding `RETIRED` to the default policy because
+it felt reasonable. That is how this register gets bypassed.
+
+## OD-014 — Whether capture channel and attestation stay collapsed in the design enum
+**Status:** ASSUMED · **Impact:** design fidelity, trust semantics
+
+The approved `VerificationState` has eight labels, and two of them answer different questions:
+`thro-recorded` describes **how the result was captured**, while `participant-confirmed` describes
+**who attested to it**. A match scored live in THRØ by one player and never confirmed by the other
+is `thro-recorded` under a naive reading, yet nobody has corroborated it.
+
+**Working assumption:** the domain models the two axes separately (`CaptureChannel` and
+`Attestation`) and *derives* the design's single label from them, so the approved surface is
+unchanged while eligibility is decided on the axis that actually bears on it. Rating eligibility
+reads attestation, never the label.
+
+**Escalate if:** the design intends `thro-recorded` to imply corroboration, which would make it a
+higher trust claim than the domain can support.
+
+## OD-015 — What a client records on a visit that has not opened, under double-in
+**Status: CLOSED, 2026-09-07 — decided by the founder as PD-008.**
+
+The founder asked for double-in ("theres leagues & tournaments that are double in"), which forced
+the capture rule this entry was waiting on. It is recorded in full as **PD-008** in
+[`DECISIONS.md`](DECISIONS.md); in one line: *what a visit records while the player has not opened is
+the score from the opening dart onward, and zero means they did not open.*
+
+The reasoning that kept it open is worth keeping, because it is why the decision had to be the
+founder's. The engine's unit is a visit, not a dart. Under double-in only the darts from the opening
+one onward count, so a player who throws treble twenty, treble twenty, double ten while unopened
+scores twenty, not one hundred and forty — and nothing in a visit total says which dart opened. The
+answer had to come from how a scorer actually calls it, not from what an engine could infer.
+
+What it cost is in PD-008 and stated there rather than here: a scorer who enters the whole visit
+instead of what counted will be believed, because at visit granularity nothing can tell the
+difference. All three in-rules are now scored; the engine refuses none of them.
+
+## OD-016 — What a club, league or tournament may show, and to whom
+**Status: CLOSED, 2026-09-07 — decided by the founder as PD-009.** **A public front, a private inside** — a club's name, badge, kind and published fixtures are public; members, results and announcements are members-only, and a member recorded as a minor is never listed to anyone but an admin.
+
+The reasoning below is kept, because it is why the decision had to be theirs.
+
+The founder asked for clubs and leagues to hold their own data and be visible in the app. Every
+question below has been answered *provisionally and restrictively* in `packages/organisation`, and
+each answer is a placeholder for yours, not a decision.
+
+| Question | What the code does today | What it would mean to change it |
+|---|---|---|
+| May a non-member see a club's page? | **No.** `Permissions.may(null, …)` is false for every action, including VIEW. | A public club page is a discovery feature and probably what a league wants. It also makes the membership list a privacy decision rather than a members-only one. |
+| May a member see the membership list? | **Yes** — `VIEW_MEMBERS` is a member right. | If juniors are listed, this is a safeguarding surface as well as a privacy one. |
+| Who admits and removes members? | **Admins only.** An official may announce and manage fixtures, but not change who belongs. | Officials doing it is more convenient and gives more people the power to remove someone. |
+| Can a person belong to many clubs? | Nothing prevents it; nothing depends on it. | A "home club" concept would change the profile and probably the rating. |
+
+**Options, if it helps to choose from a shortlist:**
+
+- **A — members only.** Nothing about a club is visible until you are in it. Safest, worst for
+  discovery, and probably wrong for a league that wants to advertise a new season.
+- **B — a public front, a private inside.** Name, badge, kind and *published* fixtures are public;
+  members, results and announcements are not. This is what most sports club apps do.
+- **C — the club decides, per field.** The most flexible and the most ways to get it wrong; it also
+  means someone at every club has to understand the settings.
+
+Engineering's reading: **B**, with the membership list members-only and juniors never listed to
+anyone but an admin. But it is a privacy decision about other people's children and it is not
+engineering's to take.
+
+## OD-017 — Whether members may message each other, and what protects that
+**Status: CLOSED, 2026-09-07 — decided by the founder as PD-009.** **Announcements only** — broadcast, from an official, with an author on the record. Member-to-member messaging is not built and is not to be built until the founder has taken safeguarding advice. The refusals in `packages/organisation` stay: nobody recorded as a minor, or whose age is not established, is reached until OD-010 is answered.
+
+The reasoning below is kept, because it is why the decision had to be theirs.
+
+The founder asked for the app to "become a hub for them to communicate with member and arrange
+things". What is built is **announcements only**: broadcast, from an official or admin, to a
+membership, with an author on the record and no private channel anywhere. And a member whose age is
+MINOR *or UNKNOWN* receives nothing at all until OD-010 is answered — enforced in
+`Announcements.deliver`, not documented and hoped for.
+
+**Member-to-member messaging is not built, not stubbed, and not behind a flag.** It is absent,
+because the controls it needs would determine its data model and building the model first would
+prejudge them:
+
+- Can an adult start a conversation with a member recorded as a minor? Under what consent?
+- Is there moderation, and is it before or after the fact? Who does it — the club, or THRØ?
+- How is a message reported, and who sees the report?
+- How long is a message kept, and who can delete it — the sender, the club, or nobody?
+- Does a club's own official have any privileged view of it? (If yes, say so to members. If no, say
+  that too.)
+
+**Must not be decided by:** engineering, and not by looking at what other apps do. Two of these are
+legal questions in every jurisdiction THRØ would operate in, and the safeguarding regime for a
+sports club with junior members is specific.
+
+**The honest interim:** announcements cover the actual jobs a club secretary has — the fixture is
+off, subs are due, the AGM is Tuesday. A club that needs a private word has a phone.
+
+## OD-018 — How a fixture is agreed
+**Status: CLOSED, 2026-09-07 — decided by the founder as PD-009.** **The official's list** — an official schedules, moves and cancels; agreeing a fixture happens off the app. Propose-and-accept is deferred, not refused.
+
+The reasoning below is kept, because it is why the decision had to be theirs.
+
+`Fixture` is deliberately thin: a date, two sides, a venue, and a state that says whether it is
+still going ahead. It carries no result, because a result belongs to the match aggregate and its
+provenance, and a fixture that could assert one would be a second, unverified place a score could
+come from.
+
+What is not modelled, because leagues genuinely differ:
+
+- Does an official schedule fixtures, or do captains agree them between themselves?
+- Who may postpone, and does the other side have to accept?
+- Is there a deadline, and what happens when a fixture is never played — void, or awarded?
+- Does a fixture need a marker, and is that a role?
+
+**Options:** **A — the fixture list is the official's**, and everything else happens off the app
+(simplest, matches most small leagues). **B — propose and accept**, with both sides on the record
+(more work, and the record is worth having when a league is decided by a walkover). **C — a league
+constitution**, configured per organisation (the most general and the most to get wrong).
+
+Engineering's reading: **A first**, because it is what the model already supports and it is
+reversible; **B** the moment a league asks for it.
+
+## OD-019 — Logos, avatars, and what happens to an image somebody uploads
+**Status: CLOSED, 2026-09-07 — decided by the founder as PD-014.** Automated screening plus
+report-and-remove; **nobody under 18, or of unestablished age, has a picture at all**; deletion stops
+it being served at once and purges the bytes within 30 days; the uploader warrants the right and THRØ
+removes on notice. Re-encoding and metadata stripping were engineering's to decide and are done
+always. Which of those shapes is legally available is still a question for a solicitor, and this
+repository records the answers as product intent rather than as legal conclusions.
+
+`AssetRef` is an opaque handle and this repository stores nothing and fetches nothing. That is
+deliberate: the moment an image is accepted, questions follow that are not engineering's.
+
+- Is an uploaded image checked before it is shown, and by what — a person, a service, or nothing?
+- A profile picture of a junior member: who may see it? (This is OD-010 again, in a second place.)
+- What happens to a club's badge when the club leaves, or to a photo when a person deletes their
+  account? Deletion in the app, or deletion from storage, and how quickly?
+- Who is responsible for a copyright claim on a club badge — the club, or THRØ?
+- Are images resized and re-encoded on the way in? (Engineering's recommendation: yes, always, and
+  strip every piece of metadata — a phone photo carries the place it was taken.)
+
+**The one part that is engineering's and is done:** `packages/organisation` already guarantees that
+whatever colour a club picks, the app stays readable — the text on an accent is chosen rather than
+configured, and a sweep of the colour cube proves no choice falls below the contrast floor. The same
+discipline has no equivalent for an image; a photograph cannot be made safe by arithmetic.
+
+## OD-020 — Apple Watch: what it is for, and which of the three shapes THRØ can honestly build
+**Status:** OPEN · **Impact:** product surface, durability, and one measurement that has not been taken
+
+The founder asked to see the options. There are three, and **which of them is buildable is decided by
+a rule this repository already keeps** rather than by taste:
+
+> Every visit is committed to the journal **before** the screen updates (`MatchSession.submit`). If
+> the commit fails, the screen says *Not saved, so not scored* and the state does not change.
+
+That is ADR-006's rule, it is measured (P95 1.6 ms against a 20 ms budget on an iPhone 14 Pro Max),
+and it is why the app can be trusted with a match. A watch either keeps it or breaks it, and the
+three options are exactly the three ways that goes.
+
+### A — A glance, and nothing more
+
+The watch shows the match the phone is scoring: remaining, whose throw, legs, and the bust or won-leg
+announcement PD-005 already defines. No input. A complication, and a view.
+
+- **Keeps the rule trivially**, because nothing is recorded on the wrist.
+- **Costs**: a watchOS target, a build in CI, and a `WatchConnectivity` session that is *allowed* to
+  be late or lossy because nothing depends on it arriving.
+- **Worth**: modest and real. The phone is usually on the shelf and the player is at the oche; a
+  glance at the remaining without walking over is worth something. It is not what most people mean
+  when they ask for a watch app.
+
+### B — Scoring from the wrist, with the watch's own journal
+
+The watch records visits. To keep the rule it needs **its own durable journal**, not a message to the
+phone: `WatchConnectivity` is best-effort by design, so "the watch takes the entry and the phone
+stores it" would show a score that is not yet saved — precisely what the rule exists to prevent.
+
+- **The architecture is already most of the way there.** The engine is Swift and dependency-free; the
+  journal is SQLite and so is watchOS; and the two-device reconciliation this needs is *already built
+  and tested* (`packages/trust`), because a watch and a phone are two devices with their own streams
+  — the same problem the offline model already solves.
+- **The one thing missing is a measurement.** ADR-006's durability numbers were taken on a phone. A
+  watch has a different chip, a different flash controller and a much tighter power budget, and
+  `synchronous=FULL` with `fullfsync` may well cost more than 20 ms there. `packages/durability-probe`
+  would have to be **run on a watch** before a line of the scoring UI is written, and the answer might
+  be no — in which case the honest outcome is A, and knowing that is worth the probe.
+- **The interface is the other risk.** A 45 mm screen cannot hold the export's keypad. The plausible
+  shape is the Digital Crown for the total plus one large confirm, with the common totals as quick
+  keys — and that is a **design commission** (B3), not an engineering choice.
+
+### C — The watch as the second, corroborating device
+
+The trust model's centre is that one player's word never moves a rating (PD-002), and that
+corroboration comes from two independent devices. A watch on the opponent's wrist is a natural second
+device: they confirm what they saw, from where they are standing, without holding a phone.
+
+- **This is the option that is uniquely THRØ's** rather than a scoring app's. It is also the one that
+  makes a rated match possible in a pub without two phones on the oche.
+- **Blocked twice over**: it needs identity (**B4**) so the watch's confirmation is *someone's*, and
+  it needs the sync path, which does not exist. Neither is close.
+
+### Engineering's reading
+
+**Run the probe first, then decide between A and B.** The measurement is a day, it is the only fact
+that separates the two, and taking it before designing anything means the design is not thrown away.
+**C waits on B4** and should be recorded as the destination rather than attempted early — the
+reconciliation it needs is built, so nothing is lost by waiting.
+
+**Must not be decided by:** an assumption that a watch behaves like a phone under `fullfsync`. That
+is the whole question, and it is measurable rather than arguable.
+
+
+## OD-021 — Whether a person on this phone may have a picture, and how their age would be known
+**Status: CLOSED, 2026-09-07 — decided by the founder as PD-023.** A picture arrives with an account.
+The person in the photograph is the one who answers for their own age; nothing on this phone asks,
+and nothing about it changes until B4. Engineering's reading was the same, for the reason below.
+
+PD-014 settled who may have a picture: **nobody under 18, and nobody of unestablished age.** A club
+member has an age band because the club's admin is asked for one when they add them, so the rule can
+be applied. A **person on this phone** — one of the two names typed at the oche before a match — has
+no age band at all. The `person` table holds a name and a creation date, and there is nowhere in the
+app that asks.
+
+So by PD-014, applied honestly, a local person may not have a picture. That is what the app now does,
+and the person's page says which rule and why rather than merely having no picture on it.
+
+The founder asked for pictures for "players", so this is the part of that ask which is **not** built,
+and it is not built because the alternative would have been to invent an answer to this:
+
+- Is somebody asked for a person's age when they type a name at the oche? That is a question in the
+  middle of setting up a game of darts, asked about a person who is standing next to them.
+- Or does a local person simply never have a picture, and a picture is something you get by being in
+  a club — which is where an admin has already been asked?
+- Or does a person's picture arrive only with an account (B4), where the person answers for their own
+  age rather than somebody answering for them?
+
+**Engineering's reading:** the third. A picture of somebody is theirs, and the one person who should
+be asked their age is the person in the photograph. A club admin answering for a member is already a
+compromise PD-014 accepted because a roster has to work before anybody has an account; extending that
+to "whoever is holding the phone answers for whoever is playing" widens it in the wrong direction, on
+the surface where THRØ has the least idea who anybody is.
+
+**Must not be decided by:** the fact that it would be easy to add a column. It would.
+
+## OD-022 — Whether THRØ has a league scoring standard, or every league sets its own
+**Status: PARTLY CLOSED, 2026-09-07.** The third question below — the **unit** — came back as
+**PD-022**: the league declares whether its results are counted in legs, matches or points, chosen
+once and fixed as soon as a result exists. That was the half that could not be answered
+retroactively. The other two are still open and can wait, because neither becomes unanswerable:
+whether THRØ has a *standard* a league may override, and whether the tie-break is the league's to
+change.
+
+**Impact:** every league table THRØ ever draws
+
+A table needs to know what a win is worth. Real leagues disagree: two points a win is the common
+answer in pub and county darts, one is not rare, and some run on legs or on match points rather than
+on fixtures won at all.
+
+**What engineering did, and why it is not the decision:** the app asks. A league stores its own
+points for a win and for a draw, defaulting to 2 and 1, the numbers are on the league's edit screen,
+and the table says which it used. That is the smallest honest thing: a constant buried in a table
+calculation would be THRØ deciding a league's rules for it without saying so, which is exactly the
+kind of silent invention this repository refuses.
+
+It is still only half an answer, because two related things are **not** asked and are currently
+fixed:
+
+- **What separates two teams on the same points.** The table sorts on points, then difference, then
+  what a team scored, then the name. That is the near-universal convention and it is not universal:
+  head-to-head first is the common alternative, and some leagues use legs won.
+- **What the numbers in a result mean.** Today they are whatever the person entering them says —
+  legs, matches, points. The table adds them up either way, so a league that enters legs and a
+  league that enters match points both get a coherent table, and neither can be compared with the
+  other. That is fine while a league lives on one phone and is **not** fine the moment two leagues
+  are in the same product.
+
+The questions for the founder:
+
+1. Does THRØ have a **standard** league scoring, with a league free to override it — or is scoring
+   always the league's, with THRØ only ever storing what it is told?
+2. Should the tie-break be configurable, or is one convention imposed?
+3. Does a result's **unit** need to be declared by the league (legs / matches / points), so that two
+   leagues' tables mean the same thing when they eventually sit next to each other?
+
+**Engineering's reading:** answer 3 first, and answer it before any league data exists that would
+have to be migrated. The unit is the one that becomes expensive later, because a stored `3–1` with
+no unit on it cannot be reinterpreted afterwards — somebody has to be asked what they meant, and by
+then they will not remember.
+
+**Must not be decided by:** whichever numbers happen to be the defaults today. They are defaults
+because a screen needed one, not because they were chosen.
+
+## OD-023 — What THRØ does about a bust only the darts can show
+**Status: OPEN.** Raised 2026-09-09, by per-dart entry making it visible for the first time.
+
+**Impact:** every leg scored dart by dart, under double-out and master-out
+
+The engine scores a visit, not a dart (`ThroEngine/Types.swift:26`). PD-008 settled double-in on that
+basis and ADR-002 keeps the Swift and Kotlin engines structurally parallel behind one conformance
+corpus. So when a visit reaches zero, all the engine can ask is whether the score it **started** from
+was finishable.
+
+That is enough while a visit is a total. It stops being enough the moment three darts are entered:
+
+- A player on 60 throws `T20`. They reach zero on a treble, which under double-out is a **bust**. The
+  engine sees a visit of 60 from 60, and 60 is a checkout, so it would call it a leg won.
+- A player on 20 throws a single 20. Same thing.
+
+Per-dart entry can see the difference and the engine cannot, and the two currently disagree in a way
+that is worse than either alone: the first case produces `dartsAtDouble: 0`, which the engine rejects
+as `DARTS_AT_DOUBLE_INVALID` — a true refusal carrying a reason no player can act on — while the
+second produces `dartsAtDouble: 1`, because 20 is `D10` and the dart was thrown from a one-dart
+finish, so it is **accepted as a leg won that never happened**.
+
+**What engineering did, and why it is not the decision:** `DartVisit.illegalFinish` catches both,
+before either reaches the engine, and `MatchSession` refuses with the dart named and the rule said
+out loud. That makes the app's behaviour consistent and stops it recording a leg nobody won. It does
+**not** record the bust, and the refusal says so rather than implying the visit was scored.
+
+The decision is what should happen instead:
+
+- Does the engine learn about darts — a `recordVisit` that may carry them, or a new command — in
+  Swift and Kotlin together, re-baselining the conformance corpus? That is the complete answer and
+  the most expensive one, and it reopens PD-008's reasoning about what a visit is.
+- Or does the visit total stay the engine's only input, with the entry layer converting an illegal
+  finish into the visit total that produces the same bust? There is no such total: a bust from 60 on
+  a treble and a checkout from 60 are the same 60.
+- Or does per-dart entry keep refusing it, and the player switches notation for that one visit —
+  where the app will then tell them they won?
+
+**Must not be decided by:** which is easiest to build. The third option is free and is the one that
+leaves a player holding a phone that says they won a leg they busted.
+
+## OD-024 — Display names inside the append-only match aggregate
+**Status:** DECIDED — closed by V018 (2026-09-09) · **Impact:** privacy, safeguarding, ADR-005
+
+**Resolved by the seat.** The engine's two labels are seats, not names. `evidence.match` binds the
+home seat to `home_id` and the away seat to `away_id`; every visit payload names the seat with the
+two words both on-device journals already store, `home` and `away`; a display name is joined from
+`identity` at render and is never written beside evidence. V018 drops `home_name` and `away_name`
+and rewrites every existing payload's name to the seat it labelled — matched per match against that
+match's own two names, never by a global lookup — which is the one deliberate rewrite of evidence in
+this repository: a pseudonymisation performed once, by the owner role, and held by `MigrationTest`
+over a populated V013 database (three named visits read back as `home, away, home`, the rest of each
+payload untouched, no name left anywhere in `evidence`). The pseudonymous label for a non-adult
+account that the original text asked for is therefore unnecessary: nothing in `evidence` carries a
+name for anyone. A visit naming anything other than a seat is refused by the command handler as
+"that is not a seat in this match". The original text is kept below for the record.
+
+`evidence.match.home_name` and `away_name` (V006) are personal data in a table nothing may update or
+delete, because the engine works in display names and the aggregate joins identifiers to them.
+Hostile review of ADR-017 named it: once a match is opened from a league fixture, an unclaimed or
+non-adult player's name would enter evidence that can never be rectified or erased.
+
+**Resolved for now by:** nothing yet opening a match from a fixture. Phase B's command-path work must
+make the engine and the aggregate work in identifiers, join names from `identity` at render, and
+write a pseudonymous label for any account whose age band is not `adult`.
+
+**Must not be decided by:** Phase C opening a match from a fixture with the names as they are.

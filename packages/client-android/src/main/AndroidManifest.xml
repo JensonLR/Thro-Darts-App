@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The client's one permission. The notice about people's information is read from THRØ's public web site (PD-097);
+     scoring asks for nothing, and tools/check_android_network.py fails the build if anything else here reaches a
+     network or asks for another permission. -->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <uses-permission android:name="android.permission.INTERNET" />
+</manifest>

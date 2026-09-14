@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- GENERATED-EQUIVALENT: throGreen from packages/design-tokens. The one colour Android needs before
+     Compose is running, so it cannot come from the generated Kotlin. Held by tools/check_tokens_exist.py. -->
+<resources>
+    <color name="thro_green">#0F3D2E</color>
+</resources>

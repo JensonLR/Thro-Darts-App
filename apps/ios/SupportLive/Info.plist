@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!-- Kept outside the target's synchronised source folder, for the same reason the app's own
+	     plist lives in Support/: a file-system-synchronised group would otherwise copy it into the
+	     bundle as a resource as well as reading it as the target's Info.plist. -->
+	<key>NSExtension</key>
+	<dict>
+		<key>NSExtensionPointIdentifier</key>
+		<string>com.apple.widgetkit-extension</string>
+	</dict>
+	<!-- The brand's two families, bundled into this extension as the Fonts folder (PD-093). A widget and a
+	     Live Activity draw in this process and not the app's, so the app's own UIAppFonts registers nothing
+	     here — which is the whole reason the Lock Screen was set in the system face until now. -->
+	<key>UIAppFonts</key>
+	<array>
+		<string>Fonts/Archivo-Regular.ttf</string>
+		<string>Fonts/Archivo-Medium.ttf</string>
+		<string>Fonts/Archivo-SemiBold.ttf</string>
+		<string>Fonts/Archivo-Bold.ttf</string>
+		<string>Fonts/Archivo-ExtraBold.ttf</string>
+		<string>Fonts/Archivo-Black.ttf</string>
+		<string>Fonts/IBMPlexSansCondensed-Regular.ttf</string>
+		<string>Fonts/IBMPlexSansCondensed-Medium.ttf</string>
+		<string>Fonts/IBMPlexSansCondensed-SemiBold.ttf</string>
+		<string>Fonts/IBMPlexSansCondensed-Bold.ttf</string>
+	</array>
+</dict>
+</plist>

@@ -1,0 +1,9 @@
+**/build
+**/.gradle
+.git
+apps
+docs
+packages/client-ios
+tools
+scripts
+**/*.md

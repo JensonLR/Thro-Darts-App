@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!-- The same container as the app's. The extension only ever READS from it: a widget process
+	     that could write would be a second writer to a file the app assumes it owns, and it has
+	     nothing to say anyway. -->
+	<key>com.apple.security.application-groups</key>
+	<array>
+		<string>group.app.thro.darts</string>
+	</array>
+</dict>
+</plist>

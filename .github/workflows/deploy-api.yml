@@ -1,0 +1,133 @@
+name: deploy-api
+
+# The API deploys itself (PD-095). ADR-013's order is kept — the migration runs before the code that expects it —
+# but a pipeline runs it instead of a person: the checks, a restore point of production, the migration, the deploy
+# of exactly the commit that was migrated, and proof that the new API came back at the new schema.
+#
+# Three secrets, added once in GitHub (Settings → Secrets and variables → Actions):
+#   MIGRATE_DATABASE_URL    Neon's connection for the deploy user (DATABASE_URL_UNPOOLED in .env.local)
+#   NEON_API_KEY            a Neon API key, for the restore point
+#   RENDER_DEPLOY_HOOK_URL  the API service's deploy hook, from Render's dashboard
+# Until all three exist it runs the checks and stops there, and says so in the run's summary. Nothing is ever
+# half-deployed: a failed migration stops the deploy, and the API already serving keeps serving.
+
+on:
+  push:
+    branches: [claude/thro-production-build-je2mkf]
+    # What the API image is built from (Dockerfile; services/api/settings.gradle.kts), and this pipeline.
+    paths:
+      - "services/api/**"
+      - "packages/engine/**"
+      - "packages/statistics/**"
+      - "packages/authz/**"
+      - "packages/trust/**"
+      - "packages/competition/**"
+      - "Dockerfile"
+      - "tools/deploy_api.py"
+      - ".github/workflows/deploy-api.yml"
+  workflow_dispatch:
+
+# One deploy at a time, in the order they were pushed. A second push waits; it is never cancelled half-way.
+concurrency:
+  group: deploy-api
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+env:
+  # Not secrets. Without the API key and the database password these name things and open nothing.
+  NEON_PROJECT_ID: round-darkness-99300686
+  NEON_BRANCH_ID: br-icy-leaf-zaq0grqg   # the branch called production
+
+jobs:
+  checks:
+    name: What a deploy depends on
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_HOST_AUTH_METHOD: trust
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd pg_isready --health-interval 5s
+          --health-timeout 5s --health-retries 10
+    env:
+      PGHOST: localhost
+      PGPORT: "5432"
+      PGUSER: postgres
+      PGDATABASE: postgres
+      # If the database service fails to come up, the suites must fail rather than skip themselves.
+      THRO_REQUIRE_DB: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - name: Migration discipline (ADR-013)
+        run: python3 tools/check_migrations.py
+      - name: The pipeline removes only the restore points it made (PD-095)
+        run: python3 tools/check_restore_points.py
+      - name: Install psql
+        run: command -v psql >/dev/null || (sudo apt-get update && sudo apt-get install -y postgresql-client)
+      - name: Schema properties
+        run: bash services/api/test/schema_properties.sh
+      - uses: actions/setup-java@v4
+        with: { distribution: temurin, java-version: "21" }
+      - uses: gradle/actions/setup-gradle@v4
+      - name: The API's tests
+        working-directory: services/api
+        run: gradle test --no-daemon
+
+  deploy:
+    name: Restore point, migrate, deploy, prove it
+    needs: checks
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      MIGRATE_DATABASE_URL: ${{ secrets.MIGRATE_DATABASE_URL }}
+      NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
+      RENDER_DEPLOY_HOOK_URL: ${{ secrets.RENDER_DEPLOY_HOOK_URL }}
+      # The role the API connects as. After each migration it is given the application roles (Migrate.kt), so a
+      # migration that creates a role cannot leave the running API without it. A name, not a secret.
+      APP_DB_USER: thro_app
+    steps:
+      - name: Stop cleanly if the secrets are not there yet
+        id: ready
+        run: |
+          missing=""
+          for name in MIGRATE_DATABASE_URL NEON_API_KEY RENDER_DEPLOY_HOOK_URL; do
+            [ -n "${!name}" ] || missing="$missing $name"
+          done
+          if [ -n "$missing" ]; then
+            echo "### Not deployed" >> "$GITHUB_STEP_SUMMARY"
+            echo "The checks passed. Missing secrets:$missing — docs/runbooks/DEPLOY.md says how to add them." >> "$GITHUB_STEP_SUMMARY"
+            echo "go=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "go=true" >> "$GITHUB_OUTPUT"
+          fi
+      - uses: actions/checkout@v4
+        if: steps.ready.outputs.go == 'true'
+      - uses: actions/setup-java@v4
+        if: steps.ready.outputs.go == 'true'
+        with: { distribution: temurin, java-version: "21" }
+      - uses: gradle/actions/setup-gradle@v4
+        if: steps.ready.outputs.go == 'true'
+      - name: A restore point of production, before anything changes
+        if: steps.ready.outputs.go == 'true'
+        run: python3 tools/deploy_api.py restore-point
+      - name: Migrate, before the code that expects it (ADR-013)
+        if: steps.ready.outputs.go == 'true'
+        run: gradle -p services/api migrate --no-daemon
+      # Idempotent (SeedTest: a second run changes nothing), so they run every time rather than somebody having to
+      # remember which deploy changed a league file (PD-033, PD-037).
+      - name: The league seeds
+        if: steps.ready.outputs.go == 'true'
+        run: |
+          gradle -p services/api seed --no-daemon --args=seed/leagues/directory.json
+          gradle -p services/api seed --no-daemon --args=seed/leagues/teesside.json
+      - name: Deploy exactly this commit
+        if: steps.ready.outputs.go == 'true'
+        run: python3 tools/deploy_api.py deploy
+      - name: Wait for the new API to answer at the new schema
+        if: steps.ready.outputs.go == 'true'
+        run: python3 tools/deploy_api.py wait

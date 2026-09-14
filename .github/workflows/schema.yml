@@ -1,0 +1,84 @@
+name: schema
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+
+
+# These jobs read the repository and write nothing back. Stating that here rather than
+# inheriting whatever the repository's default happens to be means a token that leaks out of a
+# build step cannot push, comment, or publish.
+permissions:
+  contents: read
+
+jobs:
+  properties:
+    name: Event model property tests
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_HOST_AUTH_METHOD: trust
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd pg_isready --health-interval 5s
+          --health-timeout 5s --health-retries 10
+    env:
+      PGHOST: localhost
+      # If the service ever fails to come up, these suites must fail rather than skip themselves.
+      THRO_REQUIRE_DB: "1"
+      PGPORT: "5432"
+      PGUSER: postgres
+      PGDATABASE: postgres
+    steps:
+      - uses: actions/checkout@v4
+      # ADR-013 before anything is applied: every migration runs as the owner, a destructive
+      # statement carries its approval, and evidence is never rewritten except to remove personal
+      # data under a marked, reasoned exception. The rule was written on 3 September and enforced
+      # by nothing until this step.
+      - name: Migration discipline (ADR-013)
+        run: python3 tools/check_migrations.py
+      # The runner image usually ships psql; apt is only consulted when it does not, because a
+      # third-party mirror's hash mismatch (seen 2026-09-09) is not a schema failure.
+      - name: Install psql
+        run: command -v psql >/dev/null || (sudo apt-get update && sudo apt-get install -y postgresql-client)
+      # These assert, against a real database, the properties the competitive event model depends
+      # on — including the two-device corroboration case an earlier schema silently rejected, and
+      # that the append-only guarantee survives a table created by a later migration.
+      - name: Schema properties
+        run: bash services/api/test/schema_properties.sh
+
+  command-path:
+    name: Command path integrity
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_HOST_AUTH_METHOD: trust
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd pg_isready --health-interval 5s
+          --health-timeout 5s --health-retries 10
+    env:
+      PGHOST: localhost
+      # If the service ever fails to come up, these suites must fail rather than skip themselves.
+      THRO_REQUIRE_DB: "1"
+      PGPORT: "5432"
+      PGUSER: postgres
+      PGDATABASE: postgres
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with: { distribution: temurin, java-version: "21" }
+      - uses: gradle/actions/setup-gradle@v4
+      # End-to-end: idempotency, gapless sequences, engine revalidation, two-device corroboration,
+      # that the server derives the outcome rather than trusting the client, and that the
+      # statistics projection derives the same figures as a leg computed by hand.
+      - name: Command path and statistics projection
+        working-directory: services/api
+        run: gradle test --no-daemon

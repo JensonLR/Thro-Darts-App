@@ -1,0 +1,22 @@
+{
+  "applinks": {
+    "details": [
+      {
+        "appIDs": ["2XM324WPD5.app.thro.darts"],
+        "components": [
+          { "/": "/m/*", "comment": "A match" },
+          { "/": "/match/*", "comment": "A match, spelled out" },
+          { "/": "/p/*", "comment": "A person" },
+          { "/": "/person/*", "comment": "A person, spelled out" },
+          { "/": "/e/*", "comment": "An organisation this phone keeps: a team, a league or a tournament (ADR-017)" },
+          { "/": "/club/*", "comment": "A team, under the word links shared before ADR-017 used" },
+          { "/": "/team/*", "comment": "A team, spelled out" },
+          { "/": "/tab/*", "comment": "One of the five tabs" },
+          { "/": "/settings", "comment": "Settings" },
+          { "/": "/new", "comment": "Start a match" },
+          { "/": "/continue", "comment": "The match this phone walked away from" }
+        ]
+      }
+    ]
+  }
+}

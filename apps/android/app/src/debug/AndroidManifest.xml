@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- A debuggable build only. It may read the notice about people's information from a local copy served over plain HTTP
+     on the emulator's address for the host machine, 10.0.2.2, so the card can be looked at without publishing a notice
+     (docs/runbooks/CLIENT_ANDROID.md). A release build keeps Android's default, HTTPS only. -->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <application android:networkSecurityConfig="@xml/thro_debug_network" />
+</manifest>

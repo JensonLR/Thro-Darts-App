@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!-- The one container the app and its widget extension share.
+	     The journal does NOT live here: ADR-006 measured it in Application Support and it stays
+	     there. What lives here is a small regenerable projection of it, so a widget can draw four
+	     numbers without linking SQLite and a scoring engine. See ThroLiveKit/Projection.swift.
+	     This string appears in three files and tools/check_app_group.py holds them in agreement —
+	     a typo in one produces a widget that is permanently empty with no error anywhere. -->
+	<key>com.apple.developer.applesignin</key>
+	<array>
+		<string>Default</string>
+	</array>
+	<key>com.apple.developer.associated-domains</key>
+	<array>
+		<!-- No `?mode=developer`. That flag makes the phone fetch the association file straight from
+		     the domain instead of Apple's CDN, and it is IGNORED unless the phone has Settings →
+		     Developer → Associated Domains Development switched on — which a TestFlight tester has
+		     no reason to have done. With it on this build, a passkey refused with "Application with
+		     identifier 2XM324WPD5.app.thro.darts is not associated with domain
+		     thro-api-staging.onrender.com" on a phone where the association file was being served
+		     correctly the whole time. Plain form: Apple's CDN fetches it, and it works for everyone. -->
+		<string>webcredentials:thro-api-staging.onrender.com</string>
+	</array>
+	<key>com.apple.security.application-groups</key>
+	<array>
+		<string>group.app.thro.darts</string>
+	</array>
+</dict>
+</plist>

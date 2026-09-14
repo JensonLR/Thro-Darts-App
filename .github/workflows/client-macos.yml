@@ -1,0 +1,138 @@
+name: client-macos
+
+# The macOS jobs, apart from the Linux ones on purpose: macOS runners bill at ten times the Linux
+# rate, and on 2026-09-05 this repository's Actions allowance ran out mid-build. These run only when
+# something they build has changed; a documentation push costs nothing.
+on:
+  push:
+    branches: ["**"]
+    paths:
+      - "packages/client-ios/**"
+      - "packages/design-tokens/**"
+      - "packages/engine-swift/**"
+      - "packages/statistics-swift/**"
+      - "packages/durability-probe/**"
+      - "apps/**"
+      - ".github/workflows/client-macos.yml"
+  pull_request:
+    paths:
+      - "packages/client-ios/**"
+      - "packages/design-tokens/**"
+      - "packages/engine-swift/**"
+      - "packages/statistics-swift/**"
+      - "packages/durability-probe/**"
+      - "apps/**"
+      - ".github/workflows/client-macos.yml"
+
+
+# These jobs read the repository and write nothing back. Stating that here rather than
+# inheriting whatever the repository's default happens to be means a token that leaks out of a
+# build step cannot push, comment, or publish.
+permissions:
+  contents: read
+
+jobs:
+  durability-probe:
+    name: Durability probe compiles and runs
+    # macOS, because the probe links SQLite3 directly and measures `fullfsync`, neither of which
+    # exists on Linux. This job is here because the package previously had NO compile check
+    # anywhere — it was excluded from CI as "Apple-only", so a type-name collision with
+    # Foundation.Measurement reached a person's machine before anything caught it. A package
+    # nothing builds is a package that is broken and does not know it.
+    #
+    # The numbers this produces are a CI runner's disk and answer nothing about a phone. The point
+    # is that it BUILDS and the probe runs end to end.
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build and run
+        run: swift test --package-path packages/durability-probe
+
+  client-ios:
+    name: iOS client packages build and test
+    # macOS, because these are SwiftUI and an asset catalogue. This job exists for the same reason
+    # the durability probe's does: a package nothing builds is broken and does not know it, and
+    # this session cannot compile Swift itself. The design tokens are consumed straight from the
+    # generator's output directory, so this also proves that `build.py --check` and the Swift
+    # consumer agree on the same files.
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Resolve the local package graph
+        run: swift package --package-path packages/client-ios resolve
+      - name: Build and test
+        run: swift test --package-path packages/client-ios
+
+  beyond-the-phone:
+    name: The watch app, and everything that must build for a watch or a TV
+    # The watch app exists now (PD-078). The three module steps below predate it and stay: they were
+    # here when there was no watch target at all, because a foundation nobody compiles rots — and the
+    # only two things that had gone were a trait resolution with nothing to resolve on a watch and a
+    # colour picker nobody uses from a wrist (PD-072). They are also the fast half: a broken module
+    # says which module, where a failing app build says only that the app failed.
+    #
+    # The design system is still built even though the watch app does not link it. It is the
+    # foundation for the day a wrist does more than glance, and the bill for letting it rot arrives
+    # all at once.
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Design system, for watchOS
+        run: |
+          cd packages/client-ios
+          xcodebuild -scheme ThroDesign -destination 'generic/platform=watchOS Simulator' -quiet build
+      - name: The watch's own module, for watchOS
+        run: |
+          cd packages/client-ios
+          xcodebuild -scheme ThroWatchKit -destination 'generic/platform=watchOS Simulator' -quiet build
+      - name: Scoring engine, for watchOS
+        run: |
+          cd packages/engine-swift
+          xcodebuild -scheme ThroEngine -destination 'generic/platform=watchOS Simulator' -quiet build
+      # tvOS, for the same reason and with a shorter history: the whole design system, the network
+      # layer, the live surfaces, the engine and the statistics all build for a TV as of PD-079, and
+      # what it took was five edits — a colour picker and a drag gesture that describe acts nobody
+      # performs from a sofa, a haptic guard that named platforms instead of naming iOS, and a text
+      # metric a ten-foot interface does not have. Left uncompiled, the next iOS-only API would put
+      # all of that back silently.
+      - name: Design system, network layer and live surfaces, for tvOS
+        run: |
+          cd packages/client-ios
+          xcodebuild -scheme ThroDesign -destination 'generic/platform=tvOS Simulator' -quiet build
+          xcodebuild -scheme ThroNet -destination 'generic/platform=tvOS Simulator' -quiet build
+          xcodebuild -scheme ThroLiveKit -destination 'generic/platform=tvOS Simulator' -quiet build
+      - name: Scoring engine and statistics, for tvOS
+        run: |
+          cd packages/engine-swift
+          xcodebuild -scheme ThroEngine -destination 'generic/platform=tvOS Simulator' -quiet build
+          cd ../statistics-swift
+          xcodebuild -scheme ThroStatistics -destination 'generic/platform=tvOS Simulator' -quiet build
+      - name: The Apple TV app itself
+        run: |
+          xcodebuild -project apps/ios/ThroDarts.xcodeproj -scheme ThroTV \
+            -destination 'generic/platform=tvOS Simulator' -configuration Debug \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO -quiet build
+      - name: The watch app itself
+        run: |
+          xcodebuild -project apps/ios/ThroDarts.xcodeproj -scheme ThroWatch \
+            -destination 'generic/platform=watchOS Simulator' -configuration Debug \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO -quiet build
+
+  ios-app:
+    name: iOS app builds for the simulator
+    # The Xcode project is a few lines that mount ThroApp from packages/client-ios. `swift test` on
+    # macOS proves the packages compile for macOS; only xcodebuild against the iOS SDK proves they
+    # compile for the phone, where SwiftUI's availability differs. Unsigned, because CI has no team;
+    # the founder's Mac signs it.
+    #
+    # This also builds the watch app and embeds it, because the phone app depends on it — so the two
+    # cannot drift apart without a red build, which is the whole reason the watch is a dependency
+    # rather than a thing somebody remembers to build.
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build for the simulator
+        run: |
+          xcodebuild -project apps/ios/ThroDarts.xcodeproj -scheme ThroDarts \
+            -destination 'generic/platform=iOS Simulator' -configuration Debug \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO -quiet build

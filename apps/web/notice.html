@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="en-GB">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>THRØ — a notice about your information</title>
+<meta name="description" content="If something ever goes wrong with the information THRØ keeps, this is where it says so.">
+<!-- UK GDPR Art 34 (PD-094). THRØ holds no email address, phone number or push token, so it cannot write to
+     anybody. When a breach is likely to put people at high risk, this page and the card on the app's Home are
+     how it tells them. The words come from notice.json, the one file to edit: docs/legal/BREACH_PLAN.md says how. -->
+<link rel="stylesheet" href="tokens.css">
+<link rel="stylesheet" href="thro.css">
+</head>
+<body>
+<header class="field">
+  <div class="measure">
+    <a class="brand-link" href="index.html"><img class="brand" src="wordmark.svg" alt="THRØ" width="428" height="134"></a>
+    <p class="wordmark" style="font-size:28px">A notice about your information</p>
+    <p class="lede">If something ever goes wrong with what THRØ keeps, this is where it says so.</p>
+  </div>
+</header>
+<main class="measure">
+  <div id="notice" aria-live="polite"><p class="quiet">Looking for a notice…</p></div>
+  <noscript><p>This page reads its notice from <a href="notice.json">notice.json</a>, which your browser can open on its own.</p></noscript>
+</main>
+<footer class="measure">
+  <p><a href="index.html">THRØ</a> · <a href="notice-under-18.html">This notice, if you're under 18</a> ·
+     <a href="privacy.html">Privacy</a> · <a href="under-18.html">If you're under 18</a></p>
+</footer>
+<script src="thro.js"></script>
+<script>THRO.mountNotice(document.getElementById('notice'), 'adult');</script>
+</body>
+</html>
