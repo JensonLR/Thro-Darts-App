@@ -113,11 +113,21 @@ public struct AccountScreen: View {
             SectionHeader("Friends")
             LinkRow(icon: .users, label: "Friends", value: account.friends.map { $0.isEmpty ? "None yet" : "\($0.count)" } ?? "Codes, given in person") { showing = .friends }
             SectionHeader("Ways in")
-            waysIn(profile.credentials ?? 1)
-            ThroButton("Add a passkey", variant: .secondary, size: .medium, icon: .lock) { Task { await account.usePasskey() } }
-            ThroTextButton("Add Sign in with Apple", tone: .quiet) { Task { await account.signInWithApple() } }
-            if account.configuration.googleClientID != nil {
-                ThroTextButton("Add Sign in with Google", tone: .quiet) { Task { await account.signInWithGoogle() } }
+            let ways = WaysIn(profile: profile)
+            waysIn(ways.count)
+            // Each way held, by name (PD-102), so adding one visibly adds a row rather than changing one word.
+            ForEach(ways.held, id: \.self) { way in
+                SettingsRow(icon: .check, label: way.title, value: "Set up")
+            }
+            ForEach(ways.offers(googleConfigured: account.configuration.googleClientID != nil), id: \.self) { way in
+                switch way {
+                case .passkey:
+                    ThroButton(ways.has(.passkey) ? "Add another passkey" : "Add a passkey", variant: .secondary, size: .medium, icon: .lock) { Task { await account.usePasskey() } }
+                case .apple:
+                    ThroTextButton("Add Sign in with Apple", tone: .quiet) { Task { await account.signInWithApple() } }
+                case .google:
+                    ThroTextButton("Add Sign in with Google", tone: .quiet) { Task { await account.signInWithGoogle() } }
+                }
             }
             SectionHeader("From THRØ")
             LinkRow(icon: .bell, label: "Your inbox", value: "Tasks waiting on you") { showing = .inbox }

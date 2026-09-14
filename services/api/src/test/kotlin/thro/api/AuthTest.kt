@@ -127,6 +127,8 @@ class AuthTest {
             // --- the session is THRØ's own ----------------------------------------------------------
             val me = get("/v1/me", access)
             check("the access token names the account, and its live claim is the principal", me.status.value == 200 && field(me.bodyAsText(), "playerId") == playerId.toString() && field(me.bodyAsText(), "named") == "false")
+            check("the profile says which ways into the account there are, not only how many, so the phone can show them",
+                me.bodyAsText().contains("\"ways\":[\"apple\"]") && me.bodyAsText().contains("\"credentials\":1"))
             check("no principal is 401 on /v1/me, on logout and on the profile", get("/v1/me", null).status.value == 401 && post("/v1/auth/logout", "").status.value == 401 && client.put("/v1/me/profile") { setBody("""{"displayName":"x"}""") }.status.value == 401)
             check("a made-up bearer token is nobody", get("/v1/me", "not-a-token").status.value == 401)
             val orgs = Organisations(c)
@@ -207,7 +209,7 @@ class AuthTest {
                 post("/v1/auth/refresh", """{"refreshToken":${thro.api.http.Contract.q(race[0].refreshToken)}}""").status.value == 401)
         }
         println("  $passed auth properties held")
-        assertEquals(41, passed)
+        assertEquals(42, passed)
     }
 
     @Test

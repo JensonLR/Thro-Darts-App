@@ -5643,3 +5643,30 @@ principal. The JSON field is one line beside the domain query the test reads.
 due hour, and an answer with a reason. It says on its face that hiding and suspending are not done by THRØ yet. The
 organiser's front door now uses the same sign-in gate. `node --check` passes; **not checked in a browser**, for the
 passkey reason as before.
+
+**Deployed.** CI green on 648b3de, `deploy-api` completed success, `/healthz` answered with it, `moderation.html` and
+`organiser.html` answer 200, and the `thro.js` served from `thro.uk` holds `mountModeration`, `mountLobby`, `scheduler`,
+`teamAdder` and `signInGate`.
+
+## "Nothing changed" — it had, and nothing said so (PD-102)
+
+**The report.** The founder added a passkey (and the other sign-ins) and the account page did not change; the website
+did not look updated; the app offered no update.
+
+**What was true, checked before anything was changed.** His account in production holds three live credentials: Apple
+(12 Sep), Google (14 Sep 10:14) and a passkey (14 Sep 13:52, not yet used). The app re-reads the profile after adding one,
+and the page drew only a count — "2 ways" became "3 ways" — above the same three buttons. The site was updated
+(`last-modified` 13:41 UTC; Cloudflare holds a copy for at most five minutes) but its home page links to none of the new
+pages. The app had not changed since build 8: everything since was server and web, and TestFlight offers an update only
+when there is a build.
+
+**Changed.** `/v1/me` carries `ways`, the live credential kinds. The phone's `Profile` takes it as an optional field, a new
+`WaysIn` decides what is held and what to offer, and the account screen draws a row per held way and offers only what is
+missing. The home page's footer links *Run a league*.
+
+**Tested alongside the code, not first**, and said so: `AuthTest` checks `/v1/me` names `["apple"]` after an Apple
+sign-in (its own count of checks went from 41 to 42, which it asserts); `AccountProfileTests` decodes `ways`, names all
+three in order, offers only another passkey when all are held, does not offer Apple twice or Google in a build without
+it, and offers everything for a profile with no `ways`. `AccountProfileTests` and `AccountTests`, 26 tests, pass — which
+also shows no existing `Profile(...)` call broke. The API suite: 114 tests, 0 failures. `check_test_counts.py` caught
+the new test missing from the README and `CLIENT_IOS.md`, whose counts now say 385 and 859.

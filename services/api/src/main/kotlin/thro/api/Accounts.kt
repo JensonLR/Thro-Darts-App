@@ -42,7 +42,9 @@ public class Accounts(
         public data object Expired : Refreshed
     }
 
-    public data class Profile(val accountId: UUID, val playerId: UUID?, val displayName: String, val ageBand: String, val named: Boolean, val credentials: Int)
+    /** [ways] is which kinds of way in the account holds — apple, google, passkey — so a phone can show them by name (PD-102). */
+    public data class Profile(val accountId: UUID, val playerId: UUID?, val displayName: String, val ageBand: String, val named: Boolean, val credentials: Int,
+                              val ways: List<String> = emptyList())
 
     public companion object {
         public val ACCESS_TTL: Duration = Duration.ofMinutes(15)
@@ -270,8 +272,17 @@ public class Accounts(
             """.trimIndent(),
         ).use { ps ->
             ps.setObject(1, accountId)
-            ps.executeQuery().use { rs -> if (rs.next()) Profile(accountId, rs.getObject(3) as UUID?, rs.getString(1), rs.getString(2), rs.getString(1) != PLACEHOLDER_NAME, credentialCount(accountId)) else null }
+            ps.executeQuery().use { rs -> if (rs.next()) Profile(accountId, rs.getObject(3) as UUID?, rs.getString(1), rs.getString(2), rs.getString(1) != PLACEHOLDER_NAME, credentialCount(accountId), waysIn(accountId)) else null }
         }
+
+    /**
+     * The kinds of way into an account that are live, each once (PD-102). A count alone left a person who had just added a
+     * passkey looking at the same page — the sentence changed from two to three and nothing else did — so they could not
+     * tell whether it had worked. The kind, never the credential or its subject: that is all a screen needs to name.
+     */
+    public fun waysIn(accountId: UUID): List<String> =
+        connection.prepareStatement("SELECT DISTINCT kind FROM identity.credential WHERE account_id = ? AND revoked_at IS NULL ORDER BY kind")
+            .use { ps -> ps.setObject(1, accountId); ps.executeQuery().use { rs -> generateSequence { if (rs.next()) rs.getString(1) else null }.toList() } }
 
     public fun setDisplayName(accountId: UUID, name: String) {
         val trimmed = name.trim()

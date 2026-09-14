@@ -4549,3 +4549,19 @@ founder was named as the moderator (`THRO_MODERATORS`, his account) at his word.
 - **Making a decision do what it says**: hiding a name, suspending an account. Until then a report about a name is
   answered by the moderator correcting it by hand.
 - Who else moderates. `THRO_MODERATORS` is a list set on the server, deliberately not a table (PD-050).
+
+## PD-102 — The account screen names each way in
+
+**14 September 2026.** The founder added a passkey, and before that Google, and reported that the page did not change,
+so he could not tell whether they had been kept. Production showed all three live on his account: Apple, Google and a
+passkey. The screen showed only a count, in one sentence, and the same three *Add* buttons whatever was held.
+
+### Decided
+
+- **The profile carries which kinds of way in are held** (`ways`: apple, google, passkey), not only how many. The kind,
+  never the credential or its subject.
+- **The account screen shows each held way as a row by name**, then offers only what is missing: Apple and Google once
+  each, and a passkey always, as *Add another passkey* once one is held, because every phone keeps its own.
+- **A profile without `ways`** (an older server, or one cached by an older build) offers everything, as before.
+- **The public site links to the organiser's page** from its footer (*Run a league*). The pages built for PD-099 and
+  PD-100 were live and unreachable except by typing the address, which read to the founder as the site not updating.

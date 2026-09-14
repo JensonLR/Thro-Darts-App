@@ -92,16 +92,21 @@ public struct Profile: Codable, Sendable, Equatable {
     /// decode — and **absent reads as neither**, which is the safe way round: a switch shown off when it
     /// is on is a moment's confusion, and one shown on when it is off is a lie about who can see you.
     public let consents: [String]?
+    /// Which kinds of way into the account it holds — `apple`, `google`, `passkey` — so the account screen can name them
+    /// (PD-102). Optional for the cache's sake, like the fields above: absent means an older server, and the screen then
+    /// offers every way as it always did.
+    public let ways: [String]?
 
     public var mayBeListed: Bool { consents?.contains("listing") ?? false }
     public var mayBeShownLive: Bool { consents?.contains("live") ?? false }
 
     public init(accountId: UUID?, playerId: UUID?, displayName: String?, named: Bool, ageBand: String, credentials: Int?,
-                termsVersion: String? = nil, acceptedTerms: Bool? = nil, consents: [String]? = nil) {
+                termsVersion: String? = nil, acceptedTerms: Bool? = nil, consents: [String]? = nil, ways: [String]? = nil) {
         self.accountId = accountId; self.playerId = playerId; self.displayName = displayName
         self.named = named; self.ageBand = ageBand; self.credentials = credentials
         self.termsVersion = termsVersion; self.acceptedTerms = acceptedTerms
         self.consents = consents
+        self.ways = ways
     }
 }
 

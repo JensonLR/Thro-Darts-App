@@ -839,7 +839,7 @@ private fun profile(c: Connection, deps: Deps, p: Principal): Http {
     // to go and ask for separately is a fact some build ships without.
     val given = Consent(c, deps.now).given(account)
     val consents = given.joinToString(",") { Contract.q(it.stored) }
-    return Http(200, """{"accountId":"${pr.accountId}","playerId":${pr.playerId?.let { "\"$it\"" } ?: "null"},"displayName":${Contract.q(pr.displayName)},"named":${pr.named},"ageBand":${Contract.q(pr.ageBand)},"credentials":${pr.credentials},$terms,"acceptedTerms":$accepted,"consents":[$consents]}""")
+    return Http(200, """{"accountId":"${pr.accountId}","playerId":${pr.playerId?.let { "\"$it\"" } ?: "null"},"displayName":${Contract.q(pr.displayName)},"named":${pr.named},"ageBand":${Contract.q(pr.ageBand)},"credentials":${pr.credentials},"ways":[${pr.ways.joinToString(",") { Contract.q(it) }}],$terms,"acceptedTerms":$accepted,"consents":[$consents]}""")
 }
 
 /**

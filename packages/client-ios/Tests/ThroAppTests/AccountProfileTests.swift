@@ -84,6 +84,27 @@ final class AccountProfileTests: XCTestCase {
         XCTAssertTrue(DeleteAccountScreen.finality.lowercased().contains("brand new account"))
     }
 
+    // MARK: - the ways in (PD-102)
+
+    func testTheWaysInAreNamedAndOnlyWhatIsMissingIsOffered() throws {
+        let json = #"{"accountId":"aaaaaaaa-0000-0000-0000-000000000001","playerId":null,"displayName":"Jenson","named":true,"ageBand":"adult","credentials":3,"ways":["passkey","apple","google"]}"#
+        let all = WaysIn(profile: try JSONDecoder().decode(Profile.self, from: Data(json.utf8)))
+        XCTAssertEqual(all.held, [.apple, .google, .passkey], "every way held, by name, in one order")
+        XCTAssertEqual(all.count, 3)
+        XCTAssertEqual(all.offers(googleConfigured: true), [.passkey], "Apple and Google are set up; only another passkey is offered")
+
+        let appleOnly = WaysIn(profile: Profile(accountId: UUID(), playerId: nil, displayName: "Sam", named: true, ageBand: "adult",
+                                                credentials: 1, ways: ["apple"]))
+        XCTAssertEqual(appleOnly.offers(googleConfigured: true), [.google, .passkey], "Apple is not offered twice")
+        XCTAssertEqual(appleOnly.offers(googleConfigured: false), [.passkey], "and Google is not offered by a build without it")
+
+        // A profile from an older server, or cached by an older build, names no ways: everything is offered, as before.
+        let older = WaysIn(profile: profile(name: "Sam"))
+        XCTAssertEqual(older.held, [])
+        XCTAssertEqual(older.offers(googleConfigured: true), [.apple, .google, .passkey])
+        XCTAssertEqual(older.count, 1)
+    }
+
     // MARK: - helpers
 
     private func profile(name: String) -> Profile {
