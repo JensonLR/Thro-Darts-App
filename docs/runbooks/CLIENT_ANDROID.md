@@ -60,6 +60,24 @@ ending `.nosync` is the one thing every macOS sync client agrees to skip. Elsewh
 adb install -r "$(ls apps/android/app/build*/outputs/apk/debug/app-debug.apk | head -1)" && adb shell am start -n app.thro.darts/.MainActivity
 ```
 
+### Looking at the notice about people's information (PD-097)
+
+The client's one network call reads `notice.json` from the public web site (`THRO_WEB_BASE_URL` in `Hosts.kt`, kept by
+`tools/host.py`), and the committed file says no notice is live. To look at the card, serve a copy of `apps/web` whose
+`notice.json` is a rehearsal, from this Mac, and point a debuggable build at it. Plain HTTP to `10.0.2.2` — the
+emulator's address for the host — is allowed in debug builds only (`apps/android/app/src/debug`).
+
+```bash
+python3 -m http.server 8787 --bind 127.0.0.1 --directory /path/to/a-copy-of-apps-web
+```
+
+```bash
+adb shell am start -n app.thro.darts/.MainActivity --es thro.webBaseUrl http://10.0.2.2:8787
+```
+
+The card sits under the mark on the first screen. **Never put a rehearsal in `apps/web/notice.json`**: the file on the
+site is the notice, and it reaches every phone that opens THRØ.
+
 A screenshot comes back with `adb exec-out screencap -p > shot.png`.
 
 ## The shape

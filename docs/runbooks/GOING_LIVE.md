@@ -17,6 +17,8 @@ which is the whole reason this is written down.
 | `render.yaml` → `THRO_RP_ORIGINS` | absent (the code defaults to `https://<rp id>`) — **but set on the staging service**, since 14 September to its own origin; see step 6 | `https://thro.uk,https://api.thro.uk` |
 | `Info.plist` → `THROAPIBaseURL` | `https://thro-api-staging.onrender.com` | **`https://api.thro.uk`** |
 | `ThroDarts.entitlements` → `webcredentials:` | `thro-api-staging.onrender.com` | **`thro.uk`** |
+| `Info.plist` → `THROWebBaseURL` (where the notice is read) | `https://thro-web-q7ys.onrender.com` | **`https://thro.uk`** |
+| `Hosts.kt` → `THRO_WEB_BASE_URL` (the same, on Android) | `https://thro-web-q7ys.onrender.com` | **`https://thro.uk`** |
 | `render.yaml` → the two rewrite destinations | the API service's own hostname | **unchanged** |
 
 Two things in that table are easy to get wrong and both are silent.

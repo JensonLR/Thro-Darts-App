@@ -69,7 +69,12 @@ Collected, all *linked to the user* and all for *app functionality*, none shared
 location, no personal identifiers beyond the account, no app activity, no crash logs, no device IDs.
 
 Play also asks whether data collection is **optional**. It is: THRØ works entirely without an account, and
-nothing reaches the server until somebody signs in. Say so — it is true and it is unusual.
+nothing about anybody reaches THRØ until somebody signs in. Say so — it is true and it is unusual.
+
+**The one request made without an account** (PD-097, and PD-094 on the iPhone) is for the public notice about people's
+information, `notice.json` on the web site. It carries nothing about the person — no account, no device id, no cookie —
+and the web host sees the internet address it comes from, as it does for any page. Whether Play's form wants that
+mentioned is the founder's call when filling it in; the answer should match the one given for the web pages.
 
 ## What the founder still has to supply
 

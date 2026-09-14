@@ -111,6 +111,10 @@ jobs:
       # read at a child's level, as under-18.html is held to (PD-094).
       - name: The notice about people's information can be read, by everybody it is for
         run: python3 tools/check_notice.py
+      # Android reads that notice, and it is the only network call the Android client makes (PD-097). Until then the
+      # client had no network code at all, and the defaults audit leaned on it; this is what still holds.
+      - name: The Android client reaches a network only for the notice
+        run: python3 tools/check_android_network.py
 
       # A transitive dependency is linkable, not nameable — and a type you can see is not a member
       # you can reach. Three macOS rounds at four minutes each, in one day: Geometry.swift naming

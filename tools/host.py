@@ -9,6 +9,7 @@ domain exists, which is the trap this exists to close:
   - `Info.plist`             THROAPIBaseURL — the host the app sends requests to
   - `ThroDarts.entitlements` webcredentials: — the domain the phone fetches the association file from
   - `Info.plist`             THROWebBaseURL — the public web site the app reads a notice from (PD-094)
+  - `Hosts.kt`               THRO_WEB_BASE_URL — the same web site, for the Android app (PD-097)
 
 Before a domain there is one host and all three carry it. After a domain there are two, because a
 registrable domain may serve its API from a subdomain: the app talks to `api.thro.uk` while the
@@ -39,6 +40,7 @@ ROOT = pathlib.Path(__file__).resolve().parents[1]
 RENDER = ROOT / "render.yaml"
 PLIST = ROOT / "apps/ios/Support/Info.plist"
 ENTS = ROOT / "apps/ios/Support/ThroDarts.entitlements"
+ANDROID = ROOT / "packages/client-android/src/main/kotlin/thro/client/Hosts.kt"
 
 # The API service's own Render hostname. This is the free-tier public host AND, after a domain, the
 # rewrite target that never changes — the API keeps answering on it either way.
@@ -54,10 +56,11 @@ RP_ORIGINS = re.compile(r"(- key: THRO_RP_ORIGINS\n\s+value: )(\S+)")
 BASE_URL = re.compile(r"(<key>THROAPIBaseURL</key>\s*\n\s*<string>)([^<]+)(</string>)")
 WEB_BASE = re.compile(r"(<key>THROWebBaseURL</key>\s*\n\s*<string>)([^<]+)(</string>)")
 WEBCRED = re.compile(r"(<string>webcredentials:)([^<]+)(</string>)")
+ANDROID_WEB_BASE = re.compile(r'(THRO_WEB_BASE_URL: String = ")([^"]+)(")')
 
 
 def arrangement(domain: str | None) -> dict[str, str]:
-    """The four values, for a domain or for the free subdomain.
+    """Every value, for a domain or for the free subdomain.
 
     With a domain the app is given its own subdomain rather than being routed through the static
     site's rewrite: a CDN in front of `text/event-stream` is how a live match stream dies, and
@@ -70,6 +73,7 @@ def arrangement(domain: str | None) -> dict[str, str]:
             "base_url": f"https://{API_SERVICE_HOST}",
             "webcredentials": API_SERVICE_HOST,
             "web_base": f"https://{WEB_SERVICE_HOST}",
+            "android_web_base": f"https://{WEB_SERVICE_HOST}",
         }
     return {
         "rp_id": domain,
@@ -77,6 +81,7 @@ def arrangement(domain: str | None) -> dict[str, str]:
         "base_url": f"https://api.{domain}",
         "webcredentials": domain,
         "web_base": f"https://{domain}",
+        "android_web_base": f"https://{domain}",
     }
 
 
@@ -84,12 +89,14 @@ def read() -> dict[str, str | None]:
     render, plist, ents = RENDER.read_text(), PLIST.read_text(), ENTS.read_text()
     rp, origins = RP_ID.search(render), RP_ORIGINS.search(render)
     base, cred, web = BASE_URL.search(plist), WEBCRED.search(ents), WEB_BASE.search(plist)
+    android = ANDROID_WEB_BASE.search(ANDROID.read_text())
     return {
         "rp_id": rp.group(2) if rp else None,
         "rp_origins": origins.group(2) if origins else None,
         "base_url": base.group(2) if base else None,
         "webcredentials": cred.group(2) if cred else None,
         "web_base": web.group(2) if web else None,
+        "android_web_base": android.group(2) if android else None,
     }
 
 
@@ -141,7 +148,7 @@ def check() -> int:
         print("  fix: python3 tools/host.py --set " + domain[4:])
         return 1
 
-    for key in ("rp_id", "base_url", "webcredentials", "web_base"):
+    for key in ("rp_id", "base_url", "webcredentials", "web_base", "android_web_base"):
         if found[key] != want[key]:
             problems.append(f"  {key}: found {found[key]!r}, {where} wants {want[key]!r}")
     # Origins may be absent on the free tier, where the code defaults to https://<rp id>. With a
@@ -199,11 +206,13 @@ def apply(domain: str | None) -> int:
     plist = BASE_URL.sub(lambda m: m.group(1) + want["base_url"] + m.group(3), plist, count=1)
     plist = WEB_BASE.sub(lambda m: m.group(1) + want["web_base"] + m.group(3), plist, count=1)
     ents = WEBCRED.sub(lambda m: m.group(1) + want["webcredentials"] + m.group(3), ents, count=1)
+    android = ANDROID_WEB_BASE.sub(lambda m: m.group(1) + want["android_web_base"] + m.group(3), ANDROID.read_text(),
+                                   count=1)
 
-    RENDER.write_text(render); PLIST.write_text(plist); ENTS.write_text(ents)
+    RENDER.write_text(render); PLIST.write_text(plist); ENTS.write_text(ents); ANDROID.write_text(android)
 
     print(f"host: set to {'the domain ' + domain if domain else 'the free subdomain'}")
-    for k in ("rp_id", "rp_origins", "base_url", "webcredentials", "web_base"):
+    for k in ("rp_id", "rp_origins", "base_url", "webcredentials", "web_base", "android_web_base"):
         print(f"  {k} = {want[k]}")
     if domain:
         print()
@@ -213,7 +222,7 @@ def apply(domain: str | None) -> int:
         print("    3. Point the DNS as Render instructs — A records only. Render is IPv4-only,")
         print("       so delete any AAAA record or the site answers intermittently.")
         print("    4. Set THRO_RP_ID and THRO_RP_ORIGINS on the API service to the values above.")
-        print("    5. Rebuild and ship the app.")
+        print("    5. Rebuild and ship the apps, the iPhone's and Android's.")
         print()
         print("  And tell your testers: a passkey is bound to its relying party, so every passkey")
         print("  registered under the old host stops working. Sign in with Apple is not domain-bound")

@@ -189,11 +189,16 @@ knowledge is a refusal rather than a permission.
 
 ## 8. Android
 
-`packages/client-android` has **no network code at all** — the package graph contains nothing that
-speaks HTTP, which is the same structural enforcement the iOS client uses for its own offline claim.
-Its one persisted preference is a journal device id, a random UUID written once into
-`MODE_PRIVATE` shared preferences, and the code comment is explicit that it is deliberately *not*
-the hardware identifier: it says which device wrote a row, not which person is holding it.
+`packages/client-android` reaches a network **in one place, for one thing**. Since 14 September 2026 (PD-097) it
+reads the notice about people's information from THRØ's public web site — anonymously: no cookie, no account, no
+device id, and a user agent that does not name the phone. Until then its package graph contained nothing that spoke
+HTTP, and that was the enforcement; it cannot be any more, so `tools/check_android_network.py` enforces "only the
+notice" on every push instead — no network API outside `Notice.kt`, no cookie handler anywhere, nothing in `Notice.kt`
+that identifies the phone, and no permission but the internet. Scoring still needs neither a network nor an account.
+
+Its persisted preferences are a journal device id — a random UUID written once into `MODE_PRIVATE` shared preferences,
+deliberately *not* the hardware identifier: it says which device wrote a row, not which person is holding it — and, once
+somebody puts a notice away, that notice's id.
 
 ---
 

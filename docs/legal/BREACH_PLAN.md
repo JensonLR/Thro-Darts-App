@@ -190,9 +190,9 @@ switched off. GitHub's own editor is enough: no terminal, no deploy, no database
 
 - **The mailbox does not exist**, so §"Do you tell the people" has no `safeguarding@` behind it yet.
   It is item 2 on the DPIA's pre-launch list.
-- ~~**The in-app notice does not exist.**~~ **Built** on 13 September 2026 (PD-094), for the iPhone. **Android
-  does not have it**: the Android client has no network code at all, so until it gains some, the public page is
-  the only way to reach somebody who plays only on Android.
+- ~~**The in-app notice does not exist.**~~ **Built** on 13 September 2026 (PD-094) for the iPhone, and on
+  14 September for Android (PD-097), which reads the same file by the same rules. Both show it when the app is
+  opened, so somebody who never opens it again is reached only by the public page.
 - **Recovery is Neon's, and on the free plan it is thin.** The current path is Neon's point-in-time
   recovery in London (`aws-eu-west-2`); the paid tier documented in `DEPLOY.md` gives **7 days** and
   the free one gives less. That is a recovery window, not a backup policy: there is no copy anywhere

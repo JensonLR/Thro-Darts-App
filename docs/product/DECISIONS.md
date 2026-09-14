@@ -4407,3 +4407,28 @@ server: *permission denied for table decision_tally*. The founder chose the full
   superuser cannot fail a privilege check.
 - **It reaches production through the pipeline**, which takes a restore point and migrates before its next deploy. Until
   then the running API keeps logging the refusal, and nothing is lost by the wait: production holds no reports.
+
+## PD-097 — Android reads the notice too
+
+**14 September 2026.** PD-094 put the notice about people's information on the iPhone and not on Android, whose client
+had no network code at all, and recorded the gap: its notice would wait for its first network feature. The founder chose
+not to wait.
+
+### Decided
+
+- **Android reads the same file by the same rules.** `apps/web/notice.json`, from the public web site, read the way the
+  iPhone reads it: typed, and a readable, active notice or nothing. The iPhone's test cases are ported one for one, and
+  the committed file is read through the Android reader.
+- **The iPhone's policy, in `ThroServiceNotices`.** Asked at launch and on every return to the front, at most once a
+  minute; a notice already read stays up when the site cannot be reached, and goes when the site says there is none;
+  put away until its id changes.
+- **On the first screen, under the mark**, where the iPhone puts it under Home's masthead. Android has no accounts, so
+  everybody on it reads the under-18 words, and *Read what happened* opens the under-18 page.
+- **It says nothing about who is asking**: no cookie, no account, no device id, nothing in the address — and a user agent
+  of its own, because Android's default one names the phone's model and build. A test holds that against a real server.
+- **It is the Android client's only network call, and a check keeps it so.** The package graph said "no network" before;
+  `tools/check_android_network.py` says "only the notice": no network API outside `Notice.kt`, no cookie handler, nothing
+  in `Notice.kt` that identifies the phone, and no permission but the internet in any manifest.
+- **`tools/host.py` keeps Android's web address with the others** (`Hosts.kt`), so the domain switch moves it too.
+- **A debuggable build may read a local copy** — `--es thro.webBaseUrl`, plain HTTP to the emulator's address for the host
+  and nowhere else — as the iPhone's Debug build takes `-ThroWebBaseURL`. A release build cannot.

@@ -38,6 +38,10 @@ public fun ThroSetupScreen(
     /// is worse than no door, because somebody opens it once and learns not to.
     kept: Int = 0,
     onSeeKept: () -> Unit = {},
+    /// The notice about people's information (PD-097), in the words for this reader — or nothing, which is almost always.
+    notice: ThroNotice.Reading? = null,
+    onReadNotice: () -> Unit = {},
+    onPutAwayNotice: () -> Unit = {},
     onStart: (String, String) -> Unit,
 ) {
     var home by remember { mutableStateOf("") }
@@ -56,6 +60,12 @@ public fun ThroSetupScreen(
                 colorFilter = ColorFilter.tint(colors.colorTextOnBoard),
                 modifier = Modifier.padding(top = 20.dp).width(120.dp),
             )
+            // Under the mark, where the iPhone puts it under the masthead: before anything this screen asks for, because
+            // it is the one thing here THRØ has to tell somebody rather than ask them.
+            if (notice != null) {
+                ThroNoticeCard(notice.words, onRead = onReadNotice, onPutAway = onPutAwayNotice,
+                               modifier = Modifier.padding(top = 18.dp))
+            }
             Spacer(Modifier.weight(1f))
             Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
                 // **Offered, not resumed for you.** A match left half-scored three weeks ago is not the match

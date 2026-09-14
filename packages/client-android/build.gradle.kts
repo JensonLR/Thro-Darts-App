@@ -105,6 +105,9 @@ dependencies {
     // common variant and `kotlin.test.Test` does not exist. Naming the JUnit variant removes the guesswork.
     testImplementation("org.jetbrains.kotlin:kotlin-test-junit:2.2.20")
     testImplementation("junit:junit:4.13.2")
+    // `org.json` is part of Android, but the android.jar the JVM tests compile against carries only stubs of it, so the
+    // notice's reader (PD-097) would read every file as nothing on the desktop. The real library, for the tests only.
+    testImplementation("org.json:json:20240303")
     // The scoring engine and the journal, which are the same Gradle projects the JVM conformance corpus
     // and the 39 journal tests run against. Not copies: ADR-002 and ADR-006 both turn on there being one
     // implementation per language, and a second one here would be the thing those decisions exist to stop.

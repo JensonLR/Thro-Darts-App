@@ -17,17 +17,30 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 // The Android client's one route (PD-081, PD-083).
 //
 // **Local-first, like the phone.** PD-012: scoring needs no account and no network, so nothing here asks
 // for either. The journal opens, two names are typed, and a match is scored. Everything else the iOS client
 // does — leagues, clubs, sharing, the rest — is downstream of an account and is not here yet.
+//
+// **One thing is read from outside** (PD-097): the notice about people's information, from THRØ's public web site,
+// anonymously, at launch and on every return to the front. Nothing about scoring waits on it or knows it exists.
 
 @Composable
-public fun ThroAndroidRoot() {
+public fun ThroAndroidRoot(
+    /// The public web site the notice is read from; null asks nothing. `MainActivity` may point a debuggable build at a
+    /// local copy.
+    webBaseUrl: String? = THRO_WEB_BASE_URL,
+    /// How many times the app has come to the front. Each is a chance to look for a notice again; the notices themselves
+    /// hold the looks to one a minute.
+    foregrounds: Int = 0,
+) {
     val context = LocalContext.current
     var store by remember { mutableStateOf<ThroStore?>(null) }
     var trouble by remember { mutableStateOf<String?>(null) }
@@ -37,6 +50,11 @@ public fun ThroAndroidRoot() {
     // the only record; a cached list is a second one, and a second record is a record that can be wrong.
     var kept by remember { mutableStateOf<List<ThroMatchRow>>(emptyList()) }
     var showingKept by remember { mutableStateOf(false) }
+    val notices = remember(webBaseUrl) {
+        ThroServiceNotices(webBaseUrl, ThroNoticeTransport.Anonymous, ThroNoticePreferences(context))
+    }
+    var notice by remember { mutableStateOf<ThroNotice?>(null) }
+    val pages = LocalUriHandler.current
 
     LaunchedEffect(Unit) {
         ThroStore.open(context).fold(
@@ -47,6 +65,11 @@ public fun ThroAndroidRoot() {
             },
             onFailure = { trouble = ThroAndroidWords.journalRefused(it) },
         )
+    }
+
+    LaunchedEffect(notices, foregrounds) {
+        withContext(Dispatchers.IO) { notices.refresh() }
+        notice = notices.showing
     }
 
     ThroTheme {
@@ -95,20 +118,36 @@ public fun ThroAndroidRoot() {
                     onBack = { showingKept = false },
                 )
             }
-            else -> ThroSetupScreen(
-                carryOn = carryOn,
-                onCarryOn = {
-                    ThroSession.resumable(open.journal)?.let { session = ThroSession.resume(open.journal, it) }
+            else -> {
+                // Nobody on Android has said their age — there are no accounts here — so the under-18 words, as for
+                // anybody whose age is not known to be adult.
+                val reading = notice?.forReader(ageBand = null)
+                ThroSetupScreen(
+                    carryOn = carryOn,
+                    onCarryOn = {
+                        ThroSession.resumable(open.journal)?.let { session = ThroSession.resume(open.journal, it) }
+                        carryOn = null
+                    },
+                    kept = kept.size,
+                    onSeeKept = {
+                        kept = ThroMatchList.rows(open.journal)
+                        showingKept = true
+                    },
+                    notice = reading,
+                    onReadNotice = {
+                        notices.page(underEighteen = reading?.underEighteen ?: true)?.let { page ->
+                            // A phone with nothing to open a web page in keeps the card, and the notice with it.
+                            runCatching { pages.openUri(page) }
+                        }
+                    },
+                    onPutAwayNotice = {
+                        notices.putAway()
+                        notice = notices.showing
+                    },
+                ) { home, away ->
+                    session = ThroSession.start(open.journal, home, away)
                     carryOn = null
-                },
-                kept = kept.size,
-                onSeeKept = {
-                    kept = ThroMatchList.rows(open.journal)
-                    showingKept = true
-                },
-            ) { home, away ->
-                session = ThroSession.start(open.journal, home, away)
-                carryOn = null
+                }
             }
         }
     }

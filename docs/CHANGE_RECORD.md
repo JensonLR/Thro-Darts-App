@@ -5429,3 +5429,40 @@ Counts: API 111 tests (5 new; the retention suite has 14), schema properties 152
 **Not done:** V047 is not in production. It goes with the pipeline's first real run, after that run's restore point, and
 the running API keeps logging the refusal until then — at no cost while production holds no reports. The Android notice
 is the next piece.
+
+## Android reads the notice too (PD-097)
+
+PD-094 left Android without the notice about people's information, because its client had no network code at all. The
+founder chose not to wait for a first network feature to bring one.
+
+**The same reader, not a second opinion of it.** `Notice.kt` reads `apps/web/notice.json` by the iPhone's rules — typed,
+and a readable, active notice or nothing — and `ThroServiceNotices` holds it the iPhone's way: at launch and on every
+return to the front, at most once a minute, kept through a failed look, gone when the site says there is none, put away
+until its id changes. Fifteen tests came first and were watched failing to compile against a client with no notice in
+it: the iPhone's fourteen cases one for one, the committed file among them, and one the iPhone cannot run — the request
+as it reaches a real server, with no cookie, no account, nothing in the address, and a user agent of its own, because
+Android's default one names the phone's model and build.
+
+**The card** sits on the first screen under the mark, in the under-18 words, because Android has no accounts and unknown
+is not adult. It was looked at on the emulator against a local copy of the site carrying a rehearsal notice: a
+debuggable build takes `--es thro.webBaseUrl`, for the emulator's host address only, and plain HTTP to that address is
+allowed in debug builds and nowhere else. The card showed and the app asked once at launch. *Read what happened* handed
+the browser `http://10.0.2.2:8787/notice-under-18.html` — the emulator's Chrome stopped at its own first-run terms, which
+were left alone. Coming back to the app asked again, more than a minute after the first look. *Put away* took the card
+off, and after a relaunch the app asked again and kept it away. A second request in the server's log, which looked like
+the minute rule failing, was the `curl` that checked the server before the install: logcat started the app's process ten
+seconds after it.
+
+**One network call, and a check that keeps it one.** The package graph said "no network" before. Now
+`tools/check_android_network.py`, in the domain-spec workflow, says "only the notice": no network API outside
+`Notice.kt`, no cookie handler, nothing in `Notice.kt` that identifies the phone, and no permission but the internet in
+any manifest, debug ones included. It passes on the tree and failed each of three perturbations — a network call in
+`Setup.kt`, a device id in `Notice.kt`, a second permission.
+
+**`tools/host.py` keeps Android's address** — `THRO_WEB_BASE_URL` in `Hosts.kt` — with the other five, checked in CI. In
+a copy, `--set thro.uk` moved it with the rest and `--set-free` brought every file back byte for byte.
+
+The README's Android row, the defaults audit, the breach plan, the store answers, ROPA, the Android runbook and
+GOING_LIVE's table now say what is true.
+
+Counts: Android client 42 tests (15 new).
