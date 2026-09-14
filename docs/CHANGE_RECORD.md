@@ -5537,3 +5537,24 @@ in `render.yaml`, the iPhone's API at `https://api.thro.uk`, its passkey domain 
 already on phones, is unaffected: it was built against the Render hostname. The rest is in GOING_LIVE, steps 3–9:
 custom domains on both Render services, the records at GoDaddy (A records only), `THRO_RP_ID` and `THRO_RP_ORIGINS` in
 the API's dashboard, the paid instance, and then a new build and the association file checked on the domain.
+
+**Then the founder's half, the same hour.** At GoDaddy, the default parking records were removed and three added:
+`A @ 216.24.57.1`, `CNAME www → thro-web-q7ys.onrender.com`, `CNAME api → thro-api-staging.onrender.com` (no AAAA, no CAA).
+Both Render services verified their custom domains. Checked from here:
+
+- the Mac's resolver: `thro.uk` 216.24.57.1; `www` and `api` through their Render hostnames;
+- certificates served for `thro.uk`, `www.thro.uk` and `api.thro.uk` (CN each, valid to 13 Dec 2026), about three minutes
+  after verification — the handshake failed until then;
+- `https://www.thro.uk/` answers 301 to `https://thro.uk/`;
+- `https://thro.uk/.well-known/apple-app-site-association` answers 200, `application/json`, no redirect,
+  `{"webcredentials":{"apps":["2XM324WPD5.app.thro.darts"]}}`;
+- `https://api.thro.uk/healthz`: database ok, V047, V047, commit 2dcbb15.
+
+`THRO_RP_ID` and `THRO_RP_ORIGINS` were set on the API through the Render connector; its deploy
+`dep-dajt90fqj5pc73f0mv90` went live and logged `passkeys: relying party thro.uk, origins [https://thro.uk,
+https://api.thro.uk]`. The push of 2dcbb15 had also run `deploy-api`, green, waiting on the service's own hostname.
+
+TestFlight build 8 (run 34836519724, 2dcbb15) is the first built against `api.thro.uk`: it passed the entitlement check,
+Apple processed it to VALID, and it is in Founders beside 7. **Still open from GOING_LIVE:** step 7, the paid instance —
+the founder chose to wait, so the API still sleeps after fifteen idle minutes. Passkeys made under the Render hostname no
+longer work; Sign in with Apple is unaffected.
