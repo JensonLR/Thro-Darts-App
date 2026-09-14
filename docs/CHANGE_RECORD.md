@@ -5497,3 +5497,20 @@ tester; the App Group still only reports, as it did.
 TESTFLIGHT.md says what error 1000 means on a TestFlight build and how to read a build's entitlements by hand.
 
 Counts: unchanged; the proof is the export's entitlements, read on this Mac, and build 7's run.
+
+**Build 7 went through it.** Run 7 (d2a0a29) stamped the entitlements, the signed export carried them and the upload
+went ahead; Apple processed build 7 to VALID, and the founder signed in with Apple on it. The cofounder accepted the
+team invitation and was added to the internal Founders group through the API, where build 7 is offered to him.
+
+## Production at V047, by the pipeline, for the first time
+
+The founder added the three deploy secrets and `deploy-api` ran by hand on d2a0a29 (run 34833106821), every step green.
+The checks job ran the migration discipline, the restore-point rule against a fake Neon, the 152 schema properties and
+the API's tests. Then, against production: a restore point, `pipeline-restore-point-before-d2a0a29-20260914-102822`
+(`br-lively-pond-zat08agp`, from `br-icy-leaf-zaq0grqg`); V046 → V047; the league seeds; the deploy hook for exactly
+that commit; and the wait, which saw the old API answer at the new schema (`codeVersion` V046, commit ed491a6) and then
+the new one.
+
+Checked afterwards from outside the pipeline: `/healthz` answers `database` ok, `schemaVersion` V047, `codeVersion`
+V047, commit d2a0a29b402b602d766204a0ac2c0f4a99cb1d7f. Neon lists the new restore point, and both hand-made ones —
+`br-gentle-block-zal9jk26` and `br-bitter-block-zat2etp8` — are still there, as PD-095's prefix promised.
