@@ -12,7 +12,7 @@ audit. Kept current during the build; **not** a deliverable, and never a substit
   fronted by Cloudflare): leagues, tables, fixtures, wall (`/tv`), organiser (`organiser.html`), moderation
   (`moderation.html`), privacy, terms, deletion, notices.
 - `https://api.thro.uk` (Render web service `thro-api-staging`, free instance, Frankfurt): production at **V050**,
-  commit **4dd5467**. `/healthz` reports database, schema version, code version and commit.
+  commit **91b92b2** (PD-107; PD-108 follows). `/healthz` reports database, schema version, code version and commit.
 - Neon production branch `br-icy-leaf-zaq0grqg` (project `round-darkness-99300686`), at V050. Restore points are
   branches: the pipeline's `pipeline-restore-point-before-<sha>-<stamp>` (newest three kept) and the founder's
   hand-made `restore-point-before-*` (never removed).
@@ -29,7 +29,7 @@ entitlements and refused if the signed app lacks Sign in with Apple or the passk
 
 PD-095 deploy pipeline · PD-096 retention sweep · PD-097 Android notice · PD-098 TestFlight entitlements ·
 PD-099 fixtures · PD-100 start a league · PD-101 moderation page · PD-102 ways in · PD-103 decisions enforce +
-league management · PD-104 organiser email · PD-105 provisional rating · PD-106 the team's fixture · PD-107 registrations.
+league management · PD-104 organiser email · PD-105 provisional rating · PD-106 the team's fixture · PD-107 registrations · PD-108 moving a fixture by agreement.
 
 ## Completion matrix (from four read-only audits, 16 September; details in PD-106 and CHANGE_RECORD)
 
@@ -41,7 +41,7 @@ league management · PD-104 organiser email · PD-105 provisional rating · PD-1
 | League OS: start league, seasons, divisions, accept teams, fixtures, results, award, void, rearrange, table, private/end | Complete | PD-099..PD-106; organiser web |
 | League OS: player registration (policy, reconcile, assess, confirm, send, answer) | **Complete (PD-107)** — routes, organiser web *Registrations*, phone inbox actions | RegistrationHttpTest (35) |
 | League OS: points-policy approval, transfers, division moves, audit view | **Missing routes** — domain in `Organisations.kt` with tests, no HTTP, no UI | audit §2 |
-| Secretary: rearrangement *proposals* | **Missing routes** — domain + tests only; `/v1/commands RearrangeFixture` bypasses the proposal flow | audit §2 |
+| Secretary: rearrangement *proposals* (propose, answer, apply) | **Complete (PD-108)** — routes, phone fixture screen + inbox, organiser web *Requests* | RearrangementHttpTest (26) |
 | Tournament OS on the server (`Competitions.kt`: openEvent/enter/checkIn/draw; tournament, pair, series tables) | **Missing routes** — whole class unreachable; phone tournaments are local-only | audit §2/§3 |
 | Friendly challenge between teams | **Missing entirely** | audit |
 | Discovery (leagues, events, nearby on-device) and the map | Complete for what is written; no server-side tournament entry | audit |
@@ -55,8 +55,8 @@ league management · PD-104 organiser email · PD-105 provisional rating · PD-1
 
 ## Frontier (what is next, in order)
 
-1. ~~Secretary HTTP surface: registrations~~ **done (PD-107)**. Left of it: rearrangement *proposals* as a route
-   (propose → the opponent answers → applied), then the organiser web's *Requests* section.
+1. ~~Secretary HTTP surface: registrations (PD-107), rearrangement proposals (PD-108)~~ **done**. Left of the
+   League OS: points-policy approval, transfers, division moves as routes; withdrawing a proposal; a proposed venue.
 2. **Tournament OS on the server**: routes over `Competitions.kt` (open an event, enter, check in, draw, results), then a
    web organiser page for events and the phone's Discover → enter.
 3. **Friendly challenge** between teams (propose → accept/counter → fixture outside any season).

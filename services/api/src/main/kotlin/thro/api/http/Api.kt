@@ -495,6 +495,49 @@ public object Contract {
                               403 to "you neither run this season nor a team in it", 404 to "no such league season"),
         ),
         Endpoint(
+            id = "fixtures.proposals", method = "GET", path = "/v1/fixtures/{fixtureId}/proposals", authenticated = true,
+            summary = "The dates proposed for a fixture (PD-108)",
+            description = "Every proposal to move this fixture, newest first: the date, from which team, why, and where it stands. For "
+                + "the two teams' members and the season's administrator. A proposal is not a move: the fixture's date is the league's.",
+            responses = mapOf(200 to "the proposals", 400 to "not a UUID", 401 to "no principal", 403 to "not your fixture", 404 to "no such fixture"),
+        ),
+        Endpoint(
+            id = "fixtures.propose", method = "POST", path = "/v1/fixtures/{fixtureId}/proposals", authenticated = true,
+            summary = "Propose a new date for a fixture to the other team (PD-108)",
+            description = "By whoever runs one of the fixture's teams. The proposal reaches the other team's inbox as a task due within "
+                + "seven days or by the fixture, whichever is first. One open proposal per fixture; the date must fall inside the season.",
+            request = Schema("""{"type":"object","required":["teamId","to"],"properties":{"teamId":{"type":"string","format":"uuid"},"to":{"type":"string","format":"date-time"},"reason":{"type":"string"}}}"""),
+            responses = mapOf(200 to "the proposal, delivered", 400 to "a date outside the season, or in the past", 401 to "no principal", 403 to "you do not run a team in this fixture", 404 to "no such fixture", 409 to "a proposal is already waiting"),
+        ),
+        Endpoint(
+            id = "proposals.get", method = "GET", path = "/v1/proposals/{proposalId}", authenticated = true,
+            summary = "One proposed date, as its fixture's teams and league read it (PD-108)",
+            description = "What the inbox's task points at: the fixture, the date proposed and the one it stands on, from which team, why, and where it stands.",
+            responses = mapOf(200 to "the proposal", 400 to "not a UUID", 401 to "no principal", 403 to "not your fixture", 404 to "no such proposal"),
+        ),
+        Endpoint(
+            id = "proposals.answer", method = "POST", path = "/v1/proposals/{proposalId}/answer", authenticated = true,
+            summary = "The other team's answer to a proposed date (PD-108)",
+            description = "Accepted or rejected, by whoever runs the team the date was proposed to; a rejection says why. Accepting does not "
+                + "move the fixture — the league applies what was agreed.",
+            request = Schema("""{"type":"object","required":["answer"],"properties":{"answer":{"type":"string","enum":["accepted","rejected"]},"note":{"type":"string"}}}"""),
+            responses = mapOf(200 to "the proposal as it now stands", 400 to "not an answer, or a rejection with no reason", 401 to "no principal", 403 to "not your proposal to answer", 404 to "no such proposal", 409 to "already answered"),
+        ),
+        Endpoint(
+            id = "proposals.apply", method = "POST", path = "/v1/proposals/{proposalId}/apply", authenticated = true,
+            summary = "The league applies an agreed date (PD-108)",
+            description = "Moves the fixture through the same command every rearrangement goes through, so its history names the proposal. "
+                + "Names the fixture version the administrator last saw; a stale version is a 409 with the current row. X-Thro-Device names the device.",
+            request = Schema("""{"type":"object","required":["expectedVersion"],"properties":{"expectedVersion":{"type":"integer"}}}"""),
+            responses = mapOf(200 to "applied: the proposal, now applied", 400 to "malformed", 401 to "no principal", 403 to "you do not administer the season", 404 to "no such proposal", 409 to "not accepted, or a stale fixture version", 422 to "refused by the store"),
+        ),
+        Endpoint(
+            id = "seasons.proposals", method = "GET", path = "/v1/seasons/{leagueSeasonId}/proposals", authenticated = true,
+            summary = "A season's open requests to move fixtures (PD-108)",
+            description = "Proposed and waiting for the other team, or agreed and waiting for the league to apply. For the season's administrator.",
+            responses = mapOf(200 to "the open proposals", 400 to "not a UUID", 401 to "no principal", 403 to "you do not administer this season", 404 to "no such season"),
+        ),
+        Endpoint(
             id = "seasons.policy", method = "GET", path = "/v1/seasons/{leagueSeasonId}/policy", authenticated = true,
             summary = "What a registration with this league season needs (PD-107)",
             description = "The registration policy in force today, for the season's administrator: which facts THRØ checks (name, "

@@ -152,6 +152,31 @@ final class NetTests: XCTestCase {
         catch let e as APIError { XCTAssertEqual(e.message, "It cannot be sent from where it is.") }
     }
 
+    /// PD-108: a proposed date decodes with both dates and both teams; the inbox task points at it; answering carries the note.
+    func testAProposedDateIsReadAnsweredAndProposed() async throws {
+        let proposal = #"{"proposalId":"eeeeeeee-0000-0000-0000-000000000009","fixtureId":"ffffffff-0000-0000-0000-000000000001","leagueSeasonId":"ffffffff-0000-0000-0000-000000000002","state":"proposed","to":"2026-10-15T19:30:00Z","reason":"venue double-booked","byTeamId":"aaaaaaaa-0000-0000-0000-000000000001","byTeam":"Riverside A","toTeamId":"aaaaaaaa-0000-0000-0000-000000000002","toTeam":"Grange A","proposedAt":"2026-09-16T12:00:00Z","answeredAt":null,"scheduledAt":"2026-10-08T19:30:00Z","fixtureVersion":1}"#
+        let inbox = #"{"sections":{"ACTION_REQUIRED":[{"taskId":"cccccccc-0000-0000-0000-000000000007","kind":"rearrangement_answer_due","reason":"Answer the proposed new date","dueAt":"2026-09-23T12:00:00Z","state":"open","player":null,"proposal":"eeeeeeee-0000-0000-0000-000000000009"}]}}"#
+        let accepted = proposal.replacingOccurrences(of: #""state":"proposed""#, with: #""state":"accepted""#)
+        let store = MemorySessionStore(Session(accountId: UUID(), playerId: nil, accessToken: "acc", refreshToken: "ref", accessExpiresAt: .distantFuture, created: false))
+        let script = Script([(200, inbox), (200, proposal), (200, accepted), (200, #"{"proposals":[\#(proposal)]}"#), (200, proposal)])
+        let api = ThroAPI(configuration: config, deviceId: device, store: store, transport: script)
+        let sections = try await api.inbox()
+        let task = try XCTUnwrap(sections["ACTION_REQUIRED"]?.first)
+        let proposalId = try XCTUnwrap(task.proposal)
+        let read = try await api.proposal(proposalId)
+        XCTAssertEqual(read.byTeam, "Riverside A"); XCTAssertEqual(read.toTeam, "Grange A"); XCTAssertEqual(read.reason, "venue double-booked")
+        XCTAssertLessThan(read.scheduledAt, read.to, "both dates arrive, the one it stands on and the one proposed")
+        let answered = try await api.answerProposal(proposalId, answer: "accepted", note: "fine by us")
+        XCTAssertEqual(answered.state, "accepted")
+        XCTAssertTrue(String(decoding: script.seen[2].httpBody ?? Data(), as: UTF8.self).contains("fine by us"))
+        let list = try await api.proposals(fixture: read.fixtureId)
+        XCTAssertEqual(list.count, 1)
+        let made = try await api.propose(fixture: read.fixtureId, team: read.byTeamId, to: read.to, reason: "cup night")
+        XCTAssertEqual(made.state, "proposed")
+        let sent = String(decoding: script.seen[4].httpBody ?? Data(), as: UTF8.self)
+        XCTAssertTrue(sent.contains("2026-10-15T19:30:00Z") && sent.contains("cup night"), "the date goes as an instant, the reason as words: \(sent)")
+    }
+
     func testBase64URLRoundTripsAndMatchesTheServersAlphabet() {
         let bytes = Data([0xfb, 0xff, 0xbf, 0x00, 0x01])
         let s = Base64URL.encode(bytes)

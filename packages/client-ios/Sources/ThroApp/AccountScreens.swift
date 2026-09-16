@@ -222,6 +222,9 @@ public struct InboxScreen: View {
                                     if item.kind == "registration_required" && item.state == "open" {
                                         RegistrationTaskActions(account: account, task: item.taskId) { Task { await load() } }
                                     }
+                                    if item.kind == "rearrangement_answer_due" && item.state == "open", let proposal = item.proposal {
+                                        RearrangementTaskActions(account: account, proposal: proposal) { Task { await load() } }
+                                    }
                                 }
                                 .frame(minHeight: 52, alignment: .leading)
                                 .overlay(alignment: .bottom) { Rectangle().fill(ThroColor.colorBorderDefault).frame(height: 1) }
@@ -315,6 +318,77 @@ struct RegistrationTaskActions: View {
             let state = try await account.api.submitRegistration(submission: submission)
             said = state == "delivered" ? "Sent. The league has it; its answer registers the player." : "Its state is now \(state)."
             assessed = try await account.api.assessRegistration(task: task)
+            reload()
+        } catch { said = (error as? APIError)?.message ?? error.localizedDescription }
+    }
+}
+
+/// A proposed date the team owes an answer on (PD-108): both dates, from whom and why, and the answer — agree, or
+/// decline with a reason. Agreeing moves nothing; the league applies what was agreed, and the fixture says so then.
+struct RearrangementTaskActions: View {
+    @ObservedObject var account: AccountStore
+    let proposal: UUID
+    let reload: () -> Void
+    @State private var read: FixtureProposal?
+    @State private var declining = false
+    @State private var note = ""
+    @State private var said: String?
+    @State private var busy = false
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: ThroSpacing.spacing2) {
+            if let p = read {
+                Text("\(p.byTeam) proposes \(Self.when(p.to)) instead of \(Self.when(p.scheduledAt))" + (p.reason.map { " — \($0)" } ?? ""))
+                    .thro(ThroTypography.body).foregroundStyle(ThroColor.colorTextPrimary)
+                if p.state == "proposed" {
+                    if declining {
+                        ThroTextField("Why not?", text: $note, placeholder: "we cannot raise a side that night")
+                        HStack(spacing: ThroSpacing.spacing2) {
+                            ThroButton("Decline", variant: .primary, size: .medium) { Task { await answer("rejected") } }
+                                .disabled(note.trimmingCharacters(in: .whitespaces).count < 3 || busy)
+                            ThroTextButton("Not yet", tone: .quiet) { declining = false }
+                        }
+                    } else {
+                        HStack(spacing: ThroSpacing.spacing2) {
+                            ThroButton("Agree to \(Self.when(p.to))", variant: .primary, size: .medium) { Task { await answer("accepted") } }.disabled(busy)
+                            ThroButton("Decline", variant: .secondary, size: .medium) { declining = true; note = "" }.disabled(busy)
+                        }
+                    }
+                } else {
+                    Text(Self.standing(p.state)).thro(ThroTypography.metadata).foregroundStyle(ThroColor.colorTextSecondary)
+                }
+            } else {
+                ThroButton("See the proposed date", variant: .secondary, size: .medium) { Task { await load() } }.disabled(busy)
+            }
+            if let said { Note(said) }
+        }
+        .padding(.top, ThroSpacing.spacing2)
+    }
+
+    static func when(_ date: Date) -> String { date.formatted(date: .abbreviated, time: .shortened) }
+
+    static func standing(_ state: String) -> String {
+        switch state {
+        case "accepted": return "Agreed. The league applies it; the fixture moves when it does."
+        case "applied": return "Applied by the league: the fixture has moved."
+        case "declined": return "Declined."
+        case "withdrawn": return "Withdrawn by the team that proposed it."
+        default: return state
+        }
+    }
+
+    private func load() async {
+        busy = true; defer { busy = false }
+        do { read = try await account.api.proposal(proposal); said = nil }
+        catch { said = (error as? APIError)?.message ?? error.localizedDescription }
+    }
+
+    private func answer(_ answer: String) async {
+        busy = true; defer { busy = false }
+        do {
+            read = try await account.api.answerProposal(proposal, answer: answer, note: declining ? note.trimmingCharacters(in: .whitespaces) : nil)
+            declining = false
+            said = answer == "accepted" ? "Agreed, in your name. The league applies it — until then the fixture stands where it was." : "Declined, with your reason kept."
             reload()
         } catch { said = (error as? APIError)?.message ?? error.localizedDescription }
     }

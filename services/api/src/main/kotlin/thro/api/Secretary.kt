@@ -528,7 +528,7 @@ public class Secretary(private val connection: Connection) {
     // --- 5. Reading ---------------------------------------------------------------------------------
 
     public data class InboxItem(val taskId: UUID, val kind: String, val reason: String, val dueAt: Instant?, val state: String, val section: InboxSection,
-                                val player: UUID? = null)
+                                val player: UUID? = null, val proposal: UUID? = null)
 
     public fun inbox(teamId: UUID, now: Instant = Instant.now()): Map<InboxSection, List<InboxItem>> =
         inboxWhere("owner_team_id = ?", teamId, now)
@@ -540,14 +540,14 @@ public class Secretary(private val connection: Connection) {
         val endOfToday = now.atZone(london).toLocalDate().plusDays(1).atStartOfDay(london).toInstant().minusSeconds(1)
         val items = mutableListOf<InboxItem>()
         connection.prepareStatement(
-            "SELECT task_id, kind, reason, due_at, state, subject_player_id FROM competition.admin_task WHERE $where ORDER BY due_at NULLS LAST, created_at",
+            "SELECT task_id, kind, reason, due_at, state, subject_player_id, CASE WHEN source_kind = 'rearrangement_proposal' THEN source_id END FROM competition.admin_task WHERE $where ORDER BY due_at NULLS LAST, created_at",
         ).use { ps ->
             ps.setObject(1, id)
             ps.executeQuery().use { rs ->
                 while (rs.next()) {
                     val due = rs.getTimestamp(4)?.toInstant()
                     val state = TaskState.valueOf(rs.getString(5).uppercase())
-                    items += InboxItem(rs.getObject(1) as UUID, rs.getString(2), rs.getString(3), due, rs.getString(5), Inbox.sectionOf(state, due, now, endOfToday), rs.getObject(6) as UUID?)
+                    items += InboxItem(rs.getObject(1) as UUID, rs.getString(2), rs.getString(3), due, rs.getString(5), Inbox.sectionOf(state, due, now, endOfToday), rs.getObject(6) as UUID?, rs.getObject(7) as UUID?)
                 }
             }
         }

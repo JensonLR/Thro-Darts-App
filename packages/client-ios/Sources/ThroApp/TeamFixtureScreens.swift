@@ -118,6 +118,10 @@ public struct TeamFixtureScreen: View {
     @State private var picked: [UUID] = []
     @State private var citing = false
     @State private var matches: [MatchOnRecord]?
+    @State private var proposals: [FixtureProposal]?
+    @State private var proposing = false
+    @State private var proposedDate = Date()
+    @State private var proposedReason = ""
 
     public init(api: ThroAPI, teamId: UUID, fixture: LeagueFixtures.Fixture, onBack: @escaping () -> Void) {
         self.api = api; self.teamId = teamId; self.fixture = fixture; self.onBack = onBack
@@ -222,6 +226,36 @@ public struct TeamFixtureScreen: View {
             }
         }
 
+        // Moving it (PD-108): a proposal to the other team, and what has been proposed already.
+        if fixture.decided == nil {
+            SectionHeader("Moving it").padding(.top, ThroSpacing.spaceSectionGap)
+            if let proposals {
+                ForEach(proposals) { p in
+                    Text("\(p.byTeam) proposed \(RearrangementTaskActions.when(p.to))" + (p.reason.map { " — \($0)" } ?? "") + " · " + RearrangementTaskActions.standing(p.state))
+                        .thro(ThroTypography.metadata).foregroundStyle(ThroColor.colorTextSecondary).padding(.top, ThroSpacing.spacing2)
+                }
+                if proposals.isEmpty {
+                    Note("Nobody has proposed another date.").padding(.top, ThroSpacing.spacing2)
+                }
+            }
+            if v.mayNameLineup && !(proposals ?? []).contains(where: { $0.state == "proposed" }) {
+                if proposing {
+                    DatePicker("New date", selection: $proposedDate, in: Date()...)
+                        .thro(ThroTypography.body).foregroundStyle(ThroColor.colorTextPrimary).padding(.top, ThroSpacing.spacing2)
+                    ThroTextField("Why?", text: $proposedReason, placeholder: "venue double-booked")
+                    HStack(spacing: ThroSpacing.spacing2) {
+                        ThroButton("Propose it to \(v.opponent ?? "the other team")", variant: .primary, size: .medium) { Task { await propose(in: v) } }.disabled(busy)
+                        ThroTextButton("Leave it", tone: .quiet) { proposing = false }
+                    }
+                    Note("The other team agrees or declines from their inbox; the league applies what was agreed. Until then the fixture stands where it is.")
+                        .padding(.top, ThroSpacing.spacing2)
+                } else {
+                    ThroButton("Propose another date", variant: .secondary, size: .medium) { proposedDate = v.scheduledAt; proposing = true }
+                        .padding(.top, ThroSpacing.spacing3)
+                }
+            }
+        }
+
         // The match it was played in.
         SectionHeader("On THRØ").padding(.top, ThroSpacing.spaceSectionGap)
         if v.matchId != nil {
@@ -267,7 +301,19 @@ public struct TeamFixtureScreen: View {
 
     private func load() async {
         do { view = try await api.teamFixture(fixture.fixtureId, team: teamId); problem = nil }
-        catch { problem = ThroAPI.refusal(error) ?? "The fixture could not be read just now." }
+        catch { problem = ThroAPI.refusal(error) ?? "The fixture could not be read just now."; return }
+        // The proposals are a second read; a fixture that loads without them is still a fixture.
+        proposals = (try? await api.proposals(fixture: fixture.fixtureId)) ?? proposals
+    }
+
+    private func propose(in v: TeamFixtureView) async {
+        busy = true; defer { busy = false }
+        do {
+            let made = try await api.propose(fixture: v.fixtureId, team: teamId, to: proposedDate, reason: proposedReason.trimmingCharacters(in: .whitespaces))
+            proposing = false; proposedReason = ""
+            proposals = [made] + (proposals ?? [])
+            note = "Proposed to \(made.toTeam). They answer from their inbox."
+        } catch { note = (error as? APIError)?.message ?? error.localizedDescription }
     }
 
     private func loadMatches() async {

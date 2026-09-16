@@ -547,17 +547,18 @@ async function mountOrganiser(where, signInEl) {
     // The season as its administrator sees it (PD-099): its dates, divisions and every team that asked in. It is
     // also the page's one question about authority — somebody who does not run this season is told so here,
     // once, rather than by every button refusing in turn.
-    let plan, data, policy, registrations;
+    let plan, data, policy, registrations, proposals;
     try {
       plan = await authorised('GET', `/v1/seasons/${encodeURIComponent(season)}/teams`);
       data = await read(`/v1/seasons/${encodeURIComponent(season)}/fixtures`);
       policy = (await authorised('GET', `/v1/seasons/${encodeURIComponent(season)}/policy`)).policy;
       registrations = (await authorised('GET', `/v1/seasons/${encodeURIComponent(season)}/registrations`)).registrations;
+      proposals = (await authorised('GET', `/v1/seasons/${encodeURIComponent(season)}/proposals`)).proposals;
     } catch (e) { fail(where, e); return; }
 
     const todo = (data.fixtures || []).filter(f => !f.decided);
     const done = (data.fixtures || []).filter(f => f.decided);
-    const parts = [...leagueSection(plan, draw), ...teamsSection(plan, draw), ...registrationsSection(plan, policy, registrations, draw)];
+    const parts = [...leagueSection(plan, draw), ...teamsSection(plan, draw), ...registrationsSection(plan, policy, registrations, draw), ...requestsSection(plan, proposals, draw)];
 
     if (!(data.fixtures || []).length) {
       parts.push(make('h2', null, 'Fixtures'),
@@ -771,6 +772,41 @@ async function mountOrganiser(where, signInEl) {
     form.append(accept, from, note, reject);
     li.append(head, form, said);
     return li;
+  }
+
+  /**
+   * Requests to move fixtures (PD-108): a team proposed a date, the other team agrees or declines from its inbox, and
+   * the league applies what was agreed here — through the same command as any rearrangement, naming the version it
+   * last saw, so the fixture's history says which proposal moved it. Nothing here moves a fixture the teams did not agree.
+   */
+  function requestsSection(plan, proposals, redraw) {
+    if (!proposals.length) return [];
+    const out = [make('h2', null, 'Requests to move a fixture'), make('p', 'quiet', `${proposals.length} open.`)];
+    const list = make('ul', 'rows');
+    for (const p of proposals) {
+      const li = make('li');
+      const head = make('div', 'row-head');
+      head.append(make('div', 'row-name', `${p.byTeam} v ${p.toTeam}`),
+                  make('span', 'quiet', `${when(p.scheduledAt)} → ${when(p.to)}${p.reason ? ` — ${p.reason}` : ''}`));
+      const said = make('p', 'note'); said.hidden = true;
+      if (p.state === 'accepted') {
+        const apply = make('button', 'primary', 'Apply the agreed date');
+        apply.onclick = async () => {
+          apply.disabled = true;
+          try {
+            await authorised('POST', `/v1/proposals/${encodeURIComponent(p.proposalId)}/apply`, { expectedVersion: p.fixtureVersion });
+            redraw();
+          } catch (e) { said.hidden = false; said.textContent = e.message; apply.disabled = false; }
+        };
+        head.append(apply);
+      } else {
+        head.append(make('span', 'quiet', `waiting for ${p.toTeam}`));
+      }
+      li.append(head, said);
+      list.append(li);
+    }
+    out.push(list);
+    return out;
   }
 
   /**

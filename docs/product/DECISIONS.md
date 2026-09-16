@@ -4749,3 +4749,40 @@ frontier. Outbound notification to the league when a registration arrives waits 
 
 **Evidence.** `RegistrationHttpTest` (35 checks over the whole journey, written red first), `SecretaryTest` (64) still
 green, `NetTests.testARegistrationTaskIsAssessedConfirmedAndSent` on the phone, and the API contract regenerated.
+
+## PD-108 — Moving a fixture by agreement
+
+**16 September 2026.** The one way to move a fixture on the wire was the organiser's `RearrangeFixture` command,
+which asks nobody. `Secretary.proposeRearrangement`, the opponent's answer and `applyProposal` — one team proposes,
+the other agrees or declines, the league applies what was agreed through the same command as any rearrangement so the
+fixture's history names the proposal — were held by `SecretaryTest` and reachable from nothing. This puts them on the
+wire and on both surfaces.
+
+**Decided.**
+
+1. **A proposal is not a move.** `POST /v1/fixtures/{id}/proposals` by whoever runs one of the fixture's teams
+   reaches the other team's inbox as a task due within seven days or by the fixture, whichever is first. One open
+   proposal per fixture (the schema's own rule, answered as a 409 in words); the date inside the season and not in the
+   past. The fixture's date stays the league's until the league applies the agreement.
+2. **The answer is the opponent's.** `POST /v1/proposals/{id}/answer` by whoever runs the team the date was proposed
+   to: `accepted`, or `rejected` with a reason (400 without one). The proposing team cannot answer its own (403); an
+   answered proposal cannot be answered again (409). Acknowledgement is implied — reading the page is the read.
+3. **The league applies, naming the version it saw.** `POST /v1/proposals/{id}/apply {expectedVersion}` by the season's
+   administrator, with `X-Thro-Device`: an accepted proposal moves the fixture through `RearrangeFixture`, so the change
+   log cites the proposal; a stale version is a 409 carrying the current row; a proposal that is not accepted is a 409
+   in words. Applied twice is a 409.
+4. **Who reads.** A fixture's proposals (`GET /v1/fixtures/{id}/proposals`, `GET /v1/proposals/{id}`): its two teams'
+   members and its league. A season's open requests (`GET /v1/seasons/{id}/proposals`): its administrator.
+   The team's inbox item for the task carries `proposal`, so the phone can act on it.
+5. **Surfaces.** The phone's fixture screen has *Moving it*: what has been proposed and where it stands, and — for
+   whoever runs the team, when nothing is open — *Propose another date* with a date and a reason. The inbox, on a
+   rearrangement task: both dates, from whom and why, *Agree* or *Decline* with a reason, and afterwards the standing
+   in words ("Agreed. The league applies it; the fixture moves when it does."). The organiser web's season page has
+   *Requests to move a fixture*: each open one, waiting for the other team or *Apply the agreed date*.
+
+**Not decided here.** Withdrawing a proposal (the schema allows `withdrawn`; nothing sends it); a proposed venue
+(the domain carries one; the wire does not yet); applying automatically on acceptance (the league stays in the loop —
+its fixture list is the record, and a league may want to check the venue is free).
+
+**Evidence.** `RearrangementHttpTest` (26 checks), `SecretaryTest` (64) still green, `NetTests.testAProposedDateIsReadAnsweredAndProposed`
+on the phone, the contract regenerated.

@@ -5851,3 +5851,29 @@ routes, the organiser web's award/rearrange/next-season, `API.swift`'s team-fixt
 40452ec ("cannot access `roleOf`: it is private", "cannot find type `TeamFixtureView`") and production stayed at
 4dd5467. The first commit's `git add` had aborted on a pathspec that no longer existed, so it committed only what was
 already staged; the lesson is in the ledger.
+
+**Deployed, 16 September.** CI green on 91b92b2 (swift-engine, image, domain-spec, schema, client-macos, deploy-api);
+`/healthz` at `api.thro.uk` answered `{"schemaVersion":"V050","codeVersion":"V050","commit":"91b92b2…"}`. The web site
+redeploys from the same push.
+
+## Moving a fixture by agreement (PD-108)
+
+**Test first.** `RearrangementHttpTest` as the whole journey: a proposal needs a principal and whoever runs the
+proposing team, a team not in the fixture cannot propose, a date outside the season is refused, the captain proposes
+and it is delivered, a second open one is a 409, a stranger cannot read it, the opponent reads what was proposed and
+from whom and why, the opponent's inbox carries the proposal, the proposal reads on its own for the same readers and
+nobody else, the proposing team cannot answer its own, an unknown answer is a 400, nothing has moved, the opponent
+accepts, answering again is a 409, accepted is not moved, applying is the league's, a stale version is said and not
+applied, the league applies it, the fixture is on the new date, applying twice is a 409, the season's open requests no
+longer list it, a rejection needs a reason, the opponent declines with the reason kept, a declined proposal cannot be
+applied. 26 checks pass. Honest note: the routes were written before the first run, so the red was not watched — the
+test was written first, but the discipline of running it red was skipped for time.
+
+**Built.** `Rearrangements.kt`; six routes (`fixtures.proposals`, `fixtures.propose`, `proposals.get`,
+`proposals.answer`, `proposals.apply`, `seasons.proposals`) and their contract entries; `Secretary.InboxItem.proposal`.
+Phone: `FixtureProposal`, `ThroAPI.proposals/proposal/propose/answerProposal`, `RearrangementTaskActions` in the inbox,
+*Moving it* on the fixture screen. Web: `requestsSection` on the organiser's season page.
+
+**Proven.** API suite 121 tests green with the contract regenerated; Swift suite green (count in the README);
+`node --check`; repo checks. **Not proven:** either surface against production in a browser or simulator beyond
+compilation and the decoding test.

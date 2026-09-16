@@ -63,6 +63,7 @@ import thro.api.SeasonPlanning
 import thro.api.TeamFixtures
 import thro.api.Ratings
 import thro.api.Registrations
+import thro.api.Rearrangements
 import thro.api.Relations
 import thro.api.Secretary
 import thro.api.VisitCommand
@@ -467,6 +468,43 @@ public fun Application.thro(deps: Deps) {
         "me.seasons" to { r -> SeasonPlanning(r.connection()).let { Http(200, it.runsJson(it.seasonsRunBy(r.principal!!.subject))) } },
         // PD-105: the provisional rating. Read — and replayed when the evidence has moved — as `app_rating`, the one
         // role that may write the rating tables and may not write a match.
+        // PD-108: moving a fixture by agreement — one team proposes, the other answers, the league applies.
+        "fixtures.proposals" to { r ->
+            rearrangements { Rearrangements(r.connection(), deps.now).let { Http(200, it.json(it.ofFixture(UUID.fromString(r.call.parameters["fixtureId"]), r.principal!!.subject))) } }
+        },
+        "fixtures.propose" to { r ->
+            rearrangements {
+                val m = Json.parseObject(r.body)
+                val to = try { Instant.parse(m["to"] as? String ?: "") } catch (e: Exception) { throw IllegalArgumentException("to is not a date-time") }
+                val team = UUID.fromString(m["teamId"] as? String ?: throw IllegalArgumentException("teamId is required"))
+                Rearrangements(r.connection(), deps.now).let { Http(200, it.json(it.propose(UUID.fromString(r.call.parameters["fixtureId"]), team, to, m["reason"] as? String, r.principal!!.subject))) }
+            }
+        },
+        "proposals.get" to { r ->
+            rearrangements { Rearrangements(r.connection(), deps.now).let { Http(200, it.json(it.read(UUID.fromString(r.call.parameters["proposalId"]), r.principal!!.subject))) } }
+        },
+        "proposals.answer" to { r ->
+            rearrangements {
+                val m = Json.parseObject(r.body)
+                Rearrangements(r.connection(), deps.now).let { Http(200, it.json(it.answer(UUID.fromString(r.call.parameters["proposalId"]), m["answer"] as? String ?: "", m["note"] as? String, r.principal!!.subject))) }
+            }
+        },
+        "proposals.apply" to { r ->
+            rearrangements {
+                val m = Json.parseObject(r.body)
+                val phone = r.call.request.headers["X-Thro-Device"]?.let { runCatching { UUID.fromString(it) }.getOrNull() }
+                    ?: throw IllegalArgumentException("X-Thro-Device must name the device that is applying")
+                val expected = (m["expectedVersion"] as? Number)?.toInt() ?: throw IllegalArgumentException("expectedVersion is required")
+                val rr = Rearrangements(r.connection(), deps.now)
+                when (val a = rr.apply(UUID.fromString(r.call.parameters["proposalId"]), expected, r.principal!!.subject, phone)) {
+                    is Rearrangements.Applied.Moved -> Http(200, rr.json(a.proposal))
+                    is Rearrangements.Applied.Stale -> Http(409, """{"outcome":"stale","currentVersion":${a.currentVersion},"current":${a.current}}""")
+                }
+            }
+        },
+        "seasons.proposals" to { r ->
+            rearrangements { Rearrangements(r.connection(), deps.now).let { Http(200, it.json(it.openInSeason(UUID.fromString(r.call.parameters["leagueSeasonId"]), r.principal!!.subject))) } }
+        },
         // PD-107: registering players with a league run on THRØ — what it needs, who owes one, sending, the answer.
         "seasons.policy" to { r ->
             registrations { Registrations(r.connection(), deps.now).let { Http(200, it.json(it.policy(UUID.fromString(r.call.parameters["leagueSeasonId"]), r.principal!!.subject))) } }
@@ -953,6 +991,11 @@ private fun shown(r: Req, season: UUID, block: () -> Http): Http {
     return block()
 }
 
+/** A rearrangement step refused is an answer, with the status that says which kind (PD-108). */
+private fun rearrangements(block: () -> Http): Http = try { block() } catch (e: Rearrangements.Refused) {
+    Http(e.status, """{"error":${Contract.q(e.why)}}""")
+}
+
 /** A registration step refused is an answer, with the status that says which kind (PD-107). */
 private fun registrations(block: () -> Http): Http = try { block() } catch (e: Registrations.Refused) {
     Http(e.status, """{"error":${Contract.q(e.why)}}""")
@@ -1186,7 +1229,7 @@ private fun liveJson(panels: List<LiveBoard.Panel>): String =
 private fun inboxJson(sections: Map<thro.competition.InboxSection, List<Secretary.InboxItem>>): String =
     "{\"sections\":{" + sections.entries.joinToString(",") { (s, items) ->
         Contract.q(s.name) + ":[" + items.joinToString(",") { i ->
-            """{"taskId":"${i.taskId}","kind":${Contract.q(i.kind)},"reason":${Contract.q(i.reason)},"dueAt":${i.dueAt?.let { Contract.q(it.toString()) } ?: "null"},"state":${Contract.q(i.state)},"player":${i.player?.let { "\"$it\"" } ?: "null"}}"""
+            """{"taskId":"${i.taskId}","kind":${Contract.q(i.kind)},"reason":${Contract.q(i.reason)},"dueAt":${i.dueAt?.let { Contract.q(it.toString()) } ?: "null"},"state":${Contract.q(i.state)},"player":${i.player?.let { "\"$it\"" } ?: "null"},"proposal":${i.proposal?.let { "\"$it\"" } ?: "null"}}"""
         } + "]"
     } + "}}"
 

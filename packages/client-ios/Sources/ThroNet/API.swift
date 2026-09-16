@@ -126,7 +126,30 @@ public struct InboxItem: Decodable, Sendable, Equatable, Identifiable {
     public let state: String
     /// The player a task is about, when it is about one (a registration is); nil for a fixture's tasks.
     public let player: UUID?
+    /// The proposed date a task is about, when it is (an answer owed on a rearrangement); nil otherwise.
+    public let proposal: UUID?
     public var id: UUID { taskId }
+}
+
+/// A date one team proposed to the other for a fixture (PD-108). `scheduledAt` is where the fixture stands; `to` is
+/// the proposal. A proposal is not a move: `state` says whether it was answered, and whether the league applied it.
+public struct FixtureProposal: Decodable, Sendable, Equatable, Identifiable {
+    public let proposalId: UUID
+    public let fixtureId: UUID
+    public let leagueSeasonId: UUID
+    /// `proposed`, `accepted`, `declined`, `withdrawn` or `applied`.
+    public let state: String
+    public let to: Date
+    public let reason: String?
+    public let byTeamId: UUID
+    public let byTeam: String
+    public let toTeamId: UUID
+    public let toTeam: String
+    public let proposedAt: Date
+    public let answeredAt: Date?
+    public let scheduledAt: Date
+    public let fixtureVersion: Int
+    public var id: UUID { proposalId }
 }
 
 /// What a registration task is still missing (PD-107): facts THRØ checks by name, requirements a person confirms
@@ -1041,6 +1064,33 @@ public actor ThroAPI {
     public func submitRegistration(submission: UUID) async throws -> String {
         struct Envelope: Decodable { let state: String }
         return try (decode(await authorised("POST", "/v1/submissions/\(submission.uuidString.lowercased())/submit", body: Data("{}".utf8))) as Envelope).state
+    }
+
+    /// The dates proposed for a fixture, for its two teams and its league (PD-108).
+    public func proposals(fixture: UUID) async throws -> [FixtureProposal] {
+        struct Envelope: Decodable { let proposals: [FixtureProposal] }
+        return try (decode(await authorised("GET", "/v1/fixtures/\(fixture.uuidString.lowercased())/proposals")) as Envelope).proposals
+    }
+
+    /// One proposed date, the one an inbox task points at.
+    public func proposal(_ id: UUID) async throws -> FixtureProposal {
+        try decode(await authorised("GET", "/v1/proposals/\(id.uuidString.lowercased())"))
+    }
+
+    /// Proposes a new date to the other team, for whoever runs this one. Reaches their inbox; moves nothing.
+    public func propose(fixture: UUID, team: UUID, to: Date, reason: String?) async throws -> FixtureProposal {
+        var fields: [String: Any] = ["teamId": team.uuidString.lowercased(), "to": ISO8601DateFormatter().string(from: to)]
+        if let reason, !reason.isEmpty { fields["reason"] = reason }
+        let body = try JSONSerialization.data(withJSONObject: fields)
+        return try decode(await authorised("POST", "/v1/fixtures/\(fixture.uuidString.lowercased())/proposals", body: body))
+    }
+
+    /// The other team's answer: `accepted`, or `rejected` with a note that says why.
+    public func answerProposal(_ id: UUID, answer: String, note: String?) async throws -> FixtureProposal {
+        var fields: [String: Any] = ["answer": answer]
+        if let note, !note.isEmpty { fields["note"] = note }
+        let body = try JSONSerialization.data(withJSONObject: fields)
+        return try decode(await authorised("POST", "/v1/proposals/\(id.uuidString.lowercased())/answer", body: body))
     }
 
     /// Your THRØ rating, provisional (PD-105).
