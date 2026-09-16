@@ -12,8 +12,8 @@ audit. Kept current during the build; **not** a deliverable, and never a substit
   fronted by Cloudflare): leagues, tables, fixtures, wall (`/tv`), organiser (`organiser.html`), moderation
   (`moderation.html`), privacy, terms, deletion, notices.
 - `https://api.thro.uk` (Render web service `thro-api-staging`, free instance, Frankfurt): production at **V053**,
-  commit **8954079** (PD-115; the test-fix commit 7b0759f deploying behind it); the web at 02a9981 (the home page,
-  the nav, the phone-first sign-in). `/healthz` reports database, schema version, code version and commit.
+  commit **c01227e** (PD-116; CI six of six green, `/healthz` read by hand); the web at c01227e (the home page, the
+  nav, the phone-first sign-in, the Apple/Google buttons dormant until `/v1/auth/providers` names a client). `/healthz` reports database, schema version, code version and commit.
 - Neon production branch `br-icy-leaf-zaq0grqg` (project `round-darkness-99300686`), at V053. Restore points are
   branches: the pipeline's `pipeline-restore-point-before-<sha>-<stamp>` (newest three kept) and the founder's
   hand-made `restore-point-before-*` (never removed).
