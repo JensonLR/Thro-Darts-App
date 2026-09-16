@@ -6076,3 +6076,11 @@ one `competitorName` SQL; `Competitions.draw` reshaped around `seedOrder`. Three
 Web: the opener's kind, the entrants' seeds, the pair/team invitation, boards, a tie's board. Phone: `enter(partner:)`
 / `enter(team:)`, the card's chooser from your teams. **Proven.** API suite green with the contract regenerated;
 Swift suite green; repo checks.
+
+## Looked at, 16 September evening
+
+The home page, the organiser page's sign-in panel (a live code, the countdown, the 202 polls in the network log)
+and the events page at 375 points in a browser against a local API at V053; on the simulator, the profile's *Ways
+in* naming Sign in with Apple and a passkey as held and offering Google and a second passkey, the rating card, and
+*Sign in on a screen*. Not looked at: the pair/team invitation and the boards on the organiser's event page, and the
+phone's pair/team chooser — proven by their tests, not by eye.
