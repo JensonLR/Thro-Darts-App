@@ -11,12 +11,13 @@ audit. Kept current during the build; **not** a deliverable, and never a substit
 - `https://thro.uk` (Render static site, auto-deploys `apps/web/**` from branch `claude/thro-production-build-je2mkf`,
   fronted by Cloudflare): leagues, tables, fixtures, wall (`/tv`), organiser (`organiser.html`), moderation
   (`moderation.html`), privacy, terms, deletion, notices.
-- `https://api.thro.uk` (Render web service `thro-api-staging`, free instance, Frankfurt): production at **V050**,
-  commit **09b4b37** (PD-108; PD-109 follows). `/healthz` reports database, schema version, code version and commit.
-- Neon production branch `br-icy-leaf-zaq0grqg` (project `round-darkness-99300686`), at V050. Restore points are
+- `https://api.thro.uk` (Render web service `thro-api-staging`, free instance, Frankfurt): production at **V051**,
+  commit **af4b188** (PD-110); the web at 826f714 (polish). `/healthz` reports database, schema version, code version and commit.
+- Neon production branch `br-icy-leaf-zaq0grqg` (project `round-darkness-99300686`), at V051. Restore points are
   branches: the pipeline's `pipeline-restore-point-before-<sha>-<stamp>` (newest three kept) and the founder's
   hand-made `restore-point-before-*` (never removed).
-- iPhone on TestFlight: build 10 VALID (V049 code); build 11 uploading at the time of writing (V050: the rating card).
+- iPhone on TestFlight: build 11 VALID (V050: the rating card); build 12 failed (the half-staged PD-106 tree); build 13
+  dispatched from 826f714 (PD-106..PD-110 on the phone) — its state is in the final report.
   Internal group *Founders*: the founder and the cofounder (Ethan).
 
 **Deploy pipeline** — `.github/workflows/deploy-api.yml` on every push touching the API or its packages: checks →
@@ -63,6 +64,13 @@ league management · PD-104 organiser email · PD-105 provisional rating · PD-1
 3. ~~Friendly challenge~~ **done (PD-110)**. Left: rearranging an accepted friendly; a venue on the wire.
 4. ~~Web polish~~ **done**: a 420px breakpoint, `fail()` keeps the page and offers *Try again*, fixtures → table.
 5. NEEDS-DECISION (founder): the deploy branch's name; moving `PlaytestServer` out of the image.
+
+## Known gaps after PD-110 (small, recorded rather than hidden)
+
+- `Friendlies.cite` and `TeamFixtures.cite` check that the citer played the match and runs one of the two teams, not
+  that the match's other participant belongs to the other team. Display only; no table or rating reads it.
+- `Registrations.list` labels `created_at` as `sentAt`; the send time is the submission's transition, not its creation.
+- The PD-108 and PD-110 HTTP tests were written before their routes but their first red run was not watched.
 
 ## Founder's stated positions (do not re-ask)
 

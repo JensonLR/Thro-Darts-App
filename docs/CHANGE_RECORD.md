@@ -5925,8 +5925,15 @@ answerFriendly/withdrawFriendly`, a *Friendlies* section on the team's front and
 another team's.
 
 **Proven.** API suite green with the contract regenerated; Swift suite green; repo checks (counts in the README).
-**Not proven:** the phone's section against production beyond compilation and the decoding test; the migration against
-production runs in the pipeline on push and is read back by `/healthz` (recorded below once it has).
+**Not proven:** the phone's section against production beyond compilation and the decoding test.
+
+**Deployed, 16 September.** CI green on af4b188 (and on 826f714, the web polish); `deploy-api` took its restore point,
+migrated production to V051 and `/healthz` at `api.thro.uk` answered `{"schemaVersion":"V051","codeVersion":"V051",
+"commit":"af4b188…"}`. PD-109's 76d21f0 had deployed before it. A hostile read-only review of PD-107..PD-110 (a
+subagent over the four commits: authority, state machines, SQL and roles, JSON escaping, time zones, the SwiftUI
+views) reported no finding it could verify; its one low note — `Friendlies.cite` checks the citer played the match
+and runs one of the teams but not that the opponent in the match belongs to the other team, the same shape
+`TeamFixtures.cite` has — is recorded in the ledger as a known gap.
 
 ## Web polish: a bad read no longer blanks a page, a phone-width form, the fixtures page's way back
 
