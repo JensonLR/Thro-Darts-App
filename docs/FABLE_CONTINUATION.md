@@ -11,14 +11,17 @@ audit. Kept current during the build; **not** a deliverable, and never a substit
 - `https://thro.uk` (Render static site, auto-deploys `apps/web/**` from branch `claude/thro-production-build-je2mkf`,
   fronted by Cloudflare): leagues, tables, fixtures, wall (`/tv`), organiser (`organiser.html`), moderation
   (`moderation.html`), privacy, terms, deletion, notices.
-- `https://api.thro.uk` (Render web service `thro-api-staging`, free instance, Frankfurt): production at **V053**,
-  commit **c01227e** (PD-116; CI six of six green, `/healthz` read by hand); the web at c01227e (the home page, the
-  nav, the phone-first sign-in, the Apple/Google buttons dormant until `/v1/auth/providers` names a client). `/healthz` reports database, schema version, code version and commit.
+- `https://api.thro.uk` (Render web service `thro-api-staging`, free instance, Frankfurt): production at **V054**,
+  commit **30896e4** (PD-117, PD-118; deploy-api green, `/healthz` read by hand; the association file serves
+  `applinks` for `/link/*`); the web at 76e9c2d (Open THRØ on a phone, `link.html`; the `/link/*` rewrite in
+  `render.yaml` waits for a Blueprint sync, so `thro.uk/link/<code>` is a 404 in Safari until then while the
+  universal link into the app already works; the Apple/Google buttons and THRØ's readings are dormant until the
+  founder sets their keys). `/healthz` reports database, schema version, code version and commit.
 - Neon production branch `br-icy-leaf-zaq0grqg` (project `round-darkness-99300686`), at V053. Restore points are
   branches: the pipeline's `pipeline-restore-point-before-<sha>-<stamp>` (newest three kept) and the founder's
   hand-made `restore-point-before-*` (never removed).
-- iPhone on TestFlight: build 15 **VALID** (from 8954079: the ways in read true, Sign in on a screen, pairs and
-  teams from the card, the desk cards), in the *Founders* group. Builds 13 and 14 before it.
+- iPhone on TestFlight: build 16 **VALID** (from 30896e4: the applinks entitlement, the profile opened by a link)
+  and build 17 (VALID; from 76e9c2d: the readiness row says links work), in the *Founders* group. Build 15 before them.
   Internal group *Founders*: the founder and the cofounder (Ethan).
 
 **Deploy pipeline** — `.github/workflows/deploy-api.yml` on every push touching the API or its packages: checks →
