@@ -231,7 +231,8 @@ public struct TeamFixtureScreen: View {
             SectionHeader("Moving it").padding(.top, ThroSpacing.spaceSectionGap)
             if let proposals {
                 ForEach(proposals) { p in
-                    Text("\(p.byTeam) proposed \(RearrangementTaskActions.when(p.to))" + (p.reason.map { " — \($0)" } ?? "") + " · " + RearrangementTaskActions.standing(p.state))
+                    Text("\(p.byTeam) proposed \(RearrangementTaskActions.when(p.to))" + (p.reason.map { " — \($0)" } ?? "") + " · "
+                         + (p.state == "proposed" ? (p.byTeamId == teamId ? "waiting for \(p.toTeam)" : "waiting for your answer — it is in your inbox") : RearrangementTaskActions.standing(p.state)))
                         .thro(ThroTypography.metadata).foregroundStyle(ThroColor.colorTextSecondary).padding(.top, ThroSpacing.spacing2)
                     if p.state == "proposed" && p.byTeamId == teamId && v.mayNameLineup {
                         ThroTextButton("Take it back", tone: .quiet) { Task { await withdraw(p) } }.disabled(busy)

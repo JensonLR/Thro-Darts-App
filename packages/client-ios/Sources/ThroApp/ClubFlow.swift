@@ -645,7 +645,9 @@ public struct ClubsFlow: View {
                                onUseLocation: { nearby.useMyLocation() },
                                onStopLocation: { nearby.stopUsingLocation() },
                                onRetry: { Task { await nearby.load(api, force: true); await teams.loadMine(api, signedIn: signedIn) } })
-                    .task { await nearby.load(api); if case .idle = teams.mine { await teams.loadMine(api, signedIn: signedIn) } }
+                    // Keyed on being signed in: a cold start opens Discover before the profile has resolved, and a task
+                    // that ran once while signed out would leave "your teams" unread for the rest of the session.
+                    .task(id: signedIn && api != nil) { await nearby.load(api); if case .idle = teams.mine { await teams.loadMine(api, signedIn: signedIn) } }
             }
 
         case .leagues(let focus):

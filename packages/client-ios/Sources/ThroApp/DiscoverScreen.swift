@@ -305,8 +305,12 @@ public struct DiscoverScreen: View {
                 .padding(.top, ThroSpacing.spacing2)
         } else {
             switch teams.mine {
-            case .idle, .loading:
+            case .loading:
                 HStack { ProgressView(); Text("Reading your teams").thro(ThroTypography.body).foregroundStyle(ThroColor.colorTextSecondary) }
+                    .padding(.vertical, ThroSpacing.spacing3)
+            // Idle is not reading: nothing has been asked yet. A spinner here would spin for ever if the ask never came.
+            case .idle:
+                Text("Your teams appear here once THRØ has read them.").thro(ThroTypography.body).foregroundStyle(ThroColor.colorTextSecondary)
                     .padding(.vertical, ThroSpacing.spacing3)
             case .failed(let why):
                 Text(why).thro(ThroTypography.body).foregroundStyle(ThroColor.colorTextSecondary).padding(.vertical, ThroSpacing.spacing3)

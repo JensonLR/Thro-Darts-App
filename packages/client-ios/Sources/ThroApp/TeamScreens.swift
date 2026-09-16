@@ -509,13 +509,9 @@ struct FriendliesSection: View {
                 Text("No friendlies yet. Open another team's page to challenge them.")
                     .thro(ThroTypography.body).foregroundStyle(ThroColor.colorTextSecondary).fixedSize(horizontal: false, vertical: true).padding(.top, ThroSpacing.spacing2)
             }
-            ThroDivider().padding(.top, ThroSpacing.spacing2)
             ForEach(list) { f in
-                VStack(alignment: .leading, spacing: ThroSpacing.spacing1) {
-                    Text(f.direction == "sent" ? "v \(f.toTeam)" : "\(f.fromTeam) challenge you")
-                        .thro(ThroTypography.bodyLarge.weight(.semibold)).foregroundStyle(ThroColor.colorTextPrimary)
-                    Text(f.playAt.formatted(date: .abbreviated, time: .shortened) + " · " + Self.standing(f))
-                        .thro(ThroTypography.metadata).foregroundStyle(ThroColor.colorTextSecondary)
+                DeskCard(icon: .users, title: f.direction == "sent" ? "v \(f.toTeam)" : "\(f.fromTeam) challenge you",
+                         meta: f.playAt.formatted(date: .abbreviated, time: .shortened) + " · " + Self.standing(f)) {
                     if let m = f.message { Text("“\(m)”").thro(ThroTypography.body).foregroundStyle(ThroColor.colorTextSecondary).fixedSize(horizontal: false, vertical: true) }
                     if runsIt && f.state == "proposed" {
                         if f.direction == "received" {
@@ -537,8 +533,7 @@ struct FriendliesSection: View {
                         }
                     }
                 }
-                .padding(.vertical, ThroSpacing.spacing3)
-                ThroDivider()
+                .padding(.top, ThroSpacing.spacing2)
             }
         } else {
             Text("One moment…").thro(ThroTypography.body).foregroundStyle(ThroColor.colorTextSecondary).padding(.top, ThroSpacing.spacing2)

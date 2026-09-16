@@ -1498,7 +1498,7 @@ public struct YouScreen: View {
                                                                  split: !people.isEmpty) == .sideBySide)
                     }
                     .padding(.horizontal, ThroSpacing.spaceScreenGutter)
-                    Note("Matches scored on this phone stay on it, whoever is signed in. A rating is not in this build: what you see are the figures the darts produced (PD-018).")
+                    Note("Matches scored on this phone stay on it, whoever is signed in. Your THRØ rating is provisional (PD-105): a range until it has earned a number, read from matches whose records both players stand by.")
                         .padding(.top, ThroSpacing.spaceSectionGap)
                         .padding(.horizontal, ThroSpacing.spaceScreenGutter)
                         .padding(.bottom, ThroSpacing.spacing6)

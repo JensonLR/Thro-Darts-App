@@ -190,6 +190,40 @@ struct LinkRow: View {
     }
 }
 
+/// A card on the desk: one task, one event, one friendly — the account screens' card shape (`CardGroup`'s), holding
+/// its words and, beneath them, the acts a person may take on it. Plain rows with a hairline were rejected for these
+/// screens: a thing waiting on you is a thing, not a line in a list.
+struct DeskCard<Content: View>: View {
+    let icon: ThroIcon
+    let title: String
+    let meta: String?
+    let content: Content
+    init(icon: ThroIcon, title: String, meta: String? = nil, @ViewBuilder content: () -> Content) {
+        self.icon = icon; self.title = title; self.meta = meta; self.content = content()
+    }
+    var body: some View {
+        VStack(alignment: .leading, spacing: ThroSpacing.spacing3) {
+            HStack(alignment: .top, spacing: ThroSpacing.spacing3) {
+                IconTile(icon: icon)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(title).thro(ThroTypography.bodyLarge.weight(.semibold)).foregroundStyle(ThroColor.colorTextPrimary)
+                        .fixedSize(horizontal: false, vertical: true)
+                    if let meta {
+                        Text(meta).thro(ThroTypography.metadata).foregroundStyle(ThroColor.colorTextSecondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+            }
+            content
+        }
+        .padding(ThroSpacing.spacing4)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(ThroColor.colorBackgroundRaised)
+        .clipShape(RoundedRectangle(cornerRadius: ThroSpacing.radiusCard, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: ThroSpacing.radiusCard, style: .continuous).strokeBorder(ThroColor.colorBorderDefault, lineWidth: 1))
+    }
+}
+
 /// What the Secretary is waiting on you for. Every task carries its reason; none is invented here.
 public struct InboxScreen: View {
     @ObservedObject private var account: AccountStore
@@ -216,9 +250,7 @@ public struct InboxScreen: View {
                         ForEach(InboxOrder.sections.filter { !(sections[$0]?.isEmpty ?? true) }, id: \.self) { key in
                             SectionHeader(InboxOrder.title(key), meta: "\(sections[key]?.count ?? 0)")
                             ForEach(sections[key] ?? []) { item in
-                                VStack(alignment: .leading, spacing: 2) {
-                                    Text(item.reason).thro(ThroTypography.body).foregroundStyle(ThroColor.colorTextPrimary)
-                                    Text(InboxOrder.detail(item)).thro(ThroTypography.metadata).foregroundStyle(ThroColor.colorTextSecondary)
+                                DeskCard(icon: InboxOrder.icon(item.kind), title: item.reason, meta: InboxOrder.detail(item)) {
                                     if item.kind == "registration_required" && item.state == "open" {
                                         RegistrationTaskActions(account: account, task: item.taskId) { Task { await load() } }
                                     }
@@ -226,8 +258,6 @@ public struct InboxScreen: View {
                                         RearrangementTaskActions(account: account, proposal: proposal) { Task { await load() } }
                                     }
                                 }
-                                .frame(minHeight: 52, alignment: .leading)
-                                .overlay(alignment: .bottom) { Rectangle().fill(ThroColor.colorBorderDefault).frame(height: 1) }
                             }
                         }
                     } else {
@@ -410,9 +440,28 @@ enum InboxOrder {
         }
     }
     static func detail(_ item: InboxItem) -> String {
-        let kind = item.kind.replacingOccurrences(of: "_", with: " ")
+        let kind = words(item.kind)
         if let due = item.dueAt { return "\(kind) · due \(due.formatted(date: .abbreviated, time: .omitted))" }
         return "\(kind) · no deadline stated"
+    }
+    /// The task's kind in a person's words, not the server's identifier.
+    static func words(_ kind: String) -> String {
+        switch kind {
+        case "registration_required": return "A registration"
+        case "rearrangement_answer_due": return "A proposed date"
+        case "result_submission_due": return "A result to send"
+        case "consent_required": return "Consent needed"
+        default: return kind.replacingOccurrences(of: "_", with: " ").capitalized
+        }
+    }
+    static func icon(_ kind: String) -> ThroIcon {
+        switch kind {
+        case "registration_required": return .shield
+        case "rearrangement_answer_due": return .calendar
+        case "result_submission_due": return .filePen
+        case "consent_required": return .check
+        default: return .bell
+        }
     }
 }
 
@@ -436,23 +485,19 @@ public struct DiscoveryScreen: View {
                     if let problem {
                         ErrorState(title: "Could not load events", what: problem, safe: "Nothing on this phone changed.", todo: "Try again when you are online.") { Task { await load() } }
                     } else if let sections {
-                        let all = sections["ALL"] ?? []
-                        if all.isEmpty {
+                        if sections.values.allSatisfy(\.isEmpty) {
                             EmptyState(title: "Nothing coming up", message: "No open events in the next sixty days on THRØ yet. When an organiser opens one, it appears here with why it is offered to you.")
                         }
                         ForEach(DiscoveryOrder.sections.filter { !(sections[$0]?.isEmpty ?? true) }, id: \.self) { key in
                             SectionHeader(DiscoveryOrder.title(key), meta: "\(sections[key]?.count ?? 0)")
                             ForEach(sections[key] ?? []) { card in
-                                VStack(alignment: .leading, spacing: 4) {
-                                    Text(card.name).thro(ThroTypography.heading3).foregroundStyle(ThroColor.colorTextPrimary)
-                                    Text(DiscoveryOrder.line(card)).thro(ThroTypography.label).foregroundStyle(ThroColor.colorTextSecondary)
-                                    ForEach(card.reasons, id: \.self) { reason in
-                                        Text("· \(reason)").thro(ThroTypography.metadata).foregroundStyle(ThroColor.colorTextSecondary)
+                                DeskCard(icon: .trophy, title: card.name, meta: DiscoveryOrder.line(card)) {
+                                    if !card.reasons.isEmpty {
+                                        Text(card.reasons.joined(separator: " · ")).thro(ThroTypography.metadata).foregroundStyle(ThroColor.colorTextBrand)
+                                            .fixedSize(horizontal: false, vertical: true)
                                     }
                                     EventActions(account: account, card: card) { Task { await load() } }
                                 }
-                                .padding(.vertical, ThroSpacing.spacing2)
-                                .overlay(alignment: .bottom) { Rectangle().fill(ThroColor.colorBorderDefault).frame(height: 1) }
                             }
                         }
                     } else {
@@ -506,7 +551,10 @@ struct EventActions: View {
                     } else if checkedIn {
                         Text("Checked in · this phone scores it").thro(ThroTypography.metadata).foregroundStyle(ThroColor.colorTextSecondary)
                     }
-                    ThroButton("Withdraw", variant: .secondary, size: .medium) { Task { await withdraw() } }.disabled(busy || checkedIn)
+                    // Before the draw only: once drawn, a player in the bracket is decided against, not withdrawn.
+                    if !(page.map { $0.state != "open" && $0.state != "entries_closed" } ?? false) {
+                        ThroButton("Withdraw", variant: .secondary, size: .medium) { Task { await withdraw() } }.disabled(busy || checkedIn)
+                    }
                 } else if card.access == "open" {
                     ThroButton("Enter", variant: .primary, size: .medium) { Task { await enter() } }.disabled(busy)
                 }
@@ -516,7 +564,6 @@ struct EventActions: View {
             }
             if let said { Note(said) }
         }
-        .padding(.top, ThroSpacing.spacing2)
         .task { if card.entered && page == nil { page = try? await account.api.event(card.eventId) } }
     }
 

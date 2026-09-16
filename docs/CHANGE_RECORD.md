@@ -6013,3 +6013,30 @@ calendar days, the league's or event's name in the header, *Decide it by hand* r
 (home, table, fixtures) were looked at too and left alone: they were right.
 
 **Not looked at.** The moderation page and the organiser lobby's *Start a league* form beyond their signed-out states.
+
+## The phone's new journeys, looked at (design pass in the simulator)
+
+**How.** The Debug build's `-ThroScreenshotAccount` stage (answers from memory; a Release build does not contain it)
+gained the desk: an inbox with a registration task, a proposed date and a result to send; a provisional rating; a
+discovery board with an entered, drawn event and an open one; the staged team's friendlies, its season's fixture and
+that fixture as the side reads it. Every new screen was opened on an iPhone 17 Pro simulator and screenshotted.
+
+**What was wrong and is not now.**
+- *A real defect, on production too:* the Discover board's "Your teams on THRØ" read as "Reading your teams" for
+  ever on a cold start. The board's load task ran once, before the profile had resolved, saw the person as signed out
+  and left the teams unread; and `idle` drew the same spinner as `loading`. The task is now keyed on being signed in
+  (`.task(id:)`), and idle says what it is.
+- The You tab's note still said "A rating is not in this build" (untrue since PD-105). It now says what the rating is.
+- The inbox, the discovery cards and a team's friendlies were plain rows with a hairline — the shape the founder has
+  rejected for these screens. They are `DeskCard`s now: the account screens' card, an `IconTile` per kind (a shield
+  for a registration, a calendar for a proposed date, a pen for a result, a trophy for an event, people for a
+  friendly), the kind in a person's words ("A registration", not "registration required"), and the acts beneath.
+- Discovery's empty state showed above the cards whenever the server sent no `ALL` section; it now shows only when
+  every section is empty. *Withdraw* was offered on a drawn event, where the server would refuse it; it is offered
+  only before the draw. The fixture screen's *Moving it* now says whose answer an open proposal waits for.
+- In the stage itself: the staged team's sub-paths (its friendlies) were being sent to the real server, and its
+  front answered before the desk could. Both fixed; both stage-only.
+
+**Not looked at.** The challenge form on another team's front (the stage passes other teams through to production,
+whose teams have no friendlies yet); the event page's *Name the match* list beyond its empty state; landscape and
+iPad for the new cards.

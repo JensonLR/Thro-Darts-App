@@ -30,3 +30,4 @@ xcuserdata/
 .env.local
 # Written by xcodebuild archive; nothing in it is ours.
 apps/ios/ThroDarts.xcodeproj/project.xcworkspace/xcshareddata/
+.claude/launch.json
