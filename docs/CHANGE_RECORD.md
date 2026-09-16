@@ -5947,3 +5947,17 @@ only a placeholder; with a redraw to hand it offers *Try again*, and the four pa
 `@media (max-width: 420px)` rule: full-width fields and primary buttons in a form, a wrapping row head, the app's
 16-pixel gutter. The fixtures page opens with *← This season's table*. Proven by `node --check`, the web token check,
 and a look in the browser at phone width — the last of which is recorded here as done only once it has been.
+
+## Three defects closed, and a proposal may be taken back (PD-108 addendum)
+
+**Defects.** (1) `TeamFixtures.cite` and `Friendlies.cite` now require the match's other seat to be a current member
+of the other team: a captain's match against a mate is not the fixture's match (409, said in words). Test first in
+`TeamFixtureTest` and `FriendlyHttpTest`. (2) `Registrations.list` reports `sentAt` as the time of the transition
+that sent the submission, falling back to its creation only when none exists. (3) The ledger's process note stands;
+nothing to fix in code.
+
+**Taking back a proposal.** `POST /v1/proposals/{id}/withdraw` by whoever runs the proposing team, while unanswered:
+the proposal is withdrawn, the opponent's task cancelled, and the submission that carried it *superseded* — the one
+move a delivered request may make without the recipient's word, and the right one: its subject is gone. Withdrawing a
+delivered submission is not a transition the rule table or the V016 trigger admit, and neither was changed. The phone's
+fixture screen shows *Take it back* on the team's own open proposal. Five checks added to `RearrangementHttpTest`.

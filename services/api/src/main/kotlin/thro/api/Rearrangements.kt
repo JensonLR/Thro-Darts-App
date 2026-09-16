@@ -137,6 +137,15 @@ public class Rearrangements(private val connection: Connection, private val now:
         return one(proposalId)
     }
 
+    /** The proposer takes it back while unanswered. */
+    public fun withdraw(proposalId: UUID, by: UUID): Proposal {
+        val p = one(proposalId)
+        if (!runsTeam(by, p.byTeamId)) throw Refused("Only whoever runs the proposing team withdraws it.", 403)
+        if (p.state != "proposed") throw Refused("Only an unanswered proposal is withdrawn; this one was ${p.state}.", 409)
+        when (val m = sec.withdrawProposal(proposalId, by)) { is Secretary.Moved.Refused -> throw Refused(m.why, 409); is Secretary.Moved.Ok -> {} }
+        return one(proposalId)
+    }
+
     // --- the league applies -----------------------------------------------------------------------------------------
 
     public sealed interface Applied {

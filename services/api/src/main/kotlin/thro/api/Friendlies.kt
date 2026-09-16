@@ -114,6 +114,11 @@ public class Friendlies(private val connection: Connection, private val now: () 
         val match = Matches(connection).load(matchId) ?: throw Refused("THRØ has no such match.", 404)
         if (by !in match.participants) throw Refused("Only somebody who played the match may cite it.", 403)
         if (!runsTeam(by, f.fromTeamId) && !runsTeam(by, f.toTeamId)) throw Refused("Citing a match is for whoever runs one of the two teams.", 403)
+        val teams = Teams(connection)
+        val mine = if (teams.roleOf(by, f.fromTeamId) != null) f.fromTeamId else f.toTeamId
+        val theirs = if (mine == f.fromTeamId) f.toTeamId else f.fromTeamId
+        val opponent = (match.participants - by).firstOrNull()
+        if (opponent == null || teams.roleOf(opponent, theirs) == null) throw Refused("The other player in that match is not in the other team, so it is not this friendly's match.", 409)
         if (f.state != "accepted") throw Refused("Only an accepted friendly names its match; this one is ${f.state}.", 409)
         if (f.matchId != null) throw Refused("This friendly already names its match. It is not a field to point elsewhere.", 409)
         val n = try {

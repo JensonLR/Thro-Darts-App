@@ -88,6 +88,12 @@ public class TeamFixtures(private val connection: Connection) {
         val rel = Relations(connection)
         val runsOne = listOf(f.home, f.away).any { rel.decide(by, "team.manage", ObjectRef(ObjectType.TEAM, it.toString())).allowed }
         if (!runsOne) throw Refused("Citing a match is for whoever runs one of the fixture's teams.", 403)
+        // The other seat must be the other team's: a match the captain played against a mate is not this fixture's.
+        val teams = Teams(connection)
+        val mine = if (teams.roleOf(by, f.home) != null) f.home else f.away
+        val theirs = if (mine == f.home) f.away else f.home
+        val opponent = (match.participants - by).firstOrNull()
+        if (opponent == null || teams.roleOf(opponent, theirs) == null) throw Refused("The other player in that match is not in the other team, so it is not this fixture's match.", 409)
         if (f.matchId != null) throw Refused("This fixture already names its match. A fixture's match is not a field to point elsewhere.", 409)
         try { Organisations(connection).citeMatch(fixtureId, matchId) }
         catch (e: IllegalArgumentException) { throw Refused("This fixture already names its match.", 409) }

@@ -438,6 +438,27 @@ public class Secretary(private val connection: Connection) {
         return Proposal(proposalId, taskId, submissionId)
     }
 
+    /**
+     * The proposer takes a proposal back while it is unanswered (PD-108): the proposal is withdrawn, the submission
+     * that carried it is superseded — its subject is gone, which is what `superseded` means here, and the one move a
+     * delivered request may make without the recipient's word — and the opponent's task is cancelled.
+     */
+    public fun withdrawProposal(proposalId: UUID, by: UUID): Moved {
+        val (submission, task, state) = connection.prepareStatement(
+            "SELECT s.submission_id, s.task_id, p.state FROM competition.fixture_rearrangement_proposal p JOIN competition.submission s ON s.proposal_id = p.proposal_id WHERE p.proposal_id = ?",
+        ).use { ps -> ps.setObject(1, proposalId); ps.executeQuery().use { rs -> if (rs.next()) Triple(rs.getObject(1) as UUID, rs.getObject(2) as UUID?, rs.getString(3)) else return Moved.Refused("no such proposal") } }
+        if (state != "proposed") return Moved.Refused("the proposal was already $state")
+        val moved = guarded(submission) {
+            val s = submission(submission) ?: throw IllegalStateException("no such submission")
+            transition(submission, SubmissionState.valueOf(s.state.uppercase()), SubmissionState.SUPERSEDED, by = by, note = "The proposal was withdrawn by the team that made it")
+        }
+        if (moved is Moved.Refused) return moved
+        connection.prepareStatement("UPDATE competition.fixture_rearrangement_proposal SET state = 'withdrawn', row_version = row_version + 1 WHERE proposal_id = ? AND state = 'proposed'")
+            .use { ps -> ps.setObject(1, proposalId); ps.executeUpdate() }
+        task?.let { closeTask(it, TaskState.CANCELLED, by, "The proposal was withdrawn") }
+        return moved
+    }
+
     private fun answerProposal(proposalId: UUID, state: String, by: UUID) {
         val version = connection.prepareStatement("SELECT row_version FROM competition.fixture_rearrangement_proposal WHERE proposal_id = ?")
             .use { ps -> ps.setObject(1, proposalId); ps.executeQuery().use { rs -> rs.next(); rs.getInt(1) } }

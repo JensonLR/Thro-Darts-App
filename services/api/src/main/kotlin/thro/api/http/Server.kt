@@ -542,6 +542,7 @@ public fun Application.thro(deps: Deps) {
                 Rearrangements(r.connection(), deps.now).let { Http(200, it.json(it.answer(UUID.fromString(r.call.parameters["proposalId"]), m["answer"] as? String ?: "", m["note"] as? String, r.principal!!.subject))) }
             }
         },
+        "proposals.withdraw" to { r -> rearrangements { Rearrangements(r.connection(), deps.now).let { Http(200, it.json(it.withdraw(UUID.fromString(r.call.parameters["proposalId"]), r.principal!!.subject))) } } },
         "proposals.apply" to { r ->
             rearrangements {
                 val m = Json.parseObject(r.body)

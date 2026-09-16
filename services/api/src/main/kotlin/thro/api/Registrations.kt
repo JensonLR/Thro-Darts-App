@@ -154,7 +154,8 @@ public class Registrations(private val connection: Connection, private val now: 
         if (!Fixtures(connection).seasonExists(season)) throw Refused("THRØ has no such league season.", 404)
         if (!runsSeason(by, season)) throw Refused("You do not administer this league season.", 403)
         return connection.prepareStatement(
-            """SELECT s.submission_id, s.state, s.subject_player_id, t.team_id, t.name, s.task_id, s.created_at,
+            """SELECT s.submission_id, s.state, s.subject_player_id, t.team_id, t.name, s.task_id,
+                      coalesce((SELECT min(tr.at) FROM competition.submission_transition tr WHERE tr.submission_id = s.submission_id AND tr.to_state = 'submitted'), s.created_at),
                       (SELECT CASE WHEN identity.player_may_be_disclosed(c.player_id) AND a.display_name <> ? THEN a.display_name END
                          FROM identity.player_claim c JOIN identity.account a ON a.account_id = c.account_id AND a.deleted_at IS NULL
                         WHERE c.player_id = s.subject_player_id AND c.revoked_at IS NULL)

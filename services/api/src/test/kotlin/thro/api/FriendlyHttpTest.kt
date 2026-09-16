@@ -111,6 +111,9 @@ class FriendlyHttpTest {
                 check("visit $seq is applied", r.status.value == 200)
             }
             check("citing is for somebody who played it and runs a team in it", post("/v1/friendlies/$id/match", """{"matchId":"$matchId"}""", sam).status.value == 403)
+            val elsewhere = UUID.randomUUID()
+            Matches(c).open(elsewhere, ade, zed, MatchFormat(startingScore = 501, inRule = InRule.STRAIGHT, outRule = OutRule.DOUBLE, legs = Structure(StructureMode.FIRST_TO, 1), throwFirst = Seat.home))
+            check("a match against somebody outside the other team cannot be cited", post("/v1/friendlies/$id/match", """{"matchId":"$elsewhere"}""", ade).status.value == 409)
             check("the captain who played cites it", post("/v1/friendlies/$id/match", """{"matchId":"$matchId"}""", ade).status.value == 200 && get("/v1/teams/$riverside/friendlies", ade).bodyAsText().contains("\"matchId\":\"$matchId\""))
             check("a friendly names its match once", post("/v1/friendlies/$id/match", """{"matchId":"$matchId"}""", gil).status.value == 409)
 

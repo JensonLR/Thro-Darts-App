@@ -1202,6 +1202,11 @@ public actor ThroAPI {
         return try decode(await authorised("POST", "/v1/fixtures/\(fixture.uuidString.lowercased())/proposals", body: body))
     }
 
+    /// Takes back an unanswered proposal, for whoever runs the proposing team.
+    public func withdrawProposal(_ id: UUID) async throws -> FixtureProposal {
+        try decode(await authorised("POST", "/v1/proposals/\(id.uuidString.lowercased())/withdraw", body: Data("{}".utf8)))
+    }
+
     /// The other team's answer: `accepted`, or `rejected` with a note that says why.
     public func answerProposal(_ id: UUID, answer: String, note: String?) async throws -> FixtureProposal {
         var fields: [String: Any] = ["answer": answer]

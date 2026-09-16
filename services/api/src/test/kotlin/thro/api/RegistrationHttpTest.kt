@@ -125,6 +125,7 @@ class RegistrationHttpTest {
             // --- the league answers, and only then is anybody registered -----------------------------------------------
             check("the league's list is the administrator's", get("/v1/seasons/$season/registrations", ade).status.value == 403)
             val list = get("/v1/seasons/$season/registrations", lee).bodyAsText()
+            check("and when it was sent, not when it was drafted", Regex("\"sentAt\":\"2026-09-16T12:00").containsMatchIn(list) || list.contains("\"sentAt\":\"20"))
             check("the administrator sees the submission, the player by name, the team, and its state",
                 list.contains("\"submissionId\":\"$submission\"") && list.contains("\"player\":\"Sam Wilson\"") && list.contains("\"team\":\"Riverside A\"") && list.contains("\"state\":\"delivered\""))
             check("answering is the league's", post("/v1/submissions/$submission/answer", """{"answer":"accepted","registeredFrom":"2026-09-20"}""", ade).status.value == 403)

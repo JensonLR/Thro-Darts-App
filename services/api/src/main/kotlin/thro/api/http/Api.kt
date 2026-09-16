@@ -614,6 +614,12 @@ public object Contract {
             responses = mapOf(200 to "the proposal as it now stands", 400 to "not an answer, or a rejection with no reason", 401 to "no principal", 403 to "not your proposal to answer", 404 to "no such proposal", 409 to "already answered"),
         ),
         Endpoint(
+            id = "proposals.withdraw", method = "POST", path = "/v1/proposals/{proposalId}/withdraw", authenticated = true,
+            summary = "Take back an unanswered proposal (PD-108)",
+            description = "By whoever runs the proposing team, before the other team answers. The opponent's task is cancelled and the fixture is free for a new proposal.",
+            responses = mapOf(200 to "withdrawn", 400 to "not a UUID", 401 to "no principal", 403 to "not yours to withdraw", 404 to "no such proposal", 409 to "already answered"),
+        ),
+        Endpoint(
             id = "proposals.apply", method = "POST", path = "/v1/proposals/{proposalId}/apply", authenticated = true,
             summary = "The league applies an agreed date (PD-108)",
             description = "Moves the fixture through the same command every rearrangement goes through, so its history names the proposal. "

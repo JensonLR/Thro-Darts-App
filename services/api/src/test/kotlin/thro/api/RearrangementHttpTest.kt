@@ -122,6 +122,15 @@ class RearrangementHttpTest {
             val declined = post("/v1/proposals/$second/answer", """{"answer":"rejected","note":"we cannot raise a side that night"}""", ade)
             check("the opponent declines, with the reason kept", declined.status.value == 200 && declined.bodyAsText().contains("\"state\":\"declined\""))
             check("a declined proposal cannot be applied", post("/v1/proposals/$second/apply", """{"expectedVersion":2}""", lee).status.value == 409)
+
+            // --- withdrawing is the proposer's, while unanswered -------------------------------------------------------
+            val third = idOf(post("/v1/fixtures/$fixture/proposals", """{"teamId":"$riverside","to":"2026-10-29T19:30:00Z"}""", ade).bodyAsText(), "proposalId")!!
+            check("withdrawing is for whoever runs the proposing team", post("/v1/proposals/$third/withdraw", "{}", gil).status.value == 403)
+            val withdrawn = post("/v1/proposals/$third/withdraw", "{}", ade)
+            check("the proposer withdraws (${withdrawn.status.value} ${withdrawn.bodyAsText().take(200)})", withdrawn.bodyAsText().contains("\"state\":\"withdrawn\""))
+            check("a withdrawn proposal cannot be answered", post("/v1/proposals/$third/answer", """{"answer":"accepted"}""", gil).status.value == 409)
+            check("and its task is no longer open in the opponent's inbox", !get("/v1/teams/$grange/inbox", gil).bodyAsText().contains("\"proposal\":\"$third\",\"state\":\"open\"") )
+            check("a withdrawn proposal frees the fixture for a new one", post("/v1/fixtures/$fixture/proposals", """{"teamId":"$grange","to":"2026-11-05T19:30:00Z"}""", gil).status.value == 200)
         }
         println("rearrangement over HTTP: $passed checks passed")
     }

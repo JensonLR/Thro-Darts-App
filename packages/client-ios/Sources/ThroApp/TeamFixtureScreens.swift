@@ -233,6 +233,9 @@ public struct TeamFixtureScreen: View {
                 ForEach(proposals) { p in
                     Text("\(p.byTeam) proposed \(RearrangementTaskActions.when(p.to))" + (p.reason.map { " — \($0)" } ?? "") + " · " + RearrangementTaskActions.standing(p.state))
                         .thro(ThroTypography.metadata).foregroundStyle(ThroColor.colorTextSecondary).padding(.top, ThroSpacing.spacing2)
+                    if p.state == "proposed" && p.byTeamId == teamId && v.mayNameLineup {
+                        ThroTextButton("Take it back", tone: .quiet) { Task { await withdraw(p) } }.disabled(busy)
+                    }
                 }
                 if proposals.isEmpty {
                     Note("Nobody has proposed another date.").padding(.top, ThroSpacing.spacing2)
@@ -304,6 +307,15 @@ public struct TeamFixtureScreen: View {
         catch { problem = ThroAPI.refusal(error) ?? "The fixture could not be read just now."; return }
         // The proposals are a second read; a fixture that loads without them is still a fixture.
         proposals = (try? await api.proposals(fixture: fixture.fixtureId)) ?? proposals
+    }
+
+    private func withdraw(_ p: FixtureProposal) async {
+        busy = true; defer { busy = false }
+        do {
+            let gone = try await api.withdrawProposal(p.proposalId)
+            proposals = (proposals ?? []).map { $0.proposalId == gone.proposalId ? gone : $0 }
+            note = "Taken back. The fixture stands where it was."
+        } catch { note = (error as? APIError)?.message ?? error.localizedDescription }
     }
 
     private func propose(in v: TeamFixtureView) async {

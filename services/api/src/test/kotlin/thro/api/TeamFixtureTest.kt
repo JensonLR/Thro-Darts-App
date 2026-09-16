@@ -109,6 +109,11 @@ class TeamFixtureTest {
             check("a member who was not in the match cannot cite it", post("/v1/fixtures/$fixture/match", """{"matchId":"$match"}""", sam).status.value == 403)
             check("nor can a stranger", post("/v1/fixtures/$fixture/match", """{"matchId":"$match"}""", zed).status.value == 403)
             check("a match nobody has is a 404", post("/v1/fixtures/$fixture/match", """{"matchId":"${UUID.randomUUID()}"}""", ade).status.value == 404)
+            // A match the captain played against somebody who is not in the other team is not this fixture's match.
+            val elsewhere = UUID.randomUUID()
+            Matches(c).open(elsewhere, ade, zed, oneLeg)
+            val aside = post("/v1/fixtures/$fixture/match", """{"matchId":"$elsewhere"}""", ade)
+            check("a match against somebody outside the opposing team cannot be cited", aside.status.value == 409 && aside.bodyAsText().contains("other team"))
             val cited = post("/v1/fixtures/$fixture/match", """{"matchId":"$match"}""", ade)
             check("the captain who played it cites the match to the fixture", cited.status.value == 200 && cited.bodyAsText().contains("\"matchId\":\"$match\""))
             check("once: a fixture's match is not a field to point elsewhere", post("/v1/fixtures/$fixture/match", """{"matchId":"$match"}""", gil).status.value == 409)
