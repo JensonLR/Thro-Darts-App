@@ -6122,3 +6122,11 @@ reading moved before the insert and the unused grant came out of V054.
 The sign-in panel and `link.html` on an iPhone-sized browser; the profile opened by `-ThroScreen link/K7TQ2M`;
 Discover in landscape on the iPhone. The passkey sheet Apple shows on a phone with no passkey for thro.uk was
 reproduced in Safari on the simulator, which is what PD-117 answers.
+
+## The applinks absence is retired (PD-117)
+
+`tools/check_absence_claims.py` registered "the app claims no applinks domain" while no domain existed; thro.uk now
+serves the association file with `applinks` for `/link/*`, so the claim came out (five remain), and the three places
+that stated it — `services/links/README.md`, `CLIENT_IOS.md`, the readiness screen's *Links that open the app* row —
+say what is true: the row is *Working* and names `thro.uk/link/…`. `ReadinessTests` adjusted (a quiet phone has one
+thing working). Found by CI on 30896e4, with `host.py` refusing a rewrite to the site's own page — both fixed.

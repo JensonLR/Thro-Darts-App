@@ -453,12 +453,12 @@ public enum ThroReadiness {
     }
 
     static func links(_ f: Facts) -> Surface {
-        Surface(id: "links", name: "Links that open the app", state: .absent,
-                detail: "There is no thro.app domain yet, and the `applinks` entry is deliberately left "
-                      + "out: claiming a domain nobody owns makes iOS fetch a file that is not "
-                      + "there, after which the app silently never handles a link at all. The file "
-                      + "a domain would serve is written and checked on every push, so this is a "
-                      + "purchase away rather than a build away.")
+        // PD-117: thro.uk serves the association file and the entitlement names it, so a link to
+        // thro.uk/link/<code> — a screen's sign-in code — opens the app on the card that approves it.
+        Surface(id: "links", name: "Links that open the app", state: .on,
+                detail: "A link to thro.uk/link/… opens THRØ on the card that signs a screen in, and "
+                      + "thro:// links open it anywhere. The file thro.uk serves for iOS is checked "
+                      + "against the app's own link grammar on every push.")
     }
 
     static func watch(_ f: Facts) -> Surface {

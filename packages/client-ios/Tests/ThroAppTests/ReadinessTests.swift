@@ -83,7 +83,7 @@ final class ReadinessTests: XCTestCase {
         let blocked = ThroReadiness.surfaces(fresh).filter { $0.state == .blocked }
         XCTAssertEqual(blocked.map(\.id), [], "a fresh phone should have nothing blocked")
         XCTAssertEqual(ThroReadiness.surfaces(fresh).filter { $0.state == .absent }.map(\.id),
-                       ["links"])
+                       [], "since PD-117 nothing on this screen is honestly absent: links open the app")
     }
 
     // MARK: the Lock Screen
@@ -192,10 +192,12 @@ final class ReadinessTests: XCTestCase {
 
     // MARK: what is honestly not there
 
-    func testTheLinkRowSaysWhyTheEntitlementIsMissingRatherThanClaimingItWorks() {
+    /// PD-117: the domain exists and serves the association file, so the row says the link works and
+    /// names the address it works for — not a promise about a domain, a path the phone can be sent.
+    func testTheLinkRowNamesTheAddressThatOpensTheApp() {
         let row = find("links", .init())
-        XCTAssertEqual(row.state, .absent)
-        XCTAssertTrue(row.detail.contains("domain"), row.detail)
+        XCTAssertEqual(row.state, .on)
+        XCTAssertTrue(row.detail.contains("thro.uk/link/"), row.detail)
     }
 
     /// The watch is genuinely reachable — a Live Activity lands in the Smart Stack with no watch
@@ -209,7 +211,8 @@ final class ReadinessTests: XCTestCase {
 
     func testTheSummaryCountsWhatIsWorkingAndRefusesToCallItselfADemonstration() {
         let quiet = ThroReadiness.summary(ThroReadiness.surfaces(.init()))
-        XCTAssertTrue(quiet.contains("0 of these are working"), quiet)
+        // Links open the app on any phone (PD-117), so even a quiet phone has one thing working.
+        XCTAssertTrue(quiet.contains("1 of these is working"), quiet)
         XCTAssertTrue(quiet.contains("demonstration"), quiet)
 
         let busy = ThroReadiness.Facts(liveActivitiesAllowed: true, liveActivityUp: true,

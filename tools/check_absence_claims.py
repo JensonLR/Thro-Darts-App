@@ -107,26 +107,9 @@ CLAIMS = [
         # name, and `SyncState(...)` anywhere is a screen about to say something untrue.
         forbidden=r"\b(SyncState|OfflineState)\s*\(",
     ),
-    Claim(
-        what="the app claims no applinks domain",
-        why=("The link grammar is fixed, the association file is written and checked on every push, "
-             "and the `applinks` entry is deliberately the one piece left out — because "
-             "`applinks:thro.app` for a domain nobody owns makes iOS fetch a file that is not there "
-             "and the app then **silently never handles a link at all**, including the `thro://` "
-             "ones that work today. The entitlement itself now exists, for `webcredentials` — "
-             "passkeys need the API's host to vouch for the app — and that is a different line: "
-             "iOS fetches that file from a host that serves it. Three documents and one screen say "
-             "the applinks line is not there."),
-        sentences=[
-            ("services/links/README.md", r"\*\*No `applinks` entry\*\*"),
-            ("docs/runbooks/CLIENT_IOS.md", r"is the `applinks` entry"),
-            ("packages/client-ios/Sources/ThroApp/Readiness.swift",
-             r"the `applinks` entry is deliberately left"),
-        ],
-        where="apps/ios",
-        glob=("*.entitlements", "*.pbxproj"),
-        forbidden=r"applinks:",
-    ),
+    # The applinks absence was registered here until 17 September 2026 (PD-117): thro.uk exists, serves the
+    # association file with an `applinks` section for `/link/*`, and the entitlement names it. The claim was
+    # true for the reason it gave — a domain nobody owned — and stopped being true when the domain was owned.
     Claim(
         what="the scoring session has no compile-time dependency on the network layer",
         why=("LATENCY_BUDGETS.md: the scoring module must have no compile-time dependency on the "

@@ -12,12 +12,14 @@ a code change. This directory holds the one file that hosting needs.
   a path advertised here that the app cannot parse is a link that opens THRØ and then does nothing,
   which looks exactly like the app being broken.
 
-- **No `applinks` entry** in the Associated Domains entitlement, and that is the point at which this stops (the entitlement itself exists, for `webcredentials`, so passkeys work against the API's host). Adding
-  `applinks:thro.app` for a domain nobody owns makes iOS ask Apple's CDN for a file that is not
-  there; the app builds, installs, and silently never handles a link. There is nothing to gain from
-  claiming a domain before it exists.
+- **The `applinks` entry is there since PD-117 (17 September 2026)**: `applinks:thro.uk`, beside the
+  `webcredentials:` line passkeys need. The API serves the association file at `thro.uk`, with `/link/*`
+  — a screen's sign-in code — as the first path that opens the app from a link, and this committed file
+  keeps every path the parser reads, held to the parser by `tools/check_aasa.py`. Adding the entry
+  before the domain existed would have made iOS ask Apple's CDN for a file that was not there, after
+  which the app silently never handles a link; that is why it waited for the domain.
 
-## What turning this on takes, once there is a domain
+## What turning this on took, once there was a domain
 
 1. Buy the domain and serve this file at `https://<domain>/.well-known/apple-app-site-association`
    over **HTTPS with a valid certificate**, `Content-Type: application/json`, **no redirect** and

@@ -835,17 +835,14 @@ conformance corpus to be a legal finish of exactly that number under exactly tha
 
 ## What is not built
 
-**Universal links are ready and not turned on.** ADR-011's path grammar is fixed, the app's parser
-has always read `https://` paths as well as `thro://`, and the association file that a domain would
-serve is committed at `services/links/.well-known/apple-app-site-association` —
-`tools/check_aasa.py` holds it against the parser on every push. What is deliberately **not** there
-is the `applinks` entry: adding `applinks:thro.app` for a domain nobody owns makes
-iOS ask Apple's CDN for a file that is not there, and the app then silently never handles a link.
-(The Associated Domains entitlement itself now exists, carrying `webcredentials:` for the API's
-host, so that iOS offers passkeys for it — a different line, fetched from a host that serves it.)
-`services/links/README.md` says the three steps once there is a domain. Note also that a link into a
-phone's own data opens nothing on anybody else's until there is a server, which is why the share
-card carries no link at all.
+**Universal links are on, for one path (PD-117, 17 September 2026).** ADR-011's path grammar is fixed, the app's
+parser has always read `https://` paths as well as `thro://`, and the association file is served by the API at
+`thro.uk` — `webcredentials` for passkeys, `applinks` for `/link/*`, a screen's sign-in code — with the committed copy
+at `services/links/.well-known/apple-app-site-association` held to the parser by `tools/check_aasa.py` on every push.
+The entitlement names `applinks:thro.uk` beside `webcredentials:thro.uk`. It waited for the domain on purpose: adding
+`applinks` for a domain nobody owns makes iOS ask Apple's CDN for a file that is not there, and the app then silently
+never handles a link. A link into a phone's own data still opens nothing on anybody else's until there is a server
+for it, which is why the share card carries no link at all.
 
 **Two approved components describe a server THRØ does not have, and no screen constructs either.**
 `SyncState` — *"Synced · This match is saved to THRØ"* — and `OfflineState` — *"Changes will sync
