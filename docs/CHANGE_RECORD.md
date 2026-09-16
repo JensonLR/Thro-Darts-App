@@ -5706,3 +5706,9 @@ for the passkey reason as before.
 
 `LAUNCH_REQUIREMENTS.md` no longer says nothing can report or block, or that the privacy manifest is missing; it says
 what is built and what still waits on the mailbox.
+
+**Deployed, 16 September 06:38–06:42 UTC.** CI green on 75c1776. `deploy-api` took
+`pipeline-restore-point-before-75c1776-20260916-063806` (`br-raspy-haze-zavm2ikr`) from production, migrated V047 → V048,
+deployed the commit and saw it answer at V048; Neon lists that branch, the pipeline's two before it, and both hand-made
+restore points, with the oldest pipeline one removed as PD-095 says. `/healthz` answers database ok, V048, V048,
+75c1776. `thro.uk/thro.js` holds `leagueSection` and the `reinstated` answer.
