@@ -139,33 +139,40 @@ public class Competitions(private val connection: Connection) {
         require(entries.isNotEmpty()) { "an event with no entries cannot be drawn" }
         val math = Bracket.math(entries.size)
 
-        // `Bracket.firstRound` returns the bye holders and a count of preliminary matches; it does
-        // not pair the remaining competitors, so the pairing is done here rather than pretending
-        // its Undetermined placeholders are ties.
-        val byeHolders = entries.take(math.byes)
-        val playing = entries.drop(math.byes)
-        check(playing.size == math.preliminaryMatches * 2) {
-            "bracket maths and the field disagree: ${playing.size} competitors into " +
-                "${math.preliminaryMatches} matches"
-        }
+        // The bracket's slots in seed order (PD-115): 1 at the top, 2 at the bottom, 3 and 4 in the other quarters,
+        // and so on — so the top seeds cannot meet before the final. Entries come ranked by seed then by when they
+        // entered; a slot whose rank is beyond the field is empty, and its neighbour has a bye. Because the empty
+        // slots are the lowest ranks and the lowest ranks sit opposite the highest, the byes go to the highest seeds,
+        // as the approved organiser design specifies — and the count is the bracket maths' count.
+        val slots = seedOrder(math.bracketSize)
+        check(slots.size == math.byes * 2 + math.preliminaryMatches * 2 || math.bracketSize == 1) { "bracket maths and the field disagree" }
 
         val created = mutableListOf<UUID>()
         var position = 0
-
-        // Byes go to the highest seeds, which is what the approved organiser design specifies.
-        // A bye is not a win: it creates no match and produces no statistics.
-        for (competitor in byeHolders) {
-            position += 1
-            created += insertTie(eventId, position, competitor, null, isBye = true)
+        for (i in slots.indices step 2) {
+            val home = entries.getOrNull(slots[i]); val away = entries.getOrNull(slots[i + 1])
+            when {
+                home != null && away != null -> { position += 1; created += insertTie(eventId, position, home, away, isBye = false) }
+                home != null -> { position += 1; created += insertTie(eventId, position, home, null, isBye = true) }
+                away != null -> { position += 1; created += insertTie(eventId, position, away, null, isBye = true) }
+                else -> Unit // two empty slots: a field smaller than half the bracket, which the maths never produces
+            }
         }
-        for (i in playing.indices step 2) {
-            position += 1
-            created += insertTie(eventId, position, playing[i], playing[i + 1], isBye = false)
-        }
+        check(created.size == math.byes + math.preliminaryMatches) { "the draw made ${created.size} ties for ${math.byes} byes and ${math.preliminaryMatches} matches" }
 
         connection.prepareStatement("UPDATE competition.event SET state = 'drawn' WHERE event_id = ?")
             .use { ps -> ps.setObject(1, eventId); ps.executeUpdate() }
         return created
+    }
+
+    /** Ranks in slot order for a bracket of [size] (a power of two): [0], then [0,1], [0,3,1,2], [0,7,3,4,1,6,2,5]… */
+    private fun seedOrder(size: Int): List<Int> {
+        var order = listOf(0)
+        while (order.size < size) {
+            val n = order.size * 2
+            order = order.flatMap { listOf(it, n - 1 - it) }
+        }
+        return order
     }
 
     private fun insertTie(

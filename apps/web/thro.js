@@ -1519,6 +1519,8 @@ function eventOpener(redraw) {
   const closes = make('input'); closes.type = 'datetime-local'; closes.setAttribute('aria-label', 'Entries close at');
   const access = make('select'); access.append(new Option('Open entry — on the notice on the door', 'open'), new Option('Invitational — you name who plays', 'invitational'));
   access.setAttribute('aria-label', 'Who may enter');
+  const kind = make('select'); kind.append(new Option('Singles — players enter', 'player'), new Option('Doubles — pairs enter', 'pair'), new Option('Teams — a team enters', 'team'));
+  kind.setAttribute('aria-label', 'Who plays: players, pairs or teams');
   const said = make('p', 'note'); said.hidden = true;
   const say = text => { said.hidden = false; said.textContent = text; };
   let searching;
@@ -1544,13 +1546,13 @@ function eventOpener(redraw) {
         name: name.value.trim(), startsAt: at(start.value), sessionEndsAt: at(end.value),
         ...(venue.value ? { venueId: venue.value } : {}), ...(label.value.trim() ? { venueLabel: label.value.trim() } : {}),
         ...(capacity.value ? { capacity: Number(capacity.value) } : {}), ...(closes.value ? { entriesCloseAt: new Date(closes.value).toISOString() } : {}),
-        access: access.value,
+        access: access.value, entrantKind: kind.value,
       });
       location.search = `?event=${encodeURIComponent(made.eventId)}`;
     } catch (e) { say(e.message); open.disabled = false; }
   };
-  form.append(name, day, start, end, venueQ, venue, label, capacity, closes, access, open);
-  box.append(form, said, make('p', 'quiet', 'Single players. THRØ draws the first round from the entries and the next from the winners, until the final.'));
+  form.append(name, day, start, end, venueQ, venue, label, capacity, closes, kind, access, open);
+  box.append(form, said, make('p', 'quiet', 'THRØ draws the first round from the entries — seeds apart — and the next from the winners, until the final.'));
   return box;
 }
 
@@ -1560,7 +1562,8 @@ function eventOpener(redraw) {
  * the draw; this section only exists when the server sent `entrants`, which it does for the organiser alone.
  */
 function entrantsSection(e, redraw) {
-  const out = [make('h2', null, `Entered · ${e.entrants.length}`)];
+  const who = e.entrantKind === 'pair' ? 'Pairs' : e.entrantKind === 'team' ? 'Teams' : 'Entered';
+  const out = [make('h2', null, `${who} · ${e.entrants.length}`)];
   const list = make('ul', 'rows');
   const before = e.state === 'open' || e.state === 'entries_closed';
   for (const p of e.entrants) {
@@ -1569,45 +1572,84 @@ function entrantsSection(e, redraw) {
     head.append(make('div', 'row-name', p.name || 'A player THRØ may not name'), make('span', 'quiet', p.checkedIn ? 'checked in' : 'not yet checked in'));
     const said = make('p', 'note'); said.hidden = true;
     if (before) {
+      // The seed, as the draw will honour it: 1 at the top, 2 at the bottom, apart until the final.
+      const seed = make('input'); seed.type = 'number'; seed.min = 1; seed.max = 128; seed.value = p.seed || ''; seed.placeholder = 'seed';
+      seed.setAttribute('aria-label', `${p.name || 'this entrant'}’s seed`); seed.style.width = '5rem';
+      seed.onchange = async () => {
+        try { await authorised('POST', `/v1/events/${encodeURIComponent(e.eventId)}/entries/${encodeURIComponent(p.playerId)}/seed`, { seed: seed.value ? Number(seed.value) : null }); redraw(); }
+        catch (err) { said.hidden = false; said.textContent = err.message; seed.value = p.seed || ''; }
+      };
       const remove = make('button', 'quiet-button', 'Remove');
       remove.onclick = async () => {
         remove.disabled = true;
         try { await authorised('POST', `/v1/events/${encodeURIComponent(e.eventId)}/entries/${encodeURIComponent(p.playerId)}/remove`, {}); redraw(); }
         catch (err) { said.hidden = false; said.textContent = err.message; remove.disabled = false; }
       };
-      head.append(remove);
+      const acts = make('div', 'acts'); acts.append(seed, remove);
+      li.append(head, acts, said);
+    } else {
+      if (p.seed) head.append(make('span', 'quiet', `seed ${p.seed}`));
+      li.append(head, said);
     }
-    li.append(head, said);
     list.append(li);
   }
   out.push(list);
   if (before) {
     const box = make('div', 'entry');
-    box.append(make('h2', null, e.access === 'invitational' ? 'Invite a player' : 'Enter a player for them'));
+    const verb = e.access === 'invitational' ? 'Invite' : 'Enter';
+    box.append(make('h2', null, e.entrantKind === 'pair' ? `${verb} a pair` : e.entrantKind === 'team' ? `${verb} a team` : `${verb} a player`));
     const form = make('div', 'entry-form');
-    const pick = make('select'); pick.append(new Option('From your teams…', '')); pick.setAttribute('aria-label', 'A player from one of your teams');
-    const byId = make('input'); byId.type = 'text'; byId.placeholder = 'Or a player id'; byId.setAttribute('aria-label', 'A player id'); byId.maxLength = 36;
     const said = make('p', 'note'); said.hidden = true;
+    const pick = make('select'); pick.setAttribute('aria-label', e.entrantKind === 'team' ? 'One of your teams' : 'A player from one of your teams');
+    pick.append(new Option(e.entrantKind === 'team' ? 'Your teams…' : 'From your teams…', ''));
+    const pick2 = make('select'); pick2.setAttribute('aria-label', 'The partner'); pick2.append(new Option('…and their partner', ''));
+    const byId = make('input'); byId.type = 'text'; byId.placeholder = e.entrantKind === 'team' ? 'Or a team id' : 'Or a player id'; byId.maxLength = 36;
+    byId.setAttribute('aria-label', e.entrantKind === 'team' ? 'A team id' : 'A player id');
     (async () => {
       try {
         const mine = await authorised('GET', '/v1/me/teams');
         for (const t of mine.teams || []) {
+          if (e.entrantKind === 'team') { pick.append(new Option(t.name, t.teamId)); continue; }
           const front = await read(`/v1/teams/${encodeURIComponent(t.teamId)}`);
-          for (const m of front.roster || []) if (m.playerId && !e.entrants.some(x => x.playerId === m.playerId)) pick.append(new Option(`${m.name || 'A player'} · ${t.name}`, m.playerId));
+          for (const m of front.roster || []) if (m.playerId && !e.entrants.some(x => x.playerId === m.playerId)) {
+            pick.append(new Option(`${m.name || 'A player'} · ${t.name}`, m.playerId));
+            pick2.append(new Option(`${m.name || 'A player'} · ${t.name}`, m.playerId));
+          }
         }
       } catch (err) { said.hidden = false; said.textContent = err.message; }
     })();
-    const add = make('button', 'primary', e.access === 'invitational' ? 'Invite' : 'Enter them');
+    const add = make('button', 'primary', verb);
     add.onclick = async () => {
       const id = pick.value || byId.value.trim();
-      if (!id) { said.hidden = false; said.textContent = 'Pick a player, or paste their id.'; return; }
+      if (!id) { said.hidden = false; said.textContent = e.entrantKind === 'team' ? 'Pick a team, or paste its id.' : 'Pick a player, or paste their id.'; return; }
+      const body = e.entrantKind === 'team' ? { teamId: id }
+        : e.entrantKind === 'pair' ? (pick2.value ? { playerIds: [id, pick2.value] } : null)
+        : { playerId: id };
+      if (!body) { said.hidden = false; said.textContent = 'A pair is two players: pick the partner too.'; return; }
       add.disabled = true;
-      try { await authorised('POST', `/v1/events/${encodeURIComponent(e.eventId)}/entries`, { playerId: id }); redraw(); }
+      try { await authorised('POST', `/v1/events/${encodeURIComponent(e.eventId)}/entries`, body); redraw(); }
       catch (err) { said.hidden = false; said.textContent = err.message; add.disabled = false; }
     };
-    form.append(pick, byId, add);
+    form.append(pick);
+    if (e.entrantKind === 'pair') form.append(pick2);
+    form.append(byId, add);
     box.append(form, said);
     out.push(box);
+    // The boards: named once, then each tie is sent to one.
+    const boards = make('div', 'entry');
+    boards.append(make('h2', null, 'Boards'), make('p', 'quiet', e.boards.length ? `${e.boards.join(', ')}.` : 'Name the boards and each tie can be sent to one.'));
+    const bform = make('div', 'entry-form');
+    const labels = make('input'); labels.type = 'text'; labels.placeholder = 'Board 1, Board 2, Back room'; labels.maxLength = 200; labels.setAttribute('aria-label', 'Board names, separated by commas');
+    const bsaid = make('p', 'note'); bsaid.hidden = true;
+    const name = make('button', 'quiet-button', 'Name them');
+    name.onclick = async () => {
+      name.disabled = true;
+      try { await authorised('POST', `/v1/events/${encodeURIComponent(e.eventId)}/boards`, { labels: labels.value.split(',').map(x => x.trim()).filter(Boolean) }); redraw(); }
+      catch (err) { bsaid.hidden = false; bsaid.textContent = err.message; name.disabled = false; }
+    };
+    bform.append(labels, name);
+    boards.append(bform, bsaid);
+    out.push(boards);
   }
   return out;
 }
@@ -1657,9 +1699,21 @@ async function mountEvent(where, signInEl, eventId) {
           const line = t.isBye ? `${name(t.home)} — bye` : `${name(t.home)} v ${name(t.away)}`;
           const standing = t.isBye ? 'through without a game'
             : t.winnerId ? `${t.winnerId === t.homeId ? name(t.home) : name(t.away)} won · ${t.outcome === 'played' ? 'scored on THRØ' : t.outcome}${t.note ? ` — ${t.note}` : ''}`
-            : 'to be played';
+            : (t.board ? `${t.board} · to be played` : 'to be played');
           head.append(make('div', 'row-name', line), make('span', 'quiet', standing));
           li.append(head);
+          // The organiser sends an unplayed tie to a board it named.
+          if (session.get() && e.entrants && e.boards && e.boards.length && !t.isBye && !t.winnerId) {
+            const board = make('select'); board.setAttribute('aria-label', 'Which board');
+            board.append(new Option(t.board ? `On ${t.board}` : 'Send to a board…', ''));
+            for (const b of e.boards) if (b !== t.board) board.append(new Option(b, b));
+            board.onchange = async () => {
+              if (!board.value) return;
+              try { await authorised('POST', `/v1/events/${encodeURIComponent(eventId)}/ties/${encodeURIComponent(t.tieId)}/board`, { label: board.value }); draw(); }
+              catch (err) { const said = make('p', 'note', err.message); li.append(said); }
+            };
+            const acts = make('div', 'acts'); acts.append(board); li.append(acts);
+          }
           // The organiser decides an undecided tie here: a walkover or an award, with a reason. A played tie is
           // cited from the app by somebody who played it; the winner is the record's, never typed here.
           if (session.get() && !t.isBye && !t.winnerId && (e.state === 'drawn' || e.state === 'in_progress')) {

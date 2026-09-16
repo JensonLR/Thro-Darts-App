@@ -584,7 +584,7 @@ public object Contract {
                 + "check-in outlive that by a day), a venue on THRØ or a label, optionally when entries close and how many places. Single "
                 + "players. `access` is open (anybody enters; on the notice on the door) or invitational (PD-113: the organiser names who plays; "
                 + "not on the notice).",
-            request = Schema("""{"type":"object","required":["name","startsAt","sessionEndsAt"],"properties":{"name":{"type":"string"},"startsAt":{"type":"string","format":"date-time"},"sessionEndsAt":{"type":"string","format":"date-time"},"venueId":{"type":"string","format":"uuid"},"venueLabel":{"type":"string"},"entriesCloseAt":{"type":"string","format":"date-time"},"capacity":{"type":"integer","minimum":2},"access":{"type":"string","enum":["open","invitational"]}}}"""),
+            request = Schema("""{"type":"object","required":["name","startsAt","sessionEndsAt"],"properties":{"name":{"type":"string"},"startsAt":{"type":"string","format":"date-time"},"sessionEndsAt":{"type":"string","format":"date-time"},"venueId":{"type":"string","format":"uuid"},"venueLabel":{"type":"string"},"entriesCloseAt":{"type":"string","format":"date-time"},"capacity":{"type":"integer","minimum":2},"access":{"type":"string","enum":["open","invitational"]},"entrantKind":{"type":"string","enum":["player","pair","team"],"description":"PD-115: who enters — single players, pairs, or teams."}}}"""),
             responses = mapOf(200 to "the event's page, as its organiser reads it", 400 to "a name, dates or capacity THRØ cannot accept", 401 to "no principal"),
         ),
         Endpoint(
@@ -607,8 +607,30 @@ public object Contract {
             description = "With an empty body: yourself, on an open event, while entries are open and a place remains. With `playerId`: the organiser "
                 + "enters that player, on any event they run, including an invitational; the entries-close time does not bind the organiser. "
                 + "A withdrawn entry comes back rather than doubling.",
-            request = Schema("""{"type":"object","properties":{"playerId":{"type":"string","format":"uuid"}}}"""),
-            responses = mapOf(200 to "the event, with the player entered", 400 to "not a UUID", 401 to "no principal", 403 to "entry is by the organiser, or you are not the organiser", 404 to "no such event or player", 409 to "closed, full, or already entered — said in words"),
+            request = Schema("""{"type":"object","properties":{"playerId":{"type":"string","format":"uuid","description":"the organiser entering a player"},"partnerId":{"type":"string","format":"uuid","description":"a pair event: you and this partner (PD-115)"},"playerIds":{"type":"array","items":{"type":"string","format":"uuid"},"description":"a pair event: the organiser entering two players"},"teamId":{"type":"string","format":"uuid","description":"a team event: the team, by whoever runs it or the organiser"}}}"""),
+            responses = mapOf(200 to "the event, with the entrant entered", 400 to "not a UUID, or the wrong shape for this event's kind", 401 to "no principal", 403 to "entry is by the organiser, or you do not run the team", 404 to "no such event, player or team", 409 to "closed, full, or already entered — said in words"),
+        ),
+        Endpoint(
+            id = "events.entries.seed", method = "POST", path = "/v1/events/{eventId}/entries/{playerId}/seed", authenticated = true,
+            summary = "Seed an entrant (PD-115)",
+            description = "By the organiser, before the draw: a positive number, unique in the event, or null to unseed. The draw honours seeds — byes to the highest, "
+                + "then pairing in seed order. The path's id is the competitor's, whatever its kind.",
+            request = Schema("""{"type":"object","properties":{"seed":{"type":["integer","null"],"minimum":1}}}"""),
+            responses = mapOf(200 to "the event", 400 to "not a positive number", 401 to "no principal", 403 to "not the organiser", 404 to "not entered", 409 to "seed taken, or the draw is made"),
+        ),
+        Endpoint(
+            id = "events.boards", method = "POST", path = "/v1/events/{eventId}/boards", authenticated = true,
+            summary = "Name the boards (PD-115)",
+            description = "By the organiser: labels, each once. A tie is sent to one by label.",
+            request = Schema("""{"type":"object","required":["labels"],"properties":{"labels":{"type":"array","items":{"type":"string","maxLength":40}}}}"""),
+            responses = mapOf(200 to "the event's boards", 400 to "no labels", 401 to "no principal", 403 to "not the organiser", 404 to "no such event"),
+        ),
+        Endpoint(
+            id = "events.tie.board", method = "POST", path = "/v1/events/{eventId}/ties/{tieId}/board", authenticated = true,
+            summary = "Send a tie to a board (PD-115)",
+            description = "By the organiser. The tie then says its board; nothing else changes.",
+            request = Schema("""{"type":"object","required":["label"],"properties":{"label":{"type":"string"}}}"""),
+            responses = mapOf(200 to "the event, the tie on its board", 401 to "no principal", 403 to "not the organiser", 404 to "no such event, tie or board"),
         ),
         Endpoint(
             id = "events.entries.remove", method = "POST", path = "/v1/events/{eventId}/entries/{playerId}/remove", authenticated = true,

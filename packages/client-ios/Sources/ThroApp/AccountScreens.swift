@@ -531,7 +531,54 @@ struct EventActions: View {
     @State private var citing = false
     @State private var matches: [MatchOnRecord]?
 
+    @State private var choosing = false
+    @State private var choices: [(id: UUID, label: String)]?
+
     private var entered: Bool { page?.you?.entered ?? card.entered }
+
+    /// A partner from one of your teams' rosters, or a team you run — the people and sides the phone can already name.
+    @ViewBuilder private var choicesList: some View {
+        if let choices {
+            if choices.isEmpty {
+                Note(card.entrantKind == "pair" ? "No partner to pick yet: a partner is a player on a team you are in." : "You run no team on THRØ yet.")
+            }
+            ForEach(choices, id: \.id) { c in
+                Button { Task { await enter(with: c.id) } } label: {
+                    HStack { Text(c.label).thro(ThroTypography.body).foregroundStyle(ThroColor.colorTextPrimary); Spacer(); Icon(.chevronRight, size: 16).foregroundStyle(ThroColor.colorTextTertiary) }
+                        .frame(minHeight: ThroSpacing.touchTargetMinimum).throRowTapTarget()
+                }
+                .buttonStyle(ThroPressStyle(radius: ThroSpacing.radiusCard, pressedFill: ThroColor.colorSurfaceSecondary, scales: false))
+                .disabled(busy)
+            }
+            ThroTextButton("Leave it", tone: .quiet) { choosing = false }
+        } else {
+            Text("One moment…").thro(ThroTypography.metadata).foregroundStyle(ThroColor.colorTextSecondary)
+        }
+    }
+
+    private func loadChoices() async {
+        var found: [(id: UUID, label: String)] = []
+        let mine = (try? await account.api.myTeams()) ?? []
+        if card.entrantKind == "team" {
+            found = mine.filter { $0.role == "admin" || $0.role == "captain" || $0.role == "vice_captain" }.map { ($0.teamId, $0.name) }
+        } else {
+            for t in mine {
+                if let front = try? await account.api.teamFront(t.teamId) {
+                    for m in front.roster where m.playerId != nil && m.playerId != me { found.append((m.playerId!, "\(m.name ?? "A player") · \(t.name)")) }
+                }
+            }
+        }
+        choices = found
+    }
+
+    private func enter(with choice: UUID) async {
+        busy = true; defer { busy = false }
+        do {
+            page = card.entrantKind == "team" ? try await account.api.enter(event: card.eventId, team: choice) : try await account.api.enter(event: card.eventId, partner: choice)
+            choosing = false; said = card.entrantKind == "team" ? "Entered. Any member checks the team in on the day." : "Entered as a pair. Either of you checks in on the day."
+            reload()
+        } catch { said = (error as? APIError)?.message ?? error.localizedDescription }
+    }
     private var me: UUID? { account.api.session?.playerId }
     /// Your tie in the latest round, once the draw is made.
     private var myTie: EventPage.Tie? {
@@ -556,8 +603,18 @@ struct EventActions: View {
                         ThroButton("Withdraw", variant: .secondary, size: .medium) { Task { await withdraw() } }.disabled(busy || checkedIn)
                     }
                 } else if card.access == "open" {
-                    ThroButton("Enter", variant: .primary, size: .medium) { Task { await enter() } }.disabled(busy)
+                    switch card.entrantKind {
+                    case "pair":
+                        ThroButton("Enter with a partner", variant: .primary, size: .medium) { choosing = true; Task { await loadChoices() } }.disabled(busy)
+                    case "team":
+                        ThroButton("Enter a team you run", variant: .primary, size: .medium) { choosing = true; Task { await loadChoices() } }.disabled(busy)
+                    default:
+                        ThroButton("Enter", variant: .primary, size: .medium) { Task { await enter() } }.disabled(busy)
+                    }
                 }
+            }
+            if choosing, !entered {
+                choicesList
             }
             if entered && inPlay, let page {
                 tieLine(page)

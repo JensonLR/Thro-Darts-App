@@ -239,7 +239,7 @@ enum ScreenshotAccount {
         private var profile: String {
             let n = name.map { "\"\($0)\"" } ?? "\"New player\""
             let agreed = consents.map { "\"\($0)\"" }.joined(separator: ",")
-            return #"{"accountId":"\#(Stage.accountId.uuidString.lowercased())","playerId":"\#(Stage.playerId.uuidString.lowercased())","displayName":\#(n),"named":\#(name != nil),"ageBand":"\#(band)","credentials":\#(credentials),"consents":[\#(agreed)]}"#
+            return #"{"accountId":"\#(Stage.accountId.uuidString.lowercased())","playerId":"\#(Stage.playerId.uuidString.lowercased())","displayName":\#(n),"named":\#(name != nil),"ageBand":"\#(band)","credentials":\#(credentials),"ways":[\#(credentials >= 2 ? "\"apple\",\"passkey\"" : "\"apple\"")],"consents":[\#(agreed)]}"#
         }
     }
 

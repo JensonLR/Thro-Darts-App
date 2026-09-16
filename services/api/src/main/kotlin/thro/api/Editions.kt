@@ -39,9 +39,10 @@ public class Editions(
     private fun runs(by: UUID, event: UUID) = rel.decide(by, "event.manage", ObjectRef(ObjectType.EVENT, event.toString())).allowed
 
     public data class Tie(val tieId: UUID, val round: Int, val position: Int, val homeId: UUID, val home: String?, val awayId: UUID?, val away: String?, val isBye: Boolean, val matchId: UUID?,
-                          val winnerId: UUID? = null, val outcome: String? = null, val note: String? = null)
+                          val winnerId: UUID? = null, val outcome: String? = null, val note: String? = null, val board: String? = null)
     public data class You(val entered: Boolean, val checkedIn: Boolean)
-    public data class Entrant(val playerId: UUID, val name: String?, val checkedIn: Boolean, val seed: Int?)
+    /** [playerId] is the competitor's id whatever its kind — kept under that key for the phone and the web that read it. */
+    public data class Entrant(val playerId: UUID, val name: String?, val checkedIn: Boolean, val seed: Int?, val kind: String = "player")
     public data class View(
         val eventId: UUID, val name: String, val startsAt: Instant, val sessionEndsAt: Instant, val venueId: UUID?, val venue: String?, val locality: String?,
         val venueLabel: String?, val entrantKind: String, val access: String, val state: String, val entriesCloseAt: Instant?, val capacity: Int?,
@@ -54,12 +55,17 @@ public class Editions(
         """SELECT e.name, e.starts_at, e.session_ends_at, v.venue_id, v.name, v.locality, e.venue_label, e.entrant_kind, e.access, e.state,
                   e.entries_close_at, e.capacity,
                   (SELECT count(*) FROM competition.entry en WHERE en.event_id = e.event_id AND en.withdrawn_at IS NULL),
-                  (SELECT count(*) FROM competition.entry en WHERE en.event_id = e.event_id AND en.withdrawn_at IS NULL AND en.player_id = ?),
-                  (SELECT count(*) FROM competition.check_in ci WHERE ci.event_id = e.event_id AND ci.player_id = ?)
+                  (SELECT count(*) FROM competition.entry en WHERE en.event_id = e.event_id AND en.withdrawn_at IS NULL
+                     AND (en.player_id = ? OR en.pair_id IN (SELECT pair_id FROM competition.pair WHERE player_a = ? OR player_b = ?)
+                          OR en.team_id IN (SELECT team_id FROM competition.team_membership WHERE player_id = ? AND valid_until IS NULL AND status = 'active'))),
+                  (SELECT count(*) FROM competition.check_in ci JOIN competition.entry en ON en.event_id = ci.event_id AND en.competitor_id = ci.competitor_id AND en.withdrawn_at IS NULL
+                    WHERE ci.event_id = e.event_id AND (ci.player_id = ? OR en.pair_id IN (SELECT pair_id FROM competition.pair WHERE player_a = ? OR player_b = ?)
+                          OR en.team_id IN (SELECT team_id FROM competition.team_membership WHERE player_id = ? AND valid_until IS NULL AND status = 'active')))
              FROM competition.event e LEFT JOIN competition.venue v ON v.venue_id = e.venue_id AND v.visibility = 'public'
             WHERE e.event_id = ?""",
     ).use { ps ->
-        ps.setObject(1, viewer); ps.setObject(2, viewer); ps.setObject(3, eventId)
+        for (i in 1..8) ps.setObject(i, viewer)
+        ps.setObject(9, eventId)
         ps.executeQuery().use { rs ->
             if (!rs.next()) null
             else View(
@@ -70,35 +76,50 @@ public class Editions(
         }
     }
 
+    /**
+     * A competitor's name, whatever it is: a player where THRØ may name them, a pair as "A & B" (each half where THRØ
+     * may name them), a team by its name. The one SQL for the three, so no page names somebody another page hides.
+     */
+    private val placeholderLit = "'" + Accounts.PLACEHOLDER_NAME.replace("'", "''") + "'"
+    private val competitorName = """(
+        SELECT coalesce(
+          (SELECT tm.name FROM competition.team tm WHERE tm.team_id = %s),
+          (SELECT concat_ws(' & ',
+                    coalesce((SELECT CASE WHEN identity.player_may_be_disclosed(c.player_id) AND a.display_name <> $placeholderLit THEN a.display_name END
+                                FROM identity.player_claim c JOIN identity.account a ON a.account_id = c.account_id AND a.deleted_at IS NULL
+                               WHERE c.player_id = pr.player_a AND c.revoked_at IS NULL), 'A player'),
+                    coalesce((SELECT CASE WHEN identity.player_may_be_disclosed(c.player_id) AND a.display_name <> $placeholderLit THEN a.display_name END
+                                FROM identity.player_claim c JOIN identity.account a ON a.account_id = c.account_id AND a.deleted_at IS NULL
+                               WHERE c.player_id = pr.player_b AND c.revoked_at IS NULL), 'A player'))
+             FROM competition.pair pr WHERE pr.pair_id = %s),
+          (SELECT CASE WHEN identity.player_may_be_disclosed(c.player_id) AND a.display_name <> $placeholderLit THEN a.display_name END
+             FROM identity.player_claim c JOIN identity.account a ON a.account_id = c.account_id AND a.deleted_at IS NULL
+            WHERE c.player_id = %s AND c.revoked_at IS NULL)))""".replace("\$placeholderLit", "'" + Accounts.PLACEHOLDER_NAME.replace("'", "''") + "'")
+    private fun nameOf(column: String) = competitorName.replace("%s", column)
+
     private fun ties(eventId: UUID): List<Tie> = connection.prepareStatement(
         """SELECT t.fixture_id, t.round_number, t.position, t.home_id, t.away_id, t.is_bye, t.match_id, t.winner_id, t.outcome, t.note,
-                  (SELECT CASE WHEN identity.player_may_be_disclosed(c.player_id) AND a.display_name <> ? THEN a.display_name END
-                     FROM identity.player_claim c JOIN identity.account a ON a.account_id = c.account_id AND a.deleted_at IS NULL
-                    WHERE c.player_id = t.home_id AND c.revoked_at IS NULL),
-                  (SELECT CASE WHEN identity.player_may_be_disclosed(c.player_id) AND a.display_name <> ? THEN a.display_name END
-                     FROM identity.player_claim c JOIN identity.account a ON a.account_id = c.account_id AND a.deleted_at IS NULL
-                    WHERE c.player_id = t.away_id AND c.revoked_at IS NULL)
-             FROM competition.bracket_tie t WHERE t.event_id = ? ORDER BY t.round_number, t.position""",
+                  ${nameOf("t.home_id")}, ${nameOf("t.away_id")}, b.label
+             FROM competition.bracket_tie t LEFT JOIN competition.board b ON b.board_id = t.board_id
+            WHERE t.event_id = ? ORDER BY t.round_number, t.position""",
     ).use { ps ->
-        ps.setString(1, Accounts.PLACEHOLDER_NAME); ps.setString(2, Accounts.PLACEHOLDER_NAME); ps.setObject(3, eventId)
+        ps.setObject(1, eventId)
         ps.executeQuery().use { rs ->
             generateSequence {
                 if (!rs.next()) null
                 else Tie(rs.getObject(1) as UUID, rs.getInt(2), rs.getInt(3), rs.getObject(4) as UUID, rs.getString(11), rs.getObject(5) as UUID?, rs.getString(12), rs.getBoolean(6), rs.getObject(7) as UUID?,
-                         rs.getObject(8) as UUID?, rs.getString(9), rs.getString(10))
+                         rs.getObject(8) as UUID?, rs.getString(9), rs.getString(10), rs.getString(13))
             }.toList()
         }
     }
 
     private fun entrants(eventId: UUID): List<Entrant> = connection.prepareStatement(
-        """SELECT en.player_id, en.seed, EXISTS (SELECT 1 FROM competition.check_in ci WHERE ci.event_id = en.event_id AND ci.player_id = en.player_id),
-                  (SELECT CASE WHEN identity.player_may_be_disclosed(c.player_id) AND a.display_name <> ? THEN a.display_name END
-                     FROM identity.player_claim c JOIN identity.account a ON a.account_id = c.account_id AND a.deleted_at IS NULL
-                    WHERE c.player_id = en.player_id AND c.revoked_at IS NULL)
+        """SELECT en.competitor_id, en.seed, EXISTS (SELECT 1 FROM competition.check_in ci WHERE ci.event_id = en.event_id AND ci.competitor_id = en.competitor_id),
+                  ${nameOf("en.competitor_id")}, en.entrant_kind
              FROM competition.entry en WHERE en.event_id = ? AND en.withdrawn_at IS NULL ORDER BY en.seed NULLS LAST, en.entered_at""",
     ).use { ps ->
-        ps.setString(1, Accounts.PLACEHOLDER_NAME); ps.setObject(2, eventId)
-        ps.executeQuery().use { rs -> generateSequence { if (!rs.next()) null else Entrant(rs.getObject(1) as UUID, rs.getString(4), rs.getBoolean(3), rs.getObject(2) as Int?) }.toList() }
+        ps.setObject(1, eventId)
+        ps.executeQuery().use { rs -> generateSequence { if (!rs.next()) null else Entrant(rs.getObject(1) as UUID, rs.getString(4), rs.getBoolean(3), rs.getObject(2) as Int?, rs.getString(5)) }.toList() }
     }
 
     /** The event's page: for anybody; `you` only with a session; the entrants only for whoever runs it. */
@@ -110,8 +131,10 @@ public class Editions(
 
     // --- the organiser --------------------------------------------------------------------------------------------
 
-    public fun open(by: UUID, name: String, startsAt: Instant, sessionEndsAt: Instant, venueId: UUID?, venueLabel: String?, entriesCloseAt: Instant?, capacity: Int?, access: String = "open"): View {
+    public fun open(by: UUID, name: String, startsAt: Instant, sessionEndsAt: Instant, venueId: UUID?, venueLabel: String?, entriesCloseAt: Instant?, capacity: Int?, access: String = "open", entrantKind: String = "player"): View {
         val title = name.trim()
+        val entrants = when (entrantKind) { "player" -> thro.competition.EntrantKind.PLAYER; "pair" -> thro.competition.EntrantKind.PAIR; "team" -> thro.competition.EntrantKind.TEAM
+            else -> throw Refused("An event is entered by players, pairs or teams; '$entrantKind' is none of those.", 400) }
         val kind = when (access) { "open" -> thro.competition.EventAccess.OPEN; "invitational" -> thro.competition.EventAccess.INVITATIONAL
             else -> throw Refused("THRØ runs open and invitational events; '$access' is neither.", 400) }
         if (title.length !in 2..80) throw Refused("An event has a name, two to eighty characters.", 400)
@@ -123,7 +146,7 @@ public class Editions(
             throw Refused("THRØ has no such venue.", 400)
         }
         val id = UUID.randomUUID()
-        Competitions(connection).openEvent(id, title, startsAt, sessionEndsAt, venueLabel?.trim()?.takeIf { it.isNotEmpty() }, venueId, access = kind, entriesCloseAt = entriesCloseAt, capacity = capacity)
+        Competitions(connection).openEvent(id, title, startsAt, sessionEndsAt, venueLabel?.trim()?.takeIf { it.isNotEmpty() }, venueId, entrantKind = entrants, access = kind, entriesCloseAt = entriesCloseAt, capacity = capacity)
         rel.grant(by, "organiser", ObjectRef(ObjectType.EVENT, id.toString()), by = by)
         return view(id, by)
     }
@@ -236,24 +259,110 @@ public class Editions(
 
     // --- the player -----------------------------------------------------------------------------------------------
 
-    /** A player enters themselves (open events), or the organiser enters a player by id (any event they run). */
-    public fun enter(eventId: UUID, player: UUID, by: UUID = player): View {
-        val v = view(eventId, player)
-        val organiser = by != player || runs(by, eventId)
-        if (by != player) {
-            if (!runs(by, eventId)) throw Refused("Only the event's organiser enters somebody else.", 403)
-            if (!connection.prepareStatement("SELECT 1 FROM competition.player WHERE player_id = ?").use { ps -> ps.setObject(1, player); ps.executeQuery().use { it.next() } }) throw Refused("THRØ has no such player.", 404)
-        } else if (v.access != "open") throw Refused("This event is ${v.access.replace('_', ' ')}: entry is by the organiser.", 403)
+    /**
+     * Entering, in the event's own kind. A player enters themselves (open events) or the organiser enters one by id;
+     * a pair is a player with a partner, or the organiser's two ids — both stand entered, and neither may be in
+     * another pair here; a team is entered by whoever runs it, or the organiser, and every active member stands entered.
+     */
+    public fun enter(eventId: UUID, player: UUID, by: UUID = player, partner: UUID? = null, pairIds: List<UUID>? = null, teamId: UUID? = null): View {
+        val v = view(eventId, by)
+        val organiser = runs(by, eventId)
         if (v.state != "open") throw Refused("Entries are closed.", 409)
         if (!organiser && v.entriesCloseAt != null && !now().isBefore(v.entriesCloseAt)) throw Refused("Entries closed at ${v.entriesCloseAt}.", 409)
-        if (v.entrantKind != "player") throw Refused("This event is entered as a ${v.entrantKind}, not a single player.", 409)
-        if (v.you?.entered == true) throw Refused("You are already entered.", 409)
         if (v.capacity != null && v.entries >= v.capacity) throw Refused("This event is full: ${v.capacity} places, all taken.", 409)
-        // A withdrawn entry comes back rather than being duplicated: one row per competitor per event is the schema's rule.
-        val revived = connection.prepareStatement("UPDATE competition.entry SET withdrawn_at = NULL, entered_at = clock_timestamp() WHERE event_id = ? AND player_id = ? AND withdrawn_at IS NOT NULL")
-            .use { ps -> ps.setObject(1, eventId); ps.setObject(2, player); ps.executeUpdate() }
-        if (revived == 0) Competitions(connection).enter(eventId, player)
-        return view(eventId, player)
+        fun playerExists(id: UUID) = connection.prepareStatement("SELECT 1 FROM competition.player WHERE player_id = ?").use { ps -> ps.setObject(1, id); ps.executeQuery().use { it.next() } }
+        fun revive(competitor: UUID): Boolean = connection.prepareStatement("UPDATE competition.entry SET withdrawn_at = NULL, entered_at = clock_timestamp() WHERE event_id = ? AND competitor_id = ? AND withdrawn_at IS NOT NULL")
+            .use { ps -> ps.setObject(1, eventId); ps.setObject(2, competitor); ps.executeUpdate() } > 0
+        val comp = Competitions(connection)
+        when (v.entrantKind) {
+            "player" -> {
+                if (partner != null || pairIds != null || teamId != null) throw Refused("This event is entered by single players.", 400)
+                if (by != player) {
+                    if (!organiser) throw Refused("Only the event's organiser enters somebody else.", 403)
+                    if (!playerExists(player)) throw Refused("THRØ has no such player.", 404)
+                } else if (v.access != "open") throw Refused("This event is ${v.access.replace('_', ' ')}: entry is by the organiser.", 403)
+                if (v.you?.entered == true && by == player) throw Refused("You are already entered.", 409)
+                if (isEntered(eventId, player)) throw Refused("That player is already entered.", 409)
+                if (!revive(player)) comp.enter(eventId, player)
+            }
+            "pair" -> {
+                val two = when {
+                    pairIds != null -> { if (!organiser) throw Refused("Only the event's organiser enters a pair by ids.", 403); pairIds }
+                    partner != null -> { if (v.access != "open") throw Refused("This event is ${v.access.replace('_', ' ')}: entry is by the organiser.", 403); listOf(player, partner) }
+                    else -> throw Refused("A pair event is entered with a partner: name them.", 400)
+                }
+                if (two.size != 2 || two[0] == two[1]) throw Refused("A pair is two different players.", 400)
+                if (!two.all { playerExists(it) }) throw Refused("THRØ has no such player.", 404)
+                if (two.any { isEntered(eventId, it) }) throw Refused("One of them is already in a pair here.", 409)
+                val pairId = connection.prepareStatement("SELECT pair_id FROM competition.pair WHERE player_a = least(?::uuid, ?::uuid) AND player_b = greatest(?::uuid, ?::uuid)")
+                    .use { ps -> ps.setObject(1, two[0]); ps.setObject(2, two[1]); ps.setObject(3, two[0]); ps.setObject(4, two[1]); ps.executeQuery().use { rs -> if (rs.next()) rs.getObject(1) as UUID else null } }
+                    ?: Organisations(connection).createPair(two[0], two[1])
+                if (!revive(pairId)) comp.enter(eventId, thro.competition.Entrant.Pair(pairId.toString(), two[0].toString(), two[1].toString()))
+            }
+            "team" -> {
+                val team = teamId ?: throw Refused("A team event is entered by a team: name it.", 400)
+                if (!organiser && !rel.decide(by, "team.manage", ObjectRef(ObjectType.TEAM, team.toString())).allowed) throw Refused("Only whoever runs the team enters it.", 403)
+                if (!connection.prepareStatement("SELECT 1 FROM competition.team WHERE team_id = ? AND dissolved_at IS NULL").use { ps -> ps.setObject(1, team); ps.executeQuery().use { it.next() } }) throw Refused("THRØ has no such team.", 404)
+                if (isEntered(eventId, team)) throw Refused("That team is already entered.", 409)
+                if (!revive(team)) comp.enter(eventId, thro.competition.Entrant.Team(team.toString()))
+            }
+        }
+        return view(eventId, by)
+    }
+
+    private fun isEntered(eventId: UUID, id: UUID): Boolean = connection.prepareStatement(
+        """SELECT 1 FROM competition.entry en WHERE en.event_id = ? AND en.withdrawn_at IS NULL
+            AND (en.competitor_id = ? OR en.pair_id IN (SELECT pair_id FROM competition.pair WHERE player_a = ? OR player_b = ?))""",
+    ).use { ps -> ps.setObject(1, eventId); ps.setObject(2, id); ps.setObject(3, id); ps.setObject(4, id); ps.executeQuery().use { it.next() } }
+
+    /** The entry a person stands in: their own, their pair's, or a team's they are a member of. */
+    private fun entryOf(eventId: UUID, player: UUID): Pair<UUID, String>? = connection.prepareStatement(
+        """SELECT en.competitor_id, en.entrant_kind FROM competition.entry en WHERE en.event_id = ? AND en.withdrawn_at IS NULL
+            AND (en.player_id = ? OR en.pair_id IN (SELECT pair_id FROM competition.pair WHERE player_a = ? OR player_b = ?)
+                 OR en.team_id IN (SELECT team_id FROM competition.team_membership WHERE player_id = ? AND valid_until IS NULL AND status = 'active'))
+            LIMIT 1""",
+    ).use { ps -> for (i in 2..5) ps.setObject(i, player); ps.setObject(1, eventId); ps.executeQuery().use { rs -> if (rs.next()) (rs.getObject(1) as UUID) to rs.getString(2) else null } }
+
+    /** The organiser's seed on an entry, unique in the event, before the draw. */
+    public fun seed(eventId: UUID, competitor: UUID, seed: Int?, by: UUID): View {
+        val v = view(eventId, by)
+        if (!runs(by, eventId)) throw Refused("Only the event's organiser seeds it.", 403)
+        if (seed != null && seed < 1) throw Refused("A seed is a positive number.", 400)
+        if (v.state !in setOf("open", "entries_closed")) throw Refused("The draw is made; seeds are not changed after it.", 409)
+        val n = try {
+            connection.prepareStatement("UPDATE competition.entry SET seed = ? WHERE event_id = ? AND competitor_id = ? AND withdrawn_at IS NULL")
+                .use { ps -> if (seed == null) ps.setNull(1, java.sql.Types.INTEGER) else ps.setInt(1, seed); ps.setObject(2, eventId); ps.setObject(3, competitor); ps.executeUpdate() }
+        } catch (e: org.postgresql.util.PSQLException) { throw Refused("Another entrant already has seed $seed.", 409) }
+        if (n == 0) throw Refused("That entrant is not in this event.", 404)
+        return view(eventId, by)
+    }
+
+    /** The organiser names the boards; a tie is sent to one. */
+    public fun boards(eventId: UUID, labels: List<String>, by: UUID): List<String> {
+        view(eventId, by)
+        if (!runs(by, eventId)) throw Refused("Only the event's organiser names the boards.", 403)
+        val clean = labels.map { it.trim() }.filter { it.isNotEmpty() }.distinct()
+        if (clean.isEmpty()) throw Refused("Name at least one board.", 400)
+        connection.prepareStatement("INSERT INTO competition.board (board_id, event_id, label) VALUES (?, ?, ?) ON CONFLICT (event_id, label) DO NOTHING").use { ps ->
+            for (label in clean) { ps.setObject(1, UUID.randomUUID()); ps.setObject(2, eventId); ps.setString(3, label.take(40)); ps.addBatch() }
+            ps.executeBatch()
+        }
+        return boardLabels(eventId)
+    }
+
+    public fun boardLabels(eventId: UUID): List<String> = connection.prepareStatement("SELECT label FROM competition.board WHERE event_id = ? ORDER BY label")
+        .use { ps -> ps.setObject(1, eventId); ps.executeQuery().use { rs -> generateSequence { if (rs.next()) rs.getString(1) else null }.toList() } }
+
+    public fun sendToBoard(eventId: UUID, tieId: UUID, label: String, by: UUID): View {
+        view(eventId, by)
+        if (!runs(by, eventId)) throw Refused("Only the event's organiser sends a tie to a board.", 403)
+        val board = connection.prepareStatement("SELECT board_id FROM competition.board WHERE event_id = ? AND label = ?")
+            .use { ps -> ps.setObject(1, eventId); ps.setString(2, label.trim()); ps.executeQuery().use { rs -> if (rs.next()) rs.getObject(1) as UUID else null } }
+            ?: throw Refused("This event has no board called ${label.trim()}.", 404)
+        val n = connection.prepareStatement("UPDATE competition.bracket_tie SET board_id = ? WHERE fixture_id = ? AND event_id = ?")
+            .use { ps -> ps.setObject(1, board); ps.setObject(2, tieId); ps.setObject(3, eventId); ps.executeUpdate() }
+        if (n == 0) throw Refused("THRØ has no such tie in this event.", 404)
+        return view(eventId, by)
     }
 
     /** The organiser takes an entry out, before the draw. The row is kept with the time, as a withdrawal is. */
@@ -270,8 +379,10 @@ public class Editions(
     public fun withdraw(eventId: UUID, player: UUID): View {
         val v = view(eventId, player)
         if (v.state !in setOf("open", "entries_closed")) throw Refused("The draw is made; withdrawing now is for the organiser to record.", 409)
-        val n = connection.prepareStatement("UPDATE competition.entry SET withdrawn_at = clock_timestamp() WHERE event_id = ? AND player_id = ? AND withdrawn_at IS NULL")
-            .use { ps -> ps.setObject(1, eventId); ps.setObject(2, player); ps.executeUpdate() }
+        val (competitor, kind) = entryOf(eventId, player) ?: throw Refused("You are not entered.", 409)
+        if (kind == "team" && !rel.decide(player, "team.manage", ObjectRef(ObjectType.TEAM, competitor.toString())).allowed) throw Refused("Only whoever runs the team withdraws it.", 403)
+        val n = connection.prepareStatement("UPDATE competition.entry SET withdrawn_at = clock_timestamp() WHERE event_id = ? AND competitor_id = ? AND withdrawn_at IS NULL")
+            .use { ps -> ps.setObject(1, eventId); ps.setObject(2, competitor); ps.executeUpdate() }
         if (n == 0) throw Refused("You are not entered.", 409)
         return view(eventId, player)
     }
@@ -284,7 +395,7 @@ public class Editions(
      */
     public fun checkIn(eventId: UUID, player: UUID, device: UUID): Checked {
         val v = view(eventId, player)
-        if (v.you?.entered != true) throw Refused("Only an entrant checks in.", 409)
+        val (competitor, _) = entryOf(eventId, player) ?: throw Refused("Only an entrant checks in.", 409)
         if (v.state == "cancelled" || v.state == "complete") throw Refused("This event is ${v.state}.", 409)
         val at = now()
         if (at.isBefore(v.startsAt.minus(checkInWindow))) throw Refused("Check-in opens twelve hours before the event starts, on ${v.startsAt.minus(checkInWindow)}.", 409)
@@ -302,7 +413,7 @@ public class Editions(
         connection.prepareStatement(
             """INSERT INTO competition.check_in (event_id, competitor_id, device_id, grant_id, player_id) VALUES (?, ?, ?, ?, ?)
                ON CONFLICT (event_id, player_id, device_id) DO UPDATE SET grant_id = EXCLUDED.grant_id, competitor_id = EXCLUDED.competitor_id, checked_in_at = clock_timestamp()""",
-        ).use { ps -> ps.setObject(1, eventId); ps.setObject(2, player); ps.setObject(3, device); ps.setObject(4, grantId); ps.setObject(5, player); ps.executeUpdate() }
+        ).use { ps -> ps.setObject(1, eventId); ps.setObject(2, competitor); ps.setObject(3, device); ps.setObject(4, grantId); ps.setObject(5, player); ps.executeUpdate() }
         return Checked(grantId, expires)
     }
 
@@ -319,10 +430,10 @@ public class Editions(
             """"draw":[${v.ties.joinToString(",") { tie ->
                 """{"tieId":"${tie.tieId}","round":${tie.round},"position":${tie.position},"homeId":"${tie.homeId}","home":${tie.home?.let(q) ?: "null"},""" +
                     """"awayId":${tie.awayId?.let { "\"$it\"" } ?: "null"},"away":${tie.away?.let(q) ?: "null"},"isBye":${tie.isBye},"matchId":${tie.matchId?.let { "\"$it\"" } ?: "null"},""" +
-                    """"winnerId":${(if (tie.isBye) tie.homeId else tie.winnerId)?.let { "\"$it\"" } ?: "null"},"outcome":${(tie.outcome ?: if (tie.isBye) "bye" else null)?.let(q) ?: "null"},"note":${tie.note?.let(q) ?: "null"}}"""
+                    """"winnerId":${(if (tie.isBye) tie.homeId else tie.winnerId)?.let { "\"$it\"" } ?: "null"},"outcome":${(tie.outcome ?: if (tie.isBye) "bye" else null)?.let(q) ?: "null"},"note":${tie.note?.let(q) ?: "null"},"board":${tie.board?.let(q) ?: "null"}}"""
             }}],"winnerId":${champion(v)?.let { "\"$it\"" } ?: "null"},"entrants":${v.entrants?.let { list ->
-                "[" + list.joinToString(",") { """{"playerId":"${it.playerId}","name":${it.name?.let(q) ?: "null"},"checkedIn":${it.checkedIn},"seed":${it.seed ?: "null"}}""" } + "]"
-            } ?: "null"}}"""
+                "[" + list.joinToString(",") { """{"playerId":"${it.playerId}","name":${it.name?.let(q) ?: "null"},"checkedIn":${it.checkedIn},"seed":${it.seed ?: "null"},"kind":${q(it.kind)}}""" } + "]"
+            } ?: "null"},"boards":[${boardLabels(v.eventId).joinToString(",") { q(it) }}]}"""
     }
 
     /** The event's winner: the one decided tie of its last round, once the event is complete. */

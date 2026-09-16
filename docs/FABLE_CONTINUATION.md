@@ -30,7 +30,7 @@ entitlements and refused if the signed app lacks Sign in with Apple or the passk
 
 PD-095 deploy pipeline · PD-096 retention sweep · PD-097 Android notice · PD-098 TestFlight entitlements ·
 PD-099 fixtures · PD-100 start a league · PD-101 moderation page · PD-102 ways in · PD-103 decisions enforce +
-league management · PD-104 organiser email · PD-105 provisional rating · PD-106 the team's fixture · PD-107 registrations · PD-108 moving a fixture by agreement · PD-109 a knockout · PD-110 a friendly · PD-111 rounds · PD-112 the organiser's remaining acts · PD-113 invitationals · two design passes (web, phone).
+league management · PD-104 organiser email · PD-105 provisional rating · PD-106 the team's fixture · PD-107 registrations · PD-108 moving a fixture by agreement · PD-109 a knockout · PD-110 a friendly · PD-111 rounds · PD-112 the organiser's remaining acts · PD-113 invitationals · PD-114 sign in by the phone · PD-115 pairs, teams, seeds, boards · two design passes (web, phone).
 
 ## Completion matrix (from four read-only audits, 16 September; details in PD-106 and CHANGE_RECORD)
 
@@ -47,7 +47,8 @@ league management · PD-104 organiser email · PD-105 provisional rating · PD-1
 | Tournament OS on the server: open, enter, withdraw, check in, close, draw round one | **Complete (PD-109)** — routes, `events.html`, Discover card actions | EventHttpTest (32) |
 | Tournament OS: later rounds, a tie decided (played or declared), the event's winner, citing from the phone | **Complete (PD-111, V052)** | EventHttpTest (47) |
 | Tournament OS: invitational access, the organiser's entries | **Complete (PD-113)** | EventHttpTest (61) |
-| Tournament OS: pairs/teams as entrants, seeding, boards, players without accounts | **Missing** — not on the wire (kinds), not in the domain (seeding UI, boards) | PD-113 |
+| Tournament OS: pairs/teams as entrants, seeding, boards | **Complete (PD-115)** | EntrantsHttpTest (30) |
+| Tournament OS: walk-up entrants without accounts, a pair from friends | **Missing** — friends carry no player id; a walk-up has no name | PD-115 |
 | Friendly challenge between teams | **Complete (PD-110, V051)** — challenge, answer, withdraw, cite; phone team front | FriendlyHttpTest (31) |
 | Discovery (leagues, events, nearby on-device) and the map | Complete for what is written; no server-side tournament entry | audit |
 | Moderation | Complete (PD-101, PD-103) | ModerationHttpTest |

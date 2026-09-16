@@ -6059,3 +6059,20 @@ panel; the phone's *Sign in on a screen* card and `ThroAPI.approveScreen`. `Play
 
 **Proven.** API suite green with the contract regenerated; Swift suite green; the distribution's jar checked for the
 harness (none) and the server (present).
+
+## The knockout's other shapes (PD-115)
+
+**Test first.** `EntrantsHttpTest`, red on the missing seed route: seeding is the organiser's, positive, Dave first
+and Alice second, no shared seed, the seeds read on the entrants, the draw with seed 1 in the first tie and seed 2 in
+the second, no seed after the draw; boards the organiser's, named, a board THRØ does not have a 404, a tie sent to
+Board 1 and the page saying so; a kind THRØ does not run refused, a pair event not entered alone nor with yourself,
+Alice with Bob, both entered, Bob not again with Cara, the organiser's pair by two ids, the draw naming the pairs,
+either of a pair checking in; a team event not entered as a person, entering a team for whoever runs it, Sam a member
+standing entered, Grange entered, the entrants the teams by name, withdrawing a team for whoever runs it, the draw
+naming the teams, a member checking the team in, somebody in no entered team refused. 30 checks.
+
+**Built.** `Editions`: `entrantKind` at open, `enter` in three shapes, `entryOf`, `seed`, `boards`, `sendToBoard`,
+one `competitorName` SQL; `Competitions.draw` reshaped around `seedOrder`. Three routes and the wider entries body.
+Web: the opener's kind, the entrants' seeds, the pair/team invitation, boards, a tie's board. Phone: `enter(partner:)`
+/ `enter(team:)`, the card's chooser from your teams. **Proven.** API suite green with the contract regenerated;
+Swift suite green; repo checks.

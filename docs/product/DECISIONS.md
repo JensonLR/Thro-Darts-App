@@ -4969,3 +4969,35 @@ application's main class is the HTTP server's). `gradle -p services/api run` sti
 
 **Evidence.** `AuthLinkHttpTest` (15 checks, real sessions rather than the development principal),
 `NetTests.testApprovingAScreensCodeIsSentAsTyped`.
+
+## PD-115 — The knockout's other shapes: pairs, teams, seeds, boards
+
+**16 September 2026.** The founder chose to proceed with the later tournament options. PD-109 and PD-111 ran singles
+with no seeding and no boards; the domain already carried pairs, teams, seeds and boards.
+
+**Decided.**
+
+1. **Who enters is the event's kind** (`entrantKind`: player, pair, team, set when it opens). A pair is a player with
+   a partner (`partnerId`), or the organiser's two ids (`playerIds`): both stand entered, neither may be in another
+   pair here, the pair record is found or made in the players' fixed order. A team is entered by whoever runs it, or
+   the organiser (`teamId`); every active member stands entered; withdrawing it is for whoever runs it. A page names a
+   competitor whatever its kind — a player where THRØ may name them, a pair as "A & B", a team by its name — through
+   one SQL, so no page names somebody another page hides.
+2. **Check-in is the person present.** Either of a pair, any member of a team, checks the entrant in from their own
+   phone; the grant is theirs; the entry is the competitor's (V020's rule, unchanged).
+3. **Seeds are the organiser's**, positive, unique in the event, before the draw (`POST …/entries/{id}/seed`).
+   **The draw honours them**: the bracket's slots in seed order — 1 at the top, 2 at the bottom, 3 and 4 in the
+   other quarters — so the top seeds cannot meet before the final; the empty slots are the lowest ranks and sit
+   opposite the highest, so the byes go to the highest seeds, as before; the bye and match counts are the bracket
+   maths' as before (`CompetitionTest` unchanged and green). Unseeded entrants rank by when they entered.
+4. **Boards are labels** the organiser names once (`POST …/boards`); a tie is sent to one (`POST …/ties/{tie}/board`)
+   and says so. Nothing else changes: a board does not decide, score or time anything.
+5. **Surfaces.** The web opener asks who plays; the organiser's entrants carry a seed field and *Remove*, the
+   invitation takes a pair or a team, and *Boards* is named beneath; on the bracket an unplayed tie is sent to a board.
+   The phone's card offers *Enter with a partner* (from your teams' rosters) or *Enter a team you run*.
+
+**Not decided here.** A pair from friends (a friend carries no player id on the wire); a walk-up entrant with no THRØ
+account; a board's own schedule.
+
+**Evidence.** `EntrantsHttpTest` (30 checks, red first), `EventHttpTest` 61 and `CompetitionTest` 21 still green,
+`NetTests.testAPairAndATeamEnterInTheirOwnShape`.

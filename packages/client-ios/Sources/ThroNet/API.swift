@@ -425,6 +425,8 @@ public struct TeamFront: Decodable, Sendable, Equatable {
         /// The roster entry's own handle, for the team's admin alone, to name a captain with (PD-045).
         /// Not a person's id; nil for everybody else.
         public let memberId: UUID?
+        /// The player behind the entry, sent to the team's own members alone (PD-113/PD-115: an invitation, a partner).
+        public let playerId: UUID?
     }
     public struct SeasonLine: Decodable, Sendable, Equatable {
         public let league: String
@@ -713,6 +715,8 @@ public struct EventPage: Decodable, Sendable, Equatable, Identifiable {
         public let away: String?
         public let isBye: Bool
         public let matchId: UUID?
+        /// The board the tie was sent to, once the organiser did (PD-115).
+        public let board: String?
         /// Who went through, and how: `played` (read from the match's record), `walkover`, `awarded`, or `bye`; nil while undecided.
         public let winnerId: UUID?
         public let outcome: String?
@@ -741,6 +745,8 @@ public struct EventPage: Decodable, Sendable, Equatable, Identifiable {
     public let draw: [Tie]
     /// The champion, once the event is complete.
     public let winnerId: UUID?
+    /// The boards the organiser named, for a tie to be sent to (PD-115).
+    public let boards: [String]?
     public var id: UUID { eventId }
 }
 
@@ -1180,9 +1186,14 @@ public actor ThroAPI {
         return try decode(data)
     }
 
-    /// Enters yourself. Full, closed or already entered come back as words.
-    public func enter(event: UUID) async throws -> EventPage {
-        try decode(await authorised("POST", "/v1/events/\(event.uuidString.lowercased())/entries", body: Data("{}".utf8)))
+    /// Enters yourself; with a partner on a doubles event; a team you run on a team event (PD-115). Full, closed or
+    /// already entered come back as words.
+    public func enter(event: UUID, partner: UUID? = nil, team: UUID? = nil) async throws -> EventPage {
+        var fields: [String: Any] = [:]
+        if let partner { fields["partnerId"] = partner.uuidString.lowercased() }
+        if let team { fields["teamId"] = team.uuidString.lowercased() }
+        let body = try JSONSerialization.data(withJSONObject: fields)
+        return try decode(await authorised("POST", "/v1/events/\(event.uuidString.lowercased())/entries", body: body))
     }
 
     /// Withdraws your entry, before the draw.

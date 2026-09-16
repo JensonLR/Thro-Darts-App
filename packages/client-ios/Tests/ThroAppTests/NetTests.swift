@@ -249,6 +249,21 @@ final class NetTests: XCTestCase {
         catch let e as APIError { XCTAssertEqual(e.message, "THRØ has no such code, or it has expired. Ask the screen for a new one.") }
     }
 
+    /// PD-115: a pair enters with a partner and a team by its id; the card's kind decides which body goes.
+    func testAPairAndATeamEnterInTheirOwnShape() async throws {
+        let page = #"{"eventId":"dddddddd-0000-0000-0000-000000000001","name":"Friday Doubles","startsAt":"2026-10-16T19:00:00Z","sessionEndsAt":"2026-10-16T23:00:00Z","venueId":null,"venue":null,"locality":null,"venueLabel":"upstairs","entrantKind":"pair","access":"open","state":"open","entriesCloseAt":null,"capacity":null,"entries":1,"spotsRemaining":null,"you":{"entered":true,"checkedIn":false},"draw":[],"winnerId":null,"entrants":null,"boards":[]}"#
+        let store = MemorySessionStore(Session(accountId: UUID(), playerId: nil, accessToken: "acc", refreshToken: "ref", accessExpiresAt: .distantFuture, created: false))
+        let script = Script([(200, page), (200, page.replacingOccurrences(of: "\"pair\"", with: "\"team\""))])
+        let api = ThroAPI(configuration: config, deviceId: device, store: store, transport: script)
+        let event = UUID(uuidString: "dddddddd-0000-0000-0000-000000000001")!
+        let partner = UUID(uuidString: "aaaaaaaa-0000-0000-0000-000000000002")!, team = UUID(uuidString: "aaaaaaaa-0000-0000-0000-0000000000c1")!
+        _ = try await api.enter(event: event, partner: partner)
+        XCTAssertTrue(String(decoding: script.seen[0].httpBody ?? Data(), as: UTF8.self).contains("\"partnerId\":\"aaaaaaaa-0000-0000-0000-000000000002\""))
+        let teamed = try await api.enter(event: event, team: team)
+        XCTAssertEqual(teamed.entrantKind, "team")
+        XCTAssertTrue(String(decoding: script.seen[1].httpBody ?? Data(), as: UTF8.self).contains("\"teamId\":\"aaaaaaaa-0000-0000-0000-0000000000c1\""))
+    }
+
     func testBase64URLRoundTripsAndMatchesTheServersAlphabet() {
         let bytes = Data([0xfb, 0xff, 0xbf, 0x00, 0x01])
         let s = Base64URL.encode(bytes)

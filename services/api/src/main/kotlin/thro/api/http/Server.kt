@@ -554,7 +554,7 @@ public fun Application.thro(deps: Deps) {
                     r.principal!!.subject, m["name"] as? String ?: "", instant("startsAt") ?: throw IllegalArgumentException("startsAt is required"),
                     instant("sessionEndsAt") ?: throw IllegalArgumentException("sessionEndsAt is required"),
                     (m["venueId"] as? String)?.let(UUID::fromString), m["venueLabel"] as? String, instant("entriesCloseAt"), (m["capacity"] as? Number)?.toInt(),
-                    access = m["access"] as? String ?: "open",
+                    access = m["access"] as? String ?: "open", entrantKind = m["entrantKind"] as? String ?: "player",
                 )))
             }
         },
@@ -562,8 +562,34 @@ public fun Application.thro(deps: Deps) {
         "events.get" to { r -> editions { Editions(r.connection(), deps.now).let { Http(200, it.json(it.view(UUID.fromString(r.call.parameters["eventId"]), r.principal?.subject))) } } },
         "events.enter" to { r ->
             editions {
-                val named = (if (r.body.isBlank()) null else Json.parseObject(r.body)["playerId"] as? String)?.let(UUID::fromString)
-                Editions(r.connection(), deps.now).let { Http(200, it.json(it.enter(UUID.fromString(r.call.parameters["eventId"]), named ?: r.principal!!.subject, by = r.principal!!.subject))) }
+                val m = if (r.body.isBlank()) emptyMap() else Json.parseObject(r.body)
+                val named = (m["playerId"] as? String)?.let(UUID::fromString)
+                val me = r.principal!!.subject
+                Editions(r.connection(), deps.now).let {
+                    Http(200, it.json(it.enter(UUID.fromString(r.call.parameters["eventId"]), named ?: me, by = me,
+                                               partner = (m["partnerId"] as? String)?.let(UUID::fromString),
+                                               pairIds = (m["playerIds"] as? List<*>)?.map { x -> UUID.fromString(x.toString()) },
+                                               teamId = (m["teamId"] as? String)?.let(UUID::fromString))))
+                }
+            }
+        },
+        "events.entries.seed" to { r ->
+            editions {
+                val m = Json.parseObject(r.body)
+                Editions(r.connection(), deps.now).let { Http(200, it.json(it.seed(UUID.fromString(r.call.parameters["eventId"]), UUID.fromString(r.call.parameters["playerId"]), (m["seed"] as? Number)?.toInt(), r.principal!!.subject))) }
+            }
+        },
+        "events.boards" to { r ->
+            editions {
+                val m = Json.parseObject(r.body)
+                val labels = (m["labels"] as? List<*>)?.map { it.toString() } ?: emptyList()
+                Http(200, """{"boards":[${Editions(r.connection(), deps.now).boards(UUID.fromString(r.call.parameters["eventId"]), labels, r.principal!!.subject).joinToString(",") { Contract.q(it) }}]}""")
+            }
+        },
+        "events.tie.board" to { r ->
+            editions {
+                val m = Json.parseObject(r.body)
+                Editions(r.connection(), deps.now).let { Http(200, it.json(it.sendToBoard(UUID.fromString(r.call.parameters["eventId"]), UUID.fromString(r.call.parameters["tieId"]), m["label"] as? String ?: "", r.principal!!.subject))) }
             }
         },
         "events.entries.remove" to { r -> editions { Editions(r.connection(), deps.now).let { Http(200, it.json(it.remove(UUID.fromString(r.call.parameters["eventId"]), UUID.fromString(r.call.parameters["playerId"]), r.principal!!.subject))) } } },
