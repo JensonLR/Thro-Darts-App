@@ -20,6 +20,7 @@ final class RoutingTests: XCTestCase {
         .club("club-1"),
         .newMatch,
         .continueLatest,
+        .screen("K7TQ2M"),
     ]
 
     /// Every route can be written as a link and read back as itself.
@@ -75,6 +76,16 @@ final class RoutingTests: XCTestCase {
         XCTAssertEqual(ThroRoute(url: URL(string: "thro://continue")!), .continueLatest)
         XCTAssertEqual(ThroRoute.continueLatest.url.absoluteString, "thro://continue")
         XCTAssertNotEqual(ThroRoute.continueLatest, ThroRoute.match(MatchId("continue")))
+    }
+
+    /// A screen's sign-in code arrives as a link (PD-117): the app's own scheme from a page on this phone, and
+    /// the site's address from anywhere else. Both name the same place; a link with no code names nothing.
+    func testAScreensCodeIsALink() {
+        XCTAssertEqual(ThroRoute(url: URL(string: "thro://link/K7TQ2M")!), .screen("K7TQ2M"))
+        XCTAssertEqual(ThroRoute(url: URL(string: "https://thro.uk/link/K7TQ2M")!), .screen("K7TQ2M"))
+        XCTAssertEqual(ThroRoute.screen("K7TQ2M").url.absoluteString, "thro://link/K7TQ2M")
+        XCTAssertNil(ThroRoute(url: URL(string: "thro://link")!))
+        XCTAssertNil(ThroRoute(url: URL(string: "https://thro.uk/link/")!))
     }
 
     /// A link this build cannot read opens nothing.

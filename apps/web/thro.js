@@ -378,6 +378,21 @@ async function signInWithPasskey() {
   return signedIn;
 }
 
+/** True on a phone or a tablet: the device that may well have THRØ on it (PD-117). */
+function onPhone() {
+  return /iPhone|iPad|iPod|Android/i.test(navigator.userAgent)
+    || (navigator.maxTouchPoints > 1 && window.matchMedia && matchMedia('(pointer: coarse)').matches);
+}
+
+/** What a passkey ceremony's refusal means, in words; the browser's own are a W3C address and a shrug. */
+function passkeyWords(e) {
+  if (e && (e.name === 'NotAllowedError' || e.name === 'AbortError')) {
+    return onPhone() ? 'No passkey was used. Open THRØ on this phone instead — it signs this screen in.' : 'No passkey was used. Your phone is the easy way in.';
+  }
+  if (e && e.name === 'SecurityError') return 'This page cannot use a passkey here.';
+  return (e && e.message) || 'The passkey did not sign you in.';
+}
+
 async function whoAmI() { return authorised('GET', '/v1/me'); }
 
 function signOut() { session.clear(); }
@@ -394,55 +409,71 @@ function signOut() { session.clear(); }
  */
 let linkPolling = null;
 function signInPanel(redraw) {
+  const phone = onPhone();
   const box = make('div', 'entry signin');
-  box.append(make('h2', null, 'Sign in with your phone'));
+  box.append(make('h2', null, phone ? 'Sign in with THRØ on this phone' : 'Sign in with your phone'));
+  // PD-117: on a phone, the app that holds the account is a tap away. `thro://link/<code>` opens it on the sign-in
+  // card with the code already in; the same path on thro.uk is a universal link for a code sent from elsewhere.
+  const open = make('a', 'primary', 'Open THRØ'); open.hidden = true;
   const code = make('p', 'code', '······');
   code.setAttribute('aria-live', 'polite');
   const steps = make('ol', 'steps');
-  for (const step of ['Open THRØ on your phone', 'You → Profile → Sign in on a screen', 'Type this code']) steps.append(make('li', null, step));
+  const words = phone
+    ? ['Tap Open THRØ', 'THRØ asks whether to sign this screen in — say yes', 'Come back here: you are in']
+    : ['Open THRØ on your phone', 'You → Profile → Sign in on a screen', 'Type this code'];
+  for (const step of words) steps.append(make('li', null, step));
+  const elsewhere = phone ? make('p', 'quiet', 'THRØ on another phone? Open it there: You → Profile → Sign in on a screen, and type the code above.') : null;
   const said = make('p', 'quiet', 'Asking THRØ for a code…');
   const again = make('button', 'quiet-button', 'New code'); again.hidden = true;
   const acts = make('div', 'acts');
   // Apple and Google, only when the server names the web's client ids for them (PD-116): each SDK is fetched then,
   // never before, so a page without them loads nothing from either.
   providerButtons(acts, redraw, said);
-  const passkey = make('button', 'quiet-button', 'Use a passkey instead');
+  const passkey = make('button', 'quiet-button', 'Use a passkey you made in THRØ');
   passkey.onclick = async () => {
     passkey.disabled = true;
     try { await signInWithPasskey(); clearInterval(linkPolling); await redraw(); }
-    catch (e) { said.textContent = e.message; passkey.disabled = false; }
+    catch (e) { said.textContent = passkeyWords(e); passkey.disabled = false; }
   };
   acts.append(again, passkey);
-  box.append(code, steps, said, acts);
+  if (phone) box.append(open, code, steps, elsewhere, said, acts);
+  else box.append(code, steps, said, acts);
 
+  let current = null;
+  const expire = () => { clearInterval(linkPolling); current = null; said.textContent = 'That code has expired.'; again.hidden = false; code.textContent = '······'; open.hidden = true; };
+  const tick = () => {
+    if (!current) return;
+    const left = Math.max(0, Math.round((current.until - Date.now()) / 1000));
+    said.textContent = left > 0 ? `Good for ${Math.floor(left / 60)}:${String(left % 60).padStart(2, '0')} more.` : 'That code has expired.';
+    if (left <= 0) expire();
+  };
+  const poll = async () => {
+    if (!current) return;
+    tick();
+    try {
+      const res = await fetch(`${API}/v1/auth/link/${encodeURIComponent(current.linkId)}?deviceId=${encodeURIComponent(deviceId())}`, { headers: { Accept: 'application/json' } });
+      if (res.status === 200) {
+        clearInterval(linkPolling); current = null;
+        session.set(await res.json());
+        await redraw();
+      } else if (res.status === 410 || res.status === 404) expire();
+    } catch { /* a missed poll is nothing; the next one asks again */ }
+  };
   const ask = async () => {
     clearInterval(linkPolling);
     again.hidden = true;
     try {
       const link = await post('/v1/auth/link', { deviceId: deviceId() });
+      current = { linkId: link.linkId, until: new Date(link.expiresAt) };
       code.textContent = link.code.split('').join(' ');
-      const until = new Date(link.expiresAt);
-      const tick = () => {
-        const left = Math.max(0, Math.round((until - Date.now()) / 1000));
-        said.textContent = left > 0 ? `Good for ${Math.floor(left / 60)}:${String(left % 60).padStart(2, '0')} more.` : 'That code has expired.';
-        if (left <= 0) { clearInterval(linkPolling); again.hidden = false; code.textContent = '······'; }
-      };
+      open.href = `thro://link/${encodeURIComponent(link.code)}`;
+      open.hidden = !phone;
       tick();
-      linkPolling = setInterval(async () => {
-        tick();
-        try {
-          const res = await fetch(`${API}/v1/auth/link/${encodeURIComponent(link.linkId)}?deviceId=${encodeURIComponent(deviceId())}`, { headers: { Accept: 'application/json' } });
-          if (res.status === 200) {
-            clearInterval(linkPolling);
-            session.set(await res.json());
-            await redraw();
-          } else if (res.status === 410 || res.status === 404) {
-            clearInterval(linkPolling); said.textContent = 'That code has expired.'; again.hidden = false; code.textContent = '······';
-          }
-        } catch { /* a missed poll is nothing; the next one asks again */ }
-      }, 2500);
+      linkPolling = setInterval(poll, 2500);
     } catch (e) { said.textContent = e.message; again.hidden = false; }
   };
+  // Coming back from the app — the phone's case — asks at once rather than waiting out the interval.
+  document.addEventListener('visibilitychange', () => { if (!document.hidden) poll(); });
   again.onclick = ask;
   ask();
   return box;
@@ -524,6 +555,18 @@ const ANSWERS = [
   ['reinstated', 'Reinstate — lift the suspension, or show it again'],
 ];
 
+/** THRØ's reading of a report (PD-118) in words, or null when there is none worth a line. */
+function readingWords(j) {
+  if (!j || j.severity === null || j.severity === undefined) return null;
+  const about = {
+    harassment: 'harassment', hate_or_slur: 'a slur or hate', sexual: 'sexual', impersonation_or_fraud: 'impersonation or a scam',
+    cheating_or_dispute: 'a disputed result', spam: 'spam', other: 'something else',
+  }[j.category] || j.category;
+  const level = ['nothing to act on', 'mildly unpleasant', 'clearly against the rules', 'serious harm or danger'][Math.min(3, Math.max(0, Math.round(j.severity)))];
+  const child = j.childSafety >= 0.85 ? 'a child may be at risk' : j.childSafety >= 0.5 ? 'possibly about a child' : 'not about a child';
+  return `THRØ's reading: ${about} (${Math.round(j.confidence * 100)}% sure) · ${level} · ${child}. A hint, not an answer.`;
+}
+
 async function mountModeration(where, signInEl) {
   const draw = async () => {
     if (!signInGate(signInEl, where, 'Sign in to answer reports.', draw)) return;
@@ -552,9 +595,12 @@ async function mountModeration(where, signInEl) {
     box.append(
       make('div', 'row-name', `${r.urgent ? 'URGENT · ' : ''}${kind}: ${r.subject}`),
       make('p', null, `“${r.reason}”`),
-      make('div', 'row-meta', `Reported ${when(r.reportedAt)} · answer by ${when(r.answerDueAt)}`
+      make('div', 'row-meta', `${r.raisedBy === 'thro' ? 'Raised by THRØ' : 'Reported'} ${when(r.reportedAt)} · answer by ${when(r.answerDueAt)}`
         + (r.decisions ? ` · answered ${r.decisions} time${r.decisions === 1 ? '' : 's'}` : '')),
     );
+    // PD-118: what THRØ made of it, beside it — a hint for the person answering, never an answer.
+    const reading = readingWords(r.reading);
+    if (reading) box.append(make('p', 'reading', reading));
     const form = make('div', 'entry-form');
     const answer = make('select');
     answer.setAttribute('aria-label', 'Your answer');
@@ -666,23 +712,8 @@ async function mountOrganiser(where, signInEl) {
   if (!season) { await mountLobby(where, signInEl); return; }
 
   const draw = async () => {
-    if (!session.get()) {
-      signInEl.replaceChildren(make('p', 'quiet', 'Signing in uses a passkey — the same one the app uses. Nothing is typed.'));
-      const button = make('button', 'primary', 'Sign in with a passkey');
-      button.onclick = async () => {
-        button.disabled = true;
-        try { await signInWithPasskey(); await draw(); }
-        catch (e) { signInEl.append(make('p', 'note', e.message)); button.disabled = false; }
-      };
-      signInEl.append(button);
-      where.replaceChildren(make('p', 'quiet', 'Sign in to enter this season’s results.'));
-      return;
-    }
-
-    signInEl.replaceChildren();
-    const out = make('button', 'quiet-button', 'Sign out');
-    out.onclick = () => { signOut(); draw(); };
-    signInEl.append(out);
+    // The one gate every signed-in page shares (PD-114, PD-117): the phone first, a passkey second.
+    if (!signInGate(signInEl, where, 'Sign in to enter this season’s results.', draw)) return;
 
     // The season as its administrator sees it (PD-099): its dates, divisions and every team that asked in. It is
     // also the page's one question about authority — somebody who does not run this season is told so here,

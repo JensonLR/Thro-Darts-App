@@ -68,6 +68,11 @@ services:
       - type: rewrite
         source: /v1/*
         destination: https://thro-api-staging.onrender.com/v1/*
+      # PD-117: a screen's sign-in code as a link. On a phone with THRØ it opens the app (a universal link, by the
+      # association file below); without the app it is this page, which says what to do.
+      - type: rewrite
+        source: /link/*
+        destination: /link.html
       - type: rewrite
         source: /.well-known/apple-app-site-association
         destination: https://thro-api-staging.onrender.com/.well-known/apple-app-site-association

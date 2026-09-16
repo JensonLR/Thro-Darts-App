@@ -31,7 +31,7 @@ entitlements and refused if the signed app lacks Sign in with Apple or the passk
 
 PD-095 deploy pipeline · PD-096 retention sweep · PD-097 Android notice · PD-098 TestFlight entitlements ·
 PD-099 fixtures · PD-100 start a league · PD-101 moderation page · PD-102 ways in · PD-103 decisions enforce +
-league management · PD-104 organiser email · PD-105 provisional rating · PD-106 the team's fixture · PD-107 registrations · PD-108 moving a fixture by agreement · PD-109 a knockout · PD-110 a friendly · PD-111 rounds · PD-112 the organiser's remaining acts · PD-113 invitationals · PD-114 sign in by the phone · PD-115 pairs, teams, seeds, boards · PD-116 Apple and Google on the web (awaiting the founder's console work) · two design passes (web, phone).
+league management · PD-104 organiser email · PD-105 provisional rating · PD-106 the team's fixture · PD-107 registrations · PD-108 moving a fixture by agreement · PD-109 a knockout · PD-110 a friendly · PD-111 rounds · PD-112 the organiser's remaining acts · PD-113 invitationals · PD-114 sign in by the phone · PD-115 pairs, teams, seeds, boards · PD-116 Apple and Google on the web (awaiting the founder's console work) · PD-117 the phone that is already here (Open THRØ from the web's sign-in, `/link/<code>`) · PD-118 THRØ reads reports and names with TypeSafe's System One model (V054; dormant until `THRO_TYPESAFE_API_KEY`) · two design passes (web, phone).
 
 ## Completion matrix (from four read-only audits, 16 September; details in PD-106 and CHANGE_RECORD)
 
@@ -72,7 +72,14 @@ league management · PD-104 organiser email · PD-105 provisional rating · PD-1
    (PD-114's commit). ~~Next for "a whole new level of UI standard"~~ looked at 16 September night: the table and
    fixtures pages already wear the home page's field header and nav (left as they are); Home, Play and Live are cards;
    You on the iPad sits in two columns; the iPhone in landscape renders side by side. Nothing changed there.
-6. PD-116 lands the server and web sides of Apple/Google sign-in on the web; the buttons appear only once the founder
+6. PD-117: on a phone the web's sign-in leads with *Open THRØ*; `https://thro.uk/link/<code>` is a universal link
+   (needs TestFlight build 16 on the phone for the entitlement). Not done: a QR code on the laptop's panel.
+7. PD-118: the moderation queue carries THRØ's reading of each report, and a chosen name that reads as abuse is put on
+   the queue by THRØ itself — once the founder creates a TypeSafe key, reads its terms, and sets
+   `THRO_TYPESAFE_API_KEY` on Render (steps in PD-118). Next uses worth weighing, in order: a reporter's free text
+   on the fixture screen ("what happened") sorted into the six outcomes; matching a typed player name to a
+   registered one at registration; reading a league's typed rules into a points policy THRØ can compute.
+8. PD-116 lands the server and web sides of Apple/Google sign-in on the web; the buttons appear only once the founder
    creates the Services ID and the Web OAuth client and sets `THRO_APPLE_WEB_CLIENT_ID` / `THRO_GOOGLE_WEB_CLIENT_ID`
    on Render (the clicks are in PD-116). Until then the web offers the phone code and the passkey.
 

@@ -19,17 +19,20 @@ import java.util.UUID
  * deleted. **Accepting the terms** is recorded with the version accepted, because "which version" is the
  * only honest answer to "what did they agree to".
  */
-public class Safety(private val connection: Connection, private val now: () -> Instant = Instant::now) {
+public class Safety(private val connection: Connection, private val reader: Reader? = null, private val now: () -> Instant = Instant::now) {
 
     public class Refused(public val why: String, public val status: Int? = null) : Exception(why)
 
     public data class Report(val reportId: UUID, val subjectKind: String, val subjectId: UUID,
-                             val reason: String, val urgent: Boolean, val reportedAt: Instant, val answerDueAt: Instant)
+                             val reason: String, val urgent: Boolean, val reportedAt: Instant, val answerDueAt: Instant,
+                             /** False for a report THRØ raised itself from its reading of a name (PD-118). */
+                             val raisedByAPerson: Boolean = true)
     /**
-     * A report as the person answering it needs it: with [subject], the name somebody read (PD-101). A moderator
-     * cannot judge an id, and the name is exactly the thing most reports are about.
+     * A report as the person answering it needs it: with [subject], the name somebody read (PD-101), and [reading],
+     * what THRØ made of it (PD-118) — a hint beside the report, never an answer to it. A moderator cannot judge an
+     * id, and the name is exactly the thing most reports are about.
      */
-    public data class Queued(val report: Report, val decisions: Int, val subject: String)
+    public data class Queued(val report: Report, val decisions: Int, val subject: String, val reading: Reading? = null)
 
     public companion object {
         /** What can be reported: the things a person writes that another person reads. */
@@ -38,16 +41,29 @@ public class Safety(private val connection: Connection, private val now: () -> I
         public val ANSWER_WITHIN: Duration = Duration.ofHours(24)
         /** The terms a player accepts before they may write anything anyone else reads. */
         public const val TERMS_VERSION: String = "2026-09-11"
+        /**
+         * The probability at which THRØ's reading acts on its own (PD-118): a report this likely to concern a child goes
+         * to the front of the queue, and a name this likely to be abuse or impersonation is put on the queue. Conservative
+         * on purpose — a reading below it changes nothing but the order — and to be revisited against real reports.
+         */
+        public const val ACTS_AT: Double = 0.85
     }
 
     /**
      * Reports something. [urgent] is set by the caller for a report raised by, or about, somebody THRØ knows
      * to be a child; it puts the report at the front of the queue and is never left to the day-long clock.
+     *
+     * With a [reader], the report is read as it arrives (PD-118) and the reading kept beside it; a reading that says a
+     * child is likely at risk makes the report urgent as surely as the caller can. A reader that answers nothing, or
+     * fails, leaves the report exactly as it was: the reading is beside the report, never in its way.
      */
     public fun report(by: UUID, subjectKind: String, subjectId: UUID, reason: String, urgent: Boolean = false): Report {
         if (subjectKind !in SUBJECTS) throw Refused("THRØ does not know how to report that.")
         val clean = reason.trim()
         if (clean.length !in 3..600) throw Refused("Say what is wrong with it, in a sentence.")
+        // Read before it is written: a report is append-only (V040's trigger), so whether it is urgent is decided once.
+        val reading = runCatching { reader?.readReport(subjectKind, subjectName(subjectKind, subjectId), clean) }.getOrNull()
+        val front = urgent || (reading != null && reading.childSafety >= ACTS_AT)
         val at = now()
         val due = at.plus(ANSWER_WITHIN)
         val id = UUID.randomUUID()
@@ -56,14 +72,78 @@ public class Safety(private val connection: Connection, private val now: () -> I
                VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
         ).use { ps ->
             ps.setObject(1, id); ps.setString(2, subjectKind); ps.setObject(3, subjectId); ps.setObject(4, by)
-            ps.setString(5, clean); ps.setBoolean(6, urgent)
+            ps.setString(5, clean); ps.setBoolean(6, front)
             ps.setTimestamp(7, Timestamp.from(at)); ps.setTimestamp(8, Timestamp.from(due))
             ps.executeUpdate()
         }
-        return Report(id, subjectKind, subjectId, clean, urgent, at, due)
+        if (reading != null) keep(id, reading.category, reading.categoryConfidence, reading.childSafety, reading.severity, reading.model)
+        return Report(id, subjectKind, subjectId, clean, front, at, due)
     }
 
-    /** What is waiting to be answered: the urgent first, then by the hour it is due. */
+    /**
+     * Reads a name somebody chose (PD-118) — a display name, a team name — and, when it reads as abuse or as
+     * impersonation, raises a report of THRØ's own for a person to answer. Nothing is refused and nothing is hidden:
+     * a person decides, within the day, as for any report. A name already waiting on the queue is not reported twice.
+     * Without a reader, or with one that cannot answer, nothing happens.
+     */
+    public fun noteName(kind: String, subjectId: UUID, name: String) {
+        val reading = runCatching { reader?.readName(kind, name) }.getOrNull() ?: return
+        val (category, probability) = when {
+            reading.abusive >= ACTS_AT -> "abusive_name" to reading.abusive
+            reading.impersonates >= ACTS_AT -> "impersonation" to reading.impersonates
+            else -> return
+        }
+        val waiting = connection.prepareStatement(
+            """SELECT count(*) FROM safety.report r
+                WHERE r.subject_kind = ? AND r.subject_id = ? AND r.reported_by IS NULL
+                  AND NOT EXISTS (SELECT 1 FROM safety.decision d WHERE d.report_id = r.report_id)""",
+        ).use { ps -> ps.setString(1, kind); ps.setObject(2, subjectId); ps.executeQuery().use { rs -> rs.next(); rs.getInt(1) } }
+        if (waiting > 0) return
+        val what = if (category == "abusive_name") "likely abusive" else "likely to be impersonating somebody"
+        val reason = "THRØ read the name “$name” as $what (${(probability * 100).toInt()}%). Nobody reported it; please look."
+        val at = now()
+        val id = UUID.randomUUID()
+        connection.prepareStatement(
+            """INSERT INTO safety.report (report_id, subject_kind, subject_id, reported_by, reason, urgent, reported_at, answer_due_at)
+               VALUES (?, ?, ?, NULL, ?, false, ?, ?)""",
+        ).use { ps ->
+            ps.setObject(1, id); ps.setString(2, kind); ps.setObject(3, subjectId); ps.setString(4, reason.take(600))
+            ps.setTimestamp(5, Timestamp.from(at)); ps.setTimestamp(6, Timestamp.from(at.plus(ANSWER_WITHIN)))
+            ps.executeUpdate()
+        }
+        keep(id, category, probability, null, null, reading.model)
+    }
+
+    private fun keep(reportId: UUID, category: String, confidence: Double, childSafety: Double?, severity: Double?, model: String) {
+        connection.prepareStatement(
+            "INSERT INTO safety.judgment (report_id, category, confidence, child_safety, severity, model, judged_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
+        ).use { ps ->
+            ps.setObject(1, reportId); ps.setString(2, category); ps.setDouble(3, confidence)
+            if (childSafety == null) ps.setNull(4, java.sql.Types.DOUBLE) else ps.setDouble(4, childSafety)
+            if (severity == null) ps.setNull(5, java.sql.Types.DOUBLE) else ps.setDouble(5, severity)
+            ps.setString(6, model); ps.setTimestamp(7, Timestamp.from(now()))
+            ps.executeUpdate()
+        }
+    }
+
+    /** The name somebody read (PD-101), as the queue shows it. */
+    private fun subjectName(kind: String, id: UUID): String = connection.prepareStatement(
+        """SELECT CASE ?
+              WHEN 'account' THEN (SELECT coalesce(nullif(a.display_name, ''), 'An account with no name') FROM identity.account a WHERE a.account_id = ?)
+              WHEN 'team'    THEN (SELECT t.name FROM competition.team t WHERE t.team_id = ?)
+              WHEN 'venue'   THEN (SELECT v.name FROM competition.venue v WHERE v.venue_id = ?)
+              WHEN 'league'  THEN (SELECT l.name FROM competition.league l WHERE l.league_id = ?)
+              WHEN 'match'   THEN 'A match'
+            END""",
+    ).use { ps ->
+        ps.setString(1, kind); for (i in 2..5) ps.setObject(i, id)
+        ps.executeQuery().use { rs -> rs.next(); rs.getString(1) ?: "Not on THRØ any more" }
+    }
+
+    /**
+     * What is waiting to be answered: the urgent first, then what THRØ read as most serious (PD-118), then by the
+     * hour it is due. A report with no reading sorts as least serious, never as unread.
+     */
     public fun queue(limit: Int = 50): List<Queued> =
         connection.prepareStatement(
             """SELECT r.report_id, r.subject_kind, r.subject_id, r.reason, r.urgent, r.reported_at, r.answer_due_at,
@@ -77,10 +157,13 @@ public class Safety(private val connection: Connection, private val now: () -> I
                         WHEN 'venue'   THEN (SELECT v.name FROM competition.venue v WHERE v.venue_id = r.subject_id)
                         WHEN 'league'  THEN (SELECT l.name FROM competition.league l WHERE l.league_id = r.subject_id)
                         WHEN 'match'   THEN 'A match'
-                      END
+                      END,
+                      r.reported_by IS NOT NULL,
+                      j.category, j.confidence, j.child_safety, j.severity, j.model
                  FROM safety.report r
+                 LEFT JOIN safety.judgment j ON j.report_id = r.report_id
                 ORDER BY (SELECT count(*) FROM safety.decision d WHERE d.report_id = r.report_id) ASC,
-                         r.urgent DESC, r.answer_due_at ASC
+                         r.urgent DESC, coalesce(j.severity, -1) DESC, r.answer_due_at ASC
                 LIMIT ?""",
         ).use { ps ->
             ps.setInt(1, limit)
@@ -89,9 +172,14 @@ public class Safety(private val connection: Connection, private val now: () -> I
                     if (!rs.next()) null
                     else Queued(
                         Report(rs.getObject(1) as UUID, rs.getString(2), rs.getObject(3) as UUID, rs.getString(4),
-                               rs.getBoolean(5), rs.getTimestamp(6).toInstant(), rs.getTimestamp(7).toInstant()),
+                               rs.getBoolean(5), rs.getTimestamp(6).toInstant(), rs.getTimestamp(7).toInstant(), rs.getBoolean(10)),
                         rs.getInt(8),
                         rs.getString(9) ?: "Not on THRØ any more",
+                        rs.getString(11)?.let { category ->
+                            val child = rs.getDouble(13).let { if (rs.wasNull()) Double.NaN else it }
+                            val severity = rs.getDouble(14).let { if (rs.wasNull()) Double.NaN else it }
+                            Reading(category, rs.getDouble(12), child, severity, rs.getString(15))
+                        },
                     )
                 }.toList()
             }

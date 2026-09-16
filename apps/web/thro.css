@@ -121,12 +121,15 @@ footer { border-top: 1px solid var(--color-border-default); padding-block: 24px 
 /* A score is two small boxes; a name, a date or a time is not. */
 .entry-form input[type="number"] { width: 5rem; text-align: center; }
 .entry-form input[type="text"], .entry-form input[type="date"], .entry-form input[type="time"], .entry-form select { flex: 1 1 11rem; max-width: 100%; }
-.entry-form button:focus-visible, button.primary:focus-visible, button.quiet-button:focus-visible {
+.entry-form button:focus-visible, button.primary:focus-visible, a.primary:focus-visible, button.quiet-button:focus-visible {
   outline: 3px solid var(--color-border-focus, var(--color-background-brand)); outline-offset: 2px; }
 .entry-form .v { color: var(--color-text-secondary); }
-button.primary { font: inherit; font-weight: var(--font-weight-semibold); padding: 12px 20px;
+button.primary, a.primary { font: inherit; font-weight: var(--font-weight-semibold); padding: 12px 20px;
                  color: var(--color-text-inverse); background: var(--color-background-brand);
                  border: 0; border-radius: var(--radius-control); cursor: pointer; min-height: 44px; }
+/* A link dressed as the primary act (PD-117: Open THRØ) reads as the button it is. */
+a.primary { display: inline-block; text-decoration: none; text-align: center; line-height: 20px; box-sizing: border-box; }
+.signin a.primary { display: block; margin: 4px 0 14px; }
 button.primary:disabled { opacity: 1; background: var(--color-text-tertiary); cursor: default; }
 button.quiet-button { font: inherit; padding: 8px 0; color: var(--color-text-brand);
                       background: none; border: 0; cursor: pointer; text-decoration: underline; }
@@ -182,6 +185,8 @@ ul.rows li .row-head + .row-meta { margin-top: -6px; }
 .entry h2:first-child, .entry .entry-form:first-child { margin-top: 0; }
 .entry h2 { margin-top: 0; }
 .entry .entry-form + p.quiet, .entry .note + p.quiet { margin-top: 12px; }
+/* THRØ's reading of a report (PD-118): beside it, quieter than the report, never louder. */
+.entry p.reading { margin: 6px 0 0; color: var(--color-text-secondary); font-size: 14px; }
 .acts { display: flex; flex-wrap: wrap; gap: 8px 18px; align-items: center; margin-top: 8px; }
 .acts button.quiet-button { margin: 0; }
 p.eyebrow + p.wordmark { margin-top: 2px; }

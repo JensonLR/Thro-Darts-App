@@ -6095,3 +6095,30 @@ founder creates the Services ID and the Web client and sets the two variables �
 
 Home, Play and Live on the iPhone (cards throughout; left as they were), You on the iPad (two columns) and the
 iPhone in landscape (side by side); the table and fixtures pages at 375 points against the league-acts scenario.
+
+## The phone that is already here (PD-117)
+
+`signInPanel` leads with *Open THRØ* (`thro://link/<code>`) on a phone and asks at once on `visibilitychange`; the
+passkey's refusals are words (`passkeyWords`); the season page uses `signInGate`. `link.html` and a `/link/*` rewrite
+in `render.yaml`; the API's association file and the committed one carry `applinks` for `/link/*`; the app's
+entitlement names `applinks:thro.uk`. `ThroRoute.screen`, `follow()` opening the profile on `Sub.screen(code)`, the
+card leading the page and saying where the code came from. `RoutingTests` 12 → 13.
+
+## THRØ reads what people write (PD-118, V054)
+
+`Reader`, `Reading`, `NameReading`, `TypeSafeReader` (java.net.http, three-second timeout, the key as a bearer token);
+`Safety(connection, reader, now)` reads a report before writing it and keeps the reading in `safety.judgment`; the
+queue joins it and sorts by severity within the urgent/not; `noteName` raises THRØ's own report for a name that
+reads as abuse or impersonation; `reported_by` nullable. `Deps.reader`, `THRO_TYPESAFE_API_KEY` in `Main.kt`; the
+display-name and team-creation routes call `noteName`; `queueJson` carries `raisedBy` and `reading`; the moderation
+page shows the reading under the report. Privacy page, ROPA and DPIA name TypeSafe as a processor. API tests 126 → 133.
+
+**Test first.** `TypeSafeReaderTest` and `JudgmentTest` were written first and failed on the unresolved `Reader`; the
+first green run found that a report is append-only (V040's trigger refused the `UPDATE` that made it urgent), so the
+reading moved before the insert and the unused grant came out of V054.
+
+## Looked at, 17 September
+
+The sign-in panel and `link.html` on an iPhone-sized browser; the profile opened by `-ThroScreen link/K7TQ2M`;
+Discover in landscape on the iPhone. The passkey sheet Apple shows on a phone with no passkey for thro.uk was
+reproduced in Safari on the simulator, which is what PD-117 answers.

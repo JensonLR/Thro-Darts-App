@@ -51,6 +51,10 @@ public enum ThroRoute: Equatable, Hashable, Sendable {
     /// of* in December, so the address names the question and the app answers it. Naming a match id
     /// would freeze the answer at the moment the Shortcut was made.
     case continueLatest
+    /// A screen's sign-in code (PD-114), arriving as a link (PD-117): `thro://link/K7TQ2M` from a page on this
+    /// phone, or `https://thro.uk/link/K7TQ2M` from anywhere. Opens the profile's *Sign in on a screen* card
+    /// with the code in, and nothing is approved until the person says so.
+    case screen(String)
 }
 
 extension ThroRoute {
@@ -76,6 +80,7 @@ extension ThroRoute {
         case let .club(id): path = "e/\(escape(id))"
         case .newMatch: path = "new"
         case .continueLatest: path = "continue"
+        case let .screen(code): path = "link/\(escape(code))"
         }
         return ThroLink.url(path: path)
     }
@@ -107,6 +112,9 @@ extension ThroRoute {
         case ("e", let id?), ("club", let id?), ("team", let id?):
             guard !id.isEmpty else { return nil }
             self = .club(id)
+        case ("link", let code?):
+            guard !code.isEmpty else { return nil }
+            self = .screen(code)
         default:
             return nil
         }

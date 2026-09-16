@@ -197,7 +197,7 @@ in-app notice that does not exist yet. That gap is now written down rather than 
    both Standard 4 and DSA Art 14(3), because a young player needs the rules as much as the privacy.
    Its reading age is measured rather than claimed, and a guard holds it. What it still wants is the
    only test that counts: some actual young players reading it and saying which bits they skipped.
-6. **Art 28 processor terms** with Render, Neon and the mail host; **Art 27 EU representative** if EU users
+6. **Art 28 processor terms** with Render, Neon, the mail host and — before `THRO_TYPESAFE_API_KEY` is set — TypeSafe (PD-118: it is sent the words of a report and a chosen name, never who wrote them); **Art 27 EU representative** if EU users
    are targeted.
 7. **ICO registration**, tier 1.
 

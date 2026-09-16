@@ -14,7 +14,8 @@
           { "/": "/tab/*", "comment": "One of the five tabs" },
           { "/": "/settings", "comment": "Settings" },
           { "/": "/new", "comment": "Start a match" },
-          { "/": "/continue", "comment": "The match this phone walked away from" }
+          { "/": "/continue", "comment": "The match this phone walked away from" },
+          { "/": "/link/*", "comment": "A screen's sign-in code, approved by the phone that holds the account (PD-117)" }
         ]
       }
     ]

@@ -3,6 +3,7 @@ package thro.api
 import io.ktor.client.request.get
 import io.ktor.client.request.header
 import io.ktor.client.request.post
+import io.ktor.client.request.put
 import io.ktor.client.request.setBody
 import io.ktor.client.statement.HttpResponse
 import io.ktor.client.statement.bodyAsText
@@ -59,10 +60,16 @@ class ModerationHttpTest {
         // person's is, by a first sign-in, so it holds the player and the claim a principal needs.
         val moderator = Accounts(c, now = { clock }).signIn("apple", "001234.ann", UUID.randomUUID()).accountId
 
+        // PD-118: THRØ's reader, standing in by the words — the wire to TypeSafe is TypeSafeReaderTest's.
+        val reader = object : Reader {
+            override fun readReport(subjectKind: String, subjectName: String, reason: String) =
+                Reading(if (reason.contains("Threats")) "harassment" else "other", 0.81, childSafety = 0.04, severity = 2.2, model = "stub")
+            override fun readName(kind: String, name: String) = NameReading(if (name.contains("Kill")) 0.93 else 0.02, 0.01, "stub")
+        }
         testApplication {
             application {
                 thro(Deps(connect = { TestDatabase.connect() }, authenticator = Authenticator.Bearer(now = { clock }), now = { clock },
-                          providers = mapOf(Provider.APPLE to clientId), keys = keys, moderators = setOf(moderator)))
+                          providers = mapOf(Provider.APPLE to clientId), keys = keys, moderators = setOf(moderator), reader = reader))
             }
             val device = UUID.randomUUID()
             suspend fun post(path: String, body: String, token: String? = null): HttpResponse = client.post(path) {
@@ -90,6 +97,15 @@ class ModerationHttpTest {
             check("the named moderator reads the queue", queue.status.value == 200 && text.contains(reportId))
             check("and each report carries the name somebody read, and what was said",
                 text.contains("\"subject\":\"${Accounts.PLACEHOLDER_NAME}\"") && text.contains("Threats after the match."))
+            check("and THRØ's reading of it, beside it (PD-118)",
+                text.contains(""""raisedBy":"player","reading":{"category":"harassment","confidence":0.81,"childSafety":0.04,"severity":2.20,"model":"stub"}"""))
+            // A chosen name is read as it is chosen: one that reads as abuse is put on the queue by THRØ itself.
+            val named0 = client.put("/v1/me/profile") { header("Authorization", "Bearer $rudeToken"); header("X-Thro-Device", device.toString()); setBody("""{"displayName":"Kill All Refs"}""") }
+            check("a person names themselves", named0.status.value == 200)
+            val named = get("/v1/reports", annToken).bodyAsText()
+            check("and a name that reads as abuse is on the queue, raised by THRØ, for a person to answer",
+                named.contains(""""subject":"Kill All Refs","reason":"THRØ read the name “Kill All Refs” as likely abusive (93%). Nobody reported it; please look.","urgent":false""")
+                    && named.contains(""""raisedBy":"thro","reading":{"category":"abusive_name","confidence":0.93,"childSafety":null,"severity":null,"model":"stub"}"""))
             val bad = post("/v1/reports/$reportId/decisions", """{"outcome":"vanish","note":"gone"}""", annToken)
             check("an answer a report cannot have is refused in words", bad.status.value == 400 && bad.bodyAsText().contains("not one of the answers"))
             val suspended = post("/v1/reports/$reportId/decisions", """{"outcome":"account_suspended","note":"Threats, after a warning."}""", annToken)

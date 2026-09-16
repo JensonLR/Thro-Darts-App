@@ -250,7 +250,7 @@ class PasskeyTest {
 
             // --- the association file -----------------------------------------------------------------
             val aasa = client.get("/.well-known/apple-app-site-association")
-            check("this host tells iOS which app may use its passkeys", aasa.status.value == 200 && aasa.bodyAsText() == """{"webcredentials":{"apps":["TEAMID.app.example"]}}""")
+            check("this host tells iOS which app may use its passkeys, and which links open it (PD-117)", aasa.status.value == 200 && aasa.bodyAsText() == """{"webcredentials":{"apps":["TEAMID.app.example"]},"applinks":{"details":[{"appIDs":["TEAMID.app.example"],"components":[{"/":"/link/*","comment":"a screen's sign-in code, approved by the phone (PD-117)"}]}]}}""")
         }
         println("  $passed passkey properties held")
         assertEquals(29, passed)

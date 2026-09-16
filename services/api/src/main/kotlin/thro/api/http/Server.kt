@@ -53,6 +53,8 @@ import thro.api.WebAuthn
 import java.util.Base64
 import thro.api.MatchRecords
 import thro.api.LeagueTable
+import thro.api.Reader
+import thro.api.Reading
 import thro.api.Safety
 import thro.api.Matches
 import thro.api.Json
@@ -113,6 +115,12 @@ public class Deps(
      * nobody has named a moderator for refuses everyone rather than admitting the first caller.
      */
     public val moderators: Set<UUID> = emptySet(),
+    /**
+     * THRØ's reader of what people write (PD-118): a System One model asked narrow, typed questions about a report and
+     * about a chosen name, whose answers sit beside the report for the person who answers it. Null — the default, and
+     * the state until a key is configured — means no reading, and nothing else changes.
+     */
+    public val reader: Reader? = null,
 )
 
 private class Http(val status: Int, val body: String)
@@ -156,7 +164,15 @@ public fun Application.thro(deps: Deps) {
         "passkey.register" to { r -> passkeyRegister(r.connection(), deps, r.principal, r.body) },
         "passkey.options" to { r -> passkeyOptions(r.connection(), deps, r.body) },
         "passkey.assert" to { r -> passkeyAssert(r.connection(), deps, r.body) },
-        "aasa" to { _ -> if (deps.appleAppIds.isEmpty()) Http(404, """{"error":"no app ids configured"}""") else Http(200, """{"webcredentials":{"apps":[${deps.appleAppIds.joinToString(",") { Contract.q(it) }}]}}""") },
+        // webcredentials: iOS offers this host's passkeys to the app. applinks (PD-117): a link to /link/<code> — a
+        // screen's sign-in code — opens the app rather than Safari, so the phone that holds the account approves it.
+        "aasa" to { _ ->
+            if (deps.appleAppIds.isEmpty()) Http(404, """{"error":"no app ids configured"}""")
+            else {
+                val apps = deps.appleAppIds.joinToString(",") { Contract.q(it) }
+                Http(200, """{"webcredentials":{"apps":[$apps]},"applinks":{"details":[{"appIDs":[$apps],"components":[{"/":"/link/*","comment":"a screen's sign-in code, approved by the phone (PD-117)"}]}]}}""")
+            }
+        },
         // PD-114: a screen signs in by the phone that holds the account.
         "auth.link.start" to { r ->
             val m = Json.parseObject(r.body)
@@ -218,7 +234,10 @@ public fun Application.thro(deps: Deps) {
             if (account == null) Http(403, """{"error":"the development principal has no account"}""")
             else {
                 val m = Json.parseObject(r.body)
-                (m["displayName"] as? String)?.let { Accounts(r.connection(), deps.now).setDisplayName(account, it) }
+                (m["displayName"] as? String)?.let {
+                    Accounts(r.connection(), deps.now).setDisplayName(account, it)
+                    Safety(r.connection(), deps.reader, deps.now).noteName("account", account, it.trim())
+                }
                 (m["ageBand"] as? String)?.let { Friends(r.connection(), deps.now).declareAge(account, it) }
                 // PD-104: an organiser's contact email. Present and empty takes it away; absent leaves it alone.
                 val contact = m.containsKey("contactEmail")
@@ -229,7 +248,16 @@ public fun Application.thro(deps: Deps) {
                 if (m["displayName"] == null && m["ageBand"] == null && !contact) Http(400, """{"error":"displayName, ageBand or contactEmail"}""") else profile(r.connection(), deps, r.principal!!)
             }
         },
-        "teams.create" to { r -> teamly { val m = Json.parseObject(r.body); Teams(r.connection(), deps.now).let { Http(200, it.json(it.create(r.principal!!.subject, str(m, "name"), m["locality"] as? String))) } } },
+        "teams.create" to { r ->
+            teamly {
+                val m = Json.parseObject(r.body)
+                Teams(r.connection(), deps.now).let { teams ->
+                    val made = teams.create(r.principal!!.subject, str(m, "name"), m["locality"] as? String)
+                    Safety(r.connection(), deps.reader, deps.now).noteName("team", made.teamId, made.name)
+                    Http(200, teams.json(made))
+                }
+            }
+        },
         "teams.mine" to { r -> Teams(r.connection(), deps.now).let { Http(200, it.json(it.mine(r.principal!!.subject))) } },
         "teams.front" to { r -> r.role = DbRole.READ; val id = UUID.fromString(r.call.parameters["teamId"]); Teams(r.connection(), deps.now).let { t -> t.front(id, r.principal?.subject)?.let { Http(200, t.json(it)) } ?: Http(404, """{"error":"no such team"}""") } },
         "teams.invite" to { r -> teamly(403) { Teams(r.connection(), deps.now).let { Http(200, it.json(it.invite(r.principal!!.subject, UUID.fromString(r.call.parameters["teamId"])))) } } },
@@ -250,7 +278,7 @@ public fun Application.thro(deps: Deps) {
                 safely {
                     val m = Json.parseObject(r.body)
                     val subject = try { UUID.fromString(str(m, "subjectId")) } catch (e: IllegalArgumentException) { throw IllegalArgumentException("subjectId must be a UUID") }
-                    Safety(r.connection(), deps.now).let { s ->
+                    Safety(r.connection(), deps.reader, deps.now).let { s ->
                         Http(200, s.json(s.report(a, str(m, "subjectKind"), subject, str(m, "reason"))))
                     }
                 }
@@ -260,31 +288,31 @@ public fun Application.thro(deps: Deps) {
             withAccount(r) { a ->
                 safely {
                     val other = try { UUID.fromString(str(Json.parseObject(r.body), "accountId")) } catch (e: IllegalArgumentException) { throw IllegalArgumentException("accountId must be a UUID") }
-                    Safety(r.connection(), deps.now).let { s -> s.block(a, other); Http(200, blocksJson(s.blocking(a))) }
+                    Safety(r.connection(), deps.reader, deps.now).let { s -> s.block(a, other); Http(200, blocksJson(s.blocking(a))) }
                 }
             }
         },
         "safety.unblock" to { r ->
             withAccount(r) { a ->
                 safely {
-                    Safety(r.connection(), deps.now).let { s ->
+                    Safety(r.connection(), deps.reader, deps.now).let { s ->
                         s.lift(a, UUID.fromString(r.call.parameters["accountId"])); Http(200, blocksJson(s.blocking(a)))
                     }
                 }
             }
         },
-        "safety.blocks" to { r -> withAccount(r) { a -> Http(200, blocksJson(Safety(r.connection(), deps.now).blocking(a))) } },
+        "safety.blocks" to { r -> withAccount(r) { a -> Http(200, blocksJson(Safety(r.connection(), deps.reader, deps.now).blocking(a))) } },
         // The fourth thing the stores ask for is that somebody answers. Two routes, closed to everyone but
         // the people named to answer: the queue as it should be worked, and the answer itself.
         "safety.queue" to { r ->
-            withModerator(r, deps.moderators) { _ -> Http(200, queueJson(Safety(r.connection(), deps.now).queue())) }
+            withModerator(r, deps.moderators) { _ -> Http(200, queueJson(Safety(r.connection(), deps.reader, deps.now).queue())) }
         },
         "safety.decide" to { r ->
             withModerator(r, deps.moderators) { a ->
                 safely {
                     val m = Json.parseObject(r.body)
                     val report = UUID.fromString(r.call.parameters["reportId"])
-                    val decision = Safety(r.connection(), deps.now).decide(report, str(m, "outcome"), str(m, "note"), a)
+                    val decision = Safety(r.connection(), deps.reader, deps.now).decide(report, str(m, "outcome"), str(m, "note"), a)
                     Http(200, """{"decisionId":"$decision","reportId":"$report"}""")
                 }
             }
@@ -310,7 +338,7 @@ public fun Application.thro(deps: Deps) {
             withAccount(r) { a ->
                 safely {
                     val asked = (Json.parseObject(r.body)["version"] as? String)?.takeIf { it.isNotBlank() } ?: Safety.TERMS_VERSION
-                    Safety(r.connection(), deps.now).acceptTerms(a, asked)
+                    Safety(r.connection(), deps.reader, deps.now).acceptTerms(a, asked)
                     Http(200, """{"version":${Contract.q(asked)},"accepted":true}""")
                 }
             }
@@ -1024,8 +1052,16 @@ private fun queueJson(queued: List<Safety.Queued>): String =
         """{"reportId":"${q.report.reportId}","subjectKind":${Contract.q(q.report.subjectKind)},""" +
             """"subjectId":"${q.report.subjectId}","subject":${Contract.q(q.subject)},"reason":${Contract.q(q.report.reason)},""" +
             """"urgent":${q.report.urgent},"reportedAt":"${q.report.reportedAt}",""" +
-            """"answerDueAt":"${q.report.answerDueAt}","decisions":${q.decisions}}"""
+            """"answerDueAt":"${q.report.answerDueAt}","decisions":${q.decisions},""" +
+            """"raisedBy":${if (q.report.raisedByAPerson) "\"player\"" else "\"thro\""},"reading":${readingJson(q.reading)}}"""
     } + "]}"
+
+/** THRØ's reading of a report (PD-118), or null: a hint beside it, in the words the queue shows. A NaN is a number the reading did not have. */
+private fun readingJson(r: Reading?): String {
+    if (r == null) return "null"
+    fun n(d: Double) = if (d.isNaN()) "null" else "%.2f".format(java.util.Locale.ROOT, d)
+    return """{"category":${Contract.q(r.category)},"confidence":${n(r.categoryConfidence)},"childSafety":${n(r.childSafety)},"severity":${n(r.severity)},"model":${Contract.q(r.model)}}"""
+}
 
 /** A safety refusal is an answer too: the sentence to show, with 400 unless the refusal names a status. */
 private fun safely(status: Int = 400, block: () -> Http): Http = try { block() } catch (e: Safety.Refused) {
@@ -1196,7 +1232,7 @@ private fun profile(c: Connection, deps: Deps, p: Principal): Http {
     val account = p.accountId
         ?: return Http(200, """{"accountId":null,"playerId":"${p.subject}","displayName":null,"named":false,"ageBand":"unknown",$terms,"acceptedTerms":false,"consents":[],"note":"development principal: no account"}""")
     val pr = Accounts(c, deps.now).profile(account) ?: return Http(404, """{"error":"no such account"}""")
-    val accepted = Safety(c, deps.now).hasAcceptedTerms(account)
+    val accepted = Safety(c, deps.reader, deps.now).hasAcceptedTerms(account)
     // What they have agreed to, for the same reason the terms travel here (PD-050, PD-088): a screen
     // with a switch on it has to know which way the switch is set, and a fact the client must remember
     // to go and ask for separately is a fact some build ships without.

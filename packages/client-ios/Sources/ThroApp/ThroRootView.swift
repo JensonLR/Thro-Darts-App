@@ -293,6 +293,8 @@ public struct ThroRootView: View {
     /// happens on it — a name saving, a way in being added, an erasure finishing — instead of
     /// vanishing the moment the account stops saying `signedIn`.
     @State private var profileOpen: ProfileOpening?
+    /// PD-117: a screen's code that arrived before the account had answered; opened on the card once it has.
+    @State private var screenAwaitingAccount: String?
     /// The You tab's Friends button opens the account screen on Friends rather than on its front.
     @State private var openingFriends = false
     @StateObject private var accountHolder = AccountHolder()
@@ -403,6 +405,9 @@ public struct ThroRootView: View {
             if let route = ThroSpotlight.route(for: activity) { router.go(route) }
         }
         .onChange(of: router.pending) { _, _ in follow() }
+        .onChange(of: account?.profile?.accountId) { _, id in
+            if id != nil, let code = screenAwaitingAccount { screenAwaitingAccount = nil; openAccount(.screen(code)) }
+        }
         .task {
             follow()
             reindex()
@@ -533,6 +538,14 @@ public struct ThroRootView: View {
                 store.flow = nil
                 store.tab = .play
             }
+        case let .screen(code):
+            // PD-117: the profile's Sign in on a screen card, with the code in. On a cold launch the account has
+            // not answered yet, so the code waits for it; somebody not signed in sees the welcome, and the card
+            // when they are.
+            viewing = nil; showingSettings = false; store.flow = nil
+            store.tab = .you
+            if let profile = account?.profile, profile.accountId != nil { openAccount(.screen(code)) }
+            else { screenAwaitingAccount = code }
         }
     }
 

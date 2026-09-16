@@ -4,6 +4,7 @@ import io.ktor.server.cio.CIO
 import io.ktor.server.engine.embeddedServer
 import java.sql.Connection
 import java.util.UUID
+import thro.api.TypeSafeReader
 import thro.api.Db
 import thro.api.HttpJwkSource
 import thro.api.Provider
@@ -65,6 +66,12 @@ public fun main() {
     // in a policy, which is the failure the DPIA was written to avoid.
     Retention.everyDay(connect)
 
+    // PD-118: THRØ reads each report, and each chosen name, with TypeSafe's System One model when a key is set. The key
+    // stays in this process; the phone and the web never see it. Without it, nothing is read and nothing changes.
+    val reader = env("THRO_TYPESAFE_API_KEY")?.let { TypeSafeReader(it) }
+    if (reader == null) System.err.println("note: no reader (THRO_TYPESAFE_API_KEY); reports and names are not read, and the queue orders by the hour they are due")
+    else System.err.println("reader: TypeSafe jev-latest reads reports and names as they arrive")
+
     val port = env("PORT")?.toIntOrNull() ?: 8080
-    embeddedServer(CIO, port = port) { thro(Deps(connect, authenticator, providers = providers, webProviders = webProviders, keys = HttpJwkSource(), relyingParty = rp, appleAppIds = appleAppIds, moderators = moderators)) }.start(wait = true)
+    embeddedServer(CIO, port = port) { thro(Deps(connect, authenticator, providers = providers, webProviders = webProviders, keys = HttpJwkSource(), relyingParty = rp, appleAppIds = appleAppIds, moderators = moderators, reader = reader)) }.start(wait = true)
 }

@@ -96,10 +96,16 @@ public struct YourProfileScreen: View {
     @State private var screenCode = ""
     @State private var screenNote: String?
     @State private var approving = false
+    /// PD-117: the code arrived by a link, so the card leads the page and says where the code came from.
+    @State private var screenFromLink = false
 
     /// The lists that used to live behind a separate Account screen, and the blocked list that has joined
     /// them (PD-050). They are about the person, so they are reached from the page about the person.
-    public enum Sub: Sendable { case friends, inbox, discovery, blocked }
+    public enum Sub: Sendable, Equatable {
+        case friends, inbox, discovery, blocked
+        /// Not a list: the page itself, opened on *Sign in on a screen* with this code in (PD-117).
+        case screen(String)
+    }
 
     /// The account this page is about. `Profile.accountId` is optional because a development
     /// principal has none; a page about nobody is not a page, so the caller passes one that has one.
@@ -116,7 +122,14 @@ public struct YourProfileScreen: View {
         self.onBack = onBack
         _name = State(initialValue: profile.named ? (profile.displayName ?? "") : "")
         _contactEmail = State(initialValue: profile.contactEmail ?? "")
-        _showing = State(initialValue: opening)
+        // A code from a link opens the page itself on its card, not a list.
+        if case let .screen(code)? = opening {
+            _showing = State(initialValue: nil)
+            _screenCode = State(initialValue: code.uppercased())
+            _screenFromLink = State(initialValue: true)
+        } else {
+            _showing = State(initialValue: opening)
+        }
     }
 
     /// The account's own profile while there is one; the one the page opened on once there is not,
@@ -159,6 +172,7 @@ public struct YourProfileScreen: View {
         case .inbox: InboxScreen(account: account, onBack: back)
         case .discovery: DiscoveryScreen(account: account, onBack: back)
         case .blocked: BlockedAccountsScreen(safety: safety, api: account.api, onBack: back)
+        case .screen: EmptyView()   // never a list: `init` turns it into the page itself, on its card
         }
     }
 
@@ -170,6 +184,8 @@ public struct YourProfileScreen: View {
                     if let problem = account.problem {
                         Snackbar(problem, tone: .error, actionLabel: "OK") { account.dismissProblem() }
                     }
+                    // PD-117: a code that arrived by a link is the reason the page opened, so its card leads.
+                    if screenFromLink { signInAScreen }
                     band
                     beingSeen
                     ratingCard
@@ -182,7 +198,7 @@ public struct YourProfileScreen: View {
                         CardRow(icon: .shield, label: "Blocked", value: blockedLine) { showing = .blocked }
                     }
                     waysIn
-                    signInAScreen
+                    if !screenFromLink { signInAScreen }
                     CardGroup("From THRØ") {
                         CardRow(icon: .bell, label: "Your inbox", value: "Tasks waiting on you") { showing = .inbox }
                         CardDivider()
@@ -481,14 +497,17 @@ public struct YourProfileScreen: View {
     /// A screen — the league's laptop, the pub's browser — signs in by this phone (PD-114): the screen shows a code,
     /// the person types it here, and the screen is signed in as this account. No password, nothing to remember.
     private var signInAScreen: some View {
-        CardGroup("Sign in on a screen", footnote: "On thro.uk, choose Sign in with your phone. It shows a six-character code; type it here and that screen is signed in as you.") {
+        CardGroup(screenFromLink ? "A screen asked for you" : "Sign in on a screen",
+                  footnote: screenFromLink
+                    ? "The link you opened carries this code. If the screen showing it is yours, sign it in; if you do not know it, do nothing — a code does nothing until you say so, and it dies in five minutes."
+                    : "On thro.uk, choose Sign in with your phone. It shows a six-character code; type it here and that screen is signed in as you.") {
             VStack(alignment: .leading, spacing: ThroSpacing.spacing2) {
                 ThroTextField("The code on the screen", text: $screenCode, placeholder: "K7TQ2M")
                     #if os(iOS)
                     .textInputAutocapitalization(.characters)
                     .autocorrectionDisabled()
                     #endif
-                ThroButton("Sign that screen in", variant: .primary, size: .medium) { Task { await approveScreen() } }
+                ThroButton(screenFromLink ? "Yes, sign that screen in" : "Sign that screen in", variant: .primary, size: .medium) { Task { await approveScreen() } }
                     .disabled(screenCode.trimmingCharacters(in: .whitespaces).count < 6 || account.working != nil || approving)
                 if let screenNote { Note(screenNote) }
             }
@@ -498,7 +517,7 @@ public struct YourProfileScreen: View {
 
     private func approveScreen() async {
         approving = true; defer { approving = false }
-        do { try await account.api.approveScreen(code: screenCode); screenNote = "Done — that screen is signed in as you."; screenCode = "" }
+        do { try await account.api.approveScreen(code: screenCode); screenNote = "Done — that screen is signed in as you."; screenCode = ""; screenFromLink = false }
         catch { screenNote = (error as? APIError)?.message ?? error.localizedDescription }
     }
 

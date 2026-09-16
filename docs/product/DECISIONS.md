@@ -5032,3 +5032,85 @@ only the founder can create.
 
 **Evidence.** `AuthTest` (44 checks): a token for the web's Services ID is accepted as this app's and finds the same
 account; `/v1/auth/providers` says what it may offer and nothing more.
+
+## PD-117 — The phone that is already here
+
+**17 September 2026.** The founder chose *Use a passkey* on thro.uk on an iPhone and got Apple's sheet: *You don't have any
+passwords or passkeys saved for this website — Scan QR Code / Use Security Key.* True, and useless: the phone in their hand
+holds the account, in THRØ, two taps away. The web offered the phone as a code to type into itself.
+
+**Decided.**
+
+1. **On a phone, the first act is *Open THRØ*.** The sign-in panel detects a phone (user agent, or a coarse pointer
+   with touch) and leads with a button whose address is `thro://link/<code>`: the app opens on the profile's *Sign in
+   on a screen* card with the code already in and one question — *Yes, sign that screen in*. Coming back to the tab,
+   the page asks THRØ at once (`visibilitychange`) rather than waiting out its poll. The code and the three steps stay
+   under the button, for THRØ on another phone.
+2. **The same address from anywhere.** `https://thro.uk/link/<code>` is a universal link: the association file's
+   `applinks` names `/link/*`, the app's entitlement names `applinks:thro.uk`, and `ThroRoute.screen` reads both
+   spellings (the same parser, as ADR-011 promised). A phone without THRØ gets `link.html` — the code, *Open THRØ*,
+   and what to do — by a static-site rewrite of `/link/*`.
+3. **Nothing is approved by arriving.** The card leads the page and says where the code came from; the person taps.
+   A link somebody else sent cannot sign their screen in as you without your finger.
+4. **The passkey stays, second, and says what it is**: *Use a passkey you made in THRØ*. Its refusals are put into
+   words — the browser's own is a W3C address and a shrug — and on a phone the words point back to the app.
+5. **One gate everywhere.** The season page of the organiser's desk still had the old passkey-only gate; it now uses
+   the same panel as the lobby, the knockouts and the moderation page.
+
+**Not done.** A QR code on the laptop's panel, for a phone's camera to scan into the app — the universal link makes
+it possible; drawing a QR needs an encoder this site does not carry yet. Somebody not signed in on the phone sees the
+welcome and loses the code; they sign in and tap the link again.
+
+**Evidence.** `RoutingTests` (13): the two spellings, the round trip, a link with no code names nothing.
+`PasskeyTest`: the association file carries `applinks` for `/link/*`. `tools/check_aasa.py`: the committed file and
+the parser agree on twelve paths. Looked at: the panel on an iPhone at 375 points, `link.html`, the profile opened on
+the card by `-ThroScreen link/K7TQ2M`.
+
+## PD-118 — THRØ reads what people write, with TypeSafe's System One model
+
+**17 September 2026.** THRØ promises to answer every report within a day, and one person answers them. The founder
+asked for Jev, TypeSafe's System One model, to be put to use: a small, fast model that returns typed probabilities
+rather than prose. The right first use is the one where a probability changes what a person sees first.
+
+**Decided.**
+
+1. **Three narrow questions per report, asked together as it arrives.** *What is it about* (a Choice over seven
+   categories THRØ names), *might a child be at risk* (a Noul), *how serious is it* (a Score over four levels that
+   each stand on their own). The state is the report's words, the name reported and what kind of thing it is, and one
+   sentence of context (a pub darts app in the UK; players may be under 18). No account id, no device, no reporter.
+2. **The answers sit beside the report, never in its way.** `safety.judgment` (V054) holds the category, its
+   confidence, the child-safety probability and the severity, one row per report, gone with the report. The queue
+   shows *THRØ's reading: harassment (81% sure) · clearly against the rules · not about a child. A hint, not an
+   answer.* The person decides, as before, with the same six answers.
+3. **The reading orders the queue and can move a report to the front.** Within the unanswered, urgent first, then
+   by severity, then by the hour due. A child-safety probability at or above **0.85** makes the report urgent — read
+   before it is written, because a report is append-only. The threshold is conservative, named once (`Safety.ACTS_AT`),
+   and to be revisited against real reports.
+4. **A chosen name is read as it is chosen.** A display name (`PUT /v1/me/profile`) and a team's name (`POST
+   /v1/teams`) are asked two Nouls — *abusive*, *impersonates*. At or above 0.85 THRØ raises a report of its own —
+   *THRØ read the name "…" as likely abusive (93%). Nobody reported it; please look.* — with no reporter
+   (`reported_by` is nullable for exactly that row) and a reading beside it. Nothing is refused and nothing is hidden:
+   a person answers within the day, as for any report. A name already waiting is not reported twice.
+5. **Nothing a reader does can reach a report.** A refusal, nonsense, a timeout (three seconds) or a failure is no
+   reading; the report is written exactly as it would have been. Without `THRO_TYPESAFE_API_KEY` there is no reader
+   at all, and the queue orders by the hour due as it did.
+6. **The key stays on the server.** The phone and the web never see it or the endpoint. The model is `jev-latest`.
+
+**Why these and not more.** A name refused at the door by a model would be a decision nobody made; a report answered
+by one would be a promise nobody kept. Both stay a person's. What the model is good for — reading a thousand words in
+a hundred milliseconds and saying which to read first — is exactly what a one-person queue lacks.
+
+**What the founder does (once).**
+- Read TypeSafe's terms and its data-processing terms, and note where it processes; the ROPA row is written to be
+  completed from them.
+- console.typesafe.ai → create an API key.
+- Render, service thro-api-staging → Environment → add `THRO_TYPESAFE_API_KEY=<the key>`. Render redeploys. The
+  next report is read; `/v1/reports` carries `reading`.
+- Watch the first readings against your own judgment on the moderation page; if the 0.85 line is wrong, it is one
+  number.
+
+**Evidence.** `TypeSafeReaderTest` (3): the wire — bearer key, model, the three questions and their shapes, the
+state; a refusal, nonsense, an incomplete answer, a slow one and an unreachable host are each no reading.
+`JudgmentTest` (4): the reading beside the report, the queue's order, a child moved to the front, no reader or a
+failing one changing nothing, a name that reads badly raising THRØ's own report once and an ordinary one raising
+none. `ModerationHttpTest`: the reading and *raised by THRØ* over the wire. `SafetyTest` (6) unchanged.
