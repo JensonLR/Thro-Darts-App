@@ -11,13 +11,13 @@ audit. Kept current during the build; **not** a deliverable, and never a substit
 - `https://thro.uk` (Render static site, auto-deploys `apps/web/**` from branch `claude/thro-production-build-je2mkf`,
   fronted by Cloudflare): leagues, tables, fixtures, wall (`/tv`), organiser (`organiser.html`), moderation
   (`moderation.html`), privacy, terms, deletion, notices.
-- `https://api.thro.uk` (Render web service `thro-api-staging`, free instance, Frankfurt): production at **V051**,
-  commit **af4b188** (PD-110); the web at 826f714 (polish). `/healthz` reports database, schema version, code version and commit.
-- Neon production branch `br-icy-leaf-zaq0grqg` (project `round-darkness-99300686`), at V051. Restore points are
+- `https://api.thro.uk` (Render web service `thro-api-staging`, free instance, Frankfurt): production at **V052**,
+  commit **24286ec** (PD-112/PD-113); the web at 7d76775 (the organiser's desk, looked at). `/healthz` reports database, schema version, code version and commit.
+- Neon production branch `br-icy-leaf-zaq0grqg` (project `round-darkness-99300686`), at V052. Restore points are
   branches: the pipeline's `pipeline-restore-point-before-<sha>-<stamp>` (newest three kept) and the founder's
   hand-made `restore-point-before-*` (never removed).
-- iPhone on TestFlight: build 11 VALID (V050: the rating card); build 12 failed (the half-staged PD-106 tree); build 13
-  **VALID** (from 826f714: PD-106..PD-110 on the phone), in the *Founders* group.
+- iPhone on TestFlight: build 13 VALID (PD-106..PD-110); build 14 dispatched from 5ce2de1 (PD-111 on the phone, the
+  desk cards, the cold-start Discover fix) — its state is in the final report of 16 September.
   Internal group *Founders*: the founder and the cofounder (Ethan).
 
 **Deploy pipeline** — `.github/workflows/deploy-api.yml` on every push touching the API or its packages: checks →
@@ -30,7 +30,7 @@ entitlements and refused if the signed app lacks Sign in with Apple or the passk
 
 PD-095 deploy pipeline · PD-096 retention sweep · PD-097 Android notice · PD-098 TestFlight entitlements ·
 PD-099 fixtures · PD-100 start a league · PD-101 moderation page · PD-102 ways in · PD-103 decisions enforce +
-league management · PD-104 organiser email · PD-105 provisional rating · PD-106 the team's fixture · PD-107 registrations · PD-108 moving a fixture by agreement · PD-109 a knockout · PD-110 a friendly · PD-111 rounds · PD-112 the organiser's remaining acts · PD-113 invitationals.
+league management · PD-104 organiser email · PD-105 provisional rating · PD-106 the team's fixture · PD-107 registrations · PD-108 moving a fixture by agreement · PD-109 a knockout · PD-110 a friendly · PD-111 rounds · PD-112 the organiser's remaining acts · PD-113 invitationals · two design passes (web, phone).
 
 ## Completion matrix (from four read-only audits, 16 September; details in PD-106 and CHANGE_RECORD)
 
@@ -68,12 +68,15 @@ league management · PD-104 organiser email · PD-105 provisional rating · PD-1
 4. ~~Web polish~~ **done**: a 420px breakpoint, `fail()` keeps the page and offers *Try again*, fixtures → table.
 5. NEEDS-DECISION (founder): the deploy branch's name; moving `PlaytestServer` out of the image.
 
-## Known gaps after PD-110 (small, recorded rather than hidden)
+## Known gaps after PD-113 (small, recorded rather than hidden)
 
-- `Friendlies.cite` and `TeamFixtures.cite` check that the citer played the match and runs one of the two teams, not
-  that the match's other participant belongs to the other team. Display only; no table or rating reads it.
-- `Registrations.list` labels `created_at` as `sentAt`; the send time is the submission's transition, not its creation.
+- ~~cite's other seat~~, ~~sentAt~~: closed 16 September (PD-108 addendum commit).
 - The PD-108 and PD-110 HTTP tests were written before their routes but their first red run was not watched.
+- Not looked at in the simulator: the challenge form on another team's front; *Name the match* with matches present;
+  landscape and iPad for the desk cards. Not looked at in a browser: the moderation page signed in.
+- How to look again: `THRO_DEV_AUTH=1 PGHOST=localhost … gradle -p services/api serve`, `python3 tools/web_serve.py`,
+  a browser at 375 points with `sessionStorage.thro.session` set and `fetch` patched to add `X-Thro-Dev-Subject`;
+  on the phone, `xcrun simctl launch <device> app.thro.darts -ThroScreenshotAccount adult -ThroScreen tab/you`.
 
 ## Founder's stated positions (do not re-ask)
 
