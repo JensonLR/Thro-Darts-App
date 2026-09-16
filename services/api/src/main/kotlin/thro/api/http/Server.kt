@@ -65,6 +65,7 @@ import thro.api.Ratings
 import thro.api.Registrations
 import thro.api.Rearrangements
 import thro.api.Editions
+import thro.api.Friendlies
 import thro.api.Relations
 import thro.api.Secretary
 import thro.api.VisitCommand
@@ -469,6 +470,31 @@ public fun Application.thro(deps: Deps) {
         "me.seasons" to { r -> SeasonPlanning(r.connection()).let { Http(200, it.runsJson(it.seasonsRunBy(r.principal!!.subject))) } },
         // PD-105: the provisional rating. Read — and replayed when the evidence has moved — as `app_rating`, the one
         // role that may write the rating tables and may not write a match.
+        // PD-110: a friendly between two teams — challenge, read, answer, withdraw, cite the match.
+        "teams.friendlies" to { r -> friendlies { val team = UUID.fromString(r.call.parameters["teamId"]); Friendlies(r.connection(), deps.now).let { Http(200, it.json(it.ofTeam(team, r.principal!!.subject), team)) } } },
+        "teams.challenge" to { r ->
+            friendlies {
+                val m = Json.parseObject(r.body)
+                val team = UUID.fromString(r.call.parameters["teamId"])
+                val to = UUID.fromString(m["toTeamId"] as? String ?: throw IllegalArgumentException("toTeamId is required"))
+                val at = try { Instant.parse(m["playAt"] as? String ?: "") } catch (e: Exception) { throw IllegalArgumentException("playAt is not a date-time") }
+                Friendlies(r.connection(), deps.now).let { Http(200, it.json(it.challenge(team, to, at, m["message"] as? String, r.principal!!.subject), team)) }
+            }
+        },
+        "friendlies.answer" to { r ->
+            friendlies {
+                val m = Json.parseObject(r.body)
+                Friendlies(r.connection(), deps.now).let { Http(200, it.json(it.answer(UUID.fromString(r.call.parameters["friendlyId"]), m["answer"] as? String ?: "", m["note"] as? String, r.principal!!.subject))) }
+            }
+        },
+        "friendlies.withdraw" to { r -> friendlies { Friendlies(r.connection(), deps.now).let { Http(200, it.json(it.withdraw(UUID.fromString(r.call.parameters["friendlyId"]), r.principal!!.subject))) } } },
+        "friendlies.cite" to { r ->
+            friendlies {
+                val m = Json.parseObject(r.body)
+                val match = UUID.fromString(m["matchId"] as? String ?: throw IllegalArgumentException("matchId is required"))
+                Friendlies(r.connection(), deps.now).let { Http(200, it.json(it.cite(UUID.fromString(r.call.parameters["friendlyId"]), match, r.principal!!.subject))) }
+            }
+        },
         // PD-109: a knockout run on THRØ — open, enter, withdraw, check in, close, draw.
         "events.open" to { r ->
             editions {
@@ -1016,6 +1042,11 @@ private fun shown(r: Req, season: UUID, block: () -> Http): Http {
     if (!allowed) return Http(404, """{"error":"THRØ has no such league season."}""")
     r.role = DbRole.READ
     return block()
+}
+
+/** A friendly step refused is an answer, with the status that says which kind (PD-110). */
+private fun friendlies(block: () -> Http): Http = try { block() } catch (e: Friendlies.Refused) {
+    Http(e.status, """{"error":${Contract.q(e.why)}}""")
 }
 
 /** An event step refused is an answer, with the status that says which kind (PD-109). */

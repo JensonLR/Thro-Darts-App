@@ -4823,3 +4823,35 @@ This decision puts the edition on the wire, on the organiser web, and on the pho
 
 **Evidence.** `EventHttpTest` (32 checks, red first on the missing route), `CompetitionTest` and `EventsTest` still
 green, `NetTests.testAnEventIsEnteredWithdrawnAndCheckedIn`, the contract regenerated.
+
+## PD-110 — A friendly between two teams
+
+**16 September 2026.** The last item on the programme's list with nothing in the repository: a game two teams agree
+outside any season. A league fixture is a season's row (`league_fixture.league_season_id` is NOT NULL, rightly), so a
+friendly is its own table rather than a fixture with a hole where the season should be.
+
+**Decided.**
+
+1. **Shape.** V051 `competition.friendly`: from team, to team, when to play, an optional venue and message, a state
+   (`proposed`, `accepted`, `declined`, `withdrawn`), who proposed and who answered with a note, and the match it was
+   played in — cited once, and only on an accepted friendly (a CHECK holds it). One open challenge between a pair of
+   teams at a time, in either direction (a partial unique index over `least`/`greatest`). Readable by `app_read` and
+   `app_competition`; written by `app_competition`.
+2. **Who.** Challenge: whoever runs the challenging team (`team.manage`); a team cannot challenge itself; the game is
+   in the future; the other team exists and is not dissolved. Read: the members of either team, with `direction`
+   (sent or received). Answer: whoever runs the challenged team — `accepted`, or `declined` with a reason. Withdraw:
+   the challenger, while unanswered. Cite: somebody who played the match and runs one of the two teams, once — the
+   rule a league fixture keeps (PD-106).
+3. **What a friendly is not.** It reaches no league table and touches no rating; what a friendly counts for is
+   OD-001's question, not this decision's. No Secretary task is derived from it: the challenged team reads it on its
+   own page, and a phone that wants a nudge has the team's inbox for league business, not for a game between mates.
+4. **Surfaces.** The phone: a team's front gains *Friendlies* for its members — sent and received, each with its
+   state, the message, the answer, *Accept* / *Decline* (with a reason) for whoever runs the team, and *Withdraw* for
+   the challenger; and on another team's front, for somebody who runs a team, *Challenge them to a friendly* with a
+   date and a message. No web surface: friendlies are the phone's.
+
+**Not decided here.** Rearranging an accepted friendly (propose a new one and withdraw the old); a venue on the wire
+(the table carries one); citing from the phone's match record screen.
+
+**Evidence.** `FriendlyHttpTest` (31 checks), `check_migrations.py` green on V051, `NetTests.testAFriendlyIsChallengedReadAndAnswered`,
+the contract regenerated.

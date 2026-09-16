@@ -284,6 +284,16 @@ public struct TeamFrontScreen: View {
                     }
                 }
 
+                // Friendlies (PD-110): the team's own members read them and whoever runs it answers; somebody who runs
+                // another team challenges from here.
+                if let api {
+                    if front.yourRole != nil {
+                        FriendliesSection(api: api, teamId: front.teamId, runsIt: TeamFrontScreen.runsIt(front.yourRole))
+                    } else {
+                        ChallengeSection(api: api, target: front)
+                    }
+                }
+
                 // What the team says of itself, under what the league published about it (PD-049).
                 TeamLeagueSay(teams: teams, front: front, api: api)
                 SectionHeader("Roster", meta: "\(front.roster.count)").padding(.top, ThroSpacing.spaceSectionGap)
@@ -475,5 +485,156 @@ public struct JoinOrStartTeamScreen: View {
             }
         }
         .background(ThroColor.colorBackgroundPrimary.ignoresSafeArea())
+    }
+}
+
+// MARK: - Friendlies (PD-110)
+
+/// A team's friendlies, sent and received. Whoever runs the team accepts or declines a received one and withdraws an
+/// unanswered sent one; everybody on the team reads them. Every refusal is the server's words.
+struct FriendliesSection: View {
+    let api: ThroAPI
+    let teamId: UUID
+    let runsIt: Bool
+    @State private var list: [Friendly]?
+    @State private var declining: UUID?
+    @State private var note = ""
+    @State private var said: String?
+    @State private var busy = false
+
+    var body: some View {
+        SectionHeader("Friendlies", meta: list.map { "\($0.count)" } ?? "").padding(.top, ThroSpacing.spaceSectionGap)
+        if let list {
+            if list.isEmpty {
+                Text("No friendlies yet. Open another team's page to challenge them.")
+                    .thro(ThroTypography.body).foregroundStyle(ThroColor.colorTextSecondary).fixedSize(horizontal: false, vertical: true).padding(.top, ThroSpacing.spacing2)
+            }
+            ThroDivider().padding(.top, ThroSpacing.spacing2)
+            ForEach(list) { f in
+                VStack(alignment: .leading, spacing: ThroSpacing.spacing1) {
+                    Text(f.direction == "sent" ? "v \(f.toTeam)" : "\(f.fromTeam) challenge you")
+                        .thro(ThroTypography.bodyLarge.weight(.semibold)).foregroundStyle(ThroColor.colorTextPrimary)
+                    Text(f.playAt.formatted(date: .abbreviated, time: .shortened) + " · " + Self.standing(f))
+                        .thro(ThroTypography.metadata).foregroundStyle(ThroColor.colorTextSecondary)
+                    if let m = f.message { Text("“\(m)”").thro(ThroTypography.body).foregroundStyle(ThroColor.colorTextSecondary).fixedSize(horizontal: false, vertical: true) }
+                    if runsIt && f.state == "proposed" {
+                        if f.direction == "received" {
+                            if declining == f.friendlyId {
+                                ThroTextField("Why not?", text: $note, placeholder: "cup night")
+                                HStack(spacing: ThroSpacing.spacing2) {
+                                    ThroButton("Decline", variant: .primary, size: .medium) { Task { await answer(f, "declined") } }
+                                        .disabled(note.trimmingCharacters(in: .whitespaces).count < 3 || busy)
+                                    ThroTextButton("Not yet", tone: .quiet) { declining = nil }
+                                }
+                            } else {
+                                HStack(spacing: ThroSpacing.spacing2) {
+                                    ThroButton("Accept", variant: .primary, size: .medium) { Task { await answer(f, "accepted") } }.disabled(busy)
+                                    ThroButton("Decline", variant: .secondary, size: .medium) { declining = f.friendlyId; note = "" }.disabled(busy)
+                                }
+                            }
+                        } else {
+                            ThroButton("Withdraw", variant: .secondary, size: .medium) { Task { await withdraw(f) } }.disabled(busy)
+                        }
+                    }
+                }
+                .padding(.vertical, ThroSpacing.spacing3)
+                ThroDivider()
+            }
+        } else {
+            Text("One moment…").thro(ThroTypography.body).foregroundStyle(ThroColor.colorTextSecondary).padding(.top, ThroSpacing.spacing2)
+                .task { await load() }
+        }
+        if let said { Note(said).padding(.top, ThroSpacing.spacing2) }
+    }
+
+    static func standing(_ f: Friendly) -> String {
+        switch f.state {
+        case "proposed": return f.direction == "sent" ? "waiting for \(f.toTeam)" : "waiting for your answer"
+        case "accepted": return f.matchId != nil ? "played, scored on THRØ" : "agreed" + (f.answerNote.map { " — \($0)" } ?? "")
+        case "declined": return "declined" + (f.answerNote.map { " — \($0)" } ?? "")
+        case "withdrawn": return "withdrawn"
+        default: return f.state
+        }
+    }
+
+    private func load() async {
+        do { list = try await api.friendlies(team: teamId); said = nil }
+        catch { list = []; said = (error as? APIError)?.message ?? error.localizedDescription }
+    }
+
+    private func answer(_ f: Friendly, _ answer: String) async {
+        busy = true; defer { busy = false }
+        do {
+            _ = try await api.answerFriendly(f.friendlyId, answer: answer, note: declining == f.friendlyId ? note.trimmingCharacters(in: .whitespaces) : nil)
+            declining = nil; said = answer == "accepted" ? "Agreed, in your name." : "Declined, with your reason kept."
+            await load()
+        } catch { said = (error as? APIError)?.message ?? error.localizedDescription }
+    }
+
+    private func withdraw(_ f: Friendly) async {
+        busy = true; defer { busy = false }
+        do { _ = try await api.withdrawFriendly(f.friendlyId); said = "Withdrawn."; await load() }
+        catch { said = (error as? APIError)?.message ?? error.localizedDescription }
+    }
+}
+
+/// On another team's page: somebody who runs a team challenges them to a friendly, from the team they run.
+struct ChallengeSection: View {
+    let api: ThroAPI
+    let target: TeamFront
+    @State private var mine: [TeamSummary]?
+    @State private var from: UUID?
+    @State private var when = Date().addingTimeInterval(7 * 24 * 3600)
+    @State private var message = ""
+    @State private var open = false
+    @State private var said: String?
+    @State private var busy = false
+
+    private var runnable: [TeamSummary] { (mine ?? []).filter { $0.role == "admin" || $0.role == "captain" || $0.role == "vice_captain" } }
+
+    var body: some View {
+        if let mine, !runnable.isEmpty {
+            SectionHeader("A friendly").padding(.top, ThroSpacing.spaceSectionGap)
+            if open {
+                if runnable.count > 1 {
+                    ForEach(runnable) { t in
+                        Button { from = t.teamId } label: {
+                            HStack {
+                                Icon(from == t.teamId ? .circleCheck : .circle, size: 20).foregroundStyle(from == t.teamId ? ThroColor.colorBackgroundBrand : ThroColor.colorTextSecondary)
+                                Text("From \(t.name)").thro(ThroTypography.body).foregroundStyle(ThroColor.colorTextPrimary)
+                                Spacer()
+                            }
+                            .frame(minHeight: ThroSpacing.touchTargetMinimum)
+                            .throRowTapTarget()
+                        }
+                        .buttonStyle(ThroPressStyle(radius: ThroSpacing.radiusCard, pressedFill: ThroColor.colorSurfaceSecondary, scales: false))
+                    }
+                }
+                DatePicker("When", selection: $when, in: Date()...)
+                    .thro(ThroTypography.body).foregroundStyle(ThroColor.colorTextPrimary).padding(.top, ThroSpacing.spacing2)
+                ThroTextField("A message", text: $message, placeholder: "Friday, our board, first to five?")
+                HStack(spacing: ThroSpacing.spacing2) {
+                    ThroButton("Challenge \(target.name)", variant: .primary, size: .medium) { Task { await send() } }.disabled(busy || from == nil)
+                    ThroTextButton("Leave it", tone: .quiet) { open = false }
+                }
+                Note("They accept or decline from their team's page. A friendly reaches no league table.").padding(.top, ThroSpacing.spacing2)
+            } else {
+                ThroButton("Challenge them to a friendly", variant: .secondary, size: .medium) { open = true; if from == nil { from = runnable.first?.teamId } }
+                    .padding(.top, ThroSpacing.spacing3)
+            }
+            if let said { Note(said).padding(.top, ThroSpacing.spacing2) }
+            let _ = mine
+        } else if mine == nil {
+            Color.clear.frame(height: 1).task { mine = (try? await api.myTeams()) ?? [] }
+        }
+    }
+
+    private func send() async {
+        guard let from else { return }
+        busy = true; defer { busy = false }
+        do {
+            _ = try await api.challenge(from: from, to: target.teamId, playAt: when, message: message.trimmingCharacters(in: .whitespaces))
+            open = false; said = "Challenge sent. \(target.name) answer from their page; it shows under your team's Friendlies."
+        } catch { said = (error as? APIError)?.message ?? error.localizedDescription }
     }
 }

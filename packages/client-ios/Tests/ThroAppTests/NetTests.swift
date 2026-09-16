@@ -202,6 +202,28 @@ final class NetTests: XCTestCase {
         XCTAssertTrue(script.seen[5].url!.path.hasSuffix("/withdraw"))
     }
 
+    /// PD-110: a friendly decodes with both teams and its direction; a challenge goes with its date and message; the answer carries its note.
+    func testAFriendlyIsChallengedReadAndAnswered() async throws {
+        let friendly = #"{"friendlyId":"ffffffff-0000-0000-0000-000000000001","fromTeamId":"aaaaaaaa-0000-0000-0000-000000000001","fromTeam":"Riverside A","toTeamId":"aaaaaaaa-0000-0000-0000-000000000002","toTeam":"Grange A","playAt":"2026-09-25T19:30:00Z","venue":null,"message":"Friday, our board?","state":"proposed","proposedAt":"2026-09-16T12:00:00Z","answeredAt":null,"answerNote":null,"matchId":null,"version":1,"direction":"received"}"#
+        let accepted = friendly.replacingOccurrences(of: #""state":"proposed""#, with: #""state":"accepted""#).replacingOccurrences(of: #""answerNote":null"#, with: #""answerNote":"see you Friday""#)
+        let store = MemorySessionStore(Session(accountId: UUID(), playerId: nil, accessToken: "acc", refreshToken: "ref", accessExpiresAt: .distantFuture, created: false))
+        let script = Script([(200, #"{"friendlies":[\#(friendly)]}"#), (200, accepted), (200, friendly.replacingOccurrences(of: "received", with: "sent")), (409, #"{"error":"A challenge between these two teams is already waiting for an answer."}"#)])
+        let api = ThroAPI(configuration: config, deviceId: device, store: store, transport: script)
+        let grange = UUID(uuidString: "aaaaaaaa-0000-0000-0000-000000000002")!
+        let list = try await api.friendlies(team: grange)
+        let first = try XCTUnwrap(list.first)
+        XCTAssertEqual(first.direction, "received"); XCTAssertEqual(first.fromTeam, "Riverside A"); XCTAssertEqual(first.message, "Friday, our board?")
+        let answered = try await api.answerFriendly(first.friendlyId, answer: "accepted", note: "see you Friday")
+        XCTAssertEqual(answered.state, "accepted"); XCTAssertEqual(answered.answerNote, "see you Friday")
+        XCTAssertTrue(String(decoding: script.seen[1].httpBody ?? Data(), as: UTF8.self).contains("see you Friday"))
+        let made = try await api.challenge(from: first.fromTeamId, to: grange, playAt: first.playAt, message: "Friday, our board?")
+        XCTAssertEqual(made.direction, "sent")
+        let sent = String(decoding: script.seen[2].httpBody ?? Data(), as: UTF8.self)
+        XCTAssertTrue(sent.contains("2026-09-25T19:30:00Z") && sent.contains(grange.uuidString.lowercased()), "the date goes as an instant and the team by id: \(sent)")
+        do { _ = try await api.challenge(from: first.fromTeamId, to: grange, playAt: first.playAt, message: nil); XCTFail("a second open challenge is refused") }
+        catch let e as APIError { XCTAssertEqual(e.message, "A challenge between these two teams is already waiting for an answer.") }
+    }
+
     func testBase64URLRoundTripsAndMatchesTheServersAlphabet() {
         let bytes = Data([0xfb, 0xff, 0xbf, 0x00, 0x01])
         let s = Base64URL.encode(bytes)

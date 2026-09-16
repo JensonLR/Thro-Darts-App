@@ -5903,3 +5903,27 @@ one, and superseding an earlier grant is a read. Check-in now runs its two write
 **Proven.** API suite green with the contract regenerated; Swift suite green; `node --check`; repo checks (counts in
 the README). **Not proven:** the web page or the phone's card against production beyond compilation and the decoding
 test; the scoring grant a check-in issues has not yet been exercised from a phone scoring a match at an event.
+
+## A friendly between two teams (V051, PD-110)
+
+**Migration.** V051 creates `competition.friendly` — additive, no destructive statement, `thro_owner` throughout;
+`tools/check_migrations.py` green. The pipeline takes its restore point before migrating, as for every version.
+
+**Test first.** `FriendlyHttpTest`: a challenge needs a principal and whoever runs the team; a team cannot challenge
+itself; a date in the past and a team THRØ does not have are refused; the captain challenges and it is proposed; a
+second open challenge between the same two teams is a 409 from either side; a stranger cannot read a team's
+friendlies; the challenged team reads who, when and the message, as received; the challenger's members read it as
+sent; the challenger cannot answer its own; a non-runner cannot answer; an unknown answer and a refusal with no reason
+are 400s; the other captain accepts; answering again and withdrawing an accepted friendly are 409s; citing a match
+THRØ does not have is a 404; five visits of a leg are recorded; citing is for somebody who played it and runs a team
+in it; the captain who played cites it; a friendly names its match once; a decline keeps its reason; withdrawing is the
+challenger's; a withdrawn challenge cannot be answered; no league table knows any of this. 31 checks.
+
+**Built.** `Friendlies.kt`; five routes (`teams.friendlies`, `teams.challenge`, `friendlies.answer`,
+`friendlies.withdraw`, `friendlies.cite`) and their contract entries. Phone: `Friendly`, `ThroAPI.friendlies/challenge/
+answerFriendly/withdrawFriendly`, a *Friendlies* section on the team's front and *Challenge them to a friendly* on
+another team's.
+
+**Proven.** API suite green with the contract regenerated; Swift suite green; repo checks (counts in the README).
+**Not proven:** the phone's section against production beyond compilation and the decoding test; the migration against
+production runs in the pipeline on push and is read back by `/healthz` (recorded below once it has).

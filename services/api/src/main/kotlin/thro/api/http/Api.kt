@@ -495,6 +495,41 @@ public object Contract {
                               403 to "you neither run this season nor a team in it", 404 to "no such league season"),
         ),
         Endpoint(
+            id = "teams.friendlies", method = "GET", path = "/v1/teams/{teamId}/friendlies", authenticated = true,
+            summary = "A team's friendlies, sent and received (PD-110)",
+            description = "For the team's own members: every challenge to or from this team, newest game first, with its state, the other "
+                + "team, the message, the answer, and the match it was played in once cited. `direction` says sent or received.",
+            responses = mapOf(200 to "the friendlies", 400 to "not a UUID", 401 to "no principal", 403 to "not a member", 404 to "no such team"),
+        ),
+        Endpoint(
+            id = "teams.challenge", method = "POST", path = "/v1/teams/{teamId}/friendlies", authenticated = true,
+            summary = "Challenge another team to a friendly (PD-110)",
+            description = "By whoever runs this team: the other team, when, and a message. One open challenge between a pair of teams "
+                + "at a time, in either direction. A friendly reaches no league table and touches no rating.",
+            request = Schema("""{"type":"object","required":["toTeamId","playAt"],"properties":{"toTeamId":{"type":"string","format":"uuid"},"playAt":{"type":"string","format":"date-time"},"message":{"type":"string","maxLength":280}}}"""),
+            responses = mapOf(200 to "the challenge, proposed", 400 to "itself, or a date in the past", 401 to "no principal", 403 to "you do not run this team", 404 to "no such team", 409 to "a challenge between these teams is already waiting"),
+        ),
+        Endpoint(
+            id = "friendlies.answer", method = "POST", path = "/v1/friendlies/{friendlyId}/answer", authenticated = true,
+            summary = "Accept or decline a challenge (PD-110)",
+            description = "By whoever runs the challenged team. A refusal says why.",
+            request = Schema("""{"type":"object","required":["answer"],"properties":{"answer":{"type":"string","enum":["accepted","declined"]},"note":{"type":"string","maxLength":280}}}"""),
+            responses = mapOf(200 to "the friendly as it now stands", 400 to "not an answer, or a refusal with no reason", 401 to "no principal", 403 to "not yours to answer", 404 to "no such friendly", 409 to "already answered or withdrawn"),
+        ),
+        Endpoint(
+            id = "friendlies.withdraw", method = "POST", path = "/v1/friendlies/{friendlyId}/withdraw", authenticated = true,
+            summary = "Withdraw an unanswered challenge (PD-110)",
+            description = "By whoever runs the challenging team, before it is answered.",
+            responses = mapOf(200 to "withdrawn", 400 to "not a UUID", 401 to "no principal", 403 to "not yours to withdraw", 404 to "no such friendly", 409 to "already answered"),
+        ),
+        Endpoint(
+            id = "friendlies.cite", method = "POST", path = "/v1/friendlies/{friendlyId}/match", authenticated = true,
+            summary = "Name the match a friendly was played in (PD-110)",
+            description = "Once, on an accepted friendly, by somebody who played the match and runs one of the two teams — the rule a league fixture keeps.",
+            request = Schema("""{"type":"object","required":["matchId"],"properties":{"matchId":{"type":"string","format":"uuid"}}}"""),
+            responses = mapOf(200 to "the friendly, naming its match", 400 to "malformed", 401 to "no principal", 403 to "you did not play it, or do not run a team in it", 404 to "no such friendly or match", 409 to "not accepted, or already named"),
+        ),
+        Endpoint(
             id = "events.open", method = "POST", path = "/v1/events", authenticated = true,
             summary = "Open an edition of a knockout (PD-109)",
             description = "Whoever opens it is its organiser. A name, when it starts and when the session ends (the scoring grants issued at "

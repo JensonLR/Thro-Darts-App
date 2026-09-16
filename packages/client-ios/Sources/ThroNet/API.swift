@@ -678,6 +678,28 @@ public struct DiscoveryCard: Decodable, Sendable, Equatable, Identifiable {
     public var id: UUID { eventId }
 }
 
+/// A friendly between two teams (PD-110): who challenged whom, when, the message, where it stands, and the match once
+/// cited. `direction` is `sent` or `received` for the team whose list it came from.
+public struct Friendly: Decodable, Sendable, Equatable, Identifiable {
+    public let friendlyId: UUID
+    public let fromTeamId: UUID
+    public let fromTeam: String
+    public let toTeamId: UUID
+    public let toTeam: String
+    public let playAt: Date
+    public let venue: String?
+    public let message: String?
+    /// `proposed`, `accepted`, `declined` or `withdrawn`.
+    public let state: String
+    public let proposedAt: Date
+    public let answeredAt: Date?
+    public let answerNote: String?
+    public let matchId: UUID?
+    public let version: Int
+    public let direction: String?
+    public var id: UUID { friendlyId }
+}
+
 /// An event's page (PD-109): what, when, where, how many places, and — with a session — whether you are in.
 /// `draw` is the first round once it is made; a bye is a tie with no away side and is not a win.
 public struct EventPage: Decodable, Sendable, Equatable, Identifiable {
@@ -1108,6 +1130,33 @@ public actor ThroAPI {
     public func submitRegistration(submission: UUID) async throws -> String {
         struct Envelope: Decodable { let state: String }
         return try (decode(await authorised("POST", "/v1/submissions/\(submission.uuidString.lowercased())/submit", body: Data("{}".utf8))) as Envelope).state
+    }
+
+    /// A team's friendlies, sent and received, for its members (PD-110).
+    public func friendlies(team: UUID) async throws -> [Friendly] {
+        struct Envelope: Decodable { let friendlies: [Friendly] }
+        return try (decode(await authorised("GET", "/v1/teams/\(team.uuidString.lowercased())/friendlies")) as Envelope).friendlies
+    }
+
+    /// Challenges another team to a friendly, for whoever runs this one.
+    public func challenge(from team: UUID, to other: UUID, playAt: Date, message: String?) async throws -> Friendly {
+        var fields: [String: Any] = ["toTeamId": other.uuidString.lowercased(), "playAt": ISO8601DateFormatter().string(from: playAt)]
+        if let message, !message.isEmpty { fields["message"] = message }
+        let body = try JSONSerialization.data(withJSONObject: fields)
+        return try decode(await authorised("POST", "/v1/teams/\(team.uuidString.lowercased())/friendlies", body: body))
+    }
+
+    /// The challenged team's answer: `accepted`, or `declined` with a note that says why.
+    public func answerFriendly(_ id: UUID, answer: String, note: String?) async throws -> Friendly {
+        var fields: [String: Any] = ["answer": answer]
+        if let note, !note.isEmpty { fields["note"] = note }
+        let body = try JSONSerialization.data(withJSONObject: fields)
+        return try decode(await authorised("POST", "/v1/friendlies/\(id.uuidString.lowercased())/answer", body: body))
+    }
+
+    /// Withdraws an unanswered challenge, for whoever runs the challenging team.
+    public func withdrawFriendly(_ id: UUID) async throws -> Friendly {
+        try decode(await authorised("POST", "/v1/friendlies/\(id.uuidString.lowercased())/withdraw", body: Data("{}".utf8)))
     }
 
     /// An event's page, with `you` when signed in (PD-109).
