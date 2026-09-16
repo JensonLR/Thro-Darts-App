@@ -16,8 +16,8 @@ audit. Kept current during the build; **not** a deliverable, and never a substit
 - Neon production branch `br-icy-leaf-zaq0grqg` (project `round-darkness-99300686`), at V052. Restore points are
   branches: the pipeline's `pipeline-restore-point-before-<sha>-<stamp>` (newest three kept) and the founder's
   hand-made `restore-point-before-*` (never removed).
-- iPhone on TestFlight: build 13 VALID (PD-106..PD-110); build 14 dispatched from 5ce2de1 (PD-111 on the phone, the
-  desk cards, the cold-start Discover fix) — its state is in the final report of 16 September.
+- iPhone on TestFlight: build 13 VALID (PD-106..PD-110); build 14 **VALID** (from 5ce2de1: PD-111 on the phone, the
+  desk cards, the cold-start Discover fix), in the *Founders* group.
   Internal group *Founders*: the founder and the cofounder (Ethan).
 
 **Deploy pipeline** — `.github/workflows/deploy-api.yml` on every push touching the API or its packages: checks →
