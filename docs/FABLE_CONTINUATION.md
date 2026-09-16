@@ -17,7 +17,7 @@ audit. Kept current during the build; **not** a deliverable, and never a substit
   branches: the pipeline's `pipeline-restore-point-before-<sha>-<stamp>` (newest three kept) and the founder's
   hand-made `restore-point-before-*` (never removed).
 - iPhone on TestFlight: build 11 VALID (V050: the rating card); build 12 failed (the half-staged PD-106 tree); build 13
-  dispatched from 826f714 (PD-106..PD-110 on the phone) — its state is in the final report.
+  **VALID** (from 826f714: PD-106..PD-110 on the phone), in the *Founders* group.
   Internal group *Founders*: the founder and the cofounder (Ethan).
 
 **Deploy pipeline** — `.github/workflows/deploy-api.yml` on every push touching the API or its packages: checks →
