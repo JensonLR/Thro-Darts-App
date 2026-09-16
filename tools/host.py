@@ -164,10 +164,11 @@ def check() -> int:
     if domain and found["rp_origins"] != want["rp_origins"]:
         problems.append(f"  rp_origins: found {found['rp_origins']!r}, wants {want['rp_origins']!r}")
 
-    # The rewrites address the API service and must not have been dragged along by a replace-all.
+    # The rewrites that leave the site address the API service and must not have been dragged along by a
+    # replace-all. A rewrite to a path of the site's own (`/link/*` → `/link.html`, PD-117) names no host at all.
     render = RENDER.read_text()
     for line in render.splitlines():
-        if "destination:" in line and API_SERVICE_HOST not in line:
+        if "destination:" in line and API_SERVICE_HOST not in line and not line.split("destination:", 1)[1].strip().startswith("/"):
             problems.append(f"  a rewrite no longer addresses the API service: {line.strip()}")
 
     # Agreeing with each other is not the same as being right. A `--set thro.uk` run to try the tool out,
