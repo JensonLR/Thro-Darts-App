@@ -495,6 +495,87 @@ public object Contract {
                               403 to "you neither run this season nor a team in it", 404 to "no such league season"),
         ),
         Endpoint(
+            id = "seasons.policy", method = "GET", path = "/v1/seasons/{leagueSeasonId}/policy", authenticated = true,
+            summary = "What a registration with this league season needs (PD-107)",
+            description = "The registration policy in force today, for the season's administrator: which facts THRØ checks (name, "
+                + "age band, account, consent), which requirements a person confirms by hand, and when registration closes.",
+            responses = mapOf(200 to "the policy, or null when none is set", 400 to "not a UUID", 401 to "no principal", 403 to "you do not administer this season", 404 to "no such season"),
+        ),
+        Endpoint(
+            id = "seasons.policy.set", method = "POST", path = "/v1/seasons/{leagueSeasonId}/policy", authenticated = true,
+            summary = "Set what a registration with this league season needs (PD-107)",
+            description = "Drafted and approved in one act by the season's administrator, in force from today, superseding the one before. "
+                + "Read by the same strict parser the Secretary executes: a requirement THRØ cannot check goes under manualRequirements, "
+                + "where a named person confirms it; one THRØ does not know at all is refused.",
+            request = Schema("""{"type":"object","required":["requires"],"properties":{"requires":{"type":"array","items":{"type":"string","enum":["name","age_band","account_claimed","consent"]}},"manualRequirements":{"type":"array","items":{"type":"string"}},"deadlineDaysBeforeFirstFixture":{"type":"integer","minimum":0},"registrationClosesOn":{"type":"string","format":"date"}}}"""),
+            responses = mapOf(200 to "the policy, approved", 400 to "a rule THRØ cannot execute", 401 to "no principal", 403 to "you do not administer this season", 404 to "no such season"),
+        ),
+        Endpoint(
+            id = "teams.reconcile", method = "POST", path = "/v1/teams/{teamId}/reconcile", authenticated = true,
+            summary = "Find out what the team owes its leagues (PD-107)",
+            description = "Derives a registration task for every active member of the team in every season it is accepted into that "
+                + "has an approved registration policy, due by the policy's deadline. Doing it again derives nothing new. The tasks are "
+                + "read from the team's inbox. For whoever runs the team.",
+            responses = mapOf(200 to "how many tasks were derived, and when they are due", 400 to "not a UUID", 401 to "no principal", 403 to "you do not run this team"),
+        ),
+        Endpoint(
+            id = "tasks.assess", method = "POST", path = "/v1/tasks/{taskId}/assess", authenticated = true,
+            summary = "What a registration task is still missing, or the submission it prepares (PD-107)",
+            description = "Checks the player against the policy: the facts THRØ can check are named where missing, the requirements a "
+                + "person must confirm are listed while unconfirmed, and when nothing is missing a submission is prepared, ready to send.",
+            responses = mapOf(200 to "what is missing, or the submission", 400 to "not a UUID", 401 to "no principal", 403 to "you do not run the team", 404 to "no such task", 409 to "not a registration task"),
+        ),
+        Endpoint(
+            id = "tasks.confirm", method = "POST", path = "/v1/tasks/{taskId}/confirm", authenticated = true,
+            summary = "Confirm, by name, a requirement THRØ cannot check (PD-107)",
+            description = "A fee paid, a form signed: a named person says it was met, with a note that is kept. Shown as a manual step, never a tick THRØ gave.",
+            request = Schema("""{"type":"object","required":["requirement","note"],"properties":{"requirement":{"type":"string"},"note":{"type":"string","minLength":3}}}"""),
+            responses = mapOf(200 to "confirmed", 400 to "no requirement or no note", 401 to "no principal", 403 to "you do not run the team", 404 to "no such task"),
+        ),
+        Endpoint(
+            id = "submissions.submit", method = "POST", path = "/v1/submissions/{submissionId}/submit", authenticated = true,
+            summary = "Send a prepared registration to the league (PD-107)",
+            description = "For whoever runs the sending team. On THRØ the league's page is the delivery, so a sent submission is delivered "
+                + "at once — and delivered is not accepted: the player is registered only when the season's administrator answers.",
+            responses = mapOf(200 to "sent and delivered", 400 to "not a UUID", 401 to "no principal", 403 to "you do not run the team", 404 to "no such submission", 409 to "it cannot be sent from where it is"),
+        ),
+        Endpoint(
+            id = "seasons.registrations", method = "GET", path = "/v1/seasons/{leagueSeasonId}/registrations", authenticated = true,
+            summary = "The registrations sent to a league season (PD-107)",
+            description = "For the season's administrator: every registration sent, newest first, with its state, the team, and the player by name where THRØ may name them.",
+            responses = mapOf(200 to "the registrations", 400 to "not a UUID", 401 to "no principal", 403 to "you do not administer this season", 404 to "no such season"),
+        ),
+        Endpoint(
+            id = "submissions.answer", method = "POST", path = "/v1/submissions/{submissionId}/answer", authenticated = true,
+            summary = "The league's answer to a registration (PD-107)",
+            description = "Accepted from a date, which registers the player from that date under the policy in force; or rejected with a reason. "
+                + "The one act that registers anybody. Acknowledged on the way if it had not been.",
+            request = Schema("""{"type":"object","required":["answer"],"properties":{"answer":{"type":"string","enum":["accepted","rejected"]},"registeredFrom":{"type":"string","format":"date"},"note":{"type":"string"}}}"""),
+            responses = mapOf(200 to "the submission's state", 400 to "not an answer, or a rejection with no reason", 401 to "no principal", 403 to "you do not administer the season", 404 to "no such submission", 409 to "an acceptance needs a date, or the submission cannot be answered from where it is"),
+        ),
+        Endpoint(
+            id = "fixtures.team", method = "GET", path = "/v1/fixtures/{fixtureId}/team/{teamId}", authenticated = true,
+            summary = "A fixture as one team lives it (PD-106)",
+            description = "For the team's own members only: the opponent and the hour, every member with what they have said "
+                + "about playing (and the version the next change must name), who has been picked and in what order, whether "
+                + "the caller may pick the side, and the match on THRØ the fixture was played in, if it has been cited. A "
+                + "member's name is shown only where THRØ may name them; their player id is theirs to be picked by. Changes "
+                + "go through POST /v1/commands as SetAvailability and NameLineup.",
+            responses = mapOf(200 to "the fixture, the side and the lineup", 400 to "not a UUID", 401 to "no principal",
+                              403 to "you are not a member of this team", 404 to "no such fixture, or the team is not in it"),
+        ),
+        Endpoint(
+            id = "fixtures.cite", method = "POST", path = "/v1/fixtures/{fixtureId}/match", authenticated = true,
+            summary = "Name the match on THRØ a fixture was played in (PD-106)",
+            description = "Once, and only by somebody who was in the match and runs one of the fixture's teams. This is what "
+                + "makes the league's result for the fixture a played one — read against a match scored visit by visit — "
+                + "rather than the organiser's declared word (PD-055). A fixture that already names its match answers 409.",
+            request = Schema("""{"type":"object","required":["matchId"],"properties":{"matchId":{"type":"string","format":"uuid"}}}"""),
+            responses = mapOf(200 to "the fixture and its match", 400 to "matchId is not a UUID", 401 to "no principal",
+                              403 to "you were not in the match, or run neither team", 404 to "no such fixture or match",
+                              409 to "the fixture already names its match"),
+        ),
+        Endpoint(
             id = "me.rating", method = "GET", path = "/v1/me/rating", authenticated = true,
             summary = "Your THRØ rating, provisional (PD-105)",
             description = "Replayed from matches scored on THRØ that finished with a winner and stand as recorded or confirmed "

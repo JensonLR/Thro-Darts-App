@@ -25,7 +25,15 @@ async function read(path) {
 }
 
 const text = (el, s) => { el.textContent = s; return el; };
-const make = (tag, cls, s) => { const el = document.createElement(tag); if (cls) el.className = cls; if (s !== undefined) el.textContent = s; return el; };
+const make = (tag, cls, s) => {
+  const el = document.createElement(tag);
+  if (cls) el.className = cls;
+  if (s !== undefined) el.textContent = s;
+  // A `note` is what a page says after something was tried — saved, refused, why. Sighted readers see it appear;
+  // a screen reader hears it only if the region announces itself.
+  if (cls === 'note') el.setAttribute('role', 'status');
+  return el;
+};
 
 function fail(where, error) {
   where.replaceChildren(
@@ -539,15 +547,17 @@ async function mountOrganiser(where, signInEl) {
     // The season as its administrator sees it (PD-099): its dates, divisions and every team that asked in. It is
     // also the page's one question about authority — somebody who does not run this season is told so here,
     // once, rather than by every button refusing in turn.
-    let plan, data;
+    let plan, data, policy, registrations;
     try {
       plan = await authorised('GET', `/v1/seasons/${encodeURIComponent(season)}/teams`);
       data = await read(`/v1/seasons/${encodeURIComponent(season)}/fixtures`);
+      policy = (await authorised('GET', `/v1/seasons/${encodeURIComponent(season)}/policy`)).policy;
+      registrations = (await authorised('GET', `/v1/seasons/${encodeURIComponent(season)}/registrations`)).registrations;
     } catch (e) { fail(where, e); return; }
 
     const todo = (data.fixtures || []).filter(f => !f.decided);
     const done = (data.fixtures || []).filter(f => f.decided);
-    const parts = [...leagueSection(plan, draw), ...teamsSection(plan, draw)];
+    const parts = [...leagueSection(plan, draw), ...teamsSection(plan, draw), ...registrationsSection(plan, policy, registrations, draw)];
 
     if (!(data.fixtures || []).length) {
       parts.push(make('h2', null, 'Fixtures'),
@@ -599,8 +609,36 @@ async function mountOrganiser(where, signInEl) {
     };
     form.append(name, rename, toggle, end);
     box.append(form, said);
-    out.push(box);
+    out.push(box, nextSeason(l, redraw));
     return out;
+  }
+
+  /** The league's next season (PD-100): a label, its dates, its divisions — opened by the starter, run by them. */
+  function nextSeason(l, redraw) {
+    const box = make('div', 'entry');
+    box.append(make('h2', null, 'Open the next season'));
+    const form = make('div', 'entry-form');
+    const label = make('input'); label.type = 'text'; label.placeholder = 'Season, e.g. 2027-28'; label.maxLength = 40;
+    label.setAttribute('aria-label', 'The next season’s label');
+    const starts = make('input'); starts.type = 'date'; starts.setAttribute('aria-label', 'First day');
+    const ends = make('input'); ends.type = 'date'; ends.setAttribute('aria-label', 'Last day');
+    const divisions = make('input'); divisions.type = 'text'; divisions.placeholder = 'Divisions, comma-separated, optional';
+    divisions.setAttribute('aria-label', 'Divisions');
+    const go = make('button', 'quiet-button', 'Open it');
+    const said = make('p', 'note'); said.hidden = true;
+    go.onclick = async () => {
+      if (!label.value.trim() || !starts.value || !ends.value) { said.hidden = false; said.textContent = 'A season needs a label and two dates.'; return; }
+      go.disabled = true;
+      try {
+        const opened = await authorised('POST', `/v1/leagues/${encodeURIComponent(l.leagueId)}/seasons`,
+          { label: label.value.trim(), startsOn: starts.value, endsOn: ends.value,
+            divisions: divisions.value.split(',').map(d => d.trim()).filter(Boolean) });
+        location.href = `organiser.html?season=${encodeURIComponent(opened.season.leagueSeasonId)}`;
+      } catch (e) { said.hidden = false; said.textContent = e.message; go.disabled = false; }
+    };
+    form.append(label, starts, ends, divisions, go);
+    box.append(form, said);
+    return box;
   }
 
   /**
@@ -635,6 +673,104 @@ async function mountOrganiser(where, signInEl) {
     }
     out.push(list);
     return out;
+  }
+
+  /**
+   * Registering players (PD-107): what a registration with this season needs, and the ones its teams have sent.
+   * THRØ checks the facts it can (a name, an age band, a claimed account, consent); anything else — a fee, a form —
+   * is confirmed by hand on the team's side and shown here as their word, not THRØ's tick. Sent is not accepted:
+   * the one act that registers anybody is the answer given here, from a date.
+   */
+  function registrationsSection(plan, policy, registrations, redraw) {
+    const out = [make('h2', null, 'Registrations')];
+    const box = make('div', 'entry');
+    const said = make('p', 'note'); said.hidden = true;
+    const say = text => { said.hidden = false; said.textContent = text; };
+    const facts = [['name', 'a name'], ['age_band', 'an age band'], ['account_claimed', 'a claimed THRØ account'], ['consent', 'consent to be listed']];
+    const has = policy ? new Set(policy.requires) : new Set(['name', 'age_band', 'consent']);
+    box.append(make('p', 'quiet', policy
+      ? `Version ${policy.version}, in force from ${policy.effectiveFrom}. THRØ checks: ${policy.requires.map(r => r.replace('_', ' ')).join(', ') || 'nothing'}.`
+        + (policy.manualRequirements.length ? ` Confirmed by hand: ${policy.manualRequirements.join(', ')}.` : '')
+        + (policy.registrationClosesOn ? ` Closes ${policy.registrationClosesOn}.` : ` Due ${policy.deadlineDaysBeforeFirstFixture} days before a team's first fixture.`)
+      : 'No policy yet, so no team owes a registration. Say what one needs and the teams will be asked.'));
+    const form = make('div', 'entry-form');
+    const boxes = facts.map(([key, text]) => {
+      const l = make('label', 'quiet'); const c = make('input'); c.type = 'checkbox'; c.checked = has.has(key); c.value = key;
+      l.append(c, ' ' + text); return [c, l];
+    });
+    const manual = make('input'); manual.type = 'text'; manual.placeholder = 'Confirmed by hand, e.g. fee, form'; manual.maxLength = 120;
+    manual.value = policy ? policy.manualRequirements.join(', ') : '';
+    manual.setAttribute('aria-label', 'Requirements a person confirms by hand, separated by commas');
+    const days = make('input'); days.type = 'number'; days.min = 0; days.max = 365; days.value = policy && policy.deadlineDaysBeforeFirstFixture != null ? policy.deadlineDaysBeforeFirstFixture : 7;
+    days.setAttribute('aria-label', 'Days before a team’s first fixture that a registration is due');
+    const daysLabel = make('label', 'quiet', 'due '); daysLabel.append(days, ' days before the first fixture');
+    const set = make('button', 'primary', policy ? 'Set a new version' : 'Set the policy');
+    set.onclick = async () => {
+      set.disabled = true;
+      try {
+        const made = await authorised('POST', `/v1/seasons/${encodeURIComponent(plan.leagueSeasonId)}/policy`, {
+          requires: boxes.filter(([c]) => c.checked).map(([c]) => c.value),
+          manualRequirements: manual.value.split(',').map(x => x.trim()).filter(Boolean),
+          deadlineDaysBeforeFirstFixture: Number(days.value),
+        });
+        say(`Version ${made.policy.version} is in force. Teams find out what they owe when they next look.`);
+        setTimeout(redraw, 900);
+      } catch (e) { say(e.message); set.disabled = false; }
+    };
+    form.append(...boxes.map(([, l]) => l), manual, daysLabel, set);
+    box.append(form, said);
+    out.push(box);
+
+    if (!registrations.length) {
+      if (policy) out.push(make('p', 'quiet', 'No team has sent a registration yet.'));
+      return out;
+    }
+    const open = registrations.filter(r => r.state === 'delivered' || r.state === 'acknowledged');
+    const answered = registrations.filter(r => !(r.state === 'delivered' || r.state === 'acknowledged'));
+    const list = make('ul', 'rows');
+    for (const r of open) list.append(registrationRow(r, redraw));
+    if (open.length) out.push(make('p', 'quiet', `${open.length} waiting for your answer.`), list);
+    if (answered.length) {
+      const doneList = make('ul', 'rows');
+      for (const r of answered) {
+        const li = make('li'); const head = make('div', 'row-head');
+        head.append(make('div', 'row-name', `${r.player || 'A player'} · ${r.team}`), make('span', 'quiet', r.state.replace('_', ' ')));
+        li.append(head); doneList.append(li);
+      }
+      out.push(make('p', 'quiet', `${answered.length} answered.`), doneList);
+    }
+    return out;
+  }
+
+  /** One registration waiting for the league: accepted from a date, or rejected with a reason. */
+  function registrationRow(r, redraw) {
+    const li = make('li');
+    const head = make('div', 'row-head');
+    head.append(make('div', 'row-name', `${r.player || 'A player THRØ may not name'} · ${r.team}`),
+                make('span', 'quiet', `sent ${when(r.sentAt)}`));
+    const form = make('div', 'entry-form');
+    const from = make('input'); from.type = 'date'; from.value = new Date().toISOString().slice(0, 10);
+    from.setAttribute('aria-label', 'Registered from');
+    const note = make('input'); note.type = 'text'; note.placeholder = 'Reason, if rejecting'; note.maxLength = 200;
+    note.setAttribute('aria-label', 'A note, required for a rejection');
+    const said = make('p', 'note'); said.hidden = true;
+    const answer = async (body, button) => {
+      button.disabled = true;
+      try {
+        await authorised('POST', `/v1/submissions/${encodeURIComponent(r.submissionId)}/answer`, body);
+        redraw();
+      } catch (e) { said.hidden = false; said.textContent = e.message; button.disabled = false; }
+    };
+    const accept = make('button', 'primary', 'Accept from');
+    accept.onclick = () => answer({ answer: 'accepted', registeredFrom: from.value, note: note.value.trim() || undefined }, accept);
+    const reject = make('button', 'quiet-button', 'Reject');
+    reject.onclick = () => {
+      if (!note.value.trim()) { said.hidden = false; said.textContent = 'A rejection says why: write the reason first.'; return; }
+      answer({ answer: 'rejected', note: note.value.trim() }, reject);
+    };
+    form.append(accept, from, note, reject);
+    li.append(head, form, said);
+    return li;
   }
 
   /**
@@ -928,6 +1064,96 @@ async function mountOrganiser(where, signInEl) {
       }
     };
     form.append(home, make('span', 'v', 'v'), away, save);
+    box.append(form, said);
+    if (!replacing) box.append(otherwise(f, redraw, said));
+    return box;
+  }
+
+  /**
+   * What else can happen to an open fixture (PD-106): it is awarded to one side — a decision with a reason and never
+   * a scoreline (ADR-012) — or it is moved to another day. Both fold away behind a word, because most fixtures are
+   * played as planned. A move names the row version it read, so two officials moving the same fixture do not
+   * silently overwrite each other: the second is told to reload.
+   */
+  function otherwise(f, redraw, said) {
+    const row = make('div', 'row-meta');
+    const award = make('button', 'quiet-button', 'Award'); award.setAttribute('aria-expanded', 'false');
+    const move = make('button', 'quiet-button', 'Rearrange'); move.setAttribute('aria-expanded', 'false');
+    row.append(award, move);
+    const wrap = make('div');
+    let open = null;
+    const shut = () => {
+      if (open) { open.remove(); open = null; }
+      award.textContent = 'Award'; award.setAttribute('aria-expanded', 'false');
+      move.textContent = 'Rearrange'; move.setAttribute('aria-expanded', 'false');
+    };
+    award.onclick = () => {
+      const was = award.getAttribute('aria-expanded') === 'true'; shut(); if (was) return;
+      open = awarding(f, redraw); award.textContent = 'Leave it'; award.setAttribute('aria-expanded', 'true'); wrap.append(open);
+    };
+    move.onclick = () => {
+      const was = move.getAttribute('aria-expanded') === 'true'; shut(); if (was) return;
+      open = moving(f, redraw); move.textContent = 'Leave it'; move.setAttribute('aria-expanded', 'true'); wrap.append(open);
+    };
+    wrap.append(row);
+    return wrap;
+  }
+
+  function awarding(f, redraw) {
+    const box = make('div', 'entry');
+    box.append(make('p', 'quiet', 'A fixture nobody played goes to one side with a reason, and never a scoreline: the points move, the legs do not.'));
+    const form = make('div', 'entry-form');
+    const to = make('select'); to.setAttribute('aria-label', 'Which team the fixture is awarded to');
+    to.append(new Option(`To ${f.home || 'the home team'}`, f.homeTeamId), new Option(`To ${f.away || 'the away team'}`, f.awayTeamId));
+    const why = make('input'); why.type = 'text'; why.placeholder = 'Why — e.g. away side did not turn up';
+    why.setAttribute('aria-label', 'Why the fixture is awarded');
+    const go = make('button', 'primary', 'Award it');
+    const said = make('p', 'note'); said.hidden = true;
+    go.onclick = async () => {
+      const reason = why.value.trim();
+      if (!reason) { said.hidden = false; said.textContent = 'An award says why. A decision with no reason is one nobody can answer for.'; return; }
+      go.disabled = true;
+      try {
+        await authorised('POST', `/v1/fixtures/${encodeURIComponent(f.fixtureId)}/award`, { toTeamId: to.value, reason });
+        said.hidden = false; said.textContent = 'Awarded, with the reason on the record.';
+        setTimeout(redraw, 900);
+      } catch (e) { said.hidden = false; said.textContent = e.message; go.disabled = false; }
+    };
+    form.append(to, why, go);
+    box.append(form, said);
+    return box;
+  }
+
+  function moving(f, redraw) {
+    const box = make('div', 'entry');
+    box.append(make('p', 'quiet', 'Moves the fixture to another day and time. The change is recorded against the fixture; nothing about the teams changes.'));
+    const form = make('div', 'entry-form');
+    const was = new Date(f.scheduledAt);
+    const day = make('input'); day.type = 'date'; day.value = was.toISOString().slice(0, 10);
+    day.setAttribute('aria-label', 'The new day');
+    const time = make('input'); time.type = 'time';
+    time.value = `${String(was.getHours()).padStart(2, '0')}:${String(was.getMinutes()).padStart(2, '0')}`;
+    time.setAttribute('aria-label', 'The new time');
+    const go = make('button', 'primary', 'Move it');
+    const said = make('p', 'note'); said.hidden = true;
+    go.onclick = async () => {
+      if (!day.value || !time.value) { said.hidden = false; said.textContent = 'A rearrangement is a day and a time.'; return; }
+      go.disabled = true;
+      try {
+        const res = await fetch(`${API}/v1/commands`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.get().accessToken}`, 'X-Thro-Device': deviceId() },
+          body: JSON.stringify({ type: 'RearrangeFixture', commandId: crypto.randomUUID(), fixtureId: f.fixtureId,
+                                 to: new Date(`${day.value}T${time.value}`).toISOString(), expectedVersion: f.version }),
+        });
+        const body = await res.json().catch(() => ({}));
+        if (res.status === 409) throw new Error('This fixture changed while you were looking at it. Reload, and move the one that is standing now.');
+        if (!res.ok) throw new Error(body.error || body.reason || `THRØ answered ${res.status}.`);
+        said.hidden = false; said.textContent = 'Moved.';
+        setTimeout(redraw, 900);
+      } catch (e) { said.hidden = false; said.textContent = e.message; go.disabled = false; }
+    };
+    form.append(day, time, go);
     box.append(form, said);
     return box;
   }

@@ -34,10 +34,10 @@ request. No CORS, no preflight, no second host to configure, and no credentials 
 
 ```bash
 PGHOST=localhost THRO_DEV_AUTH=1 gradle -p services/api serve   # one terminal
-python3 apps/web/serve.py                                       # another; http://localhost:8899
+python3 tools/web_serve.py                                       # another; http://localhost:8899
 ```
 
-`serve.py` serves the directory and proxies `/v1` to the API, so what you look at in development is
+`tools/web_serve.py` serves the directory and proxies `/v1` to the API, so what you look at in development is
 arranged the way the real thing is rather than in a way that only works locally.
 
 ## Signing in

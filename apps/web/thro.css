@@ -115,9 +115,14 @@ footer { border-top: 1px solid var(--color-border-default); padding-block: 24px 
 .entry { border: 1px solid var(--color-border-default); border-radius: var(--radius-card);
          background: var(--color-background-raised); padding: 14px; margin-bottom: 12px; }
 .entry-form { display: flex; align-items: center; gap: 10px; margin-top: 10px; flex-wrap: wrap; }
-.entry-form input { width: 5rem; font: inherit; padding: 10px; text-align: center;
+.entry-form input, .entry-form select { font: inherit; padding: 10px; min-height: 44px;
                     color: var(--color-text-primary); background: var(--color-background-primary);
                     border: 1px solid var(--color-border-default); border-radius: var(--radius-field); }
+/* A score is two small boxes; a name, a date or a time is not. */
+.entry-form input[type="number"] { width: 5rem; text-align: center; }
+.entry-form input[type="text"], .entry-form input[type="date"], .entry-form input[type="time"], .entry-form select { flex: 1 1 11rem; max-width: 100%; }
+.entry-form button:focus-visible, button.primary:focus-visible, button.quiet-button:focus-visible {
+  outline: 3px solid var(--color-border-focus, var(--color-background-brand)); outline-offset: 2px; }
 .entry-form .v { color: var(--color-text-secondary); }
 button.primary { font: inherit; font-weight: var(--font-weight-semibold); padding: 12px 20px;
                  color: var(--color-text-inverse); background: var(--color-background-brand);

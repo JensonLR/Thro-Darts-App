@@ -5778,3 +5778,76 @@ The founder: pubs rarely have an Apple TV, so the tvOS app, which cannot even be
 answer for a pub. PD-090 already gave the right one — the wall, in the television's own browser or on a £30 stick —
 and it was findable only by knowing the address. `tv.html` is an address a landlord can type and lands on the wall's
 chooser; the home page's footer says *Put THRØ on a pub screen*. Nothing else changed.
+
+## The frontier, from four audits — and the captain's half of a fixture (PD-106)
+
+**The audits.** Four read-only sweeps, run in parallel against the repository rather than the plan: the server's domain
+code against its routes; the phone's dead ends; the organiser web against the League OS; development artefacts,
+classified. What they found is in PD-106 and in `docs/FABLE_CONTINUATION.md`; the rest of this entry is what was done
+about the part that could be closed today.
+
+**Private means private, test first.** Two checks added to `LeagueStartingTest` (a private league's fixtures, table and
+live board are 404 to a stranger and to nobody; its starter reads them) failed, then passed once the three public season
+routes went through one `shown` helper: the league's standing is read as the competition role, an administrator is
+recognised through the relation, and the page is then read as `app_read` as before. 44 checks.
+
+**The team's fixture, test first.** `TeamFixtureTest` (24 checks) failed on the route being absent, then held: a member
+reads the fixture and the side; a stranger and the other team's captain are refused; a fixture nobody has, and a team not
+in it, are 404; a member says they can play by command and the side reads it with its version; the admin names the side
+and everyone reads it in order; citing needs a principal, is refused to a member who did not play and to a stranger, a
+match nobody has is 404, the captain who played it cites it, once (409 after), the side sees it, and the organiser's
+result is then **played**. `Teams.roleOf` became public for the membership check; `TeamFixtures.kt` is new; the fixtures
+JSON carries `homeTeamId`, `awayTeamId` and `version`; the team front's season lines carry `leagueSeasonId` and
+`accepted`.
+
+**The phone.** `TeamFixtureScreens.swift`: the season's fixtures for the team (to play, then played; *waiting* when the
+league has not let the team in), and one fixture — *Can play / Maybe / Can't play*, the side with availability, the pick
+in tap order for whoever runs the team, and *Name the match* from one's own finished matches. `API.command` posts to
+`/v1/commands` and reads a 409 or 422 as a receipt rather than a failure. A decode test holds the shapes. The Swift
+package builds and the account tests pass (11).
+
+**The organiser web.** *Award* (to either side, with a reason), *Rearrange* (a day and a time, naming the version read;
+a 409 says to reload), *Open the next season*; `role="status"` on every note; inputs sized by type; a focus ring on
+buttons; the moderation page linked from the organiser's footer. `node --check` passes; not looked at in a browser.
+
+**Leftovers.** `hello.ts` and `neon.ts` deleted; `apps/web/serve.py` → `tools/web_serve.py` (its root now `apps/web`);
+`apps/web/README.md` → `docs/runbooks/WEB.md`. Render publishes `apps/web` whole, and a dev proxy and a README naming
+`THRO_DEV_AUTH` were being served from it.
+
+The API suite: 119 tests, 0 failures, contract regenerated.
+
+## Registering players with a league run on THRØ (PD-107)
+
+**What the repository held.** The Secretary's registration flow, complete as a domain and unreachable as a product:
+policy → reconcile → assess → confirm by hand → prepare → submit → deliver → acknowledge → answer → register, with a
+named mover and evidence at every transition, held by `SecretaryTest`. No route, no page, no screen.
+
+**Test first.** `RegistrationHttpTest` was written as the whole journey over HTTP — the league sets the policy (401
+without a principal, 403 for a captain, 400 for a requirement THRØ does not know), the captain reconciles the team
+(three tasks, due seven days before the first fixture, nothing new the second time), the inbox names each task's
+player, a player missing an age band and consent is told so by name, a player with everything still waits on the fee
+until the captain confirms it with a note, the submission is prepared, sent and delivered at once, the league sees it
+only after it was sent, an acceptance needs a date, an acceptance from a date no policy governed is a 409 in words, an
+acceptance from 20 September registers from that date and not before, an answered submission cannot be answered again,
+and a rejection needs a reason. It failed first on "a registration policy needs a principal" (no route), then on the
+policy period constraint (superseding the day's policy from yesterday), then on the ungoverned date — a real domain hole
+(§3 of PD-107), fixed in `Secretary.answer` and covered by the test. 35 checks pass.
+
+**Built.** `Registrations.kt` (the authority checks and the JSON), eight routes in `Server.kt` and their contract
+entries in `Api.kt` (`seasons.policy` GET/POST, `teams.reconcile`, `tasks.assess`, `tasks.confirm`,
+`submissions.submit`, `seasons.registrations`, `submissions.answer`); `Secretary.InboxItem.player` and the inbox JSON;
+`Secretary.taskOwnerTeam`, `submissionParties`, `registrationPolicy` as the lookups a route needs. Organiser web:
+`registrationsSection` and `registrationRow` in `thro.js`. Phone: `ThroAPI.assessRegistration` / `confirmRequirement` /
+`submitRegistration`, `RegistrationAssessment`, `InboxItem.player`, and `RegistrationTaskActions` in the inbox.
+
+**Proven.** API suite 120 tests green with the contract regenerated (`THRO_WRITE_OPENAPI=1`); Swift 863 tests green;
+`node --check` on `thro.js`; every `tools/check_*.py` green. **Not proven:** the organiser web section in a browser
+against production (the founder's test league has no registration policy yet — set one on its season page and a
+captain's inbox will show the tasks); the phone's inbox actions in the simulator beyond compilation and the decoding test.
+
+**Also in this commit.** The PD-106 modifications that the two earlier commits failed to stage (`Teams.roleOf` made
+public, `Fixtures.Fixture.version/homeTeamId/awayTeamId`, `Teams.SeasonLine`, the `fixtures.team`/`fixtures.cite`
+routes, the organiser web's award/rearrange/next-season, `API.swift`'s team-fixture calls) — which is why CI was red on
+40452ec ("cannot access `roleOf`: it is private", "cannot find type `TeamFixtureView`") and production stayed at
+4dd5467. The first commit's `git add` had aborted on a pathspec that no longer existed, so it committed only what was
+already staged; the lesson is in the ledger.

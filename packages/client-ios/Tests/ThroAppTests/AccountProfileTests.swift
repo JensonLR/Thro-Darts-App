@@ -132,6 +132,25 @@ final class AccountProfileTests: XCTestCase {
         XCTAssertEqual(try JSONDecoder().decode(RatingAnswer.self, from: Data(unrated.utf8)).figure, "—")
     }
 
+    // MARK: - a team's fixture (PD-106)
+
+    func testATeamsFixtureDecodesWithTheSideTheLineupAndTheMatch() throws {
+        let json = #"{"fixtureId":"cccccccc-0000-0000-0000-000000000001","leagueSeasonId":"cccccccc-0000-0000-0000-000000000002","teamId":"cccccccc-0000-0000-0000-000000000003","home":true,"opponent":"Grange A","opponentTeamId":"cccccccc-0000-0000-0000-000000000004","scheduledAt":"2026-09-17T19:30:00Z","state":"scheduled","venue":"The Anchor","version":1,"matchId":null,"yourRole":"player","mayNameLineup":false,"members":[{"playerId":"dddddddd-0000-0000-0000-000000000001","name":null,"availability":"available","availabilityVersion":1,"role":"player"},{"playerId":"dddddddd-0000-0000-0000-000000000002","name":"Ade","availability":null,"availabilityVersion":0,"role":"admin"}],"lineup":{"version":1,"players":["dddddddd-0000-0000-0000-000000000001","dddddddd-0000-0000-0000-000000000002"]}}"#
+        let v = try Wire.decoder.decode(TeamFixtureView.self, from: Data(json.utf8))
+        XCTAssertEqual(v.opponent, "Grange A")
+        XCTAssertNil(v.matchId)
+        XCTAssertEqual(v.members.count, 2)
+        XCTAssertNil(v.members[0].name, "a member THRØ may not name stays unnamed")
+        XCTAssertEqual(v.member(v.members[0].playerId)?.availability, "available")
+        XCTAssertEqual(v.lineup.players.count, 2)
+        XCTAssertFalse(v.mayNameLineup)
+        XCTAssertEqual(TeamFixtureScreen.availabilityLabel("unavailable"), "Can't play")
+        XCTAssertEqual(TeamFixtureScreen.availabilityLabel(nil), "Not said")
+        let receipt = try JSONDecoder().decode(CommandReceipt.self, from: Data(#"{"outcome":"stale","currentVersion":2,"current":{}}"#.utf8))
+        XCTAssertFalse(receipt.applied)
+        XCTAssertTrue(try JSONDecoder().decode(CommandReceipt.self, from: Data(#"{"outcome":"applied","version":2}"#.utf8)).applied)
+    }
+
     // MARK: - helpers
 
     private func profile(name: String) -> Profile {

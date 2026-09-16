@@ -29,7 +29,7 @@ entitlements and refused if the signed app lacks Sign in with Apple or the passk
 
 PD-095 deploy pipeline · PD-096 retention sweep · PD-097 Android notice · PD-098 TestFlight entitlements ·
 PD-099 fixtures · PD-100 start a league · PD-101 moderation page · PD-102 ways in · PD-103 decisions enforce +
-league management · PD-104 organiser email · PD-105 provisional rating.
+league management · PD-104 organiser email · PD-105 provisional rating · PD-106 the team's fixture · PD-107 registrations.
 
 ## Completion matrix (from four read-only audits, 16 September; details in PD-106 and CHANGE_RECORD)
 
@@ -39,8 +39,9 @@ league management · PD-104 organiser email · PD-105 provisional rating.
 | Team OS on the phone: create/claim, venue, roster, invite, roles, say-league | Complete | Teams routes + TeamScreens |
 | Team OS: availability, lineup, the fixture as the side reads it, citing the match | **Complete (PD-106)** | TeamFixtureTest (24), TeamFixtureScreens.swift |
 | League OS: start league, seasons, divisions, accept teams, fixtures, results, award, void, rearrange, table, private/end | Complete | PD-099..PD-106; organiser web |
-| League OS: player registration review, points-policy approval, transfers, division moves, deadlines, audit view | **Missing routes** — domain in `Secretary.kt`/`Organisations.kt` with tests, no HTTP, no UI | audit §2 |
-| Secretary: external submission (submit/deliver/acknowledge), rearrangement *proposals* | **Missing routes** — domain + tests only; `/v1/commands RearrangeFixture` bypasses the proposal flow | audit §2 |
+| League OS: player registration (policy, reconcile, assess, confirm, send, answer) | **Complete (PD-107)** — routes, organiser web *Registrations*, phone inbox actions | RegistrationHttpTest (35) |
+| League OS: points-policy approval, transfers, division moves, audit view | **Missing routes** — domain in `Organisations.kt` with tests, no HTTP, no UI | audit §2 |
+| Secretary: rearrangement *proposals* | **Missing routes** — domain + tests only; `/v1/commands RearrangeFixture` bypasses the proposal flow | audit §2 |
 | Tournament OS on the server (`Competitions.kt`: openEvent/enter/checkIn/draw; tournament, pair, series tables) | **Missing routes** — whole class unreachable; phone tournaments are local-only | audit §2/§3 |
 | Friendly challenge between teams | **Missing entirely** | audit |
 | Discovery (leagues, events, nearby on-device) and the map | Complete for what is written; no server-side tournament entry | audit |
@@ -54,9 +55,8 @@ league management · PD-104 organiser email · PD-105 provisional rating.
 
 ## Frontier (what is next, in order)
 
-1. **Secretary HTTP surface**: player registration review (assess / confirm manual requirement / consent), the
-   team-side submission (`submit`, `recordDeliveryAttempt`, `acknowledge`) and rearrangement proposals — routes over
-   the existing domain, then the organiser web's *Registrations* and *Requests* sections and the phone's inbox actions.
+1. ~~Secretary HTTP surface: registrations~~ **done (PD-107)**. Left of it: rearrangement *proposals* as a route
+   (propose → the opponent answers → applied), then the organiser web's *Requests* section.
 2. **Tournament OS on the server**: routes over `Competitions.kt` (open an event, enter, check in, draw, results), then a
    web organiser page for events and the phone's Discover → enter.
 3. **Friendly challenge** between teams (propose → accept/counter → fixture outside any season).
@@ -68,6 +68,12 @@ league management · PD-104 organiser email · PD-105 provisional rating.
 Mailbox: later (iCloud+ custom domain recommended). Render stays for now; Cloudflare later. ICO and solicitor parked
 until near submission. No Apple TV box needed — `thro.uk/tv`. Android: emulator only, no device. Email: organisers
 only, never phone (PD-104). Rating: public, marked provisional (PD-105).
+
+## Git lesson (16 September)
+
+`git add -A -- <paths…>` aborts the whole add when one pathspec matches nothing, and `git commit` then commits only what
+was already staged. Two PD-106 commits went out with a fraction of the work and CI red. Stage in one `git add` per
+file group, and read `git status --short` before `git commit`, every time.
 
 ## How to resume
 

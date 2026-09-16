@@ -124,7 +124,18 @@ public struct InboxItem: Decodable, Sendable, Equatable, Identifiable {
     public let reason: String
     public let dueAt: Date?
     public let state: String
+    /// The player a task is about, when it is about one (a registration is); nil for a fixture's tasks.
+    public let player: UUID?
     public var id: UUID { taskId }
+}
+
+/// What a registration task is still missing (PD-107): facts THRØ checks by name, requirements a person confirms
+/// by hand, and — when neither remains — the submission prepared, with its state.
+public struct RegistrationAssessment: Decodable, Sendable, Equatable {
+    public let missing: [String]
+    public let manualOutstanding: [String]
+    public let submissionId: UUID?
+    public let state: String?
 }
 
 /// A league as its public front shows it: seasons newest first, each with its divisions and teams,
@@ -257,8 +268,14 @@ public struct LeagueFixtures: Decodable, Sendable, Equatable {
         public let decided: Decided?
         /// Set when this fixture's result was annulled and it is open again.
         public let annulled: Annulled?
+        /// The teams themselves and the row version (PD-106), so a team can find its own fixtures and a change can
+        /// name what it read. Optional, so a list from an older server still decodes.
+        public let homeTeamId: UUID?
+        public let awayTeamId: UUID?
+        public let version: Int?
 
         public var id: UUID { fixtureId }
+        public func involves(_ team: UUID) -> Bool { homeTeamId == team || awayTeamId == team }
     }
 
     public let fixtures: [Fixture]
@@ -390,6 +407,10 @@ public struct TeamFront: Decodable, Sendable, Equatable {
         public let league: String
         public let label: String
         public let division: String?
+        /// The season itself, so the team's page can reach its fixtures (PD-106); and whether the league has let the
+        /// team in yet. Both optional so a front from an older server still decodes.
+        public let leagueSeasonId: UUID?
+        public let accepted: Bool?
     }
     /// A league the team's own admin or captain says it plays in (PD-049): its say, not the league's.
     public struct LeagueSaid: Decodable, Sendable, Equatable, Identifiable {
@@ -464,6 +485,49 @@ public struct RatingAnswer: Decodable, Sendable, Equatable {
         }
     }
     public var isProvisional: Bool { display.kind == "provisional" }
+}
+
+/// A fixture as one team lives it (PD-106): the side, who can play, who is picked, and the match it was played in.
+public struct TeamFixtureView: Decodable, Sendable, Equatable {
+    public struct Member: Decodable, Sendable, Equatable, Identifiable {
+        public let playerId: UUID
+        public let name: String?
+        public let role: String
+        /// `available`, `unavailable`, `maybe`, or nil when they have not said.
+        public let availability: String?
+        public let availabilityVersion: Int
+        public var id: UUID { playerId }
+    }
+    public struct Lineup: Decodable, Sendable, Equatable {
+        public let version: Int
+        public let players: [UUID]
+    }
+    public let fixtureId: UUID
+    public let leagueSeasonId: UUID
+    public let teamId: UUID
+    public let home: Bool
+    public let opponent: String?
+    public let opponentTeamId: UUID
+    public let scheduledAt: Date
+    public let state: String
+    public let venue: String?
+    public let version: Int
+    public let matchId: UUID?
+    public let yourRole: String
+    public let mayNameLineup: Bool
+    public let members: [Member]
+    public let lineup: Lineup
+
+    public func member(_ player: UUID) -> Member? { members.first { $0.playerId == player } }
+}
+
+/// What the command endpoint answered: applied with the new version, or refused, stale or replayed in the server's words.
+public struct CommandReceipt: Decodable, Sendable, Equatable {
+    public let outcome: String
+    public let version: Int?
+    public let reason: String?
+    public let currentVersion: Int?
+    public var applied: Bool { outcome == "applied" || outcome == "replayed" }
 }
 
 public struct FriendInvite: Decodable, Sendable, Equatable {
@@ -916,6 +980,67 @@ public actor ThroAPI {
     public func declareAge(adult: Bool) async throws -> Profile {
         let body = try JSONSerialization.data(withJSONObject: ["ageBand": adult ? "adult" : "minor"])
         return try decode(await authorised("PUT", "/v1/me/profile", body: body))
+    }
+
+    // MARK: a team's fixture (PD-106)
+
+    /// The fixture as one team lives it: for the team's own members.
+    public func teamFixture(_ fixture: UUID, team: UUID) async throws -> TeamFixtureView {
+        try decode(await authorised("GET", "/v1/fixtures/\(fixture.uuidString.lowercased())/team/\(team.uuidString.lowercased())"))
+    }
+
+    /// One organisational command, with its own id so a retry is a replay and never a second act.
+    public func command(_ fields: [String: Any]) async throws -> CommandReceipt {
+        var body = fields
+        body["commandId"] = body["commandId"] ?? UUID().uuidString.lowercased()
+        let data = try JSONSerialization.data(withJSONObject: body)
+        // A stale version is a 409 that carries the current row; the caller reads it rather than failing on the status.
+        guard let current = session else { throw APIError.signedOut }
+        var (out, http) = try await send("POST", "/v1/commands", body: data, bearer: current.accessToken)
+        if http.statusCode == 401 {
+            try await refresh()
+            guard let renewed = session else { throw APIError.signedOut }
+            (out, http) = try await send("POST", "/v1/commands", body: data, bearer: renewed.accessToken)
+        }
+        guard http.statusCode == 200 || http.statusCode == 409 || http.statusCode == 422 else {
+            throw APIError.status(http.statusCode, String(decoding: out, as: UTF8.self))
+        }
+        return try decode(out)
+    }
+
+    /// Says whether a member can play a fixture. `expectedVersion` is what the side last read; 0 when they have not said.
+    public func setAvailability(fixture: UUID, team: UUID, player: UUID, status: String, expectedVersion: Int) async throws -> CommandReceipt {
+        try await command(["type": "SetAvailability", "fixtureId": fixture.uuidString.lowercased(), "teamId": team.uuidString.lowercased(),
+                           "playerId": player.uuidString.lowercased(), "status": status, "expectedVersion": expectedVersion])
+    }
+
+    /// Names the side, in order. `expectedVersion` is the lineup version the side last read; 0 when none has been named.
+    public func nameLineup(fixture: UUID, team: UUID, players: [UUID], expectedVersion: Int) async throws -> CommandReceipt {
+        try await command(["type": "NameLineup", "fixtureId": fixture.uuidString.lowercased(), "teamId": team.uuidString.lowercased(),
+                           "players": players.map { $0.uuidString.lowercased() }, "expectedVersion": expectedVersion])
+    }
+
+    /// Names the match on THRØ a fixture was played in — once, by somebody who played it and runs one of its teams.
+    public func cite(fixture: UUID, match: UUID) async throws {
+        let body = try JSONSerialization.data(withJSONObject: ["matchId": match.uuidString.lowercased()])
+        _ = try await authorised("POST", "/v1/fixtures/\(fixture.uuidString.lowercased())/match", body: body)
+    }
+
+    /// What a registration task still needs, or the submission it prepared (PD-107). For whoever runs the team.
+    public func assessRegistration(task: UUID) async throws -> RegistrationAssessment {
+        try decode(await authorised("POST", "/v1/tasks/\(task.uuidString.lowercased())/assess", body: Data("{}".utf8)))
+    }
+
+    /// A named person's word that a requirement THRØ cannot check was met — a fee, a form — with the note kept.
+    public func confirmRequirement(task: UUID, requirement: String, note: String) async throws {
+        let body = try JSONSerialization.data(withJSONObject: ["requirement": requirement, "note": note])
+        _ = try await authorised("POST", "/v1/tasks/\(task.uuidString.lowercased())/confirm", body: body)
+    }
+
+    /// Sends a prepared registration to the league. Delivered is not accepted: the answer is the league's.
+    public func submitRegistration(submission: UUID) async throws -> String {
+        struct Envelope: Decodable { let state: String }
+        return try (decode(await authorised("POST", "/v1/submissions/\(submission.uuidString.lowercased())/submit", body: Data("{}".utf8))) as Envelope).state
     }
 
     /// Your THRØ rating, provisional (PD-105).

@@ -219,6 +219,9 @@ public struct InboxScreen: View {
                                 VStack(alignment: .leading, spacing: 2) {
                                     Text(item.reason).thro(ThroTypography.body).foregroundStyle(ThroColor.colorTextPrimary)
                                     Text(InboxOrder.detail(item)).thro(ThroTypography.metadata).foregroundStyle(ThroColor.colorTextSecondary)
+                                    if item.kind == "registration_required" && item.state == "open" {
+                                        RegistrationTaskActions(account: account, task: item.taskId) { Task { await load() } }
+                                    }
                                 }
                                 .frame(minHeight: 52, alignment: .leading)
                                 .overlay(alignment: .bottom) { Rectangle().fill(ThroColor.colorBorderDefault).frame(height: 1) }
@@ -240,6 +243,80 @@ public struct InboxScreen: View {
     private func load() async {
         problem = nil
         do { sections = try await account.api.inbox() } catch let e as APIError { problem = e.message } catch { problem = error.localizedDescription }
+    }
+}
+
+/// A registration task's three acts for whoever runs the team (PD-107): see what is missing, confirm by name a
+/// requirement THRØ cannot check, and send the prepared submission. Sent is shown as sent — the league answers.
+struct RegistrationTaskActions: View {
+    @ObservedObject var account: AccountStore
+    let task: UUID
+    let reload: () -> Void
+    @State private var assessed: RegistrationAssessment?
+    @State private var confirming: String?
+    @State private var note = ""
+    @State private var said: String?
+    @State private var busy = false
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: ThroSpacing.spacing2) {
+            if let a = assessed {
+                if !a.missing.isEmpty {
+                    Text("Still needs: " + a.missing.map { $0.replacingOccurrences(of: "_", with: " ") }.joined(separator: ", ") + ". The player sets these in their own profile.")
+                        .thro(ThroTypography.metadata).foregroundStyle(ThroColor.colorTextSecondary)
+                }
+                ForEach(a.manualOutstanding, id: \.self) { requirement in
+                    if confirming == requirement {
+                        ThroTextField("How was the \(requirement) met?", text: $note, placeholder: "paid in cash, 14 Sep")
+                        HStack(spacing: ThroSpacing.spacing2) {
+                            ThroButton("Confirm \(requirement)", variant: .primary, size: .medium) { Task { await confirm(requirement) } }
+                                .disabled(note.trimmingCharacters(in: .whitespaces).count < 3 || busy)
+                            ThroTextButton("Not yet", tone: .quiet) { confirming = nil }
+                        }
+                    } else {
+                        ThroButton("Confirm the \(requirement) by hand", variant: .secondary, size: .medium) { confirming = requirement; note = "" }
+                            .disabled(busy)
+                    }
+                }
+                if let submission = a.submissionId {
+                    if a.state == "ready" {
+                        ThroButton("Send it to the league", variant: .primary, size: .medium) { Task { await send(submission) } }.disabled(busy)
+                    } else {
+                        Text("Sent · \(a.state ?? "with the league") — the league answers, and only its answer registers the player.")
+                            .thro(ThroTypography.metadata).foregroundStyle(ThroColor.colorTextSecondary)
+                    }
+                }
+            } else {
+                ThroButton("See what it needs", variant: .secondary, size: .medium) { Task { await assess() } }.disabled(busy)
+            }
+            if let said { Note(said) }
+        }
+        .padding(.top, ThroSpacing.spacing2)
+    }
+
+    private func assess() async {
+        busy = true; defer { busy = false }
+        do { assessed = try await account.api.assessRegistration(task: task); said = nil }
+        catch { said = (error as? APIError)?.message ?? error.localizedDescription }
+    }
+
+    private func confirm(_ requirement: String) async {
+        busy = true; defer { busy = false }
+        do {
+            try await account.api.confirmRequirement(task: task, requirement: requirement, note: note.trimmingCharacters(in: .whitespaces))
+            confirming = nil; said = "\(requirement.capitalized) confirmed, in your name."
+            assessed = try await account.api.assessRegistration(task: task)
+        } catch { said = (error as? APIError)?.message ?? error.localizedDescription }
+    }
+
+    private func send(_ submission: UUID) async {
+        busy = true; defer { busy = false }
+        do {
+            let state = try await account.api.submitRegistration(submission: submission)
+            said = state == "delivered" ? "Sent. The league has it; its answer registers the player." : "Its state is now \(state)."
+            assessed = try await account.api.assessRegistration(task: task)
+            reload()
+        } catch { said = (error as? APIError)?.message ?? error.localizedDescription }
     }
 }
 

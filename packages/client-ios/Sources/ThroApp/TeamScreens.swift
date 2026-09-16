@@ -160,6 +160,9 @@ public struct TeamFrontScreen: View {
     /// nothing worth holding once it is sent — the record of it lives where it was sent to.
     @StateObject private var safety = SafetyModel()
     @State private var reporting = false
+    /// PD-106: the season whose fixtures are open, and the team's name to say them under.
+    @State private var fixturesIn: TeamFront.SeasonLine?
+    @State private var teamName = "The team"
 
     public init(teams: TeamsModel, teamId: UUID, api: ThroAPI?, onBack: @escaping () -> Void) {
         self.teams = teams
@@ -169,6 +172,14 @@ public struct TeamFrontScreen: View {
     }
 
     public var body: some View {
+        if let line = fixturesIn, let api {
+            TeamFixturesScreen(api: api, teamId: teamId, teamName: teamName, season: line, onBack: { fixturesIn = nil })
+        } else {
+            front
+        }
+    }
+
+    private var front: some View {
         VStack(spacing: 0) {
             TopBar("Team", eyebrow: "On THRØ", onBack: onBack)
             switch teams.front(for: teamId) {
@@ -254,11 +265,20 @@ public struct TeamFrontScreen: View {
                 } else {
                     ThroDivider().padding(.top, ThroSpacing.spacing2)
                     ForEach(Array(front.seasons.enumerated()), id: \.offset) { _, line in
-                        HStack {
-                            Text(line.league).thro(ThroTypography.bodyLarge.weight(.semibold)).foregroundStyle(ThroColor.colorTextPrimary)
-                            Spacer()
-                            Text([line.label, line.division].compactMap { $0 }.joined(separator: " · ")).thro(ThroTypography.body).foregroundStyle(ThroColor.colorTextSecondary)
+                        // A season the league published is where the team's fixtures are (PD-106): the row opens them.
+                        Button { if line.leagueSeasonId != nil, api != nil { teamName = front.name; fixturesIn = line } } label: {
+                            HStack {
+                                Text(line.league).thro(ThroTypography.bodyLarge.weight(.semibold)).foregroundStyle(ThroColor.colorTextPrimary)
+                                Spacer()
+                                Text([line.label, line.division, line.accepted == false ? "waiting" : nil].compactMap { $0 }.joined(separator: " · "))
+                                    .thro(ThroTypography.body).foregroundStyle(ThroColor.colorTextSecondary)
+                                if line.leagueSeasonId != nil { Icon(.chevronRight, size: 16).foregroundStyle(ThroColor.colorTextSecondary) }
+                            }
+                            .frame(minHeight: ThroSpacing.touchTargetMinimum)
+                            .throRowTapTarget()
                         }
+                        .buttonStyle(ThroPressStyle(radius: ThroSpacing.radiusCard, pressedFill: ThroColor.colorSurfaceSecondary, scales: false))
+                        .accessibilityHint(line.leagueSeasonId != nil ? "Opens the team's fixtures in this season" : "")
                         .padding(.vertical, ThroSpacing.spacing3)
                         ThroDivider()
                     }

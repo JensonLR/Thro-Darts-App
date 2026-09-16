@@ -127,6 +127,31 @@ final class NetTests: XCTestCase {
         XCTAssertTrue(card.qualifies)
     }
 
+    /// PD-107: a registration task carries the player it is about, and the captain's three acts over it decode to what the server said.
+    func testARegistrationTaskIsAssessedConfirmedAndSent() async throws {
+        let inbox = #"{"sections":{"ACTION_REQUIRED":[{"taskId":"cccccccc-0000-0000-0000-000000000001","kind":"registration_required","reason":"Register Sam with the Teesside league","dueAt":"2026-09-20T00:00:00Z","state":"open","player":"aaaaaaaa-0000-0000-0000-000000000002"}]}}"#
+        let assessed = #"{"missing":["age_band"],"manualOutstanding":["fee"],"submissionId":null,"state":null}"#
+        let confirmed = #"{"taskId":"cccccccc-0000-0000-0000-000000000001","confirmed":"fee"}"#
+        let ready = #"{"missing":[],"manualOutstanding":[],"submissionId":"eeeeeeee-0000-0000-0000-000000000003","state":"ready"}"#
+        let sent = #"{"submissionId":"eeeeeeee-0000-0000-0000-000000000003","state":"delivered"}"#
+        let store = MemorySessionStore(Session(accountId: UUID(), playerId: nil, accessToken: "acc", refreshToken: "ref", accessExpiresAt: .distantFuture, created: false))
+        let script = Script([(200, inbox), (200, assessed), (200, confirmed), (200, ready), (200, sent), (409, #"{"error":"It cannot be sent from where it is."}"#)])
+        let api = ThroAPI(configuration: config, deviceId: device, store: store, transport: script)
+        let sections = try await api.inbox()
+        let task = try XCTUnwrap(sections["ACTION_REQUIRED"]?.first)
+        XCTAssertEqual(task.player?.uuidString.lowercased(), "aaaaaaaa-0000-0000-0000-000000000002")
+        let first = try await api.assessRegistration(task: task.taskId)
+        XCTAssertEqual(first.missing, ["age_band"]); XCTAssertEqual(first.manualOutstanding, ["fee"]); XCTAssertNil(first.submissionId)
+        try await api.confirmRequirement(task: task.taskId, requirement: "fee", note: "paid in cash")
+        XCTAssertTrue(String(decoding: script.seen[2].httpBody ?? Data(), as: UTF8.self).contains("paid in cash"), "the note travels")
+        let second = try await api.assessRegistration(task: task.taskId)
+        XCTAssertEqual(second.state, "ready")
+        let state = try await api.submitRegistration(submission: try XCTUnwrap(second.submissionId))
+        XCTAssertEqual(state, "delivered")
+        do { _ = try await api.submitRegistration(submission: try XCTUnwrap(second.submissionId)); XCTFail("a resend is refused") }
+        catch let e as APIError { XCTAssertEqual(e.message, "It cannot be sent from where it is.") }
+    }
+
     func testBase64URLRoundTripsAndMatchesTheServersAlphabet() {
         let bytes = Data([0xfb, 0xff, 0xbf, 0x00, 0x01])
         let s = Base64URL.encode(bytes)

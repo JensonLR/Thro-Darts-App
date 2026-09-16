@@ -30,6 +30,7 @@ import io.ktor.server.routing.put
 import io.ktor.server.routing.routing
 import java.sql.Connection
 import java.time.Instant
+import java.time.LocalDate
 import java.time.temporal.ChronoUnit
 import java.util.UUID
 import thro.api.Accounts
@@ -59,7 +60,9 @@ import thro.api.Migrations
 import thro.api.OrganisationCommands
 import thro.api.Organisations
 import thro.api.SeasonPlanning
+import thro.api.TeamFixtures
 import thro.api.Ratings
+import thro.api.Registrations
 import thro.api.Relations
 import thro.api.Secretary
 import thro.api.VisitCommand
@@ -266,10 +269,9 @@ public fun Application.thro(deps: Deps) {
             }
         },
         "seasons.live" to { r ->
-            r.role = DbRole.READ
             val season = UUID.fromString(r.call.parameters["leagueSeasonId"])
             val limit = (r.call.request.queryParameters["limit"]?.toIntOrNull() ?: 20).coerceIn(1, 20)
-            Http(200, liveJson(LiveBoard(r.connection()).inPlay(season, limit)))
+            shown(r, season) { Http(200, liveJson(LiveBoard(r.connection()).inPlay(season, limit))) }
         },
         "me.terms" to { r ->
             withAccount(r) { a ->
@@ -406,12 +408,8 @@ public fun Application.thro(deps: Deps) {
         },
         // PD-056: a season's fixtures, publicly. Read as `app_read`, like the table it belongs beside.
         "seasons.fixtures" to { r ->
-            r.role = DbRole.READ
             val season = UUID.fromString(r.call.parameters["leagueSeasonId"])
-            Fixtures(r.connection()).let { f ->
-                if (!f.seasonExists(season)) Http(404, """{"error":"THRØ has no such league season."}""")
-                else Http(200, f.json(f.of(season)))
-            }
+            shown(r, season) { Fixtures(r.connection()).let { f -> Http(200, f.json(f.of(season))) } }
         },
         // PD-099: what running a season needs before any result — its teams, and its fixtures. The season is looked
         // for first, so a mistyped one is a 404 rather than a refusal that reads like a permission.
@@ -469,6 +467,67 @@ public fun Application.thro(deps: Deps) {
         "me.seasons" to { r -> SeasonPlanning(r.connection()).let { Http(200, it.runsJson(it.seasonsRunBy(r.principal!!.subject))) } },
         // PD-105: the provisional rating. Read — and replayed when the evidence has moved — as `app_rating`, the one
         // role that may write the rating tables and may not write a match.
+        // PD-107: registering players with a league run on THRØ — what it needs, who owes one, sending, the answer.
+        "seasons.policy" to { r ->
+            registrations { Registrations(r.connection(), deps.now).let { Http(200, it.json(it.policy(UUID.fromString(r.call.parameters["leagueSeasonId"]), r.principal!!.subject))) } }
+        },
+        "seasons.policy.set" to { r ->
+            registrations {
+                val m = Json.parseObject(r.body)
+                fun strings(key: String) = (m[key] as? List<*>)?.map { it.toString() } ?: emptyList()
+                val closes = (m["registrationClosesOn"] as? String)?.let { try { LocalDate.parse(it) } catch (e: Exception) { throw IllegalArgumentException("registrationClosesOn is not a date") } }
+                Registrations(r.connection(), deps.now).let {
+                    Http(200, it.json(it.setPolicy(UUID.fromString(r.call.parameters["leagueSeasonId"]), r.principal!!.subject, strings("requires"), strings("manualRequirements"),
+                                                   (m["deadlineDaysBeforeFirstFixture"] as? Number)?.toInt(), closes)))
+                }
+            }
+        },
+        "teams.reconcile" to { r ->
+            registrations { Registrations(r.connection(), deps.now).let { Http(200, it.json(it.reconcile(UUID.fromString(r.call.parameters["teamId"]), r.principal!!.subject))) } }
+        },
+        "tasks.assess" to { r ->
+            registrations { Registrations(r.connection(), deps.now).let { Http(200, it.json(it.assess(UUID.fromString(r.call.parameters["taskId"]), r.principal!!.subject))) } }
+        },
+        "tasks.confirm" to { r ->
+            registrations {
+                val m = Json.parseObject(r.body)
+                Registrations(r.connection(), deps.now).confirm(UUID.fromString(r.call.parameters["taskId"]), m["requirement"] as? String ?: "", m["note"] as? String ?: "", r.principal!!.subject)
+                Http(200, """{"taskId":"${r.call.parameters["taskId"]}","confirmed":${Contract.q(m["requirement"].toString())}}""")
+            }
+        },
+        "submissions.submit" to { r ->
+            registrations {
+                val id = UUID.fromString(r.call.parameters["submissionId"])
+                Http(200, """{"submissionId":"$id","state":${Contract.q(Registrations(r.connection(), deps.now).submit(id, r.principal!!.subject))}}""")
+            }
+        },
+        "seasons.registrations" to { r ->
+            registrations { Registrations(r.connection(), deps.now).let { Http(200, it.json(it.list(UUID.fromString(r.call.parameters["leagueSeasonId"]), r.principal!!.subject))) } }
+        },
+        "submissions.answer" to { r ->
+            registrations {
+                val id = UUID.fromString(r.call.parameters["submissionId"])
+                val m = Json.parseObject(r.body)
+                val from = (m["registeredFrom"] as? String)?.let { try { LocalDate.parse(it) } catch (e: Exception) { throw IllegalArgumentException("registeredFrom is not a date") } }
+                val state = Registrations(r.connection(), deps.now).answer(id, r.principal!!.subject, m["answer"] as? String ?: "", m["note"] as? String, from)
+                Http(200, """{"submissionId":"$id","state":${Contract.q(state)}}""")
+            }
+        },
+        // PD-106: a fixture as one team lives it, and the match it was played in.
+        "fixtures.team" to { r ->
+            teamFixture {
+                val t = TeamFixtures(r.connection())
+                Http(200, t.json(t.view(UUID.fromString(r.call.parameters["fixtureId"]), UUID.fromString(r.call.parameters["teamId"]), r.principal!!.subject)))
+            }
+        },
+        "fixtures.cite" to { r ->
+            teamFixture {
+                val fixture = UUID.fromString(r.call.parameters["fixtureId"])
+                val match = try { UUID.fromString(str(Json.parseObject(r.body), "matchId")) } catch (e: IllegalArgumentException) { throw IllegalArgumentException("matchId must be a UUID") }
+                TeamFixtures(r.connection()).cite(fixture, match, r.principal!!.subject)
+                Http(200, """{"fixtureId":"$fixture","matchId":"$match"}""")
+            }
+        },
         "me.rating" to { r -> rated(r, deps, r.principal!!.subject) },
         "players.rating" to { r ->
             val player = UUID.fromString(r.call.parameters["playerId"])
@@ -509,12 +568,9 @@ public fun Application.thro(deps: Deps) {
         // rather than kept anywhere. A season nobody has given rules to is ordered by THRØ's standard, and
         // the answer says so on its face.
         "seasons.standings" to { r ->
-            r.role = DbRole.READ
-            tabled {
-                val season = UUID.fromString(r.call.parameters["leagueSeasonId"])
-                val division = r.call.request.queryParameters["division"]?.let { UUID.fromString(it) }
-                LeagueTable(r.connection()).let { Http(200, it.json(it.of(season, division, deps.now()))) }
-            }
+            val season = UUID.fromString(r.call.parameters["leagueSeasonId"])
+            val division = r.call.request.queryParameters["division"]?.let { UUID.fromString(it) }
+            shown(r, season) { tabled { LeagueTable(r.connection()).let { Http(200, it.json(it.of(season, division, deps.now()))) } } }
         },
         "events" to { r -> r.role = DbRole.READ; Http(200, Events(r.connection()).let { it.json(it.upcoming(r.call.request.queryParameters["from"]?.let { f -> Instant.parse(f) } ?: deps.now())) }) },
         "me.discovery" to { r -> discovery(r.connection(), r.principal!!, r.call.request.queryParameters["from"], r.call.request.queryParameters["to"], r.call.request.queryParameters["locality"], deps.now()) },
@@ -874,6 +930,39 @@ private fun rated(r: Req, deps: Deps, player: UUID): Http {
     return Http(200, ratings.json(answer, names))
 }
 
+/**
+ * A season's public pages answer for a public, unended league — or for the people who run the season, whatever the
+ * league's standing (PD-103). A stranger holding a private season's id is told there is no such season, which is the
+ * same answer as a season that does not exist, so the id tells nobody which. The check reads as the competition role
+ * (the relation lives in `authz`), then the page is read as `app_read` like every public read.
+ */
+private fun shown(r: Req, season: UUID, block: () -> Http): Http {
+    r.role = DbRole.COMPETITION
+    val standing = r.connection().prepareStatement(
+        "SELECT l.visibility = 'public' AND l.dissolved_at IS NULL FROM competition.league_season ls JOIN competition.league l ON l.league_id = ls.league_id WHERE ls.league_season_id = ?",
+    ).use { ps -> ps.setObject(1, season); ps.executeQuery().use { rs -> if (rs.next()) rs.getBoolean(1) else null } }
+    val allowed = when (standing) {
+        null -> false
+        true -> true
+        false -> r.principal?.let { p ->
+            Relations(r.connection()).decide(p.subject, "league_season.administer", ObjectRef(ObjectType.LEAGUE_SEASON, season.toString())).allowed
+        } ?: false
+    }
+    if (!allowed) return Http(404, """{"error":"THRØ has no such league season."}""")
+    r.role = DbRole.READ
+    return block()
+}
+
+/** A registration step refused is an answer, with the status that says which kind (PD-107). */
+private fun registrations(block: () -> Http): Http = try { block() } catch (e: Registrations.Refused) {
+    Http(e.status, """{"error":${Contract.q(e.why)}}""")
+}
+
+/** A team's fixture refused is an answer, with the status that says which kind (PD-106). */
+private fun teamFixture(block: () -> Http): Http = try { block() } catch (e: TeamFixtures.Refused) {
+    Http(e.status, """{"error":${Contract.q(e.why)}}""")
+}
+
 /** A season's plan refused is an answer: which fixture, and why it cannot be played (PD-099). */
 private fun planned(block: () -> Http): Http = try { block() } catch (e: SeasonPlanning.Refused) {
     Http(e.status, """{"error":${Contract.q(e.why)}}""")
@@ -1097,7 +1186,7 @@ private fun liveJson(panels: List<LiveBoard.Panel>): String =
 private fun inboxJson(sections: Map<thro.competition.InboxSection, List<Secretary.InboxItem>>): String =
     "{\"sections\":{" + sections.entries.joinToString(",") { (s, items) ->
         Contract.q(s.name) + ":[" + items.joinToString(",") { i ->
-            """{"taskId":"${i.taskId}","kind":${Contract.q(i.kind)},"reason":${Contract.q(i.reason)},"dueAt":${i.dueAt?.let { Contract.q(it.toString()) } ?: "null"},"state":${Contract.q(i.state)}}"""
+            """{"taskId":"${i.taskId}","kind":${Contract.q(i.kind)},"reason":${Contract.q(i.reason)},"dueAt":${i.dueAt?.let { Contract.q(it.toString()) } ?: "null"},"state":${Contract.q(i.state)},"player":${i.player?.let { "\"$it\"" } ?: "null"}}"""
         } + "]"
     } + "}}"
 

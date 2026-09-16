@@ -51,8 +51,12 @@ public class Fixtures(private val connection: Connection) {
         /** scheduled, rearranged or postponed — a fixture's own lifecycle, not its result. */
         val state: String,
         val home: String?, val away: String?,
+        /** The teams themselves, which an award names (PD-106). A team id is not a person. */
+        val homeTeamId: UUID, val awayTeamId: UUID,
         val venue: String?, val locality: String?,
         val decided: Decided?,
+        /** The row version a rearrangement must name (PD-106): a stale write is refused rather than taken. */
+        val version: Int,
         /** Set when the live outcome is a void: the fixture is open again, and says why. */
         val annulled: Annulled?,
     )
@@ -70,7 +74,7 @@ public class Fixtures(private val connection: Connection) {
             SELECT f.fixture_id, f.division_id, d.name, f.scheduled_at, f.schedule_state,
                    h.name, a.name, v.name, v.locality,
                    o.kind, o.legs_home, o.legs_away, (o.to_team_id = f.home_team_id), o.outcome_id,
-                   annul.reason, annul.decided_at
+                   annul.reason, annul.decided_at, f.row_version, f.home_team_id, f.away_team_id
               FROM competition.league_fixture f
               -- A private team is unnamed rather than absent: the join is left, so the fixture survives it.
               LEFT JOIN competition.team h ON h.team_id = f.home_team_id AND h.visibility = 'public'
@@ -104,6 +108,7 @@ public class Fixtures(private val connection: Connection) {
                             divisionId = rs.getObject(2) as UUID?, division = rs.getString(3),
                             scheduledAt = rs.getTimestamp(4).toInstant(), state = rs.getString(5),
                             home = rs.getString(6), away = rs.getString(7),
+                            homeTeamId = rs.getObject(18) as UUID, awayTeamId = rs.getObject(19) as UUID,
                             venue = rs.getString(8), locality = rs.getString(9),
                             decided = kind?.let {
                                 val lh = rs.getInt(11).takeUnless { _ -> rs.wasNull() }
@@ -121,6 +126,7 @@ public class Fixtures(private val connection: Connection) {
                             annulled = if (kind != null) null else rs.getString(15)?.let { why ->
                                 Annulled(why, rs.getTimestamp(16).toInstant())
                             },
+                            version = rs.getInt(17),
                         )
                     }
                 }.toList()
@@ -138,8 +144,8 @@ public class Fixtures(private val connection: Connection) {
             val annulled = f.annulled?.let { a -> """{"reason":${q(a.reason)},"at":"${a.at}"}""" } ?: "null"
             """{"fixtureId":"${f.fixtureId}","divisionId":${f.divisionId?.let { "\"$it\"" } ?: "null"},""" +
                 """"division":${q(f.division)},"scheduledAt":"${f.scheduledAt}","state":${q(f.state)},""" +
-                """"home":${q(f.home)},"away":${q(f.away)},"venue":${q(f.venue)},"locality":${q(f.locality)},""" +
-                """"decided":$decided,"annulled":$annulled}"""
+                """"home":${q(f.home)},"away":${q(f.away)},"homeTeamId":"${f.homeTeamId}","awayTeamId":"${f.awayTeamId}","venue":${q(f.venue)},"locality":${q(f.locality)},""" +
+                """"decided":$decided,"annulled":$annulled,"version":${f.version}}"""
         } + "]}"
     }
 }

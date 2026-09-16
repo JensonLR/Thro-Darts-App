@@ -263,16 +263,21 @@ public class Secretary(private val connection: Connection) {
         require(answer in setOf(SubmissionState.ACCEPTED, SubmissionState.ACCEPTED_CONDITIONAL, SubmissionState.REJECTED, SubmissionState.ACTION_REQUIRED)) { "not an answer" }
         val s = submission(submissionId) ?: throw IllegalArgumentException("no such submission")
         val from = SubmissionState.valueOf(s.state.uppercase())
+        // Looked up before the transition, not after: there is no transaction around an answer, so an acceptance
+        // that could not register anybody must be refused whole rather than left accepted with nobody registered.
+        val governing = if (s.kind == "player_registration" && answer == SubmissionState.ACCEPTED) {
+            if (registeredFrom == null) throw IllegalStateException("an acceptance says from which date the player is registered")
+            approvedPolicy(s.seasonId!!, "registration", registeredFrom)?.first
+                ?: throw IllegalStateException("no approved registration policy governed this league season on $registeredFrom; accept from a date the policy covers")
+        } else null
         transition(
             submissionId, from, answer, by = by,
             evidence = if (artefactId != null) EvidenceKind.ARTEFACT else EvidenceKind.HUMAN_CONFIRMATION,
             artefactId = artefactId, note = note, registeredFrom = registeredFrom, conditions = conditions,
         )
-        if (s.kind == "player_registration" && answer == SubmissionState.ACCEPTED) {
-            val governing = approvedPolicy(s.seasonId!!, "registration", registeredFrom!!)?.first
-                ?: throw IllegalStateException("no approved registration policy governed ${s.seasonId} on $registeredFrom")
+        if (governing != null && registeredFrom != null) {
             Organisations(connection).register(
-                playerId = s.playerId!!, leagueSeasonId = s.seasonId, teamId = s.fromTeam, policyId = governing,
+                playerId = s.playerId!!, leagueSeasonId = s.seasonId!!, teamId = s.fromTeam, policyId = governing,
                 from = registeredFrom.atStartOfDay(london).toInstant(), source = "thro", by = by,
             )
         }
@@ -522,7 +527,8 @@ public class Secretary(private val connection: Connection) {
 
     // --- 5. Reading ---------------------------------------------------------------------------------
 
-    public data class InboxItem(val taskId: UUID, val kind: String, val reason: String, val dueAt: Instant?, val state: String, val section: InboxSection)
+    public data class InboxItem(val taskId: UUID, val kind: String, val reason: String, val dueAt: Instant?, val state: String, val section: InboxSection,
+                                val player: UUID? = null)
 
     public fun inbox(teamId: UUID, now: Instant = Instant.now()): Map<InboxSection, List<InboxItem>> =
         inboxWhere("owner_team_id = ?", teamId, now)
@@ -534,19 +540,34 @@ public class Secretary(private val connection: Connection) {
         val endOfToday = now.atZone(london).toLocalDate().plusDays(1).atStartOfDay(london).toInstant().minusSeconds(1)
         val items = mutableListOf<InboxItem>()
         connection.prepareStatement(
-            "SELECT task_id, kind, reason, due_at, state FROM competition.admin_task WHERE $where ORDER BY due_at NULLS LAST, created_at",
+            "SELECT task_id, kind, reason, due_at, state, subject_player_id FROM competition.admin_task WHERE $where ORDER BY due_at NULLS LAST, created_at",
         ).use { ps ->
             ps.setObject(1, id)
             ps.executeQuery().use { rs ->
                 while (rs.next()) {
                     val due = rs.getTimestamp(4)?.toInstant()
                     val state = TaskState.valueOf(rs.getString(5).uppercase())
-                    items += InboxItem(rs.getObject(1) as UUID, rs.getString(2), rs.getString(3), due, rs.getString(5), Inbox.sectionOf(state, due, now, endOfToday))
+                    items += InboxItem(rs.getObject(1) as UUID, rs.getString(2), rs.getString(3), due, rs.getString(5), Inbox.sectionOf(state, due, now, endOfToday), rs.getObject(6) as UUID?)
                 }
             }
         }
         return items.groupBy { it.section }
     }
+
+    // --- what a route needs to know before it may touch a task or a submission (PD-107) ------------------------------
+
+    /** The team a task belongs to, for the authority check: only whoever runs it may act on it. */
+    public fun taskOwnerTeam(taskId: UUID): UUID? = task(taskId)?.ownerTeam
+
+    /** Whose a submission is and where it goes: the sending team and the receiving season. */
+    public fun submissionParties(submissionId: UUID): Pair<UUID, UUID?>? =
+        connection.prepareStatement("SELECT from_team_id, to_league_season_id FROM competition.submission WHERE submission_id = ?").use { ps ->
+            ps.setObject(1, submissionId)
+            ps.executeQuery().use { rs -> if (rs.next()) (rs.getObject(1) as UUID) to (rs.getObject(2) as UUID?) else null }
+        }
+
+    /** The registration policy in force for a season on [on], as its id and body, or null when the league has set none. */
+    public fun registrationPolicy(season: UUID, on: LocalDate): Pair<UUID, Map<String, Any?>>? = approvedPolicy(season, "registration", on)
 
     /** What the league's administration sees: nothing before it was sent. Drafts are the team's. */
     public fun submissionsForLeague(seasonId: UUID): List<Pair<UUID, String>> {

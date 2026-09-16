@@ -127,6 +127,14 @@ class LeagueStartingTest {
             val quietId = idOf(quietText, "leagueId")
             check("and a private league is not on the public list", !get("/v1/leagues", subject = null).bodyAsText().contains("THRØ Rehearsal League"))
             check("its season still runs for its starter", get("/v1/seasons/${idOf(quietText, "leagueSeasonId")}/teams").status.value == 200)
+            // Private means private: the season's public pages answer nobody but the people who run it, and a
+            // stranger holding the id is told there is no such season — the same as one that does not exist.
+            val quietSeason = idOf(quietText, "leagueSeasonId")
+            check("a private league's fixtures, table and live board are not public, even to somebody holding the id",
+                get("/v1/seasons/$quietSeason/fixtures", subject = null).status.value == 404
+                    && get("/v1/seasons/$quietSeason/standings", subject = zed).status.value == 404
+                    && get("/v1/seasons/$quietSeason/live", subject = null).status.value == 404)
+            check("but its starter reads them", get("/v1/seasons/$quietSeason/fixtures").status.value == 200 && get("/v1/seasons/$quietSeason/standings").status.value == 200)
             check("the season page says which league it is, and how it stands", get("/v1/seasons/$season/teams").bodyAsText().contains("\"league\":{\"leagueId\":\"$league\""))
 
             check("changing a league is its starter's", post("/v1/leagues/$league", """{"name":"Zed's League"}""", subject = zed).status.value == 403)

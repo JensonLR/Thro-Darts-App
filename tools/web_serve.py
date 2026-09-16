@@ -7,7 +7,7 @@ no preflight, and no third host to configure. This mirrors that locally so what 
 development is arranged the way the real thing is.
 
     gradle -p services/api serve            # in another terminal, with PGHOST set
-    python3 apps/web/serve.py               # then open http://localhost:8899
+    python3 tools/web_serve.py               # then open http://localhost:8899
 """
 import http.server
 import os
@@ -15,7 +15,9 @@ import sys
 import urllib.error
 import urllib.request
 
-HERE = os.path.dirname(os.path.abspath(__file__))
+# The site lives in apps/web; this script lives in tools/, out of the directory Render publishes, because a static
+# host serves every file in its publish root and a development proxy is not a page.
+HERE = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "apps", "web")
 API = os.environ.get("THRO_API", "http://localhost:8080")
 PORT = int(os.environ.get("PORT", "8899"))
 

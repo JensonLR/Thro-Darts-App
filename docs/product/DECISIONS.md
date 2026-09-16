@@ -4670,3 +4670,82 @@ none. This revises OD-001's interim position and nothing else in it: the model i
   this model is a candidate like the others, and the display projection is what makes replacing it cheap.
 - Decay for inactivity, and a rating period. Both are visible ledger lines when they come, never silent drift.
 - Whether league results entered by an official should ever count. PD-055 says never; nothing here changes that.
+
+## PD-106 — A fixture as the team lives it
+
+**16 September 2026.** An audit of the captain's journey on the phone found where it broke: availability and the lineup
+existed only as commands no screen sent and nothing read back; a team's front carried no season id, so a player could not
+reach their own fixtures; and nothing outside a test ever cited a match to a fixture, so every league result was the
+organiser's *declared* word even when the match had been scored on THRØ visit by visit — the provenance PD-055 was built
+for, unused. The audit also found a private league's season pages answering to anybody holding the id, and the organiser
+web unable to award, rearrange, or open a next season.
+
+### Decided
+
+- **A team reads its fixture** (`GET /v1/fixtures/{id}/team/{teamId}`, members only): the opponent and the hour, every
+  member with what they have said about playing and the version the next change must name, who is picked and in what
+  order, whether the caller may pick the side, and the match cited. Changes still go through `POST /v1/commands`
+  (`SetAvailability`, `NameLineup`), whose authority and staleness rules were already held by tests. A member's player
+  id is shown to their own teammates — it is what a lineup names — and to nobody else.
+- **A match is cited to a fixture by somebody who played it and runs one of its teams** (`POST /v1/fixtures/{id}/match`),
+  once. The organiser's result for that fixture is then *played*, read against the match, and the table says so.
+- **On the phone**: a season row on the team's front opens the team's fixtures; a fixture opens the side — *Can play /
+  Maybe / Can't play* for oneself, the pick for whoever runs the team, and *Name the match* from one's own finished
+  matches. The team's front says *waiting* beside a season the league has not let it into yet.
+- **Private means private**: a private or ended league's fixtures, table and live board answer 404 to everybody but the
+  people who run the season, the same as a season that does not exist.
+- **The organiser web** awards a fixture (a reason, never a scoreline), rearranges one (naming the version it read, so
+  two officials cannot silently overwrite each other), and opens the league's next season; its status lines announce
+  themselves to screen readers; its fields are sized for what they hold.
+- **Leftovers removed**: the Neon starter files at the repo root; the web development proxy and its README, which named
+  the development-auth switch, moved out of the directory Render publishes.
+
+### Not decided here
+
+- A postponement with no new date. `schedule_state` admits `postponed` and nothing writes it; a rearrangement to a new
+  day is what the organiser has.
+- A team's admin citing a match they did not play in. The rule is deliberately "played it *and* runs a team", because
+  that pair is what makes the citation their word to give.
+
+## PD-107 — Registering players with a league run on THRØ
+
+**16 September 2026.** The completion matrix (PD-106) named the largest gap between what the repository holds and what
+anybody can reach: the Secretary's registration flow. `Secretary.kt` reconciled a team against a league's approved
+registration policy into tasks, assessed each into the facts THRØ can check and the requirements a person must confirm,
+prepared a submission, moved it through a state machine with a named mover and evidence at every step, and registered
+the player only on the league's answer — held by `SecretaryTest`, reachable from nothing. This decision is the HTTP
+shape over that domain, and the two surfaces that use it.
+
+**Decided.**
+
+1. **The league says what a registration needs, over the wire, in the parser's vocabulary.** `POST /v1/seasons/{id}/policy`
+   drafts and approves a registration policy in one act by the season's administrator, in force from today, superseding
+   the one before it (which ends today; both are in force for the day and the Secretary reads the higher version). The
+   body is read by the same strict `RegistrationPolicy.parse` the Secretary executes: `requires` is limited to the four
+   facts THRØ can check (`name`, `age_band`, `account_claimed`, `consent`); anything else goes under
+   `manualRequirements`, where a named person confirms it by hand; a requirement in `requires` THRØ does not know is a
+   400, not a rule silently broken later. Registration closes on a date or a number of days before the team's first
+   fixture — one of the two, required.
+2. **Sent is delivered; delivered is not accepted.** On THRØ the league's page *is* the delivery, so `submit` records
+   the send and an API delivery in one step (`Transport.API`, adapter `thro`), and the league's list shows it at once.
+   Nothing registers anybody except `POST /v1/submissions/{id}/answer` by the season's administrator: `accepted` from a
+   date, under the policy in force on that date, or `rejected` with a reason (a rejection with no note is a 400).
+   Acknowledgement is implied on the way — a page read is a read.
+3. **Refused whole, or done whole.** There is no transaction around an answer. An acceptance from a date no policy
+   governed used to transition the submission to *accepted* and then throw, leaving it accepted with nobody registered.
+   The governing policy is now looked up before the transition, so the answer is refused in words (409) or done in full.
+4. **Who may.** Policy and answers: whoever administers the season (`league_season.administer`). Reconcile, assess,
+   confirm, send: whoever runs the team (`team.manage`) — a member who does not is a 403, a stranger a 403, a task
+   that does not exist a 404. The team's inbox now names the player each task is about, so the captain's screen can act.
+5. **Surfaces.** The organiser web's season page has a *Registrations* section: the policy as a form (which facts,
+   which manual requirements, the deadline) and every registration sent, the player by name where THRØ may name them,
+   with *Accept from* a date or *Reject* with a reason. The phone's inbox, on a registration task: *See what it needs*
+   → what is missing by name (set by the player in their own profile), *Confirm the fee by hand* with a note kept in the
+   captain's name, *Send it to the league* — and after sending, the state as it is, never "registered".
+
+**Not decided here.** Consent recorded by the captain for a player (`Secretary.recordConsent`) stays off the wire: on
+THRØ a player consents in their own profile. Rearrangement *proposals*, transfers and division moves remain on the
+frontier. Outbound notification to the league when a registration arrives waits on a mailbox (OD-025).
+
+**Evidence.** `RegistrationHttpTest` (35 checks over the whole journey, written red first), `SecretaryTest` (64) still
+green, `NetTests.testARegistrationTaskIsAssessedConfirmedAndSent` on the phone, and the API contract regenerated.

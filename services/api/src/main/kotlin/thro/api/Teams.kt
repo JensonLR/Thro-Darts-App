@@ -28,7 +28,8 @@ public class Teams(private val connection: Connection, private val now: () -> In
      * a person's id — and is there only for the team's admin, to name a captain with (PD-045).
      */
     public data class Member(val name: String?, val role: String, val memberId: UUID? = null)
-    public data class SeasonLine(val league: String, val label: String, val division: String?)
+    /** [leagueSeasonId] is what lets the phone reach the season's fixtures; [accepted] says whether the league has let the team in. */
+    public data class SeasonLine(val league: String, val label: String, val division: String?, val leagueSeasonId: UUID, val accepted: Boolean)
     /** A league the team's own admin or captain says it plays in (PD-049): their say, not the league's. */
     public data class LeagueSaid(val leagueId: UUID, val name: String)
     /**
@@ -80,7 +81,7 @@ public class Teams(private val connection: Connection, private val now: () -> In
             ps.executeQuery().use { rs -> generateSequence { if (rs.next()) Summary(rs.getObject(1) as UUID, rs.getString(2), rs.getString(3), rs.getString(4), rs.getInt(5)) else null }.toList() }
         }
 
-    private fun roleOf(player: UUID, teamId: UUID): String? =
+    public fun roleOf(player: UUID, teamId: UUID): String? =
         connection.prepareStatement("SELECT role FROM competition.team_membership WHERE team_id = ? AND player_id = ? AND valid_until IS NULL")
             .use { ps -> ps.setObject(1, teamId); ps.setObject(2, player); ps.executeQuery().use { rs -> if (rs.next()) rs.getString(1) else null } }
 
@@ -96,12 +97,12 @@ public class Teams(private val connection: Connection, private val now: () -> In
                WHERE tv.team_id = ? AND tv.kind = 'home' AND tv.valid_until IS NULL""",
         ).use { ps -> ps.setObject(1, teamId); ps.executeQuery().use { rs -> if (rs.next()) Leagues.Venue(rs.getObject(1) as UUID, rs.getString(2), rs.getString(3), rs.getString(4), rs.getBigDecimal(5)?.toDouble(), rs.getBigDecimal(6)?.toDouble(), null) else null } }
         val seasons = connection.prepareStatement(
-            """SELECT l.name, ls.label, d.name FROM competition.team_affiliation ta
+            """SELECT l.name, ls.label, d.name, ls.league_season_id, ta.status = 'accepted' FROM competition.team_affiliation ta
                JOIN competition.league_season ls ON ls.league_season_id = ta.league_season_id
                JOIN competition.league l ON l.league_id = ls.league_id
                LEFT JOIN competition.division d ON d.division_id = ta.division_id
                WHERE ta.team_id = ? AND ta.valid_until IS NULL ORDER BY ls.starts_on DESC""",
-        ).use { ps -> ps.setObject(1, teamId); ps.executeQuery().use { rs -> generateSequence { if (rs.next()) SeasonLine(rs.getString(1), rs.getString(2), rs.getString(3)) else null }.toList() } }
+        ).use { ps -> ps.setObject(1, teamId); ps.executeQuery().use { rs -> generateSequence { if (rs.next()) SeasonLine(rs.getString(1), rs.getString(2), rs.getString(3), rs.getObject(4) as UUID, rs.getBoolean(5)) else null }.toList() } }
         // Each entry's handle goes to the admin alone, to name a captain with; nobody else sees one.
         val handles = yourRole == "admin"
         val roster = connection.prepareStatement(
@@ -361,7 +362,7 @@ public class Teams(private val connection: Connection, private val now: () -> In
     public fun json(f: Front): String =
         """{"teamId":"${f.teamId}","name":${q(f.name)},"locality":${q(f.locality)},"venue":""" + (f.venue?.let { v ->
             """{"venueId":"${v.venueId}","name":${q(v.name)},"locality":${q(v.locality)},"postcode":${q(v.postcode)},"latitude":${v.latitude ?: "null"},"longitude":${v.longitude ?: "null"}}"""
-        } ?: "null") + ""","seasons":[${f.seasons.joinToString(",") { """{"league":${q(it.league)},"label":${q(it.label)},"division":${q(it.division)}}""" }}],""" +
+        } ?: "null") + ""","seasons":[${f.seasons.joinToString(",") { """{"league":${q(it.league)},"label":${q(it.label)},"division":${q(it.division)},"leagueSeasonId":"${it.leagueSeasonId}","accepted":${it.accepted}}""" }}],""" +
             """"roster":[${f.roster.joinToString(",") { """{"name":${q(it.name)},"role":${q(it.role)}${it.memberId?.let { id -> ""","memberId":"$id"""" } ?: ""}}""" }}],""" +
             """"yourRole":${q(f.yourRole)},"adopted":${f.adopted},""" +
             """"saysItPlaysIn":[${f.saysItPlaysIn.joinToString(",") { """{"leagueId":"${it.leagueId}","name":${q(it.name)}}""" }}]}"""
