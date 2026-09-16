@@ -369,10 +369,11 @@ function signInGate(signInEl, where, prompt, redraw) {
 
 const ANSWERS = [
   ['left', 'Leave it — nothing wrong'],
-  ['hidden', 'Hide it'],
-  ['corrected', 'Corrected'],
-  ['account_suspended', 'Suspend the account'],
+  ['hidden', 'Hide it — the name comes off every public page'],
+  ['corrected', 'Corrected — they put it right'],
+  ['account_suspended', 'Suspend the account — signed out everywhere, cannot sign in'],
   ['not_upheld', 'Not upheld'],
+  ['reinstated', 'Reinstate — lift the suspension, or show it again'],
 ];
 
 async function mountModeration(where, signInEl) {
@@ -383,8 +384,10 @@ async function mountModeration(where, signInEl) {
     const open = data.reports.filter(r => r.decisions === 0);
     const answered = data.reports.filter(r => r.decisions > 0);
     const parts = [
-      make('p', 'quiet', 'A decision is recorded, with your name and reason, and kept. THRØ does not yet hide a name or '
-        + 'suspend an account by itself: do that, then record it here.'),
+      make('p', 'quiet', 'A decision is recorded, with your name and reason, and kept — and it does what it says (PD-103): '
+        + 'hiding takes the name off every public page, suspending signs the person out everywhere and refuses their '
+        + 'next sign-in, and reinstating undoes either. A match names nobody, so a report about one is answered by '
+        + 'reporting the account.'),
       make('h2', null, open.length ? `${open.length} to answer` : 'Nothing waiting'),
     ];
     for (const r of open) parts.push(card(r, draw));
@@ -472,11 +475,13 @@ async function mountLobby(where, signInEl) {
     const label = input('text', 'Season, e.g. 2026-27'); label.maxLength = 40;
     const starts = input('date'); const ends = input('date');
     const divisions = input('text', 'Divisions, comma-separated, optional');
+    const quiet = input('checkbox'); quiet.checked = true;
     const go = make('button', 'primary', 'Start it');
     const said = make('p', 'note'); said.hidden = true;
     go.onclick = async () => {
       const body = {
         name: name.value.trim(),
+        visibility: quiet.checked ? 'private' : 'public',
         ...(locality.value.trim() ? { locality: locality.value.trim() } : {}),
         season: {
           label: label.value.trim(), startsOn: starts.value, endsOn: ends.value,
@@ -494,7 +499,8 @@ async function mountLobby(where, signInEl) {
     };
     const form = make('div', 'entry-form');
     form.style.flexWrap = 'wrap';
-    form.append(name, locality, label, field('Starts', starts), field('Ends', ends), divisions, go);
+    form.append(name, locality, label, field('Starts', starts), field('Ends', ends), divisions,
+                field('Keep it private for now (off the public list; you can make it public later)', quiet), go);
     box.append(form, said);
     return box;
   }
@@ -541,7 +547,7 @@ async function mountOrganiser(where, signInEl) {
 
     const todo = (data.fixtures || []).filter(f => !f.decided);
     const done = (data.fixtures || []).filter(f => f.decided);
-    const parts = [...teamsSection(plan, draw)];
+    const parts = [...leagueSection(plan, draw), ...teamsSection(plan, draw)];
 
     if (!(data.fixtures || []).length) {
       parts.push(make('h2', null, 'Fixtures'),
@@ -562,6 +568,40 @@ async function mountOrganiser(where, signInEl) {
     parts.push(scheduler(plan, draw));
     where.replaceChildren(...parts);
   };
+
+  /**
+   * The league this season belongs to, and what its starter may do to it (PD-103): rename it, keep it off the public
+   * list, or end it. A league THRØ lists from elsewhere is named and left alone — its organiser did not start it here.
+   */
+  function leagueSection(plan, redraw) {
+    const l = plan.league;
+    const standing = l.endedAt ? `ended ${when(l.endedAt)}` : (l.visibility === 'private' ? 'private — off the public list' : 'public');
+    const out = [make('h2', null, l.name), make('p', 'quiet', `${plan.label} · ${plan.startsOn} to ${plan.endsOn} · the league is ${standing}.`)];
+    if (!l.startedHere || l.endedAt) return out;
+    const box = make('div', 'entry');
+    const said = make('p', 'note'); said.hidden = true;
+    const change = async (body, button) => {
+      button.disabled = true;
+      try { await authorised('POST', `/v1/leagues/${encodeURIComponent(l.leagueId)}`, body); redraw(); }
+      catch (e) { said.hidden = false; said.textContent = e.message; button.disabled = false; }
+    };
+    const form = make('div', 'entry-form');
+    const name = make('input'); name.type = 'text'; name.value = l.name; name.maxLength = 80;
+    name.setAttribute('aria-label', 'The league’s name');
+    const rename = make('button', 'quiet-button', 'Rename');
+    rename.onclick = () => change({ name: name.value.trim() }, rename);
+    const toggle = make('button', 'quiet-button', l.visibility === 'private' ? 'Make it public' : 'Take it private');
+    toggle.onclick = () => change({ visibility: l.visibility === 'private' ? 'public' : 'private' }, toggle);
+    const end = make('button', 'quiet-button', 'End this league');
+    end.onclick = () => {
+      if (end.textContent !== 'End it — this cannot be undone') { end.textContent = 'End it — this cannot be undone'; return; }
+      change({ ended: true }, end);
+    };
+    form.append(name, rename, toggle, end);
+    box.append(form, said);
+    out.push(box);
+    return out;
+  }
 
   /**
    * The teams that asked into the season (PD-099). Only an accepted team is in the league: its fixtures count and

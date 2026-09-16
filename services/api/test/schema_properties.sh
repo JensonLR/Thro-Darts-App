@@ -958,6 +958,25 @@ r=$($PSQL -c "INSERT INTO competition.league_fixture_outcome (outcome_id, fixtur
 if echo "$r" | grep -qi 'must supersede it'; then bad "a voided fixture may be decided again" "the writer still counts a void as a result"
 else ok "a voided fixture may be decided again"; fi
 
+# V048 — a decision does what it says (PD-103).
+# A suspension carries its reason or it is not one; a league is public or private and nothing else; and
+# 'reinstated' is an answer a report can have, recorded by the application role like every other.
+r=$($PSQL -c "SET ROLE app_competition; UPDATE identity.account SET suspended_at = now() WHERE account_id='$RB';" 2>&1)
+if echo "$r" | grep -qi 'suspension_has_a_reason'; then ok "a suspension without a reason is refused"
+else bad "a suspension without a reason is refused" "${r:-an account was suspended with no reason on the row}"; fi
+$PSQL -c "SET ROLE app_competition; UPDATE identity.account SET suspended_at = now(), suspended_reason = 'threats' WHERE account_id='$RB';" >/dev/null 2>&1
+check "and one with a reason is recorded by the application role" "$($PSQL -c "SELECT count(*) FROM identity.account WHERE account_id='$RB' AND suspended_at IS NOT NULL;")" "1"
+$PSQL -c "SET ROLE app_competition; UPDATE identity.account SET suspended_at = NULL, suspended_reason = NULL WHERE account_id='$RB';" >/dev/null 2>&1
+SLG48=$($PSQL -c "SELECT gen_random_uuid();")
+$PSQL -c "INSERT INTO competition.league (league_id, name) VALUES ('$SLG48','A League To Hide');" >/dev/null 2>&1
+r=$($PSQL -c "SET ROLE app_competition; UPDATE competition.league SET visibility='secret' WHERE league_id='$SLG48';" 2>&1)
+if echo "$r" | grep -qi 'visibility'; then ok "a league is public or private and nothing else"
+else bad "a league is public or private and nothing else" "${r:-a league took a visibility that is neither}"; fi
+$PSQL -c "SET ROLE app_competition; UPDATE competition.league SET visibility='private' WHERE league_id='$SLG48';" >/dev/null 2>&1
+check "and the application role may make one private" "$($PSQL -c "SELECT visibility FROM competition.league WHERE league_id='$SLG48';")" "private"
+$PSQL -c "SET ROLE app_competition; INSERT INTO safety.decision (report_id, outcome, note, decided_by) VALUES ('$RP','reinstated','renamed, back on the list','$RB');" >/dev/null 2>&1
+check "reinstated is an answer a report can have" "$($PSQL -c "SELECT count(*) FROM safety.decision WHERE report_id='$RP' AND outcome='reinstated';")" "1"
+
 echo
 echo "-------------------------------------------"
 echo "  $PASS passed, $FAIL failed"

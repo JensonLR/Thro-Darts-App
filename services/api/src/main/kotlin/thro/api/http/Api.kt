@@ -449,8 +449,20 @@ public object Contract {
             description = "The league, its first season and that season's divisions, together or not at all, and whoever "
                 + "starts it becomes the season's administrator. A league THRØ lists from elsewhere is not this: it already "
                 + "has somebody who runs it, and is run only by the person named for it (PD-053).",
-            request = Schema("""{"type":"object","required":["name","season"],"properties":{"name":{"type":"string","minLength":2,"maxLength":80},"locality":{"type":"string"},"season":{"type":"object","required":["label","startsOn","endsOn"],"properties":{"label":{"type":"string","minLength":1,"maxLength":40},"startsOn":{"type":"string","format":"date"},"endsOn":{"type":"string","format":"date"},"divisions":{"type":"array","maxItems":12,"items":{"type":"string"}}}}}}"""),
-            responses = mapOf(200 to "the league and its first season", 400 to "a name, label, date or division of the wrong shape", 401 to "no principal"),
+            request = Schema("""{"type":"object","required":["name","season"],"properties":{"name":{"type":"string","minLength":2,"maxLength":80},"locality":{"type":"string"},"visibility":{"type":"string","enum":["public","private"],"description":"private keeps it off the public list: a rehearsal, or not yet public"},"season":{"type":"object","required":["label","startsOn","endsOn"],"properties":{"label":{"type":"string","minLength":1,"maxLength":40},"startsOn":{"type":"string","format":"date"},"endsOn":{"type":"string","format":"date"},"divisions":{"type":"array","maxItems":12,"items":{"type":"string"}}}}}}"""),
+            responses = mapOf(200 to "the league and its first season", 400 to "a name, label, date, division or visibility of the wrong shape", 401 to "no principal"),
+        ),
+        Endpoint(
+            id = "leagues.update", method = "POST", path = "/v1/leagues/{leagueId}", authenticated = true,
+            summary = "Rename a league started on THRØ, take it private or public, or end it (PD-103)",
+            description = "Only the person who started the league. A private league is off the public list and its name is "
+                + "shown nowhere public; its seasons still run for its organiser. Ending is recorded once and never undone: "
+                + "an ended league keeps and answers for every season it had and takes no more. A league THRØ lists from "
+                + "elsewhere refuses everybody here.",
+            request = Schema("""{"type":"object","properties":{"name":{"type":"string","minLength":2,"maxLength":80},"visibility":{"type":"string","enum":["public","private"]},"ended":{"type":"boolean"}}}"""),
+            responses = mapOf(200 to "the league as it now stands", 400 to "a name or visibility of the wrong shape", 401 to "no principal",
+                              403 to "you did not start this league, or THRØ lists it from elsewhere", 404 to "no such league",
+                              409 to "the league has already ended"),
         ),
         Endpoint(
             id = "leagues.season.open", method = "POST", path = "/v1/leagues/{leagueId}/seasons", authenticated = true,

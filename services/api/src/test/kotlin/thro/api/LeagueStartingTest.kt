@@ -119,6 +119,33 @@ class LeagueStartingTest {
             val taken = post("/v1/leagues/$listed/seasons", next)
             check("a league THRØ lists from elsewhere cannot have seasons opened in it by whoever asks, and says why",
                 taken.status.value == 403 && taken.bodyAsText().contains("named"))
+
+            // --- running the league itself: private, renamed, ended (PD-103) -------------------------------------------
+            val quiet = post("/v1/leagues", """{"name":"THRØ Rehearsal League","season":{"label":"2026-27","startsOn":"2026-09-01","endsOn":"2027-05-31"},"visibility":"private"}""")
+            val quietText = quiet.bodyAsText()
+            check("a league can be started private — a rehearsal, or not yet public", quiet.status.value == 200 && quietText.contains("\"visibility\":\"private\""))
+            val quietId = idOf(quietText, "leagueId")
+            check("and a private league is not on the public list", !get("/v1/leagues", subject = null).bodyAsText().contains("THRØ Rehearsal League"))
+            check("its season still runs for its starter", get("/v1/seasons/${idOf(quietText, "leagueSeasonId")}/teams").status.value == 200)
+            check("the season page says which league it is, and how it stands", get("/v1/seasons/$season/teams").bodyAsText().contains("\"league\":{\"leagueId\":\"$league\""))
+
+            check("changing a league is its starter's", post("/v1/leagues/$league", """{"name":"Zed's League"}""", subject = zed).status.value == 403)
+            check("a listed league is nobody's to change here", post("/v1/leagues/$listed", """{"visibility":"private"}""").status.value == 403)
+            check("a league nobody has is a 404", post("/v1/leagues/${UUID.randomUUID()}", """{"name":"X"}""").status.value == 404)
+            check("a visibility that is not one is a 400", post("/v1/leagues/$league", """{"visibility":"secret"}""").status.value == 400)
+            check("a name too short is a 400", post("/v1/leagues/$league", """{"name":"X"}""").status.value == 400)
+            val renamed = post("/v1/leagues/$league", """{"name":"THRØ Test League (renamed)","visibility":"private"}""")
+            check("the starter renames it and takes it private in one go",
+                renamed.status.value == 200 && renamed.bodyAsText().contains("(renamed)") && renamed.bodyAsText().contains("\"visibility\":\"private\""))
+            check("and it leaves the public list", !get("/v1/leagues", subject = null).bodyAsText().contains("THRØ Test League"))
+            check("and comes back to it", post("/v1/leagues/$league", """{"visibility":"public"}""").status.value == 200
+                && get("/v1/leagues", subject = null).bodyAsText().contains("THRØ Test League (renamed)"))
+            val ended = post("/v1/leagues/$league", """{"ended":true}""")
+            check("the starter ends the league", ended.status.value == 200 && ended.bodyAsText().contains("\"endedAt\":\""))
+            check("an ended league is off the public list", !get("/v1/leagues", subject = null).bodyAsText().contains("THRØ Test League"))
+            check("and no season can be opened in it", post("/v1/leagues/$league/seasons", """{"label":"2028-29","startsOn":"2028-09-01","endsOn":"2029-05-31"}""").status.value == 409)
+            check("but its seasons still answer, and are still the starter's", get("/v1/seasons/$season/teams").status.value == 200)
+            check("ending it twice changes nothing and says so", post("/v1/leagues/$league", """{"ended":true}""").status.value == 409)
         }
         println("league starting: $passed checks passed")
     }

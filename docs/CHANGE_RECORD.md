@@ -5670,3 +5670,39 @@ three in order, offers only another passkey when all are held, does not offer Ap
 it, and offers everything for a profile with no `ways`. `AccountProfileTests` and `AccountTests`, 26 tests, pass — which
 also shows no existing `Profile(...)` call broke. The API suite: 114 tests, 0 failures. `check_test_counts.py` caught
 the new test missing from the README and `CLIENT_IOS.md`, whose counts now say 385 and 859.
+
+**Deployed.** CI green on 92a58eb, `deploy-api` completed success, `/healthz` answered with it, the home page served from
+`thro.uk` links *Run a league*, and TestFlight build 9 (run 34854069497) uploaded and processed to VALID.
+
+## A decision does what it says, and a league is its starter's to run (V048, PD-103)
+
+**Tests first, both red for the right reason.** `SafetyTest` gained a case run as `app_competition`: hidden makes a team,
+venue and league private and an account's name the placeholder; hidden on a match is refused in words; suspending a team
+is refused; suspending an account kills a live session on the next request and refuses the next sign-in with
+`AccountSuspended`; a moderator cannot suspend themselves; reinstating lifts the suspension and makes hidden things
+public again, and is refused where nothing was hidden or suspended; every decision stays on the record. It failed to
+compile on `AccountSuspended`, then — after my test made the account by hand, without the player claim a principal
+needs — passed once the account was made the way a person's is, by signing in. `ModerationHttpTest` is new: a moderator
+signed in with a real Apple token (13 checks) reads the queue by name, is refused an answer that is not one, suspends,
+sees the person's session die and their sign-in answered 403 *suspended*, reinstates, and sees them back. Its first run
+failed for the same missing-claim reason, fixed the same way.
+
+**V048.** `identity.account` gains `suspended_at` and `suspended_reason`, both or neither; `competition.league` gains
+`visibility` and `dissolved_at`; the decision and tally outcome CHECKs admit `reinstated` (drop-and-add, marked and
+reasoned as V042 did). `check_migrations.py` passes. Three properties were added to `schema_properties.sh` and the whole
+script run on a scratch cluster (a cluster already holding `thro_owner` cannot run it): 157 passed, 0 failed.
+
+**The code.** `Safety.decide` enforces in its own transaction; `Accounts` gains `suspend`, `reinstate`, `hideName` and
+the one suspension check at `openFamily`, where both sign-in paths mint a session; `resolve` excludes suspended
+accounts; the sign-in route answers `AccountSuspended` as 403. `Leagues.all` lists public, unended leagues only.
+`SeasonPlanning` gains `updateLeague` (rename, visibility, ended — starter only, listed leagues refused, ending once),
+`startLeague` takes a visibility, and a season's JSON carries its league's head. `LeagueStartingTest` gained 17 checks,
+red first on the route being absent: 42 pass. The API suite with the contract regenerated: 116 tests, 0 failures.
+
+**The web.** The moderation page's answers say what each does and the note no longer disowns them; the organiser's
+season page opens with the league's name and standing and, for its starter, rename / take private / end (the end button
+asks twice); *Start a league* keeps a new league private by default. `node --check` passes; not looked at in a browser,
+for the passkey reason as before.
+
+`LAUNCH_REQUIREMENTS.md` no longer says nothing can report or block, or that the privacy manifest is missing; it says
+what is built and what still waits on the mailbox.

@@ -101,6 +101,84 @@ class SafetyTest {
         }
     }
 
+    /**
+     * A decision does what it says (PD-103). Until this, *hidden* and *account_suspended* were words on a record and the
+     * moderator did the thing by hand — or did not, and the record said it had been done. Run as `app_competition`,
+     * because that is the role the server holds, and a grant the owner has and the server lacks is a 500 in production.
+     */
+    @Test
+    fun `a decision does what it says - hides, suspends, reinstates - and refuses what it cannot do`() {
+        if (!configured) return
+        migrated().use { c ->
+            var at = Instant.parse("2026-09-16T10:00:00Z")
+            val orgs = Organisations(c)
+            val ann = account(c, "Ann")
+            val device = UUID.randomUUID()
+            val accounts = Accounts(c, now = { at })
+            // The rude account is made the way a person's is — by signing in — so it holds a player and a live session,
+            // as a person being suspended would.
+            val session = accounts.signIn("apple", "sub-rude", device)
+            val rude = session.accountId
+            accounts.setDisplayName(rude, "Rude Name")
+            assertEquals(rude, accounts.resolve(session.accessToken)?.first, "the session works before any decision")
+            val team = orgs.createTeam("A Rude Team", "Stockton-on-Tees")
+            val venue = orgs.createVenue("The Rude Arms")
+            val league = orgs.createLeague("The Rude League")
+            fun visibility(table: String, key: String, id: UUID) = count(c, "SELECT count(*) FROM competition.$table WHERE $key = '$id' AND visibility = 'private'")
+            fun suspended(id: UUID) = count(c, "SELECT count(*) FROM identity.account WHERE account_id = '$id' AND suspended_at IS NOT NULL")
+            fun name(id: UUID) = c.createStatement().use { st -> st.executeQuery("SELECT display_name FROM identity.account WHERE account_id = '$id'").use { rs -> rs.next(); rs.getString(1) } }
+
+            c.createStatement().use { it.execute("SET ROLE app_competition") }
+            val safety = Safety(c) { at }
+            val onTeam = safety.report(ann, "team", team, "The team name is a slur.")
+            val onVenue = safety.report(ann, "venue", venue, "The venue name is a slur.")
+            val onLeague = safety.report(ann, "league", league, "The league name is a slur.")
+            val onAccount = safety.report(ann, "account", rude, "Their name is a slur.")
+            val onMatch = safety.report(ann, "match", UUID.randomUUID(), "They threatened me after the match.")
+            val moderator = ann
+
+            // --- hidden ---------------------------------------------------------------------------------------
+            safety.decide(onTeam.reportId, "hidden", "The name is hidden until the team renames it.", moderator)
+            assertEquals(1, visibility("team", "team_id", team), "a hidden team is private: unnamed on every public surface")
+            safety.decide(onVenue.reportId, "hidden", "Hidden.", moderator)
+            assertEquals(1, visibility("venue", "venue_id", venue), "a hidden venue is private")
+            safety.decide(onLeague.reportId, "hidden", "Hidden.", moderator)
+            assertEquals(1, visibility("league", "league_id", league), "a hidden league is private: off the public list")
+            safety.decide(onAccount.reportId, "hidden", "The name is replaced.", moderator)
+            assertEquals(Accounts.PLACEHOLDER_NAME, name(rude), "a hidden account name is the placeholder, for the person to change")
+            assertEquals("A match names nobody, so there is nothing to hide. Report the account instead.",
+                         assertFailsWith<Safety.Refused> { safety.decide(onMatch.reportId, "hidden", "Hide it.", moderator) }.why)
+
+            // --- suspended ------------------------------------------------------------------------------------
+            assertEquals("Suspending is of an account. Report the account, and suspend that.",
+                         assertFailsWith<Safety.Refused> { safety.decide(onTeam.reportId, "account_suspended", "Out.", moderator) }.why)
+            safety.decide(onAccount.reportId, "account_suspended", "Threats, after a warning.", moderator)
+            assertEquals(1, suspended(rude))
+            at = at.plusSeconds(1)
+            assertEquals(null, accounts.resolve(session.accessToken), "every session of a suspended account is dead on the next request")
+            assertEquals("this account is suspended", assertFailsWith<Accounts.AccountSuspended> { accounts.signIn("apple", "sub-rude", device) }.message,
+                         "and a suspended account cannot sign in again")
+            assertEquals("You cannot suspend yourself.",
+                         assertFailsWith<Safety.Refused> { safety.decide(safety.report(rude, "account", ann, "x y z").reportId, "account_suspended", "Self.", ann) }.why)
+
+            // --- reinstated -----------------------------------------------------------------------------------
+            safety.decide(onAccount.reportId, "reinstated", "Apologised; a month served.", moderator)
+            assertEquals(0, suspended(rude), "reinstating lifts the suspension")
+            val again = accounts.signIn("apple", "sub-rude", device)
+            assertEquals(rude, accounts.resolve(again.accessToken)?.first, "and they sign in again")
+            safety.decide(onTeam.reportId, "reinstated", "Renamed.", moderator)
+            assertEquals(0, visibility("team", "team_id", team), "reinstating a hidden team makes it public again")
+            safety.decide(onLeague.reportId, "reinstated", "Renamed.", moderator)
+            assertEquals(0, visibility("league", "league_id", league))
+            assertEquals("There is nothing to reinstate: no decision hid or suspended this.",
+                         assertFailsWith<Safety.Refused> { safety.decide(onMatch.reportId, "reinstated", "Back.", moderator) }.why)
+
+            // --- and every decision is on the record, in order --------------------------------------------------
+            assertEquals(3, count(c, "SELECT count(*) FROM safety.decision WHERE report_id = '${onAccount.reportId}'"))
+            assertEquals(2, safety.queue().first { it.report.reportId == onTeam.reportId }.decisions)
+        }
+    }
+
     @Test
     fun `a report raised by or about a child goes to the front of the queue`() {
         if (!configured) return

@@ -422,7 +422,18 @@ public fun Application.thro(deps: Deps) {
                 val m = Json.parseObject(r.body)
                 val name = m["name"] as? String ?: throw IllegalArgumentException("A league has a name.")
                 val opening = SeasonPlanning.parseOpening(m["season"])
-                SeasonPlanning(r.connection()).let { p -> Http(200, p.json(p.startLeague(r.principal!!.subject, name, m["locality"] as? String, opening))) }
+                val visibility = m["visibility"] as? String ?: "public"
+                SeasonPlanning(r.connection()).let { p -> Http(200, p.json(p.startLeague(r.principal!!.subject, name, m["locality"] as? String, opening, visibility))) }
+            }
+        },
+        "leagues.update" to { r ->
+            planned {
+                val league = UUID.fromString(r.call.parameters["leagueId"])
+                val m = Json.parseObject(r.body)
+                val ended = when (val e = m["ended"]) { null -> false; is Boolean -> e; else -> throw IllegalArgumentException("ended is true or false.") }
+                SeasonPlanning(r.connection()).let { p ->
+                    Http(200, p.json(p.updateLeague(r.principal!!.subject, league, m["name"] as? String, m["visibility"] as? String, ended)))
+                }
             }
         },
         "leagues.season.open" to { r ->
@@ -542,6 +553,8 @@ public fun Application.thro(deps: Deps) {
                         Http(503, """{"error":"the sign-in provider's keys are unavailable; try again shortly"}""")
                     } catch (x: Accounts.AccountDeleted) {
                         Http(403, """{"error":"this account was deleted"}""")
+                    } catch (x: Accounts.AccountSuspended) {
+                        Http(403, """{"error":"this account is suspended"}""")
                     } catch (x: Accounts.SubjectHeldElsewhere) {
                         Http(409, """{"error":"that sign-in already belongs to another account; nobody was signed in"}""")
                     } finally {

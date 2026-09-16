@@ -97,18 +97,40 @@ public class Safety(private val connection: Connection, private val now: () -> I
             }
         }
 
-    /** Answers a report. A second look is a second decision, never an edit of the first. */
+    /**
+     * Answers a report. A second look is a second decision, never an edit of the first.
+     *
+     * **And the decision does what it says** (PD-103), in the same transaction as the record of it, so the two cannot
+     * disagree. *Hidden* takes the thing off every public surface: a team, venue or league goes private, an account's
+     * name goes back to the placeholder. *Suspended* is of an account only — it revokes every session and refuses the
+     * next sign-in. *Reinstated* undoes whichever of those a decision on this report did. The rest are records.
+     */
     public fun decide(reportId: UUID, outcome: String, note: String, by: UUID): UUID {
-        if (outcome !in setOf("left", "hidden", "corrected", "account_suspended", "not_upheld")) {
+        if (outcome !in setOf("left", "hidden", "corrected", "account_suspended", "not_upheld", "reinstated")) {
             throw Refused("That is not one of the answers a report can have.")
         }
         val clean = note.trim()
         if (clean.length !in 3..1000) throw Refused("Say why, so the decision can be read back.")
         // A decision on a report that is not there is a mistyped id, not a server fault. Left to the foreign
         // key it would arrive as a 500; asked first, it is answered with what is actually true.
-        connection.prepareStatement("SELECT 1 FROM safety.report WHERE report_id = ?").use { ps ->
+        val (kind, subject) = connection.prepareStatement("SELECT subject_kind, subject_id FROM safety.report WHERE report_id = ?").use { ps ->
             ps.setObject(1, reportId)
-            if (!ps.executeQuery().use { it.next() }) throw Refused("That report is not on the queue.", 404)
+            ps.executeQuery().use { rs -> if (rs.next()) rs.getString(1) to (rs.getObject(2) as UUID) else throw Refused("That report is not on the queue.", 404) }
+        }
+        when (outcome) {
+            "hidden" -> hide(kind, subject)
+            "account_suspended" -> {
+                if (kind != "account") throw Refused("Suspending is of an account. Report the account, and suspend that.")
+                if (subject == by) throw Refused("You cannot suspend yourself.")
+                Accounts(connection, now).suspend(subject, clean)
+            }
+            "reinstated" -> {
+                val undone = connection.prepareStatement(
+                    "SELECT count(*) FROM safety.decision WHERE report_id = ? AND outcome IN ('hidden','account_suspended')",
+                ).use { ps -> ps.setObject(1, reportId); ps.executeQuery().use { rs -> rs.next(); rs.getInt(1) } }
+                if (undone == 0) throw Refused("There is nothing to reinstate: no decision hid or suspended this.")
+                reinstate(kind, subject)
+            }
         }
         val id = UUID.randomUUID()
         connection.prepareStatement(
@@ -118,6 +140,34 @@ public class Safety(private val connection: Connection, private val now: () -> I
             ps.setString(4, clean); ps.setObject(5, by); ps.executeUpdate()
         }
         return id
+    }
+
+    private fun hide(kind: String, subject: UUID) {
+        when (kind) {
+            // A team's every update bumps its version (V014's trigger); the bump is what makes this an honest write.
+            "team" -> connection.prepareStatement("UPDATE competition.team SET visibility = 'private', row_version = row_version + 1 WHERE team_id = ? AND visibility = 'public'")
+                .use { ps -> ps.setObject(1, subject); ps.executeUpdate() }
+            "venue" -> connection.prepareStatement("UPDATE competition.venue SET visibility = 'private' WHERE venue_id = ?")
+                .use { ps -> ps.setObject(1, subject); ps.executeUpdate() }
+            "league" -> connection.prepareStatement("UPDATE competition.league SET visibility = 'private' WHERE league_id = ?")
+                .use { ps -> ps.setObject(1, subject); ps.executeUpdate() }
+            "account" -> Accounts(connection, now).hideName(subject)
+            else -> throw Refused("A match names nobody, so there is nothing to hide. Report the account instead.")
+        }
+    }
+
+    private fun reinstate(kind: String, subject: UUID) {
+        when (kind) {
+            "team" -> connection.prepareStatement("UPDATE competition.team SET visibility = 'public', row_version = row_version + 1 WHERE team_id = ? AND visibility = 'private'")
+                .use { ps -> ps.setObject(1, subject); ps.executeUpdate() }
+            "venue" -> connection.prepareStatement("UPDATE competition.venue SET visibility = 'public' WHERE venue_id = ?")
+                .use { ps -> ps.setObject(1, subject); ps.executeUpdate() }
+            "league" -> connection.prepareStatement("UPDATE competition.league SET visibility = 'public' WHERE league_id = ?")
+                .use { ps -> ps.setObject(1, subject); ps.executeUpdate() }
+            // A hidden name is not put back — the person chose a new one, or has the placeholder — so for an account
+            // reinstating is the suspension lifted.
+            "account" -> Accounts(connection, now).reinstate(subject)
+        }
     }
 
     /**

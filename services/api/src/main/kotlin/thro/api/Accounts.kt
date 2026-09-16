@@ -30,6 +30,8 @@ public class Accounts(
 
     /** The account behind this credential was deleted; there is nothing to sign in to. */
     public class AccountDeleted : IllegalStateException("this account was deleted")
+    /** A suspended account may not sign in (PD-103). Its sessions were revoked when it was suspended. */
+    public class AccountSuspended : IllegalStateException("this account is suspended")
 
     /** A link was asked for, but the subject is already another account's. Nobody is signed in. */
     public class SubjectHeldElsewhere : IllegalStateException("that sign-in already belongs to another account")
@@ -192,6 +194,9 @@ public class Accounts(
     }
 
     private fun openFamily(credentialId: UUID, accountId: UUID, deviceId: UUID, created: Boolean): Session {
+        // Every sign-in, by a provider or a passkey, mints its session here — so this is the one place a suspended
+        // account is turned away (PD-103). Said in words at the door rather than by a session that dies on first use.
+        if (isSuspended(accountId)) throw AccountSuspended()
         val familyId = UUID.randomUUID()
         connection.prepareStatement("INSERT INTO identity.session_family (family_id, account_id, credential_id, device_id) VALUES (?, ?, ?, ?)")
             .use { ps -> ps.setObject(1, familyId); ps.setObject(2, accountId); ps.setObject(3, credentialId); ps.setObject(4, deviceId); ps.executeUpdate() }
@@ -253,7 +258,7 @@ public class Accounts(
             SELECT t.account_id, c.player_id
               FROM identity.access_token t
               JOIN identity.session_family f ON f.family_id = t.family_id
-              JOIN identity.account a ON a.account_id = t.account_id AND a.deleted_at IS NULL
+              JOIN identity.account a ON a.account_id = t.account_id AND a.deleted_at IS NULL AND a.suspended_at IS NULL
               LEFT JOIN identity.player_claim c ON c.account_id = t.account_id AND c.revoked_at IS NULL
              WHERE t.token_hash = ? AND t.expires_at > ? AND f.revoked_at IS NULL AND f.expires_at > ?
             """.trimIndent(),
@@ -341,6 +346,34 @@ public class Accounts(
             .use { ps -> ps.setObject(1, accountId); ps.executeQuery().use { rs -> if (rs.next()) rs.getObject(1) as UUID else null } }
         return Session(accountId, playerId, access, refresh, accessExpires, created)
     }
+
+    public fun isSuspended(accountId: UUID): Boolean =
+        connection.prepareStatement("SELECT 1 FROM identity.account WHERE account_id = ? AND suspended_at IS NOT NULL")
+            .use { ps -> ps.setObject(1, accountId); ps.executeQuery().use { it.next() } }
+
+    /**
+     * Suspends an account (PD-103): the hour and the reason on the row, and every live session family revoked, so the
+     * person is signed out everywhere at once and `resolve` refuses whatever token they still hold. Suspending twice
+     * changes nothing.
+     */
+    public fun suspend(accountId: UUID, reason: String) {
+        val n = connection.prepareStatement(
+            "UPDATE identity.account SET suspended_at = ?, suspended_reason = ? WHERE account_id = ? AND suspended_at IS NULL AND deleted_at IS NULL",
+        ).use { ps -> ps.setObject(1, Timestamp.from(now())); ps.setString(2, reason); ps.setObject(3, accountId); ps.executeUpdate() }
+        if (n == 0) return
+        connection.prepareStatement("UPDATE identity.session_family SET revoked_at = ?, revoked_reason = ? WHERE account_id = ? AND revoked_at IS NULL")
+            .use { ps -> ps.setObject(1, Timestamp.from(now())); ps.setString(2, "account suspended"); ps.setObject(3, accountId); ps.executeUpdate() }
+    }
+
+    /** Lifts a suspension. The sessions revoked by it stay revoked: the person signs in again. */
+    public fun reinstate(accountId: UUID): Boolean =
+        connection.prepareStatement("UPDATE identity.account SET suspended_at = NULL, suspended_reason = NULL WHERE account_id = ? AND suspended_at IS NOT NULL")
+            .use { ps -> ps.setObject(1, accountId); ps.executeUpdate() } == 1
+
+    /** Takes a name off an account (PD-103): back to the placeholder, which the person may change. */
+    public fun hideName(accountId: UUID): Boolean =
+        connection.prepareStatement("UPDATE identity.account SET display_name = ? WHERE account_id = ? AND deleted_at IS NULL")
+            .use { ps -> ps.setString(1, PLACEHOLDER_NAME); ps.setObject(2, accountId); ps.executeUpdate() } == 1
 
     private fun revokeFamily(familyId: UUID, reason: String) {
         connection.prepareStatement("UPDATE identity.session_family SET revoked_at = ?, revoked_reason = ? WHERE family_id = ? AND revoked_at IS NULL")

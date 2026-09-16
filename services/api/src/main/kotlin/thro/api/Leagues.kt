@@ -69,7 +69,10 @@ public class Leagues(private val connection: Connection) {
               LEFT JOIN competition.team t ON t.team_id = ta.team_id AND t.visibility = 'public' AND t.dissolved_at IS NULL
               LEFT JOIN competition.team_venue_tenure tv ON tv.team_id = t.team_id AND tv.kind = 'home' AND tv.valid_until IS NULL
               LEFT JOIN competition.venue v ON v.venue_id = tv.venue_id AND v.visibility = 'public'
-             WHERE ? IS NULL OR l.locality ILIKE '%' || ? || '%'
+             -- Public means public (PD-103): a private league — hidden by a moderator, or started to test with —
+             -- and an ended one are not on the list.
+             WHERE l.visibility = 'public' AND l.dissolved_at IS NULL
+               AND (? IS NULL OR l.locality ILIKE '%' || ? || '%')
              ORDER BY l.name, ls.starts_on DESC, ls.label, d.ordinal NULLS LAST, t.name
             """.trimIndent(),
         ).use { ps ->

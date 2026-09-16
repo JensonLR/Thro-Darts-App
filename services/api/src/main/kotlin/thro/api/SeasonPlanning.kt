@@ -27,9 +27,12 @@ public class SeasonPlanning(private val connection: Connection) {
 
     public data class Division(val divisionId: UUID, val name: String, val ordinal: Int)
     public data class Entrant(val affiliationId: UUID, val teamId: UUID, val name: String, val divisionId: UUID?, val status: String)
+    /** The league a season belongs to, as its organiser needs it: what it is called, whether it is public, whether it was
+     * started here (and so is theirs to change), and whether it has ended (PD-103). */
+    public data class LeagueHead(val leagueId: UUID, val name: String, val visibility: String, val startedBy: UUID?, val endedAt: Instant?)
     public data class Season(
         val leagueSeasonId: UUID, val label: String, val startsOn: LocalDate, val endsOn: LocalDate,
-        val divisions: List<Division>, val teams: List<Entrant>,
+        val divisions: List<Division>, val teams: List<Entrant>, val league: LeagueHead,
     )
     public data class Wanted(val homeTeamId: UUID, val awayTeamId: UUID, val scheduledAt: Instant, val divisionId: UUID?)
     public data class Scheduled(val fixtureId: UUID, val wanted: Wanted, val divisionId: UUID?)
@@ -38,6 +41,7 @@ public class SeasonPlanning(private val connection: Connection) {
         /** A season's worth and then some: forty teams playing each other home and away is 1,560, but a division
          * is rarely more than twelve, and a list longer than this is more likely a mistake than a league. */
         public const val MOST: Int = 400
+        public val VISIBILITIES: Set<String> = setOf("public", "private")
 
         /** The day a fixture falls on is the day in the UK, where the leagues are, not the day in UTC. */
         private val LEAGUE_TIME: ZoneId = ZoneId.of("Europe/London")
@@ -103,28 +107,66 @@ public class SeasonPlanning(private val connection: Connection) {
      * here has nobody else it could belong to. The league records who started it, and that is what lets the same
      * person open its next season.
      */
-    public fun startLeague(player: UUID, name: String, locality: String?, opening: Opening): Started {
+    public fun startLeague(player: UUID, name: String, locality: String?, opening: Opening, visibility: String = "public"): Started {
         val clean = name.trim()
         require(clean.length in 2..80) { "A league's name is 2 to 80 characters." }
+        require(visibility in VISIBILITIES) { "A league is public or private." }
         return together {
             val league = Organisations(connection).createLeague(clean, locality?.trim()?.takeIf { it.isNotEmpty() }, by = player)
+            if (visibility != "public") {
+                connection.prepareStatement("UPDATE competition.league SET visibility = ? WHERE league_id = ?")
+                    .use { ps -> ps.setString(1, visibility); ps.setObject(2, league); ps.executeUpdate() }
+            }
             Started(league, clean, openFor(league, opening, player))
         }
     }
 
     /** The next season of a league somebody started here. Only they open it; a listed league is nobody's to open. */
     public fun openSeason(player: UUID, leagueId: UUID, opening: Opening): Started {
-        val (name, startedBy) = connection.prepareStatement("SELECT name, created_by FROM competition.league WHERE league_id = ?").use { ps ->
-            ps.setObject(1, leagueId)
-            ps.executeQuery().use { rs -> if (rs.next()) rs.getString(1) to (rs.getObject(2) as UUID?) else throw Refused(404, "THRØ has no such league.") }
-        }
-        when (startedBy) {
-            null -> throw Refused(403, "THRØ lists this league from elsewhere, so its seasons are opened by the person named to run it, not by whoever asks.")
-            player -> {}
-            else -> throw Refused(403, "Only the person who started this league opens its seasons.")
-        }
-        return together { Started(leagueId, name, openFor(leagueId, opening, player)) }
+        val head = mine(player, leagueId)
+        if (head.endedAt != null) throw Refused(409, "This league has ended. A new season needs a new league.")
+        return together { Started(leagueId, head.name, openFor(leagueId, opening, player)) }
     }
+
+    /**
+     * The league itself, changed by its starter (PD-103): renamed, taken private or made public, or ended. Ended is
+     * recorded once and never undone — an ended league keeps every season it had, answers for them, and takes no more.
+     */
+    public fun updateLeague(player: UUID, leagueId: UUID, name: String?, visibility: String?, ended: Boolean): LeagueHead {
+        val head = mine(player, leagueId)
+        val clean = name?.trim()
+        if (clean != null) require(clean.length in 2..80) { "A league's name is 2 to 80 characters." }
+        if (visibility != null) require(visibility in VISIBILITIES) { "A league is public or private." }
+        if (ended && head.endedAt != null) throw Refused(409, "This league has already ended.")
+        return together {
+            if (clean != null) connection.prepareStatement("UPDATE competition.league SET name = ? WHERE league_id = ?")
+                .use { ps -> ps.setString(1, clean); ps.setObject(2, leagueId); ps.executeUpdate() }
+            if (visibility != null) connection.prepareStatement("UPDATE competition.league SET visibility = ? WHERE league_id = ?")
+                .use { ps -> ps.setString(1, visibility); ps.setObject(2, leagueId); ps.executeUpdate() }
+            if (ended) connection.prepareStatement("UPDATE competition.league SET dissolved_at = clock_timestamp() WHERE league_id = ? AND dissolved_at IS NULL")
+                .use { ps -> ps.setObject(1, leagueId); ps.executeUpdate() }
+            leagueHead(leagueId)!!
+        }
+    }
+
+    /** A league that is this person's to change: started here, and by them. */
+    private fun mine(player: UUID, leagueId: UUID): LeagueHead {
+        val head = leagueHead(leagueId) ?: throw Refused(404, "THRØ has no such league.")
+        when (head.startedBy) {
+            null -> throw Refused(403, "THRØ lists this league from elsewhere, so it is run by the person named to run it, not by whoever asks.")
+            player -> {}
+            else -> throw Refused(403, "Only the person who started this league changes it.")
+        }
+        return head
+    }
+
+    private fun leagueHead(leagueId: UUID): LeagueHead? =
+        connection.prepareStatement("SELECT name, visibility, created_by, dissolved_at FROM competition.league WHERE league_id = ?").use { ps ->
+            ps.setObject(1, leagueId)
+            ps.executeQuery().use { rs ->
+                if (rs.next()) LeagueHead(leagueId, rs.getString(1), rs.getString(2), rs.getObject(3) as UUID?, rs.getTimestamp(4)?.toInstant()) else null
+            }
+        }
 
     private fun openFor(leagueId: UUID, opening: Opening, player: UUID): Season {
         val taken = connection.prepareStatement("SELECT 1 FROM competition.league_season WHERE league_id = ? AND lower(label) = lower(?)").use { ps ->
@@ -195,7 +237,8 @@ public class SeasonPlanning(private val connection: Connection) {
         }
     }
 
-    public fun json(s: Started): String = """{"leagueId":"${s.leagueId}","league":${thro.api.http.Contract.q(s.league)},"season":${json(s.season)}}"""
+    public fun json(s: Started): String =
+        """{"leagueId":"${s.leagueId}","league":${thro.api.http.Contract.q(s.league)},"visibility":${thro.api.http.Contract.q(s.season.league.visibility)},"season":${json(s.season)}}"""
 
     public fun json(a: Added): String =
         """{"teamId":"${a.teamId}","affiliationId":"${a.affiliationId}","name":${thro.api.http.Contract.q(a.name)},"divisionId":${a.divisionId?.let { "\"$it\"" } ?: "null"},"status":"accepted"}"""
@@ -206,12 +249,16 @@ public class SeasonPlanning(private val connection: Connection) {
         } + "]}"
 
     public fun season(id: UUID): Season? {
-        val head = connection.prepareStatement(
-            "SELECT label, starts_on, ends_on FROM competition.league_season WHERE league_season_id = ?",
+        val (head, leagueId) = connection.prepareStatement(
+            "SELECT label, starts_on, ends_on, league_id FROM competition.league_season WHERE league_season_id = ?",
         ).use { ps ->
             ps.setObject(1, id)
-            ps.executeQuery().use { rs -> if (!rs.next()) return null else Triple(rs.getString(1), rs.getObject(2, LocalDate::class.java), rs.getObject(3, LocalDate::class.java)) }
+            ps.executeQuery().use { rs ->
+                if (!rs.next()) return null
+                Triple(rs.getString(1), rs.getObject(2, LocalDate::class.java), rs.getObject(3, LocalDate::class.java)) to (rs.getObject(4) as UUID)
+            }
         }
+        val league = leagueHead(leagueId)!!
         val divisions = connection.prepareStatement(
             "SELECT division_id, name, ordinal FROM competition.division WHERE league_season_id = ? ORDER BY ordinal",
         ).use { ps ->
@@ -235,7 +282,7 @@ public class SeasonPlanning(private val connection: Connection) {
                 }.toList()
             }
         }
-        return Season(id, head.first, head.second, head.third, divisions, teams)
+        return Season(id, head.first, head.second, head.third, divisions, teams, league)
     }
 
     /**
@@ -324,8 +371,11 @@ public class SeasonPlanning(private val connection: Connection) {
         val teams = s.teams.joinToString(",") {
             """{"affiliationId":"${it.affiliationId}","teamId":"${it.teamId}","name":${q(it.name)},"divisionId":${it.divisionId?.let { d -> "\"$d\"" } ?: "null"},"status":${q(it.status)}}"""
         }
-        return """{"leagueSeasonId":"${s.leagueSeasonId}","label":${q(s.label)},"startsOn":"${s.startsOn}","endsOn":"${s.endsOn}","divisions":[$divisions],"teams":[$teams]}"""
+        return """{"leagueSeasonId":"${s.leagueSeasonId}","label":${q(s.label)},"startsOn":"${s.startsOn}","endsOn":"${s.endsOn}","divisions":[$divisions],"teams":[$teams],"league":${json(s.league)}}"""
     }
+
+    public fun json(l: LeagueHead): String =
+        """{"leagueId":"${l.leagueId}","name":${thro.api.http.Contract.q(l.name)},"visibility":${thro.api.http.Contract.q(l.visibility)},"startedHere":${l.startedBy != null},"endedAt":${l.endedAt?.let { "\"$it\"" } ?: "null"}}"""
 
     public fun json(made: List<Scheduled>): String =
         """{"created":[""" + made.joinToString(",") {

@@ -548,3 +548,21 @@ make the engine and the aggregate work in identifiers, join names from `identity
 write a pseudonymous label for any account whose age band is not `adult`.
 
 **Must not be decided by:** Phase C opening a match from a fixture with the names as they are.
+
+## OD-025 — Handing a league to another person
+**Status:** OPEN (2026-09-16) · **Impact:** PD-100, PD-103, authz
+
+A league started on THRØ is run by whoever started it, and only they may open its seasons, rename it, hide it or end
+it (PD-100, PD-103). Nothing hands it on. A secretary who steps down, or who started the league to try it out for the
+person who will really run it, has no way to give it to them — and `Relations.revoke` exists with no route to it.
+
+**What makes it a decision rather than a route:** THRØ holds no email or phone for anybody, and a person is named to
+the server by an id nobody sees. A hand-over needs a way to name a person without an id. The team's answer is a
+code given in person (PD-044's invite); a league could use the same shape — the starter makes a code, the successor
+redeems it, the relations move — or the successor could be picked from the league's own officials once there are any.
+Either is a design with consequences for who can be handed a league by mistake.
+
+**Resolved for now by:** nothing. A league that must change hands is handed over out of band, the way an
+administrator is named for a listed league (PD-053).
+
+**Must not be decided by:** a route that takes a player id in its body.

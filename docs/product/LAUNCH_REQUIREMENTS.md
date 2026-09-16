@@ -21,13 +21,16 @@ each claim, so that the ones that need a solicitor can be taken to one knowingly
 
 ## Blocking — the app cannot go public without these
 
-1. **User-generated content safety (Apple 1.2, Play UGC policy).** *Build.* Nothing in the app can report or
-   block anything today. Needed: an in-app **report** on every surface that carries somebody's words or
-   picture (team and venue names, display names, profile photos), an in-app **block** between accounts, a
-   **moderation queue** with a response inside 24 hours, published **contact information**, and a **EULA
-   accepted before a player can post anything**, stating that objectionable content is not tolerated.
-2. **`PrivacyInfo.xcprivacy` with required-reason API declarations.** *Build.* Mandatory since 1 May 2024;
-   its absence is an automatic rejection (ITMS-91053/91055). The app uses `UserDefaults` (reason `CA92.1`).
+1. **User-generated content safety (Apple 1.2, Play UGC policy).** *Build.* **Built, 11–16 September 2026.**
+   In-app **report** on accounts, teams, venues, leagues and matches and an in-app **block** between accounts
+   (PD-050, V040); the **terms accepted** before a player writes anything, with the version recorded; a
+   **moderation queue** answered inside 24 hours from `thro.uk/moderation.html` by the accounts named in
+   `THRO_MODERATORS`, each report by the name somebody read (PD-101); and decisions that **do what they say** —
+   hiding takes the thing off every public surface, suspending signs the person out everywhere and refuses
+   their next sign-in, reinstating undoes either (PD-103, V048). **Still missing:** the published **contact
+   address**, which waits on the mailbox (item 3).
+2. **`PrivacyInfo.xcprivacy` with required-reason API declarations.** *Build.* **Done**: `apps/ios/ThroDarts/PrivacyInfo.xcprivacy`
+   declares `UserDefaults` (reason `CA92.1`), and `tools/check_bundle_faces.py` holds the file on every push.
 3. **A web address, and a contact on it.** *Founder.* **Half done, 12 September 2026.** The pages are
    live at `https://thro-web-q7ys.onrender.com`, so the account-deletion page Google Play requires
    (PD-056) is publicly reachable and this no longer waits on buying a domain — a free Render subdomain

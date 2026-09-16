@@ -4565,3 +4565,39 @@ passkey. The screen showed only a count, in one sentence, and the same three *Ad
 - **A profile without `ways`** (an older server, or one cached by an older build) offers everything, as before.
 - **The public site links to the organiser's page** from its footer (*Run a league*). The pages built for PD-099 and
   PD-100 were live and unreachable except by typing the address, which read to the founder as the site not updating.
+
+## PD-103 — A decision does what it says, and a league is its starter's to run
+
+**16 September 2026.** PD-101's page had to say on its face that *Hide it* and *Suspend the account* did nothing but
+record. A safety page that records an action nobody took is the wrong kind of honest. And PD-100 left a league public
+from the moment it was started, with no way to rename, hide or end it — the founder's test league included.
+
+### Decided
+
+- **Every decision takes effect in the same transaction as its record** (V048), so the two cannot disagree:
+  - *hidden* — a team, venue or league goes private (off every public surface, unnamed); an account's display name goes
+    back to the placeholder, for the person to change. A match names nobody, so a report about one cannot be hidden:
+    the answer says to report the account.
+  - *account_suspended* — of an account only. The hour and reason go on the row, every session family is revoked, and
+    `resolve` refuses the account's tokens on the very next request (ADR-008: authority per request, never from a
+    token). Sign-in, by a provider or a passkey, is refused in words at the one place a session is minted. A moderator
+    cannot suspend themselves.
+  - *reinstated* — new. Lifts the suspension, or makes the hidden team, venue or league public again. A hidden name is
+    not put back. It is refused where no decision on the report hid or suspended anything.
+  - *left*, *corrected*, *not_upheld* — records, as before.
+- **A league started on THRØ is its starter's to change**: `POST /v1/leagues/{id}` renames it, takes it private or
+  public, or ends it. Ending is recorded once and never undone; an ended league keeps and answers for every season and
+  opens no more. A league THRØ lists from elsewhere refuses everybody here, as it does for seasons (PD-100).
+- **A league may be started private**, and the web form starts one private by default: a rehearsal, or not yet public.
+  Private and ended leagues are off `/v1/leagues`; their seasons still answer by id for their organiser.
+- **The season's page names its league and its standing**, and offers rename / private / end only to its starter.
+- **The moderator is held over the wire too**: `ModerationHttpTest` signs a moderator in the way a person is and works
+  the queue, which `HttpTest` could not (the development principal has no account).
+
+### Not decided here
+
+- **Handing a league to another person** — OD-025. There is no way yet to name a person without an id, and an
+  organiser typing a UUID is not a design.
+- A private league's season pages (fixtures, table, live) still answer to anybody holding the season id. Nothing links
+  to them, and the id is unguessable; a league that must be unreachable rather than unlisted is a later decision.
+- Suspension has no term. A moderator reinstates, or does not.
