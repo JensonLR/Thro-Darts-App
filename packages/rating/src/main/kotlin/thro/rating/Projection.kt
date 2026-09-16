@@ -11,13 +11,19 @@ package thro.rating
  */
 public object Publication {
 
-    /** Refuses to publish anything a model has not earned the right to publish. */
+    /**
+     * Refuses to publish anything a model has not earned the right to publish.
+     *
+     * A PROVISIONAL model may be (PD-105): the founder chose a public rating marked provisional over none, and the
+     * display projection is what keeps that honest — a range, never a bare number under the threshold. A SHADOW
+     * model still may not, and nothing here is VALIDATED.
+     */
     public fun check(model: RatingModel, publishedModels: Set<String>): Result {
-        if (!model.validated) {
+        if (model.stage == RatingModel.Stage.SHADOW) {
             return Result.Refused(
-                "${model.id} is not validated. OD-001 is open: the rating model must be chosen " +
-                    "from research-laboratory evidence, and publishing an unvalidated model is " +
-                    "exactly the decision-by-implementation this register exists to prevent.",
+                "${model.id} runs in shadow. OD-001 is open: a model is shown only once it is at least " +
+                    "provisional (PD-105), and publishing a shadow model is exactly the " +
+                    "decision-by-implementation this register exists to prevent.",
             )
         }
         val others = publishedModels - model.id

@@ -169,6 +169,7 @@ public struct YourProfileScreen: View {
                     }
                     band
                     beingSeen
+                    ratingCard
                     contact
                     CardGroup("Friends") {
                         CardRow(icon: .users, label: "Friends", value: friendsLine) { showing = .friends }
@@ -197,7 +198,10 @@ public struct YourProfileScreen: View {
         }
         // The field runs up under the clock, as it does on Settings.
         .throBrandFieldBehind()
-        .task { if account.friends == nil { await account.loadFriends() } }
+        .task {
+            if account.friends == nil { await account.loadFriends() }
+            if account.rating == nil { await account.loadRating() }
+        }
     }
 
     // MARK: - the head: a face and a name, both changed where they sit
@@ -293,6 +297,34 @@ public struct YourProfileScreen: View {
         let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty, trimmed != (profile.displayName ?? "") else { return }
         Task { await account.setDisplayName(trimmed) }
+    }
+
+    // MARK: - the rating (PD-105)
+
+    /// The THRØ rating, provisional: a range until it has earned a number, and the lines that explain it — each from
+    /// facts frozen when the match was rated. The form figure (PD-018) says how somebody has been scoring; this says
+    /// how they have been *winning*, against whom, and how far that can be trusted yet.
+    @ViewBuilder private var ratingCard: some View {
+        if let r = account.rating {
+            let d = r.display
+            let footnote: String = switch d.kind {
+            case "unrated": "Play a match scored on THRØ — live, or sent and confirmed by the other player — and a rating starts. Nothing is guessed before then."
+            case "provisional": "Provisional: a range, because \(d.matches) match\(d.matches == 1 ? "" : "es") is not enough for a number. It narrows as you play. Compared across \(d.comparedAcross) players who have met on THRØ."
+            default: "From \(d.matches) matches, compared across \(d.comparedAcross) players. The margin is how far the truth plausibly lies either side."
+            }
+            CardGroup("Your THRØ rating", footnote: footnote) {
+                CardInfoRow(icon: d.kind == "established" ? .circleCheck : .clock,
+                            label: d.kind == "provisional" ? "Provisional" : (d.kind == "established" ? "Rating" : "Not yet rated"),
+                            value: r.figure)
+                ForEach(r.lines.prefix(5)) { line in
+                    CardDivider()
+                    CardInfoRow(icon: line.outcome == "won" ? .check : .x, label: line.words,
+                                value: line.delta >= 0 ? "+\(line.delta)" : "\(line.delta)")
+                }
+            }
+        } else if let note = account.ratingNote {
+            CardGroup("Your THRØ rating", footnote: note) { CardInfoRow(icon: .cloudOff, label: "Not read", value: "—") }
+        }
     }
 
     // MARK: - reaching an organiser (PD-104)

@@ -990,6 +990,20 @@ check "the application role gives an organiser an email" "$($PSQL -c "SELECT con
 $PSQL -c "SELECT identity.erase_account('$RB');" >/dev/null 2>&1
 check "and erasure takes it with the name" "$($PSQL -c "SELECT coalesce(contact_email,'gone') FROM identity.account WHERE account_id='$RB';")" "gone"
 
+# V050 — a provisional rating may be shown (PD-105). A range has no negative width, and the rating role — and only
+# it among the application roles — writes a snapshot.
+r=$($PSQL -c "SET ROLE app_rating; INSERT INTO rating.snapshot (player_id, model_id, model_version, parameter_hash, scale_epoch, as_of_commit_xid, as_of_global_seq, rating, confidence, matches_counted, dispersion, pool)
+  VALUES (gen_random_uuid(), 'glicko2', '1.0.0', 'x', 1, '1'::xid8, 1, 1500, 0.1, 1, -5, 2);" 2>&1)
+if echo "$r" | grep -qi 'dispersion'; then ok "a snapshot with a negative dispersion is refused"
+else bad "a snapshot with a negative dispersion is refused" "${r:-a range of negative width was stored}"; fi
+$PSQL -c "SET ROLE app_rating; INSERT INTO rating.snapshot (player_id, model_id, model_version, parameter_hash, scale_epoch, as_of_commit_xid, as_of_global_seq, rating, confidence, matches_counted, dispersion, pool)
+  VALUES (gen_random_uuid(), 'glicko2', '1.0.0', 'x', 1, '1'::xid8, 1, 1500, 0.1, 1, 300, 2);" >/dev/null 2>&1
+check "the rating role writes a snapshot with its range and pool" "$($PSQL -c "SELECT count(*) FROM rating.snapshot WHERE model_id='glicko2' AND dispersion=300 AND pool=2;")" "1"
+r=$($PSQL -c "SET ROLE app_competition; INSERT INTO rating.snapshot (player_id, model_id, model_version, parameter_hash, scale_epoch, as_of_commit_xid, as_of_global_seq, rating, confidence, matches_counted)
+  VALUES (gen_random_uuid(), 'glicko2', '1.0.0', 'x', 1, '1'::xid8, 1, 1500, 0.1, 1);" 2>&1)
+if echo "$r" | grep -qi 'permission denied'; then ok "and no other application role may"
+else bad "and no other application role may" "${r:-the competition role wrote a rating}"; fi
+
 echo
 echo "-------------------------------------------"
 echo "  $PASS passed, $FAIL failed"

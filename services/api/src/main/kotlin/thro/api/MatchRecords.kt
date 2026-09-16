@@ -265,9 +265,41 @@ public class MatchRecords(private val connection: Connection, private val now: (
 
     // --- what either of them reads ------------------------------------------------------------------
 
+    /**
+     * A match replayed to what it finished as and how it stands: the record, through the engine, plus each seat's
+     * answer for it. What the summary reads, and what a rating reads (PD-105) — one derivation, so the two cannot
+     * disagree about who won.
+     */
+    public data class Replayed(
+        val match: MatchAggregate, val openedAt: Instant, val selfReported: Boolean, val state: MatchState, val visits: Int,
+        val ending: String?, val retired: String?, val winner: String?, val sender: String?,
+        val answers: Map<String, String?>, val standing: String,
+    ) {
+        val legs: Map<String, Int>
+            get() = mapOf(Seat.HOME to (state.legsWonTotal[Seat.home] ?: 0), Seat.AWAY to (state.legsWonTotal[Seat.away] ?: 0))
+    }
+
     /** The match as [viewer] may read it — only a player in it may — or null. */
     public fun summary(matchId: UUID, viewer: UUID): Summary? {
         val you = seatOf(matchId, viewer) ?: return null
+        val r = replay(matchId) ?: return null
+        // Claimable means a code could be made for it: the seat opposite the sender, of a match sent
+        // from a phone, that nobody holds yet. Not "held by no account" — the first version said
+        // that, and a sender whose competitor had no account read their own seat as up for grabs.
+        val seats = SEATS.map { seat ->
+            val competitor = r.match.idFor(seat)!!
+            val claimedBy = seatClaimedBy(matchId, seat)
+            SeatLine(seat = seat, you = seat == you, name = nameOf(claimedBy ?: competitor),
+                     claimable = r.selfReported && r.sender != null && seat != r.sender && claimedBy == null && !claimedAtAll(competitor))
+        }
+        return Summary(
+            matchId = matchId, openedAt = r.openedAt, format = r.match.format, selfReported = r.selfReported, seats = seats,
+            legs = r.legs, visits = r.visits, ending = r.ending, retired = r.retired, winner = r.winner, sentBy = r.sender,
+            answers = r.answers, standing = r.standing,
+        )
+    }
+
+    public fun replay(matchId: UUID): Replayed? {
         val match = Matches(connection).load(matchId) ?: return null
         val (openedAt, selfReported) = connection.prepareStatement("SELECT opened_at, self_reported FROM evidence.match WHERE match_id = ?")
             .use { ps -> ps.setObject(1, matchId); ps.executeQuery().use { rs -> rs.next(); rs.getTimestamp(1).toInstant() to rs.getBoolean(2) } }
@@ -330,21 +362,7 @@ public class MatchRecords(private val connection: Connection, private val now: (
             sender != null && answers[other(sender)] == "confirmed" -> "confirmed"
             else -> "self-reported"
         }
-
-        // Claimable means a code could be made for it: the seat opposite the sender, of a match sent
-        // from a phone, that nobody holds yet. Not "held by no account" — the first version said
-        // that, and a sender whose competitor had no account read their own seat as up for grabs.
-        val seats = SEATS.map { seat ->
-            val competitor = match.idFor(seat)!!
-            val claimedBy = seatClaimedBy(matchId, seat)
-            SeatLine(seat = seat, you = seat == you, name = nameOf(claimedBy ?: competitor),
-                     claimable = selfReported && sender != null && seat != sender && claimedBy == null && !claimedAtAll(competitor))
-        }
-        return Summary(
-            matchId = matchId, openedAt = openedAt, format = match.format, selfReported = selfReported, seats = seats,
-            legs = mapOf(Seat.HOME to (state.legsWonTotal[Seat.home] ?: 0), Seat.AWAY to (state.legsWonTotal[Seat.away] ?: 0)),
-            visits = visits, ending = how, retired = retired, winner = winner, sentBy = sender, answers = answers, standing = standing,
-        )
+        return Replayed(match, openedAt, selfReported, state, visits, how, retired, winner, sender, answers, standing)
     }
 
     /** The matches [viewer] sits in — sent by them, or claimed — newest first. */

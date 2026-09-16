@@ -117,6 +117,21 @@ final class AccountProfileTests: XCTestCase {
         XCTAssertFalse(profile(name: "Sam").mayGiveContactEmail, "and a profile from an older server, or an older cache, is not either")
     }
 
+    // MARK: - the rating (PD-105)
+
+    func testARatingReadsAsARangeANumberWithItsMarginOrAnHonestDash() throws {
+        let provisional = #"{"playerId":"aaaaaaaa-0000-0000-0000-000000000001","model":"glicko2","version":"1.0.0","stage":"provisional","display":{"kind":"provisional","low":1380,"high":1620,"matches":1,"comparedAcross":2},"asOf":{"commit":1,"seq":5},"lines":[{"matchId":"bbbbbbbb-0000-0000-0000-000000000001","outcome":"won","delta":112,"opponent":null,"opponentRating":1500,"expected":0.50,"words":"Beat an opponent, rated about 1500. An even contest."}]}"#
+        let p = try JSONDecoder().decode(RatingAnswer.self, from: Data(provisional.utf8))
+        XCTAssertEqual(p.figure, "1380–1620", "a range, never a bare number, while provisional")
+        XCTAssertTrue(p.isProvisional)
+        XCTAssertEqual(p.lines.first?.words, "Beat an opponent, rated about 1500. An even contest.")
+        XCTAssertNil(p.lines.first?.opponent, "an opponent THRØ may not name is not named")
+        let established = #"{"playerId":"aaaaaaaa-0000-0000-0000-000000000001","model":"glicko2","version":"1.0.0","stage":"provisional","display":{"kind":"established","value":1612,"plusMinus":180,"matches":15,"comparedAcross":6},"asOf":{"commit":1,"seq":5},"lines":[]}"#
+        XCTAssertEqual(try JSONDecoder().decode(RatingAnswer.self, from: Data(established.utf8)).figure, "1612 ± 180")
+        let unrated = #"{"playerId":"aaaaaaaa-0000-0000-0000-000000000001","model":"glicko2","version":"1.0.0","stage":"provisional","display":{"kind":"unrated","matches":0,"comparedAcross":0},"asOf":{"commit":0,"seq":0},"lines":[]}"#
+        XCTAssertEqual(try JSONDecoder().decode(RatingAnswer.self, from: Data(unrated.utf8)).figure, "—")
+    }
+
     // MARK: - helpers
 
     private func profile(name: String) -> Profile {

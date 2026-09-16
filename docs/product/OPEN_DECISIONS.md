@@ -33,7 +33,11 @@ justifies otherwise.
 
 **Must not be decided by:** shipping a placeholder rating to fill the UI.
 **Blocked until:** the Rating Research Laboratory produces evidence (Gate 8).
-**Interim position:** any rating produced before that gate is internal and non-public.
+**Interim position, revised 2026-09-16 (PD-105):** a Glicko-2 rating is shown **marked provisional** — a range until
+ten matches and a deviation under 120, then a number with its margin — replayed from recorded and confirmed THRØ
+matches only. It is not validated and says so; the laboratory's gates that need no real matches are held by tests;
+the ones that do (calibration, prospective shadow) remain this decision's to settle. The earlier position, that any
+rating before the gate is internal and non-public, is withdrawn.
 
 ## OD-002 — Competitive band taxonomy
 **Status:** OPEN · **Impact:** product, brand, player dignity

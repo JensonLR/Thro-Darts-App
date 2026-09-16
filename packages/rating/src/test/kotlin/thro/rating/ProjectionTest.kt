@@ -93,7 +93,7 @@ class ProjectionTest {
     fun `exactly one model may be published at a time`() {
         val validated = object : RatingModel by ProvisionalModel() {
             override val id = "candidate-b"
-            override val validated = true
+            override val stage = RatingModel.Stage.VALIDATED
             override fun rate(evidence: List<EvidenceRow>) = emptyList<Snapshot>() to emptyList<LedgerLine>()
         }
         assertTrue(Publication.check(validated, emptySet()) is Publication.Result.Allowed)

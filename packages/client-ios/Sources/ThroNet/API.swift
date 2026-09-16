@@ -428,6 +428,44 @@ public struct Friend: Decodable, Sendable, Equatable, Identifiable {
     public init(accountId: UUID, displayName: String, since: Date) { self.accountId = accountId; self.displayName = displayName; self.since = since }
 }
 
+/// A THRØ rating as the server shows it (PD-105): one of three shapes, and the lines that explain it.
+public struct RatingAnswer: Decodable, Sendable, Equatable {
+    public struct Display: Decodable, Sendable, Equatable {
+        /// `unrated`, `provisional` or `established` — and nothing else.
+        public let kind: String
+        public let low: Int?
+        public let high: Int?
+        public let value: Int?
+        public let plusMinus: Int?
+        public let matches: Int
+        public let comparedAcross: Int
+    }
+    public struct Line: Decodable, Sendable, Equatable, Identifiable {
+        public let matchId: UUID
+        public let outcome: String
+        public let delta: Int
+        public let opponent: String?
+        public let opponentRating: Int?
+        public let words: String
+        public var id: UUID { matchId }
+    }
+    public let playerId: UUID
+    public let model: String
+    public let stage: String
+    public let display: Display
+    public let lines: [Line]
+
+    /// The figure as a person reads it: a range, a number with its margin, or the honest absence of either.
+    public var figure: String {
+        switch display.kind {
+        case "provisional": return "\(display.low ?? 0)–\(display.high ?? 0)"
+        case "established": return "\(display.value ?? 0) ± \(display.plusMinus ?? 0)"
+        default: return "—"
+        }
+    }
+    public var isProvisional: Bool { display.kind == "provisional" }
+}
+
 public struct FriendInvite: Decodable, Sendable, Equatable {
     public let code: String
     public let expiresAt: Date
@@ -879,6 +917,9 @@ public actor ThroAPI {
         let body = try JSONSerialization.data(withJSONObject: ["ageBand": adult ? "adult" : "minor"])
         return try decode(await authorised("PUT", "/v1/me/profile", body: body))
     }
+
+    /// Your THRØ rating, provisional (PD-105).
+    public func rating() async throws -> RatingAnswer { try decode(await authorised("GET", "/v1/me/rating")) }
 
     public func friends() async throws -> [Friend] {
         struct Envelope: Decodable { let friends: [Friend] }

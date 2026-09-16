@@ -59,6 +59,7 @@ import thro.api.Migrations
 import thro.api.OrganisationCommands
 import thro.api.Organisations
 import thro.api.SeasonPlanning
+import thro.api.Ratings
 import thro.api.Relations
 import thro.api.Secretary
 import thro.api.VisitCommand
@@ -114,7 +115,7 @@ private class Http(val status: Int, val body: String)
  * module it is for before it touches a table, so a handler that reaches past its module fails on
  * a grant rather than succeeding by accident. The names are constants, never input.
  */
-internal enum class DbRole(val sql: String) { COMPETITION("app_competition"), MATCH("app_match"), READ("app_read"), TRUST("app_trust") }
+internal enum class DbRole(val sql: String) { COMPETITION("app_competition"), MATCH("app_match"), READ("app_read"), TRUST("app_trust"), RATING("app_rating") }
 
 private class Req(val call: ApplicationCall, val body: String, private val deps: Deps) {
     var principal: Principal? = null
@@ -466,6 +467,17 @@ public fun Application.thro(deps: Deps) {
             }
         },
         "me.seasons" to { r -> SeasonPlanning(r.connection()).let { Http(200, it.runsJson(it.seasonsRunBy(r.principal!!.subject))) } },
+        // PD-105: the provisional rating. Read — and replayed when the evidence has moved — as `app_rating`, the one
+        // role that may write the rating tables and may not write a match.
+        "me.rating" to { r -> rated(r, deps, r.principal!!.subject) },
+        "players.rating" to { r ->
+            val player = UUID.fromString(r.call.parameters["playerId"])
+            // A player THRØ may not name is not shown at all — 404, the same answer as a player who does not exist, so
+            // the route cannot be used to tell the two apart. Asked as the read role, which holds the disclosure rule.
+            r.role = DbRole.READ
+            if (player != r.principal!!.subject && !Ratings(r.connection(), deps.now).mayBeShown(player)) Http(404, """{"error":"THRØ shows no rating for that player."}""")
+            else rated(r, deps, player)
+        },
         // PD-104: how the teams in a league reach the person running it. The season is looked for first (a mistyped
         // address is a 404, not a refusal); then the caller must administer the season, or a team accepted into it.
         "seasons.organiser" to { r ->
@@ -846,6 +858,20 @@ private fun outcomely(superseding: Boolean = false, block: () -> Http): Http = t
  */
 private fun tabled(block: () -> Http): Http = try { block() } catch (e: LeagueTable.Refused) {
     Http(e.status, """{"error":${Contract.q(e.why)}}""")
+}
+
+/**
+ * A rating, in two roles (PD-105): replayed and read as `app_rating`, which may write the rating tables and read no
+ * person; then named as `app_read`, which holds the disclosure rule and writes nothing. The connection is narrowed
+ * twice, and each narrowing is on the audit of roles the HTTP tests keep.
+ */
+private fun rated(r: Req, deps: Deps, player: UUID): Http {
+    r.role = DbRole.RATING
+    val ratings = Ratings(r.connection(), deps.now)
+    val answer = ratings.of(player)
+    r.role = DbRole.READ
+    val names = answer.lines.map { it.opponent }.distinct().associateWith { Ratings(r.connection(), deps.now).nameOf(it) }
+    return Http(200, ratings.json(answer, names))
 }
 
 /** A season's plan refused is an answer: which fixture, and why it cannot be played (PD-099). */

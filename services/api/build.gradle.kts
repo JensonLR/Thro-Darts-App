@@ -9,6 +9,7 @@ dependencies {
     implementation("thro-authz:thro-authz")
     implementation("thro-trust:thro-trust")
     implementation("thro-competition:thro-competition")
+    implementation("thro-rating:thro-rating")
     implementation("org.postgresql:postgresql:42.7.4")
     // ADR-001: Ktor. The HTTP layer is thin — routes over the existing handlers — and the contract
     // it serves at /openapi.json is emitted from the same registry the routes are built from.

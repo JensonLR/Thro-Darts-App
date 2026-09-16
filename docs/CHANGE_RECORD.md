@@ -5737,3 +5737,37 @@ takes both fields (optional, absent reads as *may not*), `API.setContactEmail`, 
 **The words.** `privacy.html` (three passages), `terms.html`, `STORE_ANSWERS.md` (Contact Info → Email is now *Yes*,
 scoped), `DPIA.md` (the shape, the breach severity, the minimisation row), `ROPA.md` (the opening claim and the
 account row), `MAILBOX.md`'s reply template. Phone numbers were declined and the decision says why.
+
+## A provisional rating, shown as one (V050, PD-105)
+
+**The model, test first.** `Glicko2ModelTest` in `packages/rating` (twelve cases) failed on the missing class, then held:
+a provisional model may be published and the shadow one still may not; a winner goes up and a loser down; an unqualified
+match moves nobody; the same evidence in any order is byte-identical; the ledger reconciles from the starting rating;
+every line carries the frozen facts, quoting the opponent's rating *at that instant*; at two matches only a wide range;
+established only after the threshold and a narrow deviation — the threshold set from a probe that printed the
+deviations a six-player league produces (139 / 112 / 95 after two, three, four rounds; 158 after twenty wins over
+strangers) rather than guessed; no single result moves a rating past 400 over 300 random matches; a day with no matches
+moves nothing; two groups who never meet are two pools of the stated size, joined by one bridge match; the display is
+one of three shapes. `ProjectionTest`'s "one model at a time" double now declares a stage rather than overriding
+`validated`, which the interface derives. 26 tests, 0 failures, after a `gradle clean` for iCloud's duplicates.
+
+**Over the wire, test first.** `RatingHttpTest` (41 checks) plays one-leg matches with `RecordVisit` commands and holds:
+401 without a principal; unrated before anything, and told so; after one match a provisional range and never a number,
+the pool size, the model and stage, a line with the match, outcome, expectation and delta, an unnamed opponent where
+THRØ may not name one; the loser below the winner; an unfinished match counts for nobody; two reads identical to the
+byte; another player's rating needs a principal, is 404 for a player THRØ may not name and for one who does not exist,
+400 for a malformed id; four matches narrow the range; one ledger line per match. Its first failures were mine: a
+`Seat` import from the wrong package, and a device sequence carried across matches (a gap is a 409).
+
+**V050** adds `dispersion` and `pool` to `rating.snapshot`, and gives `app_rating` its first way into `identity`: the
+schema, `player_may_be_disclosed`, and three columns of two tables — found when the first ledger line's name lookup
+was refused. Three schema properties added.
+
+**The code.** `packages/rating`: `RatingModel.Stage`, `Snapshot.dispersion`/`pool`, `Glicko2Model`, `Display`;
+`Publication.check` refuses SHADOW rather than "unvalidated". The API: `Ratings` (lazy replay as `app_rating` when the
+evidence watermark has moved; the evidence view over every finished match; the JSON with its bounded vocabulary);
+`MatchRecords.replay` extracted from `summary` so a rating and a summary cannot disagree about who won; `DbRole.RATING`;
+`GET /v1/me/rating` and `GET /v1/players/{id}/rating`. `packages/rating` joined the API's composite build and the deploy
+path filter. The phone: `RatingAnswer`, `API.rating()`, `AccountStore.loadRating()`, and *Your THRØ rating* on the
+person's own page — the figure, the words for what it is, and the last five lines; a decode test holds the three
+shapes. The API suite: 118 tests, 0 failures, contract regenerated.

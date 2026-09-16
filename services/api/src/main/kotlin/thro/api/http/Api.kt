@@ -495,6 +495,24 @@ public object Contract {
                               403 to "you neither run this season nor a team in it", 404 to "no such league season"),
         ),
         Endpoint(
+            id = "me.rating", method = "GET", path = "/v1/me/rating", authenticated = true,
+            summary = "Your THRØ rating, provisional (PD-105)",
+            description = "Replayed from matches scored on THRØ that finished with a winner and stand as recorded or confirmed "
+                + "— never from a league's declared result, a match nobody confirmed, or a disputed one. Shown as one of three "
+                + "shapes: unrated, a range marked provisional, or a number with its margin once enough has been played "
+                + "and the uncertainty has narrowed. Each match line carries the facts frozen at rating time and a sentence "
+                + "from a bounded vocabulary; the opponent is named only where THRØ may name them. Says how many players the "
+                + "rating is comparable with, because two pools that never meet are two pools.",
+            responses = mapOf(200 to "the rating, its display shape, and its lines", 401 to "no principal"),
+        ),
+        Endpoint(
+            id = "players.rating", method = "GET", path = "/v1/players/{playerId}/rating", authenticated = true,
+            summary = "Another player's THRØ rating, where THRØ may show them (PD-105)",
+            description = "The same answer as /v1/me/rating, for a player an adult has agreed to be shown as. A player THRØ may "
+                + "not name is a 404, the same as a player who does not exist, so the route tells nobody which.",
+            responses = mapOf(200 to "the rating", 400 to "not a UUID", 401 to "no principal", 404 to "no such player, or one THRØ does not show"),
+        ),
+        Endpoint(
             id = "me.seasons", method = "GET", path = "/v1/me/seasons", authenticated = true,
             summary = "The league seasons you administer (PD-100)",
             description = "Newest first, with the league's name, so an organiser can find their way back to the season they run.",

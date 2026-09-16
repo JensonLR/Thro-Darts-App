@@ -254,6 +254,14 @@ public final class AccountStore: ObservableObject {
     /// The last thing the server said about friends — a refusal's own sentence, or an error.
     @Published public private(set) var friendsNote: String?
 
+    /// PD-105: the rating, read when the person's own page opens. Nil until read; the note says why when it could not be.
+    @Published public private(set) var rating: RatingAnswer?
+    @Published public private(set) var ratingNote: String?
+
+    public func loadRating() async {
+        do { rating = try await api.rating(); ratingNote = nil } catch { ratingNote = ThroAPI.refusal(error) ?? "Your rating could not be read just now." }
+    }
+
     public func loadFriends() async {
         do { friends = try await api.friends(); friendsNote = nil } catch { friendsNote = ThroAPI.refusal(error) ?? "Your friends could not be read just now." }
     }

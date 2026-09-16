@@ -42,6 +42,18 @@ public data class Snapshot(
     val confidence: Double,
     val matchesCounted: Int,
     val published: Boolean,
+    /**
+     * How far either side of [rating] the truth plausibly lies (PD-105): a 95% half-width in rating points, or null
+     * for a model that carries none. The display projection turns it into a range, and never shows a bare number
+     * while it is wide.
+     */
+    val dispersion: Double? = null,
+    /**
+     * How many players this one is comparable with: the size of the connected component of the comparison graph
+     * they sit in. Two pools that never meet are two pools, and a rating that reads the same across them is the
+     * failure the harness names; saying the size is how the display stays honest about it.
+     */
+    val pool: Int = 0,
 )
 
 /**
@@ -91,10 +103,19 @@ public interface RatingModel {
     public val parameterHash: String
 
     /**
+     * How far a model may be shown (PD-105). SHADOW computes and is shown to nobody; PROVISIONAL may be published
+     * **as provisional** — a range, marked, never a bare number under the threshold — which is the founder's
+     * revision of OD-001's interim position; VALIDATED is the laboratory's bar, which nothing here has passed.
+     */
+    public enum class Stage { SHADOW, PROVISIONAL, VALIDATED }
+
+    public val stage: Stage get() = Stage.SHADOW
+
+    /**
      * Whether this model has passed the research laboratory's bar. **No model in this repository
      * sets this true**, and none should until Gate 8 produces the evidence.
      */
-    public val validated: Boolean get() = false
+    public val validated: Boolean get() = stage == Stage.VALIDATED
 
     /** Rank is never an input. A rating computed from rank and a rank computed from rating is a loop. */
     public fun rate(evidence: List<EvidenceRow>): Pair<List<Snapshot>, List<LedgerLine>>

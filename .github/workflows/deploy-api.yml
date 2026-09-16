@@ -19,6 +19,7 @@ on:
       - "services/api/**"
       - "packages/engine/**"
       - "packages/statistics/**"
+      - "packages/rating/**"
       - "packages/authz/**"
       - "packages/trust/**"
       - "packages/competition/**"

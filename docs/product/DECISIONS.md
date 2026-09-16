@@ -4630,3 +4630,43 @@ who needs to be reachable.
 - Sending mail (a code for OD-025's hand-over, a reminder). That needs an outbound sender and its processor terms.
 - Verifying the address. Until mail is sent, a typo is the organiser's to notice.
 - A contact for a team's admin shown to the league. The organiser's is the one asked for; the reverse can follow.
+
+## PD-105 — A provisional rating, shown as one
+
+**16 September 2026.** OD-001 left every player provisional with no number shown, until a research laboratory produced
+evidence. The founder: *"surely it can be unblocked & doesn't need hundreds of games."* He is right about what the
+laboratory needs matches for — calibration, not the algorithm — and chose a public rating **marked provisional** over
+none. This revises OD-001's interim position and nothing else in it: the model is not validated, and says so.
+
+### Decided
+
+- **The model is Glicko-2, one match at a time, outcome only** — who won, never legs, visits or the three-dart average
+  (which PD-018 keeps as a form figure and never a rating). It carries its own uncertainty, which is what makes a
+  provisional rating honest to show. τ = 0.5, the paper's middle, because nothing has been measured to move it.
+- **Three display shapes and no fourth.** *Unrated* before any qualifying match. A **range, rounded to tens, marked
+  provisional** until ten matches are counted *and* the deviation is under 120 — measured before the threshold was
+  set: a six-player league narrows to ~139 after two rounds, ~112 after three, ~95 after four, so a number appears
+  about three rounds in; twenty wins over strangers do not earn one. Then a whole number with its margin beside it.
+  A number at two matches, the harness's named failure, cannot be drawn.
+- **What counts.** A match scored on THRØ that finished with a winner and stands as *recorded* (live) or *confirmed*
+  (sent, and agreed by the other seat). Not a self-reported match nobody confirmed, not a disputed one, not an
+  abandoned one, and never a league's declared result (PD-055).
+- **Replayed, never nudged** (ADR-009): recomputed as of the evidence watermark when somebody asks and the evidence has
+  moved, by `app_rating`, the role that may write the rating tables and may not write a match. Snapshots and ledger are
+  replaced whole, so a correction ripples to everybody downstream.
+- **Explained from frozen facts.** Each match line stores the opponent, both ratings at that instant, the expected
+  probability, the outcome and the delta; the sentence is composed at read time from those facts and a bounded
+  vocabulary — *"Beat Sam, rated about 1,540. An upset in your favour."* — never from present ratings and never from
+  model internals. The opponent is named only where THRØ may name them (the roster rule).
+- **The pool is stated.** Each snapshot carries the size of the connected component of who-has-played-whom, and the
+  display says *compared across N players*, because two pools that never meet are two pools.
+- **Whose rating others may see**: `/v1/me/rating` is one's own; `/v1/players/{id}/rating` answers only for a player
+  THRØ may name, and 404 otherwise — the same as no such player.
+- **On the phone**, on the person's own page: the figure, the plain words for what it is, and the last five lines.
+
+### Not decided here
+
+- The laboratory (Gate 8) and validation. The stage is *provisional*; `validated` stays false. When the laboratory runs,
+  this model is a candidate like the others, and the display projection is what makes replacing it cheap.
+- Decay for inactivity, and a rating period. Both are visible ledger lines when they come, never silent drift.
+- Whether league results entered by an official should ever count. PD-055 says never; nothing here changes that.
