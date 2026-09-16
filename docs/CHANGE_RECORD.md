@@ -5771,3 +5771,10 @@ evidence watermark has moved; the evidence view over every finished match; the J
 path filter. The phone: `RatingAnswer`, `API.rating()`, `AccountStore.loadRating()`, and *Your THRØ rating* on the
 person's own page — the figure, the words for what it is, and the last five lines; a decode test holds the three
 shapes. The API suite: 118 tests, 0 failures, contract regenerated.
+
+## thro.uk/tv — the pub screen needs no box
+
+The founder: pubs rarely have an Apple TV, so the tvOS app, which cannot even be installed without one, is the wrong
+answer for a pub. PD-090 already gave the right one — the wall, in the television's own browser or on a £30 stick —
+and it was findable only by knowing the address. `tv.html` is an address a landlord can type and lands on the wall's
+chooser; the home page's footer says *Put THRØ on a pub screen*. Nothing else changed.
