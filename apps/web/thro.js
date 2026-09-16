@@ -39,6 +39,21 @@ const make = (tag, cls, s) => {
  * A read that failed is said at the top of the page, not instead of it: what was already drawn stays, so one bad
  * answer does not blank a page a person was reading. With `retry`, the note carries a button that asks again.
  */
+/** A checkbox beside its words, as one tap target. */
+function check(text, checked) {
+  const l = make('label', 'check');
+  const c = make('input'); c.type = 'checkbox'; c.checked = !!checked;
+  l.append(c, text);
+  return [c, l];
+}
+
+/** A calendar day (yyyy-mm-dd) in words: "1 Sep 2026". Days are days, not instants, so no time zone touches them. */
+const day = iso => {
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(iso || '');
+  if (!m) return iso || '';
+  return new Date(Date.UTC(+m[1], +m[2] - 1, +m[3])).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' });
+};
+
 function fail(where, error, retry) {
   const note = make('div', 'entry');
   note.setAttribute('role', 'status');
@@ -574,7 +589,10 @@ async function mountOrganiser(where, signInEl) {
 
     const todo = (data.fixtures || []).filter(f => !f.decided);
     const done = (data.fixtures || []).filter(f => f.decided);
-    const parts = [...leagueSection(plan, draw), ...teamsSection(plan, draw), ...registrationsSection(plan, policy, registrations, draw), ...registeredSection(plan, registered, draw), ...requestsSection(plan, proposals, draw), ...pointsSection(plan, standings, draw)];
+    const title = document.getElementById('title'); if (title) title.textContent = plan.league.name;
+    const eyebrow = document.getElementById('eyebrow'); if (eyebrow) eyebrow.textContent = `Run this league · ${plan.label}`;
+    document.title = `${plan.league.name} — THRØ`;
+    const parts = [...leagueSection(plan, draw), ...pointsSection(plan, standings, draw), ...teamsSection(plan, draw), ...registrationsSection(plan, policy, registrations, draw), ...registeredSection(plan, registered, draw), ...requestsSection(plan, proposals, draw)];
 
     if (!(data.fixtures || []).length) {
       parts.push(make('h2', null, 'Fixtures'),
@@ -603,7 +621,7 @@ async function mountOrganiser(where, signInEl) {
   function leagueSection(plan, redraw) {
     const l = plan.league;
     const standing = l.endedAt ? `ended ${when(l.endedAt)}` : (l.visibility === 'private' ? 'private — off the public list' : 'public');
-    const out = [make('h2', null, l.name), make('p', 'quiet', `${plan.label} · ${plan.startsOn} to ${plan.endsOn} · the league is ${standing}.`)];
+    const out = [make('h2', null, 'The season'), make('p', 'quiet', `${plan.label} · ${day(plan.startsOn)} to ${day(plan.endsOn)} · the league is ${standing}.`)];
     if (!l.startedHere || l.endedAt) return out;
     const box = make('div', 'entry');
     const said = make('p', 'note'); said.hidden = true;
@@ -707,21 +725,18 @@ async function mountOrganiser(where, signInEl) {
     const facts = [['name', 'a name'], ['age_band', 'an age band'], ['account_claimed', 'a claimed THRØ account'], ['consent', 'consent to be listed']];
     const has = policy ? new Set(policy.requires) : new Set(['name', 'age_band', 'consent']);
     box.append(make('p', 'quiet', policy
-      ? `Version ${policy.version}, in force from ${policy.effectiveFrom}. THRØ checks: ${policy.requires.map(r => r.replace('_', ' ')).join(', ') || 'nothing'}.`
+      ? `Version ${policy.version}, in force from ${day(policy.effectiveFrom)}. THRØ checks: ${policy.requires.map(r => r.replace('_', ' ')).join(', ') || 'nothing'}.`
         + (policy.manualRequirements.length ? ` Confirmed by hand: ${policy.manualRequirements.join(', ')}.` : '')
-        + (policy.registrationClosesOn ? ` Closes ${policy.registrationClosesOn}.` : ` Due ${policy.deadlineDaysBeforeFirstFixture} days before a team's first fixture.`)
+        + (policy.registrationClosesOn ? ` Closes ${day(policy.registrationClosesOn)}.` : ` Due ${policy.deadlineDaysBeforeFirstFixture} days before a team's first fixture.`)
       : 'No policy yet, so no team owes a registration. Say what one needs and the teams will be asked.'));
     const form = make('div', 'entry-form');
-    const boxes = facts.map(([key, text]) => {
-      const l = make('label', 'quiet'); const c = make('input'); c.type = 'checkbox'; c.checked = has.has(key); c.value = key;
-      l.append(c, ' ' + text); return [c, l];
-    });
+    const boxes = facts.map(([key, text]) => { const [c, l] = check(text, has.has(key)); c.value = key; return [c, l]; });
     const manual = make('input'); manual.type = 'text'; manual.placeholder = 'Confirmed by hand, e.g. fee, form'; manual.maxLength = 120;
     manual.value = policy ? policy.manualRequirements.join(', ') : '';
     manual.setAttribute('aria-label', 'Requirements a person confirms by hand, separated by commas');
     const days = make('input'); days.type = 'number'; days.min = 0; days.max = 365; days.value = policy && policy.deadlineDaysBeforeFirstFixture != null ? policy.deadlineDaysBeforeFirstFixture : 7;
     days.setAttribute('aria-label', 'Days before a team’s first fixture that a registration is due');
-    const daysLabel = make('label', 'quiet', 'due '); daysLabel.append(days, ' days before the first fixture');
+    const daysLabel = make('label', 'spec', 'due '); daysLabel.append(days, ' days before the first fixture');
     const set = make('button', 'primary', policy ? 'Set a new version' : 'Set the policy');
     set.onclick = async () => {
       set.disabled = true;
@@ -869,7 +884,7 @@ async function mountOrganiser(where, signInEl) {
       const li = make('li');
       const head = make('div', 'row-head');
       head.append(make('div', 'row-name', `${r.player || 'A player THRØ may not name'} · ${r.team || 'no team'}`),
-                  make('span', 'quiet', `from ${r.from}${r.until ? ` to ${r.until}` : ''} · ${r.source}${r.supersedes ? ' · transfer' : ''}`));
+                  make('span', 'quiet', `from ${day(r.from)}${r.until ? ` to ${day(r.until)}` : ''} · ${r.source}${r.supersedes ? ' · transfer' : ''}`));
       li.append(head);
       list.append(li);
     }
@@ -909,7 +924,7 @@ async function mountOrganiser(where, signInEl) {
     const box = make('div', 'entry');
     box.append(make('h2', null, 'Points'), make('p', 'quiet', rules.says || 'Ordered by THRØ’s standard until the league sets its own.'));
     const form = make('div', 'entry-form');
-    const num = (label, value) => { const i = make('input'); i.type = 'number'; i.min = 0; i.max = 20; i.value = value; i.setAttribute('aria-label', label); const l = make('label', 'quiet', label + ' '); l.append(i); return [i, l]; };
+    const num = (label, value) => { const i = make('input'); i.type = 'number'; i.min = 0; i.max = 20; i.value = value; i.setAttribute('aria-label', label); const l = make('label', 'spec', label + ' '); l.append(i); return [i, l]; };
     const [win, winL] = num('a win', 2), [draw, drawL] = num('a draw', 1), [loss, lossL] = num('a loss', 0), [leg, legL] = num('per leg won', 0);
     const order = make('input'); order.type = 'text'; order.value = (rules.orderedBy || ['points', 'leg_difference', 'legs_for', 'head_to_head']).join(', '); order.maxLength = 80;
     order.setAttribute('aria-label', 'Tie-breaks, in order: points, leg_difference, legs_for, head_to_head, played');
@@ -1001,7 +1016,7 @@ async function mountOrganiser(where, signInEl) {
       return box;
     }
     const named = id => (plan.teams.find(t => t.teamId === id) || {}).name || 'A team';
-    const label = (text, input) => { const l = make('label', 'quiet', text + ' '); l.append(input); return l; };
+    const label = (text, input) => { const l = make('label', 'spec', text + ' '); l.append(input); return l; };
     const select = (options, blank) => {
       const s = make('select');
       if (blank) s.append(new Option(blank, ''));
@@ -1051,7 +1066,7 @@ async function mountOrganiser(where, signInEl) {
     const whole = make('div', 'entry-form');
     const first = make('input'); first.type = 'date'; first.min = plan.startsOn; first.max = plan.endsOn;
     const wholeTime = make('input'); wholeTime.type = 'time'; wholeTime.value = '19:30';
-    const twice = make('input'); twice.type = 'checkbox'; twice.checked = true;
+    const [twice, twiceL] = check('Home and away', true);
     const draw_up = make('button', 'quiet-button', 'Draw it up');
     const preview = make('div');
     draw_up.onclick = () => {
@@ -1072,13 +1087,13 @@ async function mountOrganiser(where, signInEl) {
       create.onclick = () => send(fixtures, create);
       preview.replaceChildren(make('p', 'quiet', `${fixtures.length} fixtures, weekly. Nothing is added until you press the button under the list.`), list, create);
     };
-    whole.append(label('First round', first), wholeTime, label('Home and away', twice), draw_up);
+    whole.append(label('First round', first), wholeTime, twiceL, draw_up);
 
     pool.onchange = () => { refill(); preview.replaceChildren(); };
     refill();
     box.append(label('Division', pool),
                make('p', 'quiet', 'One fixture'), one,
-               make('p', 'quiet', `Or the whole division as a round robin, inside the season (${plan.startsOn} to ${plan.endsOn})`), whole,
+               make('p', 'quiet', `Or the whole division as a round robin, inside the season (${day(plan.startsOn)} to ${day(plan.endsOn)})`), whole,
                preview, said);
     return box;
   }
@@ -1237,7 +1252,8 @@ async function mountOrganiser(where, signInEl) {
     const row = make('div', 'row-meta');
     const award = make('button', 'quiet-button', 'Award'); award.setAttribute('aria-expanded', 'false');
     const move = make('button', 'quiet-button', 'Rearrange'); move.setAttribute('aria-expanded', 'false');
-    row.append(award, move);
+    const acts = make('div', 'acts'); acts.append(award, move);
+    row.append(acts);
     const wrap = make('div');
     let open = null;
     const shut = () => {
@@ -1548,9 +1564,12 @@ async function mountEvent(where, signInEl, eventId) {
       const out = make('button', 'quiet-button', 'Sign out'); out.onclick = () => { signOut(); draw(); }; signInEl.append(out);
     }
     const whereAt = e.venue ? `${e.venue}${e.locality ? `, ${e.locality}` : ''}` : (e.venueLabel || 'venue to be announced');
+    const title = document.getElementById('title'); if (title) title.textContent = e.name;
+    const eyebrow = document.getElementById('eyebrow'); if (eyebrow) eyebrow.textContent = `${when(e.startsAt)} · ${whereAt}`;
+    document.title = `${e.name} — THRØ`;
     const places = e.capacity == null ? 'places not stated' : (e.spotsRemaining === 0 ? 'full' : `${e.spotsRemaining} of ${e.capacity} places left`);
     const parts = [
-      make('h2', null, e.name),
+      make('h2', null, 'The day'),
       make('p', 'quiet', `${when(e.startsAt)} · ${whereAt} · ${e.entries} entered · ${places} · ${e.state.replace('_', ' ')}`
         + (e.entriesCloseAt ? ` · entries close ${when(e.entriesCloseAt)}` : '')),
     ];
@@ -1585,14 +1604,16 @@ async function mountEvent(where, signInEl, eventId) {
           // The organiser decides an undecided tie here: a walkover or an award, with a reason. A played tie is
           // cited from the app by somebody who played it; the winner is the record's, never typed here.
           if (session.get() && !t.isBye && !t.winnerId && (e.state === 'drawn' || e.state === 'in_progress')) {
-            const form = make('div', 'entry-form');
+            const form = make('div', 'entry-form'); form.hidden = true;
             const winner = make('select'); winner.append(new Option('Who goes through', ''), new Option(name(t.home), t.homeId), new Option(name(t.away), t.awayId));
             winner.setAttribute('aria-label', 'Who goes through');
             const how = make('select'); how.append(new Option('walkover', 'walkover'), new Option('awarded', 'awarded'));
             how.setAttribute('aria-label', 'How it was decided');
             const why = make('input'); why.type = 'text'; why.placeholder = 'Why, e.g. did not arrive'; why.maxLength = 280; why.setAttribute('aria-label', 'Why');
             const said = make('p', 'note'); said.hidden = true;
-            const decide = make('button', 'quiet-button', 'Record it');
+            const reveal = make('button', 'quiet-button', 'Decide it by hand'); reveal.setAttribute('aria-expanded', 'false');
+            reveal.onclick = () => { form.hidden = !form.hidden; reveal.setAttribute('aria-expanded', String(!form.hidden)); reveal.textContent = form.hidden ? 'Decide it by hand' : 'Leave it to the board'; };
+            const decide = make('button', 'primary', 'Record it');
             decide.onclick = async () => {
               if (!winner.value || !why.value.trim()) { said.hidden = false; said.textContent = 'Say who goes through and why.'; return; }
               decide.disabled = true;
@@ -1600,7 +1621,8 @@ async function mountEvent(where, signInEl, eventId) {
               catch (err) { said.hidden = false; said.textContent = err.message; decide.disabled = false; }
             };
             form.append(winner, how, why, decide);
-            li.append(form, said);
+            const acts = make('div', 'acts'); acts.append(reveal);
+            li.append(acts, form, said);
           }
           list.append(li);
         }

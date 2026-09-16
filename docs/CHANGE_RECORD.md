@@ -5994,3 +5994,22 @@ the organiser's, works, and refuses somebody not entered; an invited player may 
 organiser is told it is closed. **Built.** `Editions.open(access)`, `enter(by)`, `remove`, `entrants`; the route
 bodies and two contract entries; the web opener's access and the organiser's *Entered* / *Invite a player* sections.
 **Proven.** API suite green with the contract regenerated; `node --check`; repo checks.
+
+## The organiser's desk, looked at (web design pass)
+
+**How it was looked at.** The API run locally with the development authenticator (`THRO_DEV_AUTH=1`, refused against
+any database not on this machine), the pages served by `tools/web_serve.py`, the browser at 375 points, the session
+and `X-Thro-Dev-Subject` injected in the page so the organiser's season page and an event's page rendered signed in
+against the registration scenario's data plus a proposal, points rules, a friendly and a drawn event seeded over the
+wire. Screenshots taken, faults fixed, screenshots taken again.
+
+**What was wrong and is not now.** A checkbox rendered as a 44-pixel field with its words underneath; two quiet acts
+("AwardRearrange") ran together; a list touched the box after it; a select outside a form had the browser's own
+look; dates read as ISO; the page's title said "Results" whatever league it was; a tie's decision was three controls
+per undecided tie; a hidden form was not hidden because a class gave it `display: flex`; the label class `field`
+collided with the header's `.field` and painted labels green; the home page's footer had a stray full stop. Now: one
+shape for every control in a box, `label.check` and `label.spec`, `.acts`, `[hidden]` that means it, `day()` for
+calendar days, the league's or event's name in the header, *Decide it by hand* revealing the form. The public pages
+(home, table, fixtures) were looked at too and left alone: they were right.
+
+**Not looked at.** The moderation page and the organiser lobby's *Start a league* form beyond their signed-out states.

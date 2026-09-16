@@ -156,3 +156,32 @@ button.quiet-button { font: inherit; padding: 8px 0; color: var(--color-text-bra
   .entry-form button.primary { flex: 1 1 100%; }
   .row-head { flex-wrap: wrap; }
 }
+
+/* What is hidden stays hidden, whatever display a class gave it. */
+[hidden] { display: none !important; }
+
+/* --- The organiser's desk, at a glance (design pass, 16 September) ------------------------------------------------
+   Every control a person touches in a box shares one shape: the same height, the same corner, the same ink. A checkbox
+   is a checkbox, beside its words, not a 44-pixel field with its words underneath. Two quiet acts side by side have
+   air between them. A list and the box after it do not touch. */
+.entry input:not([type="checkbox"]), .entry select { font: inherit; padding: 10px 12px; min-height: 44px; border-radius: var(--radius-control, 10px);
+  border: 1px solid var(--color-border-default); background: var(--color-surface-primary); color: var(--color-text-primary); max-width: 100%; }
+.entry select { appearance: none; -webkit-appearance: none; padding-right: 36px;
+  background-image: linear-gradient(45deg, transparent 50%, var(--color-text-secondary) 50%), linear-gradient(135deg, var(--color-text-secondary) 50%, transparent 50%);
+  background-position: calc(100% - 20px) 50%, calc(100% - 14px) 50%; background-size: 6px 6px, 6px 6px; background-repeat: no-repeat; }
+.entry-form input[type="checkbox"], .check input[type="checkbox"] { width: 22px; height: 22px; min-height: 0; padding: 0; margin: 0; flex: none;
+  accent-color: var(--color-text-brand); border-radius: 6px; }
+label.check { display: inline-flex; align-items: center; gap: 10px; min-height: 44px; color: var(--color-text-primary); font-size: 16px; cursor: pointer; }
+label.spec { display: inline-flex; align-items: center; gap: 8px; color: var(--color-text-secondary); font-size: 14px; white-space: nowrap; }
+label.spec input, label.spec select { color: var(--color-text-primary); font-size: 16px; }
+button.quiet-button + button.quiet-button, button.quiet-button + label.check { margin-left: 18px; }
+.entry > button.quiet-button, li > button.quiet-button { margin-top: 6px; }
+ul.rows + .entry, p.quiet + .entry, .entry + .entry, .entry + ul.rows, .note + .entry { margin-top: 16px; }
+ul.rows li .row-meta { padding: 0 0 10px; }
+ul.rows li .row-head + .row-meta { margin-top: -6px; }
+.entry h2:first-child, .entry .entry-form:first-child { margin-top: 0; }
+.entry h2 { margin-top: 0; }
+.entry .entry-form + p.quiet, .entry .note + p.quiet { margin-top: 12px; }
+.acts { display: flex; flex-wrap: wrap; gap: 8px 18px; align-items: center; margin-top: 8px; }
+.acts button.quiet-button { margin: 0; }
+p.eyebrow + p.wordmark { margin-top: 2px; }

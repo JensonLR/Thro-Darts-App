@@ -1,0 +1,22 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "api-dev",
+      "runtimeExecutable": "sh",
+      "runtimeArgs": [
+        "-c",
+        "JAVA_HOME=/opt/homebrew/opt/openjdk@21 PATH=/opt/homebrew/opt/openjdk@21/bin:$PATH PGHOST=localhost PGPORT=5432 PGUSER=jensonlr PGDATABASE=postgres PORT=8080 THRO_DEV_AUTH=1 gradle -p services/api serve -q"
+      ],
+      "port": 8080
+    },
+    {
+      "name": "web-dev",
+      "runtimeExecutable": "/usr/bin/python3",
+      "runtimeArgs": [
+        "/Users/jensonlr/Documents/Thro-Darts-App/tools/web_serve.py"
+      ],
+      "port": 8899
+    }
+  ]
+}
