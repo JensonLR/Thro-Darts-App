@@ -585,6 +585,29 @@ public object Contract {
             responses = mapOf(200 to "the event, drawn, with its first round", 400 to "not a UUID", 401 to "no principal", 403 to "not the organiser", 404 to "no such event", 409 to "already drawn, or fewer than two entrants"),
         ),
         Endpoint(
+            id = "events.tie.result", method = "POST", path = "/v1/events/{eventId}/ties/{tieId}/result", authenticated = true,
+            summary = "The organiser declares a tie: a walkover or an award (PD-111)",
+            description = "With a note that says why. A played tie is never declared — it cites its match and the winner is read from the record. "
+                + "A decided tie is not decided again; a bye is not decided at all.",
+            request = Schema("""{"type":"object","required":["winnerId","outcome","note"],"properties":{"winnerId":{"type":"string","format":"uuid"},"outcome":{"type":"string","enum":["walkover","awarded"]},"note":{"type":"string","maxLength":280}}}"""),
+            responses = mapOf(200 to "the event, with the tie decided", 400 to "not a side of the tie, no note, or a played outcome", 401 to "no principal", 403 to "not the organiser", 404 to "no such event or tie", 409 to "already decided, a bye, or the event is not in play"),
+        ),
+        Endpoint(
+            id = "events.tie.match", method = "POST", path = "/v1/events/{eventId}/ties/{tieId}/match", authenticated = true,
+            summary = "Name the match a tie was played in; the winner is the record's (PD-111)",
+            description = "By somebody who played the match, or the organiser. The match must be between the tie's two players and finished; "
+                + "the winner is derived from its record by the one derivation a rating reads, never typed.",
+            request = Schema("""{"type":"object","required":["matchId"],"properties":{"matchId":{"type":"string","format":"uuid"}}}"""),
+            responses = mapOf(200 to "the event, with the tie decided as played", 400 to "malformed", 401 to "no principal", 403 to "you did not play it", 404 to "no such event, tie or match", 409 to "not this tie's match, no winner yet, or already decided"),
+        ),
+        Endpoint(
+            id = "events.advance", method = "POST", path = "/v1/events/{eventId}/advance", authenticated = true,
+            summary = "Draw the next round from the winners (PD-111)",
+            description = "By the organiser, once every tie in the current round is decided: winners paired in position order; byes go through. "
+                + "A round of one decided tie completes the event, which then names its winner.",
+            responses = mapOf(200 to "the event, with the next round or complete", 400 to "not a UUID", 401 to "no principal", 403 to "not the organiser", 404 to "no such event", 409 to "undecided ties, no draw yet, or already complete"),
+        ),
+        Endpoint(
             id = "fixtures.proposals", method = "GET", path = "/v1/fixtures/{fixtureId}/proposals", authenticated = true,
             summary = "The dates proposed for a fixture (PD-108)",
             description = "Every proposal to move this fixture, newest first: the date, from which team, why, and where it stands. For "

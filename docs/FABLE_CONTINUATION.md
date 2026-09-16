@@ -30,7 +30,7 @@ entitlements and refused if the signed app lacks Sign in with Apple or the passk
 
 PD-095 deploy pipeline · PD-096 retention sweep · PD-097 Android notice · PD-098 TestFlight entitlements ·
 PD-099 fixtures · PD-100 start a league · PD-101 moderation page · PD-102 ways in · PD-103 decisions enforce +
-league management · PD-104 organiser email · PD-105 provisional rating · PD-106 the team's fixture · PD-107 registrations · PD-108 moving a fixture by agreement · PD-109 a knockout · PD-110 a friendly.
+league management · PD-104 organiser email · PD-105 provisional rating · PD-106 the team's fixture · PD-107 registrations · PD-108 moving a fixture by agreement · PD-109 a knockout · PD-110 a friendly · PD-111 rounds.
 
 ## Completion matrix (from four read-only audits, 16 September; details in PD-106 and CHANGE_RECORD)
 
@@ -44,7 +44,8 @@ league management · PD-104 organiser email · PD-105 provisional rating · PD-1
 | League OS: points-policy approval, transfers, division moves, audit view | **Missing routes** — domain in `Organisations.kt` with tests, no HTTP, no UI | audit §2 |
 | Secretary: rearrangement *proposals* (propose, answer, apply) | **Complete (PD-108)** — routes, phone fixture screen + inbox, organiser web *Requests* | RearrangementHttpTest (26) |
 | Tournament OS on the server: open, enter, withdraw, check in, close, draw round one | **Complete (PD-109)** — routes, `events.html`, Discover card actions | EventHttpTest (32) |
-| Tournament OS: later rounds, pairs/teams, invitational access, a tie citing its match from the phone | **Missing** — not in the domain (rounds) or not on the wire (kinds, access) | PD-109 §5 |
+| Tournament OS: later rounds, a tie decided (played or declared), the event's winner, citing from the phone | **Complete (PD-111, V052)** | EventHttpTest (47) |
+| Tournament OS: pairs/teams as entrants, invitational access, seeding, boards | **Missing** — not on the wire (kinds, access), not in the domain (seeding UI, boards) | PD-111 |
 | Friendly challenge between teams | **Complete (PD-110, V051)** — challenge, answer, withdraw, cite; phone team front | FriendlyHttpTest (31) |
 | Discovery (leagues, events, nearby on-device) and the map | Complete for what is written; no server-side tournament entry | audit |
 | Moderation | Complete (PD-101, PD-103) | ModerationHttpTest |
@@ -59,8 +60,8 @@ league management · PD-104 organiser email · PD-105 provisional rating · PD-1
 
 1. ~~Secretary HTTP surface: registrations (PD-107), rearrangement proposals (PD-108)~~ **done**. Left of the
    League OS: points-policy approval, transfers, division moves as routes; withdrawing a proposal; a proposed venue.
-2. ~~Tournament OS on the server~~ **done for round one (PD-109)**. Left: advancing winners (needs domain work),
-   pairs and teams as entrants, invitational access, citing a tie's match from the phone.
+2. ~~Tournament OS on the server~~ **done through the final (PD-109, PD-111)**. Left: pairs and teams as entrants,
+   invitational access, seeding, boards.
 3. ~~Friendly challenge~~ **done (PD-110)**. Left: rearranging an accepted friendly; a venue on the wire.
 4. ~~Web polish~~ **done**: a 420px breakpoint, `fail()` keeps the page and offers *Try again*, fixtures → table.
 5. NEEDS-DECISION (founder): the deploy branch's name; moving `PlaytestServer` out of the image.

@@ -5961,3 +5961,12 @@ the proposal is withdrawn, the opponent's task cancelled, and the submission tha
 move a delivered request may make without the recipient's word, and the right one: its subject is gone. Withdrawing a
 delivered submission is not a transition the rule table or the V016 trigger admit, and neither was changed. The phone's
 fixture screen shows *Take it back* on the team's own open proposal. Five checks added to `RearrangementHttpTest`.
+
+## A tie has a winner, and a bracket has rounds (V052, PD-111)
+
+**Migration.** V052, additive, guard green. **Test first.** `EventHttpTest` gained the rounds journey (15 checks, red on
+the missing `advance` route). **Built.** `Editions.declare/citeTie/advance`, three routes and their contract entries,
+ties carrying `winnerId/outcome/note` and the event its `winnerId`; the web event page as a bracket with the
+organiser's decisions; the phone's card showing your tie and *Name the match*. **Proven.** API suite green with the
+contract regenerated; Swift suite green; repo checks. **Not proven:** the bracket page and the phone's tie against
+production beyond compilation and the decoding tests.

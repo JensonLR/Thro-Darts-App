@@ -713,6 +713,10 @@ public struct EventPage: Decodable, Sendable, Equatable, Identifiable {
         public let away: String?
         public let isBye: Bool
         public let matchId: UUID?
+        /// Who went through, and how: `played` (read from the match's record), `walkover`, `awarded`, or `bye`; nil while undecided.
+        public let winnerId: UUID?
+        public let outcome: String?
+        public let note: String?
         public var id: UUID { tieId }
     }
     public struct You: Decodable, Sendable, Equatable {
@@ -735,6 +739,8 @@ public struct EventPage: Decodable, Sendable, Equatable, Identifiable {
     public let spotsRemaining: Int?
     public let you: You?
     public let draw: [Tie]
+    /// The champion, once the event is complete.
+    public let winnerId: UUID?
     public var id: UUID { eventId }
 }
 
@@ -1181,6 +1187,12 @@ public actor ThroAPI {
     /// Checks you in from this phone, on the day, and returns the grant that lets it score with no signal.
     public func checkIn(event: UUID) async throws -> ScoringGrant {
         try decode(await authorised("POST", "/v1/events/\(event.uuidString.lowercased())/check-in", body: Data("{}".utf8)))
+    }
+
+    /// Names the match a tie was played in (PD-111); the winner is read from the record, never typed.
+    public func citeTie(event: UUID, tie: UUID, match: UUID) async throws -> EventPage {
+        let body = try JSONSerialization.data(withJSONObject: ["matchId": match.uuidString.lowercased()])
+        return try decode(await authorised("POST", "/v1/events/\(event.uuidString.lowercased())/ties/\(tie.uuidString.lowercased())/match", body: body))
     }
 
     /// The dates proposed for a fixture, for its two teams and its league (PD-108).

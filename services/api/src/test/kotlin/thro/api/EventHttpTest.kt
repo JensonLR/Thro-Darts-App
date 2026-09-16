@@ -52,6 +52,7 @@ class EventHttpTest {
         val bob = person("003.bob", "Bob Board")
         val cara = person("003.cara", "Cara Checkout")
         val dave = person("003.dave", "Dave Drifter")
+        val zed = person("003.zed", "Zed Nobody")
         val pub = orgs.createVenue("The Sun Inn", "Stockton-on-Tees")
         var clock = Instant.parse("2026-09-16T12:00:00Z")
 
@@ -119,6 +120,45 @@ class EventHttpTest {
             check("the organiser closes entries", post("/v1/events/$second/close", "{}", lee).bodyAsText().contains("\"state\":\"entries_closed\""))
             check("and nobody enters after", post("/v1/events/$second/entries", "{}", bob).status.value == 409)
             check("one entrant is no draw", post("/v1/events/$second/draw", "{}", lee).status.value == 409)
+
+            // --- rounds (PD-111): four entrants, two rounds, one decided by a match and one by the organiser's word ------
+            val third = idOf(post("/v1/events", """{"name":"Friday Fours","startsAt":"2026-10-09T19:00:00Z","sessionEndsAt":"2026-10-09T23:00:00Z","venueLabel":"the back room"}""", lee).bodyAsText(), "eventId")!!
+            for (p in listOf(alice, bob, cara, dave)) post("/v1/events/$third/entries", "{}", p)
+            check("advancing before the draw is a 409", post("/v1/events/$third/advance", "{}", lee).status.value == 409)
+            val drawnFours = post("/v1/events/$third/draw", "{}", lee).bodyAsText()
+            val ties = Regex("\"tieId\":\"([0-9a-f-]{36})\"[^}]*\"homeId\":\"([0-9a-f-]{36})\"[^}]*\"awayId\":\"([0-9a-f-]{36})\"").findAll(drawnFours)
+                .map { Triple(it.groupValues[1], UUID.fromString(it.groupValues[2]), UUID.fromString(it.groupValues[3])) }.toList()
+            check("four entrants draw into two ties with no bye", ties.size == 2 && !drawnFours.contains("\"isBye\":true"))
+            check("advancing with nothing decided is a 409 that says so", post("/v1/events/$third/advance", "{}", lee).bodyAsText().contains("undecided"))
+            val (tieA, homeA, awayA) = ties[0]; val (tieB, homeB, awayB) = ties[1]
+            // Tie A: the organiser's word — a walkover to the home side because the away side did not turn up.
+            check("declaring a winner is the organiser's", post("/v1/events/$third/ties/$tieA/result", """{"winnerId":"$homeA","outcome":"walkover","note":"did not arrive"}""", alice).status.value == 403)
+            check("a winner who is not in the tie is refused", post("/v1/events/$third/ties/$tieA/result", """{"winnerId":"$lee","outcome":"walkover","note":"x"}""", lee).status.value == 400)
+            val walk = post("/v1/events/$third/ties/$tieA/result", """{"winnerId":"$homeA","outcome":"walkover","note":"did not arrive"}""", lee)
+            check("the organiser records a walkover, and the tie says who and why", walk.status.value == 200 && walk.bodyAsText().contains("\"outcome\":\"walkover\"") && walk.bodyAsText().contains("\"winnerId\":\"$homeA\""))
+            check("a decided tie is not decided again", post("/v1/events/$third/ties/$tieA/result", """{"winnerId":"$awayA","outcome":"awarded","note":"changed my mind"}""", lee).status.value == 409)
+            // Tie B: played on THRØ; the winner is read from the match's own record, not typed.
+            val played = UUID.randomUUID()
+            Matches(c).open(played, homeB, awayB, thro.engine.MatchFormat(startingScore = 501, inRule = thro.engine.InRule.STRAIGHT, outRule = thro.engine.OutRule.DOUBLE, legs = thro.engine.Structure(thro.engine.StructureMode.FIRST_TO, 1), throwFirst = Seat.home))
+            var seq = 0L
+            for ((seat, total) in listOf("home" to 180, "away" to 60, "home" to 180, "away" to 60, "home" to 141)) {
+                post("/v1/commands", """{"type":"RecordVisit","commandId":"${UUID.randomUUID()}","matchId":"$played","deviceSeq":${++seq},"player":"$seat","visitTotal":$total,"occurredAt":"2026-10-09T19:${30 + seq}:00Z"}""", homeB)
+            }
+            check("a stranger cannot cite a match to a tie", post("/v1/events/$third/ties/$tieB/match", """{"matchId":"$played"}""", zed).status.value == 403)
+            val wrong = UUID.randomUUID()
+            Matches(c).open(wrong, homeB, lee, thro.engine.MatchFormat(startingScore = 501, inRule = thro.engine.InRule.STRAIGHT, outRule = thro.engine.OutRule.DOUBLE, legs = thro.engine.Structure(thro.engine.StructureMode.FIRST_TO, 1), throwFirst = Seat.home))
+            check("a match between other players is not this tie's", post("/v1/events/$third/ties/$tieB/match", """{"matchId":"$wrong"}""", homeB).status.value == 409)
+            val cited = post("/v1/events/$third/ties/$tieB/match", """{"matchId":"$played"}""", homeB)
+            check("a player in the tie cites the match, and the winner is the record's", cited.status.value == 200 && cited.bodyAsText().contains("\"outcome\":\"played\"") && cited.bodyAsText().contains("\"winnerId\":\"$homeB\""))
+            check("the event is in progress", get("/v1/events/$third", null).bodyAsText().contains("\"state\":\"in_progress\""))
+            check("advancing is the organiser's", post("/v1/events/$third/advance", "{}", alice).status.value == 403)
+            val next = post("/v1/events/$third/advance", "{}", lee).bodyAsText()
+            check("the organiser advances: one tie in round two between the two winners", next.contains("\"round\":2") && next.contains("\"homeId\":\"$homeA\"") && next.contains("\"awayId\":\"$homeB\""))
+            val finalTie = Regex("\"tieId\":\"([0-9a-f-]{36})\",\"round\":2").find(next)!!.groupValues[1]
+            post("/v1/events/$third/ties/$finalTie/result", """{"winnerId":"$homeB","outcome":"awarded","note":"won 3-1 on the board"}""", lee)
+            val done = post("/v1/events/$third/advance", "{}", lee).bodyAsText()
+            check("after the final the event is complete, and names its winner", done.contains("\"state\":\"complete\"") && done.contains("\"winnerId\":\"$homeB\""))
+            check("a complete event does not advance", post("/v1/events/$third/advance", "{}", lee).status.value == 409)
         }
         println("events over HTTP: $passed checks passed")
     }

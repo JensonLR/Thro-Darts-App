@@ -521,6 +521,21 @@ public fun Application.thro(deps: Deps) {
         },
         "events.close" to { r -> editions { Editions(r.connection(), deps.now).let { Http(200, it.json(it.close(UUID.fromString(r.call.parameters["eventId"]), r.principal!!.subject))) } } },
         "events.draw" to { r -> editions { Editions(r.connection(), deps.now).let { Http(200, it.json(it.draw(UUID.fromString(r.call.parameters["eventId"]), r.principal!!.subject))) } } },
+        "events.tie.result" to { r ->
+            editions {
+                val m = Json.parseObject(r.body)
+                val winner = UUID.fromString(m["winnerId"] as? String ?: throw IllegalArgumentException("winnerId is required"))
+                Editions(r.connection(), deps.now).let { Http(200, it.json(it.declare(UUID.fromString(r.call.parameters["eventId"]), UUID.fromString(r.call.parameters["tieId"]), winner, m["outcome"] as? String ?: "", m["note"] as? String, r.principal!!.subject))) }
+            }
+        },
+        "events.tie.match" to { r ->
+            editions {
+                val m = Json.parseObject(r.body)
+                val match = UUID.fromString(m["matchId"] as? String ?: throw IllegalArgumentException("matchId is required"))
+                Editions(r.connection(), deps.now).let { Http(200, it.json(it.citeTie(UUID.fromString(r.call.parameters["eventId"]), UUID.fromString(r.call.parameters["tieId"]), match, r.principal!!.subject))) }
+            }
+        },
+        "events.advance" to { r -> editions { Editions(r.connection(), deps.now).let { Http(200, it.json(it.advance(UUID.fromString(r.call.parameters["eventId"]), r.principal!!.subject))) } } },
         // PD-108: moving a fixture by agreement — one team proposes, the other answers, the league applies.
         "fixtures.proposals" to { r ->
             rearrangements { Rearrangements(r.connection(), deps.now).let { Http(200, it.json(it.ofFixture(UUID.fromString(r.call.parameters["fixtureId"]), r.principal!!.subject))) } }

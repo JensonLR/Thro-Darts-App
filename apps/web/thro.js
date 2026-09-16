@@ -1390,18 +1390,55 @@ async function mountEvent(where, signInEl, eventId) {
       parts.push(make('p', 'quiet', e.you.entered ? (e.you.checkedIn ? 'You are entered and checked in.' : 'You are entered. Check in from the app on the day.') : 'Entering is done in the app, from Discover.'));
     }
     if (e.draw.length) {
-      parts.push(make('h2', null, 'First round'));
-      const list = make('ul', 'rows');
-      for (const t of e.draw) {
-        const li = make('li');
-        li.append(make('div', 'row-name', t.isBye ? `${t.home || 'A player'} — bye` : `${t.home || 'A player'} v ${t.away || 'A player'}`),
-                  make('div', 'row-meta', t.matchId ? 'scored on THRØ' : (t.isBye ? 'a bye is not a win' : 'to be played')));
-        list.append(li);
+      // The bracket, round by round. A decided tie says how; a bye says it is one; the final says who won the day.
+      const rounds = [...new Set(e.draw.map(t => t.round))].sort((a, b) => a - b);
+      const last = rounds[rounds.length - 1];
+      const roundName = (r, ties) => ties.length === 1 && e.state === 'complete' ? 'Final' : (ties.length === 1 ? 'Final' : ties.length === 2 ? 'Semi-finals' : ties.length === 4 ? 'Quarter-finals' : `Round ${r}`);
+      if (e.winnerId) {
+        const champion = e.draw.filter(t => t.round === last).map(t => t.winnerId === t.homeId ? t.home : t.away)[0];
+        parts.push(make('p', 'wordmark', `${champion || 'A player'} won it`));
       }
-      parts.push(list);
+      for (const r of rounds) {
+        const ties = e.draw.filter(t => t.round === r);
+        parts.push(make('h2', null, roundName(r, ties)));
+        const list = make('ul', 'rows');
+        for (const t of ties) {
+          const li = make('li');
+          const head = make('div', 'row-head');
+          const name = who => who || 'A player';
+          const line = t.isBye ? `${name(t.home)} — bye` : `${name(t.home)} v ${name(t.away)}`;
+          const standing = t.isBye ? 'through without a game'
+            : t.winnerId ? `${t.winnerId === t.homeId ? name(t.home) : name(t.away)} won · ${t.outcome === 'played' ? 'scored on THRØ' : t.outcome}${t.note ? ` — ${t.note}` : ''}`
+            : 'to be played';
+          head.append(make('div', 'row-name', line), make('span', 'quiet', standing));
+          li.append(head);
+          // The organiser decides an undecided tie here: a walkover or an award, with a reason. A played tie is
+          // cited from the app by somebody who played it; the winner is the record's, never typed here.
+          if (session.get() && !t.isBye && !t.winnerId && (e.state === 'drawn' || e.state === 'in_progress')) {
+            const form = make('div', 'entry-form');
+            const winner = make('select'); winner.append(new Option('Who goes through', ''), new Option(name(t.home), t.homeId), new Option(name(t.away), t.awayId));
+            winner.setAttribute('aria-label', 'Who goes through');
+            const how = make('select'); how.append(new Option('walkover', 'walkover'), new Option('awarded', 'awarded'));
+            how.setAttribute('aria-label', 'How it was decided');
+            const why = make('input'); why.type = 'text'; why.placeholder = 'Why, e.g. did not arrive'; why.maxLength = 280; why.setAttribute('aria-label', 'Why');
+            const said = make('p', 'note'); said.hidden = true;
+            const decide = make('button', 'quiet-button', 'Record it');
+            decide.onclick = async () => {
+              if (!winner.value || !why.value.trim()) { said.hidden = false; said.textContent = 'Say who goes through and why.'; return; }
+              decide.disabled = true;
+              try { await authorised('POST', `/v1/events/${encodeURIComponent(eventId)}/ties/${encodeURIComponent(t.tieId)}/result`, { winnerId: winner.value, outcome: how.value, note: why.value.trim() }); draw(); }
+              catch (err) { said.hidden = false; said.textContent = err.message; decide.disabled = false; }
+            };
+            form.append(winner, how, why, decide);
+            li.append(form, said);
+          }
+          list.append(li);
+        }
+        parts.push(list);
+      }
     }
     // The organiser's acts: shown to a signed-in person and refused by the server for anybody who is not the organiser.
-    if (session.get() && (e.state === 'open' || e.state === 'entries_closed')) {
+    if (session.get() && (e.state === 'open' || e.state === 'entries_closed' || e.state === 'drawn' || e.state === 'in_progress')) {
       const box = make('div', 'entry');
       const said = make('p', 'note'); said.hidden = true;
       const act = async (path, button) => {
@@ -1411,11 +1448,19 @@ async function mountEvent(where, signInEl, eventId) {
       };
       const form = make('div', 'entry-form');
       if (e.state === 'open') { const close = make('button', 'quiet-button', 'Close entries'); close.onclick = () => act('close', close); form.append(close); }
-      const drawIt = make('button', 'primary', 'Make the draw');
-      drawIt.onclick = () => { if (drawIt.textContent !== 'Draw it — this cannot be undone') { drawIt.textContent = 'Draw it — this cannot be undone'; return; } act('draw', drawIt); };
-      form.append(drawIt);
-      box.append(make('h2', null, 'As the organiser'), form, said,
-                 make('p', 'quiet', 'The draw is made once, from the entries as they stand: byes to the highest seeds, the rest paired. A bye is not a win.'));
+      if (e.state === 'open' || e.state === 'entries_closed') {
+        const drawIt = make('button', 'primary', 'Make the draw');
+        drawIt.onclick = () => { if (drawIt.textContent !== 'Draw it — this cannot be undone') { drawIt.textContent = 'Draw it — this cannot be undone'; return; } act('draw', drawIt); };
+        form.append(drawIt);
+        box.append(make('h2', null, 'As the organiser'), form, said,
+                   make('p', 'quiet', 'The draw is made once, from the entries as they stand: byes to the highest seeds, the rest paired. A bye is not a win.'));
+      } else {
+        const advance = make('button', 'primary', 'Draw the next round');
+        advance.onclick = () => act('advance', advance);
+        form.append(advance);
+        box.append(make('h2', null, 'As the organiser'), form, said,
+                   make('p', 'quiet', 'Once every tie in the round is decided — scored on THRØ and named from the app, or recorded above — the winners are paired in order. A round of one decided tie ends the event.'));
+      }
       parts.push(box);
     } else if (!session.get()) {
       parts.push(make('p', 'quiet', 'Run this event? Sign in with the passkey the app uses.'));

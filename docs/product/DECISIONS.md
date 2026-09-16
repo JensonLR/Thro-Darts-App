@@ -4855,3 +4855,35 @@ friendly is its own table rather than a fixture with a hole where the season sho
 
 **Evidence.** `FriendlyHttpTest` (31 checks), `check_migrations.py` green on V051, `NetTests.testAFriendlyIsChallengedReadAndAnswered`,
 the contract regenerated.
+
+## PD-111 — A tie has a winner, and a bracket has rounds
+
+**16 September 2026.** PD-109 said plainly that THRØ drew round one and stopped. This closes it: a tie is decided, and
+the organiser advances a round once every tie in it is decided, until a round of one decided tie completes the event.
+
+**Decided.**
+
+1. **Two ways a tie is decided, and who says.** *Played*: somebody who played the match (or the organiser) names it
+   to the tie (`POST /v1/events/{id}/ties/{tie}/match`); the match must be between the tie's two players and finished;
+   the winner is read from the match's record by `MatchRecords.replay` — the one derivation a rating reads — never
+   typed. *Declared*: the organiser records a walkover or an award (`POST …/ties/{tie}/result`) with a note that says
+   why; a played outcome cannot be declared. A decided tie is not decided again; a bye is not decided at all — its one
+   side goes through by construction, and the page says "bye", not "won".
+2. **Advancing is the organiser's, once the round is whole.** `POST /v1/events/{id}/advance` refuses while any tie is
+   undecided, naming how many; otherwise pairs the winners in position order — (1 v 2), (3 v 4) — into the next round.
+   A round of one decided tie completes the event, and the event names its winner.
+3. **V052** adds to `bracket_tie`: `winner_id`, `outcome` (played | walkover | awarded | bye), `decided_by`,
+   `decided_at`, `note`, with CHECKs that the winner is a side, a decision is whole, a played tie cites its match, and
+   a bye is never anything else. Additive; no destructive statement.
+4. **Surfaces.** The event page on the web is the bracket: every round named (Final, Semi-finals, Quarter-finals,
+   Round n), each tie's standing in words, the champion at the top once complete; the organiser records a walkover or
+   an award on an undecided tie and *Draws the next round*. The phone: on an entered, drawn event the Discover card
+   shows *your tie* in the current round and, once you have scored the match on THRØ, *Name the match* from your own
+   finished matches against that opponent.
+
+**Not decided here.** Seeding beyond entry order; a board assignment per tie (the column exists); a third-place tie.
+
+**Evidence.** `EventHttpTest` extended to 47 checks (red first on the missing route): two ties from four entrants, a
+walkover recorded and refused twice over, a stranger's citation refused, another pair's match refused, the record's
+winner read, the event in progress, the round advanced to one tie between the two winners, the final declared, the
+event complete with its winner, and no advance after. `NetTests.testATieIsCitedAndReadsItsWinner`.

@@ -483,8 +483,17 @@ struct EventActions: View {
     @State private var page: EventPage?
     @State private var said: String?
     @State private var busy = false
+    @State private var citing = false
+    @State private var matches: [MatchOnRecord]?
 
     private var entered: Bool { page?.you?.entered ?? card.entered }
+    private var me: UUID? { account.api.session?.playerId }
+    /// Your tie in the latest round, once the draw is made.
+    private var myTie: EventPage.Tie? {
+        guard let page, let me, let last = page.draw.map(\.round).max() else { return nil }
+        return page.draw.first { $0.round == last && ($0.homeId == me || $0.awayId == me) }
+    }
+    private var inPlay: Bool { page.map { $0.state == "drawn" || $0.state == "in_progress" || $0.state == "complete" } ?? false }
     private var checkedIn: Bool { page?.you?.checkedIn ?? false }
     private var onTheDay: Bool { Date() >= card.startsAt.addingTimeInterval(-12 * 3600) }
 
@@ -502,9 +511,66 @@ struct EventActions: View {
                     ThroButton("Enter", variant: .primary, size: .medium) { Task { await enter() } }.disabled(busy)
                 }
             }
+            if entered && inPlay, let page {
+                tieLine(page)
+            }
             if let said { Note(said) }
         }
         .padding(.top, ThroSpacing.spacing2)
+        .task { if card.entered && page == nil { page = try? await account.api.event(card.eventId) } }
+    }
+
+    /// Where you stand in the bracket (PD-111): your tie, its standing, and — once scored on THRØ — Name the match.
+    @ViewBuilder private func tieLine(_ page: EventPage) -> some View {
+        if page.state == "complete", let champion = page.winnerId {
+            Text(champion == me ? "You won it." : "Over — \(page.draw.first { $0.winnerId == champion }.map { $0.homeId == champion ? ($0.home ?? "somebody") : ($0.away ?? "somebody") } ?? "somebody") won it.")
+                .thro(ThroTypography.body).foregroundStyle(ThroColor.colorTextPrimary)
+        } else if let t = myTie {
+            let opponent = (t.homeId == me ? t.away : t.home) ?? "a player"
+            if t.isBye {
+                Text("Round \(t.round): a bye — you go through.").thro(ThroTypography.body).foregroundStyle(ThroColor.colorTextPrimary)
+            } else if let w = t.winnerId {
+                Text("Round \(t.round) v \(opponent): " + (w == me ? "you went through" : "you went out") + " · \(t.outcome ?? "")")
+                    .thro(ThroTypography.body).foregroundStyle(ThroColor.colorTextPrimary)
+            } else {
+                Text("Round \(t.round): v \(opponent) · to be played").thro(ThroTypography.body).foregroundStyle(ThroColor.colorTextPrimary)
+                if citing {
+                    if let matches {
+                        let ours = matches.filter { m in m.winner != nil && m.seats.contains { !$0.you && $0.name == opponent } }
+                        if ours.isEmpty { Text("No finished match of yours against \(opponent) on THRØ yet.").thro(ThroTypography.metadata).foregroundStyle(ThroColor.colorTextSecondary) }
+                        ForEach(ours.prefix(5)) { m in
+                            Button { Task { await cite(t, m.matchId) } } label: {
+                                HStack {
+                                    Text(m.seats.map { $0.name ?? "A player" }.joined(separator: " v ")).thro(ThroTypography.body).foregroundStyle(ThroColor.colorTextPrimary)
+                                    Spacer()
+                                    Text(m.openedAt.formatted(date: .abbreviated, time: .shortened)).thro(ThroTypography.metadata).foregroundStyle(ThroColor.colorTextSecondary)
+                                }
+                                .frame(minHeight: ThroSpacing.touchTargetMinimum)
+                                .throRowTapTarget()
+                            }
+                            .buttonStyle(ThroPressStyle(radius: ThroSpacing.radiusCard, pressedFill: ThroColor.colorSurfaceSecondary, scales: false))
+                            .disabled(busy)
+                        }
+                        ThroTextButton("Leave it", tone: .quiet) { citing = false }
+                    } else {
+                        Text("One moment…").thro(ThroTypography.metadata).foregroundStyle(ThroColor.colorTextSecondary)
+                    }
+                } else {
+                    ThroButton("Name the match", variant: .secondary, size: .medium) { citing = true; Task { matches = (try? await account.api.myMatches()) ?? [] } }.disabled(busy)
+                }
+            }
+        } else {
+            Text("You are not in the current round.").thro(ThroTypography.metadata).foregroundStyle(ThroColor.colorTextSecondary)
+        }
+    }
+
+    private func cite(_ tie: EventPage.Tie, _ match: UUID) async {
+        busy = true; defer { busy = false }
+        do {
+            page = try await account.api.citeTie(event: card.eventId, tie: tie.tieId, match: match)
+            citing = false
+            said = "Named. The winner is what the record says."
+        } catch { said = (error as? APIError)?.message ?? error.localizedDescription }
     }
 
     private func enter() async {

@@ -202,6 +202,20 @@ final class NetTests: XCTestCase {
         XCTAssertTrue(script.seen[5].url!.path.hasSuffix("/withdraw"))
     }
 
+    /// PD-111: a tie decodes with its decision, and naming its match goes to the tie's own path with the match id.
+    func testATieIsCitedAndReadsItsWinner() async throws {
+        let decided = #"{"eventId":"dddddddd-0000-0000-0000-000000000001","name":"Friday Fours","startsAt":"2026-10-09T19:00:00Z","sessionEndsAt":"2026-10-09T23:00:00Z","venueId":null,"venue":null,"locality":null,"venueLabel":"the back room","entrantKind":"player","access":"open","state":"in_progress","entriesCloseAt":null,"capacity":null,"entries":4,"spotsRemaining":null,"you":{"entered":true,"checkedIn":true},"draw":[{"tieId":"eeeeeeee-0000-0000-0000-000000000001","round":1,"position":1,"homeId":"aaaaaaaa-0000-0000-0000-000000000001","home":"Alice Aims","awayId":"aaaaaaaa-0000-0000-0000-000000000002","away":"Bob Board","isBye":false,"matchId":"99999999-0000-0000-0000-000000000009","winnerId":"aaaaaaaa-0000-0000-0000-000000000001","outcome":"played","note":null}],"winnerId":null}"#
+        let store = MemorySessionStore(Session(accountId: UUID(), playerId: UUID(uuidString: "aaaaaaaa-0000-0000-0000-000000000001"), accessToken: "acc", refreshToken: "ref", accessExpiresAt: .distantFuture, created: false))
+        let script = Script([(200, decided)])
+        let api = ThroAPI(configuration: config, deviceId: device, store: store, transport: script)
+        let event = UUID(uuidString: "dddddddd-0000-0000-0000-000000000001")!, tie = UUID(uuidString: "eeeeeeee-0000-0000-0000-000000000001")!, match = UUID(uuidString: "99999999-0000-0000-0000-000000000009")!
+        let page = try await api.citeTie(event: event, tie: tie, match: match)
+        XCTAssertEqual(page.draw.first?.winnerId?.uuidString.lowercased(), "aaaaaaaa-0000-0000-0000-000000000001")
+        XCTAssertEqual(page.draw.first?.outcome, "played")
+        XCTAssertTrue(script.seen[0].url!.path.hasSuffix("/ties/eeeeeeee-0000-0000-0000-000000000001/match"))
+        XCTAssertTrue(String(decoding: script.seen[0].httpBody ?? Data(), as: UTF8.self).contains("99999999-0000-0000-0000-000000000009"))
+    }
+
     /// PD-110: a friendly decodes with both teams and its direction; a challenge goes with its date and message; the answer carries its note.
     func testAFriendlyIsChallengedReadAndAnswered() async throws {
         let friendly = #"{"friendlyId":"ffffffff-0000-0000-0000-000000000001","fromTeamId":"aaaaaaaa-0000-0000-0000-000000000001","fromTeam":"Riverside A","toTeamId":"aaaaaaaa-0000-0000-0000-000000000002","toTeam":"Grange A","playAt":"2026-09-25T19:30:00Z","venue":null,"message":"Friday, our board?","state":"proposed","proposedAt":"2026-09-16T12:00:00Z","answeredAt":null,"answerNote":null,"matchId":null,"version":1,"direction":"received"}"#

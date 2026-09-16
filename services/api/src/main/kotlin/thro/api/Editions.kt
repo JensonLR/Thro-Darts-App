@@ -38,7 +38,8 @@ public class Editions(
 
     private fun runs(by: UUID, event: UUID) = rel.decide(by, "event.manage", ObjectRef(ObjectType.EVENT, event.toString())).allowed
 
-    public data class Tie(val tieId: UUID, val round: Int, val position: Int, val homeId: UUID, val home: String?, val awayId: UUID?, val away: String?, val isBye: Boolean, val matchId: UUID?)
+    public data class Tie(val tieId: UUID, val round: Int, val position: Int, val homeId: UUID, val home: String?, val awayId: UUID?, val away: String?, val isBye: Boolean, val matchId: UUID?,
+                          val winnerId: UUID? = null, val outcome: String? = null, val note: String? = null)
     public data class You(val entered: Boolean, val checkedIn: Boolean)
     public data class View(
         val eventId: UUID, val name: String, val startsAt: Instant, val sessionEndsAt: Instant, val venueId: UUID?, val venue: String?, val locality: String?,
@@ -67,7 +68,7 @@ public class Editions(
     }
 
     private fun ties(eventId: UUID): List<Tie> = connection.prepareStatement(
-        """SELECT t.fixture_id, t.round_number, t.position, t.home_id, t.away_id, t.is_bye, t.match_id,
+        """SELECT t.fixture_id, t.round_number, t.position, t.home_id, t.away_id, t.is_bye, t.match_id, t.winner_id, t.outcome, t.note,
                   (SELECT CASE WHEN identity.player_may_be_disclosed(c.player_id) AND a.display_name <> ? THEN a.display_name END
                      FROM identity.player_claim c JOIN identity.account a ON a.account_id = c.account_id AND a.deleted_at IS NULL
                     WHERE c.player_id = t.home_id AND c.revoked_at IS NULL),
@@ -80,7 +81,8 @@ public class Editions(
         ps.executeQuery().use { rs ->
             generateSequence {
                 if (!rs.next()) null
-                else Tie(rs.getObject(1) as UUID, rs.getInt(2), rs.getInt(3), rs.getObject(4) as UUID, rs.getString(8), rs.getObject(5) as UUID?, rs.getString(9), rs.getBoolean(6), rs.getObject(7) as UUID?)
+                else Tie(rs.getObject(1) as UUID, rs.getInt(2), rs.getInt(3), rs.getObject(4) as UUID, rs.getString(11), rs.getObject(5) as UUID?, rs.getString(12), rs.getBoolean(6), rs.getObject(7) as UUID?,
+                         rs.getObject(8) as UUID?, rs.getString(9), rs.getString(10))
             }.toList()
         }
     }
@@ -135,6 +137,83 @@ public class Editions(
         if (v.state !in setOf("open", "entries_closed")) throw Refused("The draw was already made; the event is ${v.state.replace('_', ' ')}.", 409)
         if (v.entries < 2) throw Refused("A draw needs at least two entrants; this event has ${v.entries}.", 409)
         try { Competitions(connection).draw(eventId) } catch (e: IllegalArgumentException) { throw Refused(e.message ?: "The draw could not be made.", 409) }
+        return view(eventId, by)
+    }
+
+    // --- rounds (PD-111): a tie is decided, and the organiser advances --------------------------------------------
+
+    private fun tie(eventId: UUID, tieId: UUID): Tie = ties(eventId).firstOrNull { it.tieId == tieId } ?: throw Refused("THRØ has no such tie in this event.", 404)
+
+    private fun decide(tieId: UUID, winner: UUID, outcome: String, note: String?, by: UUID, matchId: UUID? = null) {
+        val n = connection.prepareStatement(
+            """UPDATE competition.bracket_tie SET winner_id = ?, outcome = ?, note = ?, decided_by = ?, decided_at = clock_timestamp(), match_id = coalesce(?, match_id)
+                WHERE fixture_id = ? AND winner_id IS NULL""",
+        ).use { ps -> ps.setObject(1, winner); ps.setString(2, outcome); ps.setString(3, note); ps.setObject(4, by); ps.setObject(5, matchId); ps.setObject(6, tieId); ps.executeUpdate() }
+        if (n == 0) throw Refused("This tie was decided a moment ago.", 409)
+        connection.prepareStatement("UPDATE competition.event SET state = 'in_progress' WHERE event_id = (SELECT event_id FROM competition.bracket_tie WHERE fixture_id = ?) AND state = 'drawn'")
+            .use { ps -> ps.setObject(1, tieId); ps.executeUpdate() }
+    }
+
+    /** The organiser's word: a walkover or an award, with a note that says why. Never a played result — that is the match's. */
+    public fun declare(eventId: UUID, tieId: UUID, winnerId: UUID, outcome: String, note: String?, by: UUID): View {
+        val v = view(eventId, by)
+        if (!runs(by, eventId)) throw Refused("Only the event's organiser declares a tie.", 403)
+        if (outcome !in setOf("walkover", "awarded")) throw Refused("A declared outcome is a walkover or an award; a played tie cites its match.", 400)
+        if (note.isNullOrBlank()) throw Refused("A declared outcome says why.", 400)
+        val t = tie(eventId, tieId)
+        if (t.isBye) throw Refused("A bye is not decided; its one side goes through by construction.", 409)
+        if (winnerId != t.homeId && winnerId != t.awayId) throw Refused("The winner is one of the tie's two sides.", 400)
+        if (t.winnerId != null) throw Refused("This tie is decided: ${t.outcome}. A decision is not a field to point elsewhere.", 409)
+        if (v.state !in setOf("drawn", "in_progress")) throw Refused("The event is ${v.state.replace('_', ' ')}.", 409)
+        decide(tieId, winnerId, outcome, note.trim().take(280), by)
+        return view(eventId, by)
+    }
+
+    /**
+     * A tie played on THRØ names its match, once, by somebody who played it or the organiser; the winner is read from
+     * the match's own record (`MatchRecords.replay`, the one derivation), never typed.
+     */
+    public fun citeTie(eventId: UUID, tieId: UUID, matchId: UUID, by: UUID): View {
+        val v = view(eventId, by)
+        val t = tie(eventId, tieId)
+        if (t.isBye) throw Refused("A bye has no match.", 409)
+        val match = Matches(connection).load(matchId) ?: throw Refused("THRØ has no such match.", 404)
+        if (by !in match.participants && !runs(by, eventId)) throw Refused("Only somebody who played the match, or the organiser, cites it.", 403)
+        if (match.participants != setOf(t.homeId, t.awayId)) throw Refused("That match was not between this tie's two players.", 409)
+        if (t.winnerId != null) throw Refused("This tie is decided: ${t.outcome}.", 409)
+        if (v.state !in setOf("drawn", "in_progress")) throw Refused("The event is ${v.state.replace('_', ' ')}.", 409)
+        val replayed = MatchRecords(connection).replay(matchId) ?: throw Refused("That match has no record to read.", 409)
+        val winnerSeat = replayed.winner ?: throw Refused("That match has no winner yet: it is not finished, or it was abandoned.", 409)
+        val winner = if (winnerSeat == Seat.HOME) match.homeId else match.awayId
+        decide(tieId, winner, "played", null, by, matchId)
+        return view(eventId, by)
+    }
+
+    /**
+     * Once every tie in the current round is decided, the next round is drawn from the winners in position order
+     * — (1 v 2), (3 v 4) — and a round of one decided tie completes the event. Byes go through by construction.
+     */
+    public fun advance(eventId: UUID, by: UUID): View {
+        val v = view(eventId, by)
+        if (!runs(by, eventId)) throw Refused("Only the event's organiser advances a round.", 403)
+        if (v.state !in setOf("drawn", "in_progress")) throw Refused("The event is ${v.state.replace('_', ' ')}; there is no round to advance.", 409)
+        val all = ties(eventId)
+        val round = all.maxOf { it.round }
+        val current = all.filter { it.round == round }
+        val winners = current.map { t -> if (t.isBye) t.homeId else t.winnerId }
+        val undecided = winners.count { it == null }
+        if (undecided > 0) throw Refused("Round $round has $undecided undecided tie${if (undecided == 1) "" else "s"}; every tie is decided before the next round is drawn.", 409)
+        val through = winners.map { it!! }
+        if (through.size == 1) {
+            connection.prepareStatement("UPDATE competition.event SET state = 'complete' WHERE event_id = ? AND state IN ('drawn','in_progress')").use { ps -> ps.setObject(1, eventId); ps.executeUpdate() }
+            return view(eventId, by)
+        }
+        connection.prepareStatement("INSERT INTO competition.bracket_tie (fixture_id, event_id, round_number, position, home_id, away_id, is_bye) VALUES (?, ?, ?, ?, ?, ?, false)").use { ps ->
+            through.chunked(2).forEachIndexed { i, pair ->
+                ps.setObject(1, UUID.randomUUID()); ps.setObject(2, eventId); ps.setInt(3, round + 1); ps.setInt(4, i + 1); ps.setObject(5, pair[0]); ps.setObject(6, pair[1]); ps.addBatch()
+            }
+            ps.executeBatch()
+        }
         return view(eventId, by)
     }
 
@@ -206,8 +285,16 @@ public class Editions(
             """"entries":${v.entries},"spotsRemaining":${spots ?: "null"},"you":${v.you?.let { """{"entered":${it.entered},"checkedIn":${it.checkedIn}}""" } ?: "null"},""" +
             """"draw":[${v.ties.joinToString(",") { tie ->
                 """{"tieId":"${tie.tieId}","round":${tie.round},"position":${tie.position},"homeId":"${tie.homeId}","home":${tie.home?.let(q) ?: "null"},""" +
-                    """"awayId":${tie.awayId?.let { "\"$it\"" } ?: "null"},"away":${tie.away?.let(q) ?: "null"},"isBye":${tie.isBye},"matchId":${tie.matchId?.let { "\"$it\"" } ?: "null"}}"""
-            }}]}"""
+                    """"awayId":${tie.awayId?.let { "\"$it\"" } ?: "null"},"away":${tie.away?.let(q) ?: "null"},"isBye":${tie.isBye},"matchId":${tie.matchId?.let { "\"$it\"" } ?: "null"},""" +
+                    """"winnerId":${(if (tie.isBye) tie.homeId else tie.winnerId)?.let { "\"$it\"" } ?: "null"},"outcome":${(tie.outcome ?: if (tie.isBye) "bye" else null)?.let(q) ?: "null"},"note":${tie.note?.let(q) ?: "null"}}"""
+            }}],"winnerId":${champion(v)?.let { "\"$it\"" } ?: "null"}}"""
+    }
+
+    /** The event's winner: the one decided tie of its last round, once the event is complete. */
+    private fun champion(v: View): UUID? {
+        if (v.state != "complete" || v.ties.isEmpty()) return null
+        val last = v.ties.maxOf { it.round }
+        return v.ties.filter { it.round == last }.singleOrNull()?.let { if (it.isBye) it.homeId else it.winnerId }
     }
 
     public fun json(mine: List<Mine>): String {
