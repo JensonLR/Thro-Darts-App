@@ -35,11 +35,21 @@ const make = (tag, cls, s) => {
   return el;
 };
 
-function fail(where, error) {
-  where.replaceChildren(
-    make('p', null, 'That could not be read just now.'),
-    make('p', 'quiet', error.message),
-  );
+/**
+ * A read that failed is said at the top of the page, not instead of it: what was already drawn stays, so one bad
+ * answer does not blank a page a person was reading. With `retry`, the note carries a button that asks again.
+ */
+function fail(where, error, retry) {
+  const note = make('div', 'entry');
+  note.setAttribute('role', 'status');
+  note.append(make('p', null, 'That could not be read just now.'), make('p', 'quiet', error.message));
+  if (retry) {
+    const again = make('button', 'quiet-button', 'Try again');
+    again.onclick = () => { again.disabled = true; retry(); };
+    note.append(again);
+  }
+  const placeholder = where.children.length <= 1 && where.textContent.trim().endsWith('…');
+  if (placeholder || !where.children.length) where.replaceChildren(note); else where.prepend(note);
 }
 
 // --- the leagues -------------------------------------------------------------------------------
@@ -193,12 +203,17 @@ async function mountFixtures(where, titleEl, eyebrowEl) {
   } catch (e) { fail(where, e); return; }
 
   const fixtures = data.fixtures || [];
+  const back = make('p', 'quiet');
+  const toTable = make('a', null, 'This season’s table');
+  toTable.href = `table.html?season=${encodeURIComponent(season)}`;
+  back.append('← ', toTable);
   titleEl.textContent = 'Fixtures';
   eyebrowEl.textContent = fixtures.length ? `${fixtures.length} fixture${fixtures.length === 1 ? '' : 's'}` : 'Fixtures';
   document.title = 'Fixtures — THRØ';
 
   if (!fixtures.length) {
     where.replaceChildren(
+      back,
       make('p', null, 'No fixtures yet.'),
       make('p', 'quiet', 'When the league publishes its calendar the fixtures appear here, and the table fills itself in from their results.'),
     );
@@ -225,7 +240,7 @@ async function mountFixtures(where, titleEl, eyebrowEl) {
     list.append(li);
   }
   const unplayed = fixtures.filter(f => !f.decided).length;
-  where.replaceChildren(
+  where.replaceChildren(back, 
     list,
     make('p', 'quiet', unplayed
       ? `${unplayed} of ${fixtures.length} still to play.`
@@ -453,7 +468,7 @@ async function mountLobby(where, signInEl) {
     if (!signInGate(signInEl, where, 'Sign in to run a league.', draw)) return;
 
     let mine;
-    try { mine = await authorised('GET', '/v1/me/seasons'); } catch (e) { fail(where, e); return; }
+    try { mine = await authorised('GET', '/v1/me/seasons'); } catch (e) { fail(where, e, draw); return; }
     const parts = [make('h2', null, 'Seasons you run')];
     if (!mine.seasons.length) {
       parts.push(make('p', 'quiet', 'None yet. Start a league below.'));
@@ -554,7 +569,7 @@ async function mountOrganiser(where, signInEl) {
       policy = (await authorised('GET', `/v1/seasons/${encodeURIComponent(season)}/policy`)).policy;
       registrations = (await authorised('GET', `/v1/seasons/${encodeURIComponent(season)}/registrations`)).registrations;
       proposals = (await authorised('GET', `/v1/seasons/${encodeURIComponent(season)}/proposals`)).proposals;
-    } catch (e) { fail(where, e); return; }
+    } catch (e) { fail(where, e, draw); return; }
 
     const todo = (data.fixtures || []).filter(f => !f.decided);
     const done = (data.fixtures || []).filter(f => f.decided);
@@ -1285,7 +1300,7 @@ async function mountEvents(where, signInEl) {
   const draw = async () => {
     if (!signInGate(signInEl, where, 'Sign in to run a knockout.', draw)) return;
     let mine;
-    try { mine = await authorised('GET', '/v1/me/events'); } catch (e) { fail(where, e); return; }
+    try { mine = await authorised('GET', '/v1/me/events'); } catch (e) { fail(where, e, draw); return; }
     const parts = [make('h2', null, 'Events you run')];
     if (!mine.events.length) {
       parts.push(make('p', 'quiet', 'None yet. Open one below.'));
@@ -1359,7 +1374,7 @@ async function mountEvent(where, signInEl, eventId) {
     // The page reads without a session; the organiser's acts appear with one.
     let e;
     try { e = session.get() ? await authorised('GET', `/v1/events/${encodeURIComponent(eventId)}`) : await read(`/v1/events/${encodeURIComponent(eventId)}`); }
-    catch (err) { fail(where, err); return; }
+    catch (err) { fail(where, err, draw); return; }
     signInEl.replaceChildren();
     if (session.get()) {
       const out = make('button', 'quiet-button', 'Sign out'); out.onclick = () => { signOut(); draw(); }; signInEl.append(out);

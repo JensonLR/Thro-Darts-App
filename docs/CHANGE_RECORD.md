@@ -5927,3 +5927,16 @@ another team's.
 **Proven.** API suite green with the contract regenerated; Swift suite green; repo checks (counts in the README).
 **Not proven:** the phone's section against production beyond compilation and the decoding test; the migration against
 production runs in the pipeline on push and is read back by `/healthz` (recorded below once it has).
+
+## Web polish: a bad read no longer blanks a page, a phone-width form, the fixtures page's way back
+
+**What the audit found (PD-106, §4).** `fail()` replaced the whole page on one failed read, so a season page a person
+was reading went blank when a second request failed; `thro.css` had no breakpoint, so an `entry-form` at phone width
+squeezed five fields into a row; and `fixtures.html` linked to every league but not to the table of the season it was
+showing.
+
+**Done.** `fail(where, error, retry)` says the failure at the top of the page and keeps what was drawn, replacing
+only a placeholder; with a redraw to hand it offers *Try again*, and the four page-level reads pass theirs. One
+`@media (max-width: 420px)` rule: full-width fields and primary buttons in a form, a wrapping row head, the app's
+16-pixel gutter. The fixtures page opens with *← This season's table*. Proven by `node --check`, the web token check,
+and a look in the browser at phone width — the last of which is recorded here as done only once it has been.

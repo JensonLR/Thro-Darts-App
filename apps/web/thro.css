@@ -146,3 +146,13 @@ button.quiet-button { font: inherit; padding: 8px 0; color: var(--color-text-bra
 .notice p:last-child { margin-bottom: 0; }
 .notice .notice-title { font-weight: var(--font-weight-bold); font-size: 18px; margin-bottom: 4px; }
 .notice .notice-when { color: var(--color-text-secondary); font-size: 14px; }
+
+/* A phone in one hand. Below 420 CSS pixels a form's fields take the full measure one under another, a row's head
+   wraps rather than squeezes its name, and the gutter narrows to the 16 the app keeps. */
+@media (max-width: 420px) {
+  .measure { padding-inline: 16px; }
+  .entry-form input[type="text"], .entry-form input[type="date"], .entry-form input[type="time"],
+  .entry-form input[type="search"], .entry-form input[type="datetime-local"], .entry-form select { flex-basis: 100%; }
+  .entry-form button.primary { flex: 1 1 100%; }
+  .row-head { flex-wrap: wrap; }
+}

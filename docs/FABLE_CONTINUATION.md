@@ -49,7 +49,7 @@ league management · PD-104 organiser email · PD-105 provisional rating · PD-1
 | Moderation | Complete (PD-101, PD-103) | ModerationHttpTest |
 | Rating | Complete as provisional (PD-105); laboratory/validation open (OD-001) | Glicko2ModelTest, RatingHttpTest |
 | Organiser email | Complete (PD-104); hand-over open (OD-025, needs outbound mail) | OrganiserContactTest |
-| Web: organiser, moderation, public pages | Complete for the routes above; no `@media` breakpoints; `fail()` replaces the page on one bad read | audit §4 |
+| Web: organiser, moderation, events, public pages | Complete for the routes above; one breakpoint at 420px; `fail()` keeps the page | audit §4, closed |
 | Private league leak on season pages | **Fixed (PD-106)** | LeagueStartingTest |
 | Development artefacts | Clean after PD-106 (Neon scaffold removed; dev proxy/README out of the publish root). NEEDS-DECISION: deploy branch named `claude/…`; `PlaytestServer` compiled into the image (entrypoint runs `MainKt`) | audit |
 | "Club" wording | Only in the local on-phone book, export summary, and deep-link aliases | audit §6 |
@@ -61,7 +61,7 @@ league management · PD-104 organiser email · PD-105 provisional rating · PD-1
 2. ~~Tournament OS on the server~~ **done for round one (PD-109)**. Left: advancing winners (needs domain work),
    pairs and teams as entrants, invitational access, citing a tie's match from the phone.
 3. ~~Friendly challenge~~ **done (PD-110)**. Left: rearranging an accepted friendly; a venue on the wire.
-4. Web polish: breakpoints, a non-destructive `fail()`, fixtures page back-link.
+4. ~~Web polish~~ **done**: a 420px breakpoint, `fail()` keeps the page and offers *Try again*, fixtures → table.
 5. NEEDS-DECISION (founder): the deploy branch's name; moving `PlaytestServer` out of the image.
 
 ## Founder's stated positions (do not re-ask)
