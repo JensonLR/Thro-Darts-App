@@ -495,6 +495,61 @@ public object Contract {
                               403 to "you neither run this season nor a team in it", 404 to "no such league season"),
         ),
         Endpoint(
+            id = "events.open", method = "POST", path = "/v1/events", authenticated = true,
+            summary = "Open an edition of a knockout (PD-109)",
+            description = "Whoever opens it is its organiser. A name, when it starts and when the session ends (the scoring grants issued at "
+                + "check-in outlive that by a day), a venue on THRØ or a label, optionally when entries close and how many places. Open "
+                + "entry, single players, for now. On the notice on the door at once.",
+            request = Schema("""{"type":"object","required":["name","startsAt","sessionEndsAt"],"properties":{"name":{"type":"string"},"startsAt":{"type":"string","format":"date-time"},"sessionEndsAt":{"type":"string","format":"date-time"},"venueId":{"type":"string","format":"uuid"},"venueLabel":{"type":"string"},"entriesCloseAt":{"type":"string","format":"date-time"},"capacity":{"type":"integer","minimum":2}}}"""),
+            responses = mapOf(200 to "the event's page, as its organiser reads it", 400 to "a name, dates or capacity THRØ cannot accept", 401 to "no principal"),
+        ),
+        Endpoint(
+            id = "me.events", method = "GET", path = "/v1/me/events", authenticated = true,
+            summary = "The events you organise (PD-109)",
+            description = "Every edition the caller opened or was made organiser of, newest first, with its state and entry count.",
+            responses = mapOf(200 to "the events", 401 to "no principal"),
+        ),
+        Endpoint(
+            id = "events.get", method = "GET", path = "/v1/events/{eventId}", authenticated = false,
+            summary = "An event's page (PD-109)",
+            description = "For anybody: what, when, where (a public venue, or the organiser's label), how many places and entries, and once "
+                + "drawn, the first round with players named where THRØ may name them. With a session, `you` says whether you are "
+                + "entered and checked in; without one it is null. No organiser is named.",
+            responses = mapOf(200 to "the event", 400 to "not a UUID", 404 to "no such event"),
+        ),
+        Endpoint(
+            id = "events.enter", method = "POST", path = "/v1/events/{eventId}/entries", authenticated = true,
+            summary = "Enter yourself (PD-109)",
+            description = "Open events, single players, while entries are open and a place remains. A withdrawn entry comes back rather than doubling.",
+            responses = mapOf(200 to "the event, with you entered", 400 to "not a UUID", 401 to "no principal", 403 to "entry is by the organiser", 404 to "no such event", 409 to "closed, full, or already entered — said in words"),
+        ),
+        Endpoint(
+            id = "events.withdraw", method = "POST", path = "/v1/events/{eventId}/withdraw", authenticated = true,
+            summary = "Withdraw your entry (PD-109)",
+            description = "Before the draw. The row is kept with the time; a place opens.",
+            responses = mapOf(200 to "the event, with you withdrawn", 400 to "not a UUID", 401 to "no principal", 404 to "no such event", 409 to "not entered, or the draw is made"),
+        ),
+        Endpoint(
+            id = "events.checkin", method = "POST", path = "/v1/events/{eventId}/check-in", authenticated = true,
+            summary = "Check in on the day, from your own phone (PD-109)",
+            description = "For an entrant, from twelve hours before the start until the session ends. Issues the scoring grant (ADR-006) that "
+                + "lets this phone score the event with no signal; it expires a day after the session ends. Again from the same phone is the same answer.",
+            responses = mapOf(200 to "grantId and when it expires", 400 to "not a UUID, or no X-Thro-Device", 401 to "no principal", 404 to "no such event", 409 to "not an entrant, too early, or the session has ended"),
+        ),
+        Endpoint(
+            id = "events.close", method = "POST", path = "/v1/events/{eventId}/close", authenticated = true,
+            summary = "Close entries (PD-109)",
+            description = "By the organiser. Nobody enters after; the draw can still be made.",
+            responses = mapOf(200 to "the event, entries closed", 400 to "not a UUID", 401 to "no principal", 403 to "not the organiser", 404 to "no such event", 409 to "entries were not open"),
+        ),
+        Endpoint(
+            id = "events.draw", method = "POST", path = "/v1/events/{eventId}/draw", authenticated = true,
+            summary = "Make the first-round draw (PD-109)",
+            description = "By the organiser, once, from at least two entrants: byes to the highest seeds, the rest paired in seed then entry order. "
+                + "A bye is not a win and creates no match. Later rounds are the organiser's to run by hand: THRØ does not yet advance winners.",
+            responses = mapOf(200 to "the event, drawn, with its first round", 400 to "not a UUID", 401 to "no principal", 403 to "not the organiser", 404 to "no such event", 409 to "already drawn, or fewer than two entrants"),
+        ),
+        Endpoint(
             id = "fixtures.proposals", method = "GET", path = "/v1/fixtures/{fixtureId}/proposals", authenticated = true,
             summary = "The dates proposed for a fixture (PD-108)",
             description = "Every proposal to move this fixture, newest first: the date, from which team, why, and where it stands. For "

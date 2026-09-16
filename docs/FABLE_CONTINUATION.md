@@ -12,7 +12,7 @@ audit. Kept current during the build; **not** a deliverable, and never a substit
   fronted by Cloudflare): leagues, tables, fixtures, wall (`/tv`), organiser (`organiser.html`), moderation
   (`moderation.html`), privacy, terms, deletion, notices.
 - `https://api.thro.uk` (Render web service `thro-api-staging`, free instance, Frankfurt): production at **V050**,
-  commit **91b92b2** (PD-107; PD-108 follows). `/healthz` reports database, schema version, code version and commit.
+  commit **09b4b37** (PD-108; PD-109 follows). `/healthz` reports database, schema version, code version and commit.
 - Neon production branch `br-icy-leaf-zaq0grqg` (project `round-darkness-99300686`), at V050. Restore points are
   branches: the pipeline's `pipeline-restore-point-before-<sha>-<stamp>` (newest three kept) and the founder's
   hand-made `restore-point-before-*` (never removed).
@@ -29,7 +29,7 @@ entitlements and refused if the signed app lacks Sign in with Apple or the passk
 
 PD-095 deploy pipeline · PD-096 retention sweep · PD-097 Android notice · PD-098 TestFlight entitlements ·
 PD-099 fixtures · PD-100 start a league · PD-101 moderation page · PD-102 ways in · PD-103 decisions enforce +
-league management · PD-104 organiser email · PD-105 provisional rating · PD-106 the team's fixture · PD-107 registrations · PD-108 moving a fixture by agreement.
+league management · PD-104 organiser email · PD-105 provisional rating · PD-106 the team's fixture · PD-107 registrations · PD-108 moving a fixture by agreement · PD-109 a knockout.
 
 ## Completion matrix (from four read-only audits, 16 September; details in PD-106 and CHANGE_RECORD)
 
@@ -42,7 +42,8 @@ league management · PD-104 organiser email · PD-105 provisional rating · PD-1
 | League OS: player registration (policy, reconcile, assess, confirm, send, answer) | **Complete (PD-107)** — routes, organiser web *Registrations*, phone inbox actions | RegistrationHttpTest (35) |
 | League OS: points-policy approval, transfers, division moves, audit view | **Missing routes** — domain in `Organisations.kt` with tests, no HTTP, no UI | audit §2 |
 | Secretary: rearrangement *proposals* (propose, answer, apply) | **Complete (PD-108)** — routes, phone fixture screen + inbox, organiser web *Requests* | RearrangementHttpTest (26) |
-| Tournament OS on the server (`Competitions.kt`: openEvent/enter/checkIn/draw; tournament, pair, series tables) | **Missing routes** — whole class unreachable; phone tournaments are local-only | audit §2/§3 |
+| Tournament OS on the server: open, enter, withdraw, check in, close, draw round one | **Complete (PD-109)** — routes, `events.html`, Discover card actions | EventHttpTest (32) |
+| Tournament OS: later rounds, pairs/teams, invitational access, a tie citing its match from the phone | **Missing** — not in the domain (rounds) or not on the wire (kinds, access) | PD-109 §5 |
 | Friendly challenge between teams | **Missing entirely** | audit |
 | Discovery (leagues, events, nearby on-device) and the map | Complete for what is written; no server-side tournament entry | audit |
 | Moderation | Complete (PD-101, PD-103) | ModerationHttpTest |
@@ -57,8 +58,8 @@ league management · PD-104 organiser email · PD-105 provisional rating · PD-1
 
 1. ~~Secretary HTTP surface: registrations (PD-107), rearrangement proposals (PD-108)~~ **done**. Left of the
    League OS: points-policy approval, transfers, division moves as routes; withdrawing a proposal; a proposed venue.
-2. **Tournament OS on the server**: routes over `Competitions.kt` (open an event, enter, check in, draw, results), then a
-   web organiser page for events and the phone's Discover → enter.
+2. ~~Tournament OS on the server~~ **done for round one (PD-109)**. Left: advancing winners (needs domain work),
+   pairs and teams as entrants, invitational access, citing a tie's match from the phone.
 3. **Friendly challenge** between teams (propose → accept/counter → fixture outside any season).
 4. Web polish: breakpoints, a non-destructive `fail()`, fixtures page back-link.
 5. NEEDS-DECISION (founder): the deploy branch's name; moving `PlaytestServer` out of the image.

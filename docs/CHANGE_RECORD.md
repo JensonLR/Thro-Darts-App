@@ -5877,3 +5877,29 @@ Phone: `FixtureProposal`, `ThroAPI.proposals/proposal/propose/answerProposal`, `
 **Proven.** API suite 121 tests green with the contract regenerated; Swift suite green (count in the README);
 `node --check`; repo checks. **Not proven:** either surface against production in a browser or simulator beyond
 compilation and the decoding test.
+
+**Deployed, 16 September.** CI green on 09b4b37; `/healthz` at `api.thro.uk` answered with that commit at V050.
+
+## A knockout run on THRØ (PD-109)
+
+**Test first.** `EventHttpTest`, watched red on "opening an event needs a principal" (no route), then green through:
+a session that ends before it starts and a nameless event refused; the organiser opens it, open for entries; it is on
+the notice on the door with its venue, among the organiser's own events and nobody else's; its page reads without a
+session and names nobody; entering needs a principal; Alice enters and her page says so; twice is a 409; Bob enters
+and the event is full; Cara cannot, said in words; Bob withdraws and a place opens; withdrawing when not entered is a
+409; Cara takes the place; checking in weeks early is refused; after entries close nobody enters; somebody not entered
+cannot check in; Alice checks in on the day and holds a grant that expires a day after the session; her page says so;
+again from the same phone is the same answer; a player cannot draw; the organiser draws two entrants into one tie with
+no bye; the page shows the draw with the players named; drawing again and withdrawing after the draw are 409s; a drawn
+event is off the notice; closing entries is the organiser's and a state of its own; one entrant is no draw. 32 checks.
+The first green run hit "permission denied for table scoring_grant": `app_competition` may insert a grant but not read
+one, and superseding an earlier grant is a read. Check-in now runs its two writes under the two roles that own them.
+
+**Built.** `Editions.kt`; eight routes (`events.open`, `me.events`, `events.get`, `events.enter`, `events.withdraw`,
+`events.checkin`, `events.close`, `events.draw`) and their contract entries. Web: `events.html`, `mountEvents`,
+`eventOpener`, `mountEvent`; a *Run a knockout* link on the home page. Phone: `EventPage`, `ScoringGrant`,
+`ThroAPI.event/enter/withdraw/checkIn`, `EventActions` on every Discover card.
+
+**Proven.** API suite green with the contract regenerated; Swift suite green; `node --check`; repo checks (counts in
+the README). **Not proven:** the web page or the phone's card against production beyond compilation and the decoding
+test; the scoring grant a check-in issues has not yet been exercised from a phone scoring a match at an event.

@@ -177,6 +177,31 @@ final class NetTests: XCTestCase {
         XCTAssertTrue(sent.contains("2026-10-15T19:30:00Z") && sent.contains("cup night"), "the date goes as an instant, the reason as words: \(sent)")
     }
 
+    /// PD-109: an event's page decodes with `you`; entering, withdrawing and checking in go to the right paths and read back.
+    func testAnEventIsEnteredWithdrawnAndCheckedIn() async throws {
+        let page = #"{"eventId":"dddddddd-0000-0000-0000-000000000001","name":"Sun Inn Open","startsAt":"2026-10-03T11:00:00Z","sessionEndsAt":"2026-10-03T22:00:00Z","venueId":null,"venue":"The Sun Inn","locality":"Stockton","venueLabel":null,"entrantKind":"player","access":"open","state":"open","entriesCloseAt":null,"capacity":32,"entries":5,"spotsRemaining":27,"you":{"entered":false,"checkedIn":false},"draw":[]}"#
+        let entered = page.replacingOccurrences(of: #""you":{"entered":false,"checkedIn":false}"#, with: #""you":{"entered":true,"checkedIn":false}"#)
+        let drawn = entered.replacingOccurrences(of: #""draw":[]"#, with: #""draw":[{"tieId":"eeeeeeee-0000-0000-0000-000000000001","round":1,"position":1,"homeId":"aaaaaaaa-0000-0000-0000-000000000001","home":"Alice Aims","awayId":null,"away":null,"isBye":true,"matchId":null}]"#)
+        let store = MemorySessionStore(Session(accountId: UUID(), playerId: nil, accessToken: "acc", refreshToken: "ref", accessExpiresAt: .distantFuture, created: false))
+        let script = Script([(200, page), (200, entered), (409, #"{"error":"This event is full: 32 places, all taken."}"#), (200, #"{"grantId":"99999999-0000-0000-0000-000000000001","expiresAt":"2026-10-04T22:00:00Z"}"#), (200, drawn), (200, page)])
+        let api = ThroAPI(configuration: config, deviceId: device, store: store, transport: script)
+        let id = UUID(uuidString: "dddddddd-0000-0000-0000-000000000001")!
+        let first = try await api.event(id)
+        XCTAssertEqual(first.you?.entered, false); XCTAssertEqual(first.spotsRemaining, 27)
+        let second = try await api.enter(event: id)
+        XCTAssertEqual(second.you?.entered, true)
+        XCTAssertTrue(script.seen[1].url!.path.hasSuffix("/entries"))
+        do { _ = try await api.enter(event: id); XCTFail("full is refused") } catch let e as APIError { XCTAssertEqual(e.message, "This event is full: 32 places, all taken.") }
+        let grant = try await api.checkIn(event: id)
+        XCTAssertEqual(grant.expiresAt, ISO8601DateFormatter().date(from: "2026-10-04T22:00:00Z"))
+        XCTAssertEqual(script.seen[3].value(forHTTPHeaderField: "X-Thro-Device"), device.uuidString.lowercased(), "the phone checking in names itself")
+        let withDraw = try await api.event(id)
+        XCTAssertEqual(withDraw.draw.first?.isBye, true); XCTAssertEqual(withDraw.draw.first?.home, "Alice Aims")
+        let out = try await api.withdraw(event: id)
+        XCTAssertEqual(out.you?.entered, false)
+        XCTAssertTrue(script.seen[5].url!.path.hasSuffix("/withdraw"))
+    }
+
     func testBase64URLRoundTripsAndMatchesTheServersAlphabet() {
         let bytes = Data([0xfb, 0xff, 0xbf, 0x00, 0x01])
         let s = Base64URL.encode(bytes)

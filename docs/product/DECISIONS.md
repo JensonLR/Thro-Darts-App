@@ -4786,3 +4786,40 @@ its fixture list is the record, and a league may want to check the venue is free
 
 **Evidence.** `RearrangementHttpTest` (26 checks), `SecretaryTest` (64) still green, `NetTests.testAProposedDateIsReadAnsweredAndProposed`
 on the phone, the contract regenerated.
+
+## PD-109 — A knockout run on THRØ
+
+**16 September 2026.** The completion matrix named the Tournament OS as a whole class nobody could reach: `Competitions`
+opened an edition, took entries, checked a competitor in with the scoring grant of ADR-006, and drew the first round;
+`Events` and `Discovery` advertised editions and said who could play them; the phone's tournaments were local-only.
+This decision puts the edition on the wire, on the organiser web, and on the phone's Discover cards.
+
+**Decided.**
+
+1. **Whoever opens an edition is its organiser.** `POST /v1/events` grants the caller `organiser` on the event
+   (`event.manage` follows from it). A name, a start, a session end after it (the grants issued at check-in outlive
+   that by a day), a venue on THRØ or a label, optionally when entries close and how many places (at least two).
+   Open entry and single players for now — the domain carries pairs, teams and invitational access; the wire does not
+   yet.
+2. **Entering is the player's own act.** `POST /v1/events/{id}/entries` while entries are open, before they close, and
+   while a place remains — each refusal in words (409); an event that is not open entry is a 403. A withdrawn entry
+   comes back rather than doubling (the schema keeps one row per competitor per event). `POST …/withdraw` before the
+   draw; after it, withdrawing is the organiser's to record.
+3. **Check-in is the entrant's, from their own phone, on the day.** `POST /v1/events/{id}/check-in` with `X-Thro-Device`,
+   from twelve hours before the start until the session ends, issues the scoring grant to that phone under the
+   organiser of record and writes the check-in row; from the same phone again it is the same answer. The grant is
+   trust's table and the check-in competition's, so the request switches role between the two writes — the same two
+   writes `Competitions.checkIn` makes, split by the role that may make each.
+4. **The draw is the organiser's, once, from at least two entrants.** `POST …/draw` makes round one through the bracket
+   maths (byes to the highest seeds, the rest paired); `POST …/close` closes entries as a state of its own. A drawn
+   event leaves the notice on the door (`/v1/events` lists open and entries-closed only).
+5. **What THRØ does not do yet, said plainly.** Later rounds. The domain draws round one and lets a tie cite the match
+   it was played in; advancing winners is not in the domain, so the event page, the web and the contract all say the
+   organiser runs the rest at the board. No bracket is pretended.
+6. **Surfaces.** `events.html`: the organiser's lobby (events you run, open one — with a venue search over
+   `/v1/venues`) and one event's page, public, with the first round once drawn and the organiser's *Close entries* /
+   *Make the draw* when signed in. The phone: every Discover card gains *Enter* (open events), *Withdraw*, and on the
+   day *Check in on this phone*, with the grant's expiry read back in words.
+
+**Evidence.** `EventHttpTest` (32 checks, red first on the missing route), `CompetitionTest` and `EventsTest` still
+green, `NetTests.testAnEventIsEnteredWithdrawnAndCheckedIn`, the contract regenerated.

@@ -449,6 +449,7 @@ public struct DiscoveryScreen: View {
                                     ForEach(card.reasons, id: \.self) { reason in
                                         Text("· \(reason)").thro(ThroTypography.metadata).foregroundStyle(ThroColor.colorTextSecondary)
                                     }
+                                    EventActions(account: account, card: card) { Task { await load() } }
                                 }
                                 .padding(.vertical, ThroSpacing.spacing2)
                                 .overlay(alignment: .bottom) { Rectangle().fill(ThroColor.colorBorderDefault).frame(height: 1) }
@@ -470,6 +471,61 @@ public struct DiscoveryScreen: View {
     private func load() async {
         problem = nil
         do { sections = try await account.api.discovery() } catch let e as APIError { problem = e.message } catch { problem = error.localizedDescription }
+    }
+}
+
+/// What a player does with an event from its card (PD-109): enter, withdraw, and on the day check in from this phone.
+/// Every refusal is the server's words; nothing here decides eligibility.
+struct EventActions: View {
+    @ObservedObject var account: AccountStore
+    let card: DiscoveryCard
+    let reload: () -> Void
+    @State private var page: EventPage?
+    @State private var said: String?
+    @State private var busy = false
+
+    private var entered: Bool { page?.you?.entered ?? card.entered }
+    private var checkedIn: Bool { page?.you?.checkedIn ?? false }
+    private var onTheDay: Bool { Date() >= card.startsAt.addingTimeInterval(-12 * 3600) }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: ThroSpacing.spacing2) {
+            HStack(spacing: ThroSpacing.spacing2) {
+                if entered {
+                    if onTheDay && !checkedIn {
+                        ThroButton("Check in on this phone", variant: .primary, size: .medium) { Task { await checkIn() } }.disabled(busy)
+                    } else if checkedIn {
+                        Text("Checked in · this phone scores it").thro(ThroTypography.metadata).foregroundStyle(ThroColor.colorTextSecondary)
+                    }
+                    ThroButton("Withdraw", variant: .secondary, size: .medium) { Task { await withdraw() } }.disabled(busy || checkedIn)
+                } else if card.access == "open" {
+                    ThroButton("Enter", variant: .primary, size: .medium) { Task { await enter() } }.disabled(busy)
+                }
+            }
+            if let said { Note(said) }
+        }
+        .padding(.top, ThroSpacing.spacing2)
+    }
+
+    private func enter() async {
+        busy = true; defer { busy = false }
+        do { page = try await account.api.enter(event: card.eventId); said = "Entered. Check in on this phone on the day."; reload() }
+        catch { said = (error as? APIError)?.message ?? error.localizedDescription }
+    }
+
+    private func withdraw() async {
+        busy = true; defer { busy = false }
+        do { page = try await account.api.withdraw(event: card.eventId); said = "Withdrawn. Your place is open to somebody else."; reload() }
+        catch { said = (error as? APIError)?.message ?? error.localizedDescription }
+    }
+
+    private func checkIn() async {
+        busy = true; defer { busy = false }
+        do {
+            let grant = try await account.api.checkIn(event: card.eventId)
+            page = try await account.api.event(card.eventId)
+            said = "Checked in. This phone may score the event until \(grant.expiresAt.formatted(date: .abbreviated, time: .shortened)), signal or none."
+        } catch { said = (error as? APIError)?.message ?? error.localizedDescription }
     }
 }
 

@@ -64,6 +64,7 @@ import thro.api.TeamFixtures
 import thro.api.Ratings
 import thro.api.Registrations
 import thro.api.Rearrangements
+import thro.api.Editions
 import thro.api.Relations
 import thro.api.Secretary
 import thro.api.VisitCommand
@@ -468,6 +469,32 @@ public fun Application.thro(deps: Deps) {
         "me.seasons" to { r -> SeasonPlanning(r.connection()).let { Http(200, it.runsJson(it.seasonsRunBy(r.principal!!.subject))) } },
         // PD-105: the provisional rating. Read — and replayed when the evidence has moved — as `app_rating`, the one
         // role that may write the rating tables and may not write a match.
+        // PD-109: a knockout run on THRØ — open, enter, withdraw, check in, close, draw.
+        "events.open" to { r ->
+            editions {
+                val m = Json.parseObject(r.body)
+                fun instant(key: String) = (m[key] as? String)?.let { try { Instant.parse(it) } catch (e: Exception) { throw IllegalArgumentException("$key is not a date-time") } }
+                val ed = Editions(r.connection(), deps.now)
+                Http(200, ed.json(ed.open(
+                    r.principal!!.subject, m["name"] as? String ?: "", instant("startsAt") ?: throw IllegalArgumentException("startsAt is required"),
+                    instant("sessionEndsAt") ?: throw IllegalArgumentException("sessionEndsAt is required"),
+                    (m["venueId"] as? String)?.let(UUID::fromString), m["venueLabel"] as? String, instant("entriesCloseAt"), (m["capacity"] as? Number)?.toInt(),
+                )))
+            }
+        },
+        "me.events" to { r -> Editions(r.connection(), deps.now).let { Http(200, it.json(it.mine(r.principal!!.subject))) } },
+        "events.get" to { r -> editions { Editions(r.connection(), deps.now).let { Http(200, it.json(it.view(UUID.fromString(r.call.parameters["eventId"]), r.principal?.subject))) } } },
+        "events.enter" to { r -> editions { Editions(r.connection(), deps.now).let { Http(200, it.json(it.enter(UUID.fromString(r.call.parameters["eventId"]), r.principal!!.subject))) } } },
+        "events.withdraw" to { r -> editions { Editions(r.connection(), deps.now).let { Http(200, it.json(it.withdraw(UUID.fromString(r.call.parameters["eventId"]), r.principal!!.subject))) } } },
+        "events.checkin" to { r ->
+            editions {
+                val phone = r.call.request.headers["X-Thro-Device"]?.let { runCatching { UUID.fromString(it) }.getOrNull() }
+                    ?: throw IllegalArgumentException("X-Thro-Device must name the phone that is checking in")
+                Editions(r.connection(), deps.now, asRole = { role -> r.role = if (role == "trust") DbRole.TRUST else DbRole.COMPETITION; r.connection() }).let { Http(200, it.json(it.checkIn(UUID.fromString(r.call.parameters["eventId"]), r.principal!!.subject, phone))) }
+            }
+        },
+        "events.close" to { r -> editions { Editions(r.connection(), deps.now).let { Http(200, it.json(it.close(UUID.fromString(r.call.parameters["eventId"]), r.principal!!.subject))) } } },
+        "events.draw" to { r -> editions { Editions(r.connection(), deps.now).let { Http(200, it.json(it.draw(UUID.fromString(r.call.parameters["eventId"]), r.principal!!.subject))) } } },
         // PD-108: moving a fixture by agreement — one team proposes, the other answers, the league applies.
         "fixtures.proposals" to { r ->
             rearrangements { Rearrangements(r.connection(), deps.now).let { Http(200, it.json(it.ofFixture(UUID.fromString(r.call.parameters["fixtureId"]), r.principal!!.subject))) } }
@@ -989,6 +1016,11 @@ private fun shown(r: Req, season: UUID, block: () -> Http): Http {
     if (!allowed) return Http(404, """{"error":"THRØ has no such league season."}""")
     r.role = DbRole.READ
     return block()
+}
+
+/** An event step refused is an answer, with the status that says which kind (PD-109). */
+private fun editions(block: () -> Http): Http = try { block() } catch (e: Editions.Refused) {
+    Http(e.status, """{"error":${Contract.q(e.why)}}""")
 }
 
 /** A rearrangement step refused is an answer, with the status that says which kind (PD-108). */

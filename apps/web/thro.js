@@ -1272,4 +1272,145 @@ async function mountNotice(where, reader) {
   where.replaceChildren(box);
 }
 
-window.THRO = { mountLeagues, mountTable, mountFixtures, mountOrganiser, mountModeration, mountNotice, mountNoticeBanner, signInWithPasskey, whoAmI, signOut, session, authorised, passkeysPossible };
+// --- events: a knockout run on THRØ (PD-109) -----------------------------------------------------------------------
+
+/**
+ * `events.html` is two pages. With `?event=<id>` it is one event's page — public: what, when, where, how many places,
+ * and the first round once drawn — with the organiser's acts on it when the signed-in person is its organiser.
+ * Without, it is the organiser's lobby: the events they run, and the form that opens one.
+ */
+async function mountEvents(where, signInEl) {
+  const eventId = new URLSearchParams(location.search).get('event');
+  if (eventId) { await mountEvent(where, signInEl, eventId); return; }
+  const draw = async () => {
+    if (!signInGate(signInEl, where, 'Sign in to run a knockout.', draw)) return;
+    let mine;
+    try { mine = await authorised('GET', '/v1/me/events'); } catch (e) { fail(where, e); return; }
+    const parts = [make('h2', null, 'Events you run')];
+    if (!mine.events.length) {
+      parts.push(make('p', 'quiet', 'None yet. Open one below.'));
+    } else {
+      const list = make('ul', 'rows');
+      for (const e of mine.events) {
+        const li = make('li');
+        const link = make('a', 'row-name', e.name);
+        link.href = `events.html?event=${encodeURIComponent(e.eventId)}`;
+        li.append(link, make('div', 'row-meta', `${when(e.startsAt)} · ${e.state.replace('_', ' ')} · ${e.entries} entered`));
+        list.append(li);
+      }
+      parts.push(list);
+    }
+    parts.push(eventOpener(draw));
+    where.replaceChildren(...parts);
+  };
+  await draw();
+}
+
+/** Opening an edition: a name, a day and time, when the session ends, a venue on THRØ or a label, places, and when entries close. */
+function eventOpener(redraw) {
+  const box = make('div', 'entry');
+  box.append(make('h2', null, 'Open a knockout'));
+  const form = make('div', 'entry-form');
+  const name = make('input'); name.type = 'text'; name.placeholder = 'Sun Inn Open'; name.maxLength = 80; name.setAttribute('aria-label', 'The event’s name');
+  const day = make('input'); day.type = 'date'; day.setAttribute('aria-label', 'The day');
+  const start = make('input'); start.type = 'time'; start.value = '11:00'; start.setAttribute('aria-label', 'Starts at');
+  const end = make('input'); end.type = 'time'; end.value = '22:00'; end.setAttribute('aria-label', 'The session ends at');
+  const venueQ = make('input'); venueQ.type = 'search'; venueQ.placeholder = 'Venue on THRØ (type to find)'; venueQ.setAttribute('aria-label', 'Find the venue');
+  const venue = make('select'); venue.append(new Option('No venue on THRØ yet', '')); venue.setAttribute('aria-label', 'The venue');
+  const label = make('input'); label.type = 'text'; label.placeholder = 'Or a label: “ask at the bar”'; label.maxLength = 80; label.setAttribute('aria-label', 'Venue label');
+  const capacity = make('input'); capacity.type = 'number'; capacity.min = 2; capacity.max = 512; capacity.placeholder = 'Places'; capacity.setAttribute('aria-label', 'Places available');
+  const closes = make('input'); closes.type = 'datetime-local'; closes.setAttribute('aria-label', 'Entries close at');
+  const said = make('p', 'note'); said.hidden = true;
+  const say = text => { said.hidden = false; said.textContent = text; };
+  let searching;
+  venueQ.oninput = () => {
+    clearTimeout(searching);
+    const q = venueQ.value.trim();
+    if (q.length < 2) return;
+    searching = setTimeout(async () => {
+      try {
+        const found = await read(`/v1/venues?q=${encodeURIComponent(q)}`);
+        venue.replaceChildren(new Option('No venue on THRØ yet', ''));
+        for (const v of found.venues || []) venue.append(new Option(`${v.name}${v.locality ? ` · ${v.locality}` : ''}`, v.venueId));
+      } catch (e) { say(e.message); }
+    }, 300);
+  };
+  const open = make('button', 'primary', 'Open it');
+  open.onclick = async () => {
+    if (!name.value.trim() || !day.value || !start.value || !end.value) { say('An event is a name, a day, a start and a session end.'); return; }
+    const at = t => new Date(`${day.value}T${t}`).toISOString();
+    open.disabled = true;
+    try {
+      const made = await authorised('POST', '/v1/events', {
+        name: name.value.trim(), startsAt: at(start.value), sessionEndsAt: at(end.value),
+        ...(venue.value ? { venueId: venue.value } : {}), ...(label.value.trim() ? { venueLabel: label.value.trim() } : {}),
+        ...(capacity.value ? { capacity: Number(capacity.value) } : {}), ...(closes.value ? { entriesCloseAt: new Date(closes.value).toISOString() } : {}),
+      });
+      location.search = `?event=${encodeURIComponent(made.eventId)}`;
+    } catch (e) { say(e.message); open.disabled = false; }
+  };
+  form.append(name, day, start, end, venueQ, venue, label, capacity, closes, open);
+  box.append(form, said, make('p', 'quiet', 'Open entry, single players. THRØ draws the first round; later rounds are yours to run at the board for now.'));
+  return box;
+}
+
+async function mountEvent(where, signInEl, eventId) {
+  const draw = async () => {
+    // The page reads without a session; the organiser's acts appear with one.
+    let e;
+    try { e = session.get() ? await authorised('GET', `/v1/events/${encodeURIComponent(eventId)}`) : await read(`/v1/events/${encodeURIComponent(eventId)}`); }
+    catch (err) { fail(where, err); return; }
+    signInEl.replaceChildren();
+    if (session.get()) {
+      const out = make('button', 'quiet-button', 'Sign out'); out.onclick = () => { signOut(); draw(); }; signInEl.append(out);
+    }
+    const whereAt = e.venue ? `${e.venue}${e.locality ? `, ${e.locality}` : ''}` : (e.venueLabel || 'venue to be announced');
+    const places = e.capacity == null ? 'places not stated' : (e.spotsRemaining === 0 ? 'full' : `${e.spotsRemaining} of ${e.capacity} places left`);
+    const parts = [
+      make('h2', null, e.name),
+      make('p', 'quiet', `${when(e.startsAt)} · ${whereAt} · ${e.entries} entered · ${places} · ${e.state.replace('_', ' ')}`
+        + (e.entriesCloseAt ? ` · entries close ${when(e.entriesCloseAt)}` : '')),
+    ];
+    if (e.you) {
+      parts.push(make('p', 'quiet', e.you.entered ? (e.you.checkedIn ? 'You are entered and checked in.' : 'You are entered. Check in from the app on the day.') : 'Entering is done in the app, from Discover.'));
+    }
+    if (e.draw.length) {
+      parts.push(make('h2', null, 'First round'));
+      const list = make('ul', 'rows');
+      for (const t of e.draw) {
+        const li = make('li');
+        li.append(make('div', 'row-name', t.isBye ? `${t.home || 'A player'} — bye` : `${t.home || 'A player'} v ${t.away || 'A player'}`),
+                  make('div', 'row-meta', t.matchId ? 'scored on THRØ' : (t.isBye ? 'a bye is not a win' : 'to be played')));
+        list.append(li);
+      }
+      parts.push(list);
+    }
+    // The organiser's acts: shown to a signed-in person and refused by the server for anybody who is not the organiser.
+    if (session.get() && (e.state === 'open' || e.state === 'entries_closed')) {
+      const box = make('div', 'entry');
+      const said = make('p', 'note'); said.hidden = true;
+      const act = async (path, button) => {
+        button.disabled = true;
+        try { await authorised('POST', `/v1/events/${encodeURIComponent(eventId)}/${path}`, {}); draw(); }
+        catch (err) { said.hidden = false; said.textContent = err.message; button.disabled = false; }
+      };
+      const form = make('div', 'entry-form');
+      if (e.state === 'open') { const close = make('button', 'quiet-button', 'Close entries'); close.onclick = () => act('close', close); form.append(close); }
+      const drawIt = make('button', 'primary', 'Make the draw');
+      drawIt.onclick = () => { if (drawIt.textContent !== 'Draw it — this cannot be undone') { drawIt.textContent = 'Draw it — this cannot be undone'; return; } act('draw', drawIt); };
+      form.append(drawIt);
+      box.append(make('h2', null, 'As the organiser'), form, said,
+                 make('p', 'quiet', 'The draw is made once, from the entries as they stand: byes to the highest seeds, the rest paired. A bye is not a win.'));
+      parts.push(box);
+    } else if (!session.get()) {
+      parts.push(make('p', 'quiet', 'Run this event? Sign in with the passkey the app uses.'));
+      const button = make('button', 'quiet-button', 'Sign in with a passkey');
+      button.onclick = async () => { button.disabled = true; try { await signInWithPasskey(); await draw(); } catch (err) { parts.push(make('p', 'note', err.message)); button.disabled = false; } };
+      parts.push(button);
+    }
+    where.replaceChildren(...parts);
+  };
+  await draw();
+}
+
+window.THRO = { mountLeagues, mountTable, mountFixtures, mountOrganiser, mountModeration, mountEvents, mountNotice, mountNoticeBanner, signInWithPasskey, whoAmI, signOut, session, authorised, passkeysPossible };

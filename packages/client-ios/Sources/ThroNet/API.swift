@@ -678,6 +678,50 @@ public struct DiscoveryCard: Decodable, Sendable, Equatable, Identifiable {
     public var id: UUID { eventId }
 }
 
+/// An event's page (PD-109): what, when, where, how many places, and — with a session — whether you are in.
+/// `draw` is the first round once it is made; a bye is a tie with no away side and is not a win.
+public struct EventPage: Decodable, Sendable, Equatable, Identifiable {
+    public struct Tie: Decodable, Sendable, Equatable, Identifiable {
+        public let tieId: UUID
+        public let round: Int
+        public let position: Int
+        public let homeId: UUID
+        public let home: String?
+        public let awayId: UUID?
+        public let away: String?
+        public let isBye: Bool
+        public let matchId: UUID?
+        public var id: UUID { tieId }
+    }
+    public struct You: Decodable, Sendable, Equatable {
+        public let entered: Bool
+        public let checkedIn: Bool
+    }
+    public let eventId: UUID
+    public let name: String
+    public let startsAt: Date
+    public let sessionEndsAt: Date
+    public let venue: String?
+    public let locality: String?
+    public let venueLabel: String?
+    public let entrantKind: String
+    public let access: String
+    public let state: String
+    public let entriesCloseAt: Date?
+    public let capacity: Int?
+    public let entries: Int
+    public let spotsRemaining: Int?
+    public let you: You?
+    public let draw: [Tie]
+    public var id: UUID { eventId }
+}
+
+/// The scoring grant a check-in issues (ADR-006): this phone may score the event until `expiresAt`, signal or none.
+public struct ScoringGrant: Decodable, Sendable, Equatable {
+    public let grantId: UUID
+    public let expiresAt: Date
+}
+
 public enum Provider: String, Sendable { case apple, google }
 
 public enum APIError: Error, Equatable, Sendable {
@@ -1064,6 +1108,30 @@ public actor ThroAPI {
     public func submitRegistration(submission: UUID) async throws -> String {
         struct Envelope: Decodable { let state: String }
         return try (decode(await authorised("POST", "/v1/submissions/\(submission.uuidString.lowercased())/submit", body: Data("{}".utf8))) as Envelope).state
+    }
+
+    /// An event's page, with `you` when signed in (PD-109).
+    public func event(_ id: UUID) async throws -> EventPage {
+        let path = "/v1/events/\(id.uuidString.lowercased())"
+        if session != nil { return try decode(await authorised("GET", path)) }
+        let (data, http) = try await send("GET", path, bearer: nil)
+        guard http.statusCode == 200 else { throw APIError.status(http.statusCode, String(decoding: data, as: UTF8.self)) }
+        return try decode(data)
+    }
+
+    /// Enters yourself. Full, closed or already entered come back as words.
+    public func enter(event: UUID) async throws -> EventPage {
+        try decode(await authorised("POST", "/v1/events/\(event.uuidString.lowercased())/entries", body: Data("{}".utf8)))
+    }
+
+    /// Withdraws your entry, before the draw.
+    public func withdraw(event: UUID) async throws -> EventPage {
+        try decode(await authorised("POST", "/v1/events/\(event.uuidString.lowercased())/withdraw", body: Data("{}".utf8)))
+    }
+
+    /// Checks you in from this phone, on the day, and returns the grant that lets it score with no signal.
+    public func checkIn(event: UUID) async throws -> ScoringGrant {
+        try decode(await authorised("POST", "/v1/events/\(event.uuidString.lowercased())/check-in", body: Data("{}".utf8)))
     }
 
     /// The dates proposed for a fixture, for its two teams and its league (PD-108).
