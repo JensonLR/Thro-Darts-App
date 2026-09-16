@@ -29,6 +29,12 @@ public fun main() {
         env("THRO_APPLE_CLIENT_ID")?.let { put(Provider.APPLE, it) }
         env("THRO_GOOGLE_CLIENT_ID")?.let { put(Provider.GOOGLE, it) }
     }
+    // PD-116: the web's client ids at the same providers — Apple's Services ID, Google's Web client — so a token the
+    // browser obtained is this app's too. Absent, the web offers the phone code and the passkey alone.
+    val webProviders = buildMap {
+        env("THRO_APPLE_WEB_CLIENT_ID")?.let { put(Provider.APPLE, it) }
+        env("THRO_GOOGLE_WEB_CLIENT_ID")?.let { put(Provider.GOOGLE, it) }
+    }
     val dev = Authenticator.Dev.ifEnabled(env)
     val authenticator = when {
         dev != null -> {
@@ -60,5 +66,5 @@ public fun main() {
     Retention.everyDay(connect)
 
     val port = env("PORT")?.toIntOrNull() ?: 8080
-    embeddedServer(CIO, port = port) { thro(Deps(connect, authenticator, providers = providers, keys = HttpJwkSource(), relyingParty = rp, appleAppIds = appleAppIds, moderators = moderators)) }.start(wait = true)
+    embeddedServer(CIO, port = port) { thro(Deps(connect, authenticator, providers = providers, webProviders = webProviders, keys = HttpJwkSource(), relyingParty = rp, appleAppIds = appleAppIds, moderators = moderators)) }.start(wait = true)
 }

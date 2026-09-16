@@ -403,6 +403,9 @@ function signInPanel(redraw) {
   const said = make('p', 'quiet', 'Asking THRØ for a code…');
   const again = make('button', 'quiet-button', 'New code'); again.hidden = true;
   const acts = make('div', 'acts');
+  // Apple and Google, only when the server names the web's client ids for them (PD-116): each SDK is fetched then,
+  // never before, so a page without them loads nothing from either.
+  providerButtons(acts, redraw, said);
   const passkey = make('button', 'quiet-button', 'Use a passkey instead');
   passkey.onclick = async () => {
     passkey.disabled = true;
@@ -443,6 +446,54 @@ function signInPanel(redraw) {
   again.onclick = ask;
   ask();
   return box;
+}
+
+/** A script from a provider, loaded once and only when asked for. */
+function loadScript(src) {
+  return new Promise((resolve, reject) => {
+    if (document.querySelector(`script[src="${src}"]`)) { resolve(); return; }
+    const s = document.createElement('script'); s.src = src; s.async = true; s.onload = resolve; s.onerror = () => reject(new Error(`${src} did not load`));
+    document.head.append(s);
+  });
+}
+
+async function providerButtons(where, redraw, said) {
+  let p;
+  try { p = await read('/v1/auth/providers'); } catch { return; }
+  const finish = async (path, idToken, nonce) => {
+    const s = await post(path, { idToken, deviceId: deviceId(), ...(nonce ? { nonce } : {}) });
+    session.set(s); clearInterval(linkPolling); await redraw();
+  };
+  if (p.apple) {
+    const b = make('button', 'quiet-button', 'Sign in with Apple');
+    b.onclick = async () => {
+      b.disabled = true;
+      try {
+        await loadScript('https://appleid.cdn-apple.com/appleauth/static/jsapi/appleid/1/en_GB/appleid.auth.js');
+        const raw = crypto.getRandomValues(new Uint8Array(16)); const nonce = Array.from(raw, x => x.toString(16).padStart(2, '0')).join('');
+        const hashed = B64U.fromBytes(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(nonce)));
+        window.AppleID.auth.init({ clientId: p.apple, scope: 'name', redirectURI: `${location.origin}/`, usePopup: true, nonce: hashed });
+        const r = await window.AppleID.auth.signIn();
+        await finish('/v1/auth/apple', r.authorization.id_token, nonce);
+      } catch (e) { said.textContent = e.message || 'Apple did not sign you in.'; b.disabled = false; }
+    };
+    where.append(b);
+  }
+  if (p.google) {
+    const b = make('button', 'quiet-button', 'Sign in with Google');
+    b.onclick = async () => {
+      b.disabled = true;
+      try {
+        await loadScript('https://accounts.google.com/gsi/client');
+        const raw = crypto.getRandomValues(new Uint8Array(16)); const nonce = Array.from(raw, x => x.toString(16).padStart(2, '0')).join('');
+        await new Promise((resolve, reject) => {
+          window.google.accounts.id.initialize({ client_id: p.google, nonce, callback: async res => { try { await finish('/v1/auth/google', res.credential, nonce); resolve(); } catch (e) { reject(e); } } });
+          window.google.accounts.id.prompt(n => { if (n.isNotDisplayed && n.isNotDisplayed()) reject(new Error('Google could not show its sign-in here. Use your phone or a passkey.')); });
+        });
+      } catch (e) { said.textContent = e.message || 'Google did not sign you in.'; b.disabled = false; }
+    };
+    where.append(b);
+  }
 }
 
 function signInGate(signInEl, where, prompt, redraw) {

@@ -141,6 +141,12 @@ public object Contract {
             responses = mapOf(200 to sessionResponse, 202 to "waiting for the phone", 400 to "no device id", 404 to "no such link for this device", 410 to "used or expired; ask for a new code"),
         ),
         Endpoint(
+            id = "auth.providers", method = "GET", path = "/v1/auth/providers", authenticated = false,
+            summary = "Which providers the web may offer (PD-116)",
+            description = "Apple's Services ID and Google's Web client id, when the server is configured with them; null otherwise. Public: a client id is not a secret.",
+            responses = mapOf(200 to "apple and google, each a client id or null"),
+        ),
+        Endpoint(
             id = "auth.logout", method = "POST", path = "/v1/auth/logout", authenticated = true,
             summary = "End this session family", description = "Revokes the family the presented access token belongs to; its access and refresh tokens stop working.",
             responses = mapOf(200 to "revoked", 401 to "no principal"),

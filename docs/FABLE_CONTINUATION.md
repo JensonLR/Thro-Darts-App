@@ -31,7 +31,7 @@ entitlements and refused if the signed app lacks Sign in with Apple or the passk
 
 PD-095 deploy pipeline · PD-096 retention sweep · PD-097 Android notice · PD-098 TestFlight entitlements ·
 PD-099 fixtures · PD-100 start a league · PD-101 moderation page · PD-102 ways in · PD-103 decisions enforce +
-league management · PD-104 organiser email · PD-105 provisional rating · PD-106 the team's fixture · PD-107 registrations · PD-108 moving a fixture by agreement · PD-109 a knockout · PD-110 a friendly · PD-111 rounds · PD-112 the organiser's remaining acts · PD-113 invitationals · PD-114 sign in by the phone · PD-115 pairs, teams, seeds, boards · two design passes (web, phone).
+league management · PD-104 organiser email · PD-105 provisional rating · PD-106 the team's fixture · PD-107 registrations · PD-108 moving a fixture by agreement · PD-109 a knockout · PD-110 a friendly · PD-111 rounds · PD-112 the organiser's remaining acts · PD-113 invitationals · PD-114 sign in by the phone · PD-115 pairs, teams, seeds, boards · PD-116 Apple and Google on the web (awaiting the founder's console work) · two design passes (web, phone).
 
 ## Completion matrix (from four read-only audits, 16 September; details in PD-106 and CHANGE_RECORD)
 
@@ -69,15 +69,19 @@ league management · PD-104 organiser email · PD-105 provisional rating · PD-1
 3. ~~Friendly challenge~~ **done (PD-110)**. Left: rearranging an accepted friendly; a venue on the wire.
 4. ~~Web polish~~ **done**: a 420px breakpoint, `fail()` keeps the page and offers *Try again*, fixtures → table.
 5. ~~NEEDS-DECISION~~: the founder keeps the deploy branch's name (16 Sep); `PlaytestServer` is out of the image
-   (PD-114's commit). Next for "a whole new level of UI standard": the table, fixtures and tv pages after the home
-   page's shape; the app's older screens (Home, Play, Live) against the desk cards; a landscape/iPad pass.
+   (PD-114's commit). ~~Next for "a whole new level of UI standard"~~ looked at 16 September night: the table and
+   fixtures pages already wear the home page's field header and nav (left as they are); Home, Play and Live are cards;
+   You on the iPad sits in two columns; the iPhone in landscape renders side by side. Nothing changed there.
+6. PD-116 lands the server and web sides of Apple/Google sign-in on the web; the buttons appear only once the founder
+   creates the Services ID and the Web OAuth client and sets `THRO_APPLE_WEB_CLIENT_ID` / `THRO_GOOGLE_WEB_CLIENT_ID`
+   on Render (the clicks are in PD-116). Until then the web offers the phone code and the passkey.
 
 ## Known gaps after PD-113 (small, recorded rather than hidden)
 
 - ~~cite's other seat~~, ~~sentAt~~: closed 16 September (PD-108 addendum commit).
 - The PD-108 and PD-110 HTTP tests were written before their routes but their first red run was not watched.
 - Not looked at in the simulator: the challenge form on another team's front; *Name the match* with matches present;
-  landscape and iPad for the desk cards. Not looked at in a browser: the moderation page signed in.
+  the desk cards in landscape (You was looked at on the iPad and in landscape, 16 September). Not looked at in a browser: the moderation page signed in.
 - How to look again: `THRO_DEV_AUTH=1 PGHOST=localhost … gradle -p services/api serve`, `python3 tools/web_serve.py`,
   a browser at 375 points with `sessionStorage.thro.session` set and `fetch` patched to add `X-Thro-Dev-Subject`;
   on the phone, `xcrun simctl launch <device> app.thro.darts -ThroScreenshotAccount adult -ThroScreen tab/you`.

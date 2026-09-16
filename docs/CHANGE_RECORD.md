@@ -6084,3 +6084,14 @@ and the events page at 375 points in a browser against a local API at V053; on t
 in* naming Sign in with Apple and a passkey as held and offering Google and a second passkey, the rating card, and
 *Sign in on a screen*. Not looked at: the pair/team invitation and the boards on the organiser's event page, and the
 phone's pair/team chooser — proven by their tests, not by eye.
+
+## Apple and Google on the web, behind the founder's console work (PD-116)
+
+`Deps.webProviders`, `IdTokenVerifier.verify(…, clientIds: Set<String>, …)`, `GET /v1/auth/providers`; the web's
+`providerButtons` loads a provider's script only on press. `AuthTest` gained two checks (44). Nothing shows until the
+founder creates the Services ID and the Web client and sets the two variables — the exact clicks are in PD-116.
+
+## Looked at, 16 September night
+
+Home, Play and Live on the iPhone (cards throughout; left as they were), You on the iPad (two columns) and the
+iPhone in landscape (side by side); the table and fixtures pages at 375 points against the league-acts scenario.

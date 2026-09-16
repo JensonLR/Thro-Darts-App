@@ -56,7 +56,10 @@ public class IdTokenVerifier(private val keys: JwkSource, private val now: () ->
      * caller who supplies one for a token that carries none is refused too. Without a nonce a
      * captured ID token could open a session anywhere within its validity, so the clients send one.
      */
-    public fun verify(token: String, provider: Provider, clientId: String, nonce: String? = null): Result {
+    public fun verify(token: String, provider: Provider, clientId: String, nonce: String? = null): Result = verify(token, provider, setOf(clientId), nonce)
+
+    /** As above, for an app with more than one client id at the provider: the phone's, and the web's (PD-116). */
+    public fun verify(token: String, provider: Provider, clientIds: Set<String>, nonce: String?): Result {
         val parts = token.split('.')
         if (parts.size != 3) return Result.Rejected("not a JWT")
         val header = try { Json.parseObject(String(b64(parts[0]), Charsets.UTF_8)) } catch (e: Exception) { return Result.Rejected("header unreadable") }
@@ -73,7 +76,7 @@ public class IdTokenVerifier(private val keys: JwkSource, private val now: () ->
         val iss = payload["iss"] as? String
         if (iss !in provider.issuers) return Result.Rejected("issuer $iss is not ${provider.name.lowercase()}")
         val aud = when (val a = payload["aud"]) { is String -> listOf(a); is List<*> -> a.map { it.toString() }; else -> emptyList() }
-        if (clientId !in aud) return Result.Rejected("audience is not this app")
+        if (aud.none { it in clientIds }) return Result.Rejected("audience is not this app")
         val exp = (payload["exp"] as? Number)?.toLong() ?: return Result.Rejected("no expiry")
         if (Instant.ofEpochSecond(exp).plus(LEEWAY).isBefore(now())) return Result.Rejected("expired")
         (payload["iat"] as? Number)?.toLong()?.let { iat ->

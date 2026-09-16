@@ -66,7 +66,7 @@ class AuthTest {
         testApplication {
             application {
                 thro(Deps(connect = { TestDatabase.connect() }, authenticator = Authenticator.Bearer(now = { clock }), now = { clock },
-                    providers = mapOf(Provider.APPLE to clientId), keys = keys, limiter = thro.api.http.RateLimiter(now = { clock }))) }
+                    providers = mapOf(Provider.APPLE to clientId), webProviders = mapOf(Provider.APPLE to "uk.thro.web"), keys = keys, limiter = thro.api.http.RateLimiter(now = { clock }))) }
             suspend fun post(path: String, body: String, token: String? = null): HttpResponse = client.post(path) { token?.let { header("Authorization", "Bearer $it") }; header("X-Thro-Device", device.toString()); setBody(body) }
             suspend fun get(path: String, token: String?): HttpResponse = client.get(path) { token?.let { header("Authorization", "Bearer $it") } }
             fun field(json: String, name: String): String? = Json.parseObject(json)[name]?.toString()
@@ -100,6 +100,11 @@ class AuthTest {
             check("thirty seconds of clock skew is tolerated; sixty-one is not", leeway.status.value == 200 && signIn(jwt(apple.private, "apple-1", claims(exp = clock.epochSecond - 61))).status.value == 401)
             val arrayAud = signIn(jwt(apple.private, "apple-1", claims().replace("\"aud\":\"$clientId\"", "\"aud\":[\"other\",\"$clientId\"]")))
             check("an audience list containing this app is accepted", arrayAud.status.value == 200)
+            // PD-116: the web's client id at the same provider is this app's audience too, and the web is told which it may offer.
+            // The same subject through the web's Services ID: this app's audience too, and the same account — nothing created.
+            val webAud = signIn(jwt(apple.private, "apple-1", claims(aud = "uk.thro.web")))
+            check("a token for the web's Services ID is accepted as this app's", webAud.status.value == 200 && field(webAud.bodyAsText(), "created") == "false")
+            check("the web is told which providers it may offer, and nothing secret", get("/v1/auth/providers", null).bodyAsText() == """{"apple":"uk.thro.web","google":null}""")
             check("the refusals created nothing: the only credential is the leeway sign-in's, and the audience-list sign-in found it",
                 c.prepareStatement("SELECT count(*) FROM identity.credential").use { it.executeQuery().use { rs -> rs.next(); rs.getInt(1) == 1 } })
             val google = post("/v1/auth/google", """{"idToken":"x.y.z","deviceId":"$device"}""")
@@ -209,7 +214,7 @@ class AuthTest {
                 post("/v1/auth/refresh", """{"refreshToken":${thro.api.http.Contract.q(race[0].refreshToken)}}""").status.value == 401)
         }
         println("  $passed auth properties held")
-        assertEquals(42, passed)
+        assertEquals(44, passed)
     }
 
     @Test

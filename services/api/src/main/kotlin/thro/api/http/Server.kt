@@ -91,6 +91,8 @@ public class Deps(
     public val now: () -> Instant = { Instant.now() },
     /** Sign-in providers this server accepts, each with THRØ's client id at that provider. */
     public val providers: Map<Provider, String> = emptyMap(),
+    /** The web's client ids at the same providers (PD-116): Apple's Services ID, Google's Web client. Optional. */
+    public val webProviders: Map<Provider, String> = emptyMap(),
     /** Where the providers' keys come from; a test supplies its own. */
     public val keys: JwkSource = JwkSource { _, _ -> null },
     /** Passkeys: this server's relying party, or null when passkeys are not configured. */
@@ -177,6 +179,10 @@ public fun Application.thro(deps: Deps) {
             catch (e: Accounts.LinkWaiting) { Http(202, """{"state":"waiting"}""") }
             catch (e: Accounts.LinkNotFound) { Http(404, """{"error":"no such link for this device"}""") }
             catch (e: Accounts.LinkSpent) { Http(410, """{"error":"This link was used or has expired. Ask for a new code."}""") }
+        },
+        // PD-116: which providers the web may offer, by the client ids configured for it; nothing secret.
+        "auth.providers" to { _ ->
+            Http(200, """{"apple":${deps.webProviders[Provider.APPLE]?.let { Contract.q(it) } ?: "null"},"google":${deps.webProviders[Provider.GOOGLE]?.let { Contract.q(it) } ?: "null"}}""")
         },
         "auth.logout" to { r -> Http(200, """{"revoked":${Accounts(r.connection(), deps.now).logout(bearer(r.call) ?: "")}}""") },
         "matches.upload" to { r -> r.role = DbRole.MATCH; upload(r.connection(), deps, r.principal!!, r.body) },
@@ -902,7 +908,7 @@ private fun signIn(c: Connection, deps: Deps, verifier: IdTokenVerifier, provide
     val token = str(m, "idToken")
     val device = try { UUID.fromString(str(m, "deviceId")) } catch (e: IllegalArgumentException) { throw IllegalArgumentException("deviceId must be a UUID") }
     val nonce = m["nonce"] as? String
-    return when (val v = verifier.verify(token, provider, clientId, nonce)) {
+    return when (val v = verifier.verify(token, provider, setOfNotNull(clientId, deps.webProviders[provider]), nonce)) {
         is IdTokenVerifier.Result.Rejected -> Http(401, """{"error":${Contract.q("the ID token was not accepted: " + v.why)}}""")
         // With a bearer token, a subject nobody holds is added to the caller's account (PD-032:
         // recovery is a second way in); a subject somebody else holds signs that person in as before.

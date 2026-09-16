@@ -5001,3 +5001,34 @@ account; a board's own schedule.
 
 **Evidence.** `EntrantsHttpTest` (30 checks, red first), `EventHttpTest` 61 and `CompetitionTest` 21 still green,
 `NetTests.testAPairAndATeamEnterInTheirOwnShape`.
+
+## PD-116 — Apple and Google on the web, when the founder has set them up
+
+**16 September 2026.** The web's first way in is the phone's code (PD-114). The founder asked for the least friction
+possible; for somebody with no phone to hand, Apple or Google in the browser is that — and each needs a client id
+only the founder can create.
+
+**Decided.**
+
+1. **One app, several audiences.** A token from Apple or Google is this app's if its audience is the phone's client
+   id *or* the web's — Apple's Services ID, Google's Web client — configured as `THRO_APPLE_WEB_CLIENT_ID` and
+   `THRO_GOOGLE_WEB_CLIENT_ID`. `IdTokenVerifier.verify` takes the set. Absent, nothing changes: the web offers the
+   phone code and the passkey.
+2. **The web asks what it may offer.** `GET /v1/auth/providers` answers the web client ids or null; a client id is not
+   a secret. The sign-in panel adds *Sign in with Apple* and *Sign in with Google* only then, and loads each
+   provider's script only when its button is pressed — a page without them loads nothing from either.
+3. **The same sign-in route.** The browser's token goes to `/v1/auth/apple` or `/v1/auth/google` with the device id
+   and the nonce, as the phone's does; the same account, the same session shape, the same rate limit.
+
+**What the founder does (once each; nothing else changes).**
+- *Apple*: developer.apple.com → Certificates, Identifiers & Profiles → Identifiers → **+** → *Services IDs* →
+  identifier e.g. `uk.thro.web`, description THRØ web → enable *Sign in with Apple* → Configure: primary App ID
+  the app's, domains `thro.uk`, return URLs `https://thro.uk/` → Save. Then set `THRO_APPLE_WEB_CLIENT_ID=uk.thro.web`
+  on the Render service.
+- *Google*: console.cloud.google.com → APIs & Services → Credentials → **Create credentials** → *OAuth client ID* →
+  type **Web application** → authorised JavaScript origins `https://thro.uk` and `https://www.thro.uk` → Create; copy
+  the client id. Then set `THRO_GOOGLE_WEB_CLIENT_ID=<that id>` on the Render service.
+- Restart the service (Render redeploys on an env change). The buttons appear on the next page load.
+
+**Evidence.** `AuthTest` (44 checks): a token for the web's Services ID is accepted as this app's and finds the same
+account; `/v1/auth/providers` says what it may offer and nothing more.
