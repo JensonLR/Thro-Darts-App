@@ -16,11 +16,15 @@ for you.
 **What THRØ is.** A darts scoring app. A person scores a match on their own phone; the record is kept on
 that phone; some people sign in, join a team, and let a league publish results.
 
-**The shape that matters, and it is unusual.** There is **no email address, no phone number, no postal
-address and no date of birth anywhere in the system.** Checked, not asserted: every column in every schema
-was queried for those names, and the only postcode is a **venue's** — a pub's address. Signing in with Apple
-or Google stores the provider's subject identifier and nothing else; THRØ asks those providers for no email,
-no name and no profile.
+**The shape that matters, and it is unusual.** There is **no phone number, no postal address and no date of
+birth anywhere in the system, and no email address for any player or any child.** Checked, not asserted: every
+column in every schema was queried for those names, and the only postcode is a **venue's** — a pub's address.
+Signing in with Apple or Google stores the provider's subject identifier and nothing else; THRØ asks those
+providers for no email, no name and no profile. **The one email THRØ holds** (V049, PD-104, 16 September 2026) is
+an organiser's: an adult account holding a live admin relation on a league season or a team may give one, so the
+teams in their league can reach them. Optional; theirs to remove; shown only to the admins of teams accepted into
+that season and to the season's administrators; never public; redacted by the erasure function with the name. A
+child can never give one (the age band must be `adult`), and no player can.
 
 **Local-first.** Scoring needs no account and no network. Somebody can use the whole scoring product having
 given THRØ nothing at all, and the on-device journal is theirs.
@@ -146,7 +150,8 @@ statutory deadline rather than a missed email. The address must not be published
 
 *Likelihood: low. Severity: medium.*
 
-Tokens are hashed; passkeys are public keys; there is no email or phone to leak. Every request runs under a
+Tokens are hashed; passkeys are public keys; there is no phone to leak, and the only emails are a handful of adult
+organisers' (PD-104), which raises the severity of a breach of `identity` from low to medium for those rows. Every request runs under a
 PostgreSQL role, so one area's bug cannot read another's tables.
 
 **Written, 12 September 2026:** `docs/legal/BREACH_PLAN.md`. Two things in it are specific to THRØ and
@@ -167,7 +172,7 @@ in-app notice that does not exist yet. That gap is now written down rather than 
 | 5 | Detrimental use | Nothing here is designed to be detrimental. |
 | 6 | Policies and standards | This, the ROPA, the terms. |
 | 7 | Default settings | **Met.** Audited surface by surface on 12 September 2026 — `docs/legal/DEFAULTS_AUDIT.md`. Every default examined was already the private one; two properties that were held only by a comment now have a guard and a test. |
-| 8 | Data minimisation | Strong. No email, no phone, no DOB, no stored location. |
+| 8 | Data minimisation | Strong. No phone, no DOB, no stored location; no email for any player or child — only an adult organiser's, by their choice (PD-104). |
 | 9 | Data sharing | Nothing is shared. No analytics on children, no advertising, no third-party SDKs in the client. |
 | 10 | Geolocation | **Met** — off by default, an obvious sign while in use, and Stop in the app (PD-086). |
 | 11 | Parental controls | Not applicable: THRØ has no monitoring for a parent to enable or a child to be told about. |

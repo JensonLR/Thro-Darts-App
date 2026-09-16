@@ -96,17 +96,25 @@ public struct Profile: Codable, Sendable, Equatable {
     /// (PD-102). Optional for the cache's sake, like the fields above: absent means an older server, and the screen then
     /// offers every way as it always did.
     public let ways: [String]?
+    /// Whether this account may give a contact email — an adult who runs a league or a team (PD-104) — and the one it
+    /// gave. Both optional for the cache's sake; absent reads as "may not", which hides the field rather than offering
+    /// one the server would refuse.
+    public let organiser: Bool?
+    public let contactEmail: String?
 
     public var mayBeListed: Bool { consents?.contains("listing") ?? false }
     public var mayBeShownLive: Bool { consents?.contains("live") ?? false }
+    public var mayGiveContactEmail: Bool { organiser ?? false }
 
     public init(accountId: UUID?, playerId: UUID?, displayName: String?, named: Bool, ageBand: String, credentials: Int?,
-                termsVersion: String? = nil, acceptedTerms: Bool? = nil, consents: [String]? = nil, ways: [String]? = nil) {
+                termsVersion: String? = nil, acceptedTerms: Bool? = nil, consents: [String]? = nil, ways: [String]? = nil,
+                organiser: Bool? = nil, contactEmail: String? = nil) {
         self.accountId = accountId; self.playerId = playerId; self.displayName = displayName
         self.named = named; self.ageBand = ageBand; self.credentials = credentials
         self.termsVersion = termsVersion; self.acceptedTerms = acceptedTerms
         self.consents = consents
         self.ways = ways
+        self.organiser = organiser; self.contactEmail = contactEmail
     }
 }
 
@@ -857,6 +865,12 @@ public actor ThroAPI {
 
     public func setDisplayName(_ name: String) async throws -> Profile {
         let body = try JSONSerialization.data(withJSONObject: ["displayName": name])
+        return try decode(await authorised("PUT", "/v1/me/profile", body: body))
+    }
+
+    /// An organiser's contact email (PD-104). Empty takes it away; the server refuses anybody who may not give one.
+    public func setContactEmail(_ email: String?) async throws -> Profile {
+        let body = try JSONSerialization.data(withJSONObject: ["contactEmail": email ?? ""])
         return try decode(await authorised("PUT", "/v1/me/profile", body: body))
     }
 

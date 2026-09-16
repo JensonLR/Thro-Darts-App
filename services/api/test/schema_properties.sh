@@ -977,6 +977,19 @@ check "and the application role may make one private" "$($PSQL -c "SELECT visibi
 $PSQL -c "SET ROLE app_competition; INSERT INTO safety.decision (report_id, outcome, note, decided_by) VALUES ('$RP','reinstated','renamed, back on the list','$RB');" >/dev/null 2>&1
 check "reinstated is an answer a report can have" "$($PSQL -c "SELECT count(*) FROM safety.decision WHERE report_id='$RP' AND outcome='reinstated';")" "1"
 
+# V049 — an organiser may be reached (PD-104). The column holds one plausible, lower-case address, dated, or
+# nothing; and erasure takes it with the name.
+r=$($PSQL -c "SET ROLE app_competition; UPDATE identity.account SET contact_email='Not An Email', contact_email_set_at=now() WHERE account_id='$RB';" 2>&1)
+if echo "$r" | grep -qi 'contact_email_is_one_address'; then ok "a contact email that is not one is refused"
+else bad "a contact email that is not one is refused" "${r:-an account took a contact email of no shape}"; fi
+r=$($PSQL -c "SET ROLE app_competition; UPDATE identity.account SET contact_email='lee@example.org' WHERE account_id='$RB';" 2>&1)
+if echo "$r" | grep -qi 'contact_email_is_dated'; then ok "and one without the hour it was given is refused"
+else bad "and one without the hour it was given is refused" "${r:-an undated contact email was accepted}"; fi
+$PSQL -c "SET ROLE app_competition; UPDATE identity.account SET contact_email='lee@example.org', contact_email_set_at=now() WHERE account_id='$RB';" >/dev/null 2>&1
+check "the application role gives an organiser an email" "$($PSQL -c "SELECT contact_email FROM identity.account WHERE account_id='$RB';")" "lee@example.org"
+$PSQL -c "SELECT identity.erase_account('$RB');" >/dev/null 2>&1
+check "and erasure takes it with the name" "$($PSQL -c "SELECT coalesce(contact_email,'gone') FROM identity.account WHERE account_id='$RB';")" "gone"
+
 echo
 echo "-------------------------------------------"
 echo "  $PASS passed, $FAIL failed"

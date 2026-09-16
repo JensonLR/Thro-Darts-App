@@ -44,9 +44,13 @@ public class Accounts(
         public data object Expired : Refreshed
     }
 
-    /** [ways] is which kinds of way in the account holds — apple, google, passkey — so a phone can show them by name (PD-102). */
+    /** [ways] is which kinds of way in the account holds — apple, google, passkey — so a phone can show them by name (PD-102).
+     * [organiser] says whether this account may give a contact email (PD-104), and [contactEmail] is the one it gave. */
     public data class Profile(val accountId: UUID, val playerId: UUID?, val displayName: String, val ageBand: String, val named: Boolean, val credentials: Int,
-                              val ways: List<String> = emptyList())
+                              val ways: List<String> = emptyList(), val organiser: Boolean = false, val contactEmail: String? = null)
+
+    /** A contact email refused, in a sentence, with the status that says which kind of refusal (PD-104). */
+    public class ContactRefused(public val why: String, public val status: Int) : IllegalStateException(why)
 
     public companion object {
         public val ACCESS_TTL: Duration = Duration.ofMinutes(15)
@@ -271,14 +275,69 @@ public class Accounts(
     public fun profile(accountId: UUID): Profile? =
         connection.prepareStatement(
             """
-            SELECT a.display_name, a.age_band, c.player_id FROM identity.account a
+            SELECT a.display_name, a.age_band, c.player_id, a.contact_email FROM identity.account a
               LEFT JOIN identity.player_claim c ON c.account_id = a.account_id AND c.revoked_at IS NULL
              WHERE a.account_id = ? AND a.deleted_at IS NULL
             """.trimIndent(),
         ).use { ps ->
             ps.setObject(1, accountId)
-            ps.executeQuery().use { rs -> if (rs.next()) Profile(accountId, rs.getObject(3) as UUID?, rs.getString(1), rs.getString(2), rs.getString(1) != PLACEHOLDER_NAME, credentialCount(accountId), waysIn(accountId)) else null }
+            ps.executeQuery().use { rs ->
+                if (!rs.next()) return null
+                val player = rs.getObject(3) as UUID?
+                val band = rs.getString(2)
+                Profile(accountId, player, rs.getString(1), band, rs.getString(1) != PLACEHOLDER_NAME, credentialCount(accountId), waysIn(accountId),
+                        organiser = band == "adult" && player != null && runsSomething(player), contactEmail = rs.getString(4))
+            }
         }
+
+    /** Whether this player holds a live admin relation on any league season or team — the shape of an organiser (PD-104). */
+    public fun runsSomething(playerId: UUID): Boolean =
+        connection.prepareStatement(
+            "SELECT 1 FROM authz.relation WHERE subject_id = ? AND relation = 'admin' AND object_type IN ('league_season','team') AND revoked_at IS NULL LIMIT 1",
+        ).use { ps -> ps.setObject(1, playerId); ps.executeQuery().use { it.next() } }
+
+    /**
+     * Gives, or takes away, the one piece of contact information THRØ holds (PD-104). Only an adult who runs a league
+     * or a team may give one; anybody may take theirs away. Kept lower-case and trimmed; its shape is the database's
+     * to hold, and a refusal there is answered here as a 400 rather than a fault.
+     */
+    public fun setContactEmail(accountId: UUID, email: String?) {
+        val clean = email?.trim()?.lowercase()?.takeIf { it.isNotEmpty() }
+        if (clean != null) {
+            val p = profile(accountId) ?: throw ContactRefused("no such account", 404)
+            if (p.ageBand != "adult") throw ContactRefused("An email is given by an adult: say you are 18 or over first.", 403)
+            if (p.playerId == null || !runsSomething(p.playerId)) throw ContactRefused("THRØ keeps an email only for somebody who runs a league or a team, so the teams in it can reach them.", 403)
+            if (clean.length > 254 || !Regex("^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$").matches(clean)) throw ContactRefused("That does not look like an email address.", 400)
+        }
+        connection.prepareStatement("UPDATE identity.account SET contact_email = ?, contact_email_set_at = ? WHERE account_id = ? AND deleted_at IS NULL")
+            .use { ps -> ps.setString(1, clean); ps.setObject(2, clean?.let { Timestamp.from(now()) }); ps.setObject(3, accountId); ps.executeUpdate() }
+    }
+
+    /** The contact emails of a season's administrators, for the people entitled to them (PD-104). */
+    public fun organiserContacts(leagueSeasonId: UUID): List<String> =
+        connection.prepareStatement(
+            """
+            SELECT DISTINCT a.contact_email
+              FROM authz.relation r
+              JOIN identity.player_claim c ON c.player_id = r.subject_id AND c.revoked_at IS NULL
+              JOIN identity.account a ON a.account_id = c.account_id AND a.deleted_at IS NULL AND a.suspended_at IS NULL
+             WHERE r.relation = 'admin' AND r.object_type = 'league_season' AND r.object_id = ? AND r.revoked_at IS NULL
+               AND a.contact_email IS NOT NULL
+             ORDER BY a.contact_email
+            """.trimIndent(),
+        ).use { ps -> ps.setString(1, leagueSeasonId.toString()); ps.executeQuery().use { rs -> generateSequence { if (rs.next()) rs.getString(1) else null }.toList() } }
+
+    /** Whether this player administers a team accepted, and still in, this season. */
+    public fun runsATeamIn(playerId: UUID, leagueSeasonId: UUID): Boolean =
+        connection.prepareStatement(
+            """
+            SELECT 1 FROM authz.relation r
+              JOIN competition.team_affiliation ta ON ta.team_id::text = r.object_id AND ta.league_season_id = ?
+                   AND ta.status = 'accepted' AND ta.valid_until IS NULL
+             WHERE r.subject_id = ? AND r.relation = 'admin' AND r.object_type = 'team' AND r.revoked_at IS NULL
+             LIMIT 1
+            """.trimIndent(),
+        ).use { ps -> ps.setObject(1, leagueSeasonId); ps.setObject(2, playerId); ps.executeQuery().use { it.next() } }
 
     /**
      * The kinds of way into an account that are live, each once (PD-102). A count alone left a person who had just added a

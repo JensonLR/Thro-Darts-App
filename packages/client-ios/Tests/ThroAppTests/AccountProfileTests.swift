@@ -105,6 +105,18 @@ final class AccountProfileTests: XCTestCase {
         XCTAssertEqual(older.count, 1)
     }
 
+    // MARK: - reaching an organiser (PD-104)
+
+    func testTheContactEmailFieldIsOfferedOnlyToWhoeverTheServerSaysMayGiveOne() throws {
+        let organiser = #"{"accountId":"aaaaaaaa-0000-0000-0000-000000000001","playerId":null,"displayName":"Lee","named":true,"ageBand":"adult","credentials":1,"organiser":true,"contactEmail":"lee@example.org"}"#
+        let p = try JSONDecoder().decode(Profile.self, from: Data(organiser.utf8))
+        XCTAssertTrue(p.mayGiveContactEmail)
+        XCTAssertEqual(p.contactEmail, "lee@example.org")
+        let player = #"{"accountId":"aaaaaaaa-0000-0000-0000-000000000002","playerId":null,"displayName":"Sam","named":true,"ageBand":"adult","credentials":1,"organiser":false,"contactEmail":null}"#
+        XCTAssertFalse(try JSONDecoder().decode(Profile.self, from: Data(player.utf8)).mayGiveContactEmail, "an adult who runs nothing is not offered the field")
+        XCTAssertFalse(profile(name: "Sam").mayGiveContactEmail, "and a profile from an older server, or an older cache, is not either")
+    }
+
     // MARK: - helpers
 
     private func profile(name: String) -> Profile {

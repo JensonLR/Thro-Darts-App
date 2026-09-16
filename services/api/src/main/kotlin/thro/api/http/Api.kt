@@ -134,7 +134,7 @@ public object Contract {
         Endpoint(
             id = "me.profile", method = "PUT", path = "/v1/me/profile", authenticated = true,
             summary = "Set my display name",
-            request = Schema("""{"type":"object","properties":{"displayName":{"type":"string","maxLength":60},"ageBand":{"type":"string","enum":["adult","minor"],"description":"Self-declared, once asked. Never back to unknown. What unlocks friends (V028) is adult."}}}"""),
+            request = Schema("""{"type":"object","properties":{"displayName":{"type":"string","maxLength":60},"ageBand":{"type":"string","enum":["adult","minor"],"description":"Self-declared, once asked. Never back to unknown. What unlocks friends (V028) is adult."},"contactEmail":{"type":"string","maxLength":254,"description":"PD-104: an organiser's contact email — an adult who runs a league or a team. Empty takes it away. 403 for anybody else, with why."}}}"""),
             description = "A name is the person's to give; it is never taken from a provider's token on their behalf.",
             responses = mapOf(200 to "profile", 400 to "malformed", 401 to "no principal"),
         ),
@@ -483,6 +483,16 @@ public object Contract {
             responses = mapOf(200 to "the team, accepted into the season", 400 to "no name, or divisionId is not a UUID", 401 to "no principal",
                               403 to "you do not administer this league season", 404 to "no such league season",
                               409 to "the season already has a team with that name", 422 to "the division is not this season's, or none was named"),
+        ),
+        Endpoint(
+            id = "seasons.organiser", method = "GET", path = "/v1/seasons/{leagueSeasonId}/organiser", authenticated = true,
+            summary = "How to reach the people running a league season (PD-104)",
+            description = "The contact emails the season's administrators chose to give, for the admins of teams accepted into "
+                + "the season and for the administrators themselves. Nobody else, and never public. An organiser who gave "
+                + "none is not on the list, and a season whose organisers gave none answers an empty list rather than an "
+                + "invented one.",
+            responses = mapOf(200 to "the contacts, possibly none", 400 to "not a UUID", 401 to "no principal",
+                              403 to "you neither run this season nor a team in it", 404 to "no such league season"),
         ),
         Endpoint(
             id = "me.seasons", method = "GET", path = "/v1/me/seasons", authenticated = true,

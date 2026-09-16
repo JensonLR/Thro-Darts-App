@@ -14,7 +14,7 @@ requesting and never reading. Re-check anything marked *(verify again)* before s
 | Category | Collected | Linked to the user | Purpose | Tracking | Checked against |
 |---|---|---|---|---|---|
 | Contact Info → **Name** | **Yes** | Yes | App Functionality | No | `identity.account.display_name` — typed by the player, never taken from a provider |
-| Contact Info → Email | **No** | — | — | — | No email column anywhere in `identity`; `openid` is the only scope requested (PD-063) |
+| Contact Info → Email | **Yes** | Yes | App Functionality | No | `identity.account.contact_email` (V049, PD-104): **optional, and only an adult who runs a league or a team may give one**, so the teams in their league can reach them. Never a player's, never a child's, never public, removable, erased with the account. Still `openid` only from Apple and Google — no email is taken from a provider (PD-063). |
 | Contact Info → Phone, Address, Other | **No** | — | — | — | Same |
 | Health & Fitness | **No** | — | — | — | Nothing of the kind exists |
 | Financial Info | **No** | — | — | — | No payments in the app |
@@ -35,7 +35,8 @@ requesting and never reading. Re-check anything marked *(verify again)* before s
 data from other apps. **No ATT prompt is required**, and the app must not show one.
 
 That is an unusually short list, and it is short because of decisions rather than luck: no analytics was a
-choice, location-on-device was a choice, and no email is now a choice too (PD-063). It is worth keeping —
+choice, location-on-device was a choice, and no email from a provider was a choice too (PD-063); the one email THRØ
+holds is an organiser's, given by them for the teams in their league (PD-104). It is worth keeping —
 the first analytics SDK added to this app turns four "No" rows into "Yes" and puts a nutrition label on the
 store page that says THRØ watches you.
 

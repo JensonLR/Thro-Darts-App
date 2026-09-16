@@ -87,6 +87,9 @@ public struct YourProfileScreen: View {
     @State private var deleting = false
     @State private var showing: Sub?
     @FocusState private var editingName: Bool
+    /// PD-104: an organiser's contact email, typed where it is read and committed when the field is left.
+    @State private var contactEmail: String
+    @FocusState private var editingContact: Bool
     /// PD-050: who this person has asked not to hear from. Owned by this page rather than passed into it,
     /// because the list is read when the page behind the row is opened and is of no use to anything else.
     @StateObject private var safety = SafetyModel()
@@ -109,6 +112,7 @@ public struct YourProfileScreen: View {
         self.picture = picture
         self.onBack = onBack
         _name = State(initialValue: profile.named ? (profile.displayName ?? "") : "")
+        _contactEmail = State(initialValue: profile.contactEmail ?? "")
         _showing = State(initialValue: opening)
     }
 
@@ -165,6 +169,7 @@ public struct YourProfileScreen: View {
                     }
                     band
                     beingSeen
+                    contact
                     CardGroup("Friends") {
                         CardRow(icon: .users, label: "Friends", value: friendsLine) { showing = .friends }
                         CardDivider()
@@ -288,6 +293,45 @@ public struct YourProfileScreen: View {
         let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty, trimmed != (profile.displayName ?? "") else { return }
         Task { await account.setDisplayName(trimmed) }
+    }
+
+    // MARK: - reaching an organiser (PD-104)
+
+    /// The one piece of contact information THRØ holds, offered only to somebody the server says may give it: an adult
+    /// who runs a league or a team. Everybody else never sees the field, because a field the server would refuse is a
+    /// promise the app cannot keep. Typed where it is read and committed when the field is left, like the name.
+    @ViewBuilder var contact: some View {
+        if profile.mayGiveContactEmail {
+            CardGroup("Reaching you",
+                      footnote: "Because you run a league or a team, you may give an email so the teams in your league can reach "
+                          + "you. It is never shown publicly, and it goes with everything else if you delete your account. "
+                          + "Leave it empty to hold none.") {
+                HStack(spacing: ThroSpacing.spacing3) {
+                    TextField("", text: $contactEmail, prompt: Text("your@email").foregroundStyle(ThroColor.throChalk.opacity(0.55)))
+                        .thro(ThroTypography.body)
+                        .foregroundStyle(ThroColor.throChalk)
+                        .tint(ThroColor.throChalk)
+                        .textContentType(.emailAddress)
+                        .emailKeyboard()
+                        .autocorrectionDisabled()
+                        .submitLabel(.done)
+                        .focused($editingContact)
+                        .onSubmit(commitContact)
+                        .accessibilityLabel("Your contact email, for the teams in your league")
+                    if !editingContact {
+                        Icon(.pencilLine, size: 18).foregroundStyle(ThroColor.throChalk.opacity(0.78)).accessibilityHidden(true)
+                    }
+                }
+                .padding(.vertical, ThroSpacing.spacing2)
+            }
+            .onChange(of: editingContact) { was, now in if was && !now { commitContact() } }
+        }
+    }
+
+    private func commitContact() {
+        let trimmed = contactEmail.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        guard trimmed != (profile.contactEmail ?? "") else { return }
+        Task { await account.setContactEmail(trimmed.isEmpty ? nil : trimmed) }
     }
 
     // MARK: - the cards
@@ -549,5 +593,17 @@ public struct DeleteAccountScreen: View {
                 problem = why
             }
         }
+    }
+}
+
+// The email keyboard and no auto-capitals are iOS-only modifiers, and this package also builds for macOS (where the
+// screens are compiled but never shown) — so they are applied on the phone and are nothing elsewhere.
+private extension View {
+    @ViewBuilder func emailKeyboard() -> some View {
+        #if os(iOS)
+        self.keyboardType(.emailAddress).textInputAutocapitalization(.never)
+        #else
+        self
+        #endif
     }
 }

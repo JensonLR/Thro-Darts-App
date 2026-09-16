@@ -172,6 +172,12 @@ public final class AccountStore: ObservableObject {
         }
     }
 
+    /// An organiser's contact email (PD-104): given, changed, or taken away with nil. The server's refusal, if any,
+    /// arrives as `problem` on the page that asked.
+    public func setContactEmail(_ email: String?) async {
+        await change(email == nil ? "Removing your contact email" : "Saving your contact email") { try await api.setContactEmail(email) }
+    }
+
     public func setDisplayName(_ name: String) async {
         let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }

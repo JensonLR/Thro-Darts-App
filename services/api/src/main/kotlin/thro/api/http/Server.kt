@@ -183,7 +183,13 @@ public fun Application.thro(deps: Deps) {
                 val m = Json.parseObject(r.body)
                 (m["displayName"] as? String)?.let { Accounts(r.connection(), deps.now).setDisplayName(account, it) }
                 (m["ageBand"] as? String)?.let { Friends(r.connection(), deps.now).declareAge(account, it) }
-                if (m["displayName"] == null && m["ageBand"] == null) Http(400, """{"error":"displayName or ageBand"}""") else profile(r.connection(), deps, r.principal!!)
+                // PD-104: an organiser's contact email. Present and empty takes it away; absent leaves it alone.
+                val contact = m.containsKey("contactEmail")
+                if (contact) {
+                    try { Accounts(r.connection(), deps.now).setContactEmail(account, m["contactEmail"] as? String) }
+                    catch (e: Accounts.ContactRefused) { return@to Http(e.status, """{"error":${Contract.q(e.why)}}""") }
+                }
+                if (m["displayName"] == null && m["ageBand"] == null && !contact) Http(400, """{"error":"displayName, ageBand or contactEmail"}""") else profile(r.connection(), deps, r.principal!!)
             }
         },
         "teams.create" to { r -> teamly { val m = Json.parseObject(r.body); Teams(r.connection(), deps.now).let { Http(200, it.json(it.create(r.principal!!.subject, str(m, "name"), m["locality"] as? String))) } } },
@@ -460,6 +466,20 @@ public fun Application.thro(deps: Deps) {
             }
         },
         "me.seasons" to { r -> SeasonPlanning(r.connection()).let { Http(200, it.runsJson(it.seasonsRunBy(r.principal!!.subject))) } },
+        // PD-104: how the teams in a league reach the person running it. The season is looked for first (a mistyped
+        // address is a 404, not a refusal); then the caller must administer the season, or a team accepted into it.
+        "seasons.organiser" to { r ->
+            val season = UUID.fromString(r.call.parameters["leagueSeasonId"])
+            val accounts = Accounts(r.connection(), deps.now)
+            if (!Fixtures(r.connection()).seasonExists(season)) Http(404, """{"error":"THRØ has no such league season."}""")
+            else {
+                val me = r.principal!!.subject
+                val allowed = accounts.runsATeamIn(me, season)
+                    || Relations(r.connection()).decide(me, "league_season.administer", ObjectRef(ObjectType.LEAGUE_SEASON, season.toString())).allowed
+                if (!allowed) Http(403, """{"error":"The organiser's contact is for the teams in this season and the people who run it."}""")
+                else Http(200, """{"contacts":[${accounts.organiserContacts(season).joinToString(",") { """{"email":${Contract.q(it)}}""" }}]}""")
+            }
+        },
         "seasons.fixtures.schedule" to { r ->
             val season = UUID.fromString(r.call.parameters["leagueSeasonId"])
             val planning = SeasonPlanning(r.connection())
@@ -852,7 +872,7 @@ private fun profile(c: Connection, deps: Deps, p: Principal): Http {
     // to go and ask for separately is a fact some build ships without.
     val given = Consent(c, deps.now).given(account)
     val consents = given.joinToString(",") { Contract.q(it.stored) }
-    return Http(200, """{"accountId":"${pr.accountId}","playerId":${pr.playerId?.let { "\"$it\"" } ?: "null"},"displayName":${Contract.q(pr.displayName)},"named":${pr.named},"ageBand":${Contract.q(pr.ageBand)},"credentials":${pr.credentials},"ways":[${pr.ways.joinToString(",") { Contract.q(it) }}],$terms,"acceptedTerms":$accepted,"consents":[$consents]}""")
+    return Http(200, """{"accountId":"${pr.accountId}","playerId":${pr.playerId?.let { "\"$it\"" } ?: "null"},"displayName":${Contract.q(pr.displayName)},"named":${pr.named},"ageBand":${Contract.q(pr.ageBand)},"credentials":${pr.credentials},"ways":[${pr.ways.joinToString(",") { Contract.q(it) }}],"organiser":${pr.organiser},"contactEmail":${pr.contactEmail?.let { Contract.q(it) } ?: "null"},$terms,"acceptedTerms":$accepted,"consents":[$consents]}""")
 }
 
 /**

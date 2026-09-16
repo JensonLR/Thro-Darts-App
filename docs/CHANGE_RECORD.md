@@ -5712,3 +5712,28 @@ what is built and what still waits on the mailbox.
 deployed the commit and saw it answer at V048; Neon lists that branch, the pipeline's two before it, and both hand-made
 restore points, with the oldest pipeline one removed as PD-095 says. `/healthz` answers database ok, V048, V048,
 75c1776. `thro.uk/thro.js` holds `leagueSection` and the `reinstated` answer.
+
+## An organiser may be reached (V049, PD-104)
+
+**Test first.** `OrganiserContactTest`, over HTTP with three accounts signed in by Apple token: an account of unknown
+age is refused with "18 or over"; an adult who runs nothing is refused and told what would let them; a shape that is
+not an email, and one too long, are 400; the league's organiser gives one, kept lower-case and trimmed, and the
+profile carries it with `organiser: true`; a team's admin may too; the season's contact needs a principal, refuses a
+stranger and a team still waiting, answers the admin of an accepted team and the organiser; a season nobody has is a
+404; the public league front carries no email; an empty email takes it away; a season whose organisers gave none says
+`contacts: []`; erasing the account takes the email. It failed first on its first check, the field being unknown;
+17 checks pass.
+
+**V049.** `identity.account.contact_email` and `contact_email_set_at`, both or neither, the address lower-case and of
+one plausible shape by CHECK; `app_competition` may update the two columns; `identity.erase_account` replaced with V033's
+body plus `contact_email = NULL` in step 7. Four schema properties added. `check_migrations.py` passes.
+
+**The code.** `Accounts.setContactEmail` (adult, runs a season or team, shape), `organiserContacts`, `runsATeamIn`;
+the profile carries `organiser` and `contactEmail`; `PUT /v1/me/profile` takes `contactEmail`, empty to remove;
+`GET /v1/seasons/{id}/organiser` for the season's administrators and its accepted teams' admins. The phone's `Profile`
+takes both fields (optional, absent reads as *may not*), `API.setContactEmail`, `AccountStore.setContactEmail`, and
+*Reaching you* on the person's own page, shown only when `organiser` is true; a decode test holds the three cases.
+
+**The words.** `privacy.html` (three passages), `terms.html`, `STORE_ANSWERS.md` (Contact Info → Email is now *Yes*,
+scoped), `DPIA.md` (the shape, the breach severity, the minimisation row), `ROPA.md` (the opening claim and the
+account row), `MAILBOX.md`'s reply template. Phone numbers were declined and the decision says why.

@@ -4601,3 +4601,32 @@ from the moment it was started, with no way to rename, hide or end it — the fo
 - A private league's season pages (fixtures, table, live) still answer to anybody holding the season id. Nothing links
   to them, and the id is unguessable; a league that must be unreachable rather than unlisted is a later decision.
 - Suspension has no term. A moderator reinstates, or does not.
+
+## PD-104 — An organiser may be reached
+
+**16 September 2026.** THRØ held no email address for anybody (PD-063), and said so in the privacy notice, the store
+answers, the DPIA and the ROPA. The founder asked for email and phone, "especially for leagues". Phone was declined:
+it costs (SMS), has no use here, and is a stronger identifier to protect. Email was scoped to the one kind of person
+who needs to be reachable.
+
+### Decided
+
+- **An adult who runs a league or a team may give a contact email**; nobody else can, and a child never can. "Runs"
+  is a live `admin` relation on a league season or a team; "adult" is the age band. Optional, theirs to remove, kept
+  lower-case, one address of a plausible shape (the database holds the shape; the application holds who).
+- **Who sees it**: the admins of teams accepted into that organiser's season, and the season's other administrators,
+  at `GET /v1/seasons/{id}/organiser`. It is on no public surface and in no public JSON; a test holds `/v1/leagues`
+  carries none.
+- **Erasure takes it** with the name: `identity.erase_account` is replaced with one more line (V049).
+- **The phone offers the field only when the server says it may** (`organiser` on the profile), under *Reaching you*
+  on the person's own page, committed on leaving the field like the name.
+- **The notice, the terms, the store answers, the DPIA and the ROPA say so**, precisely: no phone for anybody, no email
+  for players or children, one optional email for an adult organiser, with who sees it and when it goes.
+- **Not verified, and not used for recovery.** THRØ sends no mail yet, so an address is what the person typed; the
+  terms still say a lost sign-in is a lost account.
+
+### Not decided here
+
+- Sending mail (a code for OD-025's hand-over, a reminder). That needs an outbound sender and its processor terms.
+- Verifying the address. Until mail is sent, a typo is the organiser's to notice.
+- A contact for a team's admin shown to the league. The organiser's is the one asked for; the reverse can follow.

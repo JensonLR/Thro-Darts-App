@@ -16,8 +16,10 @@ the foot. Nothing here is legal advice.
 
 ## What is held, and where
 
-THRØ's shape is unusual and it is the first thing an assessor should be told: **there is no email address,
-no phone number, no postal address and no date of birth anywhere in the system.** That is not a claim about
+THRØ's shape is unusual and it is the first thing an assessor should be told: **there is no phone number, no
+postal address and no date of birth anywhere in the system, and no email address for any player or child** — the
+one email held is an adult organiser's, given by them so the teams in their league can reach them (PD-104, V049,
+16 September 2026). That is not a claim about
 policy, it is a claim about the schema, and it was checked by querying every column in every schema for
 those names. The only postcode is a **venue's** — a pub's address, which is not personal data about a
 player.
@@ -28,7 +30,7 @@ player.
 | --- | --- |
 | **Purpose** | To let a person be the same person across devices, and to let a result be attributed. |
 | **Lawful basis** | Contract (Art 6(1)(b)) for the account itself. |
-| **Categories of data** | `account_id` (a UUID THRØ generates), `display_name` (typed by the person), `age_band` (`unknown` / `minor` / `adult`), `age_assurance` (`none` / `self_declared` / `guardian_declared` / `verified`), `consent_basis` (`self` / `guardian` / `none`), `created_via`, `user_handle` (an opaque WebAuthn identifier), timestamps. |
+| **Categories of data** | `account_id` (a UUID THRØ generates), `display_name` (typed by the person), `age_band` (`unknown` / `minor` / `adult`), `age_assurance` (`none` / `self_declared` / `guardian_declared` / `verified`), `consent_basis` (`self` / `guardian` / `none`), `created_via`, `user_handle` (an opaque WebAuthn identifier), timestamps; and for an adult who runs a league or a team, an optional `contact_email` with the hour it was given (PD-104), shown only to the season's administrators and the admins of its accepted teams, removable, erased with the account. |
 | **Sign-in credentials** | For Apple or Google: the **provider's subject identifier only** — a pseudonymous string specific to THRØ. THRØ asks for no email, no name, no profile. For a passkey: a public key and a signature counter. Tokens are stored **hashed**. |
 | **Data subjects** | Players, including children. |
 | **Recipients** | Apple and Google, as identity providers, at the moment of sign-in only. |

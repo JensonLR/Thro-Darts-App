@@ -63,8 +63,8 @@ A mailbox with nobody's words in it is worse than no mailbox, because the clock 
 > Thanks for writing. This is confirmation that THRØ has received your request and will answer it within one
 > calendar month, as UK GDPR requires.
 >
-> One thing worth saying now, because it usually shortens the answer: THRØ holds no email address and no
-> phone number for any player — there is nowhere in the app to put one. What it holds is the name you typed,
+> One thing worth saying now, because it usually shortens the answer: THRØ holds no phone number for anybody
+> and no email address for any player — only an organiser who chose to give one. What it holds is the name you typed,
 > how you signed in, and the darts you threw. If you want all of it gone, the account deletion page removes
 > it without needing this correspondence at all: https://thro.uk/delete-account
 >
