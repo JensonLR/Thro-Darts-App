@@ -119,6 +119,28 @@ public object Contract {
             responses = mapOf(200 to sessionResponse, 400 to "malformed", 401 to "unknown, expired, or reused (the family is now revoked)", 429 to "too many attempts from this address or device; Retry-After says when"),
         ),
         Endpoint(
+            id = "auth.link.start", method = "POST", path = "/v1/auth/link", authenticated = false,
+            summary = "A screen asks to be signed in by the phone that holds the account (PD-114)",
+            request = Schema("""{"type":"object","required":["deviceId"],"properties":{"deviceId":{"type":"string","format":"uuid","description":"This screen's device id; the session that results is bound to it."}}}"""),
+            description = "Returns a six-character code (no look-alikes) to show, a link to poll, and when the code expires (five minutes). "
+                + "The person types the code into the app they are signed in on; nothing here is a password.",
+            responses = mapOf(200 to "linkId, code, expiresAt", 400 to "no device id", 429 to "too many attempts from this address or device; Retry-After says when"),
+        ),
+        Endpoint(
+            id = "auth.link.approve", method = "POST", path = "/v1/auth/link/{code}/approve", authenticated = true,
+            summary = "The signed-in phone approves a screen's code (PD-114)",
+            description = "Binds the code to this account and the credential it last signed in with; the screen then collects a session of its own. "
+                + "Read however it is typed. A code THRØ does not have, or that expired, is a 404; one already approved a 409.",
+            responses = mapOf(200 to "approved", 401 to "no principal", 403 to "this account is suspended", 404 to "no such code, or expired", 409 to "already approved"),
+        ),
+        Endpoint(
+            id = "auth.link.claim", method = "GET", path = "/v1/auth/link/{linkId}", authenticated = false,
+            summary = "The screen collects its session, once (PD-114)",
+            query = listOf("deviceId" to "the device id the screen asked with; another device's ask is a 404"),
+            description = "202 while the phone has not spoken; 200 with the session once it has, once only; 410 after that, or once the code has expired.",
+            responses = mapOf(200 to sessionResponse, 202 to "waiting for the phone", 400 to "no device id", 404 to "no such link for this device", 410 to "used or expired; ask for a new code"),
+        ),
+        Endpoint(
             id = "auth.logout", method = "POST", path = "/v1/auth/logout", authenticated = true,
             summary = "End this session family", description = "Revokes the family the presented access token belongs to; its access and refresh tokens stop working.",
             responses = mapOf(200 to "revoked", 401 to "no principal"),

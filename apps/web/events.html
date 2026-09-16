@@ -14,7 +14,8 @@
     <a class="brand-link" href="index.html"><img class="brand" src="wordmark.svg" alt="THRØ" width="428" height="134"></a>
     <p class="eyebrow" id="eyebrow">Run a knockout</p>
     <p class="wordmark" id="title" style="font-size:28px">Events</p>
-  </div>
+    <div id="nav"></div>
+</div>
 </header>
 <main class="measure">
   <div id="signin"></div>
@@ -27,6 +28,7 @@
 </footer>
 <script src="thro.js"></script>
 <script>
+  THRO.mountNav(document.getElementById('nav'));
   THRO.mountEvents(document.getElementById('events'), document.getElementById('signin'));
 </script>
 </body>

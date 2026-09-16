@@ -93,6 +93,9 @@ public struct YourProfileScreen: View {
     /// PD-050: who this person has asked not to hear from. Owned by this page rather than passed into it,
     /// because the list is read when the page behind the row is opened and is of no use to anything else.
     @StateObject private var safety = SafetyModel()
+    @State private var screenCode = ""
+    @State private var screenNote: String?
+    @State private var approving = false
 
     /// The lists that used to live behind a separate Account screen, and the blocked list that has joined
     /// them (PD-050). They are about the person, so they are reached from the page about the person.
@@ -179,6 +182,7 @@ public struct YourProfileScreen: View {
                         CardRow(icon: .shield, label: "Blocked", value: blockedLine) { showing = .blocked }
                     }
                     waysIn
+                    signInAScreen
                     CardGroup("From THRØ") {
                         CardRow(icon: .bell, label: "Your inbox", value: "Tasks waiting on you") { showing = .inbox }
                         CardDivider()
@@ -445,22 +449,65 @@ public struct YourProfileScreen: View {
             : "\(n) ways into this account. If one is lost, another still gets you in."
     }
 
+    /// The ways in, as `WaysIn` reads them from the profile (PD-102): each way held is named as held, and only what is
+    /// missing is offered. The card used to offer every way whatever the account held, which read as though nothing
+    /// had been added; the founder saw it and said so.
     private var waysIn: some View {
-        CardGroup("Ways in", footnote: YourProfileScreen.waysInNote(profile.credentials ?? 1)) {
-            CardRow(icon: .lock, label: "Add a passkey", leads: false) { Task { await account.usePasskey() } }
-            CardDivider()
-            // Apple's own mark, as Sign in with Apple requires of a control that starts it.
-            CardRow(icon: nil, symbol: "apple.logo", label: "Add Sign in with Apple", leads: false) {
-                Task { await account.signInWithApple() }
+        let ways = WaysIn(profile: profile)
+        let offered = ways.offers(googleConfigured: account.configuration.googleClientID != nil)
+        return CardGroup("Ways in", footnote: YourProfileScreen.waysInNote(ways.count)) {
+            ForEach(Array(ways.held.enumerated()), id: \.offset) { i, way in
+                if i > 0 { CardDivider() }
+                CardRow(icon: way == .apple ? nil : (way == .passkey ? .lock : .user), symbol: way == .apple ? "apple.logo" : nil,
+                        label: YourProfileScreen.heldLabel(way), value: "On this account", leads: false) {}
+                    .accessibilityAddTraits(.isStaticText)
             }
-            if account.configuration.googleClientID != nil {
-                CardDivider()
-                CardRow(icon: .user, label: "Add Sign in with Google", leads: false) {
-                    Task { await account.signInWithGoogle() }
+            ForEach(Array(offered.enumerated()), id: \.offset) { i, way in
+                if i > 0 || !ways.held.isEmpty { CardDivider() }
+                switch way {
+                case .passkey:
+                    CardRow(icon: .lock, label: ways.has(.passkey) ? "Add a passkey on this phone" : "Add a passkey", leads: false) { Task { await account.usePasskey() } }
+                case .apple:
+                    // Apple's own mark, as Sign in with Apple requires of a control that starts it.
+                    CardRow(icon: nil, symbol: "apple.logo", label: "Add Sign in with Apple", leads: false) { Task { await account.signInWithApple() } }
+                case .google:
+                    CardRow(icon: .user, label: "Add Sign in with Google", leads: false) { Task { await account.signInWithGoogle() } }
                 }
             }
         }
         .disabled(account.working != nil)
+    }
+
+    /// A screen — the league's laptop, the pub's browser — signs in by this phone (PD-114): the screen shows a code,
+    /// the person types it here, and the screen is signed in as this account. No password, nothing to remember.
+    private var signInAScreen: some View {
+        CardGroup("Sign in on a screen", footnote: "On thro.uk, choose Sign in with your phone. It shows a six-character code; type it here and that screen is signed in as you.") {
+            VStack(alignment: .leading, spacing: ThroSpacing.spacing2) {
+                ThroTextField("The code on the screen", text: $screenCode, placeholder: "K7TQ2M")
+                    #if os(iOS)
+                    .textInputAutocapitalization(.characters)
+                    .autocorrectionDisabled()
+                    #endif
+                ThroButton("Sign that screen in", variant: .primary, size: .medium) { Task { await approveScreen() } }
+                    .disabled(screenCode.trimmingCharacters(in: .whitespaces).count < 6 || account.working != nil || approving)
+                if let screenNote { Note(screenNote) }
+            }
+            .padding(ThroSpacing.spacing4)
+        }
+    }
+
+    private func approveScreen() async {
+        approving = true; defer { approving = false }
+        do { try await account.api.approveScreen(code: screenCode); screenNote = "Done — that screen is signed in as you."; screenCode = "" }
+        catch { screenNote = (error as? APIError)?.message ?? error.localizedDescription }
+    }
+
+    static func heldLabel(_ way: WayIn) -> String {
+        switch way {
+        case .passkey: return "Passkey"
+        case .apple: return "Sign in with Apple"
+        case .google: return "Sign in with Google"
+        }
     }
 
     private var leaving: some View {

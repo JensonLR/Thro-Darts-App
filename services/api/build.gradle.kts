@@ -35,12 +35,20 @@ tasks.test {
     }
 }
 
-// `gradle -p services/api run` starts the playtest harness. The database settings come from the
-// environment so that no connection detail is ever committed.
+// The playtest harness lives in its own source set, compiled against main and never into the image:
+// `installDist` packages main alone, so a deployment cannot start it and does not carry it. `gradle -p
+// services/api run` still starts it locally. The database settings come from the environment so that no
+// connection detail is ever committed.
+val playtest: SourceSet by sourceSets.creating {
+    compileClasspath += sourceSets["main"].output + sourceSets["main"].compileClasspath
+    runtimeClasspath += sourceSets["main"].output + sourceSets["main"].runtimeClasspath
+}
 application {
-    mainClass.set("thro.api.PlaytestServer")
+    mainClass.set("thro.api.http.MainKt")
 }
 tasks.named<JavaExec>("run") {
+    classpath = playtest.runtimeClasspath
+    mainClass.set("thro.api.PlaytestServer")
     standardInput = System.`in`
     for (v in listOf("PGHOST", "PGPORT", "PGUSER", "PGDATABASE", "PORT")) {
         System.getenv(v)?.let { environment(v, it) }

@@ -27,21 +27,31 @@
     <p class="eyebrow">Local darts</p>
     <p class="lede">The leagues THRØ knows, their teams, and their tables — worked out from the results
       beneath them rather than kept as a table of their own.</p>
+    <div id="nav"></div>
   </div>
 </header>
 <main class="measure">
   <div id="notice"></div>
-  <label for="q" class="quiet">Find a league by name or town</label>
+  <h2 style="margin-top:0">What do you want to do?</h2>
+  <div class="cards">
+    <a class="card" href="#find"><h3>Find your league</h3><p>Tables worked out from results, fixtures, and who plays where.</p><span class="go">Search below →</span></a>
+    <a class="card" href="organiser.html"><h3>Run a league</h3><p>Fixtures, results, registrations, requests to move a game — the secretary's desk, on any screen.</p><span class="go">Open the desk →</span></a>
+    <a class="card" href="events.html"><h3>Run a knockout</h3><p>Open an event, take entries, draw the rounds through to the final.</p><span class="go">Open an event →</span></a>
+    <a class="card" href="tv.html"><h3>Put THRØ on a pub screen</h3><p>Tonight's games and the table on the telly, with no box to buy.</p><span class="go">Set up a screen →</span></a>
+  </div>
+  <h2 id="find">Find a league</h2>
+  <label for="q" class="quiet">By name or town</label>
   <input id="q" type="search" placeholder="Stockton, Teesside, Thursday…" autocomplete="off">
   <p id="count" class="quiet" style="margin-top:8px"></p>
   <ul class="rows" id="leagues"></ul>
 </main>
 <footer class="measure">
-  <p>THRØ is a darts app for iPhone. <a href="organiser.html">Run a league</a> · <a href="events.html">Run a knockout</a> · <a href="tv.html">Put THRØ on a pub screen</a> · <a href="delete-account.html">Delete your account</a> · <a href="privacy.html">Privacy</a> · <a href="terms.html">Terms</a> ·
+  <p>THRØ is a darts app for iPhone. <a href="privacy.html">Privacy</a> · <a href="terms.html">Terms</a> · <a href="delete-account.html">Delete your account</a> ·
      <a href="under-18.html">If you're under 18</a></p>
 </footer>
 <script src="thro.js"></script>
 <script>
+  THRO.mountNav(document.getElementById('nav'));
   THRO.mountNoticeBanner(document.getElementById('notice'));
   THRO.mountLeagues(document.getElementById('leagues'), document.getElementById('q'), document.getElementById('count'));
 </script>

@@ -207,6 +207,66 @@ public class Accounts(
         return issue(familyId, accountId, created)
     }
 
+    // --- a screen signs in by the phone that holds the account (PD-114) ----------------------------------------------
+
+    public data class Link(val linkId: UUID, val code: String, val expiresAt: Instant)
+    public class LinkNotFound : Exception("no such code, or it has expired")
+    public class LinkAlreadyApproved : Exception("this code was already approved")
+    public class LinkSpent : Exception("this link was collected, or expired; ask for a new code")
+    public class LinkWaiting : Exception("waiting for the phone")
+
+    private val linkAlphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
+    /** How long a screen's code lives unapproved. */
+    private val linkTtl: Duration = Duration.ofMinutes(5)
+
+    /** A screen asks: a code to show, a link to poll. Expired rows are swept as it is minted. */
+    public fun startLink(deviceId: UUID): Link {
+        connection.prepareStatement("DELETE FROM identity.device_link WHERE expires_at < ? AND claimed_at IS NULL")
+            .use { ps -> ps.setObject(1, Timestamp.from(now().minus(Duration.ofHours(1)))); ps.executeUpdate() }
+        val id = UUID.randomUUID()
+        val expires = now().plus(linkTtl)
+        repeat(8) {
+            val code = (1..6).map { linkAlphabet[random.nextInt(linkAlphabet.length)] }.joinToString("")
+            try {
+                connection.prepareStatement("INSERT INTO identity.device_link (link_id, code, device_id, expires_at) VALUES (?, ?, ?, ?)")
+                    .use { ps -> ps.setObject(1, id); ps.setString(2, code); ps.setObject(3, deviceId); ps.setObject(4, Timestamp.from(expires)); ps.executeUpdate() }
+                return Link(id, code, expires)
+            } catch (e: org.postgresql.util.PSQLException) { /* a live code collided; draw again */ }
+        }
+        throw IllegalStateException("could not mint a link code")
+    }
+
+    /** The signed-in phone approves a code: the link is bound to its account and the credential it last used. */
+    public fun approveLink(code: String, accountId: UUID) {
+        val normalised = code.trim().uppercase()
+        val row = connection.prepareStatement("SELECT link_id, expires_at, approved_at, claimed_at FROM identity.device_link WHERE code = ? AND claimed_at IS NULL ORDER BY created_at DESC LIMIT 1")
+            .use { ps -> ps.setString(1, normalised); ps.executeQuery().use { rs -> if (rs.next()) Triple(rs.getObject(1) as UUID, rs.getTimestamp(2).toInstant(), rs.getTimestamp(3)) else null } }
+            ?: throw LinkNotFound()
+        if (row.second.isBefore(now())) throw LinkNotFound()
+        if (row.third != null) throw LinkAlreadyApproved()
+        if (isSuspended(accountId)) throw AccountSuspended()
+        val credential = connection.prepareStatement("SELECT credential_id FROM identity.credential WHERE account_id = ? AND revoked_at IS NULL ORDER BY last_used_at DESC NULLS LAST LIMIT 1")
+            .use { ps -> ps.setObject(1, accountId); ps.executeQuery().use { rs -> if (rs.next()) rs.getObject(1) as UUID else null } }
+            ?: throw LinkNotFound()
+        val n = connection.prepareStatement("UPDATE identity.device_link SET approved_account_id = ?, approved_credential_id = ?, approved_at = ? WHERE link_id = ? AND approved_at IS NULL")
+            .use { ps -> ps.setObject(1, accountId); ps.setObject(2, credential); ps.setObject(3, Timestamp.from(now())); ps.setObject(4, row.first); ps.executeUpdate() }
+        if (n == 0) throw LinkAlreadyApproved()
+    }
+
+    /** The screen collects: a session of its own, once, on the device that asked. */
+    public fun claimLink(linkId: UUID, deviceId: UUID): Session = transaction {
+        val row = connection.prepareStatement("SELECT device_id, expires_at, approved_account_id, approved_credential_id, claimed_at FROM identity.device_link WHERE link_id = ? FOR UPDATE")
+            .use { ps -> ps.setObject(1, linkId); ps.executeQuery().use { rs -> if (rs.next()) listOf(rs.getObject(1), rs.getTimestamp(2), rs.getObject(3), rs.getObject(4), rs.getTimestamp(5)) else null } }
+            ?: throw LinkNotFound()
+        if (row[0] != deviceId) throw LinkNotFound()
+        if (row[4] != null) throw LinkSpent()
+        if ((row[1] as Timestamp).toInstant().isBefore(now())) throw LinkSpent()
+        val account = row[2] as UUID? ?: throw LinkWaiting()
+        connection.prepareStatement("UPDATE identity.device_link SET claimed_at = ? WHERE link_id = ?")
+            .use { ps -> ps.setObject(1, Timestamp.from(now())); ps.setObject(2, linkId); ps.executeUpdate() }
+        openFamily(row[3] as UUID, account, deviceId, created = false)
+    }
+
     /** How many live credentials an account has — the recovery question PD-032 asks. */
     public fun credentialCount(accountId: UUID): Int =
         connection.prepareStatement("SELECT count(*) FROM identity.credential WHERE account_id = ? AND revoked_at IS NULL")

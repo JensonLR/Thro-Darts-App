@@ -92,7 +92,9 @@ async function mountLeagues(listEl, searchEl, countEl) {
     const shown = q ? leagues.filter(l => l.name.toLowerCase().includes(q) || (l.locality || '').toLowerCase().includes(q)) : leagues;
     const many = n => `${n} league${n === 1 ? '' : 's'}`;
     countEl.textContent = q ? `${shown.length} of ${many(leagues.length)}` : many(leagues.length);
-    listEl.replaceChildren(...shown.slice(0, 200).map(l => {
+    // A few until a name is typed: three hundred leagues in a column is a wall, not a way in.
+    const limit = q ? 200 : 8;
+    listEl.replaceChildren(...shown.slice(0, limit).map(l => {
       const li = make('li');
       const season = l.seasons && l.seasons[0];
       const a = make('a');
@@ -103,6 +105,12 @@ async function mountLeagues(listEl, searchEl, countEl) {
       li.append(a);
       return li;
     }));
+    if (!q && shown.length > 8) {
+      const more = make('li', 'more');
+      const btn = make('button', 'quiet-button', `Show all ${shown.length} leagues`);
+      btn.onclick = () => { listEl.replaceChildren(...shown.map(l => { const a = make('a', 'row-name', l.name); a.href = `table.html?season=${encodeURIComponent((l.seasons && l.seasons[0] || {}).leagueSeasonId || '')}`; const li = make('li'); li.append(a, make('div', 'row-meta', leagueMeta(l))); return li; })); };
+      more.append(btn); listEl.append(more);
+    }
     if (!shown.length) listEl.replaceChildren(make('li', null, ''), text(make('p', 'quiet'), 'No league here by that name.'));
   };
   searchEl.addEventListener('input', draw);
@@ -379,16 +387,67 @@ function signOut() { session.clear(); }
  * The sign-in gate every signed-in page shares: a passkey button when nobody is signed in, a sign-out button when
  * somebody is. Answers whether the page may go on to draw.
  */
+/**
+ * Signing in on a screen (PD-114). The phone holds the account, so the screen asks THRØ for a six-character code, the
+ * person types it into the app, and this screen is signed in as them — no password, nothing to remember. A passkey is
+ * the second way in, for anybody who made one in the app.
+ */
+let linkPolling = null;
+function signInPanel(redraw) {
+  const box = make('div', 'entry signin');
+  box.append(make('h2', null, 'Sign in with your phone'));
+  const code = make('p', 'code', '······');
+  code.setAttribute('aria-live', 'polite');
+  const steps = make('ol', 'steps');
+  for (const step of ['Open THRØ on your phone', 'You → Profile → Sign in on a screen', 'Type this code']) steps.append(make('li', null, step));
+  const said = make('p', 'quiet', 'Asking THRØ for a code…');
+  const again = make('button', 'quiet-button', 'New code'); again.hidden = true;
+  const acts = make('div', 'acts');
+  const passkey = make('button', 'quiet-button', 'Use a passkey instead');
+  passkey.onclick = async () => {
+    passkey.disabled = true;
+    try { await signInWithPasskey(); clearInterval(linkPolling); await redraw(); }
+    catch (e) { said.textContent = e.message; passkey.disabled = false; }
+  };
+  acts.append(again, passkey);
+  box.append(code, steps, said, acts);
+
+  const ask = async () => {
+    clearInterval(linkPolling);
+    again.hidden = true;
+    try {
+      const link = await post('/v1/auth/link', { deviceId: deviceId() });
+      code.textContent = link.code.split('').join(' ');
+      const until = new Date(link.expiresAt);
+      const tick = () => {
+        const left = Math.max(0, Math.round((until - Date.now()) / 1000));
+        said.textContent = left > 0 ? `Good for ${Math.floor(left / 60)}:${String(left % 60).padStart(2, '0')} more.` : 'That code has expired.';
+        if (left <= 0) { clearInterval(linkPolling); again.hidden = false; code.textContent = '······'; }
+      };
+      tick();
+      linkPolling = setInterval(async () => {
+        tick();
+        try {
+          const res = await fetch(`${API}/v1/auth/link/${encodeURIComponent(link.linkId)}?deviceId=${encodeURIComponent(deviceId())}`, { headers: { Accept: 'application/json' } });
+          if (res.status === 200) {
+            clearInterval(linkPolling);
+            session.set(await res.json());
+            await redraw();
+          } else if (res.status === 410 || res.status === 404) {
+            clearInterval(linkPolling); said.textContent = 'That code has expired.'; again.hidden = false; code.textContent = '······';
+          }
+        } catch { /* a missed poll is nothing; the next one asks again */ }
+      }, 2500);
+    } catch (e) { said.textContent = e.message; again.hidden = false; }
+  };
+  again.onclick = ask;
+  ask();
+  return box;
+}
+
 function signInGate(signInEl, where, prompt, redraw) {
   if (!session.get()) {
-    signInEl.replaceChildren(make('p', 'quiet', 'Signing in uses a passkey — the same one the app uses. Nothing is typed.'));
-    const button = make('button', 'primary', 'Sign in with a passkey');
-    button.onclick = async () => {
-      button.disabled = true;
-      try { await signInWithPasskey(); await redraw(); }
-      catch (e) { signInEl.append(make('p', 'note', e.message)); button.disabled = false; }
-    };
-    signInEl.append(button);
+    signInEl.replaceChildren(signInPanel(redraw));
     where.replaceChildren(make('p', 'quiet', prompt));
     return false;
   }
@@ -1655,14 +1714,29 @@ async function mountEvent(where, signInEl, eventId) {
       }
       parts.push(box);
     } else if (!session.get()) {
-      parts.push(make('p', 'quiet', 'Run this event? Sign in with the passkey the app uses.'));
-      const button = make('button', 'quiet-button', 'Sign in with a passkey');
-      button.onclick = async () => { button.disabled = true; try { await signInWithPasskey(); await draw(); } catch (err) { parts.push(make('p', 'note', err.message)); button.disabled = false; } };
-      parts.push(button);
+      parts.push(make('p', 'quiet', 'Run this event? Sign in and its controls appear here.'), signInPanel(draw));
     }
     where.replaceChildren(...parts);
   };
   await draw();
 }
 
-window.THRO = { mountLeagues, mountTable, mountFixtures, mountOrganiser, mountModeration, mountEvents, mountNotice, mountNoticeBanner, signInWithPasskey, whoAmI, signOut, session, authorised, passkeysPossible };
+/**
+ * The site's places, on every page, in the header: what a person can do here. The current page is marked, the sign-in
+ * state is said, and nothing is a footnote. The footer keeps the legal words.
+ */
+function mountNav(where) {
+  const here = location.pathname.split('/').pop() || 'index.html';
+  const places = [['index.html', 'Leagues'], ['organiser.html', 'Run a league'], ['events.html', 'Knockouts'], ['tv.html', 'Pub screen']];
+  const nav = make('nav', 'nav'); nav.setAttribute('aria-label', 'THRØ');
+  for (const [href, label] of places) {
+    const a = make('a', here === href ? 'here' : null, label); a.href = href;
+    if (here === href) a.setAttribute('aria-current', 'page');
+    nav.append(a);
+  }
+  const state = make('span', 'nav-state', session.get() ? 'Signed in' : '');
+  nav.append(state);
+  where.replaceChildren(nav);
+}
+
+window.THRO = { mountNav, mountLeagues, mountTable, mountFixtures, mountOrganiser, mountModeration, mountEvents, mountNotice, mountNoticeBanner, signInWithPasskey, whoAmI, signOut, session, authorised, passkeysPossible };

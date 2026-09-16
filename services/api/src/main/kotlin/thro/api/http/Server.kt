@@ -155,6 +155,29 @@ public fun Application.thro(deps: Deps) {
         "passkey.options" to { r -> passkeyOptions(r.connection(), deps, r.body) },
         "passkey.assert" to { r -> passkeyAssert(r.connection(), deps, r.body) },
         "aasa" to { _ -> if (deps.appleAppIds.isEmpty()) Http(404, """{"error":"no app ids configured"}""") else Http(200, """{"webcredentials":{"apps":[${deps.appleAppIds.joinToString(",") { Contract.q(it) }}]}}""") },
+        // PD-114: a screen signs in by the phone that holds the account.
+        "auth.link.start" to { r ->
+            val m = Json.parseObject(r.body)
+            val device = (m["deviceId"] as? String)?.let { runCatching { UUID.fromString(it) }.getOrNull() } ?: throw IllegalArgumentException("deviceId is required")
+            val link = Accounts(r.connection(), deps.now).startLink(device)
+            Http(200, """{"linkId":"${link.linkId}","code":${Contract.q(link.code)},"expiresAt":"${link.expiresAt}"}""")
+        },
+        "auth.link.approve" to { r ->
+            val accounts = Accounts(r.connection(), deps.now)
+            val account = r.principal!!.accountId ?: return@to Http(401, """{"error":"approving a screen needs a signed-in account, not a development principal"}""")
+            try { accounts.approveLink(r.call.parameters["code"] ?: "", account); Http(200, """{"approved":true}""") }
+            catch (e: Accounts.LinkNotFound) { Http(404, """{"error":"THRØ has no such code, or it has expired. Ask the screen for a new one."}""") }
+            catch (e: Accounts.LinkAlreadyApproved) { Http(409, """{"error":"That code was already approved."}""") }
+            catch (e: Accounts.AccountSuspended) { Http(403, """{"error":"This account is suspended."}""") }
+        },
+        "auth.link.claim" to { r ->
+            val device = r.call.request.queryParameters["deviceId"]?.let { runCatching { UUID.fromString(it) }.getOrNull() } ?: throw IllegalArgumentException("deviceId is required")
+            val accounts = Accounts(r.connection(), deps.now)
+            try { Http(200, sessionJson(accounts.claimLink(UUID.fromString(r.call.parameters["linkId"]), device))) }
+            catch (e: Accounts.LinkWaiting) { Http(202, """{"state":"waiting"}""") }
+            catch (e: Accounts.LinkNotFound) { Http(404, """{"error":"no such link for this device"}""") }
+            catch (e: Accounts.LinkSpent) { Http(410, """{"error":"This link was used or has expired. Ask for a new code."}""") }
+        },
         "auth.logout" to { r -> Http(200, """{"revoked":${Accounts(r.connection(), deps.now).logout(bearer(r.call) ?: "")}}""") },
         "matches.upload" to { r -> r.role = DbRole.MATCH; upload(r.connection(), deps, r.principal!!, r.body) },
         // A sent match, onward (PD-043): the sender's code for the other seat, the other player's claim

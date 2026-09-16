@@ -4938,3 +4938,34 @@ and no route. This is the wire and the organiser web for the three, each the sea
 the draw would show "A player" for them, which is honest but poor, so it waits for a sounder shape.
 
 **Evidence.** `EventHttpTest` extended to 61 checks.
+
+## PD-114 — A screen signs in by the phone that holds the account
+
+**16 September 2026.** The web had one way in — a passkey — which most people have never made and which the page
+could not explain; the founder said it made no sense and that friction must be as low as possible. The phone already
+holds the account.
+
+**Decided.**
+
+1. **The flow.** A screen asks THRØ for a code (`POST /v1/auth/link {deviceId}`): six characters from an alphabet
+   with no look-alikes, good for five minutes. The person opens THRØ on their phone — You → Profile → *Sign in on a
+   screen* — and types it. The phone's approval (`POST /v1/auth/link/{code}/approve`, a signed-in account's act, read
+   however it is typed) binds the code to that account and the credential the phone last signed in with. The screen
+   collects (`GET /v1/auth/link/{id}?deviceId=`): 202 while waiting, then a session of its own — a session family on
+   the screen's device id, revocable like any other — once; 410 after that or once the code has expired.
+2. **What it is not.** Not a password: a code does nothing without a signed-in phone, and the session goes only to the
+   device that asked. Not a recovery path: it opens a session, never adds a credential. Not a replacement for the
+   passkey, which stays as the second way in for anybody who made one.
+3. **V053** `identity.device_link`: one live code at a time (a partial unique index), approval whole or absent, a
+   claim only after approval, expired rows swept as new codes are minted. Written by `app_competition`, the role
+   every sign-in runs as.
+4. **Surfaces.** The web's sign-in panel leads with *Sign in with your phone* — the code in large letters, the three
+   taps it takes, a new code when it expires — with *Use a passkey instead* beneath. The phone's profile gains *Sign in
+   on a screen*.
+
+**Also.** The playtest harness (`PlaytestServer`) now lives in its own Gradle source set; `installDist` — what the
+image is built from — no longer carries it (checked: no `PlaytestServer` class in the distribution's jar; the
+application's main class is the HTTP server's). `gradle -p services/api run` still starts it locally.
+
+**Evidence.** `AuthLinkHttpTest` (15 checks, real sessions rather than the development principal),
+`NetTests.testApprovingAScreensCodeIsSentAsTyped`.

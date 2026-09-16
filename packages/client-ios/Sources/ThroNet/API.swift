@@ -1138,6 +1138,12 @@ public actor ThroAPI {
         return try (decode(await authorised("POST", "/v1/submissions/\(submission.uuidString.lowercased())/submit", body: Data("{}".utf8))) as Envelope).state
     }
 
+    /// Approves the six-character code a screen is showing, so that screen is signed in as this account (PD-114).
+    public func approveScreen(code: String) async throws {
+        let typed = code.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
+        _ = try await authorised("POST", "/v1/auth/link/\(typed)/approve", body: Data("{}".utf8))
+    }
+
     /// A team's friendlies, sent and received, for its members (PD-110).
     public func friendlies(team: UUID) async throws -> [Friendly] {
         struct Envelope: Decodable { let friendlies: [Friendly] }

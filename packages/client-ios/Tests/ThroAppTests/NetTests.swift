@@ -238,6 +238,17 @@ final class NetTests: XCTestCase {
         catch let e as APIError { XCTAssertEqual(e.message, "A challenge between these two teams is already waiting for an answer.") }
     }
 
+    /// PD-114: approving a screen's code goes to the code's own path, upper-cased, and a refusal comes back in words.
+    func testApprovingAScreensCodeIsSentAsTyped() async throws {
+        let store = MemorySessionStore(Session(accountId: UUID(), playerId: nil, accessToken: "acc", refreshToken: "ref", accessExpiresAt: .distantFuture, created: false))
+        let script = Script([(200, #"{"approved":true}"#), (404, #"{"error":"THRØ has no such code, or it has expired. Ask the screen for a new one."}"#)])
+        let api = ThroAPI(configuration: config, deviceId: device, store: store, transport: script)
+        try await api.approveScreen(code: " k7tq2m ")
+        XCTAssertTrue(script.seen[0].url!.path.hasSuffix("/v1/auth/link/K7TQ2M/approve"), "trimmed and upper-cased: \(script.seen[0].url!.path)")
+        do { try await api.approveScreen(code: "ZZZZZZ"); XCTFail("an unknown code is refused") }
+        catch let e as APIError { XCTAssertEqual(e.message, "THRØ has no such code, or it has expired. Ask the screen for a new one.") }
+    }
+
     func testBase64URLRoundTripsAndMatchesTheServersAlphabet() {
         let bytes = Data([0xfb, 0xff, 0xbf, 0x00, 0x01])
         let s = Base64URL.encode(bytes)

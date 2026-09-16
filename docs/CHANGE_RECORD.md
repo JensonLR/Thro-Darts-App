@@ -6040,3 +6040,22 @@ that fixture as the side reads it. Every new screen was opened on an iPhone 17 P
 **Not looked at.** The challenge form on another team's front (the stage passes other teams through to production,
 whose teams have no friendlies yet); the event page's *Name the match* list beyond its empty state; landscape and
 iPad for the new cards.
+
+## A screen signs in by the phone (V053, PD-114); the playtest harness leaves the image; the ways in read true
+
+**Ways in.** The profile's *Ways in* card offered every way whatever the account held — the `WaysIn` helper (PD-102)
+existed and was tested, and the card did not use it. It now names each way held ("Passkey · On this account") and
+offers only what is missing. The founder saw the old card and said so.
+
+**Test first.** `AuthLinkHttpTest`: a screen names its device; it is given a six-character code with no look-alikes
+that expires in five minutes; it waits until the phone speaks; another device cannot collect; approving needs a signed
+-in phone; an unknown code is a 404; the code is read however it is typed; twice is a 409; the screen is signed in as
+the phone's account and the session is real (`/v1/me` answers by name); collected once, the link is spent; a spent
+code cannot be approved; an unapproved code dies in five minutes and the screen is told to ask again. 15 checks.
+
+**Built.** V053; `Accounts.startLink/approveLink/claimLink`; three routes and contract entries; the web's sign-in
+panel; the phone's *Sign in on a screen* card and `ThroAPI.approveScreen`. `PlaytestServer.kt` moved to
+`src/playtest`, its own source set; `application.mainClass` is now `thro.api.http.MainKt`.
+
+**Proven.** API suite green with the contract regenerated; Swift suite green; the distribution's jar checked for the
+harness (none) and the server (present).
