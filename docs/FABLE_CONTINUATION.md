@@ -11,13 +11,14 @@ audit. Kept current during the build; **not** a deliverable, and never a substit
 - `https://thro.uk` (Render static site, auto-deploys `apps/web/**` from branch `claude/thro-production-build-je2mkf`,
   fronted by Cloudflare): leagues, tables, fixtures, wall (`/tv`), organiser (`organiser.html`), moderation
   (`moderation.html`), privacy, terms, deletion, notices.
-- `https://api.thro.uk` (Render web service `thro-api-staging`, free instance, Frankfurt): production at **V052**,
-  commit **24286ec** (PD-112/PD-113); the web at 7d76775 (the organiser's desk, looked at). `/healthz` reports database, schema version, code version and commit.
-- Neon production branch `br-icy-leaf-zaq0grqg` (project `round-darkness-99300686`), at V052. Restore points are
+- `https://api.thro.uk` (Render web service `thro-api-staging`, free instance, Frankfurt): production at **V053**,
+  commit **8954079** (PD-115; the test-fix commit 7b0759f deploying behind it); the web at 02a9981 (the home page,
+  the nav, the phone-first sign-in). `/healthz` reports database, schema version, code version and commit.
+- Neon production branch `br-icy-leaf-zaq0grqg` (project `round-darkness-99300686`), at V053. Restore points are
   branches: the pipeline's `pipeline-restore-point-before-<sha>-<stamp>` (newest three kept) and the founder's
   hand-made `restore-point-before-*` (never removed).
-- iPhone on TestFlight: build 13 VALID (PD-106..PD-110); build 14 **VALID** (from 5ce2de1: PD-111 on the phone, the
-  desk cards, the cold-start Discover fix), in the *Founders* group.
+- iPhone on TestFlight: build 15 **VALID** (from 8954079: the ways in read true, Sign in on a screen, pairs and
+  teams from the card, the desk cards), in the *Founders* group. Builds 13 and 14 before it.
   Internal group *Founders*: the founder and the cofounder (Ethan).
 
 **Deploy pipeline** — `.github/workflows/deploy-api.yml` on every push touching the API or its packages: checks →
@@ -67,7 +68,9 @@ league management · PD-104 organiser email · PD-105 provisional rating · PD-1
    pairs and teams as entrants, seeding, boards, players without accounts.
 3. ~~Friendly challenge~~ **done (PD-110)**. Left: rearranging an accepted friendly; a venue on the wire.
 4. ~~Web polish~~ **done**: a 420px breakpoint, `fail()` keeps the page and offers *Try again*, fixtures → table.
-5. NEEDS-DECISION (founder): the deploy branch's name; moving `PlaytestServer` out of the image.
+5. ~~NEEDS-DECISION~~: the founder keeps the deploy branch's name (16 Sep); `PlaytestServer` is out of the image
+   (PD-114's commit). Next for "a whole new level of UI standard": the table, fixtures and tv pages after the home
+   page's shape; the app's older screens (Home, Play, Live) against the desk cards; a landscape/iPad pass.
 
 ## Known gaps after PD-113 (small, recorded rather than hidden)
 
