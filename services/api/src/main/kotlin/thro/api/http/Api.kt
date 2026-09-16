@@ -495,6 +495,32 @@ public object Contract {
                               403 to "you neither run this season nor a team in it", 404 to "no such league season"),
         ),
         Endpoint(
+            id = "seasons.points", method = "POST", path = "/v1/seasons/{leagueSeasonId}/points", authenticated = true,
+            summary = "Set the points rules a season's table is ordered by (PD-112)",
+            description = "By the season's administrator: points for a win, a draw, a loss and an award, points per leg won, and the order "
+                + "of tie-breaks (points, leg_difference, legs_for, head_to_head, played). Read by the same parser the table uses, so a "
+                + "rule THRØ cannot order by is refused here. In force from today; the rules before are kept, superseded. A season whose "
+                + "table is pinned is not changed after the fact.",
+            request = Schema("""{"type":"object","properties":{"win":{"type":"integer","minimum":0},"draw":{"type":"integer","minimum":0},"loss":{"type":"integer","minimum":0},"awarded":{"type":"integer","minimum":0},"pointsPerLegWon":{"type":"integer","minimum":0},"tieBreak":{"type":"array","items":{"type":"string","enum":["points","leg_difference","legs_for","head_to_head","played"]}},"awardsCountAsPlayed":{"type":"boolean"}}}"""),
+            responses = mapOf(200 to "the rules, approved, and the sentence the table will show", 400 to "a rule THRØ cannot execute, said in words", 401 to "no principal", 403 to "you do not administer this season", 404 to "no such season", 409 to "the table is pinned"),
+        ),
+        Endpoint(
+            id = "seasons.teams.division", method = "POST", path = "/v1/seasons/{leagueSeasonId}/teams/{teamId}/division", authenticated = true,
+            summary = "Move a team to another division, or out of any (PD-112)",
+            description = "By the season's administrator. Refused while the team has an undecided fixture in its current division — rearrange or void "
+                + "it first; decided fixtures stay where they were played.",
+            request = Schema("""{"type":"object","properties":{"divisionId":{"type":["string","null"],"format":"uuid"}}}"""),
+            responses = mapOf(200 to "the team and its division", 400 to "not this season's division", 401 to "no principal", 403 to "you do not administer this season", 404 to "no such season or team", 409 to "already there, or undecided fixtures"),
+        ),
+        Endpoint(
+            id = "seasons.registrations.transfer", method = "POST", path = "/v1/seasons/{leagueSeasonId}/registrations/{playerId}/transfer", authenticated = true,
+            summary = "Transfer a registered player to another team (PD-112)",
+            description = "By the season's administrator, from a date, with a reason: the current registration ends on that date and a new one "
+                + "with the other team begins, naming the one it supersedes, under the same policy. Registered throughout.",
+            request = Schema("""{"type":"object","required":["toTeamId","from","note"],"properties":{"toTeamId":{"type":"string","format":"uuid"},"from":{"type":"string","format":"date"},"note":{"type":"string","maxLength":200}}}"""),
+            responses = mapOf(200 to "the new registration", 400 to "no reason, or malformed", 401 to "no principal", 403 to "you do not administer this season", 404 to "no such season or team", 409 to "not registered on that date, or already with that team"),
+        ),
+        Endpoint(
             id = "teams.friendlies", method = "GET", path = "/v1/teams/{teamId}/friendlies", authenticated = true,
             summary = "A team's friendlies, sent and received (PD-110)",
             description = "For the team's own members: every challenge to or from this team, newest game first, with its state, the other "
@@ -533,9 +559,10 @@ public object Contract {
             id = "events.open", method = "POST", path = "/v1/events", authenticated = true,
             summary = "Open an edition of a knockout (PD-109)",
             description = "Whoever opens it is its organiser. A name, when it starts and when the session ends (the scoring grants issued at "
-                + "check-in outlive that by a day), a venue on THRØ or a label, optionally when entries close and how many places. Open "
-                + "entry, single players, for now. On the notice on the door at once.",
-            request = Schema("""{"type":"object","required":["name","startsAt","sessionEndsAt"],"properties":{"name":{"type":"string"},"startsAt":{"type":"string","format":"date-time"},"sessionEndsAt":{"type":"string","format":"date-time"},"venueId":{"type":"string","format":"uuid"},"venueLabel":{"type":"string"},"entriesCloseAt":{"type":"string","format":"date-time"},"capacity":{"type":"integer","minimum":2}}}"""),
+                + "check-in outlive that by a day), a venue on THRØ or a label, optionally when entries close and how many places. Single "
+                + "players. `access` is open (anybody enters; on the notice on the door) or invitational (PD-113: the organiser names who plays; "
+                + "not on the notice).",
+            request = Schema("""{"type":"object","required":["name","startsAt","sessionEndsAt"],"properties":{"name":{"type":"string"},"startsAt":{"type":"string","format":"date-time"},"sessionEndsAt":{"type":"string","format":"date-time"},"venueId":{"type":"string","format":"uuid"},"venueLabel":{"type":"string"},"entriesCloseAt":{"type":"string","format":"date-time"},"capacity":{"type":"integer","minimum":2},"access":{"type":"string","enum":["open","invitational"]}}}"""),
             responses = mapOf(200 to "the event's page, as its organiser reads it", 400 to "a name, dates or capacity THRØ cannot accept", 401 to "no principal"),
         ),
         Endpoint(
@@ -554,9 +581,18 @@ public object Contract {
         ),
         Endpoint(
             id = "events.enter", method = "POST", path = "/v1/events/{eventId}/entries", authenticated = true,
-            summary = "Enter yourself (PD-109)",
-            description = "Open events, single players, while entries are open and a place remains. A withdrawn entry comes back rather than doubling.",
-            responses = mapOf(200 to "the event, with you entered", 400 to "not a UUID", 401 to "no principal", 403 to "entry is by the organiser", 404 to "no such event", 409 to "closed, full, or already entered — said in words"),
+            summary = "Enter yourself, or — as the organiser — enter a player by id (PD-109, PD-113)",
+            description = "With an empty body: yourself, on an open event, while entries are open and a place remains. With `playerId`: the organiser "
+                + "enters that player, on any event they run, including an invitational; the entries-close time does not bind the organiser. "
+                + "A withdrawn entry comes back rather than doubling.",
+            request = Schema("""{"type":"object","properties":{"playerId":{"type":"string","format":"uuid"}}}"""),
+            responses = mapOf(200 to "the event, with the player entered", 400 to "not a UUID", 401 to "no principal", 403 to "entry is by the organiser, or you are not the organiser", 404 to "no such event or player", 409 to "closed, full, or already entered — said in words"),
+        ),
+        Endpoint(
+            id = "events.entries.remove", method = "POST", path = "/v1/events/{eventId}/entries/{playerId}/remove", authenticated = true,
+            summary = "The organiser removes an entry (PD-113)",
+            description = "Before the draw. The row is kept with the time, as a withdrawal is; a place opens.",
+            responses = mapOf(200 to "the event, with the entry removed", 400 to "not a UUID", 401 to "no principal", 403 to "not the organiser", 404 to "no such event", 409 to "not entered, or the draw is made"),
         ),
         Endpoint(
             id = "events.withdraw", method = "POST", path = "/v1/events/{eventId}/withdraw", authenticated = true,

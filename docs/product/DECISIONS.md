@@ -4887,3 +4887,54 @@ the organiser advances a round once every tie in it is decided, until a round of
 walkover recorded and refused twice over, a stranger's citation refused, another pair's match refused, the record's
 winner read, the event in progress, the round advanced to one tie between the two winners, the final declared, the
 event complete with its winner, and no advance after. `NetTests.testATieIsCitedAndReadsItsWinner`.
+
+## PD-112 — The organiser's remaining acts: points rules, division moves, transfers
+
+**16 September 2026.** The completion matrix's last League OS line: points-policy approval, transfers and division
+moves had domain pieces (`Organisations.draftPolicy/approvePolicy`, `register/endRegistration`, `team_affiliation.division_id`)
+and no route. This is the wire and the organiser web for the three, each the season administrator's.
+
+**Decided.**
+
+1. **Points rules** (`POST /v1/seasons/{id}/points`): win, draw, loss, awarded, points per leg won, tie-breaks in
+   order, whether awards count as played — read by `PointsPolicy.parse`, the parser the table is ordered by, so a rule
+   THRØ cannot order by is refused in words at the door. Drafted and approved in one act, in force from today, the
+   season's previous rules superseded from today (the higher version is read). A season whose table is pinned
+   (`standings_policy_id`) is not changed after the fact (409). The public table's sentence changes at once.
+2. **Division move** (`POST /v1/seasons/{id}/teams/{team}/division`): to one of this season's divisions, or none.
+   Refused while the team has an undecided fixture in another division — the organiser rearranges or voids it first;
+   decided fixtures stay where they were played, because a fixture carries its own division.
+3. **Transfer** (`POST /v1/seasons/{id}/registrations/{player}/transfer`): to a team in the season, from a date, with
+   a reason. The current registration ends on that date and a new one begins under the same policy, naming the one it
+   supersedes; the player is registered throughout. Same team, no registration on that date, or no reason: refused.
+4. **The season's registered players** are now on `GET /v1/seasons/{id}/registrations` as `registered`, alongside the
+   Secretary's submissions — every route in (THRØ, organiser, import), with `from`, `until`, and `supersedes`.
+5. **Surfaces.** The organiser's season page: *Divisions* (a select per accepted team), *Registered players* with a
+   *Transfer a player* form, and *Points* with the table's own sentence and the rules form. No phone surface: these are
+   the organiser's desk.
+
+**Evidence.** `LeagueActsHttpTest` (22 checks, red first), `RegistrationHttpTest` still green with the wider list.
+
+## PD-113 — An invitational, and the organiser's entries
+
+**16 September 2026.** PD-109 ran open events only. Most pub knockouts are not open: the landlord names who plays.
+
+**Decided.**
+
+1. **Two accesses on the wire**: `open` (anybody enters themselves; on the notice on the door) and `invitational`
+   (the organiser names who plays; not on the notice; self-entry a 403 in words). The domain carries qualified,
+   restricted and member-only; the wire refuses them until THRØ can execute what they mean.
+2. **The organiser enters a player by id**, on any event they run (`POST /v1/events/{id}/entries {playerId}`); the
+   entries-close time does not bind the organiser; a player THRØ does not have is a 404; twice is a 409. The organiser
+   removes an entry before the draw (`POST …/entries/{player}/remove`); an invited player may still withdraw
+   themselves. After the draw nobody is removed — they are decided against.
+3. **Who sees the entrants.** The event page sends `entrants` (name where THRØ may name them, checked in or not, seed)
+   to whoever runs the event and to nobody else: the public page counts and, before the draw, names nobody.
+4. **Surfaces.** The web opener asks *who may enter*; the organiser's event page lists the entered with *Remove*, and
+   offers *Invite a player* from the rosters of the organiser's own teams, or by id. No phone change: a player on an
+   invitational sees the card once entered, as before.
+
+**Not decided here.** Pairs and teams as entrants; a player without a THRØ account (a name the organiser types) —
+the draw would show "A player" for them, which is honest but poor, so it waits for a sounder shape.
+
+**Evidence.** `EventHttpTest` extended to 61 checks.

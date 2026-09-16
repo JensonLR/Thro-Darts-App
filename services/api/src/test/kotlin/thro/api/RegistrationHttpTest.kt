@@ -115,7 +115,7 @@ class RegistrationHttpTest {
             check("now a submission is prepared", submission != null && ready.contains("\"state\":\"ready\""))
 
             // --- sending it ---------------------------------------------------------------------------------------------
-            check("the league sees nothing before it is sent", get("/v1/seasons/$season/registrations", lee).bodyAsText() == """{"registrations":[]}""")
+            check("the league sees nothing before it is sent", get("/v1/seasons/$season/registrations", lee).bodyAsText() == """{"registrations":[],"registered":[]}""")
             check("sending is the captain's", post("/v1/submissions/$submission/submit", "{}", sam).status.value == 403)
             val sent = post("/v1/submissions/$submission/submit", "{}", ade)
             check("the captain sends it, and on THRØ it is delivered at once", sent.status.value == 200 && sent.bodyAsText().contains("\"state\":\"delivered\""))

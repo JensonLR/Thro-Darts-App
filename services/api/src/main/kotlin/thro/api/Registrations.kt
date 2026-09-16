@@ -213,11 +213,38 @@ public class Registrations(private val connection: Connection, private val now: 
             """"submissionId":${a.submissionId?.let { "\"$it\"" } ?: "null"},"state":${a.state?.let(q) ?: "null"}}"""
     }
 
-    public fun json(rows: List<Listed>): String {
+    public data class Registered(val registrationId: UUID, val playerId: UUID, val player: String?, val teamId: UUID?, val team: String?, val from: Instant, val until: Instant?,
+                                 val source: String, val supersedes: UUID?)
+
+    /** Who is registered in the season, by any route — the Secretary's, the organiser's, an import — newest first. */
+    public fun registered(season: UUID): List<Registered> = connection.prepareStatement(
+        """SELECT r.registration_id, r.player_id, t.team_id, t.name, r.valid_from, r.valid_until, r.source, r.supersedes_registration_id,
+                  (SELECT CASE WHEN identity.player_may_be_disclosed(c.player_id) AND a.display_name <> ? THEN a.display_name END
+                     FROM identity.player_claim c JOIN identity.account a ON a.account_id = c.account_id AND a.deleted_at IS NULL
+                    WHERE c.player_id = r.player_id AND c.revoked_at IS NULL)
+             FROM competition.player_registration r LEFT JOIN competition.team t ON t.team_id = r.team_id
+            WHERE r.league_season_id = ? AND r.status = 'registered' ORDER BY r.valid_from DESC""",
+    ).use { ps ->
+        ps.setString(1, Accounts.PLACEHOLDER_NAME); ps.setObject(2, season)
+        ps.executeQuery().use { rs ->
+            generateSequence {
+                if (!rs.next()) null
+                else Registered(rs.getObject(1) as UUID, rs.getObject(2) as UUID, rs.getString(9), rs.getObject(3) as UUID?, rs.getString(4), rs.getTimestamp(5).toInstant(),
+                                rs.getTimestamp(6)?.toInstant(), rs.getString(7), rs.getObject(8) as UUID?)
+            }.toList()
+        }
+    }
+
+    public fun json(rows: List<Listed>, registered: List<Registered> = emptyList()): String {
         val q = thro.api.http.Contract::q
+        val london = ZoneId.of("Europe/London")
         return """{"registrations":[""" + rows.joinToString(",") {
             """{"submissionId":"${it.submissionId}","state":${q(it.state)},"playerId":"${it.playerId}","player":${it.player?.let(q) ?: "null"},""" +
                 """"teamId":"${it.teamId}","team":${q(it.team)},"taskId":${it.taskId?.let { t -> "\"$t\"" } ?: "null"},"sentAt":"${it.createdAt}"}"""
+        } + """],"registered":[""" + registered.joinToString(",") {
+            """{"registrationId":"${it.registrationId}","playerId":"${it.playerId}","player":${it.player?.let(q) ?: "null"},"teamId":${it.teamId?.let { t -> "\"$t\"" } ?: "null"},""" +
+                """"team":${it.team?.let(q) ?: "null"},"from":"${it.from.atZone(london).toLocalDate()}","until":${it.until?.let { u -> "\"${u.atZone(london).toLocalDate()}\"" } ?: "null"},""" +
+                """"source":${q(it.source)},"supersedes":${it.supersedes?.let { s -> "\"$s\"" } ?: "null"}}"""
         } + "]}"
     }
 }

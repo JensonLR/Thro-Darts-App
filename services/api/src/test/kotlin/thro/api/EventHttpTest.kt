@@ -159,6 +159,25 @@ class EventHttpTest {
             val done = post("/v1/events/$third/advance", "{}", lee).bodyAsText()
             check("after the final the event is complete, and names its winner", done.contains("\"state\":\"complete\"") && done.contains("\"winnerId\":\"$homeB\""))
             check("a complete event does not advance", post("/v1/events/$third/advance", "{}", lee).status.value == 409)
+
+            // --- an invitational (PD-113): the organiser names who plays; nobody enters themselves ------------------------
+            val invite = idOf(post("/v1/events", """{"name":"Champions' Night","startsAt":"2026-10-16T19:00:00Z","sessionEndsAt":"2026-10-16T23:00:00Z","venueLabel":"upstairs","access":"invitational"}""", lee).bodyAsText(), "eventId")!!
+            check("an access THRØ does not run is refused", post("/v1/events", """{"name":"Odd","startsAt":"2026-10-16T19:00:00Z","sessionEndsAt":"2026-10-16T23:00:00Z","access":"members_and_guests"}""", lee).status.value == 400)
+            check("an invitational is not on the notice on the door", !get("/v1/events", null).bodyAsText().contains("\"eventId\":\"$invite\""))
+            check("nobody enters themselves", post("/v1/events/$invite/entries", "{}", alice).status.value == 403)
+            check("the organiser invites a player by id", post("/v1/events/$invite/entries", """{"playerId":"$alice"}""", lee).status.value == 200 && get("/v1/events/$invite", alice).bodyAsText().contains("\"you\":{\"entered\":true,\"checkedIn\":false}"))
+            check("only the organiser invites", post("/v1/events/$invite/entries", """{"playerId":"$bob"}""", alice).status.value == 403)
+            check("inviting somebody THRØ does not have is a 404", post("/v1/events/$invite/entries", """{"playerId":"${UUID.randomUUID()}"}""", lee).status.value == 404)
+            check("inviting twice is a 409", post("/v1/events/$invite/entries", """{"playerId":"$alice"}""", lee).status.value == 409)
+            post("/v1/events/$invite/entries", """{"playerId":"$bob"}""", lee)
+            check("the page counts the invited", get("/v1/events/$invite", null).bodyAsText().contains("\"entries\":2"))
+            check("the organiser reads who is entered, by name; the public page names nobody before the draw",
+                get("/v1/events/$invite", lee).bodyAsText().contains("\"entrants\":[{\"playerId\":\"$alice\",\"name\":\"Alice Aims\"") && get("/v1/events/$invite", null).bodyAsText().contains("\"entrants\":null") && !get("/v1/events/$invite", alice).bodyAsText().contains("Bob Board"))
+            check("removing an entry is the organiser's", post("/v1/events/$invite/entries/$bob/remove", "{}", alice).status.value == 403)
+            check("the organiser removes one", post("/v1/events/$invite/entries/$bob/remove", "{}", lee).status.value == 200 && get("/v1/events/$invite", null).bodyAsText().contains("\"entries\":1"))
+            check("removing somebody not entered is a 409", post("/v1/events/$invite/entries/$bob/remove", "{}", lee).status.value == 409)
+            check("an invited player may still withdraw themselves", post("/v1/events/$invite/withdraw", "{}", alice).status.value == 200)
+            check("and on an open event the organiser may also enter a player by id", post("/v1/events/$second/entries", """{"playerId":"$cara"}""", lee).status.value == 409 && post("/v1/events/$second/entries", """{"playerId":"$cara"}""", lee).bodyAsText().contains("closed"))
         }
         println("events over HTTP: $passed checks passed")
     }

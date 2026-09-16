@@ -66,6 +66,7 @@ import thro.api.Registrations
 import thro.api.Rearrangements
 import thro.api.Editions
 import thro.api.Friendlies
+import thro.api.LeagueActs
 import thro.api.Relations
 import thro.api.Secretary
 import thro.api.VisitCommand
@@ -470,6 +471,31 @@ public fun Application.thro(deps: Deps) {
         "me.seasons" to { r -> SeasonPlanning(r.connection()).let { Http(200, it.runsJson(it.seasonsRunBy(r.principal!!.subject))) } },
         // PD-105: the provisional rating. Read — and replayed when the evidence has moved — as `app_rating`, the one
         // role that may write the rating tables and may not write a match.
+        // PD-112: the organiser's remaining acts — points rules, division moves, transfers.
+        "seasons.points" to { r ->
+            leagueActs {
+                val m = Json.parseObject(r.body)
+                fun n(key: String) = (m[key] as? Number)?.toInt()
+                LeagueActs(r.connection(), deps.now).let {
+                    Http(200, it.json(it.setPoints(UUID.fromString(r.call.parameters["leagueSeasonId"]), r.principal!!.subject, n("win"), n("draw"), n("loss"), n("awarded"), n("pointsPerLegWon"),
+                                                   (m["tieBreak"] as? List<*>)?.map { x -> x.toString() }, m["awardsCountAsPlayed"] as? Boolean)))
+                }
+            }
+        },
+        "seasons.teams.division" to { r ->
+            leagueActs {
+                val m = Json.parseObject(r.body)
+                LeagueActs(r.connection(), deps.now).let { Http(200, it.json(it.moveDivision(UUID.fromString(r.call.parameters["leagueSeasonId"]), UUID.fromString(r.call.parameters["teamId"]), (m["divisionId"] as? String)?.let(UUID::fromString), r.principal!!.subject))) }
+            }
+        },
+        "seasons.registrations.transfer" to { r ->
+            leagueActs {
+                val m = Json.parseObject(r.body)
+                val from = try { LocalDate.parse(m["from"] as? String ?: "") } catch (e: Exception) { throw IllegalArgumentException("from is a date") }
+                val to = UUID.fromString(m["toTeamId"] as? String ?: throw IllegalArgumentException("toTeamId is required"))
+                LeagueActs(r.connection(), deps.now).let { Http(200, it.json(it.transfer(UUID.fromString(r.call.parameters["leagueSeasonId"]), UUID.fromString(r.call.parameters["playerId"]), to, from, m["note"] as? String, r.principal!!.subject))) }
+            }
+        },
         // PD-110: a friendly between two teams — challenge, read, answer, withdraw, cite the match.
         "teams.friendlies" to { r -> friendlies { val team = UUID.fromString(r.call.parameters["teamId"]); Friendlies(r.connection(), deps.now).let { Http(200, it.json(it.ofTeam(team, r.principal!!.subject), team)) } } },
         "teams.challenge" to { r ->
@@ -505,12 +531,19 @@ public fun Application.thro(deps: Deps) {
                     r.principal!!.subject, m["name"] as? String ?: "", instant("startsAt") ?: throw IllegalArgumentException("startsAt is required"),
                     instant("sessionEndsAt") ?: throw IllegalArgumentException("sessionEndsAt is required"),
                     (m["venueId"] as? String)?.let(UUID::fromString), m["venueLabel"] as? String, instant("entriesCloseAt"), (m["capacity"] as? Number)?.toInt(),
+                    access = m["access"] as? String ?: "open",
                 )))
             }
         },
         "me.events" to { r -> Editions(r.connection(), deps.now).let { Http(200, it.json(it.mine(r.principal!!.subject))) } },
         "events.get" to { r -> editions { Editions(r.connection(), deps.now).let { Http(200, it.json(it.view(UUID.fromString(r.call.parameters["eventId"]), r.principal?.subject))) } } },
-        "events.enter" to { r -> editions { Editions(r.connection(), deps.now).let { Http(200, it.json(it.enter(UUID.fromString(r.call.parameters["eventId"]), r.principal!!.subject))) } } },
+        "events.enter" to { r ->
+            editions {
+                val named = (if (r.body.isBlank()) null else Json.parseObject(r.body)["playerId"] as? String)?.let(UUID::fromString)
+                Editions(r.connection(), deps.now).let { Http(200, it.json(it.enter(UUID.fromString(r.call.parameters["eventId"]), named ?: r.principal!!.subject, by = r.principal!!.subject))) }
+            }
+        },
+        "events.entries.remove" to { r -> editions { Editions(r.connection(), deps.now).let { Http(200, it.json(it.remove(UUID.fromString(r.call.parameters["eventId"]), UUID.fromString(r.call.parameters["playerId"]), r.principal!!.subject))) } } },
         "events.withdraw" to { r -> editions { Editions(r.connection(), deps.now).let { Http(200, it.json(it.withdraw(UUID.fromString(r.call.parameters["eventId"]), r.principal!!.subject))) } } },
         "events.checkin" to { r ->
             editions {
@@ -609,7 +642,7 @@ public fun Application.thro(deps: Deps) {
             }
         },
         "seasons.registrations" to { r ->
-            registrations { Registrations(r.connection(), deps.now).let { Http(200, it.json(it.list(UUID.fromString(r.call.parameters["leagueSeasonId"]), r.principal!!.subject))) } }
+            registrations { val season = UUID.fromString(r.call.parameters["leagueSeasonId"]); Registrations(r.connection(), deps.now).let { Http(200, it.json(it.list(season, r.principal!!.subject), it.registered(season))) } }
         },
         "submissions.answer" to { r ->
             registrations {
@@ -1058,6 +1091,11 @@ private fun shown(r: Req, season: UUID, block: () -> Http): Http {
     if (!allowed) return Http(404, """{"error":"THRØ has no such league season."}""")
     r.role = DbRole.READ
     return block()
+}
+
+/** An organiser's act refused is an answer, with the status that says which kind (PD-112). */
+private fun leagueActs(block: () -> Http): Http = try { block() } catch (e: LeagueActs.Refused) {
+    Http(e.status, """{"error":${Contract.q(e.why)}}""")
 }
 
 /** A friendly step refused is an answer, with the status that says which kind (PD-110). */

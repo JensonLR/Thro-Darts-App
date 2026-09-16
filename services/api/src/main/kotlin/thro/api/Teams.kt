@@ -27,7 +27,8 @@ public class Teams(private val connection: Connection, private val now: () -> In
      * One roster entry. [memberId] is the membership's own id — a handle on a row of this roster, not
      * a person's id — and is there only for the team's admin, to name a captain with (PD-045).
      */
-    public data class Member(val name: String?, val role: String, val memberId: UUID? = null)
+    /** [playerId] travels only to the team's own members (PD-113: an organiser invites from their own roster); [memberId] only to its admin. */
+    public data class Member(val name: String?, val role: String, val memberId: UUID? = null, val playerId: UUID? = null)
     /** [leagueSeasonId] is what lets the phone reach the season's fixtures; [accepted] says whether the league has let the team in. */
     public data class SeasonLine(val league: String, val label: String, val division: String?, val leagueSeasonId: UUID, val accepted: Boolean)
     /** A league the team's own admin or captain says it plays in (PD-049): their say, not the league's. */
@@ -106,13 +107,13 @@ public class Teams(private val connection: Connection, private val now: () -> In
         // Each entry's handle goes to the admin alone, to name a captain with; nobody else sees one.
         val handles = yourRole == "admin"
         val roster = connection.prepareStatement(
-            """SELECT CASE WHEN identity.player_may_be_disclosed(m.player_id) THEN a.display_name END, m.role, m.membership_id
+            """SELECT CASE WHEN identity.player_may_be_disclosed(m.player_id) THEN a.display_name END, m.role, m.membership_id, m.player_id
                  FROM competition.team_membership m
                  LEFT JOIN identity.player_claim c ON c.player_id = m.player_id AND c.revoked_at IS NULL
                  LEFT JOIN identity.account a ON a.account_id = c.account_id AND a.deleted_at IS NULL
                 WHERE m.team_id = ? AND m.valid_until IS NULL AND m.status = 'active'
                 ORDER BY CASE m.role WHEN 'admin' THEN 0 WHEN 'captain' THEN 1 WHEN 'vice_captain' THEN 2 ELSE 3 END, a.display_name NULLS LAST""",
-        ).use { ps -> ps.setObject(1, teamId); ps.executeQuery().use { rs -> generateSequence { if (rs.next()) Member(rs.getString(1), rs.getString(2), if (handles) rs.getObject(3) as UUID else null) else null }.toList() } }
+        ).use { ps -> ps.setObject(1, teamId); ps.executeQuery().use { rs -> generateSequence { if (rs.next()) Member(rs.getString(1), rs.getString(2), if (handles) rs.getObject(3) as UUID else null, if (yourRole != null) rs.getObject(4) as UUID else null) else null }.toList() } }
         // Whether one of its own players took the team on (PD-047). The front says so in those words:
         // nobody appointed them, and a reader is owed that distinction.
         val adopted = connection.prepareStatement("SELECT 1 FROM competition.team_adoption WHERE team_id = ?")
@@ -363,7 +364,7 @@ public class Teams(private val connection: Connection, private val now: () -> In
         """{"teamId":"${f.teamId}","name":${q(f.name)},"locality":${q(f.locality)},"venue":""" + (f.venue?.let { v ->
             """{"venueId":"${v.venueId}","name":${q(v.name)},"locality":${q(v.locality)},"postcode":${q(v.postcode)},"latitude":${v.latitude ?: "null"},"longitude":${v.longitude ?: "null"}}"""
         } ?: "null") + ""","seasons":[${f.seasons.joinToString(",") { """{"league":${q(it.league)},"label":${q(it.label)},"division":${q(it.division)},"leagueSeasonId":"${it.leagueSeasonId}","accepted":${it.accepted}}""" }}],""" +
-            """"roster":[${f.roster.joinToString(",") { """{"name":${q(it.name)},"role":${q(it.role)}${it.memberId?.let { id -> ""","memberId":"$id"""" } ?: ""}}""" }}],""" +
+            """"roster":[${f.roster.joinToString(",") { """{"name":${q(it.name)},"role":${q(it.role)}${it.memberId?.let { id -> ""","memberId":"$id"""" } ?: ""}${it.playerId?.let { id -> ""","playerId":"$id"""" } ?: ""}}""" }}],""" +
             """"yourRole":${q(f.yourRole)},"adopted":${f.adopted},""" +
             """"saysItPlaysIn":[${f.saysItPlaysIn.joinToString(",") { """{"leagueId":"${it.leagueId}","name":${q(it.name)}}""" }}]}"""
     public fun json(i: Invite): String = """{"code":"${i.code}","expiresAt":"${i.expiresAt}","maxUses":${i.maxUses}}"""

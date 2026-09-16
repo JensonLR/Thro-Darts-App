@@ -5970,3 +5970,27 @@ ties carrying `winnerId/outcome/note` and the event its `winnerId`; the web even
 organiser's decisions; the phone's card showing your tie and *Name the match*. **Proven.** API suite green with the
 contract regenerated; Swift suite green; repo checks. **Not proven:** the bracket page and the phone's tie against
 production beyond compilation and the decoding tests.
+
+## The organiser's remaining acts (PD-112)
+
+**Test first.** `LeagueActsHttpTest`, red on the missing points route, then green through: the table ordered by THRØ's
+standard until rules are set; a tie-break THRØ cannot order by and a negative loss refused; three for a win set and
+the table saying so; a second setting superseding; a division move refused for a stranger, for another season's
+division, and for a team with an undecided fixture; Dolphin moved up and the plan saying so; already-there a 409; a
+transfer refused for a stranger, an unregistered player, a team not in the season, and no reason; Sam transferred and
+registered throughout; both registrations listed, the old one ended; again to the same team a 409. 22 checks.
+
+**Built.** `LeagueActs.kt`, three routes and contract entries, `Registrations.registered` and the wider list body.
+Web: `divisionMover`, `registeredSection`, `pointsSection` on the organiser's season page. **Proven.** API suite green
+with the contract regenerated; repo checks; `node --check`. **Not proven:** the web sections in a browser against
+production.
+
+## An invitational, and the organiser's entries (PD-113)
+
+**Test first.** `EventHttpTest` gained fourteen checks: an access THRØ does not run refused; an invitational off the
+notice; self-entry refused; the organiser invites by id, only the organiser, an unknown player a 404, twice a 409;
+the page counts the invited; the organiser reads who is entered by name and the public page names nobody; removal is
+the organiser's, works, and refuses somebody not entered; an invited player may withdraw; on a closed open event the
+organiser is told it is closed. **Built.** `Editions.open(access)`, `enter(by)`, `remove`, `entrants`; the route
+bodies and two contract entries; the web opener's access and the organiser's *Entered* / *Invite a player* sections.
+**Proven.** API suite green with the contract regenerated; `node --check`; repo checks.

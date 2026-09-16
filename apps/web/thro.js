@@ -562,18 +562,19 @@ async function mountOrganiser(where, signInEl) {
     // The season as its administrator sees it (PD-099): its dates, divisions and every team that asked in. It is
     // also the page's one question about authority — somebody who does not run this season is told so here,
     // once, rather than by every button refusing in turn.
-    let plan, data, policy, registrations, proposals;
+    let plan, data, policy, registrations, registered, proposals, standings;
     try {
       plan = await authorised('GET', `/v1/seasons/${encodeURIComponent(season)}/teams`);
       data = await read(`/v1/seasons/${encodeURIComponent(season)}/fixtures`);
       policy = (await authorised('GET', `/v1/seasons/${encodeURIComponent(season)}/policy`)).policy;
-      registrations = (await authorised('GET', `/v1/seasons/${encodeURIComponent(season)}/registrations`)).registrations;
+      ({ registrations, registered } = await authorised('GET', `/v1/seasons/${encodeURIComponent(season)}/registrations`));
       proposals = (await authorised('GET', `/v1/seasons/${encodeURIComponent(season)}/proposals`)).proposals;
+      standings = await read(`/v1/seasons/${encodeURIComponent(season)}/standings`);
     } catch (e) { fail(where, e, draw); return; }
 
     const todo = (data.fixtures || []).filter(f => !f.decided);
     const done = (data.fixtures || []).filter(f => f.decided);
-    const parts = [...leagueSection(plan, draw), ...teamsSection(plan, draw), ...registrationsSection(plan, policy, registrations, draw), ...requestsSection(plan, proposals, draw)];
+    const parts = [...leagueSection(plan, draw), ...teamsSection(plan, draw), ...registrationsSection(plan, policy, registrations, draw), ...registeredSection(plan, registered, draw), ...requestsSection(plan, proposals, draw), ...pointsSection(plan, standings, draw)];
 
     if (!(data.fixtures || []).length) {
       parts.push(make('h2', null, 'Fixtures'),
@@ -667,6 +668,7 @@ async function mountOrganiser(where, signInEl) {
     const out = [make('h2', null, 'Teams'),
       make('p', 'quiet', `${accepted.length} in the season${waiting.length ? `, ${waiting.length} waiting to be let in` : ''}.`)];
     out.push(teamAdder(plan, redraw));
+    if (accepted.length && plan.divisions.length) out.push(divisionMover(plan, accepted, redraw));
     if (!waiting.length) return out;
     const list = make('ul', 'rows');
     for (const t of waiting) {
@@ -822,6 +824,111 @@ async function mountOrganiser(where, signInEl) {
     }
     out.push(list);
     return out;
+  }
+
+  /**
+   * Which division each team plays in (PD-112). A move is refused while the team has an undecided fixture in its
+   * division — the server says so, and the fixture is rearranged or voided first.
+   */
+  function divisionMover(plan, accepted, redraw) {
+    const box = make('div', 'entry');
+    box.append(make('h2', null, 'Divisions'));
+    const list = make('ul', 'rows');
+    for (const t of accepted) {
+      const li = make('li');
+      const head = make('div', 'row-head');
+      head.append(make('div', 'row-name', t.name));
+      const pick = make('select'); pick.setAttribute('aria-label', `${t.name}’s division`);
+      pick.append(new Option('No division', ''));
+      for (const d of plan.divisions) pick.append(new Option(d.name, d.divisionId));
+      pick.value = t.divisionId || '';
+      const said = make('p', 'note'); said.hidden = true;
+      pick.onchange = async () => {
+        pick.disabled = true;
+        try { await authorised('POST', `/v1/seasons/${encodeURIComponent(plan.leagueSeasonId)}/teams/${encodeURIComponent(t.teamId)}/division`, { divisionId: pick.value || null }); redraw(); }
+        catch (e) { said.hidden = false; said.textContent = e.message; pick.value = t.divisionId || ''; pick.disabled = false; }
+      };
+      head.append(pick);
+      li.append(head, said);
+      list.append(li);
+    }
+    box.append(list);
+    return box;
+  }
+
+  /**
+   * Who is registered, by any route (PD-112), and a transfer: the current registration ends on a date and a new one
+   * with the other team begins, naming the one it supersedes. Registered throughout; the old row stays.
+   */
+  function registeredSection(plan, registered, redraw) {
+    if (!registered.length) return [];
+    const current = registered.filter(r => !r.until);
+    const out = [make('h2', null, 'Registered players'), make('p', 'quiet', `${current.length} registered now${registered.length > current.length ? `, ${registered.length - current.length} earlier registrations kept` : ''}.`)];
+    const list = make('ul', 'rows');
+    for (const r of registered) {
+      const li = make('li');
+      const head = make('div', 'row-head');
+      head.append(make('div', 'row-name', `${r.player || 'A player THRØ may not name'} · ${r.team || 'no team'}`),
+                  make('span', 'quiet', `from ${r.from}${r.until ? ` to ${r.until}` : ''} · ${r.source}${r.supersedes ? ' · transfer' : ''}`));
+      li.append(head);
+      list.append(li);
+    }
+    out.push(list);
+    const teams = plan.teams.filter(t => t.status === 'accepted');
+    if (current.length && teams.length > 1) {
+      const box = make('div', 'entry');
+      box.append(make('h2', null, 'Transfer a player'));
+      const form = make('div', 'entry-form');
+      const who = make('select'); who.setAttribute('aria-label', 'The player');
+      for (const r of current) who.append(new Option(`${r.player || 'A player'} (${r.team || 'no team'})`, r.playerId));
+      const to = make('select'); to.setAttribute('aria-label', 'To which team');
+      for (const t of teams) to.append(new Option(t.name, t.teamId));
+      const from = make('input'); from.type = 'date'; from.value = new Date().toISOString().slice(0, 10); from.setAttribute('aria-label', 'From');
+      const why = make('input'); why.type = 'text'; why.placeholder = 'Why, e.g. moved house'; why.maxLength = 200; why.setAttribute('aria-label', 'Why');
+      const said = make('p', 'note'); said.hidden = true;
+      const go = make('button', 'primary', 'Transfer');
+      go.onclick = async () => {
+        if (!why.value.trim()) { said.hidden = false; said.textContent = 'A transfer says why.'; return; }
+        go.disabled = true;
+        try { await authorised('POST', `/v1/seasons/${encodeURIComponent(plan.leagueSeasonId)}/registrations/${encodeURIComponent(who.value)}/transfer`, { toTeamId: to.value, from: from.value, note: why.value.trim() }); redraw(); }
+        catch (e) { said.hidden = false; said.textContent = e.message; go.disabled = false; }
+      };
+      form.append(who, to, from, why, go);
+      box.append(form, said);
+      out.push(box);
+    }
+    return out;
+  }
+
+  /**
+   * The points rules the table is ordered by (PD-112). Until the league sets its own, the table says it is ordered by
+   * THRØ's standard; once set, by this league's own rules — the same sentence the public table shows.
+   */
+  function pointsSection(plan, standings, redraw) {
+    const rules = standings.rules || {};
+    const box = make('div', 'entry');
+    box.append(make('h2', null, 'Points'), make('p', 'quiet', rules.says || 'Ordered by THRØ’s standard until the league sets its own.'));
+    const form = make('div', 'entry-form');
+    const num = (label, value) => { const i = make('input'); i.type = 'number'; i.min = 0; i.max = 20; i.value = value; i.setAttribute('aria-label', label); const l = make('label', 'quiet', label + ' '); l.append(i); return [i, l]; };
+    const [win, winL] = num('a win', 2), [draw, drawL] = num('a draw', 1), [loss, lossL] = num('a loss', 0), [leg, legL] = num('per leg won', 0);
+    const order = make('input'); order.type = 'text'; order.value = (rules.orderedBy || ['points', 'leg_difference', 'legs_for', 'head_to_head']).join(', '); order.maxLength = 80;
+    order.setAttribute('aria-label', 'Tie-breaks, in order: points, leg_difference, legs_for, head_to_head, played');
+    const said = make('p', 'note'); said.hidden = true;
+    const set = make('button', 'primary', 'Set the rules');
+    set.onclick = async () => {
+      set.disabled = true;
+      try {
+        const made = await authorised('POST', `/v1/seasons/${encodeURIComponent(plan.leagueSeasonId)}/points`, {
+          win: Number(win.value), draw: Number(draw.value), loss: Number(loss.value), pointsPerLegWon: Number(leg.value),
+          tieBreak: order.value.split(',').map(x => x.trim().toLowerCase().replace(/ /g, '_')).filter(Boolean),
+        });
+        said.hidden = false; said.textContent = `Version ${made.points.version}: ${made.points.says}`;
+        setTimeout(redraw, 900);
+      } catch (e) { said.hidden = false; said.textContent = e.message; set.disabled = false; }
+    };
+    form.append(winL, drawL, lossL, legL, order, set);
+    box.append(form, said, make('p', 'quiet', 'Tie-breaks in order, from: points, leg_difference, legs_for, head_to_head, played.'));
+    return [box];
   }
 
   /**
@@ -1335,6 +1442,8 @@ function eventOpener(redraw) {
   const label = make('input'); label.type = 'text'; label.placeholder = 'Or a label: “ask at the bar”'; label.maxLength = 80; label.setAttribute('aria-label', 'Venue label');
   const capacity = make('input'); capacity.type = 'number'; capacity.min = 2; capacity.max = 512; capacity.placeholder = 'Places'; capacity.setAttribute('aria-label', 'Places available');
   const closes = make('input'); closes.type = 'datetime-local'; closes.setAttribute('aria-label', 'Entries close at');
+  const access = make('select'); access.append(new Option('Open entry — on the notice on the door', 'open'), new Option('Invitational — you name who plays', 'invitational'));
+  access.setAttribute('aria-label', 'Who may enter');
   const said = make('p', 'note'); said.hidden = true;
   const say = text => { said.hidden = false; said.textContent = text; };
   let searching;
@@ -1360,13 +1469,72 @@ function eventOpener(redraw) {
         name: name.value.trim(), startsAt: at(start.value), sessionEndsAt: at(end.value),
         ...(venue.value ? { venueId: venue.value } : {}), ...(label.value.trim() ? { venueLabel: label.value.trim() } : {}),
         ...(capacity.value ? { capacity: Number(capacity.value) } : {}), ...(closes.value ? { entriesCloseAt: new Date(closes.value).toISOString() } : {}),
+        access: access.value,
       });
       location.search = `?event=${encodeURIComponent(made.eventId)}`;
     } catch (e) { say(e.message); open.disabled = false; }
   };
-  form.append(name, day, start, end, venueQ, venue, label, capacity, closes, open);
-  box.append(form, said, make('p', 'quiet', 'Open entry, single players. THRØ draws the first round; later rounds are yours to run at the board for now.'));
+  form.append(name, day, start, end, venueQ, venue, label, capacity, closes, access, open);
+  box.append(form, said, make('p', 'quiet', 'Single players. THRØ draws the first round from the entries and the next from the winners, until the final.'));
   return box;
+}
+
+/**
+ * The organiser's entrants (PD-113): who is in, checked in or not, each removable before the draw; and an invitation —
+ * a player from one of the organiser's own teams' rosters, or by id. On the public page no entrant is named before
+ * the draw; this section only exists when the server sent `entrants`, which it does for the organiser alone.
+ */
+function entrantsSection(e, redraw) {
+  const out = [make('h2', null, `Entered · ${e.entrants.length}`)];
+  const list = make('ul', 'rows');
+  const before = e.state === 'open' || e.state === 'entries_closed';
+  for (const p of e.entrants) {
+    const li = make('li');
+    const head = make('div', 'row-head');
+    head.append(make('div', 'row-name', p.name || 'A player THRØ may not name'), make('span', 'quiet', p.checkedIn ? 'checked in' : 'not yet checked in'));
+    const said = make('p', 'note'); said.hidden = true;
+    if (before) {
+      const remove = make('button', 'quiet-button', 'Remove');
+      remove.onclick = async () => {
+        remove.disabled = true;
+        try { await authorised('POST', `/v1/events/${encodeURIComponent(e.eventId)}/entries/${encodeURIComponent(p.playerId)}/remove`, {}); redraw(); }
+        catch (err) { said.hidden = false; said.textContent = err.message; remove.disabled = false; }
+      };
+      head.append(remove);
+    }
+    li.append(head, said);
+    list.append(li);
+  }
+  out.push(list);
+  if (before) {
+    const box = make('div', 'entry');
+    box.append(make('h2', null, e.access === 'invitational' ? 'Invite a player' : 'Enter a player for them'));
+    const form = make('div', 'entry-form');
+    const pick = make('select'); pick.append(new Option('From your teams…', '')); pick.setAttribute('aria-label', 'A player from one of your teams');
+    const byId = make('input'); byId.type = 'text'; byId.placeholder = 'Or a player id'; byId.setAttribute('aria-label', 'A player id'); byId.maxLength = 36;
+    const said = make('p', 'note'); said.hidden = true;
+    (async () => {
+      try {
+        const mine = await authorised('GET', '/v1/me/teams');
+        for (const t of mine.teams || []) {
+          const front = await read(`/v1/teams/${encodeURIComponent(t.teamId)}`);
+          for (const m of front.roster || []) if (m.playerId && !e.entrants.some(x => x.playerId === m.playerId)) pick.append(new Option(`${m.name || 'A player'} · ${t.name}`, m.playerId));
+        }
+      } catch (err) { said.hidden = false; said.textContent = err.message; }
+    })();
+    const add = make('button', 'primary', e.access === 'invitational' ? 'Invite' : 'Enter them');
+    add.onclick = async () => {
+      const id = pick.value || byId.value.trim();
+      if (!id) { said.hidden = false; said.textContent = 'Pick a player, or paste their id.'; return; }
+      add.disabled = true;
+      try { await authorised('POST', `/v1/events/${encodeURIComponent(e.eventId)}/entries`, { playerId: id }); redraw(); }
+      catch (err) { said.hidden = false; said.textContent = err.message; add.disabled = false; }
+    };
+    form.append(pick, byId, add);
+    box.append(form, said);
+    out.push(box);
+  }
+  return out;
 }
 
 async function mountEvent(where, signInEl, eventId) {
@@ -1387,8 +1555,10 @@ async function mountEvent(where, signInEl, eventId) {
         + (e.entriesCloseAt ? ` · entries close ${when(e.entriesCloseAt)}` : '')),
     ];
     if (e.you) {
-      parts.push(make('p', 'quiet', e.you.entered ? (e.you.checkedIn ? 'You are entered and checked in.' : 'You are entered. Check in from the app on the day.') : 'Entering is done in the app, from Discover.'));
+      parts.push(make('p', 'quiet', e.you.entered ? (e.you.checkedIn ? 'You are entered and checked in.' : 'You are entered. Check in from the app on the day.')
+        : (e.access === 'open' ? 'Entering is done in the app, from Discover.' : 'Invitational: the organiser names who plays.')));
     }
+    if (e.entrants) parts.push(...entrantsSection(e, draw));
     if (e.draw.length) {
       // The bracket, round by round. A decided tie says how; a bye says it is one; the final says who won the day.
       const rounds = [...new Set(e.draw.map(t => t.round))].sort((a, b) => a - b);
