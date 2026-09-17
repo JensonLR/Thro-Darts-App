@@ -6152,3 +6152,15 @@ the desk's card sends `RearrangeFixture`. `SeasonHistory.kt` and `GET /v1/season
 schedule-change trigger to record `thro.actor`, which `OrganisationCommands.rearrangeFixture` sets around its write;
 the desk page's folded *Who changed what* (`details.fold`). `apps/web/qr.js`, the panel's QR on screens that are not
 phones, `tools/check_qr.py`. Looked at: the panel with its QR in a browser at laptop width.
+
+## Paste the fixture list (PD-122)
+
+`Understanding.readList` (`ListRow`, `Skipped`, `ListRead`), a pool of six requests, `times()` no longer taking a day of
+the month for an hour; `POST /v1/seasons/{id}/fixtures/read`; the scheduler's `pasteList` on the desk, shown where the
+server reads; `tools/fake_systemone.py` reads a line plausibly (a name's first word, "named first/second", a fixture
+is two names either side of a v). API 147.
+
+**The phone, signed out, opening a sign-in link (PD-117's known issue).** `follow()` kept the code but showed nothing;
+it now opens the way in for somebody holding no session, and the card follows the moment the account answers
+(`showingAccount` cleared so closing the card does not land on the account screen). Looked at on the simulator: signed
+out, *Not now*, `thro://link/K7TQ2M` → the sign-in board with *Back*.

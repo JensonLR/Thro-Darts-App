@@ -406,7 +406,7 @@ public struct ThroRootView: View {
         }
         .onChange(of: router.pending) { _, _ in follow() }
         .onChange(of: account?.profile?.accountId) { _, id in
-            if id != nil, let code = screenAwaitingAccount { screenAwaitingAccount = nil; openAccount(.screen(code)) }
+            if id != nil, let code = screenAwaitingAccount { screenAwaitingAccount = nil; showingAccount = false; openAccount(.screen(code)) }
         }
         .task {
             follow()
@@ -545,7 +545,12 @@ public struct ThroRootView: View {
             viewing = nil; showingSettings = false; store.flow = nil
             store.tab = .you
             if let profile = account?.profile, profile.accountId != nil { openAccount(.screen(code)) }
-            else { screenAwaitingAccount = code }
+            else {
+                // Kept for whoever signs in next. Somebody holding no session is shown the way in now, so the link
+                // they tapped does something they can see; the card follows the moment the account answers.
+                screenAwaitingAccount = code
+                if let account, account.settled, !account.holdsSession { openAccount(nil) }
+            }
         }
     }
 

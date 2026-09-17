@@ -62,6 +62,8 @@ public class Understanding(private val model: SystemOne, private val today: () -
         private val SCORE = Regex("""(?<!\d)(\d{1,2})\s*(?:-|–|—|to|v)\s*(\d{1,2})(?!\d)""", RegexOption.IGNORE_CASE)
         /** "8", "20:30", "7.30pm", "8 o'clock". Not "15th": an ordinal is a day of the month. */
         private val TIME = Regex("""(?<![\d.:])(\d{1,2})(?:[.:](\d{2}))?\s*(am|pm|o'clock)?(?!\d|st|nd|rd|th)""", RegexOption.IGNORE_CASE)
+        private val MONTH_AFTER = Regex("""^\s*(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)""", RegexOption.IGNORE_CASE)
+        private val MONTH_BEFORE = Regex("""(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\s*$""", RegexOption.IGNORE_CASE)
         private val MONTHS = listOf("January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December")
         private val WEEKDAYS = DayOfWeek.values().map { it.getDisplayName(TextStyle.FULL, Locale.UK) }
         // Written by hand rather than by a locale: Java's UK locale prints "Sept", and the page prints "Sep".
@@ -80,6 +82,9 @@ public class Understanding(private val model: SystemOne, private val today: () -
             val scores = SCORE.findAll(text).flatMap { m -> sequenceOf(m.range) }.toList()
             return TIME.findAll(text).filter { m -> scores.none { r -> m.range.first in r } }
                 .filter { m -> m.groupValues[1].toInt() in 0..24 }
+                // "8 Oct", "October 15": a bare number beside a month's name is a day of the month, not an hour.
+                .filter { m -> m.groupValues[2].isNotEmpty() || m.groupValues[3].isNotEmpty()
+                    || !(MONTH_AFTER.containsMatchIn(text.substring(m.range.last + 1)) || MONTH_BEFORE.containsMatchIn(text.substring(0, m.range.first))) }
                 .filter { m -> m.groupValues[2].isNotEmpty() || m.groupValues[3].isNotEmpty() || m.groupValues[1].toInt() in 1..12 || m.groupValues[1].toInt() in 13..23 }
                 .map { it.value.trim() }.distinct().toList()
         }
@@ -254,6 +259,104 @@ public class Understanding(private val model: SystemOne, private val today: () -
             }
             else -> Understood(clean, "none", actP, false, "That reads as a question or a note, not something THRØ can do from here. Try “Grange A beat Dolphin 5–3”, “Move Riverside v Grange to next Thursday” or “Add Riverside A v Dolphin next Thursday at 8”.", null, null, null, null, null, null)
         }
+    }
+
+    // --- a pasted fixture list (PD-122) -------------------------------------------------------------------------------
+
+    /** One fixture read from one line of a pasted list; [doubt] names what a person must settle before it is scheduled. */
+    public data class ListRow(val line: Int, val text: String, val homeTeamId: UUID?, val home: String?, val awayTeamId: UUID?, val away: String?,
+                              val on: LocalDate?, val time: LocalTime?, val scheduledAt: Instant?, val confidence: Double, val doubt: String?)
+    public data class Skipped(val line: Int, val text: String, val why: String)
+    public data class ListRead(val rows: List<ListRow>, val skipped: List<Skipped>)
+
+    /**
+     * Reads a league's fixture list as it was pasted. One request per line that says anything, six at a time: is it a
+     * fixture, which of the season's teams is at home and away, which month and day, which of the times code found.
+     * Code carries a date heading down to the fixtures beneath it, picks the year that puts a date inside the season,
+     * gives a fixture with no time the list's usual one, and names each row's doubt. Null when the model answered
+     * nothing at all. Nothing is scheduled here.
+     */
+    public fun readList(desk: Desk, text: String): ListRead? {
+        val lines = text.lines().mapIndexed { i, l -> (i + 1) to l.trim() }.filter { it.second.isNotEmpty() }
+        require(lines.size <= 200) { "A list is at most 200 lines. Paste it in parts." }
+        if (lines.isEmpty()) return ListRead(emptyList(), emptyList())
+        val teamKeys = desk.teams.mapIndexed { i, t -> "t${i + 1}" to t }.toMap()
+        val teamOptions = teamKeys.mapValues { it.value.name } + ("none" to "no team of this season is named here")
+
+        fun ask(line: String): Pair<Map<String, Any?>?, Map<String, String>> {
+            val found = times(line).mapIndexed { i, t -> "h${i + 1}" to t }.toMap()
+            val state = obj("line" to line, "context" to "One line from a darts league's published fixture list. Most lines are a fixture: a home team, 'v', an away team, often a date and a time. Some are headings: a date on its own, a division's name, a week number, a note.")
+            val questions = obj(
+                "is_fixture" to obj("type" to "noul", "instructions" to "Is `line` a fixture — two teams playing each other?",
+                                    "criteria" to obj("true" to "two teams are named as playing each other", "false" to "a heading, a date on its own, a note, a bye, or anything else")),
+                "home_team" to choice("Which of the season's teams is the home side in `line` — the one named first? A name may be shortened or misspelt.", teamOptions),
+                "away_team" to choice("Which of the season's teams is the away side in `line` — the one named second? A name may be shortened or misspelt.", teamOptions),
+                "month" to choice("Which month does `line` name, if any?", MONTHS.associateWith { null } + ("none" to "no month is named")),
+                "day" to choice("Which day of the month does `line` name, if any?", (1..31).associate { it.toString() to null } + ("none" to "no day of the month is named")),
+                "time" to choice("Which of these times found in `line` is when the fixture is played?", found.mapValues { "the time written as '${it.value}'" } + ("none" to "no time is stated")),
+            )
+            return (try { model.answers(state, questions) } catch (e: Exception) { null }) to found
+        }
+
+        val pool = java.util.concurrent.Executors.newFixedThreadPool(6)   // the endpoint rate-limits above roughly eight
+        val answered = try { lines.map { (_, l) -> pool.submit<Pair<Map<String, Any?>?, Map<String, String>>> { ask(l) } }.map { it.get() } } finally { pool.shutdown() }
+        if (answered.all { it.first == null }) return null
+
+        fun inSeason(month: Int, day: Int): Pair<LocalDate?, Boolean> {
+            val candidates = (desk.seasonStart.year..desk.seasonEnd.year).mapNotNull { y -> runCatching { LocalDate.of(y, month, day) }.getOrNull() }
+            val inside = candidates.firstOrNull { !it.isBefore(desk.seasonStart) && !it.isAfter(desk.seasonEnd) }
+            return (inside ?: candidates.firstOrNull()) to (inside != null)
+        }
+
+        class Draft(val line: Int, val text: String, val home: Team?, val away: Team?, val on: LocalDate?, val onInSeason: Boolean, val time: LocalTime?, val confidence: Double)
+        val drafts = mutableListOf<Draft>(); val skipped = mutableListOf<Skipped>()
+        var carried: Pair<LocalDate?, Boolean>? = null
+        for ((index, entry) in lines.withIndex()) {
+            val (number, line) = entry
+            val (answers, found) = answered[index]
+            if (answers == null) { skipped += Skipped(number, line, "THRØ could not read this line"); continue }
+            fun pick(id: String): Pair<String, Double>? {
+                val a = answers[id] as? Map<*, *> ?: return null
+                val option = a["choice"] as? String ?: return null
+                return option to (((a["probabilities"] as? Map<*, *>)?.get(option) as? Number)?.toDouble() ?: (a["confidence"] as? Number)?.toDouble() ?: 0.0)
+            }
+            val isFixture = ((answers["is_fixture"] as? Map<*, *>)?.get("noul") as? Number)?.toDouble() ?: 0.0
+            val month = pick("month")?.takeIf { it.first != "none" }; val day = pick("day")?.takeIf { it.first != "none" }
+            val own = if (month != null && day != null) inSeason(MONTHS.indexOf(month.first) + 1, day.first.toInt()) else null
+            if (isFixture < 0.5) {
+                if (own != null) { carried = own; skipped += Skipped(number, line, "a date, carried down") } else skipped += Skipped(number, line, "not a fixture")
+                continue
+            }
+            if (own != null) carried = own
+            val used = mutableListOf(isFixture)
+            val home = pick("home_team"); val away = pick("away_team")
+            home?.let { used += it.second }; away?.let { used += it.second }
+            if (own != null) { used += month!!.second; used += day!!.second }
+            val time = pick("time")?.let { (k, p) -> found[k]?.let { used += p; clockOf(it) } }
+            drafts += Draft(number, line, teamKeys[home?.first], teamKeys[away?.first], (own ?: carried)?.first, (own ?: carried)?.second ?: false, time, used.min())
+        }
+        // The list's usual time: the one stated most often, the first stated when two tie.
+        val usual = drafts.mapNotNull { it.time }.let { stated -> stated.groupingBy { it }.eachCount().maxWithOrNull(compareBy<Map.Entry<LocalTime, Int>> { it.value }.thenBy { -stated.indexOf(it.key) })?.key }
+        val rows = drafts.map { d ->
+            val time = d.time ?: usual
+            val doubt = when {
+                d.home == null || d.away == null || d.home.teamId == d.away.teamId -> "teams"
+                d.on == null || !d.onInSeason -> "date"
+                time == null -> "time"
+                else -> null
+            }
+            val at = if (doubt == null) d.on!!.atTime(time!!).atZone(ZONE).toInstant() else null
+            ListRow(d.line, d.text, d.home?.teamId, d.home?.name, d.away?.teamId, d.away?.name, d.on, time, at, d.confidence, doubt)
+        }
+        return ListRead(rows, skipped)
+    }
+
+    public fun json(l: ListRead): String {
+        fun q(s: String?) = s?.let { Contract.q(it) } ?: "null"
+        return "{\"rows\":[" + l.rows.joinToString(",") { r ->
+            """{"line":${r.line},"text":${q(r.text)},"homeTeamId":${q(r.homeTeamId?.toString())},"home":${q(r.home)},"awayTeamId":${q(r.awayTeamId?.toString())},"away":${q(r.away)},""" +
+                """"on":${q(r.on?.toString())},"time":${q(r.time?.toString())},"scheduledAt":${q(r.scheduledAt?.toString())},"confidence":${"%.2f".format(Locale.ROOT, r.confidence)},"doubt":${q(r.doubt)}}"""
+        } + "],\"skipped\":[" + l.skipped.joinToString(",") { """{"line":${it.line},"text":${q(it.text)},"why":${q(it.why)}}""" } + "]}"
     }
 
     /** The calendar, done by code from the parts the model read (the date-extraction cookbook's split). */

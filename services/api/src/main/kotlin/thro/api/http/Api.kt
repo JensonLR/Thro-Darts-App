@@ -532,6 +532,19 @@ public object Contract {
                               401 to "no principal", 403 to "you do not administer this season", 404 to "no such season"),
         ),
         Endpoint(
+            id = "seasons.fixtures.read", method = "POST", path = "/v1/seasons/{leagueSeasonId}/fixtures/read", authenticated = true,
+            summary = "Paste the fixture list: read each line into a fixture to confirm (PD-122)",
+            description = "By the season's administrator. The league's list as it is written — a date heading, 'Riverside A v Grange A "
+                + "7.30pm', '15 Oct - Grange v Dolphin' — is read a line at a time by a System One model against the season's own "
+                + "teams. A heading's date carries down; the year is the one that puts the date inside the season; a fixture "
+                + "with no time takes the list's usual one. Each row names its doubt (teams, date, time). **Nothing is "
+                + "scheduled here**: the rows go, confirmed, to `POST /v1/seasons/{id}/fixtures`. At most 200 lines.",
+            request = Schema("""{"type":"object","required":["text"],"properties":{"text":{"type":"string","maxLength":20000}}}"""),
+            responses = mapOf(200 to "rows (line, text, homeTeamId, home, awayTeamId, away, on, time, scheduledAt, confidence, doubt) and skipped (line, text, why)",
+                              400 to "nothing pasted, or too much", 401 to "no principal", 403 to "you do not administer this season", 404 to "no such season",
+                              503 to "no model on this server, or the model did not answer"),
+        ),
+        Endpoint(
             id = "seasons.understand", method = "POST", path = "/v1/seasons/{leagueSeasonId}/understand", authenticated = true,
             summary = "Tell THRØ: read a sentence on the desk into an act to confirm (PD-119)",
             description = "By the season's administrator. One sentence — 'Grange A beat Dolphin 5-3 last night', 'walkover to Riverside', "

@@ -224,3 +224,11 @@ details.fold > summary::-webkit-details-marker { display: none; }
 details.fold > summary::after { content: '+'; margin-left: auto; font-size: 24px; color: var(--color-text-brand); }
 details.fold[open] > summary::after { content: '–'; }
 details.fold > summary:focus-visible { outline: 3px solid var(--color-border-focus, var(--color-background-brand)); outline-offset: 2px; }
+
+/* A pasted fixture list (PD-122): the league's own words above each row THRØ read from them. */
+.paste { margin-top: 18px; border-top: 1px solid var(--color-border-default); padding-top: 12px; }
+.paste textarea { width: 100%; box-sizing: border-box; font: inherit; padding: 12px; color: var(--color-text-primary);
+                  background: var(--color-background-primary); border: 1px solid var(--color-border-default); border-radius: var(--radius-field); }
+.paste textarea:focus-visible { outline: 3px solid var(--color-border-focus, var(--color-background-brand)); outline-offset: 2px; }
+.paste-row .entry-form { margin-top: 6px; }
+.paste-row input[type="checkbox"] { width: 22px; height: 22px; flex: none; accent-color: var(--color-background-brand); }

@@ -5215,3 +5215,34 @@ approves it.
 
 **Needs.** TestFlight build 16 or later on the phone (the `applinks` entitlement), and — for a phone without THRØ —
 the `/link/*` rewrite on the static site, which still waits on a Blueprint sync.
+
+## PD-122 — Paste the fixture list
+
+**17 September 2026.** "Fixture import from a published list" has been open since PD-099. A league's season is ninety
+lines somebody has already typed — on a sheet, in an email, on last year's page — and the first evening a secretary
+spends with THRØ is spent typing them again into boxes. It is the same shape as PD-119, a line at a time: TypeSafe's
+structure-recovery and pre-parsed-extraction cookbooks, with entity alignment against the season's own teams.
+
+**Decided.**
+
+1. **The desk takes the list as it is written.** `POST /v1/seasons/{id}/fixtures/read` reads each line that says
+   anything with one request to the model, six at a time (the endpoint rate-limits above roughly eight): *is this a
+   fixture*, *which of the season's teams is at home* and *away* ("Riverside" is Riverside A; a misspelling is still
+   the team), *which month and day*, *which of the times code found*. At most 200 lines.
+2. **Code does what is not reading.** A date on its own line carries down to the fixtures beneath it. No year is
+   asked for: the year is the one that puts the date inside the season. A bare number beside a month's name is a day,
+   not an hour. A fixture with no time takes the list's usual one — the time stated most often, the first stated when
+   two tie — and when no line states a time the page asks once for them all.
+3. **Every row names its doubt** — *teams* (one not in the season, or the same twice), *date* (none, or outside the
+   season), *time* — and comes back beside the league's own words for that line. Rows without a doubt are ticked;
+   every field can be changed; headings and notes are listed as left out, with why.
+4. **Nothing is scheduled by reading.** *Add the ticked fixtures* sends them to `POST /v1/seasons/{id}/fixtures`,
+   which has always been all or nothing: if one cannot be played — a team twice on a night — THRØ says which and adds
+   none.
+
+**Evidence.** `FixtureListTest` (3): a pasted list of eight lines into five rows, the heading's date carried down,
+January placed in the season's second year, the usual time filled in, the least certain part as the confidence, the
+left-out lines with why; each doubt; a list over 200 lines refused and a silent model no reading. It was run red
+first, on the unresolved `readList`. `LeagueActsHttpTest`: 403, 400, and a pasted list over the wire. Looked at in a
+browser against the stand-in: the rows, a doubtful row unticked, the server refusing a night with a team twice in
+words, and the fixture added once that line was unticked.

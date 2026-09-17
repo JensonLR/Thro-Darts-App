@@ -764,7 +764,7 @@ async function mountOrganiser(where, signInEl) {
       parts.push(list);
       parts.push(make('p', 'quiet', 'Correcting a result does not rub the old one out: it records a second decision, with your name on it, that supersedes the first.'));
     }
-    parts.push(scheduler(plan, draw));
+    parts.push(scheduler(plan, draw, !!(offers && offers.reads)));
     parts.push(historySection(plan));
     where.replaceChildren(...parts);
   };
@@ -1335,7 +1335,7 @@ async function mountOrganiser(where, signInEl) {
    * server checks every fixture again — accepted teams, one division, inside the season — refusing the whole list
    * if any one cannot be played.
    */
-  function scheduler(plan, redraw) {
+  function scheduler(plan, redraw, reads) {
     const box = make('div', 'entry');
     box.append(make('h2', null, 'Add fixtures'));
     const accepted = plan.teams.filter(t => t.status === 'accepted');
@@ -1423,7 +1423,84 @@ async function mountOrganiser(where, signInEl) {
                make('p', 'quiet', 'One fixture'), one,
                make('p', 'quiet', `Or the whole division as a round robin, inside the season (${day(plan.startsOn)} to ${day(plan.endsOn)})`), whole,
                preview, said);
+    if (reads) box.append(pasteList());
     return box;
+
+    /**
+     * Paste the league's list (PD-122). The season is usually already typed somewhere — a sheet, an email, last year's
+     * page — so the desk takes it as it is written. THRØ reads each line into a row; the rows it is sure of are ticked,
+     * the ones in doubt say what to settle, and nothing is added until the person presses the button.
+     */
+    function pasteList() {
+      const wrap = make('div', 'paste');
+      wrap.append(make('p', 'quiet', 'Or paste the league’s own list, as it is written — a date on its own line carries down to the fixtures under it.'));
+      const area = make('textarea'); area.rows = 6; area.setAttribute('aria-label', 'The fixture list');
+      area.placeholder = 'Thursday 8 October\nRiverside A v Grange A 7.30pm\nDolphin v Bell B\n15 Oct - Grange A v Dolphin 8pm';
+      const go = make('button', 'primary', 'Read the list');
+      const note = make('p', 'note'); note.hidden = true;
+      const out = make('div');
+      const acts = make('div', 'acts'); acts.append(go);
+      wrap.append(area, acts, note, out);
+      go.onclick = async () => {
+        if (!area.value.trim()) { area.focus(); return; }
+        go.disabled = true; note.hidden = true; out.replaceChildren(make('p', 'quiet', 'Reading each line…'));
+        try {
+          const read = await authorised('POST', `/v1/seasons/${encodeURIComponent(plan.leagueSeasonId)}/fixtures/read`, { text: area.value });
+          out.replaceChildren(rowsOf(read));
+        } catch (e) { out.replaceChildren(); note.hidden = false; note.textContent = e.message; }
+        go.disabled = false;
+      };
+
+      function rowsOf(read) {
+        const holder = make('div');
+        if (!read.rows.length) { holder.append(make('p', 'quiet', 'THRØ found no fixture in that. One to a line: “Riverside A v Grange A 7.30pm”.')); return holder; }
+        const usual = make('input'); usual.type = 'time'; usual.value = (read.rows.find(r => r.time) || {}).time ? read.rows.find(r => r.time).time.slice(0, 5) : '19:30';
+        usual.setAttribute('aria-label', 'The time for fixtures that state none');
+        const needTime = read.rows.some(r => !r.time);
+        if (needTime) { const l = make('label', 'spec', 'No time is stated on some lines. Play them at '); l.append(usual); holder.append(l); }
+        const list = make('ul', 'rows');
+        const made = [];
+        for (const r of read.rows) {
+          const li = make('li', 'paste-row');
+          const tick = make('input'); tick.type = 'checkbox'; tick.checked = !r.doubt || r.doubt === 'time';
+          tick.setAttribute('aria-label', `Add ${r.home || 'a team'} v ${r.away || 'a team'}`);
+          const homeSel = select(accepted.map(t => [t.teamId, t.name]), 'Home'); const awaySel = select(accepted.map(t => [t.teamId, t.name]), 'Away');
+          if (r.homeTeamId) homeSel.value = r.homeTeamId; if (r.awayTeamId) awaySel.value = r.awayTeamId;
+          const on = make('input'); on.type = 'date'; on.min = plan.startsOn; on.max = plan.endsOn; if (r.on) on.value = r.on;
+          on.setAttribute('aria-label', 'The day');
+          const at = make('input'); at.type = 'time'; if (r.time) at.value = r.time.slice(0, 5);
+          at.setAttribute('aria-label', 'The time');
+          const form = make('div', 'entry-form'); form.append(tick, homeSel, make('span', 'v', 'v'), awaySel, on, at);
+          const doubt = { teams: 'check the teams', date: 'check the date', time: null }[r.doubt];
+          li.append(make('div', 'row-meta', `“${r.text}”` + (doubt ? ` · ${doubt}` : '')), form);
+          list.append(li);
+          made.push({ tick, homeSel, awaySel, on, at });
+        }
+        holder.append(list);
+        if (read.skipped.length) holder.append(make('p', 'quiet', `Left out: ${read.skipped.map(s => `“${s.text}” (${s.why})`).join(' · ')}`));
+        const add = make('button', 'primary', 'Add the ticked fixtures');
+        const told = make('p', 'note'); told.hidden = true;
+        add.onclick = async () => {
+          const fixtures = [];
+          for (const m of made) {
+            if (!m.tick.checked) continue;
+            const time = m.at.value || usual.value;
+            if (!m.homeSel.value || !m.awaySel.value || m.homeSel.value === m.awaySel.value || !m.on.value || !time) {
+              told.hidden = false; told.textContent = 'Every ticked line needs two different teams, a day and a time. Untick the ones to leave out.'; return;
+            }
+            const division = (accepted.find(t => t.teamId === m.homeSel.value) || {}).divisionId;
+            fixtures.push({ homeTeamId: m.homeSel.value, awayTeamId: m.awaySel.value, scheduledAt: instant(m.on.value, time), ...(division ? { divisionId: division } : {}) });
+          }
+          if (!fixtures.length) { told.hidden = false; told.textContent = 'Tick the fixtures to add.'; return; }
+          told.hidden = true;
+          await send(fixtures, add);
+        };
+        const foot = make('div', 'acts'); foot.append(add);
+        holder.append(foot, told, make('p', 'quiet', 'They are added together or not at all: if one cannot be played, THRØ says which and adds none.'));
+        return holder;
+      }
+      return wrap;
+    }
   }
 
   /**

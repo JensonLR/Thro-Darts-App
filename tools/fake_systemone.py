@@ -23,14 +23,27 @@ def words(s):
     return set(WORD.findall(str(s).lower()))
 
 
+def overlap_of(have, wanted):
+    """Whole words, and a word of three letters or more that begins one — "Oct" for October, "Riverside" for Riverside A."""
+    return sum(1 for w in wanted if w in have or any(len(h) >= 3 and w.startswith(h) for h in have))
+
+
 def choose(text, question):
     criteria = question.get("criteria", {})
     keys = list(criteria)
     have = words(text)
+    asks = str(question.get("instructions", "")).lower()
     scored = []
     for key in keys:
         desc = criteria.get(key) or ""
-        overlap = len(have & (words(desc) | words(key.replace("_", " "))))
+        overlap = overlap_of(have, words(desc) | words(key.replace("_", " ")))
+        # "the one named first" / "named second": among the names that match, the earliest or the latest in the text.
+        first_word = (WORD.findall(str(desc).lower()) or [""])[0]
+        at = text.lower().find(first_word) if first_word and overlap else -1
+        if at >= 0 and "named second" in asks:
+            overlap += at / 1000.0
+        elif at >= 0 and "named first" in asks:
+            overlap += (1000 - at) / 100000.0
         scored.append((overlap, key))
     scored.sort(key=lambda kv: (-kv[0], keys.index(kv[1])))
     best, second = scored[0], (scored[1] if len(scored) > 1 else (0, None))
@@ -51,14 +64,16 @@ class Handler(BaseHTTPRequestHandler):
     def do_POST(self):
         body = json.loads(self.rfile.read(int(self.headers.get("Content-Length", 0))) or b"{}")
         state = body.get("state", "")
-        text = state.get("text", json.dumps(state)) if isinstance(state, dict) else str(state)
+        text = (state.get("text") or state.get("line") or json.dumps(state)) if isinstance(state, dict) else str(state)
         answers = {}
         for qid, q in body.get("questions", {}).items():
             kind = q.get("type")
             if kind == "choice":
                 answers[qid] = choose(text, q)
             elif kind == "noul":
-                answers[qid] = {"type": "noul", "noul": 0.1}
+                # The one yes/no the desk asks that a stand-in can answer: a fixture is two names either side of a "v".
+                fixture = "fixture" in str(q.get("instructions", "")).lower() and re.search(r"\sv\.?\s", text.lower()) is not None
+                answers[qid] = {"type": "noul", "noul": 0.93 if fixture else 0.06}
             elif kind == "score":
                 levels = q.get("criteria", [])
                 answers[qid] = {"type": "score", "score": 0.0, "legend": {str(i): l for i, l in enumerate(levels)},

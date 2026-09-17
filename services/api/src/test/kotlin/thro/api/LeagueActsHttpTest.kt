@@ -136,6 +136,15 @@ class LeagueActsHttpTest {
                 fun options(id: String) = (q[id] as Map<String, Any?>)["criteria"] as Map<String, Any?>
                 fun pick(id: String, vararg words: String) = options(id).entries.first { (_, v) -> words.all { w -> (v?.toString() ?: "").contains(w) } }.key
                 fun choice(option: String, p: Double) = mapOf("type" to "choice", "choice" to option, "probabilities" to mapOf(option to p), "confidence" to p)
+                if (q.containsKey("is_fixture")) {
+                    // PD-122: one line of a pasted list. Teams by name, in the order the line names them.
+                    val line = Json.parseObject(state)["line"] as String
+                    val named = options("home_team").filterKeys { it != "none" }.mapNotNull { (k, v) -> line.indexOf(v.toString()).takeIf { it >= 0 }?.let { k to it } }.sortedBy { it.second }.map { it.first }
+                    return mapOf("is_fixture" to mapOf("type" to "noul", "noul" to if (line.contains(" v ")) 0.96 else 0.05),
+                                 "home_team" to choice(named.getOrNull(0) ?: "none", 0.9), "away_team" to choice(named.getOrNull(1) ?: "none", 0.9),
+                                 "month" to choice(if (line.contains("Nov")) "November" else "none", 0.9), "day" to choice(if (line.contains("12")) "12" else "none", 0.9),
+                                 "time" to choice(options("time").keys.firstOrNull { it != "none" } ?: "none", 0.9))
+                }
                 return mapOf("act" to choice("result", 0.95), "fixture" to choice(pick("fixture", "Riverside A", "Grange A"), 0.9),
                              "score" to choice(pick("score", "5-3"), 0.96), "first_number" to choice("home", 0.9), "winner" to choice("home", 0.9))
             }
@@ -152,6 +161,15 @@ class LeagueActsHttpTest {
             check("the sentence is read as a result for the fixture, with the numbers on the right sides",
                 read.status.value == 200 && body.contains("\"act\":\"result\"") && body.contains("\"fixtureId\":\"$fixture\"")
                     && body.contains("\"legsHome\":5,\"legsAway\":3") && body.contains("\"ready\":true") && body.contains("Riverside A 5–3 Grange A, Thu 8 Oct"))
+            // PD-122: the league's list, pasted.
+            check("reading a list is the administrator's", post("/v1/seasons/$season/fixtures/read", """{"text":"12 Nov Grange A v Riverside A 8pm"}""", ade).status.value == 403)
+            check("nothing pasted is a 400", post("/v1/seasons/$season/fixtures/read", """{"text":"  "}""", lee).status.value == 400)
+            val list = post("/v1/seasons/$season/fixtures/read", """{"text":"DIVISION A\nThursday 12 November\nGrange A v Riverside A 8pm"}""", lee)
+            val listed = list.bodyAsText()
+            check("a pasted list comes back as rows to confirm, the heading's date carried down",
+                list.status.value == 200 && listed.contains("\"home\":\"Grange A\"") && listed.contains("\"away\":\"Riverside A\"")
+                    && listed.contains("\"on\":\"2026-11-12\",\"time\":\"20:00\",\"scheduledAt\":\"2026-11-12T20:00:00Z\"") && listed.contains("\"doubt\":null")
+                    && listed.contains("\"why\":\"a date, carried down\"") && listed.contains("\"why\":\"not a fixture\""))
             check("and the server tells the web it can read", client.get("/v1/auth/providers").bodyAsText().contains("\"reads\":true"))
         }
         println("league acts over HTTP: $passed checks passed")

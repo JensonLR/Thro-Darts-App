@@ -493,6 +493,32 @@ public fun Application.thro(deps: Deps) {
             if (SeasonPlanning(r.connection()).season(season) == null) Http(404, """{"error":"THRØ has no such league season."}""")
             else leagueAdmin(r, season) { SeasonHistory(r.connection()).let { h -> Http(200, h.json(h.of(season))) } }
         },
+        // PD-122: paste the fixture list. Each line read into a row to confirm; nothing is scheduled here.
+        "seasons.fixtures.read" to { r ->
+            val season = UUID.fromString(r.call.parameters["leagueSeasonId"])
+            val model = deps.systemOne
+            val desk = Understanding.desk(r.connection(), season)
+            when {
+                desk == null -> Http(404, """{"error":"THRØ has no such league season."}""")
+                else -> leagueAdmin(r, season) {
+                    val text = (Json.parseObject(r.body)["text"] as? String).orEmpty()
+                    when {
+                        model == null -> Http(503, """{"error":"THRØ cannot read a list on this server yet."}""")
+                        text.isBlank() -> Http(400, """{"error":"Paste the fixture list: one fixture to a line."}""")
+                        text.length > 20_000 -> Http(400, """{"error":"That is more than a season's list. Paste it in parts."}""")
+                        else -> {
+                            val u = Understanding(model) { deps.now().atZone(Understanding.ZONE).toLocalDate() }
+                            try {
+                                when (val read = u.readList(desk, text)) {
+                                    null -> Http(503, """{"error":"THRØ could not read that just now. Try again, or add the fixtures below."}""")
+                                    else -> Http(200, u.json(read))
+                                }
+                            } catch (e: IllegalArgumentException) { Http(400, """{"error":${Contract.q(e.message ?: "That list could not be read.")}}""") }
+                        }
+                    }
+                }
+            }
+        },
         // PD-119: Tell THRØ. A sentence on the desk, read into an act to confirm; nothing is recorded here.
         "seasons.understand" to { r ->
             val season = UUID.fromString(r.call.parameters["leagueSeasonId"])
