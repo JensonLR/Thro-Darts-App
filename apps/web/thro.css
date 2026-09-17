@@ -203,6 +203,10 @@ p.eyebrow + p.wordmark { margin-top: 2px; }
                 margin: 14px 0 10px; color: var(--color-text-primary); }
 .signin .steps { margin: 0 0 12px; padding-left: 1.3em; color: var(--color-text-secondary); }
 .signin .steps li { margin: 4px 0; }
+/* The code as a QR (PD-121). Dark on light in both themes: a camera reads an inverted code badly, if at all. */
+.signin .qr { width: 176px; max-width: 60%; margin: 6px 0 4px; border-radius: var(--radius-field); overflow: hidden; line-height: 0; }
+.signin .qr svg { display: block; width: 100%; height: auto; }
+.signin .qr + p.quiet { margin-top: 4px; }
 .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 12px; margin: 20px 0 8px; }
 .card { display: block; border: 1px solid var(--color-border-default); border-radius: var(--radius-card); padding: 18px;
         background: var(--color-background-raised); color: inherit; text-decoration: none; }
@@ -211,3 +215,12 @@ p.eyebrow + p.wordmark { margin-top: 2px; }
 .card p { margin: 0; color: var(--color-text-secondary); font-size: 14px; }
 .card .go { display: inline-block; margin-top: 10px; color: var(--color-text-brand); font-weight: var(--font-weight-semibold); }
 ul.rows li.more { padding: 12px 0; }
+
+/* A section folded behind its name (PD-120: Who changed what). Opened by whoever wants it; never in the way. */
+details.fold { margin-top: 32px; border-top: 1px solid var(--color-border-default); padding-top: 8px; }
+details.fold > summary { cursor: pointer; list-style: none; display: flex; align-items: center; min-height: 44px;
+                         font-weight: var(--font-weight-semibold); font-size: 20px; color: var(--color-text-primary); }
+details.fold > summary::-webkit-details-marker { display: none; }
+details.fold > summary::after { content: '+'; margin-left: auto; font-size: 24px; color: var(--color-text-brand); }
+details.fold[open] > summary::after { content: '–'; }
+details.fold > summary:focus-visible { outline: 3px solid var(--color-border-focus, var(--color-background-brand)); outline-offset: 2px; }

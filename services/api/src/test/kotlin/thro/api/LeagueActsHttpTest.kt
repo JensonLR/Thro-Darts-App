@@ -116,6 +116,13 @@ class LeagueActsHttpTest {
                 Regex("\"registered\":\\[.*\"team\":\"Riverside A\"[^}]*\"until\":\"2026-10-01").containsMatchIn(registrations) && Regex("\"team\":\"Grange A\"[^}]*\"until\":null").containsMatchIn(registrations))
             check("transferring again to the same team is a 409", post("/v1/seasons/$season/registrations/$sam/transfer", transfer, lee).status.value == 409)
 
+            // PD-120: who changed what, for the season's administrators and nobody else.
+            check("the season's history is the administrator's", get("/v1/seasons/$season/history", ade).status.value == 403)
+            val history = get("/v1/seasons/$season/history", lee)
+            check("and it says, in words, what was done and by whom",
+                history.status.value == 200 && history.bodyAsText().contains("\"what\":\"Set the points rules (version 2)\"")
+                    && history.bodyAsText().contains("\"who\":\"Lee Organiser\"") && history.bodyAsText().contains("Registered Sam Wilson with Grange A"))
+
             // PD-119: a server with no System One model cannot read a sentence, and says so rather than guessing.
             val unread = post("/v1/seasons/$season/understand", """{"text":"Riverside beat Grange 5-3"}""", lee)
             check("without a model, Tell THRØ answers 503 in words", unread.status.value == 503 && unread.bodyAsText().contains("cannot read"))

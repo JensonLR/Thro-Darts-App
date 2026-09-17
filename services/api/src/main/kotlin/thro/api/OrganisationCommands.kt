@@ -206,17 +206,22 @@ public class OrganisationCommands(private val connection: Connection) {
         if (current.first != cmd.expectedVersion) {
             return Result.Stale(current.first, current.second)
         }
-        val n = connection.prepareStatement(
-            """
-            UPDATE competition.league_fixture
-               SET scheduled_at = ?, venue_id = coalesce(?, venue_id), schedule_state = 'rearranged', row_version = ?
-             WHERE fixture_id = ? AND row_version = ?
-            """.trimIndent(),
-        ).use { ps ->
-            ps.setObject(1, Timestamp.from(cmd.to)); ps.setObject(2, cmd.venueId)
-            ps.setInt(3, cmd.expectedVersion + 1); ps.setObject(4, cmd.fixtureId); ps.setInt(5, cmd.expectedVersion)
-            ps.executeUpdate()
-        }
+        // PD-120: the change log's trigger cannot see who is asking, so the handler says — as V016 says which proposal.
+        fun actor(value: String) = connection.prepareStatement("SELECT set_config('thro.actor', ?, false)").use { ps -> ps.setString(1, value); ps.executeQuery().close() }
+        actor(cmd.actorId.toString())
+        val n = try {
+            connection.prepareStatement(
+                """
+                UPDATE competition.league_fixture
+                   SET scheduled_at = ?, venue_id = coalesce(?, venue_id), schedule_state = 'rearranged', row_version = ?
+                 WHERE fixture_id = ? AND row_version = ?
+                """.trimIndent(),
+            ).use { ps ->
+                ps.setObject(1, Timestamp.from(cmd.to)); ps.setObject(2, cmd.venueId)
+                ps.setInt(3, cmd.expectedVersion + 1); ps.setObject(4, cmd.fixtureId); ps.setInt(5, cmd.expectedVersion)
+                ps.executeUpdate()
+            }
+        } finally { actor("") }
         if (n == 0) {
             val now = currentFixture(cmd.fixtureId) ?: return Result.Refused("no such fixture")
             return Result.Stale(now.first, now.second)

@@ -523,6 +523,15 @@ public object Contract {
                               403 to "you neither run this season nor a team in it", 404 to "no such league season"),
         ),
         Endpoint(
+            id = "seasons.history", method = "GET", path = "/v1/seasons/{leagueSeasonId}/history", authenticated = true,
+            summary = "Who changed what in a season, newest first (PD-120)",
+            description = "By the season's administrators. Results, corrections, awards, annulments, moved fixtures, rules and "
+                + "registrations, each read back from the row that already records its actor and its time, as a sentence. An "
+                + "official is named only where THRØ may name them; otherwise `who` is null and the sentence stands.",
+            responses = mapOf(200 to "entries: at, who, kind (result, correction, award, void, move, rules, registration), what",
+                              401 to "no principal", 403 to "you do not administer this season", 404 to "no such season"),
+        ),
+        Endpoint(
             id = "seasons.understand", method = "POST", path = "/v1/seasons/{leagueSeasonId}/understand", authenticated = true,
             summary = "Tell THRØ: read a sentence on the desk into an act to confirm (PD-119)",
             description = "By the season's administrator. One sentence — 'Grange A beat Dolphin 5-3 last night', 'walkover to Riverside', "

@@ -55,6 +55,7 @@ import thro.api.MatchRecords
 import thro.api.LeagueTable
 import thro.api.Reader
 import thro.api.Reading
+import thro.api.SeasonHistory
 import thro.api.SystemOne
 import thro.api.Understanding
 import thro.api.Safety
@@ -485,6 +486,12 @@ public fun Application.thro(deps: Deps) {
                 null -> Http(404, """{"error":"THRØ has no such league season."}""")
                 else -> leagueAdmin(r, season) { Http(200, planning.json(s)) }
             }
+        },
+        // PD-120: who changed what in a season, for the people who run it — read back from rows that already name them.
+        "seasons.history" to { r ->
+            val season = UUID.fromString(r.call.parameters["leagueSeasonId"])
+            if (SeasonPlanning(r.connection()).season(season) == null) Http(404, """{"error":"THRØ has no such league season."}""")
+            else leagueAdmin(r, season) { SeasonHistory(r.connection()).let { h -> Http(200, h.json(h.of(season))) } }
         },
         // PD-119: Tell THRØ. A sentence on the desk, read into an act to confirm; nothing is recorded here.
         "seasons.understand" to { r ->

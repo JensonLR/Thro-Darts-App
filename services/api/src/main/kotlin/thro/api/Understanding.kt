@@ -33,6 +33,8 @@ public class Understanding(private val model: SystemOne, private val today: () -
     public data class Picked(val fixtureId: UUID, val home: String, val away: String, val at: Instant, val p: Double, val alternatives: List<Alternative>)
     public data class Result(val legsHome: Int, val legsAway: Int)
     public data class Award(val toTeamId: UUID, val toName: String, val reason: String)
+    /** Where a fixture is moved to. With no time in the sentence, the fixture keeps the clock time it had. */
+    public data class Move(val on: LocalDate, val time: LocalTime, val to: Instant)
     public data class Schedule(val homeTeamId: UUID, val home: String, val awayTeamId: UUID, val away: String, val on: LocalDate?, val time: LocalTime?, val scheduledAt: Instant?)
     /**
      * What the sentence was read as. [ready] when every part the act needs is there and nothing contradicts; [doubt]
@@ -42,6 +44,7 @@ public class Understanding(private val model: SystemOne, private val today: () -
     public data class Understood(
         val text: String, val act: String, val confidence: Double, val ready: Boolean, val say: String, val doubt: String?,
         val fixture: Picked?, val result: Result?, val award: Award?, val schedule: Schedule?, val reason: String?,
+        val move: Move? = null,
     )
 
     public companion object {
@@ -51,6 +54,7 @@ public class Understanding(private val model: SystemOne, private val today: () -
             "result" to "Recording what a fixture finished as: the legs each side won, e.g. 'Grange A beat Dolphin 5-3'",
             "award" to "Awarding a fixture nobody played to one side: a walkover, a forfeit, a team that did not turn up",
             "void" to "Annulling a result already recorded, so the fixture is played again",
+            "move" to "Moving a fixture already in the season to another day or time: a postponement, a rearrangement, 'is off until'",
             "schedule" to "Adding a new fixture to the season: two teams and a date",
             "none" to "None of these: a question, a note, a greeting, or something the desk cannot do",
         )
@@ -196,6 +200,30 @@ public class Understanding(private val model: SystemOne, private val today: () -
                 val say = if (fixture != null) "${fixture.home} v ${fixture.away}, ${day(fixture.at)} — result annulled, to be replayed" else "An annulment, but of which fixture?"
                 Understood(clean, act, used.min(), doubt == null, say, doubt, fixture, null, null, null, clean)
             }
+            "move" -> {
+                val fixture = fixturePicked()
+                var move: Move? = null
+                val f = fixture?.let { p -> desk.fixtures.first { it.fixtureId == p.fixtureId } }
+                if (f == null || f.decided) doubt = "fixture"
+                else {
+                    val on = date(pick("date_mode"), pick("day_anchor"), pick("weekday"), pick("week_offset"), pick("month"), pick("day"), used)
+                    val (tKey, tP) = pick("time") ?: ("none" to 0.0)
+                    // No time in the sentence: the clock time the fixture already had, in London.
+                    val time = times[tKey]?.let { used += tP; clockOf(it) } ?: f.at.atZone(ZONE).toLocalTime()
+                    when {
+                        on == null -> doubt = "date"
+                        on.isBefore(desk.seasonStart) || on.isAfter(desk.seasonEnd) -> { doubt = "date"; move = Move(on, time, on.atTime(time).atZone(ZONE).toInstant()) }
+                        else -> move = Move(on, time, on.atTime(time).atZone(ZONE).toInstant())
+                    }
+                }
+                val say = when {
+                    fixture == null -> "A move, but of which fixture?"
+                    f != null && f.decided -> "${fixture.home} v ${fixture.away}, ${day(fixture.at)} has a result, so it is not moved. Annul the result first."
+                    move == null -> "${fixture.home} v ${fixture.away}, ${day(fixture.at)} — moved to when?"
+                    else -> "${fixture.home} v ${fixture.away}, ${day(fixture.at)} → ${dayOf(move.on)}, ${clock(move.time)}"
+                }
+                Understood(clean, act, used.min(), doubt == null, say, doubt, fixture, null, null, null, null, move)
+            }
             "schedule" -> {
                 val (hKey, hP) = pick("home_team") ?: ("none" to 0.0)
                 val (aKey, aP) = pick("away_team") ?: ("none" to 0.0)
@@ -224,7 +252,7 @@ public class Understanding(private val model: SystemOne, private val today: () -
                 }
                 Understood(clean, act, used.min(), doubt == null, say, doubt, null, null, null, schedule, null)
             }
-            else -> Understood(clean, "none", actP, false, "That reads as a question or a note, not something THRØ can do from here. Try “Grange A beat Dolphin 5–3” or “Add Riverside A v Dolphin next Thursday at 8”.", null, null, null, null, null, null)
+            else -> Understood(clean, "none", actP, false, "That reads as a question or a note, not something THRØ can do from here. Try “Grange A beat Dolphin 5–3”, “Move Riverside v Grange to next Thursday” or “Add Riverside A v Dolphin next Thursday at 8”.", null, null, null, null, null, null)
         }
     }
 
@@ -285,8 +313,9 @@ public class Understanding(private val model: SystemOne, private val today: () -
         val schedule = u.schedule?.let { s ->
             """{"homeTeamId":"${s.homeTeamId}","home":${q(s.home)},"awayTeamId":"${s.awayTeamId}","away":${q(s.away)},"on":${q(s.on?.toString())},"time":${q(s.time?.toString())},"scheduledAt":${q(s.scheduledAt?.toString())}}"""
         } ?: "null"
+        val move = u.move?.let { """{"on":"${it.on}","time":"${it.time}","to":"${it.to}"}""" } ?: "null"
         return """{"text":${q(u.text)},"act":${q(u.act)},"confidence":${n(u.confidence)},"ready":${u.ready},"say":${q(u.say)},"doubt":${q(u.doubt)},""" +
-            """"fixture":$fixture,"result":$result,"award":$award,"schedule":$schedule,"reason":${q(u.reason)}}"""
+            """"fixture":$fixture,"result":$result,"award":$award,"schedule":$schedule,"move":$move,"reason":${q(u.reason)}}"""
     }
 
     private fun choice(instructions: String, criteria: Map<String, String?>): String =

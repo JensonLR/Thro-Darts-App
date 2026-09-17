@@ -423,6 +423,10 @@ function signInPanel(redraw) {
     : ['Open THRØ on your phone', 'You → Profile → Sign in on a screen', 'Type this code'];
   for (const step of words) steps.append(make('li', null, step));
   const elsewhere = phone ? make('p', 'quiet', 'THRØ on another phone? Open it there: You → Profile → Sign in on a screen, and type the code above.') : null;
+  // PD-121: on a laptop, the same address as a QR code — a phone's camera opens THRØ on the card that approves it,
+  // with nothing typed. Drawn here by qr.js, fetched only when a code is showing on a screen that is not a phone.
+  const qr = make('div', 'qr'); qr.hidden = true;
+  const qrWords = make('p', 'quiet', 'Or point your phone’s camera at this.'); qrWords.hidden = true;
   const said = make('p', 'quiet', 'Asking THRØ for a code…');
   const again = make('button', 'quiet-button', 'New code'); again.hidden = true;
   const acts = make('div', 'acts');
@@ -437,10 +441,10 @@ function signInPanel(redraw) {
   };
   acts.append(again, passkey);
   if (phone) box.append(open, code, steps, elsewhere, said, acts);
-  else box.append(code, steps, said, acts);
+  else box.append(code, steps, qr, qrWords, said, acts);
 
   let current = null;
-  const expire = () => { clearInterval(linkPolling); current = null; said.textContent = 'That code has expired.'; again.hidden = false; code.textContent = '······'; open.hidden = true; };
+  const expire = () => { clearInterval(linkPolling); current = null; said.textContent = 'That code has expired.'; again.hidden = false; code.textContent = '······'; open.hidden = true; qr.hidden = true; qrWords.hidden = true; };
   const tick = () => {
     if (!current) return;
     const left = Math.max(0, Math.round((current.until - Date.now()) / 1000));
@@ -468,6 +472,14 @@ function signInPanel(redraw) {
       code.textContent = link.code.split('').join(' ');
       open.href = `thro://link/${encodeURIComponent(link.code)}`;
       open.hidden = !phone;
+      if (!phone) {
+        // The universal link lives on thro.uk whichever host is serving this page.
+        const site = /(^|\.)thro\.uk$/.test(location.hostname) ? location.origin : 'https://thro.uk';
+        loadScript('qr.js').then(() => {
+          qr.innerHTML = window.THROQR.svg(`${site}/link/${encodeURIComponent(link.code)}`, { dark: 'var(--thro-ink)', light: 'var(--thro-chalk-raised)' });
+          qr.hidden = false; qrWords.hidden = false;
+        }).catch(() => { /* no QR code is no loss: the code and the steps are above it */ });
+      }
       tick();
       linkPolling = setInterval(poll, 2500);
     } catch (e) { said.textContent = e.message; again.hidden = false; }
@@ -753,8 +765,36 @@ async function mountOrganiser(where, signInEl) {
       parts.push(make('p', 'quiet', 'Correcting a result does not rub the old one out: it records a second decision, with your name on it, that supersedes the first.'));
     }
     parts.push(scheduler(plan, draw));
+    parts.push(historySection(plan));
     where.replaceChildren(...parts);
   };
+
+  /**
+   * Who changed what (PD-120): the season's own records read back as sentences — who put that result in, who moved
+   * that fixture, who set the rules. Folded away, read only when somebody opens it, and only for the people who run it.
+   */
+  function historySection(plan) {
+    const fold = make('details', 'fold');
+    fold.append(make('summary', null, 'Who changed what'));
+    const body = make('div'); fold.append(body);
+    let read = false;
+    fold.addEventListener('toggle', async () => {
+      if (!fold.open || read) return;
+      read = true; body.replaceChildren(make('p', 'quiet', 'Reading…'));
+      try {
+        const { entries } = await authorised('GET', `/v1/seasons/${encodeURIComponent(plan.leagueSeasonId)}/history`);
+        if (!entries.length) { body.replaceChildren(make('p', 'quiet', 'Nothing has been recorded in this season yet.')); return; }
+        const list = make('ul', 'rows');
+        for (const e of entries) {
+          const li = make('li');
+          li.append(make('div', 'row-name', e.what), make('div', 'row-meta', `${e.who || 'An official'} · ${when(e.at)}`));
+          list.append(li);
+        }
+        body.replaceChildren(make('p', 'quiet', 'Newest first. Nothing here is edited: a correction is a second line, and the first stays.'), list);
+      } catch (e) { read = false; body.replaceChildren(make('p', 'note', e.message)); }
+    });
+    return fold;
+  }
 
   /**
    * Tell THRØ (PD-119): one sentence, read by a System One model against this season's own fixtures and teams into a
@@ -764,7 +804,7 @@ async function mountOrganiser(where, signInEl) {
   function tellSection(plan, data, redraw) {
     const box = make('div', 'entry tell');
     box.append(make('h2', null, 'Tell THRØ'),
-               make('p', 'quiet', 'Say what happened and THRØ fills in the card; you confirm it. Try “Grange A beat Dolphin 5–3 last night”, “Walkover to Riverside, Grange didn’t turn up”, or “Add Riverside A v Dolphin next Thursday at 8”.'));
+               make('p', 'quiet', 'Say what happened and THRØ fills in the card; you confirm it. Try “Grange A beat Dolphin 5–3 last night”, “Walkover to Riverside, Grange didn’t turn up”, “Move Riverside v Grange to next Thursday”, or “Add Riverside A v Dolphin next Thursday at 8”.'));
     const form = make('div', 'entry-form');
     const text = make('input'); text.type = 'text'; text.maxLength = 400; text.placeholder = 'Grange A beat Dolphin 5–3 last night';
     text.setAttribute('aria-label', 'What happened'); text.style.flex = '1 1 22rem'; text.autocomplete = 'off';
@@ -795,14 +835,14 @@ async function mountOrganiser(where, signInEl) {
         c.append(make('p', null, u.say));
         return c;
       }
-      const what = { result: 'a result', award: 'an award', void: 'an annulment', schedule: 'a new fixture' }[u.act] || u.act;
+      const what = { result: 'a result', award: 'an award', void: 'an annulment', schedule: 'a new fixture', move: 'a move' }[u.act] || u.act;
       c.append(make('div', 'row-name', u.say),
                make('div', 'row-meta', `Read as ${what} · THRØ is ${sure(u.confidence)}${u.doubt ? ` · check the ${u.doubt === 'teams' ? 'teams' : u.doubt}` : ''}`));
       const fields = make('div', 'entry-form');
       const note = make('p', 'note'); note.hidden = true;
       // The fixture, when the act is about one: the model's pick, with its runners-up and every open fixture to hand.
       let fixture = null;
-      if (['result', 'award', 'void'].includes(u.act)) {
+      if (['result', 'award', 'void', 'move'].includes(u.act)) {
         fixture = make('select'); fixture.setAttribute('aria-label', 'Which fixture');
         const seen = new Set();
         const add = (id, label) => { if (seen.has(id)) return; seen.add(id); fixture.append(new Option(label, id)); };
@@ -845,7 +885,13 @@ async function mountOrganiser(where, signInEl) {
         if (u.schedule && u.schedule.time) at.value = u.schedule.time.slice(0, 5);
         fields.append(homeTeam, make('span', 'v', 'v'), awayTeam, on, at);
       }
-      const label = { result: 'Record it', award: 'Award it', void: 'Annul it', schedule: 'Add the fixture' }[u.act];
+      if (u.act === 'move') {
+        on = make('input'); on.type = 'date'; on.setAttribute('aria-label', 'The new day'); on.min = plan.startsOn; on.max = plan.endsOn;
+        at = make('input'); at.type = 'time'; at.setAttribute('aria-label', 'The new time');
+        if (u.move) { on.value = u.move.on; at.value = u.move.time.slice(0, 5); }
+        fields.append(make('span', 'v', '→'), on, at);
+      }
+      const label = { result: 'Record it', award: 'Award it', void: 'Annul it', schedule: 'Add the fixture', move: 'Move it' }[u.act];
       const confirm = make('button', 'primary', label);
       const no = make('button', 'quiet-button', 'Not what I meant');
       no.onclick = () => { card.replaceChildren(); text.focus(); };
@@ -865,6 +911,20 @@ async function mountOrganiser(where, signInEl) {
             const f = (data.fixtures || []).find(x => x.fixtureId === fixture.value);
             if (!f || !f.decided) throw new Error('Only a fixture with a result can be annulled.');
             await authorised('POST', `/v1/fixtures/${encodeURIComponent(fixture.value)}/void`, { supersedes: f.decided.outcomeId, reason: reason.value.trim() });
+          } else if (u.act === 'move') {
+            if (!on.value || !at.value) throw new Error('A rearrangement is a day and a time.');
+            const f = (data.fixtures || []).find(x => x.fixtureId === fixture.value);
+            if (!f) throw new Error('Choose the fixture to move.');
+            // The same command the fixture's own Move form sends, so its history reads the same either way.
+            const res = await fetch(`${API}/v1/commands`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.get().accessToken}`, 'X-Thro-Device': deviceId() },
+              body: JSON.stringify({ type: 'RearrangeFixture', commandId: crypto.randomUUID(), fixtureId: f.fixtureId,
+                                     to: new Date(`${on.value}T${at.value}`).toISOString(), expectedVersion: f.version }),
+            });
+            const body = await res.json().catch(() => ({}));
+            if (res.status === 409) throw new Error('This fixture changed while you were looking at it. Reload, and move the one that is standing now.');
+            if (!res.ok) throw new Error(body.error || body.reason || `THRØ answered ${res.status}.`);
           } else if (u.act === 'schedule') {
             if (homeTeam.value === awayTeam.value) throw new Error('A fixture is between two different teams.');
             if (!on.value || !at.value) throw new Error('A fixture has a date and a time.');

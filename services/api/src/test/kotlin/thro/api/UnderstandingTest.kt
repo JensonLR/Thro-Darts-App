@@ -154,6 +154,36 @@ class UnderstandingTest {
     }
 
     @Test
+    fun `a fixture is moved to a day and a time, and with no time stated it keeps its own`() {
+        val dated = Stub { q ->
+            mapOf("act" to choice("move", 0.92), "fixture" to choice("f2", 0.9),
+                  "date_mode" to choice("relative", 0.9), "day_anchor" to choice("weekday", 0.9), "weekday" to choice("Thursday", 0.95), "week_offset" to choice("next", 0.8),
+                  "month" to choice("none", 0.9), "day" to choice("none", 0.9), "time" to choice(keyOf(q, "time", "8.30"), 0.85))
+        }
+        val read = Understanding(dated) { today }.understand(desk, "Move Riverside v Grange to next Thursday at 8.30")!!
+        assertEquals("move", read.act)
+        assertEquals(f2, read.fixture?.fixtureId)
+        assertEquals(Instant.parse("2026-09-24T19:30:00Z"), read.move?.to)
+        assertEquals("Riverside A v Grange A, Thu 15 Oct → Thu 24 Sep, 8:30 pm", read.say)
+        assertEquals(0.8, read.confidence, 1e-9)
+        assertTrue(read.ready)
+
+        // No time in the sentence: the fixture keeps the clock time it had — eight in the evening in London.
+        val undated = Stub { mapOf("act" to choice("move", 0.9), "fixture" to choice("f2", 0.9), "date_mode" to choice("absolute", 0.9), "day_anchor" to choice("today", 0.2),
+                                   "weekday" to choice("none", 0.9), "week_offset" to choice("this", 0.5), "month" to choice("November", 0.9), "day" to choice("5", 0.9), "time" to choice("none", 0.95)) }
+        val kept = Understanding(undated) { today }.understand(desk, "Riverside v Grange is postponed to 5 November")!!
+        assertEquals(Instant.parse("2026-11-05T20:00:00Z"), kept.move?.to, "20:00 in London, which in November is 20:00Z")
+        assertTrue(kept.ready)
+
+        // A fixture that has a result is not moved; and a move with no date is a doubt.
+        val played = Stub { mapOf("act" to choice("move", 0.9), "fixture" to choice("f3", 0.9), "date_mode" to choice("none", 0.9), "time" to choice("none", 0.9)) }
+        val refused = Understanding(played) { today }.understand(desk, "Move Riverside v Dolphin")!!
+        assertEquals("fixture", refused.doubt); assertFalse(refused.ready)
+        val nowhere = Stub { mapOf("act" to choice("move", 0.9), "fixture" to choice("f2", 0.9), "date_mode" to choice("none", 0.9), "time" to choice("none", 0.9)) }
+        assertEquals("date", Understanding(nowhere) { today }.understand(desk, "Riverside v Grange is off")!!.doubt)
+    }
+
+    @Test
     fun `a question is not an act, and the reading says so`() {
         val stub = Stub { mapOf("act" to choice("none", 0.9)) }
         val read = Understanding(stub) { today }.understand(desk, "How many games are left?")!!

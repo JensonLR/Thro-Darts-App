@@ -5163,3 +5163,55 @@ doubt; a result with no numbers not ready; an award to a side with the sentence 
 time resolved by code; an absolute date with no year, outside the season, a doubt; a question not an act; a silent or
 failing model no reading. `LeagueActsHttpTest`: 503 without a model, 403 for a captain, 400 for an empty sentence,
 200 with the fixture and the legs on the right sides, and *reads* on the providers route.
+
+**PD-119, extended the same day: the desk moves a fixture.** A fifth act, *move* — "Move Riverside v Grange to next
+Thursday at 8.30", "Riverside v Grange is postponed to 5 November". The fixture and the date are read as before; a time
+is read if one is stated and otherwise the fixture keeps the clock time it had, in London; a fixture that has a result
+is not moved, and says why. The card's *Move it* sends the organiser's own `RearrangeFixture` command, so the fixture's
+history reads the same whichever way it was moved. `UnderstandingTest` 9 → 10.
+
+## PD-120 — Who changed what
+
+**17 September 2026.** The completion matrix has carried one *Missing* for the League OS since PD-106: an audit view.
+`Audit.kt` records authorisation decisions — who was allowed to ask — which is not what an organiser means by "who put
+that result in?". What they mean is already written down: a season's records are appended and never edited, so every
+result, correction, award, annulment, rule and registration is a row with an actor and a time.
+
+**Decided.**
+
+1. **`GET /v1/seasons/{id}/history`, for the season's administrators**: those rows read back as sentences, newest
+   first — *Recorded Riverside A 5–3 Grange A*; *Corrected … to 4–3 (it was 5–3)*; *Annulled the result of … — why*;
+   *Awarded … to … — why*; *Moved … from Thu 5 Nov, 7:30 pm to Thu 12 Nov, 8:00 pm* (and *agreed by both teams* when
+   a proposal was applied); *Set the points rules (version 2)*; *Registered Sam Wilson with Riverside A*.
+2. **A move now names who made it (V055).** `league_fixture_change.changed_by` had existed since V014 and nothing had
+   ever filled it: a trigger cannot see the caller. The handler says so the way it already says which proposal a move
+   applies — a session setting, `thro.actor`, set around the write and cleared after it.
+3. **An official is named only where THRØ may name them** — the same disclosure rule as everywhere else. Otherwise
+   the sentence stands and the person is *An official*.
+4. **On the desk, folded away**: *Who changed what*, read only when somebody opens it.
+
+**Evidence.** `SeasonHistoryTest`: every kind of entry in words, every one attributed — the move included — read as
+`app_competition`, newest first. `LeagueActsHttpTest`: 403 for a captain, 200 for the administrator with the rules
+and the registration in it. The test was written before the class and not run red first; it would have failed on the
+unresolved name.
+
+## PD-121 — The code as a QR, drawn here
+
+**17 September 2026.** PD-117 left it undone: a laptop's sign-in panel shows six characters for a person to type into
+their phone, when the phone has a camera and `https://thro.uk/link/<code>` already opens THRØ on the card that
+approves it.
+
+**Decided.**
+
+1. **The panel draws the address as a QR code** on any screen that is not a phone, under the three steps: *Or point
+   your phone's camera at this.* Dark on light in both themes — a camera reads an inverted code badly, if at all.
+2. **The encoder is written out in `apps/web/qr.js`** — byte mode, level M, versions 1 to 5, the eight masks scored
+   by the standard's penalty rules — because the sign-in page loads nothing from anybody else. It is fetched only when
+   a code is showing on a screen that is not a phone.
+3. **A camera's own decoder holds it.** `tools/check_qr.py` draws one code per version (the two-block versions
+   included) and asks Core Image — the decoder behind the iPhone's camera — what each says; each must read back
+   exactly. It runs on a Mac with `node`, which is where anybody changing the encoder is; elsewhere it says it did not
+   check.
+
+**Needs.** TestFlight build 16 or later on the phone (the `applinks` entitlement), and — for a phone without THRØ —
+the `/link/*` rewrite on the static site, which still waits on a Blueprint sync.

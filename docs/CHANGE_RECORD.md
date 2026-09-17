@@ -6144,3 +6144,11 @@ green run found Java's UK locale printing "Sept" and "20:30" being taken for a s
 lines below it — and the whole season desk drew *That could not be read just now* in its place. Renamed the input
 `onDay`. It reached production in the design-pass commit and was found by the PD-119 look, which is the argument for
 looking.
+
+## The desk moves a fixture; who changed what; the code as a QR (PD-119 extended, PD-120 with V055, PD-121)
+
+`Understanding` gains *move* (`Move`, the fixture's own clock time when none is stated, a played fixture refused) and
+the desk's card sends `RearrangeFixture`. `SeasonHistory.kt` and `GET /v1/seasons/{id}/history`; V055 replaces the
+schedule-change trigger to record `thro.actor`, which `OrganisationCommands.rearrangeFixture` sets around its write;
+the desk page's folded *Who changed what* (`details.fold`). `apps/web/qr.js`, the panel's QR on screens that are not
+phones, `tools/check_qr.py`. Looked at: the panel with its QR in a browser at laptop width.
