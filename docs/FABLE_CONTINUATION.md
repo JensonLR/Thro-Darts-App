@@ -34,7 +34,7 @@ entitlements and refused if the signed app lacks Sign in with Apple or the passk
 
 PD-095 deploy pipeline · PD-096 retention sweep · PD-097 Android notice · PD-098 TestFlight entitlements ·
 PD-099 fixtures · PD-100 start a league · PD-101 moderation page · PD-102 ways in · PD-103 decisions enforce +
-league management · PD-104 organiser email · PD-105 provisional rating · PD-106 the team's fixture · PD-107 registrations · PD-108 moving a fixture by agreement · PD-109 a knockout · PD-110 a friendly · PD-111 rounds · PD-112 the organiser's remaining acts · PD-113 invitationals · PD-114 sign in by the phone · PD-115 pairs, teams, seeds, boards · PD-116 Apple and Google on the web (awaiting the founder's console work) · PD-117 the phone that is already here (Open THRØ from the web's sign-in, `/link/<code>`) · PD-118 THRØ reads reports and names with TypeSafe's System One model (V054) · PD-119 Tell THRØ, the desk reads a sentence into an act (the key was set 17 Sep: production says `reads:true`) · PD-120 who changed what (V055) · PD-121 the sign-in code as a QR · PD-122 paste the fixture list · PD-123 the model measured (`JevEvaluationTest`; key in the git-ignored `.env.local`; held out 11 of 12, list 10 of 10, scorecard in `docs/product/JEV_SCORECARD.md`) · two design passes (web, phone).
+league management · PD-104 organiser email · PD-105 provisional rating · PD-106 the team's fixture · PD-107 registrations · PD-108 moving a fixture by agreement · PD-109 a knockout · PD-110 a friendly · PD-111 rounds · PD-112 the organiser's remaining acts · PD-113 invitationals · PD-114 sign in by the phone · PD-115 pairs, teams, seeds, boards · PD-116 Apple and Google on the web (awaiting the founder's console work) · PD-117 the phone that is already here (Open THRØ from the web's sign-in, `/link/<code>`) · PD-118 THRØ reads reports and names with TypeSafe's System One model (V054) · PD-119 Tell THRØ, the desk reads a sentence into an act (the key was set 17 Sep: production says `reads:true`) · PD-120 who changed what (V055) · PD-121 the sign-in code as a QR · PD-122 paste the fixture list · PD-124 walk-ups (V056) · PD-123 the model measured (`JevEvaluationTest`; key in the git-ignored `.env.local`; held out 11 of 12, list 10 of 10, scorecard in `docs/product/JEV_SCORECARD.md`) · two design passes (web, phone).
 
 ## Completion matrix (from four read-only audits, 16 September; details in PD-106 and CHANGE_RECORD)
 
@@ -52,7 +52,8 @@ league management · PD-104 organiser email · PD-105 provisional rating · PD-1
 | Tournament OS: later rounds, a tie decided (played or declared), the event's winner, citing from the phone | **Complete (PD-111, V052)** | EventHttpTest (47) |
 | Tournament OS: invitational access, the organiser's entries | **Complete (PD-113)** | EventHttpTest (61) |
 | Tournament OS: pairs/teams as entrants, seeding, boards | **Complete (PD-115)** | EntrantsHttpTest (30) |
-| Tournament OS: walk-up entrants without accounts, a pair from friends | **Missing** — friends carry no player id; a walk-up has no name | PD-115 |
+| Tournament OS: walk-up entrants without accounts | **Complete (PD-124, V056)** — by name, singles nights; named publicly only on the organiser's attestation; forgotten after thirty days | GuestsHttpTest (14) |
+| Tournament OS: pairs or teams of walk-ups; a walk-up claiming their player; a pair from friends | **Missing** | PD-124 |
 | Friendly challenge between teams | **Complete (PD-110, V051)** — challenge, answer, withdraw, cite; phone team front | FriendlyHttpTest (31) |
 | Discovery (leagues, events, nearby on-device) and the map | Complete for what is written; no server-side tournament entry | audit |
 | Moderation | Complete (PD-101, PD-103) | ModerationHttpTest |

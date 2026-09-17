@@ -94,12 +94,16 @@ public class Editions(
              FROM competition.pair pr WHERE pr.pair_id = %s),
           (SELECT CASE WHEN identity.player_may_be_disclosed(c.player_id) AND a.display_name <> $placeholderLit THEN a.display_name END
              FROM identity.player_claim c JOIN identity.account a ON a.account_id = c.account_id AND a.deleted_at IS NULL
-            WHERE c.player_id = %s AND c.revoked_at IS NULL)))""".replace("\$placeholderLit", "'" + Accounts.PLACEHOLDER_NAME.replace("'", "''") + "'")
-    private fun nameOf(column: String) = competitorName.replace("%s", column)
+            WHERE c.player_id = %s AND c.revoked_at IS NULL),
+          -- A walk-up (PD-124): the name the organiser typed, for the organiser; for anybody else only where the organiser
+          -- said this adult is happy to be on the draw; and "A guest" once the name is forgotten.
+          (SELECT CASE WHEN g.name IS NOT NULL AND (g.may_be_named OR %o) THEN g.name ELSE 'A guest' END
+             FROM competition.guest g WHERE g.player_id = %s)))""".replace("\$placeholderLit", "'" + Accounts.PLACEHOLDER_NAME.replace("'", "''") + "'")
+    private fun nameOf(column: String, forOrganiser: Boolean = false) = competitorName.replace("%s", column).replace("%o", if (forOrganiser) "true" else "false")
 
-    private fun ties(eventId: UUID): List<Tie> = connection.prepareStatement(
+    private fun ties(eventId: UUID, forOrganiser: Boolean = false): List<Tie> = connection.prepareStatement(
         """SELECT t.fixture_id, t.round_number, t.position, t.home_id, t.away_id, t.is_bye, t.match_id, t.winner_id, t.outcome, t.note,
-                  ${nameOf("t.home_id")}, ${nameOf("t.away_id")}, b.label
+                  ${nameOf("t.home_id", forOrganiser)}, ${nameOf("t.away_id", forOrganiser)}, b.label
              FROM competition.bracket_tie t LEFT JOIN competition.board b ON b.board_id = t.board_id
             WHERE t.event_id = ? ORDER BY t.round_number, t.position""",
     ).use { ps ->
@@ -114,8 +118,12 @@ public class Editions(
     }
 
     private fun entrants(eventId: UUID): List<Entrant> = connection.prepareStatement(
-        """SELECT en.competitor_id, en.seed, EXISTS (SELECT 1 FROM competition.check_in ci WHERE ci.event_id = en.event_id AND ci.competitor_id = en.competitor_id),
-                  ${nameOf("en.competitor_id")}, en.entrant_kind
+        // A walk-up is there, or the organiser could not have typed their name: present, and of the kind "guest".
+        """SELECT en.competitor_id, en.seed,
+                  EXISTS (SELECT 1 FROM competition.check_in ci WHERE ci.event_id = en.event_id AND ci.competitor_id = en.competitor_id)
+                    OR EXISTS (SELECT 1 FROM competition.guest g WHERE g.player_id = en.competitor_id),
+                  ${nameOf("en.competitor_id", forOrganiser = true)},
+                  CASE WHEN EXISTS (SELECT 1 FROM competition.guest g WHERE g.player_id = en.competitor_id) THEN 'guest' ELSE en.entrant_kind END
              FROM competition.entry en WHERE en.event_id = ? AND en.withdrawn_at IS NULL ORDER BY en.seed NULLS LAST, en.entered_at""",
     ).use { ps ->
         ps.setObject(1, eventId)
@@ -125,8 +133,9 @@ public class Editions(
     /** The event's page: for anybody; `you` only with a session; the entrants only for whoever runs it. */
     public fun view(eventId: UUID, viewer: UUID?): View {
         val v = row(eventId, viewer) ?: throw Refused("THRØ has no such event.", 404)
-        val withTies = if (v.state in setOf("drawn", "in_progress", "complete")) v.copy(ties = ties(eventId)) else v
-        return if (viewer != null && runs(viewer, eventId)) withTies.copy(entrants = entrants(eventId)) else withTies
+        val organiser = viewer != null && runs(viewer, eventId)
+        val withTies = if (v.state in setOf("drawn", "in_progress", "complete")) v.copy(ties = ties(eventId, organiser)) else v
+        return if (organiser) withTies.copy(entrants = entrants(eventId)) else withTies
     }
 
     // --- the organiser --------------------------------------------------------------------------------------------
@@ -307,6 +316,32 @@ public class Editions(
                 if (!revive(team)) comp.enter(eventId, thro.competition.Entrant.Team(team.toString()))
             }
         }
+        return view(eventId, by)
+    }
+
+    /**
+     * A walk-up (PD-124): somebody in the pub with no account, added by the organiser by name. A player like any other
+     * in the draw; decided by hand, because nobody scores for them on THRØ. [mayBeNamed] is the organiser's word that
+     * this is an adult who is happy to be named on the public draw; without it the name is the organiser's alone.
+     */
+    public fun enterGuest(eventId: UUID, name: String, mayBeNamed: Boolean, by: UUID): View {
+        val v = view(eventId, by)
+        if (!runs(by, eventId)) throw Refused("Only the event's organiser adds a walk-up.", 403)
+        if (v.entrantKind != "player") throw Refused("A walk-up is one name, and this event is entered by ${v.entrantKind}s. Walk-ups are for singles nights.", 400)
+        val clean = name.trim()
+        if (clean.isEmpty() || clean.codePointCount(0, clean.length) > 60) throw Refused("A walk-up's name is 1 to 60 characters.", 400)
+        if (clean.any { it.isISOControl() || it.category == CharCategory.FORMAT }) throw Refused("A name has no control or formatting characters.", 400)
+        if (v.state != "open") throw Refused("Entries are closed.", 409)
+        if (v.capacity != null && v.entries >= v.capacity) throw Refused("This event is full: ${v.capacity} places, all taken.", 409)
+        val taken = connection.prepareStatement("SELECT 1 FROM competition.guest WHERE event_id = ? AND lower(btrim(name)) = lower(?)")
+            .use { ps -> ps.setObject(1, eventId); ps.setString(2, clean); ps.executeQuery().use { it.next() } }
+        if (taken) throw Refused("There is already a $clean on this night. Add something that tells them apart.", 409)
+        val player = Organisations(connection).createPlayer("organiser", by)
+        connection.prepareStatement("INSERT INTO competition.guest (player_id, event_id, name, may_be_named, added_by, added_at) VALUES (?, ?, ?, ?, ?, ?)").use { ps ->
+            ps.setObject(1, player); ps.setObject(2, eventId); ps.setString(3, clean); ps.setBoolean(4, mayBeNamed); ps.setObject(5, by)
+            ps.setTimestamp(6, java.sql.Timestamp.from(now())); ps.executeUpdate()
+        }
+        Competitions(connection).enter(eventId, player)
         return view(eventId, by)
     }
 

@@ -5318,3 +5318,33 @@ Hotel", a carried date, a stated usual time) against one of ten for string match
 instead of an evening. The sentence desk is nineteen of twenty-two before any tuning and never confidently wrong. What
 it is *not* yet is proven on real secretaries: thirty-four sentences written by the person who built it are a start,
 and every real sentence it misreads belongs in the held-out set.
+
+## PD-124 — A walk-up has a name and no account
+
+**17 September 2026.** Open since PD-115: a pub knockout is entered by whoever is in the pub, and half of them will
+never have THRØ. The organiser's event page could enter a player by id and nobody else.
+
+**Decided.**
+
+1. **The organiser adds a walk-up by name** — `POST /v1/events/{id}/guests {name, mayBeNamed}` — on a singles event,
+   while entries are open. A walk-up is a `competition.player` with no claim on it, which the domain has always allowed
+   (`source = 'organiser'`), and one row in `competition.guest` (V056) holding the name for that one night. They are
+   in the draw like anybody else, present by being added, seeded and removed like any entry.
+2. **THRØ knows nothing about them, and behaves so.** The name is shown to the organiser. To anybody else it is shown
+   only with the organiser's tick — *they are 18 or over, and happy to be named on the public draw* — and otherwise as
+   *A guest*. Before the draw the public page names nobody, as for every entrant.
+3. **Their ties are the organiser's word.** Nobody scores for a walk-up on THRØ, so there is no match to cite, and a
+   *played* tie must cite one (V052). The organiser decides the tie by hand with a note — "Played on board 1: 2–0" —
+   which is what *Decide it by hand* has always recorded.
+4. **The name is forgotten thirty days after the night ends.** Nobody holds an account that could ask for it to be
+   erased, so the database does it: `competition.forget_guests()`, security definer, a thirty-day floor it refuses to
+   go under, run by the server's daily sweep. The entry, the draw and the result stay; *A guest* won the second tie.
+5. **Two walk-ups on one night cannot share a name** — two Daves need telling apart before the draw, not after it.
+
+**Not done.** Pairs and teams of walk-ups; a walk-up later claiming the player the organiser made for them (the claim
+machinery exists; the hand-over does not). Both wait for somebody to need them.
+
+**Evidence.** `GuestsHttpTest` (14 checks), run red first on the missing route: the organiser's alone; a name, and not
+an essay; present and of kind *guest*; a name once per night; counted and unnamed before the draw; removed like any
+entry; named for the organiser in the draw, and publicly only where said; decided by hand; refused on a pairs night;
+and forgotten thirty days on, the draw kept.

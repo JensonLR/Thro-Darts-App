@@ -674,6 +674,17 @@ public object Contract {
             responses = mapOf(200 to "the event, the tie on its board", 401 to "no principal", 403 to "not the organiser", 404 to "no such event, tie or board"),
         ),
         Endpoint(
+            id = "events.guests", method = "POST", path = "/v1/events/{eventId}/guests", authenticated = true,
+            summary = "Add a walk-up to a singles event, by name (PD-124)",
+            description = "By the event's organiser. Somebody in the pub with no account: a player in the draw like any other, present "
+                + "by being added, decided by hand. The name is shown to the organiser; to anybody else only with `mayBeNamed` — the "
+                + "organiser's word that this is an adult happy to be on the draw — and otherwise as *A guest*. It is forgotten thirty "
+                + "days after the event ends. Two walk-ups on one night cannot share a name.",
+            request = Schema("""{"type":"object","required":["name"],"properties":{"name":{"type":"string","minLength":1,"maxLength":60},"mayBeNamed":{"type":"boolean"}}}"""),
+            responses = mapOf(200 to "the event, as its organiser sees it", 400 to "no name, too long a one, or an event entered by pairs or teams",
+                              401 to "no principal", 403 to "you do not run this event", 404 to "no such event", 409 to "entries closed, full, or the name is taken"),
+        ),
+        Endpoint(
             id = "events.entries.remove", method = "POST", path = "/v1/events/{eventId}/entries/{playerId}/remove", authenticated = true,
             summary = "The organiser removes an entry (PD-113)",
             description = "Before the draw. The row is kept with the time, as a withdrawal is; a place opens.",

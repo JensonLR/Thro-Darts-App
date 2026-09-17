@@ -35,6 +35,10 @@ public object Retention {
                 runCatching { connect().use { sweep(it, keep) } }
                     .onSuccess { gone -> if (gone > 0) System.err.println("retention: forgot $gone decided report(s)") }
                     .onFailure { System.err.println("retention: could not sweep — ${it.message}") }
+                // PD-124: a walk-up's name goes thirty days after the night; the rule is the function's, not this loop's.
+                runCatching { connect().use { forgetGuests(it) } }
+                    .onSuccess { gone -> if (gone > 0) System.err.println("retention: forgot $gone walk-up name(s)") }
+                    .onFailure { System.err.println("retention: could not forget walk-ups — ${it.message}") }
                 Thread.sleep(every.toMillis())
             }
         }
@@ -47,6 +51,10 @@ public object Retention {
      * which is right for the loop above and wrong for everybody else: a test handed it a live connection
      * and got it back closed. Opening and closing belongs to whoever is scheduling, not to the work.
      */
+    /** Walk-ups' names, thirty days after their event ended (PD-124). The period is the function's own floor. */
+    public fun forgetGuests(c: Connection): Int =
+        c.prepareStatement("SELECT competition.forget_guests()").use { s -> s.executeQuery().use { rs -> rs.next(); rs.getInt(1) } }
+
     public fun sweep(c: Connection, keep: String = KEEP): Int =
         c.prepareStatement("SELECT safety.forget_decided(?::interval)").use { s ->
             s.setString(1, keep)

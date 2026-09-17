@@ -668,6 +668,15 @@ public fun Application.thro(deps: Deps) {
                 }
             }
         },
+        // PD-124: a walk-up, by name, by the organiser.
+        "events.guests" to { r ->
+            editions {
+                val m = Json.parseObject(r.body)
+                Editions(r.connection(), deps.now).let {
+                    Http(200, it.json(it.enterGuest(UUID.fromString(r.call.parameters["eventId"]), (m["name"] as? String).orEmpty(), m["mayBeNamed"] == true, r.principal!!.subject)))
+                }
+            }
+        },
         "events.entries.seed" to { r ->
             editions {
                 val m = Json.parseObject(r.body)

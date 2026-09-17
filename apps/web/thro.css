@@ -115,7 +115,7 @@ footer { border-top: 1px solid var(--color-border-default); padding-block: 24px 
 .entry { border: 1px solid var(--color-border-default); border-radius: var(--radius-card);
          background: var(--color-background-raised); padding: 14px; margin-bottom: 12px; }
 .entry-form { display: flex; align-items: center; gap: 10px; margin-top: 10px; flex-wrap: wrap; }
-.entry-form input, .entry-form select { font: inherit; padding: 10px; min-height: 44px;
+.entry-form input, .entry-form select, .acts input[type="number"] { font: inherit; padding: 10px; min-height: 44px;
                     color: var(--color-text-primary); background: var(--color-background-primary);
                     border: 1px solid var(--color-border-default); border-radius: var(--radius-field); }
 /* A score is two small boxes; a name, a date or a time is not. */
@@ -189,6 +189,9 @@ ul.rows li .row-head + .row-meta { margin-top: -6px; }
 .entry p.reading { margin: 6px 0 0; color: var(--color-text-secondary); font-size: 14px; }
 .acts { display: flex; flex-wrap: wrap; gap: 8px 18px; align-items: center; margin-top: 8px; }
 .acts button.quiet-button { margin: 0; }
+/* A seed beside its entrant: the same field as any other, a number's width. */
+.acts input[type="number"] { width: 5.5rem; text-align: center; box-sizing: border-box; }
+.entry label.check { margin-top: 12px; }
 p.eyebrow + p.wordmark { margin-top: 2px; }
 
 /* --- The site's places, and the way in (PD-114) --------------------------------------------------------------- */

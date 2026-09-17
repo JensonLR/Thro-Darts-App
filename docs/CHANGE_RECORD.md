@@ -6185,3 +6185,10 @@ and is left for the founder to suspend or delete.
 the act and fixture questions say what a terse result and a derby are; `scorelines_found` rides in the state;
 `TypeSafeReader` retries 429/503/529 twice with backoff. `JevEvaluationTest` gained a held-out set and scores both;
 `docs/product/JEV_SCORECARD.md` keeps the first held-out reading. `UnderstandingTest` 12, `TypeSafeReaderTest` 4.
+
+## Walk-ups (PD-124, V056)
+
+`competition.guest`, `competition.forget_guests()`; `Editions.enterGuest`, the name SQL's guest branch (the organiser's
+view names them, the public's only with `may_be_named`), entrants of kind `guest` present by being added;
+`POST /v1/events/{id}/guests`; `Retention.forgetGuests` in the daily loop; the knockout page's *Add a walk-up*. The
+privacy page, the ROPA and the under-18 page say what a typed name is and when it goes.

@@ -83,6 +83,16 @@ player.
 | **Purpose** | Club and team badges. |
 | **Categories of data** | An image, stored on the device. **Location metadata is stripped at intake** and proved stripped by a test that builds a real JPEG carrying GPS, puts it through the same path, and reads the bytes back. A picture is refused for a minor at the point of writing. |
 
+## Walk-up entrants (PD-124)
+
+| | |
+| --- | --- |
+| **What** | A name an event's organiser types for somebody at a knockout who has no account: `competition.guest.name`, with the organiser's tick that the person is an adult happy to be named publicly. Nothing else about them. |
+| **Whose** | People who have no account and have agreed to nothing in the app; possibly under 18, which is why the name is shown to the organiser alone unless the organiser attests otherwise. |
+| **Basis** | Legitimate interests: running the draw the person walked up to enter. |
+| **Who sees it** | The event's organiser. The public event page only with the organiser's attestation; otherwise *A guest*. |
+| **Retention** | **Thirty days after the event's session ends**, then set to null by `competition.forget_guests()` (security definer, a thirty-day floor), swept daily by the server. The entry and the result stay, unnamed. Sooner on request to the organiser or to THRØ. |
+
 ## Processors
 
 | Processor | What for | Where |

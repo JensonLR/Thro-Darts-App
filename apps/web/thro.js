@@ -1915,7 +1915,8 @@ function entrantsSection(e, redraw) {
   for (const p of e.entrants) {
     const li = make('li');
     const head = make('div', 'row-head');
-    head.append(make('div', 'row-name', p.name || 'A player THRØ may not name'), make('span', 'quiet', p.checkedIn ? 'checked in' : 'not yet checked in'));
+    head.append(make('div', 'row-name', p.name || 'A player THRØ may not name'),
+                make('span', 'quiet', p.kind === 'guest' ? 'walk-up · here' : p.checkedIn ? 'checked in' : 'not yet checked in'));
     const said = make('p', 'note'); said.hidden = true;
     if (before) {
       // The seed, as the draw will honour it: 1 at the top, 2 at the bottom, apart until the final.
@@ -1981,6 +1982,31 @@ function entrantsSection(e, redraw) {
     form.append(byId, add);
     box.append(form, said);
     out.push(box);
+    // PD-124: a walk-up — somebody in the pub with no account, added by name. Singles nights only.
+    if (e.entrantKind === 'player') {
+      const walk = make('div', 'entry');
+      walk.append(make('h2', null, 'Add a walk-up'),
+                  make('p', 'quiet', 'Somebody here tonight with no THRØ account. They go in the draw like anybody else, and you decide their ties by hand.'));
+      const wform = make('div', 'entry-form');
+      const name = make('input'); name.type = 'text'; name.maxLength = 60; name.placeholder = 'Their name, as it goes on the board'; name.setAttribute('aria-label', 'The walk-up’s name');
+      name.style.flex = '1 1 14rem'; name.autocomplete = 'off';
+      const [namedBox, namedLabel] = check('They are 18 or over, and happy to be named on the public draw');
+      const addWalk = make('button', 'primary', 'Add them');
+      const told = make('p', 'note'); told.hidden = true;
+      const send = async () => {
+        if (!name.value.trim()) { name.focus(); return; }
+        addWalk.disabled = true;
+        try { await authorised('POST', `/v1/events/${encodeURIComponent(e.eventId)}/guests`, { name: name.value.trim(), mayBeNamed: namedBox.checked }); redraw(); }
+        catch (err) { told.hidden = false; told.textContent = err.message; addWalk.disabled = false; }
+      };
+      addWalk.onclick = send;
+      name.addEventListener('keydown', ev => { if (ev.key === 'Enter') { ev.preventDefault(); send(); } });
+      wform.append(name);
+      const wacts = make('div', 'acts'); wacts.append(addWalk);
+      walk.append(wform, namedLabel, wacts, told,
+                  make('p', 'quiet', 'Without that tick only you see the name; the public draw says “A guest”. Thirty days after the night, THRØ forgets a walk-up’s name either way.'));
+      out.push(walk);
+    }
     // The boards: named once, then each tie is sent to one.
     const boards = make('div', 'entry');
     boards.append(make('h2', null, 'Boards'), make('p', 'quiet', e.boards.length ? `${e.boards.join(', ')}.` : 'Name the boards and each tie can be sent to one.'));
