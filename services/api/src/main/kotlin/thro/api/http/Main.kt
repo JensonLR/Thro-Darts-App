@@ -68,10 +68,11 @@ public fun main() {
 
     // PD-118: THRØ reads each report, and each chosen name, with TypeSafe's System One model when a key is set. The key
     // stays in this process; the phone and the web never see it. Without it, nothing is read and nothing changes.
-    val reader = env("THRO_TYPESAFE_API_KEY")?.let { TypeSafeReader(it) }
+    // THRO_TYPESAFE_ENDPOINT points a development server at a stand-in (tools/fake_systemone.py); never set in production.
+    val reader = env("THRO_TYPESAFE_API_KEY")?.let { key -> env("THRO_TYPESAFE_ENDPOINT")?.let { TypeSafeReader(key, endpoint = java.net.URI(it)) } ?: TypeSafeReader(key) }
     if (reader == null) System.err.println("note: no reader (THRO_TYPESAFE_API_KEY); reports and names are not read, and the queue orders by the hour they are due")
-    else System.err.println("reader: TypeSafe jev-latest reads reports and names as they arrive")
+    else System.err.println("reader: TypeSafe jev-latest reads reports and names as they arrive, and sentences on the desk (PD-119)")
 
     val port = env("PORT")?.toIntOrNull() ?: 8080
-    embeddedServer(CIO, port = port) { thro(Deps(connect, authenticator, providers = providers, webProviders = webProviders, keys = HttpJwkSource(), relyingParty = rp, appleAppIds = appleAppIds, moderators = moderators, reader = reader)) }.start(wait = true)
+    embeddedServer(CIO, port = port) { thro(Deps(connect, authenticator, providers = providers, webProviders = webProviders, keys = HttpJwkSource(), relyingParty = rp, appleAppIds = appleAppIds, moderators = moderators, reader = reader, systemOne = reader)) }.start(wait = true)
 }

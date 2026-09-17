@@ -104,7 +104,7 @@ class AuthTest {
             // The same subject through the web's Services ID: this app's audience too, and the same account — nothing created.
             val webAud = signIn(jwt(apple.private, "apple-1", claims(aud = "uk.thro.web")))
             check("a token for the web's Services ID is accepted as this app's", webAud.status.value == 200 && field(webAud.bodyAsText(), "created") == "false")
-            check("the web is told which providers it may offer, and nothing secret", get("/v1/auth/providers", null).bodyAsText() == """{"apple":"uk.thro.web","google":null}""")
+            check("the web is told which providers it may offer, and nothing secret", get("/v1/auth/providers", null).bodyAsText() == """{"apple":"uk.thro.web","google":null,"reads":false}""")
             check("the refusals created nothing: the only credential is the leeway sign-in's, and the audience-list sign-in found it",
                 c.prepareStatement("SELECT count(*) FROM identity.credential").use { it.executeQuery().use { rs -> rs.next(); rs.getInt(1) == 1 } })
             val google = post("/v1/auth/google", """{"idToken":"x.y.z","deviceId":"$device"}""")

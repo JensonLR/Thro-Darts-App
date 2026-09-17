@@ -718,9 +718,10 @@ async function mountOrganiser(where, signInEl) {
     // The season as its administrator sees it (PD-099): its dates, divisions and every team that asked in. It is
     // also the page's one question about authority — somebody who does not run this season is told so here,
     // once, rather than by every button refusing in turn.
-    let plan, data, policy, registrations, registered, proposals, standings;
+    let plan, data, policy, registrations, registered, proposals, standings, offers;
     try {
       plan = await authorised('GET', `/v1/seasons/${encodeURIComponent(season)}/teams`);
+      offers = await read('/v1/auth/providers').catch(() => ({}));
       data = await read(`/v1/seasons/${encodeURIComponent(season)}/fixtures`);
       policy = (await authorised('GET', `/v1/seasons/${encodeURIComponent(season)}/policy`)).policy;
       ({ registrations, registered } = await authorised('GET', `/v1/seasons/${encodeURIComponent(season)}/registrations`));
@@ -733,7 +734,7 @@ async function mountOrganiser(where, signInEl) {
     const title = document.getElementById('title'); if (title) title.textContent = plan.league.name;
     const eyebrow = document.getElementById('eyebrow'); if (eyebrow) eyebrow.textContent = `Run this league · ${plan.label}`;
     document.title = `${plan.league.name} — THRØ`;
-    const parts = [...leagueSection(plan, draw), ...pointsSection(plan, standings, draw), ...teamsSection(plan, draw), ...registrationsSection(plan, policy, registrations, draw), ...registeredSection(plan, registered, draw), ...requestsSection(plan, proposals, draw)];
+    const parts = [...(offers && offers.reads ? [tellSection(plan, data, draw)] : []), ...leagueSection(plan, draw), ...pointsSection(plan, standings, draw), ...teamsSection(plan, draw), ...registrationsSection(plan, policy, registrations, draw), ...registeredSection(plan, registered, draw), ...requestsSection(plan, proposals, draw)];
 
     if (!(data.fixtures || []).length) {
       parts.push(make('h2', null, 'Fixtures'),
@@ -754,6 +755,132 @@ async function mountOrganiser(where, signInEl) {
     parts.push(scheduler(plan, draw));
     where.replaceChildren(...parts);
   };
+
+  /**
+   * Tell THRØ (PD-119): one sentence, read by a System One model against this season's own fixtures and teams into a
+   * card — a result, an award, an annulment, a new fixture — that the secretary confirms. THRØ reads; the person
+   * records. Whatever the model was unsure of is the one thing the card asks about, with the choice already made.
+   */
+  function tellSection(plan, data, redraw) {
+    const box = make('div', 'entry tell');
+    box.append(make('h2', null, 'Tell THRØ'),
+               make('p', 'quiet', 'Say what happened and THRØ fills in the card; you confirm it. Try “Grange A beat Dolphin 5–3 last night”, “Walkover to Riverside, Grange didn’t turn up”, or “Add Riverside A v Dolphin next Thursday at 8”.'));
+    const form = make('div', 'entry-form');
+    const text = make('input'); text.type = 'text'; text.maxLength = 400; text.placeholder = 'Grange A beat Dolphin 5–3 last night';
+    text.setAttribute('aria-label', 'What happened'); text.style.flex = '1 1 22rem'; text.autocomplete = 'off';
+    const go = make('button', 'primary', 'Read it');
+    const said = make('p', 'note'); said.hidden = true;
+    const card = make('div');
+    form.append(text, go);
+    box.append(form, said, card);
+    const readIt = async () => {
+      const t = text.value.trim();
+      if (!t) { text.focus(); return; }
+      go.disabled = true; said.hidden = true; card.replaceChildren(make('p', 'quiet', 'Reading…'));
+      try {
+        const u = await authorised('POST', `/v1/seasons/${encodeURIComponent(plan.leagueSeasonId)}/understand`, { text: t });
+        card.replaceChildren(readCard(u));
+      } catch (e) { card.replaceChildren(); said.hidden = false; said.textContent = e.message; }
+      go.disabled = false;
+    };
+    go.onclick = readIt;
+    text.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); readIt(); } });
+
+    const undecided = (data.fixtures || []).filter(f => !f.decided);
+    const sure = p => p >= 0.75 ? 'sure' : p >= 0.6 ? 'fairly sure' : 'not sure';
+
+    function readCard(u) {
+      const c = make('div', 'entry read');
+      if (u.act === 'none') {
+        c.append(make('p', null, u.say));
+        return c;
+      }
+      const what = { result: 'a result', award: 'an award', void: 'an annulment', schedule: 'a new fixture' }[u.act] || u.act;
+      c.append(make('div', 'row-name', u.say),
+               make('div', 'row-meta', `Read as ${what} · THRØ is ${sure(u.confidence)}${u.doubt ? ` · check the ${u.doubt === 'teams' ? 'teams' : u.doubt}` : ''}`));
+      const fields = make('div', 'entry-form');
+      const note = make('p', 'note'); note.hidden = true;
+      // The fixture, when the act is about one: the model's pick, with its runners-up and every open fixture to hand.
+      let fixture = null;
+      if (['result', 'award', 'void'].includes(u.act)) {
+        fixture = make('select'); fixture.setAttribute('aria-label', 'Which fixture');
+        const seen = new Set();
+        const add = (id, label) => { if (seen.has(id)) return; seen.add(id); fixture.append(new Option(label, id)); };
+        if (u.fixture) add(u.fixture.fixtureId, `${u.fixture.home} v ${u.fixture.away}, ${when(u.fixture.scheduledAt)}`);
+        for (const a of (u.fixture ? u.fixture.alternatives : [])) add(a.fixtureId, a.label);
+        for (const f of (u.act === 'void' ? (data.fixtures || []).filter(f => f.decided) : undecided)) add(f.fixtureId, `${f.home || 'A team'} v ${f.away || 'A team'}, ${when(f.scheduledAt)}`);
+        if (!seen.size) { c.append(make('p', 'quiet', u.act === 'void' ? 'No result in this season to annul.' : 'No fixture in this season is waiting for a result.')); return c; }
+        fields.append(fixture);
+      }
+      let home, away, to, reason, on, at, homeTeam, awayTeam;
+      if (u.act === 'result') {
+        home = make('input'); home.type = 'number'; home.min = '0'; home.inputMode = 'numeric'; home.setAttribute('aria-label', 'Legs for the home side');
+        away = make('input'); away.type = 'number'; away.min = '0'; away.inputMode = 'numeric'; away.setAttribute('aria-label', 'Legs for the away side');
+        if (u.result) { home.value = u.result.legsHome; away.value = u.result.legsAway; }
+        fields.append(home, make('span', 'v', '–'), away);
+      }
+      if (u.act === 'award') {
+        to = make('select'); to.setAttribute('aria-label', 'Awarded to');
+        const fill = () => {
+          const f = (data.fixtures || []).find(x => x.fixtureId === fixture.value);
+          to.replaceChildren();
+          if (f) { to.append(new Option(f.home || 'The home side', f.homeTeamId), new Option(f.away || 'The away side', f.awayTeamId)); }
+          if (u.award && [...to.options].some(o => o.value === u.award.toTeamId)) to.value = u.award.toTeamId;
+        };
+        fill(); fixture.onchange = fill;
+        fields.append(to);
+      }
+      if (u.act === 'award' || u.act === 'void') {
+        reason = make('input'); reason.type = 'text'; reason.maxLength = 600; reason.value = u.reason || u.text; reason.setAttribute('aria-label', 'Why'); reason.style.flex = '1 1 16rem';
+        fields.append(reason);
+      }
+      if (u.act === 'schedule') {
+        homeTeam = make('select'); homeTeam.setAttribute('aria-label', 'Home team');
+        awayTeam = make('select'); awayTeam.setAttribute('aria-label', 'Away team');
+        for (const t of plan.teams.filter(t => t.status === 'accepted')) { homeTeam.append(new Option(t.name, t.teamId)); awayTeam.append(new Option(t.name, t.teamId)); }
+        if (u.schedule) { homeTeam.value = u.schedule.homeTeamId; awayTeam.value = u.schedule.awayTeamId; }
+        on = make('input'); on.type = 'date'; on.setAttribute('aria-label', 'On'); on.min = plan.startsOn; on.max = plan.endsOn;
+        at = make('input'); at.type = 'time'; at.setAttribute('aria-label', 'At');
+        if (u.schedule && u.schedule.on) on.value = u.schedule.on;
+        if (u.schedule && u.schedule.time) at.value = u.schedule.time.slice(0, 5);
+        fields.append(homeTeam, make('span', 'v', 'v'), awayTeam, on, at);
+      }
+      const label = { result: 'Record it', award: 'Award it', void: 'Annul it', schedule: 'Add the fixture' }[u.act];
+      const confirm = make('button', 'primary', label);
+      const no = make('button', 'quiet-button', 'Not what I meant');
+      no.onclick = () => { card.replaceChildren(); text.focus(); };
+      confirm.onclick = async () => {
+        confirm.disabled = true; note.hidden = true;
+        try {
+          if (u.act === 'result') {
+            const h = parseInt(home.value, 10), a = parseInt(away.value, 10);
+            if (!Number.isInteger(h) || !Number.isInteger(a) || h < 0 || a < 0) throw new Error('A result is two numbers, one for each side.');
+            await authorised('POST', `/v1/fixtures/${encodeURIComponent(fixture.value)}/result`, { legsHome: h, legsAway: a });
+          } else if (u.act === 'award') {
+            if (reason.value.trim().length < 3) throw new Error('Say why — this is kept.');
+            const f = (data.fixtures || []).find(x => x.fixtureId === fixture.value);
+            await authorised('POST', `/v1/fixtures/${encodeURIComponent(fixture.value)}/award`, { toTeamId: to.value, reason: reason.value.trim(), ...(f && f.decided ? { supersedes: f.decided.outcomeId } : {}) });
+          } else if (u.act === 'void') {
+            if (reason.value.trim().length < 3) throw new Error('Say why — this is kept.');
+            const f = (data.fixtures || []).find(x => x.fixtureId === fixture.value);
+            if (!f || !f.decided) throw new Error('Only a fixture with a result can be annulled.');
+            await authorised('POST', `/v1/fixtures/${encodeURIComponent(fixture.value)}/void`, { supersedes: f.decided.outcomeId, reason: reason.value.trim() });
+          } else if (u.act === 'schedule') {
+            if (homeTeam.value === awayTeam.value) throw new Error('A fixture is between two different teams.');
+            if (!on.value || !at.value) throw new Error('A fixture has a date and a time.');
+            const scheduledAt = new Date(`${on.value}T${at.value}:00`).toISOString();
+            await authorised('POST', `/v1/seasons/${encodeURIComponent(plan.leagueSeasonId)}/fixtures`, { fixtures: [{ homeTeamId: homeTeam.value, awayTeamId: awayTeam.value, scheduledAt }] });
+          }
+          note.hidden = false; note.textContent = 'Done.'; text.value = '';
+          setTimeout(redraw, 700);
+        } catch (e) { note.hidden = false; note.textContent = e.message; confirm.disabled = false; }
+      };
+      const acts = make('div', 'acts'); acts.append(confirm, no);
+      c.append(fields, acts, note, make('p', 'quiet', 'Nothing is recorded until you press the button. Correcting later works as it always has.'));
+      return c;
+    }
+    return box;
+  }
 
   /**
    * The league this season belongs to, and what its starter may do to it (PD-103): rename it, keep it off the public
@@ -1187,7 +1314,7 @@ async function mountOrganiser(where, signInEl) {
     // One fixture.
     const one = make('div', 'entry-form');
     const home = select([], 'Home'), away = select([], 'Away');
-    const day = make('input'); day.type = 'date'; day.min = plan.startsOn; day.max = plan.endsOn;
+    const onDay = make('input'); onDay.type = 'date'; onDay.min = plan.startsOn; onDay.max = plan.endsOn; onDay.setAttribute('aria-label', 'The day');
     const time = make('input'); time.type = 'time'; time.value = '19:30';
     const add = make('button', 'primary', 'Add');
     const refill = () => {
@@ -1197,11 +1324,11 @@ async function mountOrganiser(where, signInEl) {
       }
     };
     add.onclick = () => {
-      if (!home.value || !away.value || !day.value || !time.value) { say('A fixture is a home team, an away team, a day and a time.'); return; }
-      send([{ homeTeamId: home.value, awayTeamId: away.value, scheduledAt: instant(day.value, time.value),
+      if (!home.value || !away.value || !onDay.value || !time.value) { say('A fixture is a home team, an away team, a day and a time.'); return; }
+      send([{ homeTeamId: home.value, awayTeamId: away.value, scheduledAt: instant(onDay.value, time.value),
               ...(pool.value ? { divisionId: pool.value } : {}) }], add);
     };
-    one.append(home, make('span', 'v', 'v'), away, day, time, add);
+    one.append(home, make('span', 'v', 'v'), away, onDay, time, add);
 
     // A whole division.
     const whole = make('div', 'entry-form');

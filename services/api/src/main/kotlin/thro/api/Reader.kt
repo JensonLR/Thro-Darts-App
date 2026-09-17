@@ -22,6 +22,15 @@ public interface Reader {
     public fun readName(kind: String, name: String): NameReading?
 }
 
+/**
+ * A System One model as code sees it (PD-119): one request carrying a state and a map of typed questions, the answers
+ * back by the same names — or null, for anything other than a whole answer in time. The JSON is written by the
+ * caller, which knows its own questions; the wire is [TypeSafeReader]'s.
+ */
+public interface SystemOne {
+    public fun answers(state: String, questions: String): Map<String, Any?>?
+}
+
 /** THRØ's reading of a report. [severity] sits on the levels in [TypeSafeReader.SEVERITY], 0 to 3. */
 public data class Reading(val category: String, val categoryConfidence: Double, val childSafety: Double, val severity: Double, val model: String)
 
@@ -38,7 +47,7 @@ public class TypeSafeReader(
     private val endpoint: URI = URI("https://api.typesafe.ai/v1/systemone"),
     private val timeout: Duration = Duration.ofSeconds(3),
     private val model: String = "jev-latest",
-) : Reader {
+) : Reader, SystemOne {
     public companion object {
         /** What the report is about. One of these wins; the distribution says how clearly. */
         public val CATEGORIES: Map<String, String> = linkedMapOf(
@@ -119,6 +128,8 @@ public class TypeSafeReader(
     }
 
     /** One request; the answers by name, or null for anything other than a whole answer in time. */
+    override fun answers(state: String, questions: String): Map<String, Any?>? = ask(state, questions)
+
     private fun ask(state: String, questions: String): Map<String, Any?>? = try {
         val body = """{"state":$state,"model":${Contract.q(model)},"questions":$questions}"""
         val request = HttpRequest.newBuilder(endpoint).timeout(timeout)

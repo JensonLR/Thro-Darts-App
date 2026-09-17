@@ -55,6 +55,8 @@ import thro.api.MatchRecords
 import thro.api.LeagueTable
 import thro.api.Reader
 import thro.api.Reading
+import thro.api.SystemOne
+import thro.api.Understanding
 import thro.api.Safety
 import thro.api.Matches
 import thro.api.Json
@@ -121,6 +123,8 @@ public class Deps(
      * the state until a key is configured — means no reading, and nothing else changes.
      */
     public val reader: Reader? = null,
+    /** The same model, asked general questions (PD-119: Tell THRØ). Null means the desk cannot read a sentence. */
+    public val systemOne: SystemOne? = null,
 )
 
 private class Http(val status: Int, val body: String)
@@ -198,7 +202,7 @@ public fun Application.thro(deps: Deps) {
         },
         // PD-116: which providers the web may offer, by the client ids configured for it; nothing secret.
         "auth.providers" to { _ ->
-            Http(200, """{"apple":${deps.webProviders[Provider.APPLE]?.let { Contract.q(it) } ?: "null"},"google":${deps.webProviders[Provider.GOOGLE]?.let { Contract.q(it) } ?: "null"}}""")
+            Http(200, """{"apple":${deps.webProviders[Provider.APPLE]?.let { Contract.q(it) } ?: "null"},"google":${deps.webProviders[Provider.GOOGLE]?.let { Contract.q(it) } ?: "null"},"reads":${deps.systemOne != null}}""")
         },
         "auth.logout" to { r -> Http(200, """{"revoked":${Accounts(r.connection(), deps.now).logout(bearer(r.call) ?: "")}}""") },
         "matches.upload" to { r -> r.role = DbRole.MATCH; upload(r.connection(), deps, r.principal!!, r.body) },
@@ -480,6 +484,30 @@ public fun Application.thro(deps: Deps) {
             when (val s = planning.season(season)) {
                 null -> Http(404, """{"error":"THRØ has no such league season."}""")
                 else -> leagueAdmin(r, season) { Http(200, planning.json(s)) }
+            }
+        },
+        // PD-119: Tell THRØ. A sentence on the desk, read into an act to confirm; nothing is recorded here.
+        "seasons.understand" to { r ->
+            val season = UUID.fromString(r.call.parameters["leagueSeasonId"])
+            val model = deps.systemOne
+            val desk = Understanding.desk(r.connection(), season)
+            when {
+                desk == null -> Http(404, """{"error":"THRØ has no such league season."}""")
+                else -> leagueAdmin(r, season) {
+                    val text = (Json.parseObject(r.body)["text"] as? String)?.trim().orEmpty()
+                    when {
+                        model == null -> Http(503, """{"error":"THRØ cannot read sentences on this server yet."}""")
+                        text.isEmpty() -> Http(400, """{"error":"Say what happened, in a sentence."}""")
+                        text.length > 400 -> Http(400, """{"error":"One act at a time: a sentence, not a page."}""")
+                        else -> {
+                            val u = Understanding(model) { deps.now().atZone(Understanding.ZONE).toLocalDate() }
+                            when (val read = u.understand(desk, text)) {
+                                null -> Http(503, """{"error":"THRØ could not read that just now. Try again, or use the boxes below."}""")
+                                else -> Http(200, u.json(read))
+                            }
+                        }
+                    }
+                }
             }
         },
         // PD-100: a league started on THRØ is run by whoever starts it. A listed league stays named-only (PD-053).

@@ -34,7 +34,7 @@ entitlements and refused if the signed app lacks Sign in with Apple or the passk
 
 PD-095 deploy pipeline · PD-096 retention sweep · PD-097 Android notice · PD-098 TestFlight entitlements ·
 PD-099 fixtures · PD-100 start a league · PD-101 moderation page · PD-102 ways in · PD-103 decisions enforce +
-league management · PD-104 organiser email · PD-105 provisional rating · PD-106 the team's fixture · PD-107 registrations · PD-108 moving a fixture by agreement · PD-109 a knockout · PD-110 a friendly · PD-111 rounds · PD-112 the organiser's remaining acts · PD-113 invitationals · PD-114 sign in by the phone · PD-115 pairs, teams, seeds, boards · PD-116 Apple and Google on the web (awaiting the founder's console work) · PD-117 the phone that is already here (Open THRØ from the web's sign-in, `/link/<code>`) · PD-118 THRØ reads reports and names with TypeSafe's System One model (V054; dormant until `THRO_TYPESAFE_API_KEY`) · two design passes (web, phone).
+league management · PD-104 organiser email · PD-105 provisional rating · PD-106 the team's fixture · PD-107 registrations · PD-108 moving a fixture by agreement · PD-109 a knockout · PD-110 a friendly · PD-111 rounds · PD-112 the organiser's remaining acts · PD-113 invitationals · PD-114 sign in by the phone · PD-115 pairs, teams, seeds, boards · PD-116 Apple and Google on the web (awaiting the founder's console work) · PD-117 the phone that is already here (Open THRØ from the web's sign-in, `/link/<code>`) · PD-118 THRØ reads reports and names with TypeSafe's System One model (V054) · PD-119 Tell THRØ, the desk reads a sentence into an act (both dormant until `THRO_TYPESAFE_API_KEY`) · two design passes (web, phone).
 
 ## Completion matrix (from four read-only audits, 16 September; details in PD-106 and CHANGE_RECORD)
 
@@ -79,9 +79,12 @@ league management · PD-104 organiser email · PD-105 provisional rating · PD-1
    (needs TestFlight build 16 on the phone for the entitlement). Not done: a QR code on the laptop's panel.
 7. PD-118: the moderation queue carries THRØ's reading of each report, and a chosen name that reads as abuse is put on
    the queue by THRØ itself — once the founder creates a TypeSafe key, reads its terms, and sets
-   `THRO_TYPESAFE_API_KEY` on Render (steps in PD-118). Next uses worth weighing, in order: a reporter's free text
-   on the fixture screen ("what happened") sorted into the six outcomes; matching a typed player name to a
-   registered one at registration; reading a league's typed rules into a points policy THRØ can compute.
+   `THRO_TYPESAFE_API_KEY` on Render (steps in PD-118).
+7a. PD-119 Tell THRØ: the secretary's desk reads a sentence into a result, an award, an annulment or a new fixture, on
+   a card the person confirms (function calling, fan-out, date extraction, confidence-gated routing — the shape
+   TypeSafe's cookbooks describe). Same key. Next, in the order they pay: the fixture screen's *say it* for a captain
+   (a proposal card); a typed player name matched to a registered one at registration (entity alignment); a league's
+   typed rules read into a points policy.
 8. PD-116 lands the server and web sides of Apple/Google sign-in on the web; the buttons appear only once the founder
    creates the Services ID and the Web OAuth client and sets `THRO_APPLE_WEB_CLIENT_ID` / `THRO_GOOGLE_WEB_CLIENT_ID`
    on Render (the clicks are in PD-116). Until then the web offers the phone code and the passkey.

@@ -6130,3 +6130,17 @@ serves the association file with `applinks` for `/link/*`, so the claim came out
 that stated it — `services/links/README.md`, `CLIENT_IOS.md`, the readiness screen's *Links that open the app* row —
 say what is true: the row is *Working* and names `thro.uk/link/…`. `ReadinessTests` adjusted (a quiet phone has one
 thing working). Found by CI on 30896e4, with `host.py` refusing a rewrite to the site's own page — both fixed.
+
+## Tell THRØ (PD-119)
+
+`SystemOne` (one request, answers by name; `TypeSafeReader` implements it), `Understanding.kt` (the desk's closed sets,
+the questions, the reading, the calendar, `json`), `POST /v1/seasons/{id}/understand`, `reads` on `/v1/auth/providers`,
+`THRO_TYPESAFE_ENDPOINT` for a development stand-in, `tools/fake_systemone.py`. The organiser page's `tellSection`
+leads the season desk when the server reads. Test first: `UnderstandingTest` failed on the unresolved class; its first
+green run found Java's UK locale printing "Sept" and "20:30" being taken for a scoreline — both fixed by the test.
+
+**A defect found by looking (17 September).** The organiser's season page threw *day is not a function* inside
+`scheduler` — a `const day = make('input')` shadowed the `day()` humaniser the design pass had started using two
+lines below it — and the whole season desk drew *That could not be read just now* in its place. Renamed the input
+`onDay`. It reached production in the design-pass commit and was found by the PD-119 look, which is the argument for
+looking.

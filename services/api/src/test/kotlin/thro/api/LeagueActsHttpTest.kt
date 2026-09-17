@@ -115,6 +115,37 @@ class LeagueActsHttpTest {
             check("the season's registered players list both registrations: Riverside ended, Grange current",
                 Regex("\"registered\":\\[.*\"team\":\"Riverside A\"[^}]*\"until\":\"2026-10-01").containsMatchIn(registrations) && Regex("\"team\":\"Grange A\"[^}]*\"until\":null").containsMatchIn(registrations))
             check("transferring again to the same team is a 409", post("/v1/seasons/$season/registrations/$sam/transfer", transfer, lee).status.value == 409)
+
+            // PD-119: a server with no System One model cannot read a sentence, and says so rather than guessing.
+            val unread = post("/v1/seasons/$season/understand", """{"text":"Riverside beat Grange 5-3"}""", lee)
+            check("without a model, Tell THRØ answers 503 in words", unread.status.value == 503 && unread.bodyAsText().contains("cannot read"))
+        }
+
+        // PD-119: Tell THRØ over the wire, with a stand-in model that picks by the words in the options it is offered.
+        val model = object : SystemOne {
+            override fun answers(state: String, questions: String): Map<String, Any?>? {
+                val q = Json.parseObject(questions)
+                @Suppress("UNCHECKED_CAST")
+                fun options(id: String) = (q[id] as Map<String, Any?>)["criteria"] as Map<String, Any?>
+                fun pick(id: String, vararg words: String) = options(id).entries.first { (_, v) -> words.all { w -> (v?.toString() ?: "").contains(w) } }.key
+                fun choice(option: String, p: Double) = mapOf("type" to "choice", "choice" to option, "probabilities" to mapOf(option to p), "confidence" to p)
+                return mapOf("act" to choice("result", 0.95), "fixture" to choice(pick("fixture", "Riverside A", "Grange A"), 0.9),
+                             "score" to choice(pick("score", "5-3"), 0.96), "first_number" to choice("home", 0.9), "winner" to choice("home", 0.9))
+            }
+        }
+        testApplication {
+            application { thro(Deps(connect = { TestDatabase.connect() }, authenticator = Authenticator.Dev(), now = { Instant.parse("2026-09-16T12:00:00Z") }, systemOne = model)) }
+            suspend fun post(path: String, body: String, subject: UUID?): HttpResponse = client.post(path) {
+                subject?.let { header(Authenticator.Dev.HEADER, it.toString()) }; header("X-Thro-Device", device.toString()); setBody(body)
+            }
+            check("Tell THRØ is the administrator's", post("/v1/seasons/$season/understand", """{"text":"Riverside beat Grange 5-3"}""", ade).status.value == 403)
+            check("a sentence with nothing in it is a 400", post("/v1/seasons/$season/understand", """{"text":"  "}""", lee).status.value == 400)
+            val read = post("/v1/seasons/$season/understand", """{"text":"Riverside beat Grange 5-3 on Thursday"}""", lee)
+            val body = read.bodyAsText()
+            check("the sentence is read as a result for the fixture, with the numbers on the right sides",
+                read.status.value == 200 && body.contains("\"act\":\"result\"") && body.contains("\"fixtureId\":\"$fixture\"")
+                    && body.contains("\"legsHome\":5,\"legsAway\":3") && body.contains("\"ready\":true") && body.contains("Riverside A 5–3 Grange A, Thu 8 Oct"))
+            check("and the server tells the web it can read", client.get("/v1/auth/providers").bodyAsText().contains("\"reads\":true"))
         }
         println("league acts over HTTP: $passed checks passed")
     }

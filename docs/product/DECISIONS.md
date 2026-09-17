@@ -5114,3 +5114,52 @@ state; a refusal, nonsense, an incomplete answer, a slow one and an unreachable 
 `JudgmentTest` (4): the reading beside the report, the queue's order, a child moved to the front, no reader or a
 failing one changing nothing, a name that reads badly raising THRØ's own report once and an ordinary one raising
 none. `ModerationHttpTest`: the reading and *raised by THRØ* over the wire. `SafetyTest` (6) unchanged.
+
+## PD-119 — Tell THRØ: the secretary's desk reads a sentence
+
+**17 September 2026.** The founder's steer on PD-118: *"Don't think you've researched Jev properly if that's the use
+case you've chosen."* Read properly, TypeSafe's own account of what Jev is for is not a classifier bolted onto a
+queue. It is programmable common sense inside software: a sentence in, a typed call out (the function-calling
+cookbook); every question in one request and code reading only what applies (speculative fan-out); the model
+reading the *parts* of a date and code doing the calendar (date extraction); confidence as a second axis deciding
+whether to act, confirm, or ask (confidence-gated routing); candidates found by code so the model can only choose
+what is there (pre-parsed value extraction). The place in THRØ where all five meet is the league secretary's desk,
+where the week's results arrive as sentences — a text, a phone call, a scrap of paper — and are typed into boxes.
+
+**Decided.**
+
+1. **One box on the desk: *Tell THRØ*.** "Grange A beat Dolphin 5-3 last night", "walkover to Riverside, Grange
+   didn't turn up", "add Riverside A v Dolphin next Thursday at 8". `POST /v1/seasons/{id}/understand` reads the
+   sentence and answers a card; the person presses *Record it*, *Award it*, *Annul it* or *Add the fixture*, and the
+   act goes through the route it always went through. **Nothing is recorded by reading.**
+2. **Closed sets from the season's own facts.** One request carries a Choice over the four acts (and *none*), a Choice
+   over every fixture in the season by name, side and date, a Choice over the teams for each side of a new fixture,
+   a Choice over the scorelines code found in the text, a Choice over the times it found, and the parts of a date
+   (mode, anchor, weekday, this/next week, month, day). The model matches meaning to an option; it never writes a
+   name, a number or a date that was not offered.
+3. **Code does the arithmetic, the calendar and the cross-check.** Which side the first number belongs to is asked;
+   the side the sentence says won is asked separately, and when it contradicts the numbers the card says *check the
+   score* rather than guessing. "Next Thursday" is resolved from today in London; "8" is eight in the evening,
+   because darts is; "3 June" with no year is the first 3 June to come, and a date outside the season is a doubt.
+4. **The weakest link is the confidence** (the cookbook's rule): the least certain part read sets the number, and the
+   card says *sure*, *fairly sure* or *not sure* and names the part in doubt. Every card is completable by hand — the
+   fixture (with the model's runners-up first), the legs, the side, the reason, the teams, the date, the time — so a
+   half-read sentence is half the typing, never a dead end.
+5. **The web shows the box only where the server can read** (`/v1/auth/providers` says `reads`), and the server says
+   503 in words without a model. The same `THRO_TYPESAFE_API_KEY` as PD-118 switches it on; a development server can
+   point `THRO_TYPESAFE_ENDPOINT` at `tools/fake_systemone.py`, which answers by word overlap and reads nothing, to
+   look at the card end to end.
+
+**Why the desk first, and what follows.** The secretary types the same ten sentences a hundred times a season; the
+phone's players type fewer. The next uses, in the order they pay: the fixture screen's *say it* for a captain
+("can't do Thursday, Friday's fine" → a proposal card); a typed player name matched to a registered one at
+registration (entity alignment, three levels: same, look, different); a league's typed rules read into a points
+policy THRØ can compute (the same closed-set shape over `PointsPolicy`'s fields). PD-118's readings stay: they are a
+smaller use, not a wrong one.
+
+**Evidence.** `UnderstandingTest` (9): every fixture offered by name, side and date; the scoreline and time candidates
+found by code and only those offered; a result read to the right sides; a winner that contradicts the numbers a
+doubt; a result with no numbers not ready; an award to a side with the sentence as its reason; a relative day and a
+time resolved by code; an absolute date with no year, outside the season, a doubt; a question not an act; a silent or
+failing model no reading. `LeagueActsHttpTest`: 503 without a model, 403 for a captain, 400 for an empty sentence,
+200 with the fixture and the legs on the right sides, and *reads* on the providers route.

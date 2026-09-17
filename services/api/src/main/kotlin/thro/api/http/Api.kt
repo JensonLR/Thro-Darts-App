@@ -523,6 +523,19 @@ public object Contract {
                               403 to "you neither run this season nor a team in it", 404 to "no such league season"),
         ),
         Endpoint(
+            id = "seasons.understand", method = "POST", path = "/v1/seasons/{leagueSeasonId}/understand", authenticated = true,
+            summary = "Tell THRØ: read a sentence on the desk into an act to confirm (PD-119)",
+            description = "By the season's administrator. One sentence — 'Grange A beat Dolphin 5-3 last night', 'walkover to Riverside', "
+                + "'add Riverside A v Dolphin next Thursday at 8' — is read by a System One model against the season's own fixtures "
+                + "and teams into one of four acts (result, award, void, schedule) with its arguments filled, a confidence, and the "
+                + "part in doubt named. **Nothing is recorded here**: the answer is a card for the person to confirm through the "
+                + "act's own route. 503 when this server has no model to read with.",
+            request = Schema("""{"type":"object","required":["text"],"properties":{"text":{"type":"string","maxLength":400}}}"""),
+            responses = mapOf(200 to "what the sentence was read as: act, confidence, ready, say, doubt, fixture (with alternatives), result, award, schedule, reason",
+                              400 to "no sentence, or more than one", 401 to "no principal", 403 to "you do not administer this season", 404 to "no such season",
+                              503 to "no model on this server, or the model did not answer"),
+        ),
+        Endpoint(
             id = "seasons.points", method = "POST", path = "/v1/seasons/{leagueSeasonId}/points", authenticated = true,
             summary = "Set the points rules a season's table is ordered by (PD-112)",
             description = "By the season's administrator: points for a win, a draw, a loss and an award, points per leg won, and the order "
