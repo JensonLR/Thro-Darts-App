@@ -757,8 +757,8 @@ public object Contract {
             summary = "Propose a new date for a fixture to the other team (PD-108)",
             description = "By whoever runs one of the fixture's teams. The proposal reaches the other team's inbox as a task due within "
                 + "seven days or by the fixture, whichever is first. One open proposal per fixture; the date must fall inside the season.",
-            request = Schema("""{"type":"object","required":["teamId","to"],"properties":{"teamId":{"type":"string","format":"uuid"},"to":{"type":"string","format":"date-time"},"reason":{"type":"string"}}}"""),
-            responses = mapOf(200 to "the proposal, delivered", 400 to "a date outside the season, or in the past", 401 to "no principal", 403 to "you do not run a team in this fixture", 404 to "no such fixture", 409 to "a proposal is already waiting"),
+            request = Schema("""{"type":"object","required":["teamId","to"],"properties":{"teamId":{"type":"string","format":"uuid"},"to":{"type":"string","format":"date-time"},"reason":{"type":"string"},"venueId":{"type":"string","format":"uuid","description":"somewhere else to play it (PD-128): a public venue THRØ holds; omitted, the fixture stays where it was going to be"}}}"""),
+            responses = mapOf(200 to "the proposal, delivered", 400 to "a date outside the season or in the past, or a venue THRØ cannot show the other team", 401 to "no principal", 403 to "you do not run a team in this fixture", 404 to "no such fixture", 409 to "a proposal is already waiting"),
         ),
         Endpoint(
             id = "proposals.get", method = "GET", path = "/v1/proposals/{proposalId}", authenticated = true,

@@ -738,7 +738,8 @@ public fun Application.thro(deps: Deps) {
                 val m = Json.parseObject(r.body)
                 val to = try { Instant.parse(m["to"] as? String ?: "") } catch (e: Exception) { throw IllegalArgumentException("to is not a date-time") }
                 val team = UUID.fromString(m["teamId"] as? String ?: throw IllegalArgumentException("teamId is required"))
-                Rearrangements(r.connection(), deps.now).let { Http(200, it.json(it.propose(UUID.fromString(r.call.parameters["fixtureId"]), team, to, m["reason"] as? String, r.principal!!.subject))) }
+                val venue = (m["venueId"] as? String)?.let { runCatching { UUID.fromString(it) }.getOrNull() ?: throw IllegalArgumentException("venueId must be a UUID") }
+                Rearrangements(r.connection(), deps.now).let { Http(200, it.json(it.propose(UUID.fromString(r.call.parameters["fixtureId"]), team, to, m["reason"] as? String, r.principal!!.subject, venue))) }
             }
         },
         "proposals.get" to { r ->

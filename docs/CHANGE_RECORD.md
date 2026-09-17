@@ -6224,3 +6224,9 @@ flow; `DrawerShare`; the team code's share text. The API's association file and 
 
 **One league by its id.** `GET /v1/leagues/{leagueId}` (`Leagues.one`), because the shared page fetched all 329 leagues
 to show one and waited five seconds for it on the live site. `LeagueStandingTest` 10 checks.
+
+## A proposal says where as well as when (PD-128)
+
+`Rearrangements.propose(venueId)`, `Proposal.venue`, the `fixtures.propose` route and its schema; `FixtureProposal.venue`,
+`ThroAPI.propose(venue:)`, `ProposalWords`, the venue search on the fixture screen's proposal form, the inbox card; the
+desk's request row and apply button. `RearrangementHttpTest` 38, `ProposalWordsTests` 3, app tests 413, 887 in all.

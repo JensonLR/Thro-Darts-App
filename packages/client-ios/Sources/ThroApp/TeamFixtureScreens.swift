@@ -122,6 +122,9 @@ public struct TeamFixtureScreen: View {
     @State private var proposing = false
     @State private var proposedDate = Date()
     @State private var proposedReason = ""
+    @State private var proposedVenue: PublicLeague.Venue?
+    @State private var venueQuery = ""
+    @State private var venueHits: [PublicLeague.Venue] = []
 
     public init(api: ThroAPI, teamId: UUID, fixture: LeagueFixtures.Fixture, onBack: @escaping () -> Void) {
         self.api = api; self.teamId = teamId; self.fixture = fixture; self.onBack = onBack
@@ -231,8 +234,7 @@ public struct TeamFixtureScreen: View {
             SectionHeader("Moving it").padding(.top, ThroSpacing.spaceSectionGap)
             if let proposals {
                 ForEach(proposals) { p in
-                    Text("\(p.byTeam) proposed \(RearrangementTaskActions.when(p.to))" + (p.reason.map { " — \($0)" } ?? "") + " · "
-                         + (p.state == "proposed" ? (p.byTeamId == teamId ? "waiting for \(p.toTeam)" : "waiting for your answer — it is in your inbox") : RearrangementTaskActions.standing(p.state)))
+                    Text(ProposalWords.line(p, viewing: teamId))
                         .thro(ThroTypography.metadata).foregroundStyle(ThroColor.colorTextSecondary).padding(.top, ThroSpacing.spacing2)
                     if p.state == "proposed" && p.byTeamId == teamId && v.mayNameLineup {
                         ThroTextButton("Take it back", tone: .quiet) { Task { await withdraw(p) } }.disabled(busy)
@@ -246,7 +248,30 @@ public struct TeamFixtureScreen: View {
                 if proposing {
                     DatePicker("New date", selection: $proposedDate, in: Date()...)
                         .thro(ThroTypography.body).foregroundStyle(ThroColor.colorTextPrimary).padding(.top, ThroSpacing.spacing2)
-                    ThroTextField("Why?", text: $proposedReason, placeholder: "venue double-booked")
+                    ThroTextField("Why?", text: $proposedReason, placeholder: "the pub is shut that night")
+                    // Somewhere else to play it (PD-128), picked from the venues THRØ holds so the other side can be told where.
+                    if let chosen = proposedVenue {
+                        HStack {
+                            Text("At \(chosen.name)").thro(ThroTypography.body).foregroundStyle(ThroColor.colorTextPrimary)
+                            Spacer()
+                            ThroTextButton("Where it was", tone: .quiet, alignment: .trailing) { proposedVenue = nil; venueQuery = "" }
+                        }
+                        .frame(minHeight: ThroSpacing.touchTargetMinimum)
+                    } else {
+                        ThroTextField("Somewhere else? (optional)", text: $venueQuery, placeholder: "a pub or club by name")
+                            .onChange(of: venueQuery) { _, q in Task { await findVenues(q) } }
+                        ForEach(venueHits.prefix(4), id: \.venueId) { hit in
+                            Button { proposedVenue = hit; venueHits = [] } label: {
+                                HStack {
+                                    Text([hit.name, hit.locality].compactMap { $0 }.joined(separator: " · ")).thro(ThroTypography.body).foregroundStyle(ThroColor.colorTextPrimary)
+                                    Spacer()
+                                    Icon(.chevronRight, size: 16).foregroundStyle(ThroColor.colorTextTertiary)
+                                }
+                                .frame(minHeight: ThroSpacing.touchTargetMinimum).throRowTapTarget()
+                            }
+                            .buttonStyle(ThroPressStyle(radius: ThroSpacing.radiusCard, pressedFill: ThroColor.colorSurfaceSecondary, scales: false))
+                        }
+                    }
                     HStack(spacing: ThroSpacing.spacing2) {
                         ThroButton("Propose it to \(v.opponent ?? "the other team")", variant: .primary, size: .medium) { Task { await propose(in: v) } }.disabled(busy)
                         ThroTextButton("Leave it", tone: .quiet) { proposing = false }
@@ -319,11 +344,20 @@ public struct TeamFixtureScreen: View {
         } catch { note = (error as? APIError)?.message ?? error.localizedDescription }
     }
 
+    /// The venues THRØ holds by that name. Two letters before it asks; the last answer wins.
+    private func findVenues(_ query: String) async {
+        let q = query.trimmingCharacters(in: .whitespaces)
+        guard q.count >= 2 else { venueHits = []; return }
+        let found = (try? await api.venues(matching: q)) ?? []
+        if q == venueQuery.trimmingCharacters(in: .whitespaces) { venueHits = found }
+    }
+
     private func propose(in v: TeamFixtureView) async {
         busy = true; defer { busy = false }
         do {
-            let made = try await api.propose(fixture: v.fixtureId, team: teamId, to: proposedDate, reason: proposedReason.trimmingCharacters(in: .whitespaces))
-            proposing = false; proposedReason = ""
+            let made = try await api.propose(fixture: v.fixtureId, team: teamId, to: proposedDate, reason: proposedReason.trimmingCharacters(in: .whitespaces),
+                                             venue: proposedVenue?.venueId)
+            proposing = false; proposedReason = ""; proposedVenue = nil; venueQuery = ""
             proposals = [made] + (proposals ?? [])
             note = "Proposed to \(made.toTeam). They answer from their inbox."
         } catch { note = (error as? APIError)?.message ?? error.localizedDescription }
@@ -377,5 +411,21 @@ public struct TeamFixtureScreen: View {
     static func when(_ date: Date) -> String {
         let f = DateFormatter(); f.locale = Locale(identifier: "en_GB"); f.dateFormat = "EEE d MMM, HH:mm"
         return f.string(from: date)
+    }
+}
+
+
+/// A proposal in words (PD-108, PD-128), apart from the screens so it is tested.
+enum ProposalWords {
+    /// "Thu 19 Nov, 19:30 at Grange Social Club", or the date alone when the place stays as it was.
+    static func what(_ p: FixtureProposal) -> String {
+        RearrangementTaskActions.when(p.to) + (p.venue.map { " at \($0.name)" } ?? "")
+    }
+
+    /// The fixture screen's line: who proposed what, why, and where it stands for the team looking.
+    static func line(_ p: FixtureProposal, viewing team: UUID) -> String {
+        "\(p.byTeam) proposed \(what(p))" + (p.reason.map { " — \($0)" } ?? "") + " · "
+            + (p.state == "proposed" ? (p.byTeamId == team ? "waiting for \(p.toTeam)" : "waiting for your answer — it is in your inbox")
+                                     : RearrangementTaskActions.standing(p.state))
     }
 }

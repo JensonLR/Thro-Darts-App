@@ -64,6 +64,11 @@ class RearrangementHttpTest {
         rel.grant(ade, "admin", ObjectRef(ObjectType.TEAM, riverside.toString())); rel.grant(gil, "admin", ObjectRef(ObjectType.TEAM, grange.toString()))
         for (t in listOf(riverside, grange)) orgs.acceptAffiliation(orgs.affiliate(t, season, from = t0), t0)
         val fixture = orgs.scheduleFixture(season, null, riverside, grange, Instant.parse("2026-10-08T19:30:00Z"))
+        // PD-128: a second fixture, for a proposal that names somewhere else to play it.
+        val away = orgs.scheduleFixture(season, null, grange, riverside, Instant.parse("2026-11-12T19:30:00Z"))
+        val club = orgs.createVenue("Grange Social Club", "Stockton-on-Tees")
+        val hidden = orgs.createVenue("A Private Room", "Stockton-on-Tees")
+        c.prepareStatement("UPDATE competition.venue SET visibility = 'private' WHERE venue_id = ?").use { ps -> ps.setObject(1, hidden); ps.executeUpdate() }
 
         testApplication {
             application { thro(Deps(connect = { TestDatabase.connect() }, authenticator = Authenticator.Dev(), now = { Instant.parse("2026-09-16T12:00:00Z") })) }
@@ -131,6 +136,21 @@ class RearrangementHttpTest {
             check("a withdrawn proposal cannot be answered", post("/v1/proposals/$third/answer", """{"answer":"accepted"}""", gil).status.value == 409)
             check("and its task is no longer open in the opponent's inbox", !get("/v1/teams/$grange/inbox", gil).bodyAsText().contains("\"proposal\":\"$third\",\"state\":\"open\"") )
             check("a withdrawn proposal frees the fixture for a new one", post("/v1/fixtures/$fixture/proposals", """{"teamId":"$grange","to":"2026-11-05T19:30:00Z"}""", gil).status.value == 200)
+
+            // --- a proposal may name somewhere else to play it (PD-128) -----------------------------------------------
+            check("a venue that is not an id is a 400", post("/v1/fixtures/$away/proposals", """{"teamId":"$grange","to":"2026-11-19T19:30:00Z","venueId":"the club"}""", gil).status.value == 400)
+            check("a venue THRØ does not hold is a 400", post("/v1/fixtures/$away/proposals", """{"teamId":"$grange","to":"2026-11-19T19:30:00Z","venueId":"${UUID.randomUUID()}"}""", gil).status.value == 400)
+            check("a private venue cannot be proposed: the other side could not be told where", post("/v1/fixtures/$away/proposals", """{"teamId":"$grange","to":"2026-11-19T19:30:00Z","venueId":"$hidden"}""", gil).status.value == 400)
+            val elsewhere = post("/v1/fixtures/$away/proposals", """{"teamId":"$grange","to":"2026-11-19T19:30:00Z","reason":"the pub is shut for a refit","venueId":"$club"}""", gil)
+            check("a proposal names a new date and somewhere else to play it", elsewhere.status.value == 200
+                && elsewhere.bodyAsText().contains("\"venue\":{\"venueId\":\"$club\",\"name\":\"Grange Social Club\",\"locality\":\"Stockton-on-Tees\"}"))
+            val elsewhereId = idOf(elsewhere.bodyAsText(), "proposalId")!!
+            check("the opponent reads where as well as when", get("/v1/proposals/$elsewhereId", ade).bodyAsText().contains("Grange Social Club"))
+            check("a proposal with no venue says none", get("/v1/fixtures/$fixture/proposals", ade).bodyAsText().contains("\"venue\":null"))
+            post("/v1/proposals/$elsewhereId/answer", """{"answer":"accepted"}""", ade)
+            check("applied, the fixture is on the new date at the new place",
+                post("/v1/proposals/$elsewhereId/apply", """{"expectedVersion":1}""", lee).status.value == 200
+                && get("/v1/seasons/$season/fixtures", null).bodyAsText().let { it.contains("2026-11-19T19:30:00Z") && it.contains("Grange Social Club") })
         }
         println("rearrangement over HTTP: $passed checks passed")
     }

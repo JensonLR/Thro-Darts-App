@@ -149,6 +149,14 @@ public struct FixtureProposal: Decodable, Sendable, Equatable, Identifiable {
     public let answeredAt: Date?
     public let scheduledAt: Date
     public let fixtureVersion: Int
+    /// Somewhere else to play it, where the proposal names one (PD-128). Nil is "where it was going to be", and is
+    /// also what a server from before PD-128 sends.
+    public let venue: Venue?
+    public struct Venue: Decodable, Sendable, Equatable {
+        public let venueId: UUID
+        public let name: String
+        public let locality: String?
+    }
     public var id: UUID { proposalId }
 }
 
@@ -1250,8 +1258,9 @@ public actor ThroAPI {
     }
 
     /// Proposes a new date to the other team, for whoever runs this one. Reaches their inbox; moves nothing.
-    public func propose(fixture: UUID, team: UUID, to: Date, reason: String?) async throws -> FixtureProposal {
+    public func propose(fixture: UUID, team: UUID, to: Date, reason: String?, venue: UUID? = nil) async throws -> FixtureProposal {
         var fields: [String: Any] = ["teamId": team.uuidString.lowercased(), "to": ISO8601DateFormatter().string(from: to)]
+        if let venue { fields["venueId"] = venue.uuidString.lowercased() }
         if let reason, !reason.isEmpty { fields["reason"] = reason }
         let body = try JSONSerialization.data(withJSONObject: fields)
         return try decode(await authorised("POST", "/v1/fixtures/\(fixture.uuidString.lowercased())/proposals", body: body))

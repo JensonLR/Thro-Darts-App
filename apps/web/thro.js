@@ -1335,10 +1335,11 @@ async function mountOrganiser(where, signInEl) {
       const li = make('li');
       const head = make('div', 'row-head');
       head.append(make('div', 'row-name', `${p.byTeam} v ${p.toTeam}`),
-                  make('span', 'quiet', `${when(p.scheduledAt)} → ${when(p.to)}${p.reason ? ` — ${p.reason}` : ''}`));
+                  // PD-128: and where, when the proposal names somewhere else to play it.
+                  make('span', 'quiet', `${when(p.scheduledAt)} → ${when(p.to)}${p.venue ? ` at ${p.venue.name}` : ''}${p.reason ? ` — ${p.reason}` : ''}`));
       const said = make('p', 'note'); said.hidden = true;
       if (p.state === 'accepted') {
-        const apply = make('button', 'primary', 'Apply the agreed date');
+        const apply = make('button', 'primary', p.venue ? 'Apply the agreed date and place' : 'Apply the agreed date');
         apply.onclick = async () => {
           apply.disabled = true;
           try {

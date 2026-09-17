@@ -368,7 +368,7 @@ struct RearrangementTaskActions: View {
     var body: some View {
         VStack(alignment: .leading, spacing: ThroSpacing.spacing2) {
             if let p = read {
-                Text("\(p.byTeam) proposes \(Self.when(p.to)) instead of \(Self.when(p.scheduledAt))" + (p.reason.map { " — \($0)" } ?? ""))
+                Text("\(p.byTeam) proposes \(ProposalWords.what(p)) instead of \(Self.when(p.scheduledAt))" + (p.reason.map { " — \($0)" } ?? ""))
                     .thro(ThroTypography.body).foregroundStyle(ThroColor.colorTextPrimary)
                 if p.state == "proposed" {
                     if declining {
@@ -380,7 +380,7 @@ struct RearrangementTaskActions: View {
                         }
                     } else {
                         HStack(spacing: ThroSpacing.spacing2) {
-                            ThroButton("Agree to \(Self.when(p.to))", variant: .primary, size: .medium) { Task { await answer("accepted") } }.disabled(busy)
+                            ThroButton("Agree to \(ProposalWords.what(p))", variant: .primary, size: .medium) { Task { await answer("accepted") } }.disabled(busy)
                             ThroButton("Decline", variant: .secondary, size: .medium) { declining = true; note = "" }.disabled(busy)
                         }
                     }

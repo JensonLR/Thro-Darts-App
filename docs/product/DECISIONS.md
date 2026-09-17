@@ -5455,3 +5455,25 @@ Looked at: the three pages on the local site through the same rewrites, and `-Th
 `league/<id>` in the simulator landing on the tournament page and the league's card.
 
 **External.** The three rewrites are dashboard settings on the static site, like `/link/*` before them.
+
+## PD-128 — A proposal to move a fixture may say where as well as when
+
+**17 September 2026.** On the list since PD-108: *a proposed venue on the wire.* The pub being shut is the commonest
+reason a league game moves, and a proposal that could carry only a date left the place to a text message, outside the
+record the league applies from.
+
+**Decided.**
+
+1. `POST /v1/fixtures/{id}/proposals` takes an optional `venueId`. The table has held `proposed_venue_id` since V016
+   and applying has always moved the fixture to it; nothing could set it. No migration.
+2. **The venue must be one THRØ holds and may show.** A private venue could not be told to the other side, and a
+   proposal they cannot read is not one they can answer: refused, in words.
+3. Every reading of a proposal carries `venue` (id, name, locality) or null, and null means *where it was going to be*.
+4. **The app**: the fixture screen's *Propose another date* gains *Somewhere else?*, searched from THRØ's venues; the
+   line under *Moving it*, the inbox card and its *Agree to…* button all say the place. **The desk** on the web says it
+   in the request's row and on the button that applies it.
+
+**Evidence.** `RearrangementHttpTest` 38 checks (an id that is not one, a venue THRØ does not hold, a private venue,
+the proposal read by the opponent with the place, a proposal with none saying null, and applied: the fixture on the
+new date at the new place). `ProposalWordsTests` 3. Written test and code together for the app's words, so that red
+was not watched there; the server's checks were watched failing first.

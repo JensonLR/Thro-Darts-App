@@ -73,8 +73,8 @@ or on the map only, and count them apart; no TABLE without fixtures; every *tell
 can do; a tournament row opens `EventScreen`; `thro.uk/league|event|team/<id>` is one address on the web and in the app,
 shared from the app, with *Open in THRØ* or a QR on each page. **External after deploy:** three rewrites on the static
 site's dashboard (`/league/*` → `/league.html`, `/event/*` → `/event.html`, `/team/*` → `/team.html`). Left on the list:
-the captain's *say it* on the fixture screen, pairs and teams of walk-ups, a walk-up claiming their player, a proposed
-venue on a rearrangement. (The single-league read, `GET /v1/leagues/{id}`, followed the same evening.)
+the captain's *say it* on the fixture screen, pairs and teams of walk-ups, a walk-up claiming their player. (A proposed
+venue on a rearrangement is PD-128, done the same evening.) (The single-league read, `GET /v1/leagues/{id}`, followed the same evening.)
 
 ## Frontier (what is next, in order)
 

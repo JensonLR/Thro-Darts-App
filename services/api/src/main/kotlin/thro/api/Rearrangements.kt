@@ -56,15 +56,20 @@ public class Rearrangements(private val connection: Connection, private val now:
         val proposalId: UUID, val fixtureId: UUID, val state: String, val to: Instant, val reason: String?,
         val byTeamId: UUID, val byTeam: String, val toTeamId: UUID, val toTeam: String, val createdAt: Instant, val answeredAt: Instant?,
         val scheduledAt: Instant, val fixtureVersion: Int, val leagueSeasonId: UUID,
+        /** Somewhere else to play it, where the proposal names one (PD-128). Null is "where it was going to be". */
+        val venue: Venue? = null,
     )
+    public data class Venue(val venueId: UUID, val name: String, val locality: String?)
 
     private fun proposals(where: String, id: UUID): List<Proposal> = connection.prepareStatement(
         """SELECT p.proposal_id, p.fixture_id, p.state, p.proposed_at, p.reason, p.proposed_by_team_id, b.name, p.to_team_id, t.name,
-                  p.created_at, p.answered_at, f.scheduled_at, f.row_version, f.league_season_id
+                  p.created_at, p.answered_at, f.scheduled_at, f.row_version, f.league_season_id,
+                  v.venue_id, v.name, v.locality
              FROM competition.fixture_rearrangement_proposal p
              JOIN competition.league_fixture f ON f.fixture_id = p.fixture_id
              JOIN competition.team b ON b.team_id = p.proposed_by_team_id
              JOIN competition.team t ON t.team_id = p.to_team_id
+             LEFT JOIN competition.venue v ON v.venue_id = p.proposed_venue_id
             WHERE $where ORDER BY p.created_at DESC""",
     ).use { ps ->
         ps.setObject(1, id)
@@ -73,7 +78,8 @@ public class Rearrangements(private val connection: Connection, private val now:
                 if (!rs.next()) null
                 else Proposal(rs.getObject(1) as UUID, rs.getObject(2) as UUID, rs.getString(3), rs.getTimestamp(4).toInstant(), rs.getString(5),
                               rs.getObject(6) as UUID, rs.getString(7), rs.getObject(8) as UUID, rs.getString(9),
-                              rs.getTimestamp(10).toInstant(), rs.getTimestamp(11)?.toInstant(), rs.getTimestamp(12).toInstant(), rs.getInt(13), rs.getObject(14) as UUID)
+                              rs.getTimestamp(10).toInstant(), rs.getTimestamp(11)?.toInstant(), rs.getTimestamp(12).toInstant(), rs.getInt(13), rs.getObject(14) as UUID,
+                              (rs.getObject(15) as UUID?)?.let { Venue(it, rs.getString(16), rs.getString(17)) })
             }.toList()
         }
     }
@@ -82,7 +88,12 @@ public class Rearrangements(private val connection: Connection, private val now:
 
     // --- one team proposes ------------------------------------------------------------------------------------------
 
-    public fun propose(fixtureId: UUID, teamId: UUID, to: Instant, reason: String?, by: UUID): Proposal {
+    /**
+     * A new date, and where the proposal says so somewhere else to play it (PD-128): the pub is shut for a refit, the
+     * board is double-booked. The venue must be one THRØ holds and may show — a private one could not be told to the
+     * other side, and a proposal they cannot read is not one they can answer. Applied, the fixture moves to both.
+     */
+    public fun propose(fixtureId: UUID, teamId: UUID, to: Instant, reason: String?, by: UUID, venueId: UUID? = null): Proposal {
         val f = fixture(fixtureId) ?: throw Refused("THRØ has no such fixture.", 404)
         if (teamId != f.home && teamId != f.away) throw Refused("That team is not in this fixture.", 403)
         if (!runsTeam(by, teamId)) throw Refused("Only whoever runs the team proposes a date for it.", 403)
@@ -90,8 +101,13 @@ public class Rearrangements(private val connection: Connection, private val now:
         if (day.isBefore(f.seasonStarts) || day.isAfter(f.seasonEnds)) throw Refused("The new date must fall inside the season, ${f.seasonStarts} to ${f.seasonEnds}.", 400)
         if (!to.isAfter(now())) throw Refused("The new date is in the past.", 400)
         if (proposals("p.fixture_id = ? AND p.state = 'proposed'", fixtureId).isNotEmpty()) throw Refused("A proposal for this fixture is already waiting for an answer.", 409)
+        if (venueId != null) {
+            val shown = connection.prepareStatement("SELECT 1 FROM competition.venue WHERE venue_id = ? AND visibility = 'public'")
+                .use { ps -> ps.setObject(1, venueId); ps.executeQuery().use { it.next() } }
+            if (!shown) throw Refused("That venue is not one THRØ can show the other team.", 400)
+        }
         val due = minOf(now().plus(answerWindow), f.at)
-        val made = try { sec.proposeRearrangement(fixtureId, teamId, to, due, by, reason?.trim()?.takeIf { it.isNotEmpty() }) }
+        val made = try { sec.proposeRearrangement(fixtureId, teamId, to, due, by, reason?.trim()?.takeIf { it.isNotEmpty() }, venueId) }
             catch (e: org.postgresql.util.PSQLException) { throw Refused("A proposal for this fixture is already waiting for an answer.", 409) }
         return one(made.proposalId)
     }
@@ -171,7 +187,8 @@ public class Rearrangements(private val connection: Connection, private val now:
         val q = thro.api.http.Contract::q
         return """{"proposalId":"${p.proposalId}","fixtureId":"${p.fixtureId}","leagueSeasonId":"${p.leagueSeasonId}","state":${q(p.state)},"to":"${p.to}",""" +
             """"reason":${p.reason?.let(q) ?: "null"},"byTeamId":"${p.byTeamId}","byTeam":${q(p.byTeam)},"toTeamId":"${p.toTeamId}","toTeam":${q(p.toTeam)},""" +
-            """"proposedAt":"${p.createdAt}","answeredAt":${p.answeredAt?.let { "\"$it\"" } ?: "null"},"scheduledAt":"${p.scheduledAt}","fixtureVersion":${p.fixtureVersion}}"""
+            """"proposedAt":"${p.createdAt}","answeredAt":${p.answeredAt?.let { "\"$it\"" } ?: "null"},"scheduledAt":"${p.scheduledAt}","fixtureVersion":${p.fixtureVersion},""" +
+            """"venue":${p.venue?.let { """{"venueId":"${it.venueId}","name":${q(it.name)},"locality":${it.locality?.let(q) ?: "null"}}""" } ?: "null"}}"""
     }
 
     public fun json(list: List<Proposal>): String = """{"proposals":[${list.joinToString(",") { json(it) }}]}"""
