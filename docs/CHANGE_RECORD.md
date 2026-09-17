@@ -6164,3 +6164,7 @@ is two names either side of a v). API 147.
 it now opens the way in for somebody holding no session, and the card follows the moment the account answers
 (`showingAccount` cleared so closing the card does not land on the account screen). Looked at on the simulator: signed
 out, *Not now*, `thro://link/K7TQ2M` → the sign-in board with *Back*.
+
+**The link page under its own rewrite (17 September).** The `/link/*` rewrite went onto the live static site (THRO-web,
+by the dashboard — `render.yaml` governs the Blueprint's duplicate, not the site thro.uk points at), and the page came
+up unstyled: served at `/link/<code>`, its relative `thro.css` resolved to `/link/thro.css`. `<base href="/">`.
