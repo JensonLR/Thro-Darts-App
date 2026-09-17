@@ -5522,3 +5522,32 @@ answer, the guard, the weeks, the parts deciding, o'clock, the bracket). `League
 the fixture, nothing typed, the reading, and that reading proposes nothing; 503 with no model). `ProposalWordsTests` 6.
 The HTTP checks and the app's words were written with their code rather than before it; the reader's tests were
 watched failing first. Looked at in the simulator: a sentence typed, read back, the date and the reason filled in.
+
+## PD-130 — A pair with a walk-up in it
+
+**17 September 2026.** PD-124 took walk-ups on singles nights and refused pairs nights, which is where most walk-ups
+are: a blind pairs draw is whoever is in the pub, in twos.
+
+**Decided.**
+
+1. `POST /v1/events/{id}/guests` on a pairs event takes `names` of two, or `name` with `partnerId` for a partner who
+   is on THRØ. One name alone is still refused there, in words that say what a pairs night takes.
+2. **Each walk-up half is a walk-up**, exactly as PD-124 has it: a player with no account, the name the organiser's to
+   see, public only with the organiser's word that this is an adult happy to be named, *A guest* otherwise, forgotten
+   thirty days after the night. The one SQL that names a competitor names a pair's halves the same way, so no page
+   names somebody another page hides. `mayBeNamed` covers whoever is typed in that act.
+3. **All of it or none.** Found by asking what a refusal leaves behind: a pair refused for its second name left its
+   first on the night as a stray walk-up. Adding a walk-up, alone or in a pair, is one transaction now.
+4. A pair with a walk-up in it is *here*, for the reason a walk-up is: the organiser could not have typed them otherwise.
+5. **The knockout page** offers *Add a pair with a walk-up*: a name, and either a second name or a partner chosen from
+   the organiser's teams' rosters; choosing one clears the other.
+
+**Not done.** A *team* of walk-ups. A team's name is nobody's personal data, but a team row made for one night would
+need its own marker to be present, kept out of team search and cleared afterwards: a migration and a retention rule for
+a case a teams knockout rarely has. And a walk-up *claiming* the player they were on the night: that joins a typed name
+to an account, which is an identity decision for the founder and the DPIA, not something to slip in beside this.
+
+**Evidence.** `GuestsHttpTest` 26 checks: who may, two names, two different names, the pair named for the organiser and
+present, a walk-up with somebody on THRØ, a partner already paired, a partner THRØ does not know, a name already on the
+night, nothing left behind by a refusal, the public page counting and naming nobody unsaid, the organiser's draw naming
+every half, and the public draw naming only whom it may. Looked at in the browser: a pair added through the form.

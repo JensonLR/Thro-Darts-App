@@ -6245,3 +6245,9 @@ guards, "the parts decide" in `date()`, `o'clock` in `clockOf`, `Raw` in the JSO
 route `fixtures.propose.read`. App: `ThroAPI.readMove`, `MoveReading`, `ProposalWords.read` and `.fills`, *Say it* and
 *Read it* on the proposal form with the TypeSafe note; the stage answers the read. `JevEvaluationTest` gains three
 captain's sets and prints the parts read on a miss. Privacy page and ROPA. API tests 162; app tests 420, 894 in all.
+
+## A pair with a walk-up in it (PD-130)
+
+`Editions.enterGuestPair`, `guestPlayer`, `roomFor`, `together`; a pair's halves named as walk-ups in `competitorName`;
+present in `entrants`; the `events.guests` route reads `names` and `partnerId`. Web: *Add a pair with a walk-up*.
+`GuestsHttpTest` 26. No migration.

@@ -680,7 +680,13 @@ public fun Application.thro(deps: Deps) {
             editions {
                 val m = Json.parseObject(r.body)
                 Editions(r.connection(), deps.now).let {
-                    Http(200, it.json(it.enterGuest(UUID.fromString(r.call.parameters["eventId"]), (m["name"] as? String).orEmpty(), m["mayBeNamed"] == true, r.principal!!.subject)))
+                    val event = UUID.fromString(r.call.parameters["eventId"])
+                    // PD-130: two names, or a name and a partner on THRØ, are a pair; one name alone is a singles walk-up.
+                    val names = (m["names"] as? List<*>)?.map { n -> (n as? String).orEmpty() }
+                    val partner = (m["partnerId"] as? String)?.let { id -> runCatching { UUID.fromString(id) }.getOrNull() ?: throw IllegalArgumentException("partnerId must be a UUID") }
+                    if (names != null || partner != null)
+                        Http(200, it.json(it.enterGuestPair(event, names ?: listOf((m["name"] as? String).orEmpty()), partner, m["mayBeNamed"] == true, r.principal!!.subject)))
+                    else Http(200, it.json(it.enterGuest(event, (m["name"] as? String).orEmpty(), m["mayBeNamed"] == true, r.principal!!.subject)))
                 }
             }
         },

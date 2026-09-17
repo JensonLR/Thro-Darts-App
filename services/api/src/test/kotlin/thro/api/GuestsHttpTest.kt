@@ -87,6 +87,32 @@ class GuestsHttpTest {
             val doubles = idOf(post("/v1/events", """{"name":"Doubles","startsAt":"2026-01-16T19:00:00Z","sessionEndsAt":"2026-01-16T23:00:00Z","entrantKind":"pair"}""", lee).bodyAsText(), "eventId")!!
             check("a pairs or teams event takes no walk-up by one name", post("/v1/events/$doubles/guests", """{"name":"Big Dave"}""", lee).status.value == 400)
 
+            // PD-130: a blind pairs night. Two walk-ups are a pair; a walk-up and somebody on THRØ are a pair.
+            check("a pair of walk-ups is the organiser's to add", post("/v1/events/$doubles/guests", """{"names":["Big Dave","Little Dave"]}""", alice).status.value == 403)
+            check("a pair is two names", post("/v1/events/$doubles/guests", """{"names":["Big Dave"]}""", lee).status.value == 400)
+            check("and two different ones", post("/v1/events/$doubles/guests", """{"names":["Big Dave","big dave"]}""", lee).status.value == 400)
+            val twoDaves = post("/v1/events/$doubles/guests", """{"names":["Big Dave","Little Dave"]}""", lee)
+            check("two walk-ups enter as a pair, named for the organiser", twoDaves.status.value == 200
+                && twoDaves.bodyAsText().let { it.contains("Big Dave & Little Dave") || it.contains("Little Dave & Big Dave") } && twoDaves.bodyAsText().contains("\"kind\":\"pair\""))
+            check("and is here, because the organiser could not have typed them otherwise", Regex("Dave & (Big|Little) Dave\",\"checkedIn\":true").containsMatchIn(twoDaves.bodyAsText()))
+            val mixed = post("/v1/events/$doubles/guests", """{"name":"Carol Smith","partnerId":"$alice","mayBeNamed":true}""", lee)
+            check("a walk-up pairs with somebody on THRØ", mixed.status.value == 200
+                && mixed.bodyAsText().let { it.contains("Alice Aims & Carol Smith") || it.contains("Carol Smith & Alice Aims") })
+            check("somebody already in a pair here is not paired again", post("/v1/events/$doubles/guests", """{"name":"Another","partnerId":"$alice"}""", lee).status.value == 409)
+            check("a partner THRØ does not know is a 404", post("/v1/events/$doubles/guests", """{"name":"Another","partnerId":"${UUID.randomUUID()}"}""", lee).status.value == 404)
+            check("the same name twice on one night is still refused", post("/v1/events/$doubles/guests", """{"names":["Little Dave","Somebody New"]}""", lee).status.value == 409)
+            check("a pair refused for its second name leaves nothing of its first behind",
+                post("/v1/events/$doubles/guests", """{"names":["Somebody New","Little Dave"]}""", lee).status.value == 409
+                    && post("/v1/events/$doubles/guests", """{"names":["Somebody New","Somebody Else"]}""", lee).status.value == 200)
+            check("the pairs page counts them and names nobody who was not said may be named",
+                get("/v1/events/$doubles", null).bodyAsText().let { it.contains("\"entries\":3") && !it.contains("Big Dave") && !it.contains("Little Dave") })
+            for (n in listOf("Eve", "Fay", "Gus", "Hal")) post("/v1/events/$doubles/guests", """{"names":["$n One","$n Two"]}""", lee)
+            val pairsDraw = post("/v1/events/$doubles/draw", "{}", lee).bodyAsText()
+            check("the organiser's draw names every half", pairsDraw.contains("Big Dave") && pairsDraw.contains("Little Dave") && pairsDraw.contains("Carol Smith"))
+            val pairsPublic = get("/v1/events/$doubles", null).bodyAsText()
+            check("the public draw names Carol and Alice, and the two Daves are guests",
+                pairsPublic.contains("Carol Smith") && pairsPublic.contains("Alice Aims") && !pairsPublic.contains("Big Dave") && pairsPublic.contains("A guest & A guest"))
+
             // Thirty days after the night, the names go: nobody holds an account that could ask.
             TestDatabase.asServer().use { s -> s.createStatement().use { it.execute("SET ROLE app_competition"); it.execute("SELECT competition.forget_guests()") } }
             val after = get("/v1/events/$event", lee).bodyAsText()

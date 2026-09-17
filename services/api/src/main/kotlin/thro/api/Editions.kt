@@ -87,10 +87,15 @@ public class Editions(
           (SELECT concat_ws(' & ',
                     coalesce((SELECT CASE WHEN identity.player_may_be_disclosed(c.player_id) AND a.display_name <> $placeholderLit THEN a.display_name END
                                 FROM identity.player_claim c JOIN identity.account a ON a.account_id = c.account_id AND a.deleted_at IS NULL
-                               WHERE c.player_id = pr.player_a AND c.revoked_at IS NULL), 'A player'),
+                               WHERE c.player_id = pr.player_a AND c.revoked_at IS NULL),
+                             -- A walk-up half of a pair (PD-130), named exactly as a walk-up alone is.
+                             (SELECT CASE WHEN g.name IS NOT NULL AND (g.may_be_named OR %o) THEN g.name ELSE 'A guest' END FROM competition.guest g WHERE g.player_id = pr.player_a),
+                             'A player'),
                     coalesce((SELECT CASE WHEN identity.player_may_be_disclosed(c.player_id) AND a.display_name <> $placeholderLit THEN a.display_name END
                                 FROM identity.player_claim c JOIN identity.account a ON a.account_id = c.account_id AND a.deleted_at IS NULL
-                               WHERE c.player_id = pr.player_b AND c.revoked_at IS NULL), 'A player'))
+                               WHERE c.player_id = pr.player_b AND c.revoked_at IS NULL),
+                             (SELECT CASE WHEN g.name IS NOT NULL AND (g.may_be_named OR %o) THEN g.name ELSE 'A guest' END FROM competition.guest g WHERE g.player_id = pr.player_b),
+                             'A player'))
              FROM competition.pair pr WHERE pr.pair_id = %s),
           (SELECT CASE WHEN identity.player_may_be_disclosed(c.player_id) AND a.display_name <> $placeholderLit THEN a.display_name END
              FROM identity.player_claim c JOIN identity.account a ON a.account_id = c.account_id AND a.deleted_at IS NULL
@@ -121,7 +126,9 @@ public class Editions(
         // A walk-up is there, or the organiser could not have typed their name: present, and of the kind "guest".
         """SELECT en.competitor_id, en.seed,
                   EXISTS (SELECT 1 FROM competition.check_in ci WHERE ci.event_id = en.event_id AND ci.competitor_id = en.competitor_id)
-                    OR EXISTS (SELECT 1 FROM competition.guest g WHERE g.player_id = en.competitor_id),
+                    OR EXISTS (SELECT 1 FROM competition.guest g WHERE g.player_id = en.competitor_id)
+                    -- A pair with a walk-up in it (PD-130) is here for the same reason.
+                    OR EXISTS (SELECT 1 FROM competition.pair pr JOIN competition.guest g ON g.player_id IN (pr.player_a, pr.player_b) WHERE pr.pair_id = en.competitor_id),
                   ${nameOf("en.competitor_id", forOrganiser = true)},
                   CASE WHEN EXISTS (SELECT 1 FROM competition.guest g WHERE g.player_id = en.competitor_id) THEN 'guest' ELSE en.entrant_kind END
              FROM competition.entry en WHERE en.event_id = ? AND en.withdrawn_at IS NULL ORDER BY en.seed NULLS LAST, en.entered_at""",
@@ -279,7 +286,6 @@ public class Editions(
         if (v.state != "open") throw Refused("Entries are closed.", 409)
         if (!organiser && v.entriesCloseAt != null && !now().isBefore(v.entriesCloseAt)) throw Refused("Entries closed at ${v.entriesCloseAt}.", 409)
         if (v.capacity != null && v.entries >= v.capacity) throw Refused("This event is full: ${v.capacity} places, all taken.", 409)
-        fun playerExists(id: UUID) = connection.prepareStatement("SELECT 1 FROM competition.player WHERE player_id = ?").use { ps -> ps.setObject(1, id); ps.executeQuery().use { it.next() } }
         fun revive(competitor: UUID): Boolean = connection.prepareStatement("UPDATE competition.entry SET withdrawn_at = NULL, entered_at = clock_timestamp() WHERE event_id = ? AND competitor_id = ? AND withdrawn_at IS NOT NULL")
             .use { ps -> ps.setObject(1, eventId); ps.setObject(2, competitor); ps.executeUpdate() } > 0
         val comp = Competitions(connection)
@@ -327,12 +333,60 @@ public class Editions(
     public fun enterGuest(eventId: UUID, name: String, mayBeNamed: Boolean, by: UUID): View {
         val v = view(eventId, by)
         if (!runs(by, eventId)) throw Refused("Only the event's organiser adds a walk-up.", 403)
-        if (v.entrantKind != "player") throw Refused("A walk-up is one name, and this event is entered by ${v.entrantKind}s. Walk-ups are for singles nights.", 400)
+        if (v.entrantKind != "player") throw Refused(
+            if (v.entrantKind == "pair") "A pairs night takes a walk-up with a partner: two names, or a name and somebody on THRØ."
+            else "A walk-up is one name, and this event is entered by teams. Walk-ups are for singles and pairs nights.", 400)
+        roomFor(v)
+        together { Competitions(connection).enter(eventId, guestPlayer(eventId, name, mayBeNamed, by)) }
+        return view(eventId, by)
+    }
+
+    /**
+     * A pair with a walk-up in it (PD-130), which is most pairs on a blind-draw night: two names, or one name and a
+     * partner who is on THRØ. Each walk-up is a guest exactly as on a singles night — the organiser's to see, public
+     * only where the organiser says so, forgotten thirty days on — and the pair is a pair like any other in the draw.
+     */
+    public fun enterGuestPair(eventId: UUID, names: List<String>, partner: UUID?, mayBeNamed: Boolean, by: UUID): View {
+        val v = view(eventId, by)
+        if (!runs(by, eventId)) throw Refused("Only the event's organiser adds a walk-up.", 403)
+        if (v.entrantKind != "pair") throw Refused("Two names are a pair, and this event is entered by ${v.entrantKind}s.", 400)
+        val wanted = if (partner == null) 2 else 1
+        if (names.size != wanted) throw Refused("A pair is two: two names, or one name and a partner on THRØ.", 400)
+        if (names.map { it.trim().lowercase() }.distinct().size != names.size) throw Refused("A pair is two different people: tell them apart.", 400)
+        roomFor(v)
+        if (partner != null) {
+            if (!playerExists(partner)) throw Refused("THRØ has no such player.", 404)
+            if (isEntered(eventId, partner)) throw Refused("They are already in a pair here.", 409)
+        }
+        // All of it or none: a pair refused for its second name must not leave its first on the night as a stray walk-up.
+        together {
+            val two = names.map { guestPlayer(eventId, it, mayBeNamed, by) } + listOfNotNull(partner)
+            val pairId = Organisations(connection).createPair(two[0], two[1])
+            Competitions(connection).enter(eventId, thro.competition.Entrant.Pair(pairId.toString(), two[0].toString(), two[1].toString()))
+        }
+        return view(eventId, by)
+    }
+
+    private fun <T> together(block: () -> T): T {
+        if (!connection.autoCommit) return block()   // already inside somebody's transaction: theirs to end
+        connection.autoCommit = false
+        try { val out = block(); connection.commit(); return out }
+        catch (e: Exception) { connection.rollback(); throw e }
+        finally { connection.autoCommit = true }
+    }
+
+    private fun playerExists(id: UUID) = connection.prepareStatement("SELECT 1 FROM competition.player WHERE player_id = ?").use { ps -> ps.setObject(1, id); ps.executeQuery().use { it.next() } }
+
+    private fun roomFor(v: View) {
+        if (v.state != "open") throw Refused("Entries are closed.", 409)
+        if (v.capacity != null && v.entries >= v.capacity) throw Refused("This event is full: ${v.capacity} places, all taken.", 409)
+    }
+
+    /** A walk-up's player and guest row: the name checked, told apart from the night's others, and kept for thirty days. */
+    private fun guestPlayer(eventId: UUID, name: String, mayBeNamed: Boolean, by: UUID): UUID {
         val clean = name.trim()
         if (clean.isEmpty() || clean.codePointCount(0, clean.length) > 60) throw Refused("A walk-up's name is 1 to 60 characters.", 400)
         if (clean.any { it.isISOControl() || it.category == CharCategory.FORMAT }) throw Refused("A name has no control or formatting characters.", 400)
-        if (v.state != "open") throw Refused("Entries are closed.", 409)
-        if (v.capacity != null && v.entries >= v.capacity) throw Refused("This event is full: ${v.capacity} places, all taken.", 409)
         val taken = connection.prepareStatement("SELECT 1 FROM competition.guest WHERE event_id = ? AND lower(btrim(name)) = lower(?)")
             .use { ps -> ps.setObject(1, eventId); ps.setString(2, clean); ps.executeQuery().use { it.next() } }
         if (taken) throw Refused("There is already a $clean on this night. Add something that tells them apart.", 409)
@@ -341,8 +395,7 @@ public class Editions(
             ps.setObject(1, player); ps.setObject(2, eventId); ps.setString(3, clean); ps.setBoolean(4, mayBeNamed); ps.setObject(5, by)
             ps.setTimestamp(6, java.sql.Timestamp.from(now())); ps.executeUpdate()
         }
-        Competitions(connection).enter(eventId, player)
-        return view(eventId, by)
+        return player
     }
 
     private fun isEntered(eventId: UUID, id: UUID): Boolean = connection.prepareStatement(

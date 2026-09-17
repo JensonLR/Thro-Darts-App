@@ -2171,26 +2171,55 @@ function entrantsSection(e, redraw) {
     form.append(byId, add);
     box.append(form, said);
     out.push(box);
-    // PD-124: a walk-up — somebody in the pub with no account, added by name. Singles nights only.
-    if (e.entrantKind === 'player') {
+    // PD-124: a walk-up — somebody in the pub with no account, added by name. PD-130: on a pairs night, a pair with a
+    // walk-up in it: two names, or a name and a partner who is on THRØ.
+    if (e.entrantKind === 'player' || e.entrantKind === 'pair') {
+      const pairs = e.entrantKind === 'pair';
       const walk = make('div', 'entry');
-      walk.append(make('h2', null, 'Add a walk-up'),
-                  make('p', 'quiet', 'Somebody here tonight with no THRØ account. They go in the draw like anybody else, and you decide their ties by hand.'));
+      walk.append(make('h2', null, pairs ? 'Add a pair with a walk-up' : 'Add a walk-up'),
+                  make('p', 'quiet', pairs
+                    ? 'Somebody here tonight with no THRØ account, and who they are throwing with: another walk-up, or somebody on THRØ. The pair goes in the draw like any other, and you decide its ties by hand.'
+                    : 'Somebody here tonight with no THRØ account. They go in the draw like anybody else, and you decide their ties by hand.'));
       const wform = make('div', 'entry-form');
-      const name = make('input'); name.type = 'text'; name.maxLength = 60; name.placeholder = 'Their name, as it goes on the board'; name.setAttribute('aria-label', 'The walk-up’s name');
-      name.style.flex = '1 1 14rem'; name.autocomplete = 'off';
-      const [namedBox, namedLabel] = check('They are 18 or over, and happy to be named on the public draw');
-      const addWalk = make('button', 'primary', 'Add them');
+      const input = (placeholder, label) => {
+        const i = make('input'); i.type = 'text'; i.maxLength = 60; i.placeholder = placeholder; i.setAttribute('aria-label', label);
+        i.style.flex = '1 1 14rem'; i.autocomplete = 'off'; return i;
+      };
+      const name = input('Their name, as it goes on the board', 'The walk-up’s name');
+      const name2 = input('Their partner’s name', 'The partner’s name, if they are a walk-up too');
+      const onThro = make('select'); onThro.setAttribute('aria-label', 'Or a partner who is on THRØ'); onThro.append(new Option('…or a partner on THRØ', ''));
+      if (pairs) (async () => {
+        try {
+          const mine = await authorised('GET', '/v1/me/teams');
+          for (const t of mine.teams || []) {
+            const front = await read(`/v1/teams/${encodeURIComponent(t.teamId)}`);
+            for (const m of front.roster || []) if (m.playerId) onThro.append(new Option(`${m.name || 'A player'} · ${t.name}`, m.playerId));
+          }
+        } catch (err) { /* the two names still work */ }
+      })();
+      const [namedBox, namedLabel] = check(pairs ? 'Whoever is named here is 18 or over, and happy to be named on the public draw'
+                                                 : 'They are 18 or over, and happy to be named on the public draw');
+      const addWalk = make('button', 'primary', pairs ? 'Add the pair' : 'Add them');
       const told = make('p', 'note'); told.hidden = true;
       const send = async () => {
         if (!name.value.trim()) { name.focus(); return; }
+        let body = { name: name.value.trim(), mayBeNamed: namedBox.checked };
+        if (pairs) {
+          if (onThro.value) body = { name: name.value.trim(), partnerId: onThro.value, mayBeNamed: namedBox.checked };
+          else if (name2.value.trim()) body = { names: [name.value.trim(), name2.value.trim()], mayBeNamed: namedBox.checked };
+          else { told.hidden = false; told.textContent = 'A pair is two: their partner’s name, or a partner on THRØ.'; name2.focus(); return; }
+        }
         addWalk.disabled = true;
-        try { await authorised('POST', `/v1/events/${encodeURIComponent(e.eventId)}/guests`, { name: name.value.trim(), mayBeNamed: namedBox.checked }); redraw(); }
+        try { await authorised('POST', `/v1/events/${encodeURIComponent(e.eventId)}/guests`, body); redraw(); }
         catch (err) { told.hidden = false; told.textContent = err.message; addWalk.disabled = false; }
       };
       addWalk.onclick = send;
-      name.addEventListener('keydown', ev => { if (ev.key === 'Enter') { ev.preventDefault(); send(); } });
+      for (const i of [name, name2]) i.addEventListener('keydown', ev => { if (ev.key === 'Enter') { ev.preventDefault(); send(); } });
+      // One partner or the other: choosing somebody on THRØ clears the typed name, and typing clears the choice.
+      onThro.onchange = () => { if (onThro.value) name2.value = ''; };
+      name2.oninput = () => { if (name2.value) onThro.value = ''; };
       wform.append(name);
+      if (pairs) wform.append(name2, onThro);
       const wacts = make('div', 'acts'); wacts.append(addWalk);
       walk.append(wform, namedLabel, wacts, told,
                   make('p', 'quiet', 'Without that tick only you see the name; the public draw says “A guest”. Thirty days after the night, THRØ forgets a walk-up’s name either way.'));
