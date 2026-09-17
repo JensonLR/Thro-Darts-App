@@ -81,7 +81,7 @@ enum ScreenshotAccount {
             // The staged team and everything under it (its friendlies, its inbox) are the stage's; other teams are real.
             // A tournament night's own page is a public read too (PD-126), so a staged account can open a real one.
             return passedThrough.contains(path) || (path.hasPrefix("/v1/teams/") && !path.hasPrefix(stagedTeam))
-                || (path.hasPrefix("/v1/events/") && path.split(separator: "/").count == 3)
+                || (path.hasPrefix("/v1/events/") && path.split(separator: "/").count == 3 && path != "/v1/events/\(event)")
         }
 
         func send(_ request: URLRequest) async throws -> (Data, HTTPURLResponse) {
@@ -170,7 +170,13 @@ enum ScreenshotAccount {
         static let friendlyOut = "5c4ee45e-0000-4000-8000-0000000000f8"
         nonisolated(unsafe) static var feeConfirmed = false
         nonisolated(unsafe) static var sent = false
-        nonisolated(unsafe) static var proposalState = "proposed"
+        /// `-ThroStageProposal declined` starts the staged proposal answered, which is what puts the fixture screen's
+        /// *Propose another date* form on show (PD-128): it is offered only while no proposal is waiting.
+        nonisolated(unsafe) static var proposalState: String = {
+            let args = ProcessInfo.processInfo.arguments
+            if let i = args.firstIndex(of: "-ThroStageProposal"), args.indices.contains(i + 1) { return args[i + 1] }
+            return "proposed"
+        }()
         nonisolated(unsafe) static var checkedIn = false
         nonisolated(unsafe) static var friendlyInState = "proposed"
 
@@ -215,7 +221,7 @@ enum ScreenshotAccount {
         }
 
         static var proposalJson: String {
-            #"{"proposalId":"\#(proposal)","fixtureId":"\#(fixture)","leagueSeasonId":"\#(season)","state":"\#(proposalState)","to":"2026-10-15T19:30:00Z","reason":"venue double-booked","byTeamId":"5c4ee45e-0000-4000-8000-0000000000c3","byTeam":"Riverside A","toTeamId":"5c4ee45e-0000-4000-8000-0000000000c1","toTeam":"The Bell B","proposedAt":"2026-09-16T12:00:00Z","answeredAt":null,"scheduledAt":"2026-10-08T19:30:00Z","fixtureVersion":1}"#
+            #"{"proposalId":"\#(proposal)","fixtureId":"\#(fixture)","leagueSeasonId":"\#(season)","state":"\#(proposalState)","to":"2026-10-15T19:30:00Z","reason":"The Bell is shut for a refit","venue":{"venueId":"5c4ee45e-0000-4000-8000-0000000000d7","name":"Riverside WMC","locality":"Stockton-on-Tees"},"byTeamId":"5c4ee45e-0000-4000-8000-0000000000c3","byTeam":"Riverside A","toTeamId":"5c4ee45e-0000-4000-8000-0000000000c1","toTeam":"The Bell B","proposedAt":"2026-09-16T12:00:00Z","answeredAt":null,"scheduledAt":"2026-10-08T19:30:00Z","fixtureVersion":1}"#
         }
 
         static var card: String {

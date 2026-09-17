@@ -6230,3 +6230,10 @@ to show one and waited five seconds for it on the live site. `LeagueStandingTest
 `Rearrangements.propose(venueId)`, `Proposal.venue`, the `fixtures.propose` route and its schema; `FixtureProposal.venue`,
 `ThroAPI.propose(venue:)`, `ProposalWords`, the venue search on the fixture screen's proposal form, the inbox card; the
 desk's request row and apply button. `RearrangementHttpTest` 38, `ProposalWordsTests` 3, app tests 413, 887 in all.
+
+**The You tab says your teams on THRØ (PD-126, found by looking).** Signed in with a side on THRØ, the tab said *None on
+this phone yet* and offered to start one. `YouScreen` takes the person's teams (read by the root when the account
+settles), lists them first, each opening its page through the PD-127 landing, and marks the phone's own as *On this
+phone*; with none, what it offers depends on being signed in. `YouTeamsTests` 4. Decision numbers removed from five
+sentences players read. `-ThroStageProposal <state>` stages the proposal's state for screenshots; the stage keeps its own
+staged event while passing real event pages through. App tests 417, 891 in all.

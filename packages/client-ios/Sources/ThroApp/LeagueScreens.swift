@@ -1485,7 +1485,7 @@ public struct NewTeamFixtureScreen: View {
                         }
                         Note("The fixture will be called **\(name(homeId)) v \(name(awayId))**. "
                              + "It carries no result until somebody says what happened, and when "
-                             + "they do the app records where that came from (PD-020).")
+                             + "they do the app records where that came from.")
                     }
                 }
                 .padding(.horizontal, ThroSpacing.spaceScreenGutter)

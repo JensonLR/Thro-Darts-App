@@ -1172,7 +1172,7 @@ public struct NewClubScreen: View {
                  + "roster and a fixture list. It competes as itself (ADR-017)."
         case .league:
             return "Teams that play each other over a season, with a table. Its members are the "
-                 + "people who run it; the people who play are in the teams (PD-019)."
+                 + "people who run it; the people who play are in the teams."
         case .tournament:
             return "One competition with a shape — knockout, groups, round robin or double "
                  + "elimination — chosen now and kept."

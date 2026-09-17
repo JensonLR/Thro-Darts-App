@@ -325,6 +325,8 @@ public struct ThroRootView: View {
     @State private var openClub: ClubLanding?
     /// A league, tournament or team on the server that a link named (PD-127), for Discover to land on.
     @State private var openOnThro: ThroLanding?
+    /// The signed-in person's teams on THRØ, for the You tab (PD-126). Read when the account settles and when the tab opens.
+    @State private var teamsOnThro: [TeamSummary] = []
     /// Whether this phone's own search field finds matches, people and clubs (on by default).
     @AppStorage(ThroSpotlight.enabledKey) private var spotlight: Bool = true
     /// Whether iOS may tell this app how it performed. Off by default; Settings explains it.
@@ -687,8 +689,15 @@ public struct ThroRootView: View {
                              onProfile: { openAccount(nil) },
                              onRetry: { Task { await account?.start() } },
                              onClubs: { store.tab = .discover },
-                             onPerson: { viewing = $0 })
+                             onPerson: { viewing = $0 },
+                             teams: (account?.isSignedIn ?? false) ? teamsOnThro : [],
+                             onTeam: { router.go(.team($0)); follow() })
             .task { if let account, account.isSignedIn, account.friends == nil { await account.loadFriends() } }
+            // Keyed on being signed in, like Discover's: a cold start opens before the profile has resolved.
+            .task(id: account?.isSignedIn ?? false) {
+                guard let account, account.isSignedIn else { teamsOnThro = []; return }
+                if let mine = try? await account.api.myTeams() { teamsOnThro = mine }
+            }
         }
     }
 }
@@ -1479,6 +1488,9 @@ public struct YouScreen: View {
     private let onClubs: () -> Void
     private let onPerson: (LocalPerson) -> Void
     private let badge: (Club) -> Image?
+    /// The signed-in person's teams on THRØ (PD-126), shown above what this phone keeps.
+    private let teams: [TeamSummary]
+    private let onTeam: (UUID) -> Void
 
     /// Another go at confirming a session THRØ could not reach (`Account.unverified`).
     private let onRetry: () -> Void
@@ -1490,7 +1502,10 @@ public struct YouScreen: View {
                 onSettings: @escaping () -> Void,
                 onAccount: @escaping () -> Void = {}, onFriends: @escaping () -> Void = {},
                 onProfile: @escaping () -> Void = {}, onRetry: @escaping () -> Void = {},
-                onClubs: @escaping () -> Void = {}, onPerson: @escaping (LocalPerson) -> Void = { _ in }) {
+                onClubs: @escaping () -> Void = {}, onPerson: @escaping (LocalPerson) -> Void = { _ in },
+                teams: [TeamSummary] = [], onTeam: @escaping (UUID) -> Void = { _ in }) {
+        self.teams = teams
+        self.onTeam = onTeam
         self.onRetry = onRetry
         self.picture = picture
         self.account = account
@@ -1504,6 +1519,22 @@ public struct YouScreen: View {
         self.onClubs = onClubs
         self.onPerson = onPerson
     }
+
+    private var signedIn: Bool { if case .signedIn = account { return true } else { return false } }
+
+    /// What the teams card says to somebody with none (PD-126). Signed in, the team that matters is the one on THRØ;
+    /// signed out, the phone's own book is what there is, and it is called that.
+    static func noTeams(signedIn: Bool) -> (text: String, button: String) {
+        signedIn
+            ? ("**No team yet.** Join one with your captain's code or start your own, and its fixtures come to you here.", "Join or start a team")
+            : ("**None yet.** Sign in to join your side on THRØ, or keep a team on this phone alone: roster, fixtures and results, without an account.", "Go to Discover")
+    }
+
+    static func teamMeta(_ team: TeamSummary) -> String {
+        ["On THRØ", team.locality, team.members == 1 ? "1 member" : "\(team.members) members"].compactMap { $0 }.joined(separator: " · ")
+    }
+
+    static func teamsTitle(onThro: Int, kept: Int) -> String { onThro == 0 && kept > 0 ? "Teams kept on this phone" : "Your teams" }
 
     /// The slate's words for each state of the account.
     static func words(_ account: Account) -> (eyebrow: String, title: String, detail: String) {
@@ -1544,7 +1575,7 @@ public struct YouScreen: View {
                                                                  split: !people.isEmpty) == .sideBySide)
                     }
                     .padding(.horizontal, ThroSpacing.spaceScreenGutter)
-                    Note("Matches scored on this phone stay on it, whoever is signed in. Your THRØ rating is provisional (PD-105): a range until it has earned a number, read from matches whose records both players stand by.")
+                    Note("Matches scored on this phone stay on it, whoever is signed in. Your THRØ rating is provisional: a range until it has earned a number, read from matches whose records both players stand by.")
                         .padding(.top, ThroSpacing.spaceSectionGap)
                         .padding(.horizontal, ThroSpacing.spaceScreenGutter)
                         .padding(.bottom, ThroSpacing.spacing6)
@@ -1598,25 +1629,38 @@ public struct YouScreen: View {
                     // Nothing here yet is still something to look at: a card holds the sentence and the
                     // way out of it, where a line of grey text and a loose button left two thirds of a
                     // tablet with nothing on it (PD-052).
-                    if clubs.isEmpty {
-                        CardGroup("Teams you keep") {
-                            CardLine(icon: .users,
-                                     text: "**None on this phone yet.** Start one under Discover and its "
-                                         + "roster and fixtures are kept here.")
+                    if clubs.isEmpty && teams.isEmpty {
+                        let words = YouScreen.noTeams(signedIn: signedIn)
+                        CardGroup("Your teams") {
+                            CardLine(icon: .users, text: words.text)
                             CardDivider()
                             CardPad {
-                                ThroButton("Start a team", variant: .secondary, size: .large,
+                                ThroButton(words.button, variant: .secondary, size: .large,
                                            fullWidth: true, action: onClubs)
                             }
                         }
                         .padding(.top, beside ? Self.columnTop : ThroSpacing.spaceSectionGap)
                     } else {
-                        Eyebrow("Teams you keep").padding(.top, beside ? Self.columnTop : ThroSpacing.spaceSectionGap)
+                        Eyebrow(YouScreen.teamsTitle(onThro: teams.count, kept: clubs.count))
+                            .padding(.top, beside ? Self.columnTop : ThroSpacing.spaceSectionGap)
                         ThroDivider().padding(.top, ThroSpacing.spacing2)
+                        // The side you share comes first; it opens on its own page under Discover (PD-127's landing).
+                        ForEach(teams) { team in
+                            Button { onTeam(team.teamId) } label: {
+                                OrganisationRow(initials: DiscoverScreen.initials(team.name), name: team.name,
+                                                meta: YouScreen.teamMeta(team), accent: ThroColor.throGreen,
+                                                trailing: TeamFrontScreen.roleLabel(team.role), image: nil)
+                                    .throRowTapTarget()
+                            }
+                            .buttonStyle(ThroPressStyle(radius: ThroSpacing.radiusCard,
+                                                        pressedFill: ThroColor.colorSurfaceSecondary,
+                                                        scales: false))
+                            ThroDivider()
+                        }
                         ForEach(clubs) { club in
                             Button(action: onClubs) {
                                 OrganisationRow(initials: club.initials, name: club.name,
-                                                meta: "\(club.kind.label) · \(club.meta)",
+                                                meta: "On this phone · \(club.kind.label) · \(club.meta)",
                                                 accent: club.accentHex.flatMap { Color.thro(hex: $0) },
                                                 trailing: club.yourRole?.label,
                                                 image: badge(club))

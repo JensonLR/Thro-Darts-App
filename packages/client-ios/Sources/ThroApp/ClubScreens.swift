@@ -511,7 +511,7 @@ public struct FixturesScreen: View {
                          ? "A fixture carries no result. A result comes from a scored match and the "
                            + "evidence behind it, so a fixture that could assert one would be a "
                            + "second place a score came from."
-                         : "A result here is **evidence with a source on it** (PD-020): a match "
+                         : "A result here is **evidence with a source on it**: a match "
                            + "scored in THRØ, or an official's word marked as theirs. Never a bare "
                            + "number, and the two are never drawn the same way.")
                         .padding(.top, ThroSpacing.spaceSectionGap)

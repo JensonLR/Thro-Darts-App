@@ -19,14 +19,14 @@ final class ProposalWordsTests: XCTestCase {
 
     func testAProposalSaysWhereWhenItNamesSomewhereElse() {
         let when = RearrangementTaskActions.when(proposal().to)
-        XCTAssertEqual(ProposalWords.what(proposal(venue: "Grange Social Club")), "\(when) at Grange Social Club")
+        XCTAssertEqual(ProposalWords.what(proposal(venue: "Grange Social Club")), "\(when), at Grange Social Club")
         XCTAssertEqual(ProposalWords.what(proposal()), when, "no venue named: the place stays as it was, and nothing is said about it")
     }
 
     func testTheFixtureScreenSaysWhoProposedWhatAndWhereItStands() {
         let when = RearrangementTaskActions.when(proposal().to)
         XCTAssertEqual(ProposalWords.line(proposal(by: mine, venue: "Grange Social Club", reason: "the pub is shut"), viewing: mine),
-                       "Grange A proposed \(when) at Grange Social Club — the pub is shut · waiting for Riverside A")
+                       "Grange A proposed \(when), at Grange Social Club — the pub is shut · waiting for Riverside A")
         XCTAssertEqual(ProposalWords.line(proposal(), viewing: mine), "Grange A proposed \(when) · waiting for your answer — it is in your inbox")
         XCTAssertEqual(ProposalWords.line(proposal(state: "accepted"), viewing: mine), "Grange A proposed \(when) · \(RearrangementTaskActions.standing("accepted"))")
     }

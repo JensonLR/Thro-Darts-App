@@ -249,6 +249,7 @@ public struct TeamFixtureScreen: View {
                     DatePicker("New date", selection: $proposedDate, in: Date()...)
                         .thro(ThroTypography.body).foregroundStyle(ThroColor.colorTextPrimary).padding(.top, ThroSpacing.spacing2)
                     ThroTextField("Why?", text: $proposedReason, placeholder: "the pub is shut that night")
+                        .padding(.top, ThroSpacing.spacing2)
                     // Somewhere else to play it (PD-128), picked from the venues THRØ holds so the other side can be told where.
                     if let chosen = proposedVenue {
                         HStack {
@@ -259,6 +260,7 @@ public struct TeamFixtureScreen: View {
                         .frame(minHeight: ThroSpacing.touchTargetMinimum)
                     } else {
                         ThroTextField("Somewhere else? (optional)", text: $venueQuery, placeholder: "a pub or club by name")
+                            .padding(.top, ThroSpacing.spacing3)
                             .onChange(of: venueQuery) { _, q in Task { await findVenues(q) } }
                         ForEach(venueHits.prefix(4), id: \.venueId) { hit in
                             Button { proposedVenue = hit; venueHits = [] } label: {
@@ -276,6 +278,7 @@ public struct TeamFixtureScreen: View {
                         ThroButton("Propose it to \(v.opponent ?? "the other team")", variant: .primary, size: .medium) { Task { await propose(in: v) } }.disabled(busy)
                         ThroTextButton("Leave it", tone: .quiet) { proposing = false }
                     }
+                    .padding(.top, ThroSpacing.spacing3)
                     Note("The other team agrees or declines from their inbox; the league applies what was agreed. Until then the fixture stands where it is.")
                         .padding(.top, ThroSpacing.spacing2)
                 } else {
@@ -417,9 +420,10 @@ public struct TeamFixtureScreen: View {
 
 /// A proposal in words (PD-108, PD-128), apart from the screens so it is tested.
 enum ProposalWords {
-    /// "Thu 19 Nov, 19:30 at Grange Social Club", or the date alone when the place stays as it was.
+    /// "19 Nov 2026 at 19:30, at Grange Social Club", or the date alone when the place stays as it was. The comma is
+    /// there because the date's own words end "at 19:30", and "at 19:30 at the club" trips over itself.
     static func what(_ p: FixtureProposal) -> String {
-        RearrangementTaskActions.when(p.to) + (p.venue.map { " at \($0.name)" } ?? "")
+        RearrangementTaskActions.when(p.to) + (p.venue.map { ", at \($0.name)" } ?? "")
     }
 
     /// The fixture screen's line: who proposed what, why, and where it stands for the team looking.
