@@ -12,8 +12,9 @@ audit. Kept current during the build; **not** a deliverable, and never a substit
   fronted by Cloudflare): leagues, tables, fixtures, wall (`/tv`), organiser (`organiser.html`), moderation
   (`moderation.html`), privacy, terms, deletion, notices.
 - `https://api.thro.uk` (Render web service `thro-api-staging`, free instance, Frankfurt): production at **V054**,
-  commit **30896e4** (PD-117, PD-118; deploy-api green, `/healthz` read by hand; the association file serves
-  `applinks` for `/link/*`); the web at 76e9c2d (Open THRØ on a phone, `link.html`; the `/link/*` rewrite in
+  commit **04825bc** (PD-117, PD-118, PD-119; deploy-api green, `/healthz` read by hand; the association file serves
+  `applinks` for `/link/*`; `/v1/auth/providers` says `reads:false` until the TypeSafe key is set); the web at
+  04825bc (Tell THRØ leads the season desk once the server reads; Open THRØ on a phone, `link.html`; the `/link/*` rewrite in
   `render.yaml` waits for a Blueprint sync, so `thro.uk/link/<code>` is a 404 in Safari until then while the
   universal link into the app already works; the Apple/Google buttons and THRØ's readings are dormant until the
   founder sets their keys). `/healthz` reports database, schema version, code version and commit.
