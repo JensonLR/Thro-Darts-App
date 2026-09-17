@@ -11,8 +11,8 @@ audit. Kept current during the build; **not** a deliverable, and never a substit
 - `https://thro.uk` (Render static site, auto-deploys `apps/web/**` from branch `claude/thro-production-build-je2mkf`,
   fronted by Cloudflare): leagues, tables, fixtures, wall (`/tv`), organiser (`organiser.html`), moderation
   (`moderation.html`), privacy, terms, deletion, notices.
-- `https://api.thro.uk` (Render web service `thro-api-staging`, free instance, Frankfurt): production at **V055**,
-  commit **3b25dcd** (PD-117 to PD-122; deploy-api green, `/healthz` read by hand; the association file serves
+- `https://api.thro.uk` (Render web service `thro-api-staging`, free instance, Frankfurt): production at **V056**,
+  commit **6731c31** (PD-117 to PD-125; deploy-api green, `/healthz` read by hand; the association file serves
   `applinks` for `/link/*`; `/v1/auth/providers` says `reads:true` — the founder set the TypeSafe key on 17 Sep); the web at
   3b25dcd (Tell THRØ leads the season desk, the list is pasted into the scheduler, *Who changed what* folds at the
   foot, the laptop's sign-in panel draws a QR; Open THRØ on a phone, `link.html`; the `/link/*` rewrite was added to THRO-web by the dashboard on 17 Sep and `thro.uk/link/<code>` answers 200; the Apple/Google buttons and THRØ's readings are dormant until the
@@ -20,7 +20,7 @@ audit. Kept current during the build; **not** a deliverable, and never a substit
 - Neon production branch `br-icy-leaf-zaq0grqg` (project `round-darkness-99300686`), at V053. Restore points are
   branches: the pipeline's `pipeline-restore-point-before-<sha>-<stamp>` (newest three kept) and the founder's
   hand-made `restore-point-before-*` (never removed).
-- iPhone on TestFlight: build 18 (VALID; from 3b25dcd: a signed-out phone opening a sign-in link is shown the way in). Build 16 **VALID** (from 30896e4: the applinks entitlement, the profile opened by a link)
+- iPhone on TestFlight: build 19 **VALID** (from 6731c31: the board says *A screen is waiting*). Build 18 (VALID; from 3b25dcd: a signed-out phone opening a sign-in link is shown the way in). Build 16 **VALID** (from 30896e4: the applinks entitlement, the profile opened by a link)
   and build 17 (VALID; from 76e9c2d: the readiness row says links work), in the *Founders* group. Build 15 before them.
   Internal group *Founders*: the founder and the cofounder (Ethan).
 
