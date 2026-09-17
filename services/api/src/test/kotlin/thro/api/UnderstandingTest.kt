@@ -59,8 +59,8 @@ class UnderstandingTest {
                 "act" to choice("result", 0.95),
                 "fixture" to choice(keyOf(q, "fixture", "Dolphin", "Grange A", "8 Oct"), 0.9),
                 "score" to choice(keyOf(q, "score", "5-3"), 0.97),
-                "first_number" to choice("away", 0.85),
-                "winner" to choice("away", 0.9),
+                "first_number_team" to choice(keyOf(q, "first_number_team", "Grange A"), 0.85),
+                "winner_team" to choice(keyOf(q, "winner_team", "Grange A"), 0.9),
             )
         }
         val u = Understanding(stub) { today }
@@ -76,27 +76,56 @@ class UnderstandingTest {
         assertEquals("result", read.act)
         assertEquals(f1, read.fixture?.fixtureId)
         assertEquals(3, read.result?.legsHome); assertEquals(5, read.result?.legsAway)
-        assertEquals(0.85, read.confidence, 1e-9)
+        assertEquals(0.9, read.confidence, 1e-9, "the fixture and the winner at 0.9; the shakier first-number reading is not needed once the winner is said")
         assertTrue(read.ready)
         assertEquals("Dolphin 3–5 Grange A, Thu 8 Oct", read.say)
         assertNull(read.doubt)
     }
 
     @Test
-    fun `a winner that contradicts the numbers is a doubt, never a quiet guess`() {
+    fun `the side the sentence says won has the larger number, because in darts it always does`() {
+        // "Grange lost 3-5 at Riverside": the model reads whose number comes first less surely than who won, and code
+        // does not need it to — the winner's legs are the larger of the two. Measured on the real model (PD-123).
         val stub = Stub { q ->
-            mapOf("act" to choice("result", 0.95), "fixture" to choice("f1", 0.9), "score" to choice(keyOf(q, "score", "5-3"), 0.9),
-                  "first_number" to choice("home", 0.8), "winner" to choice("away", 0.9))
+            mapOf("act" to choice("result", 0.95), "fixture" to choice("f1", 0.9), "score" to choice(keyOf(q, "score", "3-5"), 0.9),
+                  "first_number_team" to choice(keyOf(q, "first_number_team", "Dolphin"), 0.55), "winner_team" to choice(keyOf(q, "winner_team", "Dolphin"), 0.93))
         }
-        val read = Understanding(stub) { today }.understand(desk, "Grange A beat Dolphin 5-3")!!
+        val read = Understanding(stub) { today }.understand(desk, "Grange A lost 3-5 at Dolphin")!!
         assertEquals(5, read.result?.legsHome); assertEquals(3, read.result?.legsAway)
-        assertEquals("score", read.doubt)
-        assertFalse(read.ready)
+        assertNull(read.doubt)
+        assertEquals(0.9, read.confidence, 1e-9, "the winner's reading counts, not the shakier first-number one it replaced")
+        assertTrue(read.ready)
+    }
+
+    @Test
+    fun `with no winner said, the first number goes to the team it belongs to, and a draw needs neither`() {
+        val noWinner = Stub { q ->
+            mapOf("act" to choice("result", 0.95), "fixture" to choice("f1", 0.9), "score" to choice(keyOf(q, "score", "6-2"), 0.9),
+                  "first_number_team" to choice(keyOf(q, "first_number_team", "Grange A"), 0.8), "winner_team" to choice("none", 0.9))
+        }
+        val read = Understanding(noWinner) { today }.understand(desk, "Grange A 6 Dolphin 2")!!
+        assertEquals(2, read.result?.legsHome); assertEquals(6, read.result?.legsAway)   // f1 is Dolphin (home) v Grange A (away)
+        assertEquals(0.8, read.confidence, 1e-9)
+
+        val draw = Stub { q ->
+            mapOf("act" to choice("result", 0.95), "fixture" to choice("f1", 0.9), "score" to choice(keyOf(q, "score", "4-4"), 0.9),
+                  "first_number_team" to choice("none", 0.4), "winner_team" to choice("none", 0.5))
+        }
+        val drawn = Understanding(draw) { today }.understand(desk, "Dolphin and Grange drew 4-4")!!
+        assertEquals(4, drawn.result?.legsHome); assertEquals(4, drawn.result?.legsAway)
+        assertEquals(0.9, drawn.confidence, 1e-9, "whose four comes first does not matter, so its doubt is not counted")
+
+        // A team named for the number that is in neither side of the fixture chosen: a doubt, not a guess.
+        val stranger = Stub { q ->
+            mapOf("act" to choice("result", 0.95), "fixture" to choice("f1", 0.9), "score" to choice(keyOf(q, "score", "6-2"), 0.9),
+                  "first_number_team" to choice(keyOf(q, "first_number_team", "Riverside A"), 0.8), "winner_team" to choice("none", 0.9))
+        }
+        assertEquals("score", Understanding(stranger) { today }.understand(desk, "Riverside 6 Dolphin 2")!!.doubt)
     }
 
     @Test
     fun `a result with no numbers in it is not ready, and says what is missing`() {
-        val stub = Stub { mapOf("act" to choice("result", 0.9), "fixture" to choice("f1", 0.9), "score" to choice("none", 0.99), "first_number" to choice("home", 0.5), "winner" to choice("away", 0.9)) }
+        val stub = Stub { mapOf("act" to choice("result", 0.9), "fixture" to choice("f1", 0.9), "score" to choice("none", 0.99), "first_number_team" to choice("none", 0.5), "winner_team" to choice("none", 0.9)) }
         val read = Understanding(stub) { today }.understand(desk, "Grange beat Dolphin")!!
         assertEquals(setOf("none"), options(stub.asked, "score").keys, "no scoreline in the text, so the only option is none")
         assertNull(read.result)
@@ -106,7 +135,7 @@ class UnderstandingTest {
 
     @Test
     fun `an award names the side it goes to, and carries the sentence as its reason`() {
-        val stub = Stub { mapOf("act" to choice("award", 0.88), "fixture" to choice("f2", 0.92), "award_to" to choice("home", 0.9), "score" to choice("none", 0.9), "first_number" to choice("home", 0.5), "winner" to choice("home", 0.6)) }
+        val stub = Stub { q -> mapOf("act" to choice("award", 0.88), "fixture" to choice("f2", 0.92), "award_team" to choice(keyOf(q, "award_team", "Riverside A"), 0.9), "score" to choice("none", 0.9), "first_number_team" to choice("none", 0.5), "winner_team" to choice("none", 0.6)) }
         val read = Understanding(stub) { today }.understand(desk, "Walkover to Riverside on the 15th, Grange didn't turn up")!!
         assertEquals("award", read.act)
         assertEquals(riverside, read.award?.toTeamId)
@@ -114,6 +143,11 @@ class UnderstandingTest {
         assertEquals(0.88, read.confidence, 1e-9)
         assertTrue(read.ready)
         assertEquals("Riverside A v Grange A, Thu 15 Oct — awarded to Riverside A", read.say)
+
+        // Asked as which team, not which side (PD-123). A team in neither side of the fixture is a doubt, not a guess.
+        val stranger = Stub { q -> mapOf("act" to choice("award", 0.9), "fixture" to choice("f2", 0.9), "award_team" to choice(keyOf(q, "award_team", "Dolphin"), 0.9)) }
+        val unsure = Understanding(stranger) { today }.understand(desk, "give Dolphin the points for Riverside v Grange")!!
+        assertEquals("side", unsure.doubt); assertNull(unsure.award); assertFalse(unsure.ready)
     }
 
     @Test

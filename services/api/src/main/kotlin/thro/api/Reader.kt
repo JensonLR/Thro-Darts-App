@@ -47,6 +47,8 @@ public class TypeSafeReader(
     private val endpoint: URI = URI("https://api.typesafe.ai/v1/systemone"),
     private val timeout: Duration = Duration.ofSeconds(3),
     private val model: String = "jev-latest",
+    /** The first wait before asking a busy model again; the second wait is three times it. */
+    private val backoff: Duration = Duration.ofMillis(250),
 ) : Reader, SystemOne {
     public companion object {
         /** What the report is about. One of these wins; the distribution says how clearly. */
@@ -130,17 +132,28 @@ public class TypeSafeReader(
     /** One request; the answers by name, or null for anything other than a whole answer in time. */
     override fun answers(state: String, questions: String): Map<String, Any?>? = ask(state, questions)
 
+    /**
+     * Up to three askings. 429, 503 and 529 are the model saying "not now" — TypeSafe's guidance is to back off and ask
+     * again, and the first real run (PD-123) met exactly that for a minute. Anything else is an answer: a refusal, a
+     * timeout or nonsense is no reading, and is not asked twice.
+     */
     private fun ask(state: String, questions: String): Map<String, Any?>? = try {
         val body = """{"state":$state,"model":${Contract.q(model)},"questions":$questions}"""
         val request = HttpRequest.newBuilder(endpoint).timeout(timeout)
             .header("Authorization", "Bearer $apiKey").header("Content-Type", "application/json")
             .POST(HttpRequest.BodyPublishers.ofString(body)).build()
-        val response = client.send(request, HttpResponse.BodyHandlers.ofString())
-        if (response.statusCode() != 200) null
-        else {
-            @Suppress("UNCHECKED_CAST")
-            Json.parseObject(response.body())["answers"] as? Map<String, Any?>
+        var answers: Map<String, Any?>? = null
+        for (attempt in 1..3) {
+            val response = client.send(request, HttpResponse.BodyHandlers.ofString())
+            if (response.statusCode() == 200) {
+                @Suppress("UNCHECKED_CAST")
+                answers = Json.parseObject(response.body())["answers"] as? Map<String, Any?>
+                break
+            }
+            if (response.statusCode() !in setOf(429, 503, 529) || attempt == 3) break
+            Thread.sleep(backoff.toMillis() * (if (attempt == 1) 1 else 3))
         }
+        answers
     } catch (e: Exception) {
         // A reading that does not come is no reading: a timeout, a refused connection, a body that is not JSON.
         null

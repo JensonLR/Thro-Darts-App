@@ -51,7 +51,7 @@ public class Understanding(private val model: SystemOne, private val today: () -
         /** Darts in the UK: every date and time the desk reads is London's. */
         public val ZONE: ZoneId = ZoneId.of("Europe/London")
         public val ACTS: Map<String, String> = linkedMapOf(
-            "result" to "Recording what a fixture finished as: the legs each side won, e.g. 'Grange A beat Dolphin 5-3'",
+            "result" to "Recording what a fixture finished as: the legs each side won, e.g. 'Grange A beat Dolphin 5-3' — often just two teams and two numbers, however tersely: 'Dolphin 6 Bell B 2', 'station 5 riverside b 1'",
             "award" to "Awarding a fixture nobody played to one side: a walkover, a forfeit, a team that did not turn up",
             "void" to "Annulling a result already recorded, so the fixture is played again",
             "move" to "Moving a fixture already in the season to another day or time: a postponement, a rearrangement, 'is off until'",
@@ -125,19 +125,22 @@ public class Understanding(private val model: SystemOne, private val today: () -
         val scores = scorelines(clean).mapIndexed { i, s -> "s${i + 1}" to s }.toMap()
         val times = times(clean).mapIndexed { i, s -> "h${i + 1}" to s }.toMap()
 
-        val state = obj("text" to clean, "today" to "${today()} (${today().dayOfWeek.getDisplayName(TextStyle.FULL, Locale.UK)})",
+        val state = obj("text" to clean, "scorelines_found" to arr(*scores.values.toTypedArray()), "today" to "${today()} (${today().dayOfWeek.getDisplayName(TextStyle.FULL, Locale.UK)})",
                         "context" to "A darts league secretary's desk. The sentence is about this league season's fixtures: two teams, a date, and often a scoreline in legs.")
         val questions = obj(
             "act" to choice("What is the sentence asking the desk to do?", ACTS),
-            "fixture" to choice("Which fixture is the sentence about? Match the teams it names; a team named first in the sentence may be either side of the fixture. If the sentence adds a new fixture or names none, choose none.",
+            "fixture" to choice("Which fixture is the sentence about? Match the teams it names, however shortened; a team named first in the sentence may be either side of the fixture. A 'derby' is the fixture between two teams of the same pub or club (the same name, A and B). If the sentence adds a new fixture or names none, choose none.",
                                 fixtureKeys.mapValues { label(it.value) } + ("none" to "The sentence is about no fixture listed, or adds a new one")),
             "score" to choice("Which of these scorelines found in the text is the result — the legs each side won?",
                               scores.mapValues { "the scoreline written as '${it.value}'" } + ("none" to "No scoreline is stated, or none of these is one")),
-            "first_number" to choice("The first number of the scoreline belongs to which side of the fixture chosen — the home side (named first in the fixture) or the away side? A scoreline usually follows the side the sentence names first.",
-                                     mapOf("home" to "the home side's legs come first", "away" to "the away side's legs come first")),
-            "winner" to choice("Which side does the sentence say won, if it says?", mapOf("home" to "the home side won", "away" to "the away side won", "none" to "the sentence does not say who won")),
-            "award_to" to choice("If the fixture is awarded — a walkover, a forfeit, a team that did not turn up — which side does it go to?",
-                                 mapOf("home" to "awarded to the home side", "away" to "awarded to the away side")),
+            // Asked as *which team*, not which side: measured on the real model (PD-123), a question about an entity
+            // in the sentence is read far more surely than one about a role in a fixture it has not been told is chosen.
+            "first_number_team" to choice("The first number of the scoreline is the legs won by which team? Usually the team the sentence names first or attaches the number to.",
+                                          teamKeys.mapValues { it.value.name } + ("none" to "no scoreline, or it cannot be told")),
+            "winner_team" to choice("Which team does the sentence say won — beat the other, or the other lost to it?",
+                                    teamKeys.mapValues { it.value.name } + ("none" to "the sentence does not say who won, or it was a draw")),
+            "award_team" to choice("If the fixture is awarded — a walkover, a forfeit, a team that did not turn up or broke a rule — which team is it awarded to: the one given the points, not the one at fault?",
+                                   teamKeys.mapValues { it.value.name } + ("none" to "no award, or it cannot be told")),
             "home_team" to choice("For a new fixture: which team is the home side — named first, or said to be at home?", teamKeys.mapValues { it.value.name } + ("none" to "not stated")),
             "away_team" to choice("For a new fixture: which team is the away side — named second, or said to be away?", teamKeys.mapValues { it.value.name } + ("none" to "not stated")),
             "date_mode" to choice("How is the fixture's date written? 'absolute' names a month or a day of the month; 'relative' is given from today (today, tomorrow, a named weekday such as 'next Thursday'); 'none' when no date is stated.",
@@ -185,12 +188,18 @@ public class Understanding(private val model: SystemOne, private val today: () -
                     used += scoreP
                     val m = SCORE.find(written)!!
                     val a = m.groupValues[1].toInt(); val b = m.groupValues[2].toInt()
-                    val (side, sideP) = pick("first_number") ?: ("home" to 0.5)
-                    used += sideP
-                    result = if (side == "home") Result(a, b) else Result(b, a)
-                    val (winner, _) = pick("winner") ?: ("none" to 0.0)
-                    if (winner != "none" && result.legsHome != result.legsAway && ((winner == "home") != (result.legsHome > result.legsAway))) {
-                        doubt = "score"; used += 0.5
+                    val f = fixture?.let { p -> desk.fixtures.first { it.fixtureId == p.fixtureId } }
+                    val winner = pick("winner_team")?.let { (k, pr) -> teamKeys[k]?.let { it to pr } }
+                    val first = pick("first_number_team")?.let { (k, pr) -> teamKeys[k]?.let { it to pr } }
+                    result = when {
+                        f == null || a == b -> Result(a, b)   // a draw needs nobody's number told apart
+                        // Who won is read more surely than whose number came first, and in darts the winner has the
+                        // larger number: so where the sentence says who won, code does the rest.
+                        winner != null && winner.first.teamId == f.homeTeamId -> { used += winner.second; Result(maxOf(a, b), minOf(a, b)) }
+                        winner != null && winner.first.teamId == f.awayTeamId -> { used += winner.second; Result(minOf(a, b), maxOf(a, b)) }
+                        first != null && first.first.teamId == f.homeTeamId -> { used += first.second; Result(a, b) }
+                        first != null && first.first.teamId == f.awayTeamId -> { used += first.second; Result(b, a) }
+                        else -> { doubt = "score"; used += 0.5; Result(a, b) }   // a team that is in neither side: say so
                     }
                 }
                 val say = if (fixture != null && result != null) "${fixture.home} ${result.legsHome}–${result.legsAway} ${fixture.away}, ${day(fixture.at)}"
@@ -202,12 +211,19 @@ public class Understanding(private val model: SystemOne, private val today: () -
                 var award: Award? = null
                 if (fixture == null) doubt = "fixture"
                 else {
-                    val (to, toP) = pick("award_to") ?: ("home" to 0.5)
-                    used += toP
                     val f = desk.fixtures.first { it.fixtureId == fixture.fixtureId }
-                    award = if (to == "home") Award(f.homeTeamId, f.home, clean) else Award(f.awayTeamId, f.away, clean)
+                    val to = pick("award_team")?.let { (k, pr) -> teamKeys[k]?.let { it to pr } }
+                    award = when (to?.first?.teamId) {
+                        f.homeTeamId -> { used += to!!.second; Award(f.homeTeamId, f.home, clean) }
+                        f.awayTeamId -> { used += to!!.second; Award(f.awayTeamId, f.away, clean) }
+                        else -> { doubt = "side"; null }   // no team told, or one that is in neither side
+                    }
                 }
-                val say = if (fixture != null && award != null) "${fixture.home} v ${fixture.away}, ${day(fixture.at)} — awarded to ${award.toName}" else "An award, but for which fixture?"
+                val say = when {
+                    fixture == null -> "An award, but for which fixture?"
+                    award == null -> "${fixture.home} v ${fixture.away}, ${day(fixture.at)} — awarded to which side?"
+                    else -> "${fixture.home} v ${fixture.away}, ${day(fixture.at)} — awarded to ${award.toName}"
+                }
                 Understood(clean, act, used.min(), doubt == null, say, doubt, fixture, null, award, null, clean)
             }
             "void" -> {
@@ -451,6 +467,7 @@ public class Understanding(private val model: SystemOne, private val today: () -
 
     private fun choice(instructions: String, criteria: Map<String, String?>): String =
         obj("type" to "choice", "instructions" to instructions, "criteria" to obj(*criteria.entries.map { it.key to it.value }.toTypedArray()))
+    private fun arr(vararg items: Any?): String = items.joinToString(",", "[", "]") { json(it) }
     private fun obj(vararg pairs: Pair<String, Any?>): String = pairs.joinToString(",", "{", "}") { (k, v) -> "${Contract.q(k)}:${json(v)}" }
     private fun json(v: Any?): String = when (v) {
         null -> "null"

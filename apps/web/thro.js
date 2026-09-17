@@ -837,7 +837,7 @@ async function mountOrganiser(where, signInEl) {
       }
       const what = { result: 'a result', award: 'an award', void: 'an annulment', schedule: 'a new fixture', move: 'a move' }[u.act] || u.act;
       c.append(make('div', 'row-name', u.say),
-               make('div', 'row-meta', `Read as ${what} · THRØ is ${sure(u.confidence)}${u.doubt ? ` · check the ${u.doubt === 'teams' ? 'teams' : u.doubt}` : ''}`));
+               make('div', 'row-meta', `Read as ${what} · THRØ is ${sure(u.confidence)}${u.doubt ? ` · check ${u.doubt === 'side' ? 'who it goes to' : 'the ' + u.doubt}` : ''}`));
       const fields = make('div', 'entry-form');
       const note = make('p', 'note'); note.hidden = true;
       // The fixture, when the act is about one: the model's pick, with its runners-up and every open fixture to hand.

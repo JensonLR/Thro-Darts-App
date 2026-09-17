@@ -5279,3 +5279,42 @@ resolved to nothing; and a heading that states the league's usual time was ignor
 
 **What the founder does.** Put the key in `.env.local` (git-ignored) as `TYPESAFE_API_KEY=…`, and the next session
 runs the evaluation, reads the scorecard, and tunes from it.
+
+**PD-123, the first real run (17 September 2026, evening).** The founder told the session to fetch the key itself. It
+was copied with the Render dashboard's own copy button — never revealed on screen — and written from the clipboard into
+the git-ignored `.env.local`; the clipboard was cleared. `jev-latest` answered as `jev-1.13.0`.
+
+| | A word-matcher (the floor) | Jev, before tuning | Jev, after tuning | Jev, held out, read once |
+|---|---|---|---|---|
+| The whole card right | 11 of 22 | 19 of 22 | 22 of 22 | **11 of 12** |
+| The act right | 15 of 22 | 21 of 22 | 22 of 22 | 12 of 12 |
+| The fixture right | 10 of 16 | 14 of 16 | 16 of 16 | 10 of 10 |
+| Wrong, and sure of itself | 0 | 0 | 0 | 0 |
+| A pasted list's rows right | 1 of 10 | 10 of 10 | 10 of 10 | — |
+
+Median 300 ms a request, 95th percentile about 560 ms. The held-out column is the honest one: twelve sentences written
+after the tuning and before any answer to them was seen. Its one miss — which side an award goes to — was flagged as
+unsure, and is fixed by the same lesson as the rest (below); the first reading stays the reported figure, kept in
+`docs/product/JEV_SCORECARD.md`.
+
+**What the scorecard taught, and what changed because of it.**
+1. **Ask about an entity in the sentence, not a role in a fixture.** "Which side's number comes first, home or away?"
+   was the weakest question on the desk, because the model is asked it in the same request that chooses the fixture.
+   "Which *team's* legs is the first number?", "which *team* won?", "which *team* is it awarded to?" are read far
+   more surely, and code maps the team to the side. A team in neither side of the fixture chosen is a doubt.
+2. **Let code do what is arithmetic.** In darts the winner has the larger number. Where the sentence says who won,
+   code puts the numbers on the sides and the shakier reading is not needed; a draw needs neither.
+3. **Say what the desk's words mean.** A *derby* is the fixture between a club's A and B; two teams and two numbers,
+   however terse or lower-case, is a result.
+4. **A busy model is asked again.** The first real run met `model_unavailable` (503) for a minute — every reading came
+   back empty in 250 ms, which is also what the live desk had been showing anybody who tried it. TypeSafe's guidance
+   is to retry 429, 503 and 529 with backoff; the client now asks up to three times and nothing else is retried.
+5. **The thresholds stand for now.** Right cards ranged from 0.43 to 1.00 and no wrong card was above 0.62, so *sure*
+   at 0.75 and *fairly sure* at 0.6 sort them the right way; with every card confirmed by a person, that is enough
+   until real secretaries' sentences say otherwise.
+
+**What this is worth, plainly.** The pasted list is the clear win: ten of ten messy lines ("R'side A", "Grnage A", "Stn
+Hotel", a carried date, a stated usual time) against one of ten for string matching — a season entered in a minute
+instead of an evening. The sentence desk is nineteen of twenty-two before any tuning and never confidently wrong. What
+it is *not* yet is proven on real secretaries: thirty-four sentences written by the person who built it are a start,
+and every real sentence it misreads belongs in the held-out set.

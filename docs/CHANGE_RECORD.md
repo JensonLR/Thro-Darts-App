@@ -6178,3 +6178,10 @@ clock is the list's usual time (a bare number in a heading never is). `Understan
 On Render the same day, by the dashboard: the `/link/*` rewrite on THRO-web (the site thro.uk points at), and
 THRO-web and thro-api-staging moved into *My project › Production*. The Blueprint's duplicate `thro-web` has no domain
 and is left for the founder to suspend or delete.
+
+## The first real run, and what it changed (PD-123)
+
+`first_number_team`, `winner_team` and `award_team` replace the home/away questions; the winner takes the larger number;
+the act and fixture questions say what a terse result and a derby are; `scorelines_found` rides in the state;
+`TypeSafeReader` retries 429/503/529 twice with backoff. `JevEvaluationTest` gained a held-out set and scores both;
+`docs/product/JEV_SCORECARD.md` keeps the first held-out reading. `UnderstandingTest` 12, `TypeSafeReaderTest` 4.

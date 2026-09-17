@@ -97,6 +97,31 @@ class TypeSafeReaderTest {
     }
 
     @Test
+    fun `a model that is briefly unavailable is asked again, and one that stays away is no reading`() {
+        // Seen on the first real run (PD-123): "model_unavailable", 503, for a minute. TypeSafe's own guidance is to retry
+        // 429, 503 and 529 with backoff; a reading that fails on the first busy signal is a desk that says "try again".
+        var calls = 0
+        val server = HttpServer.create(InetSocketAddress("127.0.0.1", 0), 0).apply {
+            createContext("/v1/systemone") { ex ->
+                ex.requestBody.readBytes(); calls++
+                val (status, body) = if (calls < 3) 503 to """{"detail":{"error_type":"model_unavailable"}}""" else 200 to reportAnswer
+                val bytes = body.toByteArray(); ex.sendResponseHeaders(status, bytes.size.toLong()); ex.responseBody.use { it.write(bytes) }
+            }
+            start()
+        }
+        try {
+            val reader = TypeSafeReader("k", endpoint = URI("http://127.0.0.1:${server.address.port}/v1/systemone"), timeout = Duration.ofSeconds(2), backoff = Duration.ofMillis(10))
+            assertNotNull(reader.readReport("team", "X", "why"), "answered on the third asking")
+            assertEquals(3, calls)
+        } finally { server.stop(0) }
+
+        val away = Stub(503, """{"detail":{"error_type":"model_unavailable"}}""")
+        try { assertNull(TypeSafeReader("k", endpoint = away.uri, timeout = Duration.ofSeconds(2), backoff = Duration.ofMillis(10)).readReport("team", "X", "why")) } finally { away.stop() }
+        val refusedForGood = Stub(401, """{"detail":"bad key"}""")
+        try { assertNull(TypeSafeReader("k", endpoint = refusedForGood.uri, timeout = Duration.ofSeconds(2), backoff = Duration.ofMillis(10)).readName("team", "X")) } finally { refusedForGood.stop() }
+    }
+
+    @Test
     fun `a refusal, nonsense or silence from TypeSafe is no reading, never an error`() {
         val refused = Stub(429, """{"error":"rate limited"}""")
         try { assertNull(TypeSafeReader("k", endpoint = refused.uri, timeout = Duration.ofSeconds(2)).readReport("team", "X", "why")) } finally { refused.stop() }

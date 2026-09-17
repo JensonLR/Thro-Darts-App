@@ -72,6 +72,25 @@ class JevEvaluationTest {
         Meant("who's top of the table", "none"),
     )
 
+    /**
+     * Held out: written after the questions were tuned on the set above and before any answer to these was seen, so
+     * the score here is the honest one. Do not tune against it; add to it.
+     */
+    private val heldOut = listOf(
+        Meant("Sun Inn turned the Crown over 5-2", "result", "Crown v Sun Inn", 2 to 5),
+        Meant("bell b 4 crown 4", "result", "Bell B v Crown", 4 to 4),
+        Meant("Dolphin pipped Grange 5-4 away from home", "result", "Grange A v Dolphin", 4 to 5),
+        Meant("Grange A 1 Dolphin 6", "result", "Grange A v Dolphin", 1 to 6),
+        Meant("station hotel beat riverside b five three", "result", "Station Hotel v Riverside B"),
+        Meant("Riverside A conceded to Grange, couldn't get a team out", "award", "Riverside A v Grange A", awardTo = "Grange A"),
+        Meant("give the Crown the points against Bell B, Bell had an unregistered player", "award", "Bell B v Crown", awardTo = "Crown"),
+        Meant("cancel the result I put in for Crown v Grange, it was entered twice", "void", "Crown v Grange A"),
+        Meant("Sun Inn v Station Hotel will now be played on Monday 19th October at 8.30", "move", "Sun Inn v Station Hotel", on = LocalDate.of(2026, 10, 19), time = LocalTime.of(20, 30)),
+        Meant("the riverside b riverside a game is moving to the 5th of November", "move", "Riverside B v Riverside A", on = LocalDate.of(2026, 11, 5), time = LocalTime.of(19, 30)),
+        Meant("schedule Dolphin at home against Station Hotel for 26 November 7.30pm", "schedule", on = LocalDate.of(2026, 11, 26), time = LocalTime.of(19, 30), teams = "Dolphin" to "Station Hotel"),
+        Meant("is the Bell game still on tonight?", "none"),
+    )
+
     private val pasted = """
         TEESSIDE THURSDAY LEAGUE 2026/27 — DIVISION ONE
         all matches 7.30pm unless shown
@@ -122,11 +141,12 @@ class JevEvaluationTest {
 
         say("# What THRØ gets from the System One model"); say("")
         say("Model: ${if (endpoint != null) "the stand-in at $endpoint (a word-matcher; the floor)" else "jev-latest"} · ${Instant.now()} · desk of ${teams.size} teams, ${fixtures.size} fixtures, today ${today}."); say("")
-        say("## Sentences on the desk"); say("")
+        for ((title, set) in listOf("Sentences on the desk (the set the questions were tuned on)" to sentences, "Held out (written after tuning, before any answer was seen)" to heldOut)) {
+        say("## $title"); say("")
         say("| | Sentence | Meant | Read | Confidence |"); say("|---|---|---|---|---|")
         var acts = 0; var fixturesRight = 0; var fixturesAsked = 0; var whole = 0; var unanswered = 0
         var wrongAndSure = 0; var wrongAndUnsure = 0
-        for (m in sentences) {
+        for (m in set) {
             val r = u.understand(desk, m.text)
             if (r == null) { unanswered++; say("| ✗ | ${m.text} | ${m.act} | *no answer* | |"); continue }
             val actOk = r.act == m.act
@@ -143,10 +163,12 @@ class JevEvaluationTest {
             if (all) whole++ else if (r.doubt == null && r.confidence >= 0.75) wrongAndSure++ else wrongAndUnsure++
             say("| ${if (all) "✓" else "✗"} | ${m.text} | ${m.act}${m.fixture?.let { " · $it" } ?: ""} | ${r.say.replace("|", "/")}${r.doubt?.let { " *(check the $it)*" } ?: ""} | ${"%.2f".format(r.confidence)} |")
         }
-        val n = sentences.size
+        val n = set.size
         say(""); say("- The act right: **$acts of $n**. The fixture right: **$fixturesRight of $fixturesAsked**. The whole card right, nothing to change: **$whole of $n**.")
         say("- Of the ${n - whole - unanswered} cards that needed a change, THRØ had said it was unsure on **$wrongAndUnsure** and had been sure on **$wrongAndSure** — the second is the number to drive to nothing.")
         if (unanswered > 0) say("- No answer at all: $unanswered.")
+        say("")
+        }
 
         say(""); say("## A pasted fixture list"); say("")
         val startList = model.millis.size
@@ -168,7 +190,7 @@ class JevEvaluationTest {
             val sorted = ms.sorted()
             say(""); say("## Speed"); say("")
             say("- ${ms.size} requests. Median **${sorted[sorted.size / 2]} ms**, 95th percentile **${sorted[(sorted.size * 95 / 100).coerceAtMost(sorted.size - 1)]} ms**, slowest ${sorted.last()} ms.")
-            say("- A sentence is one request (${sentences.size} of them); the ${ms.size - startList} lines of the list went six at a time.")
+            say("- A sentence is one request (${sentences.size + heldOut.size} of them); the ${ms.size - startList} lines of the list went six at a time.")
         }
         File("build").mkdirs(); File("build/jev-scorecard.md").writeText(out.toString())
         println("written to services/api/build/jev-scorecard.md")

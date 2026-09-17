@@ -146,7 +146,7 @@ class LeagueActsHttpTest {
                                  "time" to choice(options("time").keys.firstOrNull { it != "none" } ?: "none", 0.9))
                 }
                 return mapOf("act" to choice("result", 0.95), "fixture" to choice(pick("fixture", "Riverside A", "Grange A"), 0.9),
-                             "score" to choice(pick("score", "5-3"), 0.96), "first_number" to choice("home", 0.9), "winner" to choice("home", 0.9))
+                             "score" to choice(pick("score", "5-3"), 0.96), "first_number_team" to choice(pick("first_number_team", "Riverside A"), 0.9), "winner_team" to choice(pick("winner_team", "Riverside A"), 0.9))
             }
         }
         testApplication {
