@@ -162,7 +162,7 @@ public class Understanding(private val model: SystemOne, private val today: () -
             "leg_points" to choice("How many points does the sentence give for EACH LEG won (a bonus per leg)?", pointOptions),
             "time" to choice("Which of these times found in the text is when the fixture is played?", times.mapValues { "the time written as '${it.value}'" } + ("none" to "no time stated")),
         )
-        val answers = try { model.answers(state, questions) } catch (e: Exception) { null } ?: return null
+        val answers = try { model.answers(state.s, questions.s) } catch (e: Exception) { null } ?: return null
 
         fun pick(id: String): Pair<String, Double>? {
             val a = answers[id] as? Map<*, *> ?: return null
@@ -312,6 +312,76 @@ public class Understanding(private val model: SystemOne, private val today: () -
     // --- a pasted fixture list (PD-122) -------------------------------------------------------------------------------
 
     /** One fixture read from one line of a pasted list; [doubt] names what a person must settle before it is scheduled. */
+    // --- the captain's sentence (PD-129) ---------------------------------------------------------------------------
+
+    /** A captain's sentence about ONE fixture, read as a new day and time for it. [doubt] is `move` or `date`. */
+    public data class MoveRead(val text: String, val move: Move?, val confidence: Double, val ready: Boolean, val say: String, val doubt: String?)
+
+    /**
+     * "Can we do the 22nd instead, the pub's shut" — on the fixture's own screen, so there is no fixture to choose and
+     * no act to classify beyond whether it asks for a move at all. The same date questions as the desk's, the same
+     * code doing the calendar, and the time stays where it was unless the sentence says one. Null when the model gave
+     * no answer. Nothing is proposed by reading: the form is filled, and the captain sends it.
+     */
+    public fun readMove(fixture: Fixture, seasonStart: LocalDate, seasonEnd: LocalDate, text: String): MoveRead? {
+        val clean = text.trim()
+        val times = times(clean).mapIndexed { i, s -> "h${i + 1}" to s }.toMap()
+        val state = obj("text" to clean, "fixture" to label(fixture), "today" to "${today()} (${today().dayOfWeek.getDisplayName(TextStyle.FULL, Locale.UK)})",
+                        "context" to "A darts team's captain, on the screen of the one league fixture named here, typing to the other team's captain about playing it on another day. "
+                            + "The fixture's own date is given so it is not mistaken for the new one: the new date is the one the sentence asks for.")
+        val questions = obj(
+            "asks_move" to choice("Does the sentence ask to play this fixture on another day or at another time — a postponement, a rearrangement, a suggestion of a date?",
+                                  mapOf("yes" to null, "no" to "a greeting, a question about something else, or nothing about when it is played")),
+            // Counted from the fixture, not from today: "put it back a week" is how a captain says it, and code adds the days.
+            "shift" to choice("Does the sentence move the fixture by a number of weeks from the date it is on, rather than naming a date?",
+                              mapOf("none" to "no: it names a date or a day, or says nothing of when", "week_later" to "one week later: 'back a week', 'the week after'",
+                                    "fortnight_later" to "two weeks later: 'a fortnight', 'two weeks on'", "week_earlier" to "one week earlier: 'forward a week', 'the week before'")),
+            *dateQuestions().toTypedArray(),
+            "time" to choice("Which of these times found in the text is when the fixture would be played?", times.mapValues { "the time written as '${it.value}'" } + ("none" to "no time stated")),
+        )
+        val answers = try { model.answers(state.s, questions.s) } catch (e: Exception) { null } ?: return null
+        fun pick(id: String): Pair<String, Double>? {
+            val a = answers[id] as? Map<*, *> ?: return null
+            val option = a["choice"] as? String ?: return null
+            return option to (((a["probabilities"] as? Map<*, *>)?.get(option) as? Number)?.toDouble() ?: (a["confidence"] as? Number)?.toDouble() ?: 0.0)
+        }
+        val used = mutableListOf<Double>()
+        val asks = pick("asks_move") ?: return null
+        used += asks.second
+        if (asks.first != "yes") return MoveRead(clean, null, used.min(), false, "That does not read as a new date for this fixture.", "move")
+        val was = fixture.at.atZone(ZONE)
+        val shift = pick("shift")?.takeIf { it.first != "none" && it.second >= 0.6 }
+        val on = if (shift != null) {
+            used += shift.second
+            was.toLocalDate().plusDays(when (shift.first) { "week_later" -> 7L; "fortnight_later" -> 14L; else -> -7L })
+        } else date(pick("date_mode"), pick("day_anchor"), pick("weekday"), pick("week_offset"), pick("month"), pick("day"), used)
+        val (tKey, tP) = pick("time") ?: ("none" to 0.0)
+        val time = times[tKey]?.let { used += tP; clockOf(it) } ?: was.toLocalTime()
+        // Seen on the first real run: the fixture's own date read back as the new one. A move to where it is, is no move.
+        if (on == was.toLocalDate() && time == was.toLocalTime()) return MoveRead(clean, null, used.min(), false, "That is when it already is. To when?", "date")
+        if (on != null && on.isBefore(today())) return MoveRead(clean, null, used.min(), false, "${dayOf(on)} has gone. To when?", "date")
+        if (on == null) return MoveRead(clean, null, used.min(), false, "A move, but to when?", "date")
+        val move = Move(on, time, on.atTime(time).atZone(ZONE).toInstant())
+        val inside = !on.isBefore(seasonStart) && !on.isAfter(seasonEnd)
+        return MoveRead(clean, move, used.min(), inside, "${dayOf(on)}, ${clock(time)}" + (if (inside) "" else " is outside the season"), if (inside) null else "date")
+    }
+
+    public fun json(m: MoveRead): String = json(obj(
+        "text" to m.text, "ready" to m.ready, "confidence" to m.confidence, "say" to m.say, "doubt" to m.doubt,
+        "to" to m.move?.to?.toString(), "on" to m.move?.on?.toString(), "time" to m.move?.time?.toString(),
+    ))
+
+    /** The date's parts, asked the same way wherever a date is read: the model reads the parts, code does the calendar. */
+    private fun dateQuestions(): List<Pair<String, Any?>> = listOf(
+        "date_mode" to choice("How is the fixture's date written? 'absolute' names a month or a day of the month; 'relative' is given from today (today, tomorrow, a named weekday such as 'next Thursday'); 'none' when no date is stated.",
+                              mapOf("absolute" to null, "relative" to null, "none" to null)),
+        "day_anchor" to choice("If the date is relative to today, which day is it?", mapOf("today" to null, "tomorrow" to null, "day_after" to "the day after tomorrow", "weekday" to "a named day of the week")),
+        "weekday" to choice("If the date names a day of the week, which?", WEEKDAYS.associateWith { null } + ("none" to "no weekday named")),
+        "week_offset" to choice("If the date names a weekday: 'this' means the coming one, 'next' means the one in the week after.", mapOf("this" to "this week, or the coming one", "next" to "next week")),
+        "month" to choice("If the date is absolute, which month?", MONTHS.associateWith { null } + ("none" to "no month named; the day of the month alone, or none")),
+        "day" to choice("If the date is absolute, which day of the month?", (1..31).associate { it.toString() to null } + ("none" to "no day of the month named")),
+    )
+
     public data class ListRow(val line: Int, val text: String, val homeTeamId: UUID?, val home: String?, val awayTeamId: UUID?, val away: String?,
                               val on: LocalDate?, val time: LocalTime?, val scheduledAt: Instant?, val confidence: Double, val doubt: String?)
     public data class Skipped(val line: Int, val text: String, val why: String)
@@ -343,7 +413,7 @@ public class Understanding(private val model: SystemOne, private val today: () -
                 "day" to choice("Which day of the month does `line` name, if any?", (1..31).associate { it.toString() to null } + ("none" to "no day of the month is named")),
                 "time" to choice("Which of these times found in `line` is when the fixture is played?", found.mapValues { "the time written as '${it.value}'" } + ("none" to "no time is stated")),
             )
-            return (try { model.answers(state, questions) } catch (e: Exception) { null }) to found
+            return (try { model.answers(state.s, questions.s) } catch (e: Exception) { null }) to found
         }
 
         val pool = java.util.concurrent.Executors.newFixedThreadPool(6)   // the endpoint rate-limits above roughly eight
@@ -421,11 +491,17 @@ public class Understanding(private val model: SystemOne, private val today: () -
                      month: Pair<String, Double>?, day: Pair<String, Double>?, used: MutableList<Double>): LocalDate? {
         val now = today()
         mode?.let { used += it.second }
-        return when (mode?.first) {
+        // The parts are things in the sentence; the mode is a category about them, and the model is surer of things
+        // (PD-123, and seen again in PD-129: "tomorrow at 8" read as tomorrow, and called absolute). So where it says
+        // absolute and read no day of the month, and the relative parts make a date, the parts decide. The mode's own
+        // probability stays in `used`, so a reading rescued this way is never more confident than the part it got wrong.
+        val relativeParts = anchor?.first in setOf("today", "tomorrow", "day_after") || (anchor?.first == "weekday" && weekday?.first != null && weekday.first != "none")
+        val read = if (mode?.first == "absolute" && day?.first?.toIntOrNull() == null && relativeParts) "relative" else mode?.first
+        return when (read) {
             "relative" -> when (anchor?.first) {
-                "today" -> now
-                "tomorrow" -> now.plusDays(1)
-                "day_after" -> now.plusDays(2)
+                "today" -> { used += anchor!!.second; now }
+                "tomorrow" -> { used += anchor!!.second; now.plusDays(1) }
+                "day_after" -> { used += anchor!!.second; now.plusDays(2) }
                 "weekday" -> {
                     val wd = weekday?.first?.let { name -> DayOfWeek.values().firstOrNull { it.getDisplayName(TextStyle.FULL, Locale.UK) == name } } ?: return null
                     weekday.let { used += it.second }
@@ -465,7 +541,8 @@ public class Understanding(private val model: SystemOne, private val today: () -
         val suffix = m.groupValues[3].lowercase()
         if (suffix == "pm" && hour < 12) hour += 12
         if (suffix == "am" && hour == 12) hour = 0
-        if (suffix.isEmpty() && hour in 1..11) hour += 12
+        // "8" and "8 o'clock" alike: only "am" means the morning.
+        if ((suffix.isEmpty() || suffix == "o'clock") && hour in 1..11) hour += 12
         return runCatching { LocalTime.of(hour, minute) }.getOrNull()
     }
 
@@ -487,14 +564,22 @@ public class Understanding(private val model: SystemOne, private val today: () -
             """"fixture":$fixture,"result":$result,"award":$award,"schedule":$schedule,"move":$move,"points":$points,"reason":${q(u.reason)}}"""
     }
 
-    private fun choice(instructions: String, criteria: Map<String, String?>): String =
+    /**
+     * JSON this class has built, as distinct from a string somebody typed. The builder used to tell the two apart by
+     * whether a string began with a bracket, so a sentence that did — "[derby] is off" — was spliced into the request
+     * unquoted and broke it. A type says which is which; nothing is guessed from the first character.
+     */
+    private class Raw(val s: String) { override fun toString(): String = s }
+
+    private fun choice(instructions: String, criteria: Map<String, String?>): Raw =
         obj("type" to "choice", "instructions" to instructions, "criteria" to obj(*criteria.entries.map { it.key to it.value }.toTypedArray()))
-    private fun arr(vararg items: Any?): String = items.joinToString(",", "[", "]") { json(it) }
-    private fun obj(vararg pairs: Pair<String, Any?>): String = pairs.joinToString(",", "{", "}") { (k, v) -> "${Contract.q(k)}:${json(v)}" }
+    private fun arr(vararg items: Any?): Raw = Raw(items.joinToString(",", "[", "]") { json(it) })
+    private fun obj(vararg pairs: Pair<String, Any?>): Raw = Raw(pairs.joinToString(",", "{", "}") { (k, v) -> "${Contract.q(k)}:${json(v)}" })
     private fun json(v: Any?): String = when (v) {
         null -> "null"
+        is Raw -> v.s
         is Number, is Boolean -> v.toString()
-        is String -> if (v.startsWith("{") || v.startsWith("[")) v else Contract.q(v)
+        is String -> Contract.q(v)
         else -> Contract.q(v.toString())
     }
 }

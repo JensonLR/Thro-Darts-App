@@ -5477,3 +5477,48 @@ record the league applies from.
 the proposal read by the opponent with the place, a proposal with none saying null, and applied: the fixture on the
 new date at the new place). `ProposalWordsTests` 3. Written test and code together for the app's words, so that red
 was not watched there; the server's checks were watched failing first.
+
+## PD-129 — The captain says it: a sentence on the fixture's screen, read into the proposal
+
+**17 September 2026.** On the list since PD-119. A captain moving a game types what they would text the other captain:
+*can we do the 22nd instead, the pub's shut*. The form asked them to work a date picker instead.
+
+**Decided.**
+
+1. **`POST /v1/fixtures/{id}/proposals/read`**, for whoever may propose for the team and nobody else. It reads; it
+   proposes nothing. The answer fills the form's date, and the captain's own words become the reason unless they wrote
+   one. The form below it works whatever the reading says, and says so on a 503.
+2. **Only what a move needs is asked** (`Understanding.readMove`): whether the sentence asks for a move at all, the
+   date's parts, the times code found, and `shift` — *back a week*, *a fortnight*, *forward a week* — which is counted
+   from the fixture by code and taken only at 0.6 or better. There is no fixture to choose and no act to classify: it
+   is this fixture's screen. The time stays where it was unless the sentence names one.
+3. **Three things the real model taught, in the order it taught them.**
+   - *The fixture's own date came back as the new one*, twice in the first ten. A move to where the fixture already
+     is, is not a move: refused in words, nothing filled in. A date that has gone is refused the same way.
+   - *The parts were right and the mode was wrong.* "Tomorrow at 8" was read as tomorrow, surely, and called
+     *absolute*, which with no day of the month is no date. PD-123's lesson again: the model is surer of things in the
+     sentence than of categories about them. In `date()`, where the mode says absolute, no day of the month was read and
+     the relative parts make a date, the parts decide — and the mode's own probability stays in the confidence, so a
+     reading rescued this way is never surer than the part it got wrong. This is the desk's resolver too, so the desk
+     gains it.
+   - *"8 o'clock" was eight in the morning.* THRØ's own bug, not the model's: the evening rule skipped any time with a
+     suffix. Only *am* means the morning now.
+4. **A defect found on review, fixed at its root.** The reader's JSON builder took any string beginning with a bracket
+   for JSON it had built itself, so a sentence such as *[derby] is off* went into the request unquoted and broke it.
+   Built JSON is its own type (`Raw`) now; nothing is guessed from a first character. This was live on the desk.
+5. **Said where it is typed**: *Read by a model at TypeSafe, with the two teams' names and nothing about you. Leave
+   people's names out.* The privacy page and the ROPA say the same of organisers' and captains' sentences.
+
+**Measured, and how honestly.** Three sets of captain's sentences, each written before its answers were seen. First
+ten: **8**. They drove the guard and `shift`, so they are tuned-on. Next six: **4**, both misses failing safe (*to
+when?*); they drove "the parts decide", so they are tuned-on too. Last six, held out: **4**, one miss THRØ's own clock
+bug (fixed, so that sentence is tuned-on as well) and one a bare "at 7" read as the 7th, which came back outside the
+season and so filled nothing in. After the fixes, 21 of 22 across all three. The honest number for a sentence nobody has
+seen is about two in three right first time, with the misses so far failing safe; the form shows the date before
+anything is sent, so a wrong reading costs a glance. Median 270 ms. Scorecard: `docs/product/JEV_SCORECARD.md`.
+
+**Evidence.** `UnderstandingTest` 20 (the questions asked, the time kept, no move, no date, outside the season, no
+answer, the guard, the weeks, the parts deciding, o'clock, the bracket). `LeagueActsHttpTest` 38 (who may, a team not in
+the fixture, nothing typed, the reading, and that reading proposes nothing; 503 with no model). `ProposalWordsTests` 6.
+The HTTP checks and the app's words were written with their code rather than before it; the reader's tests were
+watched failing first. Looked at in the simulator: a sentence typed, read back, the date and the reason filled in.

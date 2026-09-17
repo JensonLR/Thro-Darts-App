@@ -199,6 +199,8 @@ enum ScreenshotAccount {
             case ("GET", "/v1/proposals/\(proposal)"), ("POST", "/v1/proposals/\(proposal)/answer"):
                 if method == "POST" { proposalState = (sentBody["answer"] as? String) == "accepted" ? "accepted" : "declined" }
                 return (200, proposalJson)
+            case ("POST", "/v1/fixtures/\(fixture)/proposals/read"):
+                return (200, #"{"text":"x","ready":true,"confidence":0.91,"say":"Thu 22 Oct, 8:30 pm","doubt":null,"to":"2026-10-22T19:30:00Z","on":"2026-10-22","time":"20:30"}"#)
             case ("GET", "/v1/fixtures/\(fixture)/proposals"):
                 return (200, #"{"proposals":[\#(proposalJson)]}"#)
             case ("GET", "/v1/me/discovery"):

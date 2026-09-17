@@ -34,4 +34,31 @@ final class ProposalWordsTests: XCTestCase {
     func testAnOlderServerSendsNoVenueAndTheProposalStillReads() {
         XCTAssertNil(proposal().venue)
     }
+
+    // --- the captain says it (PD-129) ---
+
+    private func reading(ready: Bool, say: String, doubt: String?, to: String?) -> MoveReading {
+        let json = """
+        {"text":"x","ready":\(ready),"confidence":0.9,"say":"\(say)","doubt":\(doubt.map { "\"\($0)\"" } ?? "null"),"to":\(to.map { "\"\($0)\"" } ?? "null"),"on":null,"time":null}
+        """
+        return try! Wire.decoder.decode(MoveReading.self, from: Data(json.utf8))
+    }
+
+    func testWhatWasReadIsSaidBackToBeChecked() {
+        XCTAssertEqual(ProposalWords.read(reading(ready: true, say: "Thu 22 Oct, 8:30 pm", doubt: nil, to: "2026-10-22T19:30:00Z")),
+                       "Read as Thu 22 Oct, 8:30 pm. Check it below, then propose it.")
+    }
+
+    func testASentenceThatCouldNotBeUsedSaysWhyAndPointsAtTheForm() {
+        XCTAssertEqual(ProposalWords.read(reading(ready: false, say: "That does not read as a new date for this fixture.", doubt: "move", to: nil)),
+                       "That does not read as a new date for this fixture. Pick the date below.")
+        XCTAssertEqual(ProposalWords.read(reading(ready: false, say: "A move, but to when?", doubt: "date", to: nil)), "A move, but to when? Pick the date below.")
+        XCTAssertEqual(ProposalWords.read(reading(ready: false, say: "Thu 2 Jul, 8:30 pm is outside the season", doubt: "date", to: "2027-07-02T19:30:00Z")),
+                       "Thu 2 Jul, 8:30 pm is outside the season. Pick the date below.")
+    }
+
+    func testOnlyAReadyReadingFillsTheForm() {
+        XCTAssertNotNil(ProposalWords.fills(reading(ready: true, say: "s", doubt: nil, to: "2026-10-22T19:30:00Z")))
+        XCTAssertNil(ProposalWords.fills(reading(ready: false, say: "s", doubt: "date", to: "2027-07-02T19:30:00Z")), "outside the season: said, not filled in")
+    }
 }

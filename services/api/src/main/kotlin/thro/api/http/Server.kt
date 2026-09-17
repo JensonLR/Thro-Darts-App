@@ -733,6 +733,26 @@ public fun Application.thro(deps: Deps) {
         "fixtures.proposals" to { r ->
             rearrangements { Rearrangements(r.connection(), deps.now).let { Http(200, it.json(it.ofFixture(UUID.fromString(r.call.parameters["fixtureId"]), r.principal!!.subject))) } }
         },
+        // PD-129: the captain says it. Read into a day and a time for the form; nothing is proposed by reading.
+        "fixtures.propose.read" to { r ->
+            rearrangements {
+                val m = Json.parseObject(r.body)
+                val team = runCatching { UUID.fromString(m["teamId"] as? String) }.getOrNull() ?: throw IllegalArgumentException("teamId is required")
+                val (fixture, starts, ends) = Rearrangements(r.connection(), deps.now).forReading(UUID.fromString(r.call.parameters["fixtureId"]), team, r.principal!!.subject)
+                val text = (m["text"] as? String)?.trim().orEmpty()
+                val model = deps.systemOne
+                when {
+                    model == null -> Http(503, """{"error":"THRØ cannot read sentences on this server yet. Pick the date below."}""")
+                    text.isEmpty() -> Http(400, """{"error":"Say when, in a sentence."}""")
+                    text.length > 300 -> Http(400, """{"error":"A sentence, not a page."}""")
+                    else -> {
+                        val u = Understanding(model) { deps.now().atZone(Understanding.ZONE).toLocalDate() }
+                        u.readMove(fixture, starts, ends, text)?.let { Http(200, u.json(it)) }
+                            ?: Http(503, """{"error":"THRØ could not read that just now. Pick the date below."}""")
+                    }
+                }
+            }
+        },
         "fixtures.propose" to { r ->
             rearrangements {
                 val m = Json.parseObject(r.body)

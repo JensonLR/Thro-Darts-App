@@ -96,6 +96,46 @@ class JevEvaluationTest {
         Meant("it's a point per leg, plus two for winning the match", "points", points = Understanding.Points(2, null, null, 1)),
     )
 
+    /** A captain's sentences about one fixture (PD-129), with the day and London time meant; null is "asks for no move". */
+    private val captain: List<Pair<String, String?>> = listOf(
+        "can we do the 22nd instead, pub's shut on the 15th" to "2026-10-22 19:30",
+        "Wednesday the 21st at 8 would suit us better" to "2026-10-21 20:00",
+        "we're short that week, how about Thursday 5th November" to "2026-11-05 19:30",
+        "see you all Thursday, should be a good one" to null,
+        "tomorrow night instead? 7.30" to "2026-10-10 19:30",
+        "pub has a wake on, could we push it back a week" to "2026-10-22 19:30",
+        "1st of December, same time" to "2026-12-01 19:30",
+        "Monday 19th at 8:30pm works for us" to "2026-10-19 20:30",
+        "who's bringing the scoresheets?" to null,
+        "the 29th? our lot are away till then" to "2026-10-29 19:30",
+    )
+    /**
+     * Written after the first run, before any answer to THESE was seen. The first ten scored 8: "tomorrow night" and
+     * "back a week" both came back as the fixture's own date, which is what the guard and the `shift` question are
+     * for — so those two are tuned-on now, and these are what is held out.
+     */
+    private val captainFresh: List<Pair<String, String?>> = listOf(
+        "day after tomorrow any good? same time" to "2026-10-11 19:30",
+        "put it back a fortnight, half our side are on holiday" to "2026-10-29 19:30",
+        "this Sunday at 2pm?" to "2026-10-11 14:00",
+        "tomorrow at 8" to "2026-10-10 20:00",
+        "the week after would be better for us" to "2026-10-22 19:30",
+        "are we still on for the 15th?" to null,
+    )
+    /**
+     * A third set, written after the second run and before any answer to these. The second set scored 4 of 6: "this
+     * Sunday at 2pm?" and "tomorrow at 8" had their parts read rightly and their *mode* called absolute, which is what
+     * "the parts decide" in `date()` is for. So the second set is tuned-on too, and this is what is held out.
+     */
+    private val captainThird: List<Pair<String, String?>> = listOf(
+        "how about this Friday at 7?" to "2026-10-16 19:00",
+        "tonight instead?" to "2026-10-09 19:30",
+        "Tuesday the 20th, 8 o'clock" to "2026-10-20 20:00",
+        "we can't raise a side that night" to null,
+        "Saturday afternoon, 1pm" to "2026-10-10 13:00",
+        "could we make it the 12th of November" to "2026-11-12 19:30",
+    )
+
     private val pasted = """
         TEESSIDE THURSDAY LEAGUE 2026/27 — DIVISION ONE
         all matches 7.30pm unless shown
@@ -129,8 +169,11 @@ class JevEvaluationTest {
         val millis: MutableList<Long> = java.util.Collections.synchronizedList(mutableListOf())
         override fun answers(state: String, questions: String): Map<String, Any?>? {
             val start = System.nanoTime()
-            return inner.answers(state, questions).also { millis += (System.nanoTime() - start) / 1_000_000 }
+            return inner.answers(state, questions).also { millis += (System.nanoTime() - start) / 1_000_000; last = it }
         }
+        /** The last answers, for saying which part went wrong on a miss. */
+        @Volatile var last: Map<String, Any?>? = null
+        fun parts(vararg ids: String): String = ids.mapNotNull { id -> ((last?.get(id) as? Map<*, *>)?.get("choice") as? String)?.let { "$id=$it" } }.joinToString(" ")
     }
 
     @Test
@@ -205,6 +248,23 @@ class JevEvaluationTest {
             }
             say(""); say("- Rows right, nothing to change: **$rowsRight of ${listMeant.size}** (${read.rows.size} rows read, ${read.skipped.size} lines left out: ${read.skipped.joinToString(" · ") { "“${it.text}” — ${it.why}" }}).")
         }
+
+        // PD-129: a captain's sentence on one fixture's screen. Written before any answer was seen, and never tuned against.
+        say(""); say("## A captain's sentence, on the fixture's own screen"); say("")
+        val theirs = fixtures.first { it.home == "Grange A" && it.away == "Dolphin" }   // Thu 15 Oct, 7:30 pm in London
+        say("The fixture: Grange A v Dolphin, Thu 15 Oct 2026, 7:30 pm. Today is Fri 9 Oct."); say("")
+        say("| | The captain's sentence | Meant | Read | Confidence |"); say("|---|---|---|---|---|")
+        var captainRight = 0
+        for ((text, meant) in captain + listOf("— written after the first run —" to "") + captainFresh + listOf("— held out: written after the second run —" to "") + captainThird) {
+            if (meant == "") { say("| | *$text* | | | |"); continue }
+            val r = u.readMove(theirs, desk.seasonStart, desk.seasonEnd, text)
+            val readAs = r?.move?.takeIf { r.ready }?.let { "${it.on} ${it.time}" }
+            val ok = r != null && readAs == meant
+            if (ok) captainRight++
+            val parts = if (ok) "" else " — parts read: ${model.parts("asks_move", "shift", "date_mode", "day_anchor", "weekday", "week_offset", "month", "day", "time")}"
+            say("| ${if (ok) "✓" else "✗"} | $text | ${meant ?: "*no move*"} | ${if (r == null) "*no answer*" else (readAs ?: "*${r.say}*")}$parts | ${r?.let { "%.2f".format(it.confidence) } ?: ""} |")
+        }
+        say(""); say("- Right, nothing to change: **$captainRight of ${captain.size + captainFresh.size + captainThird.size}**. On their first readings: the first ten scored 8 (before the guard and the weeks question), the next six scored 4 (before the parts decided a mislabelled date); the last six are held out. A wrong reading here costs a glance: the form shows the date before anything is sent.")
 
         val ms = model.millis.toList()
         if (ms.isNotEmpty()) {

@@ -126,6 +126,8 @@ class LeagueActsHttpTest {
             // PD-119: a server with no System One model cannot read a sentence, and says so rather than guessing.
             val unread = post("/v1/seasons/$season/understand", """{"text":"Riverside beat Grange 5-3"}""", lee)
             check("without a model, Tell THRØ answers 503 in words", unread.status.value == 503 && unread.bodyAsText().contains("cannot read"))
+            check("and so does a captain's sentence, so the form is used instead",
+                post("/v1/fixtures/$fixture/proposals/read", """{"teamId":"$riverside","text":"the 22nd instead"}""", ade).let { it.status.value == 503 && it.bodyAsText().contains("cannot read") })
         }
 
         // PD-119: Tell THRØ over the wire, with a stand-in model that picks by the words in the options it is offered.
@@ -136,6 +138,10 @@ class LeagueActsHttpTest {
                 fun options(id: String) = (q[id] as Map<String, Any?>)["criteria"] as Map<String, Any?>
                 fun pick(id: String, vararg words: String) = options(id).entries.first { (_, v) -> words.all { w -> (v?.toString() ?: "").contains(w) } }.key
                 fun choice(option: String, p: Double) = mapOf("type" to "choice", "choice" to option, "probabilities" to mapOf(option to p), "confidence" to p)
+                if (q.containsKey("asks_move")) {
+                    // PD-129: a captain's sentence about one fixture.
+                    return mapOf("asks_move" to choice("yes", 0.92), "date_mode" to choice("absolute", 0.9), "month" to choice("October", 0.9), "day" to choice("22", 0.94), "time" to choice("none", 0.9))
+                }
                 if (q.containsKey("is_fixture")) {
                     // PD-122: one line of a pasted list. Teams by name, in the order the line names them.
                     val line = Json.parseObject(state)["line"] as String
@@ -154,6 +160,7 @@ class LeagueActsHttpTest {
             suspend fun post(path: String, body: String, subject: UUID?): HttpResponse = client.post(path) {
                 subject?.let { header(Authenticator.Dev.HEADER, it.toString()) }; header("X-Thro-Device", device.toString()); setBody(body)
             }
+            suspend fun get(path: String, subject: UUID?): HttpResponse = client.get(path) { subject?.let { header(Authenticator.Dev.HEADER, it.toString()) } }
             check("Tell THRØ is the administrator's", post("/v1/seasons/$season/understand", """{"text":"Riverside beat Grange 5-3"}""", ade).status.value == 403)
             check("a sentence with nothing in it is a 400", post("/v1/seasons/$season/understand", """{"text":"  "}""", lee).status.value == 400)
             val read = post("/v1/seasons/$season/understand", """{"text":"Riverside beat Grange 5-3 on Thursday"}""", lee)
@@ -170,6 +177,16 @@ class LeagueActsHttpTest {
                 list.status.value == 200 && listed.contains("\"home\":\"Grange A\"") && listed.contains("\"away\":\"Riverside A\"")
                     && listed.contains("\"on\":\"2026-11-12\",\"time\":\"20:00\",\"scheduledAt\":\"2026-11-12T20:00:00Z\"") && listed.contains("\"doubt\":null")
                     && listed.contains("\"why\":\"a date, carried down\"") && listed.contains("\"why\":\"not a fixture\""))
+            // PD-129: the captain says it, on the fixture's own screen. Whoever may propose may have a sentence read.
+            val sentence = """{"teamId":"$riverside","text":"can we do the 22nd of October instead, the pub is shut"}"""
+            check("a sentence is read for whoever runs the team", post("/v1/fixtures/$fixture/proposals/read", sentence, sam).status.value == 403)
+            check("and only for a team in the fixture", post("/v1/fixtures/$fixture/proposals/read", """{"teamId":"$dolphin","text":"the 22nd"}""", gil).status.value == 403)
+            check("a sentence with nothing in it is a 400", post("/v1/fixtures/$fixture/proposals/read", """{"teamId":"$riverside","text":" "}""", ade).status.value == 400)
+            val moved = post("/v1/fixtures/$fixture/proposals/read", sentence, ade)
+            check("the captain's sentence comes back as a day and the time the fixture already had, to confirm",
+                moved.status.value == 200 && moved.bodyAsText().contains("\"to\":\"2026-10-22T19:30:00Z\"") && moved.bodyAsText().contains("\"ready\":true")
+                    && moved.bodyAsText().contains("\"say\":\"Thu 22 Oct, 8:30 pm\""))
+            check("reading proposes nothing", get("/v1/fixtures/$fixture/proposals", ade).bodyAsText() == """{"proposals":[]}""")
             check("and the server tells the web it can read", client.get("/v1/auth/providers").bodyAsText().contains("\"reads\":true"))
         }
         println("league acts over HTTP: $passed checks passed")

@@ -112,6 +112,21 @@ public class Rearrangements(private val connection: Connection, private val now:
         return one(made.proposalId)
     }
 
+    /**
+     * The fixture as the captain's-sentence reader needs it (PD-129), for whoever may propose for [teamId] and nobody
+     * else: reading a sentence costs a request to the model, and is offered where proposing is.
+     */
+    public fun forReading(fixtureId: UUID, teamId: UUID, by: UUID): Triple<Understanding.Fixture, java.time.LocalDate, java.time.LocalDate> {
+        val f = fixture(fixtureId) ?: throw Refused("THRØ has no such fixture.", 404)
+        if (teamId != f.home && teamId != f.away) throw Refused("That team is not in this fixture.", 403)
+        if (!runsTeam(by, teamId)) throw Refused("Only whoever runs the team proposes a date for it.", 403)
+        val names = connection.prepareStatement("SELECT team_id, name FROM competition.team WHERE team_id IN (?, ?)").use { ps ->
+            ps.setObject(1, f.home); ps.setObject(2, f.away)
+            ps.executeQuery().use { rs -> generateSequence { if (rs.next()) (rs.getObject(1) as UUID) to rs.getString(2) else null }.toMap() }
+        }
+        return Triple(Understanding.Fixture(fixtureId, names[f.home] ?: "Home", f.home, names[f.away] ?: "Away", f.away, f.at, decided = false), f.seasonStarts, f.seasonEnds)
+    }
+
     // --- both teams and the league read -----------------------------------------------------------------------------
 
     public fun ofFixture(fixtureId: UUID, viewer: UUID): List<Proposal> {

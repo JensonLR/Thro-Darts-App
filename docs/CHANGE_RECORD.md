@@ -6237,3 +6237,11 @@ settles), lists them first, each opening its page through the PD-127 landing, an
 phone*; with none, what it offers depends on being signed in. `YouTeamsTests` 4. Decision numbers removed from five
 sentences players read. `-ThroStageProposal <state>` stages the proposal's state for screenshots; the stage keeps its own
 staged event while passing real event pages through. App tests 417, 891 in all.
+
+## The captain says it (PD-129)
+
+`Understanding.readMove`, `MoveRead`, `dateQuestions()` shared with the desk, `shift`, the already-there and has-gone
+guards, "the parts decide" in `date()`, `o'clock` in `clockOf`, `Raw` in the JSON builder; `Rearrangements.forReading`;
+route `fixtures.propose.read`. App: `ThroAPI.readMove`, `MoveReading`, `ProposalWords.read` and `.fills`, *Say it* and
+*Read it* on the proposal form with the TypeSafe note; the stage answers the read. `JevEvaluationTest` gains three
+captain's sets and prints the parts read on a miss. Privacy page and ROPA. API tests 162; app tests 420, 894 in all.

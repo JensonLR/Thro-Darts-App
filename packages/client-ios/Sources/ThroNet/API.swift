@@ -160,6 +160,16 @@ public struct FixtureProposal: Decodable, Sendable, Equatable, Identifiable {
     public var id: UUID { proposalId }
 }
 
+/// What THRØ read a captain's sentence as (PD-129). `ready` when a day inside the season was read; `say` is the
+/// reading in words, or why there is none; `to` is the instant, where a day was read at all.
+public struct MoveReading: Decodable, Sendable, Equatable {
+    public let ready: Bool
+    public let say: String
+    public let doubt: String?
+    public let to: Date?
+    public let confidence: Double
+}
+
 /// What a registration task is still missing (PD-107): facts THRØ checks by name, requirements a person confirms
 /// by hand, and — when neither remains — the submission prepared, with its state.
 public struct RegistrationAssessment: Decodable, Sendable, Equatable {
@@ -1258,6 +1268,12 @@ public actor ThroAPI {
     }
 
     /// Proposes a new date to the other team, for whoever runs this one. Reaches their inbox; moves nothing.
+    /// A captain's sentence read as a new day and time for this fixture (PD-129). Proposes nothing: it fills the form.
+    public func readMove(fixture: UUID, team: UUID, text: String) async throws -> MoveReading {
+        let body = try JSONSerialization.data(withJSONObject: ["teamId": team.uuidString.lowercased(), "text": text])
+        return try decode(await authorised("POST", "/v1/fixtures/\(fixture.uuidString.lowercased())/proposals/read", body: body))
+    }
+
     public func propose(fixture: UUID, team: UUID, to: Date, reason: String?, venue: UUID? = nil) async throws -> FixtureProposal {
         var fields: [String: Any] = ["teamId": team.uuidString.lowercased(), "to": ISO8601DateFormatter().string(from: to)]
         if let venue { fields["venueId"] = venue.uuidString.lowercased() }

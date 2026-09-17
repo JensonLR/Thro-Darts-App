@@ -761,6 +761,16 @@ public object Contract {
             responses = mapOf(200 to "the proposal, delivered", 400 to "a date outside the season or in the past, or a venue THRØ cannot show the other team", 401 to "no principal", 403 to "you do not run a team in this fixture", 404 to "no such fixture", 409 to "a proposal is already waiting"),
         ),
         Endpoint(
+            id = "fixtures.propose.read", method = "POST", path = "/v1/fixtures/{fixtureId}/proposals/read", authenticated = true,
+            summary = "Read a captain's sentence as a new day and time for this fixture (PD-129)",
+            description = "For whoever may propose for the team. A System One model reads the parts of the date; code does the calendar; the time stays "
+                + "where it was unless the sentence says one. Nothing is proposed by reading: the answer fills the form, and the captain sends it. "
+                + "The sentence goes to TypeSafe with the two teams' names and the fixture's date, and nothing about a person.",
+            request = Schema("""{"type":"object","required":["teamId","text"],"properties":{"teamId":{"type":"string","format":"uuid"},"text":{"type":"string","maxLength":300}}}"""),
+            responses = mapOf(200 to "what was read: ready, say, doubt, and to/on/time where a day was read", 400 to "nothing to read, or a page", 401 to "no principal",
+                              403 to "you do not run a team in this fixture", 404 to "no such fixture", 503 to "no model on this server, or no answer from it"),
+        ),
+        Endpoint(
             id = "proposals.get", method = "GET", path = "/v1/proposals/{proposalId}", authenticated = true,
             summary = "One proposed date, as its fixture's teams and league read it (PD-108)",
             description = "What the inbox's task points at: the fixture, the date proposed and the one it stands on, from which team, why, and where it stands.",

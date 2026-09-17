@@ -122,6 +122,9 @@ public struct TeamFixtureScreen: View {
     @State private var proposing = false
     @State private var proposedDate = Date()
     @State private var proposedReason = ""
+    @State private var said = ""
+    @State private var reading = false
+    @State private var readBack: String?
     @State private var proposedVenue: PublicLeague.Venue?
     @State private var venueQuery = ""
     @State private var venueHits: [PublicLeague.Venue] = []
@@ -246,6 +249,19 @@ public struct TeamFixtureScreen: View {
             }
             if v.mayNameLineup && !(proposals ?? []).contains(where: { $0.state == "proposed" }) {
                 if proposing {
+                    // Say it (PD-129): a sentence read into the date below. The form is still the form; this fills it.
+                    ThroTextField("Say it", text: $said, placeholder: "the 22nd instead, the pub is shut")
+                        .padding(.top, ThroSpacing.spacing2)
+                    HStack(spacing: ThroSpacing.spacing2) {
+                        ThroButton(reading ? "Reading…" : "Read it", variant: .secondary, size: .medium) { Task { await readIt(in: v) } }
+                            .disabled(reading || said.trimmingCharacters(in: .whitespaces).count < 3)
+                        if let readBack { Text(readBack).thro(ThroTypography.metadata).foregroundStyle(ThroColor.colorTextSecondary).fixedSize(horizontal: false, vertical: true) }
+                    }
+                    .padding(.top, ThroSpacing.spacing2)
+                    Text("Read by a model at TypeSafe, with the two teams' names and nothing about you. Leave people's names out.")
+                        .thro(ThroTypography.metadata).foregroundStyle(ThroColor.colorTextTertiary)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .padding(.top, ThroSpacing.spacing2)
                     DatePicker("New date", selection: $proposedDate, in: Date()...)
                         .thro(ThroTypography.body).foregroundStyle(ThroColor.colorTextPrimary).padding(.top, ThroSpacing.spacing2)
                     ThroTextField("Why?", text: $proposedReason, placeholder: "the pub is shut that night")
@@ -347,6 +363,21 @@ public struct TeamFixtureScreen: View {
         } catch { note = (error as? APIError)?.message ?? error.localizedDescription }
     }
 
+    /// Reads the sentence and fills the form with it. Whatever comes back, the form below still works.
+    private func readIt(in v: TeamFixtureView) async {
+        reading = true; defer { reading = false }
+        let text = said.trimmingCharacters(in: .whitespaces)
+        do {
+            let r = try await api.readMove(fixture: v.fixtureId, team: teamId, text: text)
+            readBack = ProposalWords.read(r)
+            if let to = ProposalWords.fills(r) {
+                proposedDate = to
+                // The captain's own words are the reason, unless they have already written one.
+                if proposedReason.trimmingCharacters(in: .whitespaces).isEmpty { proposedReason = text }
+            }
+        } catch { readBack = ThroAPI.refusal(error) ?? "That could not be read just now. Pick the date below." }
+    }
+
     /// The venues THRØ holds by that name. Two letters before it asks; the last answer wins.
     private func findVenues(_ query: String) async {
         let q = query.trimmingCharacters(in: .whitespaces)
@@ -425,6 +456,15 @@ enum ProposalWords {
     static func what(_ p: FixtureProposal) -> String {
         RearrangementTaskActions.when(p.to) + (p.venue.map { ", at \($0.name)" } ?? "")
     }
+
+    /// What was read, said back to be checked (PD-129) — or why nothing was, and where to go instead.
+    static func read(_ r: MoveReading) -> String {
+        r.ready ? "Read as \(r.say). Check it below, then propose it."
+                : (r.say.hasSuffix(".") || r.say.hasSuffix("?") ? "\(r.say) Pick the date below." : "\(r.say). Pick the date below.")
+    }
+
+    /// The date a reading puts in the form: only one that is ready. A day outside the season is said and not filled in.
+    static func fills(_ r: MoveReading) -> Date? { r.ready ? r.to : nil }
 
     /// The fixture screen's line: who proposed what, why, and where it stands for the team looking.
     static func line(_ p: FixtureProposal, viewing team: UUID) -> String {
