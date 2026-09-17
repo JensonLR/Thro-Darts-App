@@ -186,7 +186,11 @@ const idFromPath = what => decodeURIComponent((location.pathname.match(new RegEx
 async function mountLeague(where, titleEl, eyebrowEl) {
   const id = idFromPath('league').toLowerCase();
   let league;
-  try { league = ((await read('/v1/leagues')).leagues || []).find(l => l.leagueId === id); } catch (e) { fail(where, e, () => mountLeague(where, titleEl, eyebrowEl)); return; }
+  // One league, not the directory: the page is what gets shared, and it should not wait on 329 leagues to show one.
+  try { league = await read(`/v1/leagues/${encodeURIComponent(id)}`); }
+  catch (e) {
+    if (!/^(no public league|leagueId must)/.test(e.message || '')) { fail(where, e, () => mountLeague(where, titleEl, eyebrowEl)); return; }
+  }
   if (!league) {
     titleEl.textContent = 'No league at this address';
     where.replaceChildren(make('p', 'quiet', 'It may have ended, or been made private by whoever runs it, or the link may be old.'));

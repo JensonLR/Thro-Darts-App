@@ -380,6 +380,12 @@ public fun Application.thro(deps: Deps) {
         },
         "me.inbox" to { r -> Http(200, inboxJson(Secretary(r.connection()).inboxForPlayer(r.principal!!.subject, deps.now()))) },
         "team.inbox" to { r -> teamInbox(r.connection(), r.principal!!, r.call.parameters["teamId"], deps.now()) },
+        // PD-127: one league by its id, for its page at thro.uk/league/<id>.
+        "leagues.get" to { r ->
+            r.role = DbRole.READ
+            val id = runCatching { UUID.fromString(r.call.parameters["leagueId"]) }.getOrNull() ?: throw IllegalArgumentException("leagueId must be a UUID")
+            Leagues(r.connection()).let { l -> l.one(id, deps.now())?.let { Http(200, l.json(it)) } ?: Http(404, """{"error":"no public league has that id"}""") }
+        },
         "leagues" to { r -> r.role = DbRole.READ; Http(200, Leagues(r.connection()).let { it.json(it.all(r.call.request.queryParameters["locality"]?.take(80), deps.now())) }) },
         // PD-053: running a league. Nothing here can grant the relation these check for — a league
         // administrator is named out of band and never self-appointed — so on a server where nobody has

@@ -52,7 +52,10 @@ public class Leagues(private val connection: Connection) {
     private val london = ZoneId.of("Europe/London")
 
     /** Every league, or those whose locality matches [locality] (case-insensitively, as a substring). */
-    public fun all(locality: String? = null, now: Instant = Instant.now()): List<League> {
+    /** One league by its id (PD-127), exactly as the list words it; null when it is not public or not there. */
+    public fun one(leagueId: UUID, now: Instant = Instant.now()): League? = all(null, now, leagueId).firstOrNull()
+
+    public fun all(locality: String? = null, now: Instant = Instant.now(), only: UUID? = null): List<League> {
         val today = now.atZone(london).toLocalDate()
         val leagues = linkedMapOf<UUID, League>()
         val seasons = linkedMapOf<UUID, MutableList<Season>>()
@@ -82,10 +85,12 @@ public class Leagues(private val connection: Connection) {
              -- and an ended one are not on the list.
              WHERE l.visibility = 'public' AND l.dissolved_at IS NULL
                AND (? IS NULL OR l.locality ILIKE '%' || ? || '%')
+               AND (?::uuid IS NULL OR l.league_id = ?::uuid)
              ORDER BY l.name, ls.starts_on DESC, ls.label, d.ordinal NULLS LAST, t.name
             """.trimIndent(),
         ).use { ps ->
             ps.setString(1, locality); ps.setString(2, locality)
+            ps.setString(3, only?.toString()); ps.setString(4, only?.toString())
             ps.executeQuery().use { rs ->
                 while (rs.next()) {
                     val leagueId = rs.getObject(1) as UUID
@@ -195,9 +200,12 @@ public class Leagues(private val connection: Connection) {
         }
 
     /** The JSON the route answers with. Hand-rendered like every other answer in this service. */
-    public fun json(leagues: List<League>): String {
+    public fun json(leagues: List<League>): String = "{\"leagues\":[" + leagues.joinToString(",") { json(it) } + "]}"
+
+    /** One league, as it appears in the list. */
+    public fun json(l: League): String {
         fun q(s: String?) = s?.let { "\"" + it.replace("\\", "\\\\").replace("\"", "\\\"").replace("\n", "\\n") + "\"" } ?: "null"
-        return "{\"leagues\":[" + leagues.joinToString(",") { l ->
+        return run {
             """{"leagueId":"${l.leagueId}","name":${q(l.name)},"shortName":${q(l.shortName)},"playsOn":${q(l.playsOn)},"locality":${q(l.locality)},"latitude":${l.latitude ?: "null"},"longitude":${l.longitude ?: "null"},"website":${q(l.website)},"standing":"${l.standing}",""" +
                 """"sources":[${l.sources.joinToString(",") { """{"source":${q(it.source)},"url":${q(it.url)},"retrievedOn":"${it.retrievedOn}"}""" }}],""" +
                 """"seasons":[${l.seasons.joinToString(",") { s ->
@@ -216,6 +224,6 @@ public class Leagues(private val connection: Connection) {
                         """{"venueId":"${v.venueId}","name":${q(v.name)},"locality":${q(v.locality)},"postcode":${q(v.postcode)},"latitude":${v.latitude ?: "null"},"longitude":${v.longitude ?: "null"},"basis":${q(v.basis)}}"""
                     } ?: "null") + "}"
                 }}]}"""
-        } + "]}"
+        }
     }
 }

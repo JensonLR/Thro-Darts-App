@@ -75,6 +75,13 @@ class LeagueStandingTest {
             check("a listed league run here by the person named to run it is run here", league("Cormorant Named League").contains("\"standing\":\"run_here\""))
             check("a league started here is run here", league("Dolphin Started League").contains("\"standing\":\"run_here\""))
             check("its season counts its fixtures, and only the results that stand", league("Dolphin Started League").contains("\"fixtures\":3,\"results\":1"))
+            // One league by its id (PD-127): what its page at thro.uk/league/<id> reads, rather than the whole directory.
+            val one = client.get("/v1/leagues/${started.leagueId}")
+            check("a league is read by its id, as the list words it", one.status.value == 200
+                && one.bodyAsText().contains("\"name\":\"Dolphin Started League\"") && one.bodyAsText().contains("\"standing\":\"run_here\"")
+                && one.bodyAsText().contains("\"fixtures\":3,\"results\":1") && !one.bodyAsText().contains("Aardvark"))
+            check("an id that is no league's is a 404", client.get("/v1/leagues/${UUID.randomUUID()}").status.value == 404)
+            check("and an id that is not one is a 400", client.get("/v1/leagues/stockton").status.value == 400)
             check("and nothing on the list names who runs anything", !body.contains(jen.toString()) && !body.contains(lee.toString()))
         }
         println("league standing: $passed checks passed")

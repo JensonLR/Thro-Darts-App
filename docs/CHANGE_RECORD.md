@@ -6221,3 +6221,6 @@ flow; `DrawerShare`; the team code's share text. The API's association file and 
 `/event/*` and `/team/*`. Web: `league.html`, `event.html`, `team.html`, `mountLeague`, `mountTeam`, `openInApp`,
 `idFromPath`, the knockout's address with a copy button, the organiser's sign-in folded; `render.yaml` rewrites;
 `tools/web_serve.py` applies the same rewrites locally.
+
+**One league by its id.** `GET /v1/leagues/{leagueId}` (`Leagues.one`), because the shared page fetched all 329 leagues
+to show one and waited five seconds for it on the live site. `LeagueStandingTest` 10 checks.

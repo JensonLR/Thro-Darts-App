@@ -472,6 +472,12 @@ public object Contract {
             responses = mapOf(200 to "leagues, newest season first"),
         ),
         Endpoint(
+            id = "leagues.get", method = "GET", path = "/v1/leagues/{leagueId}", authenticated = false,
+            summary = "One public league, as the list words it (PD-127)",
+            description = "What the league's page at thro.uk/league/{leagueId} reads: its standing (run here, or listed from elsewhere), its seasons with their fixture and result counts, its divisions and teams, and the teams that say they play in it. No person is on it.",
+            responses = mapOf(200 to "the league", 400 to "an id that is not a UUID", 404 to "no public league has that id"),
+        ),
+        Endpoint(
             id = "leagues.start", method = "POST", path = "/v1/leagues", authenticated = true,
             summary = "Start a league on THRØ, with its first season, and run it (PD-100)",
             description = "The league, its first season and that season's divisions, together or not at all, and whoever "
