@@ -28,8 +28,14 @@ class Handler(http.server.SimpleHTTPRequestHandler):
 
     # Every method, not only GET: the organiser page posts results, and a dev server that proxied reads
     # and answered 501 to writes would send somebody hunting through the API for a fault that is here.
+    # The rewrites the static host applies (render.yaml; PD-117, PD-127): an address with an id in it is one page.
+    REWRITES = {"/link/": "/link.html", "/league/": "/league.html", "/event/": "/event.html", "/team/": "/team.html"}
+
     def do_GET(self):  # noqa: N802 - the base class names these
         if self.proxied(): return
+        for prefix, page in self.REWRITES.items():
+            if self.path.startswith(prefix):
+                self.path = page
         super().do_GET()
 
     def do_HEAD(self):  # noqa: N802

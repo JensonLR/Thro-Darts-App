@@ -5376,3 +5376,82 @@ compute. And a finding from running the evaluation more than once, which changes
 left out; nothing stated a doubt. Three points sentences added to the held-out set before any answer was seen: three
 of three on first reading. Latest scorecard in `docs/product/JEV_SCORECARD.md`: 22 of 22, held out 15 of 15, list 10
 of 10, median 269 ms over 126 requests.
+
+## PD-126 — Say what THRØ holds for a league, and let every row lead somewhere
+
+**17 September 2026.** The founder, after build 19: *the league and Discover experience still feels disconnected and
+false.* Looked at against production, it was both. 329 leagues on the list, all of them placed from LeagueRepublic;
+three with teams; none with a fixture. The slate said "329 leagues listed", every league's card offered TABLE whether
+or not a fixture existed to make one, a directory league's card said *tell THRØ and it fills in* with nothing behind the
+sentence, six screens said *tell THRØ* in all, and a tournament on Discover was a row that did nothing while the way
+into it sat under You behind a different name.
+
+**Decided.**
+
+1. **The public list says what THRØ holds.** `GET /v1/leagues` gains `standing` on each league: `run_here` when
+   somebody started it on THRØ (`league.created_by`) or a season of it has a named administrator who has not been
+   revoked, else `listed`. Which, and never who: nothing on the list names a person. Each season gains `fixtures` and
+   `results`, a result counted exactly as the tables count one (unsuperseded, not void).
+2. **Three kinds, never one number.** A league is *run on THRØ*, or *has its teams listed* from its own website, or is
+   *on the map only*. The app (`PublicLeague.held`) and the web (`heldAs`) derive the same three from the same fields
+   and word them the same. The slate counts them apart; a row leads with which it is; Discover and the web's list open
+   on what is run here, then what has teams, then the pins. A server from before this says nothing about standing and
+   then nothing is claimed.
+3. **A table is offered where fixtures exist.** No TABLE key on a league with none. An empty fixture list says there
+   are no fixtures, not that every fixture has a result, which for a season with none was false.
+4. **No sentence without something behind it.** *Tell THRØ* is gone from every screen. A directory league's card offers
+   what a player can actually do: its website, *[your team] plays here* for a team they run (PD-049's say, one tap, and
+   the map refreshes), or *Start your team on THRØ*. A search that finds nothing offers *Start your team* and *Start a
+   league at thro.uk*, which opens the organiser's desk. The web's league page says plainly that a listed league cannot
+   be taken over by asking (PD-053) and that a league started on the desk is its starter's from the first minute.
+5. **A tournament row opens the tournament.** `EventScreen`: when, where, how full, where the night has got to, the
+   draw by round, and the way in, which is the same `EventActions` the list under You uses (now taking the API rather
+   than the account store, so the two cannot differ). Somebody signed out gets a *Sign in* button that goes there, on
+   Discover as well, where the old text only described where signing in lived.
+6. **Discover's plus means the team on THRØ.** It opened the on-phone scorebook under the label "Start a team", the
+   same words as the server flow two sections down. It is *Join or start a team* now, for somebody signed in; the
+   on-phone book keeps its own section and its own button.
+7. **Found by looking.** A league started on THRØ has no import source, and its card read "From . Venues are matched
+   from OpenStreetMap". It says it was started on THRØ. And the web's primary button was ink on deep green in the dark
+   theme, on every page; it is chalk on green in both themes.
+
+**Not done, and why.** Claiming a listed league from inside the app. PD-053 stands: a listed league has somebody who
+runs it, and appointing oneself would be pretending to be them. The honest route is the one offered: start it.
+
+**Evidence.** `LeagueStandingTest` (7 checks, including a voided result not counted and no person named);
+`LeagueStandingWordsTests` (8), `EventScreenTests` (4), the older word tests moved to the new sentences. Looked at in
+the browser against a local server seeded with all three kinds, and in the simulator: Discover's slate and rows, a
+started league's card, a directory league's card, the tournament page opened from its link.
+
+## PD-127 — One address, on the web and in the app
+
+**17 September 2026.** The second half of the same complaint: *the link between the web and the app.* There was one,
+for one purpose (PD-117, a screen's sign-in code). Nothing the app shared was a link; nothing on the web opened the
+app; and the app's links could name only what one phone kept, so none of them meant anything on another phone.
+
+**Decided.**
+
+1. **A league, a tournament night and a team on THRØ each have one address**: `thro.uk/league/<id>`,
+   `thro.uk/event/<id>`, `thro.uk/team/<id>`, with the server's id. It is a page on the web and, on a phone with THRØ,
+   the same thing in the app: `ThroRoute.league`, `.event` and `.team`, read from `https://` and `thro://` alike, the
+   association file advertising all three (served by the API for thro.uk, and the copy in `services/links`), and three
+   rewrites on the static site. `team/<id>` still opens a team kept on this phone when the id is that phone's own.
+2. **What is shared is the web address** (`ThroRoute.shared`), lower-case as the server writes ids, so it works with
+   no app at all. SHARE is on a league's card, a directory league's card, a team's card and the tournament page, and the
+   team code's share text carries the team's address.
+3. **The web pages open the app.** Each of the three pages ends in one panel: on a phone, *Open in THRØ*; on a bigger
+   screen, the page's own address as a QR (PD-117's encoder) for the phone in the reader's pocket. The knockout's
+   organiser is given the night's address to post, with a copy button, and the page says what it does on a phone.
+4. **The app opens the web where the web is the right place.** Starting a league is done on the organiser's desk, and
+   the app says so with a key that opens it, rather than describing a place.
+5. **A shared page is a page first.** The knockout page started a sign-in code for every reader, to offer the
+   organiser's controls. It is folded under *Run this night? Sign in* and made only when opened.
+6. **A landing is not checked against the phone**, because it cannot be: the server holds these. The screen it lands
+   on asks, and says so when there is nothing there.
+
+**Evidence.** `RoutingTests` (the three addresses, both schemes, the shared form, a non-id refused, the old alias
+kept); `PasskeyTest` 30 (the association file names the three paths); `tools/check_aasa.py` and `tools/host.py`.
+Looked at: the three pages on the local site through the same rewrites, and `-ThroScreen event/<id>` and
+`league/<id>` in the simulator landing on the tournament page and the league's card.
+
+**External.** The three rewrites are dashboard settings on the static site, like `/link/*` before them.

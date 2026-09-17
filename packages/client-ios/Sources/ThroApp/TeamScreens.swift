@@ -230,7 +230,8 @@ public struct TeamFrontScreen: View {
                             Text("Say it to the side or share it. Good until \(invite.expiresAt.formatted(.dateTime.day().month(.abbreviated))), for up to \(invite.maxUses) people.")
                                 .thro(ThroTypography.metadata).foregroundStyle(ThroColor.colorTextOnBoardSecondary)
                                 .fixedSize(horizontal: false, vertical: true)
-                            ShareLink(item: "Join \(front.name) on THRØ: the team code is \(invite.spoken). Enter it in THRØ under Discover → Join or start.") {
+                            // The team's address goes with the code (PD-127): it opens the team in the app, or its page for whoever has none.
+                            ShareLink(item: "Join \(front.name) on THRØ: the team code is \(invite.spoken). Enter it in THRØ under Discover → Join or start. \(ThroRoute.team(front.teamId).shared.absoluteString)") {
                                 Text("SHARE").thro(ThroTypography.labelStrong.uppercase(true).tracking(em: 0.06))
                                     .foregroundStyle(ThroColor.colorTextOnBoard).padding(.horizontal, ThroSpacing.spacing4)
                             }

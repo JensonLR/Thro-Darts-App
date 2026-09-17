@@ -125,11 +125,25 @@ footer { border-top: 1px solid var(--color-border-default); padding-block: 24px 
   outline: 3px solid var(--color-border-focus, var(--color-background-brand)); outline-offset: 2px; }
 .entry-form .v { color: var(--color-text-secondary); }
 button.primary, a.primary { font: inherit; font-weight: var(--font-weight-semibold); padding: 12px 20px;
-                 color: var(--color-text-inverse); background: var(--color-background-brand);
+                 /* Chalk on the green in both themes. `text-inverse` turns to ink in the dark theme, where the brand
+                    ground is still green, and ink on deep green is a button nobody can read. */
+                 color: var(--color-text-on-board); background: var(--color-background-brand);
                  border: 0; border-radius: var(--radius-control); cursor: pointer; min-height: 44px; }
 /* A link dressed as the primary act (PD-117: Open THRØ) reads as the button it is. */
 a.primary { display: inline-block; text-decoration: none; text-align: center; line-height: 20px; box-sizing: border-box; }
 .signin a.primary { display: block; margin: 4px 0 14px; }
+/* PD-127: the same place in the app. On a phone a button; on a bigger screen this page's own address as a QR, for the
+   phone in the reader's pocket. Sits at the foot of a league's, a night's or a team's page. */
+.app-link { display: flex; gap: 18px; align-items: center; margin-top: 28px; }
+.app-link .qr { flex: 0 0 132px; width: 132px; height: 132px; padding: 8px; box-sizing: border-box;
+                background: var(--thro-chalk-raised); border-radius: var(--radius-control); }
+.app-link .qr svg { width: 100%; height: 100%; display: block; }
+.app-link .app-link-title { font-weight: var(--font-weight-bold); margin: 0 0 4px; }
+.app-link p { margin: 0; }
+.app-link a.primary { flex: 0 0 auto; }
+@media (max-width: 560px) { .app-link { flex-direction: column; align-items: stretch; } .app-link .qr { align-self: center; } }
+.lede-line { font-size: 18px; margin: 0 0 18px; }
+.address { font-family: var(--font-family-mono, ui-monospace, monospace); font-size: 17px; margin: 4px 0; overflow-wrap: anywhere; user-select: all; }
 button.primary:disabled { opacity: 1; background: var(--color-text-tertiary); cursor: default; }
 button.quiet-button { font: inherit; padding: 8px 0; color: var(--color-text-brand);
                       background: none; border: 0; cursor: pointer; text-decoration: underline; }

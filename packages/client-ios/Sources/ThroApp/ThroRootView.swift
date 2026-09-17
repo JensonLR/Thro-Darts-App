@@ -323,6 +323,8 @@ public struct ThroRootView: View {
     /// The club a link named, handed to the Discover tab and cleared as it lands.
     /// Where the Clubs tab has been asked to land — a club, or a club and one of its fixtures.
     @State private var openClub: ClubLanding?
+    /// A league, tournament or team on the server that a link named (PD-127), for Discover to land on.
+    @State private var openOnThro: ThroLanding?
     /// Whether this phone's own search field finds matches, people and clubs (on by default).
     @AppStorage(ThroSpotlight.enabledKey) private var spotlight: Bool = true
     /// Whether iOS may tell this app how it performed. Off by default; Settings explains it.
@@ -508,6 +510,14 @@ public struct ThroRootView: View {
     /// that was on another device — all of them arrive here looking exactly like a good link. Each
     /// is checked against what this device actually holds, and an address that resolves to nothing
     /// leaves the screen alone rather than opening an empty one.
+    /// Something on the server, opened under Discover. Nothing on this phone can say whether it still exists, so the
+    /// screen it lands on asks, and says so if it does not.
+    private func land(_ there: ThroLanding) {
+        viewing = nil; showingSettings = false; store.flow = nil
+        store.tab = .discover
+        openOnThro = there
+    }
+
     private func follow() {
         guard let route = router.take() else { return }
         switch route {
@@ -531,6 +541,17 @@ public struct ThroRootView: View {
             viewing = nil; showingSettings = false; store.flow = nil
             store.tab = .discover
             openClub = ClubLanding(club: id)
+        case let .league(id):
+            land(.league(id))
+        case let .event(id):
+            land(.event(id))
+        case let .team(id):
+            // A team kept on this phone under the same id wins: it is what this phone's owner made.
+            if let kept = clubs.clubs.first(where: { $0.id.lowercased() == id.uuidString.lowercased() }) {
+                viewing = nil; showingSettings = false; store.flow = nil
+                store.tab = .discover
+                openClub = ClubLanding(club: kept.id)
+            } else { land(.team(id)) }
         case .newMatch:
             viewing = nil; showingSettings = false
             store.flow = .new
@@ -657,7 +678,7 @@ public struct ThroRootView: View {
                        records: account == nil ? nil : throMatches, api: account?.api,
                        signedIn: account?.isSignedIn ?? false,
                        liveShare: account == nil ? nil : liveShare)
-        case .discover: ClubsFlow(store: clubs, open: $openClub, api: account?.api, signedIn: account?.isSignedIn ?? false)
+        case .discover: ClubsFlow(store: clubs, open: $openClub, onThro: $openOnThro, api: account?.api, signedIn: account?.isSignedIn ?? false)
         case .you: YouScreen(account: youAccount, picture: accountPicture, clubs: clubs.clubs, people: clubs.people,
                              badge: { clubs.image($0.badgeAssetId) },
                              onSettings: { showingSettings = true },

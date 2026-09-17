@@ -171,11 +171,12 @@ public fun Application.thro(deps: Deps) {
         "passkey.assert" to { r -> passkeyAssert(r.connection(), deps, r.body) },
         // webcredentials: iOS offers this host's passkeys to the app. applinks (PD-117): a link to /link/<code> — a
         // screen's sign-in code — opens the app rather than Safari, so the phone that holds the account approves it.
+        // PD-127: and a league, a tournament night and a team, whose pages at this host are the same address the app opens.
         "aasa" to { _ ->
             if (deps.appleAppIds.isEmpty()) Http(404, """{"error":"no app ids configured"}""")
             else {
                 val apps = deps.appleAppIds.joinToString(",") { Contract.q(it) }
-                Http(200, """{"webcredentials":{"apps":[$apps]},"applinks":{"details":[{"appIDs":[$apps],"components":[{"/":"/link/*","comment":"a screen's sign-in code, approved by the phone (PD-117)"}]}]}}""")
+                Http(200, """{"webcredentials":{"apps":[$apps]},"applinks":{"details":[{"appIDs":[$apps],"components":[{"/":"/link/*","comment":"a screen's sign-in code, approved by the phone (PD-117)"},{"/":"/league/*","comment":"a league on THRØ (PD-127)"},{"/":"/event/*","comment":"a tournament night (PD-127)"},{"/":"/team/*","comment":"a team on THRØ (PD-127)"}]}]}}""")
             }
         },
         // PD-114: a screen signs in by the phone that holds the account.

@@ -64,6 +64,18 @@ league management · PD-104 organiser email · PD-105 provisional rating · PD-1
 | Development artefacts | Clean after PD-106 (Neon scaffold removed; dev proxy/README out of the publish root). NEEDS-DECISION: deploy branch named `claude/…`; `PlaytestServer` compiled into the image (entrypoint runs `MainKt`) | audit |
 | "Club" wording | Only in the local on-phone book, export summary, and deep-link aliases | audit §6 |
 
+## 17 September, evening: PD-126 and PD-127
+
+The founder: *league and Discover still feel disconnected and false; so does the link between web and app.* Production
+held 329 leagues, none started here, none with a named administrator, no fixtures (checked by a read-only query). Done:
+`/v1/leagues` says `standing` and per-season `fixtures`/`results`; app and web word a league as run here, teams listed,
+or on the map only, and count them apart; no TABLE without fixtures; every *tell THRØ* replaced by something a player
+can do; a tournament row opens `EventScreen`; `thro.uk/league|event|team/<id>` is one address on the web and in the app,
+shared from the app, with *Open in THRØ* or a QR on each page. **External after deploy:** three rewrites on the static
+site's dashboard (`/league/*` → `/league.html`, `/event/*` → `/event.html`, `/team/*` → `/team.html`). Left on the list:
+the captain's *say it* on the fixture screen, pairs and teams of walk-ups, a walk-up claiming their player, a proposed
+venue on a rearrangement; and a single-league read so the web's league page need not fetch the whole list.
+
 ## Frontier (what is next, in order)
 
 1. ~~Secretary HTTP surface (PD-107, PD-108), points rules / division moves / transfers (PD-112), withdrawing a

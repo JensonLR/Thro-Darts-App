@@ -456,7 +456,8 @@ public enum ThroReadiness {
         // PD-117: thro.uk serves the association file and the entitlement names it, so a link to
         // thro.uk/link/<code> — a screen's sign-in code — opens the app on the card that approves it.
         Surface(id: "links", name: "Links that open the app", state: .on,
-                detail: "A link to thro.uk/link/… opens THRØ on the card that signs a screen in, and "
+                detail: "A link to thro.uk/link/… opens THRØ on the card that signs a screen in; a league's, a "
+                      + "tournament night's and a team's page at thro.uk open the same thing here (PD-127); and "
                       + "the app's own links open it anywhere. The file thro.uk serves for iOS is "
                       + "checked against the app's own link grammar on every push.")
     }

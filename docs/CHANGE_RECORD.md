@@ -6202,3 +6202,22 @@ what differed and whether it had been flagged.
 **The board says a screen is waiting (PD-117, closed).** `Welcome.Ask.forScreen` with its own headline and sentence;
 the root passes it while a link's code waits; a kept code is used only within its five minutes. `WelcomeTests` 5,
 app tests 397. Looked at on the simulator: signed out, *Not now*, `thro://link/K7TQ2M` → *A screen is waiting*.
+
+## What THRØ holds for a league, and every row leading somewhere (PD-126)
+
+`Leagues.all` adds `standing` (`run_here` | `listed`) and per-season `fixtures` and `results`; `LeagueStandingTest`.
+App: `PublicLeague.held`, `NearbyLogic.heldLine`, `DiscoverScreen.leagueMeta` and `shortlist`,
+`LeagueBoardWords.held`, `offersTable` and `nothingByThatName`, `LeagueTableWords.nothingToPlay`, `BareLeagueCard`
+rewritten with *plays here* and *Start your team*, `LeaguesPlot.provenance` for a league started here, `EventScreen`
+and `EventWords`, `ClubRoute.event`, `EventActions` taking the API, `DiscoveryCard(page:)`, Discover's *Sign in* and
+*Read them now*, the plus as *Join or start a team*. Every *tell THRØ* sentence replaced. Web: `heldAs`, `leagueMeta`,
+`heldWords`, the list ordered and counted by kind, the index's opening words, primary buttons chalk on green in both
+themes. The screenshot stage passes a real event page through.
+
+## One address, on the web and in the app (PD-127)
+
+`ThroRoute.league/.event/.team`, `ThroRoute.shared`, `ThroWeb`, `ThroLanding` from the root view into the Discover
+flow; `DrawerShare`; the team code's share text. The API's association file and `services/links` name `/league/*`,
+`/event/*` and `/team/*`. Web: `league.html`, `event.html`, `team.html`, `mountLeague`, `mountTeam`, `openInApp`,
+`idFromPath`, the knockout's address with a copy button, the organiser's sign-in folded; `render.yaml` rewrites;
+`tools/web_serve.py` applies the same rewrites locally.

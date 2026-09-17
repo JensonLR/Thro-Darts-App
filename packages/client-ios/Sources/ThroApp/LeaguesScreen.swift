@@ -196,8 +196,12 @@ public enum LeaguesPlot {
 
     /// Where the rows came from, said once per league in words a player can read.
     public static func provenance(_ league: PublicLeague) -> String {
+        // A league started here has no source to name (PD-126); "From ." is what it said before anybody looked.
+        if league.sources.isEmpty, league.standing == "run_here" {
+            return "Started on THRØ by whoever runs it. Each team's pub is the one its own captain or admin set."
+        }
         let read = league.sources.map { "\($0.source) (read \(LeaguesPlot.day($0.retrievedOn)))" }.joined(separator: ", ")
-        return "From \(read). Venues are matched from OpenStreetMap (© OpenStreetMap contributors), most by the team's name; tell THRØ if one is wrong."
+        return "\(read.isEmpty ? "Listed from elsewhere" : "From \(read)"). Venues are matched from OpenStreetMap (© OpenStreetMap contributors), most by the team's name; whoever runs a team sets its pub on the team's page."
     }
 
     /// What a team's venue cell says: the pub and its postcode, with a mark when the pub was
@@ -215,7 +219,7 @@ public enum LeaguesPlot {
         guard case .located(let lat, let lon) = place, !pins.isEmpty else { return nil }
         let nearest = pins.map { NearbyLogic.distanceKm(fromLat: lat, lon: lon, toLat: $0.coordinate.latitude, lon: $0.coordinate.longitude) }.min() ?? 0
         guard nearest > NearbyLogic.farKm else { return nil }
-        return "You are \(NearbyLogic.miles(nearest)) from the nearest league THRØ has listed. Tell THRØ about yours and it spreads."
+        return "You are \(NearbyLogic.miles(nearest)) from the nearest league THRØ has listed. Start your team here, or your league at thro.uk, and it is on the map the same day."
     }
 
     static func day(_ iso: String) -> String {

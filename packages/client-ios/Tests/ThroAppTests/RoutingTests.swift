@@ -21,6 +21,9 @@ final class RoutingTests: XCTestCase {
         .newMatch,
         .continueLatest,
         .screen("K7TQ2M"),
+        .league(UUID(uuidString: "11111111-2222-3333-4444-555555555555")!),
+        .event(UUID(uuidString: "11111111-2222-3333-4444-555555555556")!),
+        .team(UUID(uuidString: "11111111-2222-3333-4444-555555555557")!),
     ]
 
     /// Every route can be written as a link and read back as itself.
@@ -86,6 +89,28 @@ final class RoutingTests: XCTestCase {
         XCTAssertEqual(ThroRoute.screen("K7TQ2M").url.absoluteString, "thro://link/K7TQ2M")
         XCTAssertNil(ThroRoute(url: URL(string: "thro://link")!))
         XCTAssertNil(ThroRoute(url: URL(string: "https://thro.uk/link/")!))
+    }
+
+    /// One address on the web and in the app (PD-127). A league, a tournament and a team on THRØ each have a page at
+    /// thro.uk, and the same address opens the same thing in the app: what a captain pastes into the team's chat works
+    /// for whoever taps it, app or none. The ids are the server's, so a link made on one phone means the same on another
+    /// — which a link to something kept on one phone never could.
+    func testALeagueATournamentAndATeamHaveOneAddressOnTheWebAndInTheApp() {
+        let id = UUID(uuidString: "0A1B2C3D-0000-4000-8000-00000000000A")!
+        XCTAssertEqual(ThroRoute(url: URL(string: "https://thro.uk/league/0a1b2c3d-0000-4000-8000-00000000000a")!), .league(id))
+        XCTAssertEqual(ThroRoute(url: URL(string: "https://thro.uk/event/0a1b2c3d-0000-4000-8000-00000000000a")!), .event(id))
+        XCTAssertEqual(ThroRoute(url: URL(string: "https://thro.uk/team/0a1b2c3d-0000-4000-8000-00000000000a")!), .team(id))
+        XCTAssertEqual(ThroRoute(url: URL(string: "thro://league/0A1B2C3D-0000-4000-8000-00000000000A")!), .league(id))
+        // What is shared is the web address, lower-case as the server writes ids, so it works with no app at all.
+        XCTAssertEqual(ThroRoute.league(id).shared.absoluteString, "https://thro.uk/league/0a1b2c3d-0000-4000-8000-00000000000a")
+        XCTAssertEqual(ThroRoute.event(id).shared.absoluteString, "https://thro.uk/event/0a1b2c3d-0000-4000-8000-00000000000a")
+        XCTAssertEqual(ThroRoute.team(id).shared.absoluteString, "https://thro.uk/team/0a1b2c3d-0000-4000-8000-00000000000a")
+        // Something kept on this phone has no page anywhere, so its link stays the app's own.
+        XCTAssertEqual(ThroRoute.club("c1").shared.absoluteString, "thro://e/c1")
+        // An id that is not one names nothing, and a team kept on this phone is still reached by its old alias.
+        XCTAssertNil(ThroRoute(url: URL(string: "https://thro.uk/league/stockton")!))
+        XCTAssertNil(ThroRoute(url: URL(string: "https://thro.uk/event/")!))
+        XCTAssertEqual(ThroRoute(url: URL(string: "thro://team/c1")!), .club("c1"))
     }
 
     /// A link this build cannot read opens nothing.

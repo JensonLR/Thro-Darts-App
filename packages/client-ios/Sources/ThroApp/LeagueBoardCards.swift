@@ -78,6 +78,30 @@ enum LeagueBoardWords {
         return [league.playsOn.map { "\($0) nights" }, league.locality, spread, distance].compactMap { $0 }.joined(separator: " · ")
     }
 
+    /// A table is worked out from fixtures, so it is offered where there are some (PD-126). A server that does
+    /// not count them is given the benefit of the doubt, as before.
+    static func offersTable(_ league: PublicLeague) -> Bool {
+        guard let season = league.shownSeason else { return false }
+        return season.fixtures.map { $0 > 0 } ?? true
+    }
+
+    /// Where this league's fixtures and table are: here, or on its own website. Said on its card, in words.
+    static func held(_ league: PublicLeague) -> String {
+        switch league.held {
+        case .run:
+            let fixtures = league.shownSeason?.fixtures ?? 0, results = league.shownSeason?.results ?? 0
+            return fixtures == 0 ? "Run on THRØ. Its organiser has not scheduled a fixture yet."
+                : "Run on THRØ: \(count(fixtures, "fixture")), \(results) with a result. The table is worked out from them."
+        case .teams:
+            return "Its teams are listed here from its own website. Its fixtures and table are kept there, not on THRØ."
+        case .placed:
+            return "On the map where the league lists itself. Its teams, fixtures and table are on its own website, not on THRØ."
+        }
+    }
+
+    /// A search that finds nothing offers the two things that put a name on the map, and promises nothing else.
+    static let nothingByThatName = "Nothing on the map goes by that name. A team is started here, in a minute. A league is started on the organiser's desk at thro.uk."
+
     static func count(_ n: Int, _ noun: String) -> String { "\(n) \(noun)\(n == 1 ? "" : "s")" }
 }
 
@@ -105,6 +129,21 @@ struct DrawerKey: View {
                 .padding(.horizontal, ThroSpacing.spacing4)
         }
         .buttonStyle(ChalkKeyStyle(lit ? .lit : .field, minHeight: ThroSpacing.touchTargetMinimum, seedAngle: seed))
+    }
+}
+
+/// SHARE, as a chalk key (PD-127). What it shares is the page at thro.uk, which opens the app for whoever has it.
+struct DrawerShare: View {
+    let route: ThroRoute
+    let saying: String
+    var body: some View {
+        ShareLink(item: route.shared, message: Text(saying)) {
+            Text("Share")
+                .thro(ThroTypography.labelStrong.uppercase(true).tracking(em: 0.06))
+                .foregroundStyle(ThroColor.colorTextOnBoard)
+                .padding(.horizontal, ThroSpacing.spacing4)
+        }
+        .buttonStyle(ChalkKeyStyle(.field, minHeight: ThroSpacing.touchTargetMinimum, seedAngle: 23))
     }
 }
 
@@ -245,7 +284,7 @@ struct LeaguePubCard: View {
                 ForEach(teams) { e in LeagueTeamRow(entry: e) { onTeam(e.id) } }
             }
             if venue.basis?.hasPrefix("inferred") ?? false {
-                Text("Matched to its teams by name. Tell THRØ if this is the wrong pub.")
+                Text("Matched to its teams by name, so it may be the wrong pub. Whoever runs a team here sets its pub on the team's page.")
                     .thro(ThroTypography.metadata).foregroundStyle(ThroColor.colorTextOnBoardSecondary)
             }
             DrawerKey(title: "Directions", lit: true, seed: 83, action: onDirections)
@@ -288,6 +327,7 @@ struct LeagueTeamCard: View {
             HStack(spacing: ThroSpacing.spacing3) {
                 DrawerKey(title: "Its page", lit: true, seed: 71, action: onPage)
                 if let onDirections { DrawerKey(title: "Directions", seed: 83, action: onDirections) }
+                DrawerShare(route: .team(entry.team.teamId), saying: "\(entry.team.name) on THRØ")
             }
             if !rivals.isEmpty {
                 Eyebrow(LeagueBoardWords.division(entry, teams: rivals.count + 1), color: ThroColor.colorTextOnBoardSecondary)
@@ -346,14 +386,14 @@ struct LeagueSummaryCard: View {
                        onClose: onClose)
             // The table is the thing a league member came for, so it is on the league's own card rather
             // than a screen further in (PD-054).
-            if let season = league.shownSeason {
-                Button { onTable(season.leagueSeasonId) } label: {
-                    Text("TABLE").thro(ThroTypography.labelStrong.uppercase(true).tracking(em: 0.06))
-                        .foregroundStyle(ThroColor.colorTextOnBoard)
-                        .padding(.horizontal, ThroSpacing.spacing4)
+            Text(LeagueBoardWords.held(league))
+                .thro(ThroTypography.labelStrong).foregroundStyle(ThroColor.colorTextOnBoard)
+                .fixedSize(horizontal: false, vertical: true)
+            HStack(spacing: ThroSpacing.spacing3) {
+                if let season = league.shownSeason, LeagueBoardWords.offersTable(league) {
+                    DrawerKey(title: "Table", lit: true, seed: 53) { onTable(season.leagueSeasonId) }
                 }
-                .buttonStyle(ChalkKeyStyle(.lit, minHeight: ThroSpacing.touchTargetMinimum, seedAngle: 53))
-                .fixedSize()
+                DrawerShare(route: .league(league.leagueId), saying: "\(league.name) on THRØ")
             }
             ForEach(divisions) { d in
                 VStack(alignment: .leading, spacing: ThroSpacing.spacing2) {
@@ -406,21 +446,50 @@ struct LeagueSummaryCard: View {
     }
 }
 
-/// A league placed by its own point, with no teams on THRØ: where it is, and that it fills in.
+/// A league with no teams on THRØ: what THRØ holds for it, said plainly, and the things a player can do about it —
+/// never "tell THRØ", which was a sentence with nothing behind it (PD-126).
 struct BareLeagueCard: View {
     let league: PublicLeague
     let distance: String?
     let onWebsite: (() -> Void)?
+    /// Teams of yours that you run and that have not said they play here (PD-049). Saying it puts the team on this
+    /// league's map, marked as the team's own say.
+    var yours: [TeamSummary] = []
+    var onSay: (UUID) -> Void = { _ in }
+    /// Offered to somebody signed in who runs no team yet.
+    var onStartTeam: (() -> Void)?
+    var onTable: (UUID) -> Void = { _ in }
     let onClose: () -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: ThroSpacing.spacing3) {
-            DrawerHead(eyebrow: "League · no teams on THRØ yet", title: league.name,
+            DrawerHead(eyebrow: league.held == .run ? "League · run on THRØ" : "League · on the map only", title: league.name,
                        line: LeagueBoardWords.leagueMeta(league, teams: 0, divisions: 0, distance: distance), onClose: onClose)
-            Text("Placed where the league lists itself. Its teams and pubs are not on THRØ yet — if you play in it, tell THRØ and it fills in.")
+            Text(LeagueBoardWords.held(league))
                 .thro(ThroTypography.body).foregroundStyle(ThroColor.colorTextOnBoard)
                 .fixedSize(horizontal: false, vertical: true)
-            if let onWebsite { DrawerKey(title: "Its website", lit: true, seed: 83, action: onWebsite) }
+            HStack(spacing: ThroSpacing.spacing3) {
+                if let season = league.shownSeason, league.held == .run, LeagueBoardWords.offersTable(league) {
+                    DrawerKey(title: "Table", lit: true, seed: 53) { onTable(season.leagueSeasonId) }
+                }
+                if let onWebsite { DrawerKey(title: "Its website", lit: league.held != .run, seed: 83, action: onWebsite) }
+                DrawerShare(route: .league(league.leagueId), saying: "\(league.name) on THRØ")
+            }
+            if !yours.isEmpty {
+                Eyebrow("Do you play in it?", color: ThroColor.colorTextOnBoardSecondary).padding(.top, ThroSpacing.spacing2)
+                ForEach(yours.prefix(3)) { team in
+                    DrawerKey(title: "\(team.name) plays here", seed: Double(abs(team.teamId.hashValue % 90))) { onSay(team.teamId) }
+                }
+                Text("It puts your team on this league's map, marked as the team's own say. It does not enter you into the league: that is between the side and its secretary.")
+                    .thro(ThroTypography.metadata).foregroundStyle(ThroColor.colorTextOnBoardSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            } else if let onStartTeam {
+                Eyebrow("Do you play in it?", color: ThroColor.colorTextOnBoardSecondary).padding(.top, ThroSpacing.spacing2)
+                DrawerKey(title: "Start your team on THRØ", seed: 31, action: onStartTeam)
+                Text("Start your side, then say it plays here, and it is on this league's map.")
+                    .thro(ThroTypography.metadata).foregroundStyle(ThroColor.colorTextOnBoardSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
         }
     }
 }

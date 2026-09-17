@@ -69,14 +69,41 @@ function fail(where, error, retry) {
 
 // --- the leagues -------------------------------------------------------------------------------
 
+/** The season a league's row and page show: the one running today, else the newest. The app picks the same. */
+const shownSeason = league => (league.seasons || []).find(s => s.current) || (league.seasons || [])[0] || null;
+const teamsIn = season => season ? season.divisions.reduce((n, d) => n + d.teams.length, 0) : 0;
+const plural = (n, noun) => `${n} ${noun}${n === 1 ? '' : 's'}`;
+
+/**
+ * What THRØ holds for a league (PD-126): it is run here, or its teams are listed from its own website, or it is a point
+ * on the map and nothing more. Three different things. A list that words them alike reads as three hundred leagues on
+ * THRØ, which is false; so each row and each page says which it is. The app says the same (`PublicLeague.held`).
+ */
+function heldAs(league) {
+  if (league.standing === 'run_here') return 'run';
+  return teamsIn(shownSeason(league)) > 0 ? 'teams' : 'placed';
+}
+
 function leagueMeta(league) {
-  const season = league.seasons && league.seasons[0];
-  const teams = season ? season.divisions.reduce((n, d) => n + d.teams.length, 0) : 0;
-  return [
-    league.playsOn ? `${league.playsOn} nights` : null,
-    teams ? `${teams} team${teams === 1 ? '' : 's'}` : null,
-    league.locality,
-  ].filter(Boolean).join(' · ');
+  const season = shownSeason(league);
+  const kind = heldAs(league);
+  const held = kind === 'run'
+    ? 'Run on THRØ · ' + (season && season.fixtures ? `${plural(season.fixtures, 'fixture')}, ${plural(season.results || 0, 'result')}` : 'no fixtures yet')
+    : kind === 'teams' ? `${plural(teamsIn(season), 'team')} listed` : 'On the map only';
+  return [held, league.playsOn ? `${league.playsOn} nights` : null, league.locality].filter(Boolean).join(' · ');
+}
+
+/** Where a league's fixtures and table are: here, or on its own website. The sentence its page opens on. */
+function heldWords(league) {
+  const season = shownSeason(league);
+  switch (heldAs(league)) {
+    case 'run':
+      return season && season.fixtures
+        ? `Run on THRØ: ${plural(season.fixtures, 'fixture')}, ${season.results || 0} with a result. The table is worked out from them.`
+        : 'Run on THRØ. Its organiser has not scheduled a fixture yet.';
+    case 'teams': return 'Its teams are listed here from its own website. Its fixtures and table are kept there, not on THRØ.';
+    default: return 'On the map where the league lists itself. Its teams, fixtures and table are on its own website, not on THRØ.';
+  }
 }
 
 async function mountLeagues(listEl, searchEl, countEl) {
@@ -86,35 +113,177 @@ async function mountLeagues(listEl, searchEl, countEl) {
     // first version of this page came to report "undefined leagues" over an empty list.
     leagues = (await read('/v1/leagues')).leagues || [];
   } catch (e) { fail(listEl, e); return; }
+  // What THRØ holds most of comes first: a league run here, then one with its teams, then the map's pins.
+  const order = { run: 0, teams: 1, placed: 2 };
+  leagues = leagues.map((l, i) => [l, i]).sort((a, b) => (order[heldAs(a[0])] - order[heldAs(b[0])]) || (a[1] - b[1])).map(x => x[0]);
+  const counted = kind => leagues.filter(l => heldAs(l) === kind).length;
 
+  const row = l => {
+    const li = make('li');
+    const a = make('a');
+    // One address, on the web and in the app (PD-127): the league's own page, whatever THRØ holds for it.
+    a.href = `/league/${encodeURIComponent(l.leagueId)}`;
+    a.append(make('div', 'row-name', l.name), make('div', 'row-meta', leagueMeta(l)));
+    li.append(a);
+    return li;
+  };
   const draw = () => {
     const q = (searchEl.value || '').trim().toLowerCase();
     const shown = q ? leagues.filter(l => l.name.toLowerCase().includes(q) || (l.locality || '').toLowerCase().includes(q)) : leagues;
-    const many = n => `${n} league${n === 1 ? '' : 's'}`;
-    countEl.textContent = q ? `${shown.length} of ${many(leagues.length)}` : many(leagues.length);
+    // Counted apart, never as one number (PD-126).
+    countEl.textContent = q ? `${shown.length} of ${plural(leagues.length, 'league')}`
+      : [counted('run') ? `${counted('run')} run on THRØ` : null,
+         counted('teams') ? `${counted('teams')} with their teams listed` : null,
+         counted('placed') ? `${counted('placed')} on the map from their own websites` : null].filter(Boolean).join(' · ');
     // A few until a name is typed: three hundred leagues in a column is a wall, not a way in.
-    const limit = q ? 200 : 8;
-    listEl.replaceChildren(...shown.slice(0, limit).map(l => {
-      const li = make('li');
-      const season = l.seasons && l.seasons[0];
-      const a = make('a');
-      // A league with no season has no table to show, so its row does not pretend to lead anywhere.
-      if (season) a.href = `table.html?season=${encodeURIComponent(season.leagueSeasonId)}`;
-      else { a.setAttribute('aria-disabled', 'true'); a.style.cursor = 'default'; }
-      a.append(make('div', 'row-name', l.name), make('div', 'row-meta', season ? leagueMeta(l) : 'No season on THRØ yet'));
-      li.append(a);
-      return li;
-    }));
+    listEl.replaceChildren(...shown.slice(0, q ? 200 : 8).map(row));
     if (!q && shown.length > 8) {
       const more = make('li', 'more');
       const btn = make('button', 'quiet-button', `Show all ${shown.length} leagues`);
-      btn.onclick = () => { listEl.replaceChildren(...shown.map(l => { const a = make('a', 'row-name', l.name); a.href = `table.html?season=${encodeURIComponent((l.seasons && l.seasons[0] || {}).leagueSeasonId || '')}`; const li = make('li'); li.append(a, make('div', 'row-meta', leagueMeta(l))); return li; })); };
+      btn.onclick = () => listEl.replaceChildren(...shown.map(row));
       more.append(btn); listEl.append(more);
     }
-    if (!shown.length) listEl.replaceChildren(make('li', null, ''), text(make('p', 'quiet'), 'No league here by that name.'));
+    if (!shown.length) {
+      const none = make('li');
+      none.append(make('p', 'quiet', 'No league here by that name. If you run it, start it on the organiser’s desk and it is here the same day.'));
+      const desk = make('a', null, 'Open the desk'); desk.href = 'organiser.html'; none.append(desk);
+      listEl.replaceChildren(none);
+    }
   };
   searchEl.addEventListener('input', draw);
   draw();
+}
+
+// --- one address, on the web and in the app (PD-127) -------------------------------------------
+
+/**
+ * The same place in the app. `thro.uk/league/<id>` is a page here and, on a phone with THRØ, the league in the app —
+ * so on a phone this is a button that opens it there, and on a bigger screen it is this page's own address as a QR,
+ * for the phone in the reader's pocket. `what` is `league`, `event` or `team`.
+ */
+function openInApp(what, id, words) {
+  const box = make('div', 'entry app-link');
+  const path = `${what}/${encodeURIComponent(id)}`;
+  if (onPhone()) {
+    const open = make('a', 'primary', 'Open in THRØ'); open.href = `thro://${path}`;
+    box.append(open, make('p', 'quiet', words.phone));
+  } else {
+    const qr = make('div', 'qr');
+    if (window.THROQR) {
+      try { qr.innerHTML = window.THROQR.svg(`${location.origin}/${path}`, { dark: 'var(--thro-ink)', light: 'var(--thro-chalk-raised)' }); } catch (e) { qr.hidden = true; }
+    } else qr.hidden = true;
+    const say = make('div');
+    say.append(make('p', 'app-link-title', 'On your phone'), make('p', 'quiet', words.screen));
+    box.append(qr, say);
+  }
+  return box;
+}
+
+const idFromPath = what => decodeURIComponent((location.pathname.match(new RegExp(`/${what}/([^/?#]+)`)) || [])[1]
+  || new URLSearchParams(location.search).get(what) || '');
+
+/** A league's own page: what THRØ holds for it, said first; then its table and fixtures where they exist, and its teams. */
+async function mountLeague(where, titleEl, eyebrowEl) {
+  const id = idFromPath('league').toLowerCase();
+  let league;
+  try { league = ((await read('/v1/leagues')).leagues || []).find(l => l.leagueId === id); } catch (e) { fail(where, e, () => mountLeague(where, titleEl, eyebrowEl)); return; }
+  if (!league) {
+    titleEl.textContent = 'No league at this address';
+    where.replaceChildren(make('p', 'quiet', 'It may have ended, or been made private by whoever runs it, or the link may be old.'));
+    const all = make('a', null, 'All leagues'); all.href = 'index.html'; where.append(all);
+    return;
+  }
+  const season = shownSeason(league);
+  titleEl.textContent = league.name;
+  eyebrowEl.textContent = [heldAs(league) === 'run' ? 'League · run on THRØ' : 'League', league.playsOn ? `${league.playsOn} nights` : null, league.locality].filter(Boolean).join(' · ');
+  document.title = `${league.name} — THRØ`;
+  const parts = [make('p', 'lede-line', heldWords(league))];
+
+  const go = make('div', 'cards');
+  const card = (href, title, words, cta) => { const a = make('a', 'card'); a.href = href; a.append(make('h3', null, title), make('p', null, words), make('span', 'go', cta)); return a; };
+  if (season && season.fixtures) {
+    go.append(card(`table.html?season=${encodeURIComponent(season.leagueSeasonId)}`, 'Table', 'Worked out from the results beneath it.', 'See the table →'),
+              card(`fixtures.html?season=${encodeURIComponent(season.leagueSeasonId)}`, 'Fixtures and results', `${plural(season.fixtures, 'fixture')} this season.`, 'See the fixtures →'));
+  }
+  if (league.website) go.append(card(league.website, 'Its own website', heldAs(league) === 'run' ? 'What the league publishes itself.' : 'Its fixtures, results and table are kept there.', 'Go to its website →'));
+  if (go.children.length) parts.push(go);
+
+  if (season && teamsIn(season)) {
+    parts.push(make('h2', null, `${season.label} · ${plural(teamsIn(season), 'team')}`));
+    for (const d of season.divisions) {
+      if (!d.teams.length) continue;
+      if (season.divisions.length > 1) parts.push(make('h3', null, d.name));
+      const list = make('ul', 'rows');
+      for (const t of d.teams) {
+        const li = make('li'); const a = make('a'); a.href = `/team/${encodeURIComponent(t.teamId)}`;
+        a.append(make('div', 'row-name', t.name), make('div', 'row-meta', t.venue ? [t.venue.name, t.venue.locality].filter(Boolean).join(' · ') : 'Its pub is not known yet'));
+        li.append(a); list.append(li);
+      }
+      parts.push(list);
+    }
+  }
+  if ((league.saidTeams || []).length) {
+    parts.push(make('h2', null, 'Said by their players'));
+    const list = make('ul', 'rows');
+    for (const t of league.saidTeams) { const li = make('li'); const a = make('a'); a.href = `/team/${encodeURIComponent(t.teamId)}`; a.append(make('div', 'row-name', t.name)); li.append(a); list.append(li); }
+    parts.push(list, make('p', 'quiet', 'These teams put themselves here. The league did not list them.'));
+  }
+  if (heldAs(league) !== 'run') {
+    parts.push(make('h2', null, 'Do you run it?'),
+      make('p', 'quiet', 'THRØ lists this league from elsewhere, so nobody here can take it over by asking. A league you start on the organiser’s desk is yours to run from the first minute: fixtures, results, the table, and the app for every player in it.'));
+    const desk = make('a', 'primary', 'Start a league on the desk'); desk.href = 'organiser.html'; parts.push(desk);
+  }
+  parts.push(openInApp('league', league.leagueId, {
+    phone: 'THRØ is a darts app for iPhone. In it this league is on the map, with its teams and the pubs they play at.',
+    screen: 'Point your phone’s camera here. With THRØ on it, this league opens in the app: the map, its teams, and the pubs they play at.',
+  }));
+  if ((league.sources || []).length) {
+    parts.push(make('p', 'quiet', 'Listed from ' + league.sources.map(s => `${s.source} (read ${day(s.retrievedOn)})`).join(', ') + '.'));
+  }
+  where.replaceChildren(...parts);
+}
+
+/** A team's page: who it is, where it plays, what it plays in. Nothing on it is a person unless they said they may be named. */
+async function mountTeam(where, titleEl, eyebrowEl) {
+  const id = idFromPath('team').toLowerCase();
+  let team;
+  try { team = await read(`/v1/teams/${encodeURIComponent(id)}`); }
+  catch (e) {
+    titleEl.textContent = 'No team at this address';
+    where.replaceChildren(make('p', 'quiet', 'It may be private, or have folded, or the link may be old.'));
+    return;
+  }
+  titleEl.textContent = team.name;
+  eyebrowEl.textContent = ['Team', team.locality].filter(Boolean).join(' · ');
+  document.title = `${team.name} — THRØ`;
+  const parts = [];
+  if (team.venue) parts.push(make('p', 'lede-line', `Plays at ${[team.venue.name, team.venue.locality, team.venue.postcode].filter(Boolean).join(', ')}.`));
+  if ((team.seasons || []).length) {
+    parts.push(make('h2', null, 'Playing in'));
+    const list = make('ul', 'rows');
+    for (const s of team.seasons) {
+      const li = make('li'); const a = make('a');
+      if (s.leagueSeasonId) a.href = `table.html?season=${encodeURIComponent(s.leagueSeasonId)}`;
+      a.append(make('div', 'row-name', s.league), make('div', 'row-meta', [s.label, s.division].filter(Boolean).join(' · ')));
+      li.append(a); list.append(li);
+    }
+    parts.push(list);
+  }
+  if ((team.saysItPlaysIn || []).length) {
+    parts.push(make('h2', null, 'The team says it plays in'));
+    const list = make('ul', 'rows');
+    for (const l of team.saysItPlaysIn) { const li = make('li'); const a = make('a'); a.href = `/league/${encodeURIComponent(l.leagueId)}`; a.append(make('div', 'row-name', l.name)); li.append(a); list.append(li); }
+    parts.push(list, make('p', 'quiet', 'Said by the team, not listed by the league.'));
+  }
+  const named = (team.roster || []).filter(m => m.name);
+  parts.push(make('h2', null, 'On THRØ'),
+    make('p', 'quiet', !(team.roster || []).length ? 'Nobody plays for it on THRØ yet.'
+      : `${plural(team.roster.length, 'player')} on THRØ` + (named.length ? `: ${named.map(m => m.name).join(', ')}.` : '. None has chosen to be named.')));
+  parts.push(openInApp('team', team.teamId, {
+    phone: 'THRØ is a darts app for iPhone. In it you join this team with your captain’s code, and the side’s fixtures come to you.',
+    screen: 'Point your phone’s camera here. With THRØ on it, this team opens in the app; your captain’s code joins you to it.',
+  }));
+  where.replaceChildren(...parts);
 }
 
 // --- a league's table --------------------------------------------------------------------------
@@ -2063,7 +2232,24 @@ async function mountEvent(where, signInEl, eventId) {
     ];
     if (e.you) {
       parts.push(make('p', 'quiet', e.you.entered ? (e.you.checkedIn ? 'You are entered and checked in.' : 'You are entered. Check in from the app on the day.')
-        : (e.access === 'open' ? 'Entering is done in the app, from Discover.' : 'Invitational: the organiser names who plays.')));
+        : (e.access === 'open' ? 'Entering is done in the app: open this night there, below.' : 'Invitational: the organiser names who plays.')));
+    }
+    // One address for the night (PD-127). Whoever runs it is given it to post; everybody else is given the way into the app,
+    // because entering, checking in and scoring are done there.
+    const address = `${location.origin}/event/${encodeURIComponent(eventId)}`;
+    if (e.entrants) {
+      const share = make('div', 'entry');
+      const line = make('p', 'address', address.replace(/^https?:\/\//, ''));
+      const copy = make('button', 'quiet-button', 'Copy the address');
+      copy.onclick = async () => { try { await navigator.clipboard.writeText(address); copy.textContent = 'Copied'; } catch (err) { copy.textContent = 'Select it above and copy'; } };
+      share.append(make('h2', null, 'This night\u2019s address'), line, copy,
+        make('p', 'quiet', 'Post it in the pub\u2019s group chat. On a phone with THRØ it opens the night in the app, where players enter; on anything else it is this page.'));
+      parts.push(share);
+    } else if (e.state === 'open' || e.state === 'entries_closed' || e.state === 'drawn' || e.state === 'in_progress') {
+      parts.push(openInApp('event', eventId, {
+        phone: 'THRØ is a darts app for iPhone. In it you enter this night, check in on the day and find your tie in the draw.',
+        screen: 'Point your phone\u2019s camera here. With THRØ on it, this night opens in the app: enter, check in on the day, and find your tie in the draw.',
+      }));
     }
     if (e.entrants) parts.push(...entrantsSection(e, draw));
     if (e.draw.length) {
@@ -2155,7 +2341,12 @@ async function mountEvent(where, signInEl, eventId) {
       }
       parts.push(box);
     } else if (!session.get()) {
-      parts.push(make('p', 'quiet', 'Run this event? Sign in and its controls appear here.'), signInPanel(draw));
+      // Folded, and made only when opened (PD-127): this page is what gets shared, and a sign-in code started for every
+      // reader who will never use one is a request to the server per visitor and a wall between a player and the night.
+      const fold = make('details', 'fold');
+      fold.append(make('summary', null, 'Run this night? Sign in'));
+      fold.addEventListener('toggle', () => { if (fold.open && fold.children.length === 1) fold.append(signInPanel(draw)); });
+      parts.push(fold);
     }
     where.replaceChildren(...parts);
   };
@@ -2180,4 +2371,4 @@ function mountNav(where) {
   where.replaceChildren(nav);
 }
 
-window.THRO = { mountNav, mountLeagues, mountTable, mountFixtures, mountOrganiser, mountModeration, mountEvents, mountNotice, mountNoticeBanner, signInWithPasskey, whoAmI, signOut, session, authorised, passkeysPossible };
+window.THRO = { mountNav, mountLeagues, mountLeague, mountTeam, mountEvent, idFromPath, openInApp, mountTable, mountFixtures, mountOrganiser, mountModeration, mountEvents, mountNotice, mountNoticeBanner, signInWithPasskey, whoAmI, signOut, session, authorised, passkeysPossible };

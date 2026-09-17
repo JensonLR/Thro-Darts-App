@@ -200,8 +200,16 @@ public struct PublicLeague: Decodable, Sendable, Equatable, Identifiable {
         public let endsOn: String
         public let current: Bool
         public let divisions: [Division]
+        /// Fixtures THRØ holds for the season, and how many carry a result that stands (PD-126). Nil from a server
+        /// that does not count them, which is not the same as none.
+        public let fixtures: Int?
+        public let results: Int?
         public var id: UUID { leagueSeasonId }
     }
+
+    /// What THRØ holds for a league (PD-126): it is run here, or its teams are listed from elsewhere, or it is a
+    /// point on the map and nothing more. Three different things, and a screen that words them alike is wrong.
+    public enum Held: Sendable, Equatable { case run, teams, placed }
     public let leagueId: UUID
     public let name: String
     public let shortName: String?
@@ -219,7 +227,14 @@ public struct PublicLeague: Decodable, Sendable, Equatable, Identifiable {
     /// Teams whose own admin or captain says they play in this league (PD-049): their say, beside the
     /// seasons and never inside them. Optional: a server from before V039 does not send it.
     public let saidTeams: [Team]?
+    /// `run_here` or `listed` (PD-126). Nil from a server that does not say, and then nothing is claimed.
+    public let standing: String?
     public var id: UUID { leagueId }
+
+    public var held: Held {
+        if standing == "run_here" { return .run }
+        return (shownSeason?.divisions.contains { !$0.teams.isEmpty } ?? false) ? .teams : .placed
+    }
 
     /// The season to show: the one running today, else the newest.
     public var shownSeason: Season? { seasons.first(where: \.current) ?? seasons.first }
@@ -678,6 +693,17 @@ public struct DiscoveryCard: Decodable, Sendable, Equatable, Identifiable {
     /// Every card says why it is there; the screen shows these and invents nothing.
     public let reasons: [String]
     public var id: UUID { eventId }
+
+    /// The same card, read off an event's own page (PD-126): what the page's actions need, and no reasons, because
+    /// nobody offered it — the player went looking.
+    public init(page: EventPage) {
+        eventId = page.eventId; name = page.name; tournament = nil
+        venue = page.venue ?? page.venueLabel; locality = page.locality
+        startsAt = page.startsAt; entriesCloseAt = page.entriesCloseAt
+        entrantKind = page.entrantKind; access = page.access
+        capacity = page.capacity; spotsRemaining = page.spotsRemaining
+        entered = page.you?.entered ?? false; qualifies = true; series = []; reasons = []
+    }
 }
 
 /// A friendly between two teams (PD-110): who challenged whom, when, the message, where it stands, and the match once

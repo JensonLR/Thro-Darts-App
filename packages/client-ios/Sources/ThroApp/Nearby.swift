@@ -45,14 +45,21 @@ public enum NearbyLogic {
         leagues.filter { ($0.shownSeason?.divisions.flatMap(\.teams).count ?? 0) > 0 }.count
     }
 
-    static func filledLine(_ leagues: [PublicLeague]) -> String {
-        let n = filled(leagues)
-        let teams = leagues.compactMap(\.shownSeason).flatMap(\.divisions).flatMap(\.teams).count
-        switch n {
-        case 0: return "None has its teams on THRØ yet."
-        case 1: return "One has its teams on THRØ so far (\(teams) teams)."
-        default: return "\(n) have their teams on THRØ so far (\(teams) teams)."
+    /// What THRØ holds, counted apart (PD-126): run here, teams listed, and on the map only. Never one number for
+    /// all three — "329 leagues" beside a THRØ mark reads as 329 leagues on THRØ.
+    static func heldLine(_ leagues: [PublicLeague]) -> String {
+        let run = leagues.filter { $0.held == .run }.count
+        let listed = leagues.filter { $0.held == .teams }.count
+        let placed = leagues.count - run - listed
+        if run == 0 && listed == 0 {
+            return placed == 1 ? "It is on the map from its own website; nothing of it is on THRØ yet."
+                               : "All are on the map from their own websites; none is run on THRØ yet."
         }
+        var parts: [String] = []
+        if run > 0 { parts.append("\(run) \(run == 1 ? "is" : "are") run on THRØ.") }
+        if listed > 0 { parts.append("\(listed)\(run > 0 ? " more" : "") \(listed == 1 ? "has its" : "have their") teams listed.") }
+        if placed > 0 { parts.append(placed == 1 ? "The other is on the map from its own website." : "The other \(placed) are on the map from their own websites.") }
+        return parts.joined(separator: " ")
     }
 
     /// Leagues nearest first; leagues with no placed venue last, in the order they came.
@@ -84,7 +91,7 @@ public enum NearbyLogic {
     public static func headline(place: Place, leagues: [PublicLeague]?) -> (title: String, detail: String) {
         guard let leagues else { return ("Finding the leagues", "Reading THRØ's list of leagues and venues.") }
         if leagues.isEmpty { return ("No leagues listed yet", "THRØ has not been given any leagues yet.") }
-        let listed = leagues.count == 1 ? "1 league listed" : "\(leagues.count) leagues listed"
+        let listed = leagues.count == 1 ? "1 league on the map" : "\(leagues.count) leagues on the map"
         switch place {
         case .located(let lat, let lon):
             let ranked = sorted(leagues, fromLat: lat, lon: lon)
@@ -97,13 +104,13 @@ public enum NearbyLogic {
                 return ("\(count) near you", "\(line) Nearest: \(near[0].league.shortName ?? near[0].league.name), \(miles(near[0].km ?? 0)).")
             }
             if let nearest = ranked.first, let km = nearest.km {
-                return ("Nothing near you yet", "The nearest league THRØ knows is \(nearest.league.shortName ?? nearest.league.name), \(miles(km)) away. Tell THRØ about your league and it spreads.")
+                return ("Nothing near you yet", "The nearest league THRØ knows is \(nearest.league.shortName ?? nearest.league.name), \(miles(km)) away. Start your own team or league here and it is on the map the same day.")
             }
             return (listed, "None is placed yet, so distance cannot be shown.")
         case .denied:
-            return (listed, "\(filledLine(leagues)) Location is off for THRØ; turn it on in Settings to see how far they are.")
+            return (listed, "\(heldLine(leagues)) Location is off for THRØ; turn it on in Settings to see how far they are.")
         case .unknown, .asking:
-            return (listed, "\(filledLine(leagues)) Use your location to see which are near you.")
+            return (listed, "\(heldLine(leagues)) Use your location to see which are near you.")
         }
     }
 

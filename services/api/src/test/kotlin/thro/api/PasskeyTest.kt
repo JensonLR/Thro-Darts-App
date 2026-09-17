@@ -250,9 +250,12 @@ class PasskeyTest {
 
             // --- the association file -----------------------------------------------------------------
             val aasa = client.get("/.well-known/apple-app-site-association")
-            check("this host tells iOS which app may use its passkeys, and which links open it (PD-117)", aasa.status.value == 200 && aasa.bodyAsText() == """{"webcredentials":{"apps":["TEAMID.app.example"]},"applinks":{"details":[{"appIDs":["TEAMID.app.example"],"components":[{"/":"/link/*","comment":"a screen's sign-in code, approved by the phone (PD-117)"}]}]}}""")
+            check("this host tells iOS which app may use its passkeys, and which links open it (PD-117)", aasa.status.value == 200 && aasa.bodyAsText() == """{"webcredentials":{"apps":["TEAMID.app.example"]},"applinks":{"details":[{"appIDs":["TEAMID.app.example"],"components":[{"/":"/link/*","comment":"a screen's sign-in code, approved by the phone (PD-117)"},{"/":"/league/*","comment":"a league on THRØ (PD-127)"},{"/":"/event/*","comment":"a tournament night (PD-127)"},{"/":"/team/*","comment":"a team on THRØ (PD-127)"}]}]}}""")
+            // PD-127: a league, a tournament and a team each have one address, on the web and in the app.
+            check("and a league, a tournament night and a team open the app from their pages at this host (PD-127)",
+                listOf("/league/*", "/event/*", "/team/*").all { aasa.bodyAsText().contains("\"/\":\"$it\"") })
         }
         println("  $passed passkey properties held")
-        assertEquals(29, passed)
+        assertEquals(30, passed)
     }
 }

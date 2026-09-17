@@ -26,7 +26,9 @@ public class Leagues(private val connection: Connection) {
     public data class Team(val teamId: UUID, val name: String, val venue: Venue?)
     public data class Division(val divisionId: UUID, val name: String, val ordinal: Int, val teams: List<Team>)
     public data class Season(val leagueSeasonId: UUID, val label: String, val startsOn: LocalDate, val endsOn: LocalDate,
-                             val current: Boolean, val divisions: List<Division>)
+                             val current: Boolean, val divisions: List<Division>,
+                             /** Fixtures THRØ holds for this season, and how many have a result that stands (PD-126). */
+                             val fixtures: Int = 0, val results: Int = 0)
     public data class Source(val source: String, val url: String?, val retrievedOn: LocalDate)
     public data class League(val leagueId: UUID, val name: String, val shortName: String?, val playsOn: String?,
                              val locality: String?,
@@ -38,7 +40,14 @@ public class Leagues(private val connection: Connection) {
                               * the seasons and never inside them: a division is what the league published, and
                               * this is what a team said about itself. The app says which is which.
                               */
-                             val saidTeams: List<Team> = emptyList())
+                             val saidTeams: List<Team> = emptyList(),
+                             /**
+                              * What THRØ is to this league (PD-126). `run_here`: somebody started it here, or the person
+                              * named to run it runs a season of it here — so it can have fixtures and a table. `listed`:
+                              * THRØ placed it from a directory and it is run somewhere else. Never who: nothing here
+                              * names a person.
+                              */
+                             val standing: String = "listed")
 
     private val london = ZoneId.of("Europe/London")
 
@@ -134,12 +143,45 @@ public class Leagues(private val connection: Connection) {
                 }
             }
         }
+        val runHere = runHere(); val counts = counts()
         return leagues.values.map { l ->
             l.copy(seasons = seasons[l.leagueId].orEmpty().map { s ->
-                s.copy(divisions = divisions[s.leagueSeasonId].orEmpty().map { d -> d.copy(teams = teams[d.divisionId].orEmpty()) })
-            }, saidTeams = said[l.leagueId].orEmpty())
+                val (fixtures, results) = counts[s.leagueSeasonId] ?: (0 to 0)
+                s.copy(divisions = divisions[s.leagueSeasonId].orEmpty().map { d -> d.copy(teams = teams[d.divisionId].orEmpty()) },
+                       fixtures = fixtures, results = results)
+            }, saidTeams = said[l.leagueId].orEmpty(), standing = if (l.leagueId in runHere) "run_here" else "listed")
         }
     }
+
+    /** The leagues run on THRØ: started here, or with a season somebody is named to run. Which, and never by whom. */
+    private fun runHere(): Set<UUID> =
+        connection.prepareStatement(
+            """
+            SELECT l.league_id FROM competition.league l
+             WHERE l.created_by IS NOT NULL
+                OR EXISTS (SELECT 1 FROM competition.league_season ls
+                             JOIN authz.relation r ON r.object_id = ls.league_season_id::text
+                            WHERE ls.league_id = l.league_id AND r.object_type = 'league_season'
+                              AND r.relation = 'admin' AND r.revoked_at IS NULL)
+            """.trimIndent(),
+        ).use { ps -> ps.executeQuery().use { rs -> generateSequence { if (rs.next()) rs.getObject(1) as UUID else null }.toSet() } }
+
+    /** Fixtures and standing results per season. A result stands as the tallies define it (V041, V042): unsuperseded, not void. */
+    private fun counts(): Map<UUID, Pair<Int, Int>> =
+        connection.prepareStatement(
+            """
+            SELECT f.league_season_id, count(*),
+                   count(*) FILTER (WHERE EXISTS (
+                     SELECT 1 FROM competition.league_fixture_outcome o
+                      WHERE o.fixture_id = f.fixture_id AND o.kind <> 'void'
+                        AND NOT EXISTS (SELECT 1 FROM competition.league_fixture_outcome s WHERE s.supersedes_outcome_id = o.outcome_id)))
+              FROM competition.league_fixture f GROUP BY f.league_season_id
+            """.trimIndent(),
+        ).use { ps ->
+            ps.executeQuery().use { rs ->
+                generateSequence { if (rs.next()) (rs.getObject(1) as UUID) to (rs.getInt(2) to rs.getInt(3)) else null }.toMap()
+            }
+        }
 
     private fun sourcesOf(leagueId: UUID): List<Source> =
         connection.prepareStatement(
@@ -156,10 +198,10 @@ public class Leagues(private val connection: Connection) {
     public fun json(leagues: List<League>): String {
         fun q(s: String?) = s?.let { "\"" + it.replace("\\", "\\\\").replace("\"", "\\\"").replace("\n", "\\n") + "\"" } ?: "null"
         return "{\"leagues\":[" + leagues.joinToString(",") { l ->
-            """{"leagueId":"${l.leagueId}","name":${q(l.name)},"shortName":${q(l.shortName)},"playsOn":${q(l.playsOn)},"locality":${q(l.locality)},"latitude":${l.latitude ?: "null"},"longitude":${l.longitude ?: "null"},"website":${q(l.website)},""" +
+            """{"leagueId":"${l.leagueId}","name":${q(l.name)},"shortName":${q(l.shortName)},"playsOn":${q(l.playsOn)},"locality":${q(l.locality)},"latitude":${l.latitude ?: "null"},"longitude":${l.longitude ?: "null"},"website":${q(l.website)},"standing":"${l.standing}",""" +
                 """"sources":[${l.sources.joinToString(",") { """{"source":${q(it.source)},"url":${q(it.url)},"retrievedOn":"${it.retrievedOn}"}""" }}],""" +
                 """"seasons":[${l.seasons.joinToString(",") { s ->
-                    """{"leagueSeasonId":"${s.leagueSeasonId}","label":${q(s.label)},"startsOn":"${s.startsOn}","endsOn":"${s.endsOn}","current":${s.current},""" +
+                    """{"leagueSeasonId":"${s.leagueSeasonId}","label":${q(s.label)},"startsOn":"${s.startsOn}","endsOn":"${s.endsOn}","current":${s.current},"fixtures":${s.fixtures},"results":${s.results},""" +
                         """"divisions":[${s.divisions.joinToString(",") { d ->
                             """{"divisionId":"${d.divisionId}","name":${q(d.name)},"ordinal":${d.ordinal},"teams":[${d.teams.joinToString(",") { t ->
                                 """{"teamId":"${t.teamId}","name":${q(t.name)},"venue":""" + (t.venue?.let { v ->

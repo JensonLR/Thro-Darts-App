@@ -73,6 +73,17 @@ services:
       - type: rewrite
         source: /link/*
         destination: /link.html
+      # PD-127: one address on the web and in the app. thro.uk/league/<id>, /event/<id> and /team/<id> are pages
+      # here and, on a phone with THRØ, open the same thing in the app.
+      - type: rewrite
+        source: /league/*
+        destination: /league.html
+      - type: rewrite
+        source: /event/*
+        destination: /event.html
+      - type: rewrite
+        source: /team/*
+        destination: /team.html
       - type: rewrite
         source: /.well-known/apple-app-site-association
         destination: https://thro-api-staging.onrender.com/.well-known/apple-app-site-association

@@ -485,6 +485,11 @@ public final class ClubStore: ObservableObject {
 /// every fixture across every club that has been played and not yet had a result entered — the one
 /// thing a league keeper owes — and tapping one used to land on the list of clubs, four screens from
 /// the control. It names the fixture now, and the tab lands on the screen that records it.
+/// Something on THRØ's server that a link named (PD-127): a league, a tournament night, a team.
+public enum ThroLanding: Equatable, Sendable {
+    case league(UUID), event(UUID), team(UUID)
+}
+
 public struct ClubLanding: Equatable, Sendable {
 
     /// **What was actually wanted, said rather than inferred.** The first version of this carried an
@@ -538,6 +543,8 @@ public enum ClubRoute: Equatable {
     case serverTeam(UUID)
     /// Joining a team on THRØ by code, or starting one.
     case joinOrStart
+    /// A tournament night on THRØ: its page, and the way in (PD-126).
+    case event(UUID)
 }
 
 /// The Clubs tab.
@@ -548,6 +555,8 @@ public struct ClubsFlow: View {
     /// moment it lands, so a player who then taps Back is not sent to the same place again by the
     /// next re-evaluation.
     @Binding private var open: ClubLanding?
+    /// The same, for something on the server (PD-127).
+    @Binding private var onThro: ThroLanding?
     /// The server, when the build names one. Discover reads its public front; with no server the
     /// leagues and tournaments say so rather than spin.
     private let api: ThroAPI?
@@ -559,9 +568,11 @@ public struct ClubsFlow: View {
     /// Whether the account is signed in, told by the root; server teams are only asked for then.
     private let signedIn: Bool
 
-    public init(store: ClubStore, open: Binding<ClubLanding?> = .constant(nil), api: ThroAPI? = nil, signedIn: Bool = false) {
+    public init(store: ClubStore, open: Binding<ClubLanding?> = .constant(nil), onThro: Binding<ThroLanding?> = .constant(nil),
+                api: ThroAPI? = nil, signedIn: Bool = false) {
         self.store = store
         self._open = open
+        self._onThro = onThro
         self.api = api
         self.signedIn = signedIn
     }
@@ -578,6 +589,16 @@ public struct ClubsFlow: View {
         guard let landing, let there = ClubsFlow.route(for: landing, in: store.clubs) else { return }
         route = there
         open = nil
+    }
+
+    private func land(_ there: ThroLanding?) {
+        guard let there else { return }
+        switch there {
+        case .league(let id): route = .leagues(id)
+        case .event(let id): route = .event(id)
+        case .team(let id): route = .serverTeam(id)
+        }
+        onThro = nil
     }
 
     /// Where a landing request actually goes, given what this phone holds.
@@ -607,7 +628,8 @@ public struct ClubsFlow: View {
     public var body: some View {
         content
             .onChange(of: open) { _, id in land(id) }
-            .task { land(open) }
+            .onChange(of: onThro) { _, there in land(there) }
+            .task { land(open); land(onThro) }
             // A refusal is shown where it happened, over the screen that caused it.
             .overlay(alignment: .bottom) {
                 if let problem = store.writeProblem {
@@ -640,6 +662,7 @@ public struct ClubsFlow: View {
                                onOpen: { route = .club($0.id) },
                                onCreate: { route = .newClub },
                                onLeague: { route = .leagues($0) },
+                               onEvent: { route = .event($0) },
                                onServerTeam: { route = .serverTeam($0) },
                                onJoinOrStart: { route = .joinOrStart },
                                onUseLocation: { nearby.useMyLocation() },
@@ -656,6 +679,9 @@ public struct ClubsFlow: View {
 
         case .serverTeam(let id):
             TeamFrontScreen(teams: teams, teamId: id, api: api, onBack: { route = .list })
+
+        case .event(let id):
+            EventScreen(eventId: id, api: api, signedIn: signedIn && api != nil, onBack: { route = .list })
 
         case .joinOrStart:
             JoinOrStartTeamScreen(teams: teams, api: api, onBack: { route = .list }) { made in route = .serverTeam(made.teamId) }

@@ -138,7 +138,7 @@ public struct LeagueTableScreen: View {
                     .padding(.top, ThroSpacing.spacing4)
                 ThroDivider().padding(.top, ThroSpacing.spacing2)
                 if next.isEmpty {
-                    Note(LeagueTableWords.everythingPlayed).padding(.top, ThroSpacing.spacing3)
+                    Note(LeagueTableWords.nothingToPlay(decided: done.count)).padding(.top, ThroSpacing.spacing3)
                 } else {
                     ForEach(next.prefix(6)) { fixture in
                         fixtureLine(fixture)
@@ -254,7 +254,11 @@ enum LeagueTableWords {
 
     // --- the fixtures beside the table (PD-062) -------------------------------------------------
 
-    static let everythingPlayed = "Every fixture in this season has a result."
+    /// Nothing left to play is two different facts: all of it has been played, or none of it exists (PD-126).
+    static func nothingToPlay(decided: Int) -> String {
+        decided == 0 ? "No fixtures on THRØ for this season yet. They appear when the league's organiser schedules them."
+                     : "Every fixture in this season has a result."
+    }
 
     static func andMore(_ n: Int) -> String {
         n == 1 ? "And one more after those." : "And \(n) more after those."

@@ -23,6 +23,7 @@ public struct DiscoverScreen: View {
     private let onOpen: (Club) -> Void
     private let onCreate: () -> Void
     private let onLeague: (UUID?) -> Void
+    private let onEvent: (UUID) -> Void
     private let onUseLocation: () -> Void
     private let onStopLocation: () -> Void
     private let onRetry: () -> Void
@@ -30,7 +31,7 @@ public struct DiscoverScreen: View {
     public init(nearby: Nearby, teams: TeamsModel, signedIn: Bool = false, clubs: [Club],
                 badge: @escaping (Club) -> Image? = { _ in nil },
                 onOpen: @escaping (Club) -> Void = { _ in }, onCreate: @escaping () -> Void = {},
-                onLeague: @escaping (UUID?) -> Void = { _ in },
+                onLeague: @escaping (UUID?) -> Void = { _ in }, onEvent: @escaping (UUID) -> Void = { _ in },
                 onServerTeam: @escaping (UUID) -> Void = { _ in }, onJoinOrStart: @escaping () -> Void = {},
                 onUseLocation: @escaping () -> Void = {},
                 onStopLocation: @escaping () -> Void = {},
@@ -45,6 +46,7 @@ public struct DiscoverScreen: View {
         self.onOpen = onOpen
         self.onCreate = onCreate
         self.onLeague = onLeague
+        self.onEvent = onEvent
         self.onUseLocation = onUseLocation
         self.onStopLocation = onStopLocation
         self.onRetry = onRetry
@@ -55,7 +57,7 @@ public struct DiscoverScreen: View {
             // Large, as the approved export draws it (`screens-discover.jsx`: `large: true`) and as Play and Live already
             // are (PD-092). It went compact in 4d3b225 with no decision recorded; turned sideways the large bar now folds to
             // this same compact row, so the height it costs is only spent on an upright phone.
-            TopBar("Discover", actions: clubs.isEmpty ? [] : [TopBar.Action(icon: .plus, label: "Start a team", action: onCreate)],
+            TopBar("Discover", actions: signedIn ? [TopBar.Action(icon: .plus, label: "Join or start a team", action: onJoinOrStart)] : [],
                    large: true)
             // Discover is two things, and says so on a screen with room for two (PD-062): what is out
             // there — the leagues near you and the tournaments taking entries — and what is yours. On a
@@ -220,8 +222,8 @@ public struct DiscoverScreen: View {
     static func shortlist(_ leagues: [PublicLeague], place: NearbyLogic.Place) -> [(league: PublicLeague, km: Double?)] {
         let rows = ranked(leagues, place: place)
         if case .located = place { return Array(rows.prefix(shortlistLength)) }
-        let teams: ((league: PublicLeague, km: Double?)) -> Int = { $0.league.shownSeason?.divisions.flatMap(\.teams).count ?? 0 }
-        return Array((rows.filter { teams($0) > 0 } + rows.filter { teams($0) == 0 }).prefix(shortlistLength))
+        return Array((rows.filter { $0.league.held == .run } + rows.filter { $0.league.held == .teams }
+                      + rows.filter { $0.league.held == .placed }).prefix(shortlistLength))
     }
 
     static func ranked(_ leagues: [PublicLeague], place: NearbyLogic.Place) -> [(league: PublicLeague, km: Double?)] {
@@ -234,12 +236,22 @@ public struct DiscoverScreen: View {
         return String(words.prefix(2).compactMap(\.first)).uppercased()
     }
 
-    /// "Thursday nights · 18 teams · Stockton-on-Tees". Distance goes on the trailing side. A league
-    /// the directory placed and nobody has filled in says so, rather than claiming nought teams.
+    /// "Run on THRØ · 12 fixtures, 4 results · Thursday nights · Yarm". What THRØ holds comes first (PD-126),
+    /// because it is the difference between a league a player can follow here and a pin on a map; distance goes
+    /// on the trailing side.
     static func leagueMeta(_ league: PublicLeague, km: Double?) -> String {
-        let teams = league.shownSeason?.divisions.flatMap(\.teams).count ?? 0
-        let filled = teams > 0 ? "\(teams) teams" : "teams not listed yet"
-        return [league.playsOn.map { "\($0) nights" }, filled, league.locality].compactMap { $0 }.joined(separator: " · ")
+        let held: String
+        switch league.held {
+        case .run:
+            let fixtures = league.shownSeason?.fixtures ?? 0, results = league.shownSeason?.results ?? 0
+            held = "Run on THRØ · " + (fixtures == 0 ? "no fixtures yet"
+                : "\(LeagueBoardWords.count(fixtures, "fixture")), \(LeagueBoardWords.count(results, "result"))")
+        case .teams:
+            held = "\(LeagueBoardWords.count(league.shownSeason?.divisions.flatMap(\.teams).count ?? 0, "team")) listed"
+        case .placed:
+            held = "On the map only"
+        }
+        return [held, league.playsOn.map { "\($0) nights" }, league.locality].compactMap { $0 }.joined(separator: " · ")
     }
 
     /// Under one of your teams: its league line where it is in a league THRØ lists, else its town;
@@ -261,17 +273,21 @@ public struct DiscoverScreen: View {
             Text(why).thro(ThroTypography.body).foregroundStyle(ThroColor.colorTextSecondary).padding(.vertical, ThroSpacing.spacing3)
         case .loaded(let list):
             if list.isEmpty {
-                Text("No open tournaments listed yet. When an organiser lists one with THRØ it appears here, with its venue and how many places are left.")
+                Text("No tournament is taking entries on THRØ just now. One opened on the organiser's desk at thro.uk shows here the moment it opens.")
                     .thro(ThroTypography.body).foregroundStyle(ThroColor.colorTextSecondary)
                     .fixedSize(horizontal: false, vertical: true)
                     .padding(.vertical, ThroSpacing.spacing3)
             } else {
                 ThroDivider().padding(.top, ThroSpacing.spacing2)
                 ForEach(list) { event in
-                    OrganisationRow(initials: DiscoverScreen.initials(event.name), name: event.name,
-                                    meta: DiscoverScreen.eventMeta(event), accent: ThroColor.throGreen,
-                                    trailing: event.capacity.map { "\($0) places" }, image: nil)
-                        .throRowTapTarget()
+                    // A row that names a tournament opens it (PD-126): the page, who is in, and the way in.
+                    Button { onEvent(event.eventId) } label: {
+                        OrganisationRow(initials: DiscoverScreen.initials(event.name), name: event.name,
+                                        meta: DiscoverScreen.eventMeta(event), accent: ThroColor.throGreen,
+                                        trailing: event.capacity.map { "\($0) places" }, image: nil)
+                            .throRowTapTarget()
+                    }
+                    .buttonStyle(ThroPressStyle(radius: ThroSpacing.radiusCard, pressedFill: ThroColor.colorSurfaceSecondary, scales: false))
                     ThroDivider()
                 }
             }
@@ -299,10 +315,13 @@ public struct DiscoverScreen: View {
         // the screen is in (PD-062).
         SectionHeader("Your teams on THRØ", action: signedIn ? "Join or start" : nil, onAction: onJoinOrStart)
         if !signedIn {
-            Text("Sign in under You to join a team by its code or start one. A team on THRØ has a roster, a home venue and its place in a league.")
+            Text("Sign in to join a team by its code or start one. A team on THRØ has a roster, a home venue and its place in a league.")
                 .thro(ThroTypography.body).foregroundStyle(ThroColor.colorTextSecondary)
                 .fixedSize(horizontal: false, vertical: true)
                 .padding(.top, ThroSpacing.spacing2)
+            // The way there, not a sentence about where it is (PD-126).
+            ThroButton("Sign in", variant: .primary, size: .large, fullWidth: true) { ThroRouter.shared.go(.tab(.you)) }
+                .padding(.top, ThroSpacing.spacing4)
         } else {
             switch teams.mine {
             case .loading:
@@ -310,8 +329,9 @@ public struct DiscoverScreen: View {
                     .padding(.vertical, ThroSpacing.spacing3)
             // Idle is not reading: nothing has been asked yet. A spinner here would spin for ever if the ask never came.
             case .idle:
-                Text("Your teams appear here once THRØ has read them.").thro(ThroTypography.body).foregroundStyle(ThroColor.colorTextSecondary)
-                    .padding(.vertical, ThroSpacing.spacing3)
+                Text("Your teams have not been read yet.").thro(ThroTypography.body).foregroundStyle(ThroColor.colorTextSecondary)
+                    .padding(.top, ThroSpacing.spacing3)
+                ThroTextButton("Read them now", action: onRetry)
             case .failed(let why):
                 Text(why).thro(ThroTypography.body).foregroundStyle(ThroColor.colorTextSecondary).padding(.vertical, ThroSpacing.spacing3)
             case .loaded(let list):

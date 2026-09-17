@@ -55,6 +55,13 @@ public enum ThroRoute: Equatable, Hashable, Sendable {
     /// phone, or `https://thro.uk/link/K7TQ2M` from anywhere. Opens the profile's *Sign in on a screen* card
     /// with the code in, and nothing is approved until the person says so.
     case screen(String)
+    /// A league on THRØ's server, by the server's id (PD-127): `https://thro.uk/league/<id>`. Opens the leagues board
+    /// on it. The same address is a page on the web, so a shared link works with the app or without.
+    case league(UUID)
+    /// A tournament night on the server: `https://thro.uk/event/<id>`. Its page, with the way in.
+    case event(UUID)
+    /// A team on the server: `https://thro.uk/team/<id>`. Its front.
+    case team(UUID)
 }
 
 extension ThroRoute {
@@ -81,8 +88,23 @@ extension ThroRoute {
         case .newMatch: path = "new"
         case .continueLatest: path = "continue"
         case let .screen(code): path = "link/\(escape(code))"
+        case let .league(id): path = "league/\(id.uuidString.lowercased())"
+        case let .event(id): path = "event/\(id.uuidString.lowercased())"
+        case let .team(id): path = "team/\(id.uuidString.lowercased())"
         }
         return ThroLink.url(path: path)
+    }
+
+    /// The address to hand to somebody else (PD-127). For what lives on the server it is the page at thro.uk, which
+    /// opens the app where it is installed and is a page where it is not; for what lives on this phone there is no
+    /// such page, so it is the app's own link.
+    public var shared: URL {
+        switch self {
+        case let .league(id): return ThroWeb.page("league/\(id.uuidString.lowercased())")
+        case let .event(id): return ThroWeb.page("event/\(id.uuidString.lowercased())")
+        case let .team(id): return ThroWeb.page("team/\(id.uuidString.lowercased())")
+        default: return url
+        }
     }
 
     /// The place a URL names, or nil when it names nothing this app has.
@@ -109,6 +131,14 @@ extension ThroRoute {
         case ("p", let id?), ("person", let id?):
             guard !id.isEmpty else { return nil }
             self = .person(id)
+        case ("league", let id?):
+            guard let uuid = UUID(uuidString: id) else { return nil }
+            self = .league(uuid)
+        case ("event", let id?):
+            guard let uuid = UUID(uuidString: id) else { return nil }
+            self = .event(uuid)
+        case ("team", let id?) where UUID(uuidString: id) != nil:
+            self = .team(UUID(uuidString: id)!)
         case ("e", let id?), ("club", let id?), ("team", let id?):
             guard !id.isEmpty else { return nil }
             self = .club(id)
@@ -142,6 +172,15 @@ extension ThroRoute {
         parts.append(contentsOf: components.percentEncodedPath.split(separator: "/").map(decoded))
         return parts.isEmpty ? nil : parts
     }
+}
+
+/// THRØ on the web: the pages the app points at and shares (PD-127). One place, so the host is written once.
+public enum ThroWeb {
+    public static let host = "thro.uk"
+    public static func page(_ path: String) -> URL { URL(string: "https://\(host)/\(path)")! }
+    /// The organiser's desk: where a league is started and run, on a screen with room for it.
+    public static let organiser = page("organiser.html")
+    public static let events = page("events.html")
 }
 
 /// Holds the place an incoming link asked for until a screen can go there.

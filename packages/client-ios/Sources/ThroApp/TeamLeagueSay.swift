@@ -116,7 +116,7 @@ struct LeagueSayPicker: View {
             Text("\(list.count) leagues are listed. Type two letters of yours.")
                 .thro(ThroTypography.body).foregroundStyle(ThroColor.colorTextSecondary)
         } else if hits.isEmpty {
-            Text("No league listed by that name. If yours is missing, tell THRØ and it goes on the map.")
+            Text("No league listed by that name. If yours is missing, whoever runs it can start it on the organiser's desk at thro.uk, and it is here the same day.")
                 .thro(ThroTypography.body).foregroundStyle(ThroColor.colorTextSecondary)
                 .fixedSize(horizontal: false, vertical: true)
         } else {

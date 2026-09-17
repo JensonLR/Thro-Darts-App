@@ -108,7 +108,7 @@ public object Contract {
         Endpoint(
             id = "aasa", method = "GET", path = "/.well-known/apple-app-site-association", authenticated = false,
             summary = "Apple's association file for this host",
-            description = "webcredentials for the configured app ids, so iOS offers passkeys for this relying party, and applinks for /link/* so a screen's sign-in code opens the app (PD-117). 404 when no app id is configured.",
+            description = "webcredentials for the configured app ids, so iOS offers passkeys for this relying party, and applinks for /link/* so a screen's sign-in code opens the app (PD-117), and for /league/*, /event/* and /team/* so a shared page opens the same thing in the app (PD-127). 404 when no app id is configured.",
             responses = mapOf(200 to "the association file", 404 to "no app ids configured"),
         ),
         Endpoint(

@@ -496,7 +496,7 @@ public struct DiscoveryScreen: View {
                                         Text(card.reasons.joined(separator: " · ")).thro(ThroTypography.metadata).foregroundStyle(ThroColor.colorTextBrand)
                                             .fixedSize(horizontal: false, vertical: true)
                                     }
-                                    EventActions(account: account, card: card) { Task { await load() } }
+                                    EventActions(api: account.api, card: card) { Task { await load() } }
                                 }
                             }
                         }
@@ -522,7 +522,9 @@ public struct DiscoveryScreen: View {
 /// What a player does with an event from its card (PD-109): enter, withdraw, and on the day check in from this phone.
 /// Every refusal is the server's words; nothing here decides eligibility.
 struct EventActions: View {
-    @ObservedObject var account: AccountStore
+    /// The server, signed in. Not the account: these acts need the wire and nothing else, so the event's own page
+    /// under Discover (PD-126) uses them as they are.
+    let api: ThroAPI
     let card: DiscoveryCard
     let reload: () -> Void
     @State private var page: EventPage?
@@ -558,12 +560,12 @@ struct EventActions: View {
 
     private func loadChoices() async {
         var found: [(id: UUID, label: String)] = []
-        let mine = (try? await account.api.myTeams()) ?? []
+        let mine = (try? await api.myTeams()) ?? []
         if card.entrantKind == "team" {
             found = mine.filter { $0.role == "admin" || $0.role == "captain" || $0.role == "vice_captain" }.map { ($0.teamId, $0.name) }
         } else {
             for t in mine {
-                if let front = try? await account.api.teamFront(t.teamId) {
+                if let front = try? await api.teamFront(t.teamId) {
                     for m in front.roster where m.playerId != nil && m.playerId != me { found.append((m.playerId!, "\(m.name ?? "A player") · \(t.name)")) }
                 }
             }
@@ -574,12 +576,12 @@ struct EventActions: View {
     private func enter(with choice: UUID) async {
         busy = true; defer { busy = false }
         do {
-            page = card.entrantKind == "team" ? try await account.api.enter(event: card.eventId, team: choice) : try await account.api.enter(event: card.eventId, partner: choice)
+            page = card.entrantKind == "team" ? try await api.enter(event: card.eventId, team: choice) : try await api.enter(event: card.eventId, partner: choice)
             choosing = false; said = card.entrantKind == "team" ? "Entered. Any member checks the team in on the day." : "Entered as a pair. Either of you checks in on the day."
             reload()
         } catch { said = (error as? APIError)?.message ?? error.localizedDescription }
     }
-    private var me: UUID? { account.api.session?.playerId }
+    private var me: UUID? { api.session?.playerId }
     /// Your tie in the latest round, once the draw is made.
     private var myTie: EventPage.Tie? {
         guard let page, let me, let last = page.draw.map(\.round).max() else { return nil }
@@ -621,7 +623,7 @@ struct EventActions: View {
             }
             if let said { Note(said) }
         }
-        .task { if card.entered && page == nil { page = try? await account.api.event(card.eventId) } }
+        .task { if card.entered && page == nil { page = try? await api.event(card.eventId) } }
     }
 
     /// Where you stand in the bracket (PD-111): your tie, its standing, and — once scored on THRØ — Name the match.
@@ -660,7 +662,7 @@ struct EventActions: View {
                         Text("One moment…").thro(ThroTypography.metadata).foregroundStyle(ThroColor.colorTextSecondary)
                     }
                 } else {
-                    ThroButton("Name the match", variant: .secondary, size: .medium) { citing = true; Task { matches = (try? await account.api.myMatches()) ?? [] } }.disabled(busy)
+                    ThroButton("Name the match", variant: .secondary, size: .medium) { citing = true; Task { matches = (try? await api.myMatches()) ?? [] } }.disabled(busy)
                 }
             }
         } else {
@@ -671,7 +673,7 @@ struct EventActions: View {
     private func cite(_ tie: EventPage.Tie, _ match: UUID) async {
         busy = true; defer { busy = false }
         do {
-            page = try await account.api.citeTie(event: card.eventId, tie: tie.tieId, match: match)
+            page = try await api.citeTie(event: card.eventId, tie: tie.tieId, match: match)
             citing = false
             said = "Named. The winner is what the record says."
         } catch { said = (error as? APIError)?.message ?? error.localizedDescription }
@@ -679,21 +681,21 @@ struct EventActions: View {
 
     private func enter() async {
         busy = true; defer { busy = false }
-        do { page = try await account.api.enter(event: card.eventId); said = "Entered. Check in on this phone on the day."; reload() }
+        do { page = try await api.enter(event: card.eventId); said = "Entered. Check in on this phone on the day."; reload() }
         catch { said = (error as? APIError)?.message ?? error.localizedDescription }
     }
 
     private func withdraw() async {
         busy = true; defer { busy = false }
-        do { page = try await account.api.withdraw(event: card.eventId); said = "Withdrawn. Your place is open to somebody else."; reload() }
+        do { page = try await api.withdraw(event: card.eventId); said = "Withdrawn. Your place is open to somebody else."; reload() }
         catch { said = (error as? APIError)?.message ?? error.localizedDescription }
     }
 
     private func checkIn() async {
         busy = true; defer { busy = false }
         do {
-            let grant = try await account.api.checkIn(event: card.eventId)
-            page = try await account.api.event(card.eventId)
+            let grant = try await api.checkIn(event: card.eventId)
+            page = try await api.event(card.eventId)
             said = "Checked in. This phone may score the event until \(grant.expiresAt.formatted(date: .abbreviated, time: .shortened)), signal or none."
         } catch { said = (error as? APIError)?.message ?? error.localizedDescription }
     }

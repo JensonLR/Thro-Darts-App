@@ -79,7 +79,9 @@ enum ScreenshotAccount {
         static func passesThrough(_ method: String, _ path: String) -> Bool {
             guard method == "GET" else { return false }
             // The staged team and everything under it (its friendlies, its inbox) are the stage's; other teams are real.
+            // A tournament night's own page is a public read too (PD-126), so a staged account can open a real one.
             return passedThrough.contains(path) || (path.hasPrefix("/v1/teams/") && !path.hasPrefix(stagedTeam))
+                || (path.hasPrefix("/v1/events/") && path.split(separator: "/").count == 3)
         }
 
         func send(_ request: URLRequest) async throws -> (Data, HTTPURLResponse) {

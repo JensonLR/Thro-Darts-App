@@ -333,9 +333,25 @@ public struct LeaguesScreen: View {
             if let league = b.leagues.first(where: { $0.id == id }) {
                 BareLeagueCard(league: league, distance: miles(to: league),
                                onWebsite: league.website.flatMap(URL.init(string:)).map { url in { openURL(url) } },
+                               // A team that has already said so is not asked again.
+                               yours: signedIn ? runByYou.filter { mine in !(league.saidTeams ?? []).contains { $0.teamId == mine.teamId } } : [],
+                               onSay: { team in Task {
+                                   await teams.saysItPlaysIn(team, league: id, api)
+                                   await nearby.load(api, force: true)
+                                   // It has a team now, by that team's say, so it is a league with teams and its card is that one.
+                                   if nearby.leagueList?.first(where: { $0.id == id })?.saidTeams?.isEmpty == false { choice = .league(id) }
+                               } },
+                               onStartTeam: signedIn && runByYou.isEmpty ? { sheet = .join } : nil,
+                               onTable: { sheet = .table($0, league.name) },
                                onClose: close)
             } else { browse(b) }
         }
+    }
+
+    /// The teams you run, which are the ones that may say where they play (PD-049).
+    private var runByYou: [TeamSummary] {
+        guard case .loaded(let list) = teams.mine else { return [] }
+        return list.filter { TeamFrontScreen.runsIt($0.role) }
     }
 
     /// The team's front once it has loaded and is this team's — never a front for another team,
@@ -464,10 +480,14 @@ public struct LeaguesScreen: View {
                 }
             }
             if hits.isEmpty && named.isEmpty {
-                Text("Nothing on the map goes by that name yet. If your team or league is missing, tell THRØ and it fills in.")
+                Text(LeagueBoardWords.nothingByThatName)
                     .thro(ThroTypography.body).foregroundStyle(ThroColor.colorTextOnBoardSecondary)
                     .fixedSize(horizontal: false, vertical: true)
                     .padding(.vertical, ThroSpacing.spacing2)
+                HStack(spacing: ThroSpacing.spacing3) {
+                    if signedIn { DrawerKey(title: "Start your team", lit: true, seed: 31) { sheet = .join } }
+                    DrawerKey(title: "Start a league at thro.uk", seed: 47) { openURL(ThroWeb.organiser) }
+                }
             }
         }
     }
