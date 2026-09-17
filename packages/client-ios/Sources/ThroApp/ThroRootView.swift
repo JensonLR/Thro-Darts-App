@@ -295,6 +295,9 @@ public struct ThroRootView: View {
     @State private var profileOpen: ProfileOpening?
     /// PD-117: a screen's code that arrived before the account had answered; opened on the card once it has.
     @State private var screenAwaitingAccount: String?
+    /// When that code arrived. A code lives five minutes on the server, so a kept one is not used after that: signing
+    /// in an hour later must not open a card about a screen long gone.
+    @State private var screenAwaitingSince: Date?
     /// The You tab's Friends button opens the account screen on Friends rather than on its front.
     @State private var openingFriends = false
     @StateObject private var accountHolder = AccountHolder()
@@ -406,7 +409,11 @@ public struct ThroRootView: View {
         }
         .onChange(of: router.pending) { _, _ in follow() }
         .onChange(of: account?.profile?.accountId) { _, id in
-            if id != nil, let code = screenAwaitingAccount { screenAwaitingAccount = nil; showingAccount = false; openAccount(.screen(code)) }
+            if id != nil, let code = screenAwaitingAccount {
+                let fresh = screenAwaitingSince.map { Date().timeIntervalSince($0) < 300 } ?? false
+                screenAwaitingAccount = nil; screenAwaitingSince = nil
+                if fresh { showingAccount = false; openAccount(.screen(code)) }
+            }
         }
         .task {
             follow()
@@ -548,7 +555,7 @@ public struct ThroRootView: View {
             else {
                 // Kept for whoever signs in next. Somebody holding no session is shown the way in now, so the link
                 // they tapped does something they can see; the card follows the moment the account answers.
-                screenAwaitingAccount = code
+                screenAwaitingAccount = code; screenAwaitingSince = Date()
                 if let account, account.settled, !account.holdsSession { openAccount(nil) }
             }
         }
@@ -579,7 +586,7 @@ public struct ThroRootView: View {
             Group {
                 if !account.holdsSession && !openingFriends {
                     // The welcome sets its own appearance and draws its own board edge to edge.
-                    WelcomeScreen(account: account, ask: .fromYou) { showingAccount = false }
+                    WelcomeScreen(account: account, ask: screenAwaitingAccount == nil ? .fromYou : .forScreen) { showingAccount = false }
                 } else {
                     AccountScreen(account: account, opening: openingFriends ? .friends : .account,
                                   images: clubs.images, picture: { clubs.image($0) }) { showingAccount = false; openingFriends = false }

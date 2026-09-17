@@ -58,10 +58,28 @@ public enum Welcome {
     /// stops being true is the day the sentence has to come off the screen.
     public static let promise = "Matches scored on this phone stay on this phone, signed in or not."
 
+    /// The headline for why the board is up. One board, one way in — but somebody who opened a screen's sign-in
+    /// link came for that screen, not for an account, and is told so (PD-117).
+    public static func headline(for ask: Ask) -> String {
+        switch ask {
+        case .atLaunch, .fromYou: return headline
+        case .forScreen: return "A screen is waiting"
+        }
+    }
+
+    /// The sentence under it, for the same reason.
+    public static func body(for ask: Ask) -> String {
+        switch ask {
+        case .atLaunch, .fromYou: return body
+        case .forScreen: return "Sign in, and THRØ asks whether to sign that screen in as you. The code lasts five minutes."
+        }
+    }
+
     /// The door out, worded for why the screen is up.
     public static func skip(_ ask: Ask) -> String {
         switch ask {
         case .atLaunch: return "Not now, just score"
+        case .forScreen: return "Back"
         // Asked for from the You tab, "just score" would be answering a question nobody put: the
         // player came here on purpose and wants back where they were.
         case .fromYou: return "Back"
@@ -76,6 +94,8 @@ public enum Welcome {
         case atLaunch
         /// The player tapped SIGN IN on the You tab.
         case fromYou
+        /// A screen's sign-in link was opened by somebody holding no session (PD-117).
+        case forScreen
     }
 }
 
@@ -209,12 +229,12 @@ public struct WelcomeScreen: View {
     @ViewBuilder private var pitch: some View {
         arriving(Beat.heading) {
             VStack(spacing: ThroSpacing.spacing3) {
-                Text(Welcome.headline)
+                Text(Welcome.headline(for: ask))
                     .thro(ThroTypography.heading1.family(.sport).weight(.bold).tracking(em: 0))
                     .foregroundStyle(ThroColor.colorTextOnBoard)
                     .multilineTextAlignment(.center)
                     .fixedSize(horizontal: false, vertical: true)
-                Text(Welcome.body)
+                Text(Welcome.body(for: ask))
                     .thro(ThroTypography.bodyLarge)
                     .foregroundStyle(ThroColor.colorTextOnBoardSecondary)
                     .multilineTextAlignment(.center)

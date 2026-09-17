@@ -33,6 +33,8 @@ public class Understanding(private val model: SystemOne, private val today: () -
     public data class Picked(val fixtureId: UUID, val home: String, val away: String, val at: Instant, val p: Double, val alternatives: List<Alternative>)
     public data class Result(val legsHome: Int, val legsAway: Int)
     public data class Award(val toTeamId: UUID, val toName: String, val reason: String)
+    /** The points rules a sentence states; a part it does not state is null and is left as it stands. */
+    public data class Points(val win: Int?, val draw: Int?, val loss: Int?, val perLeg: Int?)
     /** Where a fixture is moved to. With no time in the sentence, the fixture keeps the clock time it had. */
     public data class Move(val on: LocalDate, val time: LocalTime, val to: Instant)
     public data class Schedule(val homeTeamId: UUID, val home: String, val awayTeamId: UUID, val away: String, val on: LocalDate?, val time: LocalTime?, val scheduledAt: Instant?)
@@ -45,6 +47,7 @@ public class Understanding(private val model: SystemOne, private val today: () -
         val text: String, val act: String, val confidence: Double, val ready: Boolean, val say: String, val doubt: String?,
         val fixture: Picked?, val result: Result?, val award: Award?, val schedule: Schedule?, val reason: String?,
         val move: Move? = null,
+        val points: Points? = null,
     )
 
     public companion object {
@@ -56,6 +59,7 @@ public class Understanding(private val model: SystemOne, private val today: () -
             "void" to "Annulling a result already recorded, so the fixture is played again",
             "move" to "Moving a fixture already in the season to another day or time: a postponement, a rearrangement, 'is off until'",
             "schedule" to "Adding a new fixture to the season: two teams and a date",
+            "points" to "Setting the league's points rules for its table: how many points for a win, a draw, a loss, or for each leg won",
             "none" to "None of these: a question, a note, a greeting, or something the desk cannot do",
         )
         /** "5-3", "7–2", "5 to 3", "5 v 3". Not "20:30": a colon is a clock, not a scoreline. */
@@ -125,6 +129,7 @@ public class Understanding(private val model: SystemOne, private val today: () -
         val scores = scorelines(clean).mapIndexed { i, s -> "s${i + 1}" to s }.toMap()
         val times = times(clean).mapIndexed { i, s -> "h${i + 1}" to s }.toMap()
 
+        val pointOptions: Map<String, String?> = (0..5).associate { it.toString() to null } + ("none" to "the sentence does not say")
         val state = obj("text" to clean, "scorelines_found" to arr(*scores.values.toTypedArray()), "today" to "${today()} (${today().dayOfWeek.getDisplayName(TextStyle.FULL, Locale.UK)})",
                         "context" to "A darts league secretary's desk. The sentence is about this league season's fixtures: two teams, a date, and often a scoreline in legs.")
         val questions = obj(
@@ -139,8 +144,8 @@ public class Understanding(private val model: SystemOne, private val today: () -
                                           teamKeys.mapValues { it.value.name } + ("none" to "no scoreline, or it cannot be told")),
             "winner_team" to choice("Which team does the sentence say won — beat the other, or the other lost to it?",
                                     teamKeys.mapValues { it.value.name } + ("none" to "the sentence does not say who won, or it was a draw")),
-            "award_team" to choice("If the fixture is awarded — a walkover, a forfeit, a team that did not turn up or broke a rule — which team is it awarded to: the one given the points, not the one at fault?",
-                                   teamKeys.mapValues { it.value.name } + ("none" to "no award, or it cannot be told")),
+            "award_team" to choice("If the sentence awards a fixture — a walkover, a forfeit, a team that did not turn up, could not raise a side, or broke a rule — which team gets it? The team that receives the walkover or the win, never the team at fault.",
+                                   teamKeys.mapValues { it.value.name } + ("none" to "the sentence awards nothing to anybody")),
             "home_team" to choice("For a new fixture: which team is the home side — named first, or said to be at home?", teamKeys.mapValues { it.value.name } + ("none" to "not stated")),
             "away_team" to choice("For a new fixture: which team is the away side — named second, or said to be away?", teamKeys.mapValues { it.value.name } + ("none" to "not stated")),
             "date_mode" to choice("How is the fixture's date written? 'absolute' names a month or a day of the month; 'relative' is given from today (today, tomorrow, a named weekday such as 'next Thursday'); 'none' when no date is stated.",
@@ -150,6 +155,11 @@ public class Understanding(private val model: SystemOne, private val today: () -
             "week_offset" to choice("If the date names a weekday: 'this' means the coming one, 'next' means the one in the week after.", mapOf("this" to "this week, or the coming one", "next" to "next week")),
             "month" to choice("If the date is absolute, which month?", MONTHS.associateWith { null } + ("none" to "no month named; the day of the month alone, or none")),
             "day" to choice("If the date is absolute, which day of the month?", (1..31).associate { it.toString() to null } + ("none" to "no day of the month named")),
+            // The league's rules (PD-125): small whole numbers offered, never written. "none" is "the sentence does not say".
+            "win_points" to choice("How many points does the sentence give for a WIN?", pointOptions),
+            "draw_points" to choice("How many points does the sentence give for a DRAW?", pointOptions),
+            "loss_points" to choice("How many points does the sentence give for a LOSS?", pointOptions),
+            "leg_points" to choice("How many points does the sentence give for EACH LEG won (a bonus per leg)?", pointOptions),
             "time" to choice("Which of these times found in the text is when the fixture is played?", times.mapValues { "the time written as '${it.value}'" } + ("none" to "no time stated")),
         )
         val answers = try { model.answers(state, questions) } catch (e: Exception) { null } ?: return null
@@ -256,6 +266,17 @@ public class Understanding(private val model: SystemOne, private val today: () -
                 }
                 Understood(clean, act, used.min(), doubt == null, say, doubt, fixture, null, null, null, null, move)
             }
+            "points" -> {
+                // A part is taken only when the model is reasonably sure it was stated (PD-125): measured on the real model,
+                // "nothing for a loss" against "does not say" sits near a coin's toss and flips between runs, and a part
+                // left out is simply left as the league has it — the safe side of that doubt.
+                fun part(id: String): Int? = pick(id)?.takeIf { it.second >= 0.6 }?.let { (k, p) -> k.toIntOrNull()?.also { used += p } }
+                val points = Points(part("win_points"), part("draw_points"), part("loss_points"), part("leg_points"))
+                val stated = listOfNotNull(points.win?.let { "$it for a win" }, points.draw?.let { "$it for a draw" }, points.loss?.let { "$it for a loss" }, points.perLeg?.let { "$it a leg won" })
+                if (stated.isEmpty()) doubt = "points"
+                Understood(clean, act, used.min(), doubt == null, if (stated.isEmpty()) "The points rules — but how many for a win?" else stated.joinToString(" · "), doubt,
+                           null, null, null, null, null, null, if (stated.isEmpty()) null else points)
+            }
             "schedule" -> {
                 val (hKey, hP) = pick("home_team") ?: ("none" to 0.0)
                 val (aKey, aP) = pick("away_team") ?: ("none" to 0.0)
@@ -284,7 +305,7 @@ public class Understanding(private val model: SystemOne, private val today: () -
                 }
                 Understood(clean, act, used.min(), doubt == null, say, doubt, null, null, null, schedule, null)
             }
-            else -> Understood(clean, "none", actP, false, "That reads as a question or a note, not something THRØ can do from here. Try “Grange A beat Dolphin 5–3”, “Move Riverside v Grange to next Thursday” or “Add Riverside A v Dolphin next Thursday at 8”.", null, null, null, null, null, null)
+            else -> Understood(clean, "none", actP, false, "That reads as a question or a note, not something THRØ can do from here. Try “Grange A beat Dolphin 5–3”, “Move Riverside v Grange to next Thursday”, “Add Riverside A v Dolphin next Thursday at 8” or “3 points for a win, 1 for a draw”.", null, null, null, null, null, null)
         }
     }
 
@@ -460,9 +481,10 @@ public class Understanding(private val model: SystemOne, private val today: () -
         val schedule = u.schedule?.let { s ->
             """{"homeTeamId":"${s.homeTeamId}","home":${q(s.home)},"awayTeamId":"${s.awayTeamId}","away":${q(s.away)},"on":${q(s.on?.toString())},"time":${q(s.time?.toString())},"scheduledAt":${q(s.scheduledAt?.toString())}}"""
         } ?: "null"
+        val points = u.points?.let { """{"win":${it.win},"draw":${it.draw},"loss":${it.loss},"pointsPerLegWon":${it.perLeg}}""" } ?: "null"
         val move = u.move?.let { """{"on":"${it.on}","time":"${it.time}","to":"${it.to}"}""" } ?: "null"
         return """{"text":${q(u.text)},"act":${q(u.act)},"confidence":${n(u.confidence)},"ready":${u.ready},"say":${q(u.say)},"doubt":${q(u.doubt)},""" +
-            """"fixture":$fixture,"result":$result,"award":$award,"schedule":$schedule,"move":$move,"reason":${q(u.reason)}}"""
+            """"fixture":$fixture,"result":$result,"award":$award,"schedule":$schedule,"move":$move,"points":$points,"reason":${q(u.reason)}}"""
     }
 
     private fun choice(instructions: String, criteria: Map<String, String?>): String =

@@ -6192,3 +6192,13 @@ the act and fixture questions say what a terse result and a derby are; `scorelin
 view names them, the public's only with `may_be_named`), entrants of kind `guest` present by being added;
 `POST /v1/events/{id}/guests`; `Retention.forgetGuests` in the daily loop; the knockout page's *Add a walk-up*. The
 privacy page, the ROPA and the under-18 page say what a typed name is and when it goes.
+
+## The desk reads the points rules (PD-125)
+
+`Understanding.Points`, the *points* act and its four Choices, an optional part taken only at 0.6; the desk's card with
+four boxes and *Set the rules*; the award question reworded; `JevEvaluationTest` reads every sentence twice and reports
+what differed and whether it had been flagged.
+
+**The board says a screen is waiting (PD-117, closed).** `Welcome.Ask.forScreen` with its own headline and sentence;
+the root passes it while a link's code waits; a kept code is used only within its five minutes. `WelcomeTests` 5,
+app tests 397. Looked at on the simulator: signed out, *Not now*, `thro://link/K7TQ2M` → *A screen is waiting*.

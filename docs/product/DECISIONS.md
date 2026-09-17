@@ -5348,3 +5348,31 @@ machinery exists; the hand-over does not). Both wait for somebody to need them.
 an essay; present and of kind *guest*; a name once per night; counted and unnamed before the draw; removed like any
 entry; named for the organiser in the draw, and publicly only where said; decided by hand; refused on a pairs night;
 and forgotten thirty days on, the draw kept.
+
+## PD-125 — The desk reads the league's points rules; and the model is read twice
+
+**17 September 2026.** The third Jev use on the ledger: a league's typed rules read into a points policy THRØ can
+compute. And a finding from running the evaluation more than once, which changes how optional readings are taken.
+
+**Decided.**
+
+1. **A sixth act on the desk: *points*.** "3 points for a win and 1 for a draw", "two for a win, one each for a draw,
+   nothing for losing", "a point per leg, plus two for winning the match". Four Choices — a win, a draw, a loss, each
+   leg won — over the whole numbers 0 to 5 and *the sentence does not say*: the model never writes a number. The card
+   fills the four boxes; a part not stated is left blank and so left as the league has it; *Set the rules* goes to
+   `POST /v1/seasons/{id}/points`, which supersedes and never edits (PD-112).
+2. **An optional part is taken only at 0.6 or better.** Read on the real model, "nothing for a loss" against "does
+   not say" sat near a coin's toss and came out differently between two runs. Leaving a part out is the safe side of
+   that doubt, so below 0.6 it is left out — the cookbook's *stated* question, done with the probability already
+   there.
+3. **The evaluation reads every sentence twice and counts what differs.** System One is trained for stable answers,
+   and mostly gives them: of 37 sentences read twice, **one** came out differently — the *derby* — and THRØ had
+   flagged it as unsure. The count is on the scorecard from now on, because a judgment that flips is one the card must
+   never present as sure.
+4. **The award question was reworded** after the walkover sentence sat at 0.50: it now names the team that *gets*
+   the walkover and never the one at fault, and reads at 0.72.
+
+**Evidence.** `UnderstandingTest` (13): the numbers offered and never written; only the stated parts; a shaky part
+left out; nothing stated a doubt. Three points sentences added to the held-out set before any answer was seen: three
+of three on first reading. Latest scorecard in `docs/product/JEV_SCORECARD.md`: 22 of 22, held out 15 of 15, list 10
+of 10, median 269 ms over 126 requests.

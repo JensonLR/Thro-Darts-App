@@ -218,6 +218,28 @@ class UnderstandingTest {
     }
 
     @Test
+    fun `the league's points rules are read from a sentence, only the parts it states`() {
+        val stub = Stub { mapOf("act" to choice("points", 0.93), "win_points" to choice("3", 0.95), "draw_points" to choice("1", 0.9),
+                                "loss_points" to choice("none", 0.9), "leg_points" to choice("1", 0.8)) }
+        val read = Understanding(stub) { today }.understand(desk, "three points for a win, one for a draw, and a point for every leg")!!
+        // The questions offer small whole numbers and a way out; the model never writes a number of its own.
+        assertEquals((0..5).map { it.toString() }.toSet() + "none", options(stub.asked, "win_points").keys)
+        assertEquals("points", read.act)
+        assertEquals(Understanding.Points(win = 3, draw = 1, loss = null, perLeg = 1), read.points)
+        assertEquals("3 for a win · 1 for a draw · 1 a leg won", read.say)
+        assertEquals(0.8, read.confidence, 1e-9)
+        assertTrue(read.ready)
+
+        // A part the model is not reasonably sure of is left out, and so left as the league has it.
+        val shaky = Stub { mapOf("act" to choice("points", 0.9), "win_points" to choice("2", 0.9), "draw_points" to choice("none", 0.9), "loss_points" to choice("0", 0.46), "leg_points" to choice("1", 0.9)) }
+        assertEquals(Understanding.Points(2, null, null, 1), Understanding(shaky) { today }.understand(desk, "a point per leg, plus two for winning")!!.points)
+
+        val nothing = Stub { mapOf("act" to choice("points", 0.9), "win_points" to choice("none", 0.9), "draw_points" to choice("none", 0.9), "loss_points" to choice("none", 0.9), "leg_points" to choice("none", 0.9)) }
+        val vague = Understanding(nothing) { today }.understand(desk, "change the points")!!
+        assertEquals("points", vague.doubt); assertFalse(vague.ready)
+    }
+
+    @Test
     fun `a question is not an act, and the reading says so`() {
         val stub = Stub { mapOf("act" to choice("none", 0.9)) }
         val read = Understanding(stub) { today }.understand(desk, "How many games are left?")!!

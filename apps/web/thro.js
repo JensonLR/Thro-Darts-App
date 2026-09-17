@@ -835,7 +835,7 @@ async function mountOrganiser(where, signInEl) {
         c.append(make('p', null, u.say));
         return c;
       }
-      const what = { result: 'a result', award: 'an award', void: 'an annulment', schedule: 'a new fixture', move: 'a move' }[u.act] || u.act;
+      const what = { result: 'a result', award: 'an award', void: 'an annulment', schedule: 'a new fixture', move: 'a move', points: 'the points rules' }[u.act] || u.act;
       c.append(make('div', 'row-name', u.say),
                make('div', 'row-meta', `Read as ${what} · THRØ is ${sure(u.confidence)}${u.doubt ? ` · check ${u.doubt === 'side' ? 'who it goes to' : 'the ' + u.doubt}` : ''}`));
       const fields = make('div', 'entry-form');
@@ -885,13 +885,23 @@ async function mountOrganiser(where, signInEl) {
         if (u.schedule && u.schedule.time) at.value = u.schedule.time.slice(0, 5);
         fields.append(homeTeam, make('span', 'v', 'v'), awayTeam, on, at);
       }
+      let pts = null;
+      if (u.act === 'points') {
+        // The parts the sentence stated are filled; a part left blank is left as the league has it now.
+        pts = {};
+        for (const [key, text] of [['win', 'a win'], ['draw', 'a draw'], ['loss', 'a loss'], ['pointsPerLegWon', 'per leg won']]) {
+          const box = make('input'); box.type = 'number'; box.min = '0'; box.max = '20'; box.inputMode = 'numeric';
+          if (u.points && u.points[key] !== null && u.points[key] !== undefined) box.value = u.points[key];
+          const l = make('label', 'spec', text + ' '); l.append(box); fields.append(l); pts[key] = box;
+        }
+      }
       if (u.act === 'move') {
         on = make('input'); on.type = 'date'; on.setAttribute('aria-label', 'The new day'); on.min = plan.startsOn; on.max = plan.endsOn;
         at = make('input'); at.type = 'time'; at.setAttribute('aria-label', 'The new time');
         if (u.move) { on.value = u.move.on; at.value = u.move.time.slice(0, 5); }
         fields.append(make('span', 'v', '→'), on, at);
       }
-      const label = { result: 'Record it', award: 'Award it', void: 'Annul it', schedule: 'Add the fixture', move: 'Move it' }[u.act];
+      const label = { result: 'Record it', award: 'Award it', void: 'Annul it', schedule: 'Add the fixture', move: 'Move it', points: 'Set the rules' }[u.act];
       const confirm = make('button', 'primary', label);
       const no = make('button', 'quiet-button', 'Not what I meant');
       no.onclick = () => { card.replaceChildren(); text.focus(); };
@@ -911,6 +921,11 @@ async function mountOrganiser(where, signInEl) {
             const f = (data.fixtures || []).find(x => x.fixtureId === fixture.value);
             if (!f || !f.decided) throw new Error('Only a fixture with a result can be annulled.');
             await authorised('POST', `/v1/fixtures/${encodeURIComponent(fixture.value)}/void`, { supersedes: f.decided.outcomeId, reason: reason.value.trim() });
+          } else if (u.act === 'points') {
+            const body = {};
+            for (const [key, box] of Object.entries(pts)) if (box.value !== '') body[key] = Number(box.value);
+            if (!Object.keys(body).length) throw new Error('Say at least how many points a win is worth.');
+            await authorised('POST', `/v1/seasons/${encodeURIComponent(plan.leagueSeasonId)}/points`, body);
           } else if (u.act === 'move') {
             if (!on.value || !at.value) throw new Error('A rearrangement is a day and a time.');
             const f = (data.fixtures || []).find(x => x.fixtureId === fixture.value);

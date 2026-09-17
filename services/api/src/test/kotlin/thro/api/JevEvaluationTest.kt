@@ -45,7 +45,8 @@ class JevEvaluationTest {
 
     /** What a person meant. Only the parts named are scored; [fixture] is "Home v Away". */
     private data class Meant(val text: String, val act: String, val fixture: String? = null, val legs: Pair<Int, Int>? = null, val awardTo: String? = null,
-                             val on: LocalDate? = null, val time: LocalTime? = null, val teams: Pair<String, String>? = null)
+                             val on: LocalDate? = null, val time: LocalTime? = null, val teams: Pair<String, String>? = null,
+                             val points: Understanding.Points? = null)
 
     private val sentences = listOf(
         Meant("Riverside A beat Grange A 5-3 last night", "result", "Riverside A v Grange A", 5 to 3),
@@ -89,6 +90,10 @@ class JevEvaluationTest {
         Meant("the riverside b riverside a game is moving to the 5th of November", "move", "Riverside B v Riverside A", on = LocalDate.of(2026, 11, 5), time = LocalTime.of(19, 30)),
         Meant("schedule Dolphin at home against Station Hotel for 26 November 7.30pm", "schedule", on = LocalDate.of(2026, 11, 26), time = LocalTime.of(19, 30), teams = "Dolphin" to "Station Hotel"),
         Meant("is the Bell game still on tonight?", "none"),
+        // Added with PD-125 (the points rules), before any answer to them was seen.
+        Meant("3 points for a win and 1 for a draw", "points", points = Understanding.Points(3, 1, null, null)),
+        Meant("we play two for a win, one each for a draw, nothing for losing", "points", points = Understanding.Points(2, 1, 0, null)),
+        Meant("it's a point per leg, plus two for winning the match", "points", points = Understanding.Points(2, null, null, 1)),
     )
 
     private val pasted = """
@@ -157,7 +162,8 @@ class JevEvaluationTest {
             val dateOk = m.on == null || date == m.on
             val timeOk = m.time == null || time == m.time
             val teamsOk = m.teams == null || r.schedule?.let { it.home to it.away } == m.teams
-            val all = actOk && fixtureOk && legsOk && awardOk && dateOk && timeOk && teamsOk
+            val pointsOk = m.points == null || r.points == m.points
+            val all = actOk && fixtureOk && legsOk && awardOk && dateOk && timeOk && teamsOk && pointsOk
             if (actOk) acts++
             if (m.fixture != null) { fixturesAsked++; if (fixtureOk && actOk) fixturesRight++ }
             if (all) whole++ else if (r.doubt == null && r.confidence >= 0.75) wrongAndSure++ else wrongAndUnsure++
@@ -170,7 +176,22 @@ class JevEvaluationTest {
         say("")
         }
 
-        say(""); say("## A pasted fixture list"); say("")
+        // The same sentences read a second time: a card that comes out differently is a judgment near a coin's toss.
+        say("## Read twice"); say("")
+        var differed = 0; var differedAndUnsure = 0
+        for (m in sentences + heldOut) {
+            val a = u.understand(desk, m.text); val b = u.understand(desk, m.text)
+            fun key(r: Understanding.Understood?) = r?.let { listOf(it.act, it.fixture?.fixtureId, it.result, it.award?.toTeamId, it.move?.to, it.schedule?.scheduledAt, it.points, it.doubt) }
+            if (key(a) != key(b)) {
+                differed++
+                val unsure = listOfNotNull(a, b).any { it.doubt != null || it.confidence < 0.75 }
+                if (unsure) differedAndUnsure++
+                say("- “${m.text}” read as *${a?.say}* (${a?.let { "%.2f".format(it.confidence) }}) and then *${b?.say}* (${b?.let { "%.2f".format(it.confidence) }})")
+            }
+        }
+        say(""); say("- Of ${sentences.size + heldOut.size} sentences read twice, **$differed** came out differently; THRØ had flagged **$differedAndUnsure** of those as unsure."); say("")
+
+        say("## A pasted fixture list"); say("")
         val startList = model.millis.size
         val read = u.readList(desk, pasted)
         if (read == null) say("*no answer*") else {

@@ -108,4 +108,16 @@ final class SignInProblemTests: XCTestCase {
         let said = "the ID token was not accepted: the token carries a nonce and the request did not say which"
         XCTAssertEqual(SignInProblem.words(APIError.status(401, #"{"error":"\#(said)"}"#)), said)
     }
+
+    /// PD-117: somebody who opened a screen's sign-in link while signed out is told why the board is up — a screen
+    /// is waiting — rather than being pitched an account they did not come for.
+    func testTheBoardSaysAScreenIsWaitingWhenThatIsWhyItIsUp() {
+        XCTAssertEqual(Welcome.headline(for: .forScreen), "A screen is waiting")
+        XCTAssertTrue(Welcome.body(for: .forScreen).contains("sign that screen in"), Welcome.body(for: .forScreen))
+        XCTAssertEqual(Welcome.skip(.forScreen), "Back")
+        XCTAssertLessThan(Welcome.headline(for: .forScreen).count, 30, "a headline, not a paragraph")
+        // The other two asks keep the words they had.
+        XCTAssertEqual(Welcome.headline(for: .atLaunch), Welcome.headline)
+        XCTAssertEqual(Welcome.body(for: .fromYou), Welcome.body)
+    }
 }
