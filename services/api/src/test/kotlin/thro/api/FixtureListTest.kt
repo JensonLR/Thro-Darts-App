@@ -107,6 +107,15 @@ class FixtureListTest {
     }
 
     @Test
+    fun `a heading that states the league's time is the time of every fixture that states none`() {
+        val read = Understanding(Reader()) { LocalDate.of(2026, 8, 20) }
+            .readList(desk, "All matches 7.45pm unless shown\nThursday 8 October\nRiverside A v Grange A\nDolphin v Bell B 8pm\n15 Oct Grange A v Dolphin 8pm")!!
+        // Two lines say 8pm and one heading says 7.45: the heading is the league's word, so it wins over the count.
+        assertEquals(listOf(LocalTime.of(19, 45), LocalTime.of(20, 0), LocalTime.of(20, 0)), read.rows.map { it.time })
+        assertEquals("the league's usual time, carried down", read.skipped.first().why)
+    }
+
+    @Test
     fun `too long a list is refused, and a model that answers nothing is no reading`() {
         val reader = Reader()
         val long = (1..201).joinToString("\n") { "8 Oct Riverside A v Dolphin" }

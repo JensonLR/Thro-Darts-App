@@ -5246,3 +5246,36 @@ left-out lines with why; each doubt; a list over 200 lines refused and a silent 
 first, on the unresolved `readList`. `LeagueActsHttpTest`: 403, 400, and a pasted list over the wire. Looked at in a
 browser against the stand-in: the rows, a doubtful row unticked, the server refusing a night with a team twice in
 words, and the fixture added once that line was unticked.
+
+## PD-123 — What the model is worth is measured, not assumed
+
+**17 September 2026.** The founder, with the TypeSafe key live: *"I want to know what value we are getting out of
+Jev — the model is supposed to be brilliant."* The honest answer on the day was that nobody knew. Every test held
+THRØ's code against a stand-in; the key lived on Render alone; no real answer from `jev-latest` had been seen by
+anybody building on it. TypeSafe's own guidance says the same thing the founder did: typed output guarantees the
+interface, not the truth — validate in the target domain.
+
+**Decided.**
+
+1. **A labelled evaluation, in the repository** (`JevEvaluationTest`): twenty-two sentences as a league secretary
+   types them — scores written three ways, "got hammered 7-1 by", "didn't turn up so give it to the Crown", "push it
+   back to the 22nd", "half seven", three that are not acts at all — and a fixture list as a league publishes it:
+   "R'side A", "Grnage A", "Dolphins", "Stn Hotel", a date heading, "all matches 7.30pm unless shown", a cup-week note.
+   Each is read through the same `Understanding` the desk uses and scored against what a person meant.
+2. **The scorecard says four things**: how often the act, the fixture and the *whole card* were right; of the cards
+   that needed a change, how many THRØ had flagged as unsure and how many it had been sure of (the number to drive to
+   nothing, since a person confirms every card); the rows of the list right with nothing to change; and the median
+   and 95th-percentile time per request. Written to `services/api/build/jev-scorecard.md`.
+3. **It runs only with a key in the environment** (`TYPESAFE_API_KEY`), never in CI, and the key never goes to GitHub.
+   Pointed at `tools/fake_systemone.py` it scores the floor a word-matcher sets: **11 of 22 cards, 1 of 10 rows**. The
+   model's worth is the distance above that.
+4. **Thresholds follow the scorecard.** *Sure / fairly sure / not sure* (0.75, 0.6) and the 0.85 at which a reading
+   acts on its own (PD-118) are first guesses until the first real run; they are changed from its numbers, and the
+   questions' wording with them.
+
+**What writing the set found in THRØ's own code**, fixed test-first the same day: a score written round the names
+("Dolphin 6 Bell B 2") had no candidate; "Friday" said on a Friday resolved to today; "the 16th" with no month
+resolved to nothing; and a heading that states the league's usual time was ignored in favour of counting.
+
+**What the founder does.** Put the key in `.env.local` (git-ignored) as `TYPESAFE_API_KEY=…`, and the next session
+runs the evaluation, reads the scorecard, and tunes from it.

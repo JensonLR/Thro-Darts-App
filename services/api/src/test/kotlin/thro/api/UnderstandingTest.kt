@@ -201,6 +201,27 @@ class UnderstandingTest {
     }
 
     @Test
+    fun `a score written round the names, a weekday said on that weekday, and a day with no month are all read`() {
+        // "Dolphin 6 Grange A 2": no dash anywhere, so the two numbers either side of a name are the scoreline.
+        assertEquals(listOf("6-2"), Understanding.scorelines("Dolphin 6 Grange A 2"))
+        assertEquals(listOf("5-3"), Understanding.scorelines("Riverside 5 Grange 3 on the 8th"), "an ordinal is a day, not a leg")
+        assertEquals(emptyList(), Understanding.scorelines("Move it to the 16th at 8"), "one number is not a scoreline")
+
+        // Said on a Tuesday, "Tuesday" is next week's: nobody moves a fixture to the day they are speaking on.
+        val weekday = Stub { mapOf("act" to choice("move", 0.9), "fixture" to choice("f2", 0.9), "date_mode" to choice("relative", 0.9), "day_anchor" to choice("weekday", 0.9),
+                                   "weekday" to choice("Tuesday", 0.9), "week_offset" to choice("this", 0.8), "month" to choice("none", 0.9), "day" to choice("none", 0.9), "time" to choice("none", 0.9)) }
+        assertEquals(LocalDate.of(2026, 9, 22), Understanding(weekday) { today }.understand(desk, "Move Riverside v Grange to Tuesday")!!.move?.on)
+
+        // "the 16th" with no month: the next 16th to come.
+        val dayOnly = Stub { mapOf("act" to choice("move", 0.9), "fixture" to choice("f2", 0.9), "date_mode" to choice("absolute", 0.9), "day_anchor" to choice("today", 0.2),
+                                   "weekday" to choice("none", 0.9), "week_offset" to choice("this", 0.5), "month" to choice("none", 0.9), "day" to choice("16", 0.9), "time" to choice("none", 0.9)) }
+        assertEquals(LocalDate.of(2026, 9, 16), Understanding(dayOnly) { today }.understand(desk, "Move Riverside v Grange to the 16th")!!.move?.on)
+        val dayPassed = Stub { mapOf("act" to choice("move", 0.9), "fixture" to choice("f2", 0.9), "date_mode" to choice("absolute", 0.9), "day_anchor" to choice("today", 0.2),
+                                     "weekday" to choice("none", 0.9), "week_offset" to choice("this", 0.5), "month" to choice("none", 0.9), "day" to choice("3", 0.9), "time" to choice("none", 0.9)) }
+        assertEquals(LocalDate.of(2026, 10, 3), Understanding(dayPassed) { today }.understand(desk, "Move Riverside v Grange to the 3rd")!!.move?.on, "the 3rd has gone this month, so next month's")
+    }
+
+    @Test
     fun `the scoreline and time candidates are found by code, so the model can only choose what is there`() {
         assertEquals(listOf("5-3"), Understanding.scorelines("Grange A beat Dolphin 5-3 last night"))
         assertEquals(listOf("7–2", "4-4"), Understanding.scorelines("first leg 7–2, then 4-4, on Thursday 8"))

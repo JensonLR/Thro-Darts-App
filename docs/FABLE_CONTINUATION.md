@@ -15,9 +15,7 @@ audit. Kept current during the build; **not** a deliverable, and never a substit
   commit **3b25dcd** (PD-117 to PD-122; deploy-api green, `/healthz` read by hand; the association file serves
   `applinks` for `/link/*`; `/v1/auth/providers` says `reads:true` — the founder set the TypeSafe key on 17 Sep); the web at
   3b25dcd (Tell THRØ leads the season desk, the list is pasted into the scheduler, *Who changed what* folds at the
-  foot, the laptop's sign-in panel draws a QR; Open THRØ on a phone, `link.html`; the `/link/*` rewrite in
-  `render.yaml` waits for a Blueprint sync, so `thro.uk/link/<code>` is a 404 in Safari until then while the
-  universal link into the app already works; the Apple/Google buttons and THRØ's readings are dormant until the
+  foot, the laptop's sign-in panel draws a QR; Open THRØ on a phone, `link.html`; the `/link/*` rewrite was added to THRO-web by the dashboard on 17 Sep and `thro.uk/link/<code>` answers 200; the Apple/Google buttons and THRØ's readings are dormant until the
   founder sets their keys). `/healthz` reports database, schema version, code version and commit.
 - Neon production branch `br-icy-leaf-zaq0grqg` (project `round-darkness-99300686`), at V053. Restore points are
   branches: the pipeline's `pipeline-restore-point-before-<sha>-<stamp>` (newest three kept) and the founder's
@@ -36,7 +34,7 @@ entitlements and refused if the signed app lacks Sign in with Apple or the passk
 
 PD-095 deploy pipeline · PD-096 retention sweep · PD-097 Android notice · PD-098 TestFlight entitlements ·
 PD-099 fixtures · PD-100 start a league · PD-101 moderation page · PD-102 ways in · PD-103 decisions enforce +
-league management · PD-104 organiser email · PD-105 provisional rating · PD-106 the team's fixture · PD-107 registrations · PD-108 moving a fixture by agreement · PD-109 a knockout · PD-110 a friendly · PD-111 rounds · PD-112 the organiser's remaining acts · PD-113 invitationals · PD-114 sign in by the phone · PD-115 pairs, teams, seeds, boards · PD-116 Apple and Google on the web (awaiting the founder's console work) · PD-117 the phone that is already here (Open THRØ from the web's sign-in, `/link/<code>`) · PD-118 THRØ reads reports and names with TypeSafe's System One model (V054) · PD-119 Tell THRØ, the desk reads a sentence into an act (the key was set 17 Sep: production says `reads:true`) · PD-120 who changed what (V055) · PD-121 the sign-in code as a QR · PD-122 paste the fixture list · two design passes (web, phone).
+league management · PD-104 organiser email · PD-105 provisional rating · PD-106 the team's fixture · PD-107 registrations · PD-108 moving a fixture by agreement · PD-109 a knockout · PD-110 a friendly · PD-111 rounds · PD-112 the organiser's remaining acts · PD-113 invitationals · PD-114 sign in by the phone · PD-115 pairs, teams, seeds, boards · PD-116 Apple and Google on the web (awaiting the founder's console work) · PD-117 the phone that is already here (Open THRØ from the web's sign-in, `/link/<code>`) · PD-118 THRØ reads reports and names with TypeSafe's System One model (V054) · PD-119 Tell THRØ, the desk reads a sentence into an act (the key was set 17 Sep: production says `reads:true`) · PD-120 who changed what (V055) · PD-121 the sign-in code as a QR · PD-122 paste the fixture list · PD-123 the model measured (`JevEvaluationTest`; awaiting a key in `.env.local`) · two design passes (web, phone).
 
 ## Completion matrix (from four read-only audits, 16 September; details in PD-106 and CHANGE_RECORD)
 

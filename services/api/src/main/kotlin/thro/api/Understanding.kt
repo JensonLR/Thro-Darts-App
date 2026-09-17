@@ -62,6 +62,8 @@ public class Understanding(private val model: SystemOne, private val today: () -
         private val SCORE = Regex("""(?<!\d)(\d{1,2})\s*(?:-|–|—|to|v)\s*(\d{1,2})(?!\d)""", RegexOption.IGNORE_CASE)
         /** "8", "20:30", "7.30pm", "8 o'clock". Not "15th": an ordinal is a day of the month. */
         private val TIME = Regex("""(?<![\d.:])(\d{1,2})(?:[.:](\d{2}))?\s*(am|pm|o'clock)?(?!\d|st|nd|rd|th)""", RegexOption.IGNORE_CASE)
+        /** A number standing alone: not part of a clock ("7.30", "8pm"), not an ordinal ("8th"), at most two digits. */
+        private val BARE = Regex("""(?<![\d.:])\d{1,2}(?![\d.:]|\s*(?:am|pm|o'clock)|st|nd|rd|th)""", RegexOption.IGNORE_CASE)
         private val MONTH_AFTER = Regex("""^\s*(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)""", RegexOption.IGNORE_CASE)
         private val MONTH_BEFORE = Regex("""(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\s*$""", RegexOption.IGNORE_CASE)
         private val MONTHS = listOf("January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December")
@@ -72,7 +74,16 @@ public class Understanding(private val model: SystemOne, private val today: () -
         private fun dayOf(d: LocalDate): String = "${DOW[d.dayOfWeek.value - 1]} ${d.dayOfMonth} ${MON[d.monthValue - 1]}"
 
         /** The scorelines written in the text, as written: "5-3", "7–2". The model chooses among these or none. */
-        public fun scorelines(text: String): List<String> = SCORE.findAll(text).map { it.value.trim() }.distinct().toList()
+        public fun scorelines(text: String): List<String> {
+            val written = SCORE.findAll(text).map { it.value.trim() }.distinct().toList()
+            if (written.isNotEmpty()) return written
+            // "Dolphin 6 Grange A 2": the legs either side of a name. Exactly two bare numbers, neither a clock, an
+            // ordinal nor beside a month's name — and then they are the scoreline, in the order they were written.
+            val bare = BARE.findAll(text).filter { m ->
+                !(MONTH_AFTER.containsMatchIn(text.substring(m.range.last + 1)) || MONTH_BEFORE.containsMatchIn(text.substring(0, m.range.first)))
+            }.map { it.value }.toList()
+            return if (bare.size == 2) listOf("${bare[0]}-${bare[1]}") else emptyList()
+        }
 
         /**
          * The times written in the text, as written: "8", "20:30", "7.30pm". A bare number that is part of a scoreline is
@@ -311,6 +322,7 @@ public class Understanding(private val model: SystemOne, private val today: () -
         class Draft(val line: Int, val text: String, val home: Team?, val away: Team?, val on: LocalDate?, val onInSeason: Boolean, val time: LocalTime?, val confidence: Double)
         val drafts = mutableListOf<Draft>(); val skipped = mutableListOf<Skipped>()
         var carried: Pair<LocalDate?, Boolean>? = null
+        var headingTime: LocalTime? = null
         for ((index, entry) in lines.withIndex()) {
             val (number, line) = entry
             val (answers, found) = answered[index]
@@ -324,7 +336,14 @@ public class Understanding(private val model: SystemOne, private val today: () -
             val month = pick("month")?.takeIf { it.first != "none" }; val day = pick("day")?.takeIf { it.first != "none" }
             val own = if (month != null && day != null) inSeason(MONTHS.indexOf(month.first) + 1, day.first.toInt()) else null
             if (isFixture < 0.5) {
-                if (own != null) { carried = own; skipped += Skipped(number, line, "a date, carried down") } else skipped += Skipped(number, line, "not a fixture")
+                // A heading may carry a date down, or state the league's usual time ("all matches 7.30pm unless shown").
+                // Only a clock that says it is one — "7.30pm", "19:30" — never a bare number: "Week 3" is not three o'clock.
+                val stated = pick("time")?.let { (k, _) -> found[k]?.takeIf { w -> Regex("""[.:]\d{2}|am|pm|o'clock""", RegexOption.IGNORE_CASE).containsMatchIn(w) }?.let { clockOf(it) } }
+                when {
+                    own != null -> { carried = own; skipped += Skipped(number, line, "a date, carried down") }
+                    stated != null && headingTime == null -> { headingTime = stated; skipped += Skipped(number, line, "the league's usual time, carried down") }
+                    else -> skipped += Skipped(number, line, "not a fixture")
+                }
                 continue
             }
             if (own != null) carried = own
@@ -335,8 +354,9 @@ public class Understanding(private val model: SystemOne, private val today: () -
             val time = pick("time")?.let { (k, p) -> found[k]?.let { used += p; clockOf(it) } }
             drafts += Draft(number, line, teamKeys[home?.first], teamKeys[away?.first], (own ?: carried)?.first, (own ?: carried)?.second ?: false, time, used.min())
         }
-        // The list's usual time: the one stated most often, the first stated when two tie.
-        val usual = drafts.mapNotNull { it.time }.let { stated -> stated.groupingBy { it }.eachCount().maxWithOrNull(compareBy<Map.Entry<LocalTime, Int>> { it.value }.thenBy { -stated.indexOf(it.key) })?.key }
+        // The list's usual time: the league's own word in a heading; failing that, the one stated most often on the
+        // fixtures, the first stated when two tie.
+        val usual = headingTime ?: drafts.mapNotNull { it.time }.let { stated -> stated.groupingBy { it }.eachCount().maxWithOrNull(compareBy<Map.Entry<LocalTime, Int>> { it.value }.thenBy { -stated.indexOf(it.key) })?.key }
         val rows = drafts.map { d ->
             val time = d.time ?: usual
             val doubt = when {
@@ -372,7 +392,8 @@ public class Understanding(private val model: SystemOne, private val today: () -
                 "weekday" -> {
                     val wd = weekday?.first?.let { name -> DayOfWeek.values().firstOrNull { it.getDisplayName(TextStyle.FULL, Locale.UK) == name } } ?: return null
                     weekday.let { used += it.second }
-                    var d = now
+                    // From tomorrow: said on a Thursday, "Thursday" is next week's — nobody names today by its weekday.
+                    var d = now.plusDays(1)
                     while (d.dayOfWeek != wd) d = d.plusDays(1)
                     if (offset?.first == "next") { used += offset.second; d = d.plusWeeks(1) }
                     d
@@ -380,9 +401,16 @@ public class Understanding(private val model: SystemOne, private val today: () -
                 else -> null
             }
             "absolute" -> {
-                val m = month?.first?.let { name -> MONTHS.indexOf(name) + 1 }?.takeIf { it > 0 } ?: return null
                 val dd = day?.first?.toIntOrNull() ?: return null
-                month.let { used += it.second }; day.let { used += it.second }
+                val m = month?.first?.let { name -> MONTHS.indexOf(name) + 1 }?.takeIf { it > 0 }
+                if (m == null) {
+                    // "the 16th", with no month: the next 16th to come, today's included.
+                    day.let { used += it.second }
+                    var d = now
+                    repeat(62) { if (d.dayOfMonth == dd) return d; d = d.plusDays(1) }
+                    return null
+                }
+                month?.let { used += it.second }; day.let { used += it.second }
                 // No year is ever asked for: the first such date on or after today is the one a secretary means.
                 var d = runCatching { LocalDate.of(now.year, m, dd) }.getOrNull() ?: return null
                 if (d.isBefore(now)) d = d.plusYears(1)

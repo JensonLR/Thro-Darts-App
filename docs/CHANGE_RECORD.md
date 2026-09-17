@@ -6168,3 +6168,13 @@ out, *Not now*, `thro://link/K7TQ2M` → the sign-in board with *Back*.
 **The link page under its own rewrite (17 September).** The `/link/*` rewrite went onto the live static site (THRO-web,
 by the dashboard — `render.yaml` governs the Blueprint's duplicate, not the site thro.uk points at), and the page came
 up unstyled: served at `/link/<code>`, its relative `thro.css` resolved to `/link/thro.css`. `<base href="/">`.
+
+## The model, measured (PD-123)
+
+`JevEvaluationTest` (skipped without `TYPESAFE_API_KEY`; honours `THRO_TYPESAFE_ENDPOINT`), its scorecard, and four
+readings the labelled set showed were missing: `scorelines` falls back to two bare numbers either side of a name;
+a named weekday resolves from tomorrow; a day of the month with no month is the next one to come; a heading's explicit
+clock is the list's usual time (a bare number in a heading never is). `UnderstandingTest` 11, `FixtureListTest` 4.
+On Render the same day, by the dashboard: the `/link/*` rewrite on THRO-web (the site thro.uk points at), and
+THRO-web and thro-api-staging moved into *My project › Production*. The Blueprint's duplicate `thro-web` has no domain
+and is left for the founder to suspend or delete.
