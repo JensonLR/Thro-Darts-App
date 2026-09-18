@@ -6458,3 +6458,12 @@ aside severity only — never the child-safety reading. `Server.kt` puts `addres
 `WallSection` moves from fourth of eight to below `ThroMatchesBlock`; every `throEntrance` index on the screen now
 comes from the enum rather than a literal. New `LiveOrderTests` (4). App tests 911; README and CLIENT_IOS.md counts
 updated.
+
+## The floor the questions have to beat (PD-157)
+
+No new model questions. `Understanding.kt`: three copies of `pick()` collapse into one companion function that
+prefers `confidence` over the winner's share; a `settle()` applies a `SURE_ENOUGH` = 0.6 floor to `ready` across all
+six arms, with doubt `sure`; `OPTION_CEILING` = 254 replaces `take(200)`; two bare `0.6`s now name the constant.
+`Reader.kt`: model pinned to `jev-1.13.0`, `inputTokensSoFar` counts `usage.input_tokens` and logs the running cost.
+`Main.kt` boot line reports the real model instead of a literal. API tests +7. Recorded that the ranking's premise —
+a fixture Choice that cannot decline — was wrong: `none` was always an option.

@@ -37,7 +37,7 @@ class TypeSafeReaderTest {
         fun stop() = server.stop(0)
     }
 
-    private val reportAnswer = """{"model":"jev-latest","answers":{
+    private val reportAnswer = """{"model":"jev-1.13.0","answers":{
         "category":{"type":"choice","choice":"harassment","probabilities":{"harassment":0.82,"hate_or_slur":0.1,"other":0.08},"confidence":0.8},
         "child_safety":{"type":"noul","noul":0.03},
         "severity":{"type":"score","score":1.7,"legend":{"0":"a","1":"b","2":"c","3":"d"},"probabilities":{"0":0.05,"1":0.3,"2":0.55,"3":0.1},"confidence":0.6}
@@ -54,12 +54,12 @@ class TypeSafeReaderTest {
             assertEquals(0.8, reading.categoryConfidence, 1e-9)
             assertEquals(0.03, reading.childSafety, 1e-9)
             assertEquals(1.7, reading.severity, 1e-9)
-            assertEquals("jev-latest", reading.model)
+            assertEquals("jev-1.13.0", reading.model)
 
             assertEquals("Bearer key-123", stub.lastAuth, "the key is sent as a bearer token, never in the body or the address")
             assertTrue(stub.lastContentType!!.startsWith("application/json"))
             val sent = Json.parseObject(stub.lastBody!!)
-            assertEquals("jev-latest", sent["model"])
+            assertEquals("jev-1.13.0", sent["model"], "a version goes on the wire, never an alias (PD-157)")
             @Suppress("UNCHECKED_CAST")
             val questions = sent["questions"] as Map<String, Any?>
             assertEquals(setOf("category", "child_safety", "severity"), questions.keys)
@@ -82,7 +82,7 @@ class TypeSafeReaderTest {
 
     @Test
     fun `a name is read for abuse and for impersonation`() {
-        val stub = Stub(200, """{"model":"jev-latest","answers":{"abusive":{"type":"noul","noul":0.94},"impersonates":{"type":"noul","noul":0.02}},"usage":{"input_tokens":50,"output_tokens":8}}""")
+        val stub = Stub(200, """{"model":"jev-1.13.0","answers":{"abusive":{"type":"noul","noul":0.94},"impersonates":{"type":"noul","noul":0.02}},"usage":{"input_tokens":50,"output_tokens":8}}""")
         try {
             val reading = TypeSafeReader("k", endpoint = stub.uri, timeout = Duration.ofSeconds(2)).readName("team", "Kill All Referees")
             assertNotNull(reading)
@@ -129,7 +129,7 @@ class TypeSafeReaderTest {
         val nonsense = Stub(200, "<html>not json</html>")
         try { assertNull(TypeSafeReader("k", endpoint = nonsense.uri, timeout = Duration.ofSeconds(2)).readReport("team", "X", "why")) } finally { nonsense.stop() }
 
-        val incomplete = Stub(200, """{"model":"jev-latest","answers":{"category":{"type":"choice","choice":"other","probabilities":{"other":1},"confidence":1}},"usage":{}}""")
+        val incomplete = Stub(200, """{"model":"jev-1.13.0","answers":{"category":{"type":"choice","choice":"other","probabilities":{"other":1},"confidence":1}},"usage":{}}""")
         try { assertNull(TypeSafeReader("k", endpoint = incomplete.uri, timeout = Duration.ofSeconds(2)).readReport("team", "X", "why"), "three answers or none") } finally { incomplete.stop() }
 
         val slow = Stub(200, reportAnswer, delay = Duration.ofMillis(1500))
@@ -137,5 +137,46 @@ class TypeSafeReaderTest {
 
         val unreachable = TypeSafeReader("k", endpoint = URI("http://127.0.0.1:9/v1/systemone"), timeout = Duration.ofMillis(300))
         assertNull(unreachable.readName("account", "Anybody"))
+    }
+
+    // ---- PD-157: what it costs, and which model answered ----
+
+    @Test
+    fun `the reader pins a version rather than an alias that moves under it`() {
+        // TypeSafe's own guidance: "If you have tuned confidence thresholds against a specific version, pin that
+        // version's ID instead of the alias." THRØ has four — ACTS_AT, MAY_CONCERN_A_CHILD, the 0.6 an optional
+        // part is taken at (PD-125), and the desk's ready floor. jev-latest points at jev-1.13.0 today, so this
+        // changes no answer; it stops the next release changing them all without a deploy from us.
+        val stub = Stub(200, reportAnswer)
+        try {
+            TypeSafeReader("key-123", endpoint = stub.uri).readReport("account", "Ann", "Threats after the match.")
+            assertEquals("jev-1.13.0", Json.parseObject(stub.lastBody!!)["model"],
+                         "a versioned id goes on the wire, not an alias")
+        } finally { stub.stop() }
+    }
+
+    @Test
+    fun `what a reading cost is counted, because otherwise nobody can see it`() {
+        // TypeSafe charge per input token and give output away ($42 per Btok). Reader.kt read `answers` and threw
+        // `usage` away, so THRØ was spending an amount nothing in the repo could report.
+        val stub = Stub(200, reportAnswer)
+        try {
+            val reader = TypeSafeReader("key-123", endpoint = stub.uri)
+            assertEquals(0L, reader.inputTokensSoFar, "nothing asked, nothing spent")
+            reader.readReport("account", "Ann", "Threats after the match.")
+            assertEquals(200L, reader.inputTokensSoFar, "the input tokens the answer reported")
+            reader.readReport("account", "Ann", "And again.")
+            assertEquals(400L, reader.inputTokensSoFar, "and they add up across readings")
+        } finally { stub.stop() }
+    }
+
+    @Test
+    fun `a reading with no usage block costs nothing anybody can prove, and is not guessed at`() {
+        val stub = Stub(200, """{"model":"jev-1.13.0","answers":{"abusive":{"type":"noul","noul":0.9},"impersonates":{"type":"noul","noul":0.01}}}""")
+        try {
+            val reader = TypeSafeReader("key-123", endpoint = stub.uri)
+            assertEquals(NameReading(0.9, 0.01, "jev-1.13.0"), reader.readName("account", "Kill All Refs"))
+            assertEquals(0L, reader.inputTokensSoFar, "an absent usage block is not an estimate")
+        } finally { stub.stop() }
     }
 }

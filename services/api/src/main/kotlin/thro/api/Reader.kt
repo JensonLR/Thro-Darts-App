@@ -38,15 +38,21 @@ public data class Reading(val category: String, val categoryConfidence: Double, 
 public data class NameReading(val abusive: Double, val impersonates: Double, val model: String)
 
 /**
- * The reader over TypeSafe's System One endpoint, model `jev-latest` — one request per reading, the questions asked
+ * The reader over TypeSafe's System One endpoint, model `jev-1.13.0` — one request per reading, the questions asked
  * together, the answers read back by name. The key is sent as a bearer token; it lives in the server's environment
  * and nowhere else, and the phone and the web never see it or the endpoint.
+ *
+ * **A version, not an alias** (PD-157). This asked for `jev-latest` until now. An alias moves when TypeSafe ship a
+ * release, and THRØ has four numbers tuned against whatever answered last: `Safety.ACTS_AT` (0.85),
+ * `Safety.MAY_CONCERN_A_CHILD` (0.5), the 0.6 an optional part is taken at (PD-125), and the desk's ready floor.
+ * TypeSafe's own guidance is to pin the version when thresholds are tuned against one. `jev-latest` points at
+ * `jev-1.13.0` today, so this changes no answer — it stops the next release changing all four with no deploy here.
  */
 public class TypeSafeReader(
     private val apiKey: String,
     private val endpoint: URI = URI("https://api.typesafe.ai/v1/systemone"),
     private val timeout: Duration = Duration.ofSeconds(3),
-    private val model: String = "jev-latest",
+    private val model: String = "jev-1.13.0",
     /** The first wait before asking a busy model again; the second wait is three times it. */
     private val backoff: Duration = Duration.ofMillis(250),
 ) : Reader, SystemOne {
@@ -137,6 +143,23 @@ public class TypeSafeReader(
      * again, and the first real run (PD-123) met exactly that for a minute. Anything else is an answer: a refusal, a
      * timeout or nonsense is no reading, and is not asked twice.
      */
+    /**
+     * Input tokens spent by this reader since it was made (PD-157).
+     *
+     * TypeSafe charge **per input token and give output away** — $42 per billion, $0.042 per million. `ask` read
+     * `answers` out of every response and threw `usage` on the floor, so THRØ was spending an amount that nothing
+     * in this repository could report and no log could show. At production volume the figure is small; the point
+     * is that it is now a figure rather than a guess, and it is the number the desk's 254-option fixture Choice
+     * will move most.
+     *
+     * A response that carries no `usage` adds nothing: an absent count is not an estimate.
+     */
+    private val inputTokens: java.util.concurrent.atomic.AtomicLong = java.util.concurrent.atomic.AtomicLong(0)
+    public val inputTokensSoFar: Long get() = inputTokens.get()
+
+    /** The model this reader asks for, so a boot line can report it rather than repeat a literal beside it. */
+    public val modelName: String get() = model
+
     private fun ask(state: String, questions: String): Map<String, Any?>? = try {
         val body = """{"state":$state,"model":${Contract.q(model)},"questions":$questions}"""
         val request = HttpRequest.newBuilder(endpoint).timeout(timeout)
@@ -146,8 +169,10 @@ public class TypeSafeReader(
         for (attempt in 1..3) {
             val response = client.send(request, HttpResponse.BodyHandlers.ofString())
             if (response.statusCode() == 200) {
+                val parsed = Json.parseObject(response.body())
                 @Suppress("UNCHECKED_CAST")
-                answers = Json.parseObject(response.body())["answers"] as? Map<String, Any?>
+                answers = parsed["answers"] as? Map<String, Any?>
+                ((parsed["usage"] as? Map<*, *>)?.get("input_tokens") as? Number)?.let { spent(it.toLong()) }
                 break
             }
             if (response.statusCode() !in setOf(429, 503, 529) || attempt == 3) break
@@ -157,6 +182,15 @@ public class TypeSafeReader(
     } catch (e: Exception) {
         // A reading that does not come is no reading: a timeout, a refused connection, a body that is not JSON.
         null
+    }
+
+    /** Adds a reading's input tokens to the running total, and says so where an operator can read it. */
+    private fun spent(tokens: Long) {
+        if (tokens <= 0) return
+        val total = inputTokens.addAndGet(tokens)
+        // $42 per billion input tokens, output free. Printed to six decimal places because at THRØ's volume the
+        // honest answer is a fraction of a cent, and a rounded 0.00 would read as "free" rather than "not measured".
+        System.err.println("reader: $tokens input tokens; $total since start, about $${"%.6f".format(total * 42.0 / 1e9)} at \$42/Btok")
     }
 
     private fun num(v: Any?): Double? = (v as? Number)?.toDouble()

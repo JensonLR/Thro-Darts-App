@@ -51,6 +51,47 @@ public class Understanding(private val model: SystemOne, private val today: () -
     )
 
     public companion object {
+        /**
+         * How many options a Choice is given before the way out (PD-157). TypeSafe document 255 as the ceiling, and
+         * "none" takes one of them.
+         *
+         * It was 200, chosen for no stated reason, and a real division is bigger than that: Stockton Thursday's
+         * eighteen teams play 306 fixtures in a double round-robin, so 106 of them were cut off the end of the list
+         * the model was allowed to choose from — and a fixture that is not an option cannot be picked, however
+         * plainly the sentence names it. Past 254 the answer is two passes (a Choice over the season's weeks, then
+         * over that week's fixtures), not a longer list.
+         */
+        public const val OPTION_CEILING: Int = 254
+
+        /**
+         * How sure a read has to be before THRØ offers it for a tap (PD-157).
+         *
+         * `ready` was `doubt == null` — every part present and nothing contradicting. But every part present is not
+         * every part right: the scorecard holds "station 5 riverside b 1" read *reversed* at 0.39, with nothing
+         * contradicting it, and that card was ready. The number is 0.6 because that is what PD-125 measured as the
+         * band below which an answer flips between runs; a third threshold would be one more number to keep true.
+         */
+        public const val SURE_ENOUGH: Double = 0.6
+
+        /**
+         * The option a Choice picked, and **how sure the model was** — its `confidence`, not the winner's share of
+         * the distribution (PD-157).
+         *
+         * These were three byte-similar copies, each reading `probabilities[choice]` and falling back to
+         * `confidence`. That is the wrong way round. TypeSafe derive `confidence` from the whole distribution, so
+         * it is the statistic that tells a winner at 0.45 with a runner-up at 0.44 apart from a winner at 0.45 with
+         * the rest spread thin — which is exactly the difference between a read worth offering and a guess.
+         * `probabilities[choice]` remains the fallback for an answer that carries no confidence, and
+         * `distribution` still reads the probabilities for the alternatives a card lists.
+         */
+        internal fun pick(answers: Map<String, Any?>, id: String): Pair<String, Double>? {
+            val a = answers[id] as? Map<*, *> ?: return null
+            val option = a["choice"] as? String ?: return null
+            val sure = (a["confidence"] as? Number)?.toDouble()
+                ?: ((a["probabilities"] as? Map<*, *>)?.get(option) as? Number)?.toDouble() ?: 0.0
+            return option to sure
+        }
+
         /** Darts in the UK: every date and time the desk reads is London's. */
         public val ZONE: ZoneId = ZoneId.of("Europe/London")
         public val ACTS: Map<String, String> = linkedMapOf(
@@ -148,7 +189,7 @@ public class Understanding(private val model: SystemOne, private val today: () -
     public fun understand(desk: Desk, text: String): Understood? {
         val clean = text.trim()
         // The candidates code found: the model can only choose what is there.
-        val fixtures = desk.fixtures.sortedWith(compareBy<Fixture> { it.decided }.thenBy { it.at }).take(200)
+        val fixtures = desk.fixtures.sortedWith(compareBy<Fixture> { it.decided }.thenBy { it.at }).take(OPTION_CEILING)
         val fixtureKeys = fixtures.mapIndexed { i, f -> "f${i + 1}" to f }.toMap()
         val teamKeys = desk.teams.mapIndexed { i, t -> "t${i + 1}" to t }.toMap()
         val scores = scorelines(clean).mapIndexed { i, s -> "s${i + 1}" to s }.toMap()
@@ -183,18 +224,24 @@ public class Understanding(private val model: SystemOne, private val today: () -
         )
         val answers = try { model.answers(state.s, questions.s) } catch (e: Exception) { null } ?: return null
 
-        fun pick(id: String): Pair<String, Double>? {
-            val a = answers[id] as? Map<*, *> ?: return null
-            val option = a["choice"] as? String ?: return null
-            val p = ((a["probabilities"] as? Map<*, *>)?.get(option) as? Number)?.toDouble() ?: (a["confidence"] as? Number)?.toDouble() ?: 0.0
-            return option to p
-        }
+        fun pick(id: String): Pair<String, Double>? = Companion.pick(answers, id)
         fun distribution(id: String): Map<String, Double> =
             ((answers[id] as? Map<*, *>)?.get("probabilities") as? Map<*, *>)?.entries?.associate { (k, v) -> k.toString() to ((v as? Number)?.toDouble() ?: 0.0) } ?: emptyMap()
 
         val (act, actP) = pick("act") ?: return null
         val used = mutableListOf(actP)
         var doubt: String? = null
+
+        /**
+         * Whether this read is offered for a tap (PD-157): every part present, **and** the model sure enough of the
+         * least sure of them. `doubt == null` alone shipped a card the model was split on — the scorecard's
+         * "station 5 riverside b 1", read reversed at 0.39 with nothing contradicting it. Where the parts are all
+         * there but the confidence is not, the part in doubt is `sure`: not a missing fact, a shaky one.
+         */
+        fun settle(): Pair<Boolean, String?> =
+            if (doubt != null) false to doubt
+            else if (used.min() < SURE_ENOUGH) false to "sure"
+            else true to null
 
         fun fixturePicked(): Picked? {
             val (key, p) = pick("fixture") ?: return null
@@ -233,7 +280,7 @@ public class Understanding(private val model: SystemOne, private val today: () -
                 }
                 val say = if (fixture != null && result != null) "${fixture.home} ${result.legsHome}–${result.legsAway} ${fixture.away}, ${day(fixture.at)}"
                           else if (fixture != null) "${fixture.home} v ${fixture.away}, ${day(fixture.at)} — which legs?" else "A result, but for which fixture?"
-                Understood(clean, act, used.min(), doubt == null, say, doubt, fixture, result, null, null, null)
+                settle().let { (ok, why) -> Understood(clean, act, used.min(), ok, say, why, fixture, result, null, null, null) }
             }
             "award" -> {
                 val fixture = fixturePicked()
@@ -253,13 +300,13 @@ public class Understanding(private val model: SystemOne, private val today: () -
                     award == null -> "${fixture.home} v ${fixture.away}, ${day(fixture.at)} — awarded to which side?"
                     else -> "${fixture.home} v ${fixture.away}, ${day(fixture.at)} — awarded to ${award.toName}"
                 }
-                Understood(clean, act, used.min(), doubt == null, say, doubt, fixture, null, award, null, clean)
+                settle().let { (ok, why) -> Understood(clean, act, used.min(), ok, say, why, fixture, null, award, null, clean) }
             }
             "void" -> {
                 val fixture = fixturePicked()
                 if (fixture == null) doubt = "fixture"
                 val say = if (fixture != null) "${fixture.home} v ${fixture.away}, ${day(fixture.at)} — result annulled, to be replayed" else "An annulment, but of which fixture?"
-                Understood(clean, act, used.min(), doubt == null, say, doubt, fixture, null, null, null, clean)
+                settle().let { (ok, why) -> Understood(clean, act, used.min(), ok, say, why, fixture, null, null, null, clean) }
             }
             "move" -> {
                 val fixture = fixturePicked()
@@ -283,18 +330,20 @@ public class Understanding(private val model: SystemOne, private val today: () -
                     move == null -> "${fixture.home} v ${fixture.away}, ${day(fixture.at)} — moved to when?"
                     else -> "${fixture.home} v ${fixture.away}, ${day(fixture.at)} → ${dayOf(move.on)}, ${clock(move.time)}"
                 }
-                Understood(clean, act, used.min(), doubt == null, say, doubt, fixture, null, null, null, null, move)
+                settle().let { (ok, why) -> Understood(clean, act, used.min(), ok, say, why, fixture, null, null, null, null, move) }
             }
             "points" -> {
                 // A part is taken only when the model is reasonably sure it was stated (PD-125): measured on the real model,
                 // "nothing for a loss" against "does not say" sits near a coin's toss and flips between runs, and a part
                 // left out is simply left as the league has it — the safe side of that doubt.
-                fun part(id: String): Int? = pick(id)?.takeIf { it.second >= 0.6 }?.let { (k, p) -> k.toIntOrNull()?.also { used += p } }
+                fun part(id: String): Int? = pick(id)?.takeIf { it.second >= SURE_ENOUGH }?.let { (k, p) -> k.toIntOrNull()?.also { used += p } }
                 val points = Points(part("win_points"), part("draw_points"), part("loss_points"), part("leg_points"))
                 val stated = listOfNotNull(points.win?.let { "$it for a win" }, points.draw?.let { "$it for a draw" }, points.loss?.let { "$it for a loss" }, points.perLeg?.let { "$it a leg won" })
                 if (stated.isEmpty()) doubt = "points"
-                Understood(clean, act, used.min(), doubt == null, if (stated.isEmpty()) "The points rules — but how many for a win?" else stated.joinToString(" · "), doubt,
-                           null, null, null, null, null, null, if (stated.isEmpty()) null else points)
+                settle().let { (ok, why) ->
+                    Understood(clean, act, used.min(), ok, if (stated.isEmpty()) "The points rules — but how many for a win?" else stated.joinToString(" · "), why,
+                               null, null, null, null, null, null, if (stated.isEmpty()) null else points)
+                }
             }
             "schedule" -> {
                 val (hKey, hP) = pick("home_team") ?: ("none" to 0.0)
@@ -322,7 +371,7 @@ public class Understanding(private val model: SystemOne, private val today: () -
                     schedule.time == null -> "${schedule.home} v ${schedule.away}, ${dayOf(schedule.on)} — at what time?"
                     else -> "${schedule.home} v ${schedule.away}, ${dayOf(schedule.on)}, ${clock(schedule.time)}"
                 }
-                Understood(clean, act, used.min(), doubt == null, say, doubt, null, null, null, schedule, null)
+                settle().let { (ok, why) -> Understood(clean, act, used.min(), ok, say, why, null, null, null, schedule, null) }
             }
             else -> Understood(clean, "none", actP, false, "That reads as a question or a note, not something THRØ can do from here. Try “Grange A beat Dolphin 5–3”, “Move Riverside v Grange to next Thursday”, “Add Riverside A v Dolphin next Thursday at 8” or “3 points for a win, 1 for a draw”.", null, null, null, null, null, null)
         }
@@ -359,17 +408,13 @@ public class Understanding(private val model: SystemOne, private val today: () -
             "time" to choice("Which of these times found in the text is when the fixture would be played?", times.mapValues { "the time written as '${it.value}'" } + ("none" to "no time stated")),
         )
         val answers = try { model.answers(state.s, questions.s) } catch (e: Exception) { null } ?: return null
-        fun pick(id: String): Pair<String, Double>? {
-            val a = answers[id] as? Map<*, *> ?: return null
-            val option = a["choice"] as? String ?: return null
-            return option to (((a["probabilities"] as? Map<*, *>)?.get(option) as? Number)?.toDouble() ?: (a["confidence"] as? Number)?.toDouble() ?: 0.0)
-        }
+        fun pick(id: String): Pair<String, Double>? = Companion.pick(answers, id)
         val used = mutableListOf<Double>()
         val asks = pick("asks_move") ?: return null
         used += asks.second
         if (asks.first != "yes") return MoveRead(clean, null, used.min(), false, "That does not read as a new date for this fixture.", "move")
         val was = fixture.at.atZone(ZONE)
-        val shift = pick("shift")?.takeIf { it.first != "none" && it.second >= 0.6 }
+        val shift = pick("shift")?.takeIf { it.first != "none" && it.second >= SURE_ENOUGH }
         val on = if (shift != null) {
             used += shift.second
             was.toLocalDate().plusDays(when (shift.first) { "week_later" -> 7L; "fortnight_later" -> 14L; else -> -7L })
@@ -468,11 +513,7 @@ public class Understanding(private val model: SystemOne, private val today: () -
             val (number, line) = entry
             val (answers, found) = answered[index]
             if (answers == null) { skipped += Skipped(number, line, "THRØ could not read this line"); continue }
-            fun pick(id: String): Pair<String, Double>? {
-                val a = answers[id] as? Map<*, *> ?: return null
-                val option = a["choice"] as? String ?: return null
-                return option to (((a["probabilities"] as? Map<*, *>)?.get(option) as? Number)?.toDouble() ?: (a["confidence"] as? Number)?.toDouble() ?: 0.0)
-            }
+            fun pick(id: String): Pair<String, Double>? = Companion.pick(answers, id)
             val isFixture = ((answers["is_fixture"] as? Map<*, *>)?.get("noul") as? Number)?.toDouble() ?: 0.0
             val month = pick("month")?.takeIf { it.first != "none" }; val day = pick("day")?.takeIf { it.first != "none" }
             val own = if (month != null && day != null) inSeason(MONTHS.indexOf(month.first) + 1, day.first.toInt()) else null

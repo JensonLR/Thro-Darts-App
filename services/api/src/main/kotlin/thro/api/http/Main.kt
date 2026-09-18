@@ -71,7 +71,10 @@ public fun main() {
     // THRO_TYPESAFE_ENDPOINT points a development server at a stand-in (tools/fake_systemone.py); never set in production.
     val reader = env("THRO_TYPESAFE_API_KEY")?.let { key -> env("THRO_TYPESAFE_ENDPOINT")?.let { TypeSafeReader(key, endpoint = java.net.URI(it)) } ?: TypeSafeReader(key) }
     if (reader == null) System.err.println("note: no reader (THRO_TYPESAFE_API_KEY); reports and names are not read, and the queue orders by the hour they are due")
-    else System.err.println("reader: TypeSafe jev-latest reads reports and names as they arrive, and sentences on the desk (PD-119)")
+    // The model is asked for by name, so the boot line reports the name that will go on the wire rather than a
+    // literal beside it — the old one said "jev-latest" and would have gone on saying it after PD-157 pinned the
+    // version. A startup line is the only way an operator can see this setting: the environment cannot be read back.
+    else System.err.println("reader: TypeSafe ${reader.modelName} reads reports and names as they arrive, and sentences on the desk (PD-119)")
 
     val port = env("PORT")?.toIntOrNull() ?: 8080
     embeddedServer(CIO, port = port) { thro(Deps(connect, authenticator, providers = providers, webProviders = webProviders, keys = HttpJwkSource(), relyingParty = rp, appleAppIds = appleAppIds, moderators = moderators, reader = reader, systemOne = reader)) }.start(wait = true)

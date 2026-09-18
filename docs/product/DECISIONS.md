@@ -6530,3 +6530,58 @@ is a change to that line.
 **Evidence.** Four tests, watched failing to compile before the enum existed. 911 app tests. Looked at
 on iPhone 17 Pro: the tab now reads *On this phone → Send to THRØ → On THRØ → On the telly → the note*
 for a seeded adult account, and the page ends one screen after the reader's own record.
+
+## PD-157 — The floor the questions have to beat
+
+PD-154 ranked two Jev builds and said to do the code that needs no model first, and publish its numbers
+as the floor. This is that code. **Nothing here asks the model anything new.**
+
+**A premise of the ranking was wrong, and checking it changed the plan.** Build 1 was sold on "a fixture
+Choice that must always name a winner, because its probabilities add to 1". Read at
+`Understanding.kt:161`, the fixture question **already carries a `none` option** — *"The sentence is
+about no fixture listed, or adds a new one"* — and `fixturePicked()` already returns null for it, which
+sets `doubt = "fixture"`. The desk could always decline. So the two Nouls that proposal wanted
+(`names_two_teams`, `fixture_is_listed`) would be a second vote on a question the Choice already asks,
+which is the shape this phase ruled out eleven proposals for. **They are not built, and should not be
+until the numbers below exist.** The rest of that proposal was right, and is here.
+
+**Four things, each a real defect.**
+
+1. **`confidence`, not the winner's share.** Three byte-similar copies of `pick()` read
+   `probabilities[choice]` and fell back to `confidence`. That is the wrong way round: TypeSafe derive
+   `confidence` from the whole distribution, so it is the statistic that tells a winner at 0.45 with a
+   runner-up at 0.44 apart from a winner at 0.45 with the rest spread thin. Collapsed to one function in
+   the companion; `probabilities[choice]` stays as the fallback, and `distribution()` still reads the
+   probabilities for the alternatives a card lists.
+2. **A read the model is not sure of is not ready.** `ready` was `doubt == null` — every part present
+   and nothing contradicting. Every part present is not every part right: the scorecard holds "station 5
+   riverside b 1" read *reversed* at 0.39, with nothing contradicting it, and that card was ready. All
+   six arms now settle through one `settle()`, so no arm can forget it, and the part in doubt is `sure`
+   — not a missing fact, a shaky one. `SURE_ENOUGH` is 0.6, the number PD-125 already measured as the
+   band below which an answer flips between runs; the two other places that had a bare `0.6` now use it.
+3. **254 options, not 200.** The ceiling TypeSafe document is 255 and `none` takes one. 200 was chosen
+   for no stated reason, and Stockton Thursday's eighteen teams play 306 fixtures in a double
+   round-robin — so 106 were cut off the end of the list the model was allowed to choose from, and a
+   fixture that is not an option cannot be picked however plainly the sentence names it. Past 254 the
+   answer is two passes, not a longer list.
+4. **A version, not an alias.** `jev-latest` moves when TypeSafe ship a release, and THRØ has four
+   numbers tuned against whatever answered last. TypeSafe's own guidance is to pin. It points at
+   `jev-1.13.0` today, so no answer changes — it stops the next release changing all four with no deploy
+   here. The boot line printed the literal `jev-latest` beside it and would have gone on lying; it
+   reports `reader.modelName` now, and that line is the only way an operator can see this setting,
+   because the Render connector cannot read an environment back.
+
+**And what it costs, which nothing could say before.** TypeSafe charge **per input token and give output
+away — $42 per billion, $0.042 per million**. `ask()` read `answers` out of every response and dropped
+`usage` on the floor, so THRØ was spending an amount no log could show. `inputTokensSoFar` counts it and
+each reading prints its tokens and the running total in dollars to six places — because at this volume
+the honest answer is a fraction of a cent, and a rounded `0.00` would read as "free" rather than "not
+measured". An absent `usage` block adds nothing: it is not an estimate.
+
+**Evidence.** Seven new tests — four on the desk, three on the reader — each watched failing first. The
+alias change turned an existing assertion red, which is the argument for asserting the exact wire.
+API suite green, 167 schema properties, all 34 check scripts.
+
+**Deliberately not done.** The held-out desk at production size, which both builds need and neither has.
+Until it exists the numbers above are untested against the only case that matters — two teams' second
+meeting — and any measurement returns a green figure for a case it was never shown.

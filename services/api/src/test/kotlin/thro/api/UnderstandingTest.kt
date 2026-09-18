@@ -544,4 +544,79 @@ class UnderstandingTest {
             assertEquals(options(deskStub.asked, id), options(captainStub.asked, id), "$id must be asked the same way on both screens")
         }
     }
+
+    // ---- PD-157: how sure is `confidence`, and a read that is not sure is not ready ----
+
+    /** A Choice whose winner took [p] of the distribution while the model's own confidence is [sure]. */
+    private fun split(option: String, p: Double, sure: Double, rest: Map<String, Double> = emptyMap()) =
+        mapOf("type" to "choice", "choice" to option, "probabilities" to (mapOf(option to p) + rest), "confidence" to sure)
+
+    @Test
+    fun `how sure a read is comes from confidence, not from the winner's share of the vote`() {
+        // TypeSafe define confidence as "derived from the answer's probability distribution" — it is the statistic
+        // that tells a winner at 0.45 with a runner-up at 0.44 apart from a winner at 0.45 with the rest spread
+        // thin. `pick` read probabilities[choice] and fell back to confidence, which is the wrong way round.
+        val stub = Stub { q ->
+            mapOf(
+                "act" to choice("result", 0.95),
+                "fixture" to split(keyOf(q, "fixture", "Dolphin", "Grange A", "8 Oct"), 0.45, sure = 0.20,
+                                   rest = mapOf("f2" to 0.44)),
+                "score" to choice(keyOf(q, "score", "5-3"), 0.97),
+                "winner_team" to choice(keyOf(q, "winner_team", "Grange A"), 0.9),
+            )
+        }
+        val read = Understanding(stub) { today }.understand(desk, "Grange A beat Dolphin 5-3 last night")
+        assertNotNull(read)
+        assertEquals(0.20, read.confidence, 1e-9,
+                     "a fixture the model was split on is a read THRØ is not sure of, whatever the winner's share was")
+    }
+
+    @Test
+    fun `a read the model is not sure of is not ready, even with nothing contradicting it`() {
+        // The scorecard already holds this case: "station 5 riverside b 1" came back reversed at 0.39, and because
+        // `ready` was `doubt == null` and nothing contradicted it, that card was ready. Every part present is not
+        // the same as every part right.
+        val stub = Stub { q ->
+            mapOf(
+                "act" to choice("result", 0.95),
+                "fixture" to split(keyOf(q, "fixture", "Dolphin", "Grange A", "8 Oct"), 0.39, sure = 0.39),
+                "score" to choice(keyOf(q, "score", "5-3"), 0.97),
+                "winner_team" to choice(keyOf(q, "winner_team", "Grange A"), 0.9),
+            )
+        }
+        val read = Understanding(stub) { today }.understand(desk, "Grange A beat Dolphin 5-3 last night")
+        assertNotNull(read)
+        assertEquals("sure", read.doubt, "the part in doubt is named, and it is how sure the reading is")
+        assertFalse(read.ready, "a card at 0.39 is not offered for a tap")
+    }
+
+    @Test
+    fun `a read the model is sure of is still ready`() {
+        val stub = Stub { q ->
+            mapOf(
+                "act" to choice("result", 0.95),
+                "fixture" to split(keyOf(q, "fixture", "Dolphin", "Grange A", "8 Oct"), 0.62, sure = 0.88),
+                "score" to choice(keyOf(q, "score", "5-3"), 0.97),
+                "winner_team" to choice(keyOf(q, "winner_team", "Grange A"), 0.9),
+            )
+        }
+        val read = Understanding(stub) { today }.understand(desk, "Grange A beat Dolphin 5-3 last night")
+        assertNotNull(read)
+        assertTrue(read.ready, "the floor is a floor, not a new way to refuse everything")
+        assertNull(read.doubt)
+    }
+
+    @Test
+    fun `the fixture question offers as many fixtures as the model documents, not two hundred`() {
+        // 254 options plus "none" is 255, the documented ceiling. A real division of 18 teams is 306 fixtures, so
+        // the old 200 dropped 106 of them off the end of the list the model was allowed to choose from.
+        val many = (1..300).map { i ->
+            Understanding.Fixture(UUID.randomUUID(), "Home $i", UUID.randomUUID(), "Away $i", UUID.randomUUID(),
+                                  today.atTime(19, 30).atZone(java.time.ZoneId.of("Europe/London")).toInstant(), false)
+        }
+        val stub = Stub { mapOf("act" to choice("result", 0.9)) }
+        Understanding(stub) { today }.understand(desk.copy(fixtures = many), "Anything at all 5-3")
+        assertEquals(255, options(stub.asked, "fixture").size,
+                     "254 fixtures and the way out, which is what the model will take")
+    }
 }
