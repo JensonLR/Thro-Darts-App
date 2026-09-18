@@ -6550,3 +6550,10 @@ above the reading so the caveat frames the claim. The known-gap line is struck.
 `passesThrough` so the challenge form — which only appears on a team you do not run — has somewhere to appear. It
 was unreachable before, not unlooked-at. Looked at on iPhone 17 Pro: secondary on the front, one primary in the
 form with *Leave it* quiet beside it. App tests 911.
+
+## The last three screens nobody had looked at (PD-169)
+
+No code change: *Name the match* with matches present, and the desk cards in landscape, both looked at on iPhone 17
+Pro and both correct. With PD-166 and PD-168 this closes every "never looked at" gap in the ledger — three of the
+four were unreachable rather than neglected. Recorded that `simctl` swipes do not scroll a rotated scene, so a
+landscape check sees only what is above the fold.

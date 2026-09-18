@@ -6944,3 +6944,34 @@ intended — a failed read said what happened, what was safe and what to do, rat
 team — so the tooling that found my mistake was a thing an earlier decision built.
 
 **Evidence.** 911 app tests, every `tools/check_*.py` green, and the form photographed on iPhone 17 Pro.
+
+## PD-169 — The last three screens nobody had looked at, looked at
+
+The ledger's "Known gaps" listed four things never seen. All four are closed now, and **three of the four
+were unreachable rather than neglected** — which is the finding worth keeping, because "nobody got round
+to it" and "nobody could" call for different fixes.
+
+| Gap | Why it was never seen | Now |
+| --- | --- | --- |
+| The moderation page, signed in | The dev authenticator never named an account, so every account-shaped route 403'd (PD-166) | Looked at; found PD-167 |
+| The challenge form on another team's front | The stage had no team you do not run (PD-168) | Looked at; follows PD-147 already |
+| *Name the match* with matches present | Reachable, but four taps deep and never taken | **Looked at** |
+| The desk cards in landscape | Reachable | **Looked at** |
+
+***Name the match*, with matches in it.** Two rows — *Jenson R. v A player · Thu 10 Sep, 20:30* and
+*Ethan T. v Jenson R. · Tue 8 Sep, 21:10* — each a name and a when, which is what a person picking one
+needs and all they need. The stage carries three matches and the picker shows two: the one still in
+progress is not offered, because a match you cannot have finished is not a match you played. That rule
+was written in the code and had never been seen doing its job.
+
+**The desk cards in landscape.** Looked at on the event page, where a `DeskCard` is the first thing under
+the masthead: the masthead folds to its one-line shape (PD-061/PD-092), the bottom bar puts labels beside
+icons rather than under them, the card sits in the readable measure rather than stretching to the glass,
+and the hairline runs the full width. Nothing to fix.
+
+**One thing scripted looking still cannot do.** A swipe does not scroll a *rotated* scene through
+`simctl` — tried in both the portrait frame and the rotated one, neither moved the view. So a landscape
+check can only see what is above the fold, and the screen to check has to be chosen for that. Recorded
+rather than worked around, because the next person will try the same two things.
+
+**Evidence.** 911 app tests. Every `tools/check_*.py` green. Four screens photographed on iPhone 17 Pro.
