@@ -120,6 +120,8 @@ public class Understanding(private val model: SystemOne, private val today: () -
         )
         /** "5-3", "7–2", "5 to 3", "5 v 3". Not "20:30": a colon is a clock, not a scoreline. */
         private val SCORE = Regex("""(?<!\d)(\d{1,2})\s*(?:-|–|—|to|v)\s*(\d{1,2})(?!\d)""", RegexOption.IGNORE_CASE)
+        /** The same expression, for [ResultsSheet] to split a scoreline `scorelines` has already found (PD-159). */
+        public val SCORE_PUBLIC: Regex get() = SCORE
         /** "8", "20:30", "7.30pm", "8 o'clock". Not "15th": an ordinal is a day of the month. */
         private val TIME = Regex("""(?<![\d.:])(\d{1,2})(?:[.:](\d{2}))?\s*(am|pm|o'clock)?(?!\d|st|nd|rd|th)""", RegexOption.IGNORE_CASE)
         /** "15th", "22nd", "3rd", "1st": a day of the month, written as one. Never a time — TIME refuses the suffix. */

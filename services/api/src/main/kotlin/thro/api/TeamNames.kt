@@ -103,13 +103,17 @@ public object TeamNames {
 
         // Where the sentence names a side letter for this stem, it must be this team's.
         val anchor = if (whole) wanted else if (byWord) longest!! else squashed
-        val after = Regex(Regex.escape(" $anchor ") + """([a-z]|i{1,3}|[1-9])\s""").find(hay)?.groupValues?.get(1)
+        // **Every** occurrence, not the first. "grange a 4 grange b 4" names both sides of one club, and a check
+        // that read only the first said the line was about Grange A and not about Grange B — so the derby, the one
+        // fixture where this matters most, was seen as naming no pair at all.
+        val letters = Regex(Regex.escape(" $anchor ") + """([a-z]|i{1,3}|[1-9])\s""").findAll(hay)
+            .map { it.groupValues[1] }.toList()
         // A word that merely follows the name is not a side letter: only a lone character counts, and only when
         // this team has one to disagree with, or the sentence's letter names a side at all.
         return when {
-            after == null -> true
+            letters.isEmpty() -> true
             letter == null -> true    // the sentence is more specific than the team list; the desk decides which
-            else -> after == letter
+            else -> letters.contains(letter)
         }
     }
 }

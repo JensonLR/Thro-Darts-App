@@ -6476,3 +6476,13 @@ compared exactly so Grange A never matches Grange B. New `Understanding.fixtures
 which need no key and spend nothing: the sealed twenty "no fixture" sentences are refused 20 of 20 while 11 of 11
 real fixtures are still found, written to `build/fixture-floor.md`. Recorded that build 1's two proposed Nouls are
 therefore not worth building. API tests +10.
+
+## A results sheet, read (PD-159)
+
+New `ResultsSheet` — reads a pasted sheet into tickable rows with no model: `fixturesNamed` for the pair, `dateOn`
+carrying a week heading down to settle which of a pair's two meetings is meant, a phrase list for walkover and
+postponement, `Understanding.SCORE_PUBLIC` for the legs, and `firstNamed` using the side letter so a derby's numbers
+land the right way round. New `ResultsSheetLines` (55→62 lines, 45 results labelled before the run) and
+`ResultsSheetTest` (4). `ProductionDesk` rebuilt on the circle method: five fixtures a Thursday, only the opening
+week decided. Measured: 0 wrong while ready, 40 of 45 ready and right. The seven proposed questions are not built.
+API tests +4.

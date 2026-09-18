@@ -28,19 +28,37 @@ internal object ProductionDesk {
     private fun t(n: String) = teams.first { it.name == n }
 
     /**
-     * A full double round-robin: every pair meets twice, the sides swapped, on different weeks. The second meeting
-     * is months after the first, so a date can tell them apart — which is the only thing that can.
+     * A full double round-robin on a real schedule (the circle method): **five fixtures every Thursday**, eleven
+     * rounds to a half, the sides swapped after Christmas. 110 fixtures, 55 pairs, each meeting twice.
+     *
+     * The weekly round matters as much as the double meeting. A league plays a whole round on one night, so a
+     * sheet's heading dates five results at once — and a date that picks out one fixture of a hundred and ten
+     * would be a board no secretary has ever pasted into.
+     *
+     * **Only the opening week is already decided.** Enough that a sheet repeating it is caught as "already
+     * recorded"; not so much that the measurement is dominated by rows no secretary would be pasting.
      */
     val fixtures: List<Understanding.Fixture> = buildList {
-        var week = 0
-        for (round in 0..1) {
-            for (i in names.indices) for (j in names.indices) {
-                if (i >= j) continue
-                val (home, away) = if (round == 0) names[i] to names[j] else names[j] to names[i]
-                val at = Instant.parse("2026-09-03T18:30:00Z").plusSeconds(week * 7L * 86_400)
+        val withBye = names + "BYE"
+        var order = withBye.indices.toMutableList()
+        val rounds = mutableListOf<List<Pair<String, String>>>()
+        for (r in 0 until withBye.size - 1) {
+            val pairs = mutableListOf<Pair<String, String>>()
+            for (i in 0 until withBye.size / 2) {
+                val a = withBye[order[i]]; val b = withBye[order[withBye.size - 1 - i]]
+                if (a != "BYE" && b != "BYE") pairs += if ((r + i) % 2 == 0) a to b else b to a
+            }
+            rounds += pairs
+            order = (listOf(order[0], order.last()) + order.subList(1, order.size - 1)).toMutableList()
+        }
+        val first = Instant.parse("2026-09-03T18:30:00Z")
+        for (half in 0..1) for ((r, round) in rounds.withIndex()) {
+            val week = half * rounds.size + r
+            val at = first.plusSeconds(week * 7L * 86_400)
+            for ((h, a) in round) {
+                val (home, away) = if (half == 0) h to a else a to h
                 add(Understanding.Fixture(UUID.nameUUIDFromBytes("$home$away$at".toByteArray()),
-                                          home, t(home).teamId, away, t(away).teamId, at, decided = week < 4))
-                week++
+                                          home, t(home).teamId, away, t(away).teamId, at, decided = week == 0))
             }
         }
     }

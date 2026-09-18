@@ -6635,3 +6635,55 @@ not been edited since it was written.
 **Evidence.** 17 new tests (6 on the matcher, 4 on the floor, 7 carried from PD-157), each watched
 failing first — the floor test failed at 9 of 11 before the matcher was widened, which is what a positive
 control is for. API suite green, 167 schema properties, 34 check scripts.
+
+## PD-159 — A results sheet, read; and the model buys nothing here either
+
+The third of PD-154's survivors and the second the founder chose. A secretary has twenty fixtures and
+twenty forms on a Sunday night. `Understanding.readList` already reads a pasted *fixture* list; the same
+sheet with scores on it was not read at all.
+
+**Built with no model, on purpose, and then measured before deciding whether to buy one.** That is
+PD-154's rule and PD-158 is why it is not a formality: there, the floor did the entire job the two
+proposed questions were for.
+
+**The result, on 45 result lines labelled before the first run, across nine dated weeks of a real
+double round-robin:**
+
+> **0 wrong while ready. 40 of 45 ready and right. 5 in doubt — every one of them correctly "already
+> recorded", being the opening week the board has decided. 0 of 17 sheet-furniture lines made into a row.**
+
+Wrong-while-ready is the only number that can reach a league table: a row THRØ pre-ticked and got wrong
+is the one a secretary confirms without looking. A row in doubt costs a tap. **So there is nothing left
+on this set for a question to buy**, and `is_result`, `outcome_kind`, `home_team`, `away_team`, `score`,
+`winner_team` and `award_team` are not built.
+
+**Three things the measurement taught that guessing would not have.**
+
+1. **Without the heading date the sheet is safe and useless.** First run: 0 wrong while ready — *and 0
+   ready at all*, because every pair in a double round-robin meets twice and every single row was
+   honestly in doubt. A sheet's own heading dates the five results beneath it, exactly as `readList`
+   carries a heading down. Without `dateOn`, this feature would have shipped as a list of doubts.
+2. **A board must be the shape of the thing.** The first desk put one fixture a week, so no two shared a
+   date and a heading settled nothing. A league plays a whole round on one night: the circle method,
+   five fixtures every Thursday, eleven rounds to a half.
+3. **The derby needs the side letter, not the stem.** "riverside a 4 riverside b 4" — both stems are the
+   word `riverside`, found at the same place, so the numbers could not be assigned and the row sat in
+   doubt `which side`. Looking for the folded name *with* its letter separates them.
+
+**A bug in the measurement, found by disbelieving it.** The first run reported one row wrong while
+ready: "O'Grady's beat Grange A 6-2". The row was right; the *test* was wrong, because it worked out for
+itself which team the line named first and its position search could not see through the apostrophes. A
+check that re-implements the thing it checks will eventually agree with a bug or invent one. The labels
+now name the two teams **in the order the line writes them**, and the check does no searching at all.
+
+**Nothing here writes anything.** `read` returns rows; a person ticks them and presses Record, which
+calls the ordinary routes with the ordinary permissions. Every line is a row or a visible skip — a
+fixture is never silently dropped — and a paste over 20,000 characters is refused in words.
+
+**What this is not.** One synthetic league, one sheet, 45 lines. Real sheets carry things this has not
+seen, and the honest next step is a real sheet from a real league, scored the same way, before any of it
+goes near a screen. The numbers above are the floor a future change must not fall below, not a claim
+that the problem is solved.
+
+**Evidence.** `ResultsSheet`, 4 tests plus the scorecard, written before the reader existed and watched
+failing. API suite green, 167 schema properties, 34 check scripts. `build/results-sheet-floor.md`.
