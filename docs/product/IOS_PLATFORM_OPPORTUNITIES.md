@@ -413,8 +413,17 @@ unlock with no compatibility code to remove.
 ### 14 — Accessibility: close the VoiceOver gaps and fill in the nutrition labels · **SHOULD**
 
 Dynamic Type is the strong part and has a written, tested contract (PD-024: the keypad stays pinned so
-a key never moves under a thumb mid-visit). VoiceOver is 21 labels and 21 element groupings with
-**zero `accessibilityValue`, zero custom actions and zero identifiers**, and no test renders a screen.
+a key never moves under a thumb mid-visit).
+
+**Re-counted 18 September 2026 (PD-171); the figures below replaced a stale claim.** It said "21 labels and
+21 element groupings with zero `accessibilityValue`". It is **67 labels, 6 values, 45 element groupings,
+11 hints and 19 traits**, and `ThroDesign` carries 26 `spoken` forms that are extracted as static functions
+and held by `SpokenTests`. The number moved twice and this line moved neither time, which is why
+`tools/check_voiceover_does_not_regress.py` now holds a floor per package.
+
+**Still true, and still owed:** zero custom actions, zero identifiers, zero `accessibilityRepresentation`,
+and no test renders a screen. `ThroPlay` shows zero of its own because it composes `ThroDesign`'s controls
+rather than rolling its own; `ThroVenueKit` is a television nobody holds.
 `accessibilityRepresentation` (iOS 15) is the right tool for the keypad and the score display: expose a
 `Stepper`'s semantics rather than a pile of buttons.
 

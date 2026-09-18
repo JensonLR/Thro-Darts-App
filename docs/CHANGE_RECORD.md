@@ -6564,3 +6564,10 @@ landscape check sees only what is above the fold.
 37 sentences read twice the 4 that differed were all flagged unsure. The reversed "station 5 riverside b 1" scores
 0.26 and 0.42 — both under the 0.6 floor, so neither is offered. **Cost measured: 378,982 input tokens, $0.0159.**
 `JevEvaluationTest` header now prints `reader.modelName` instead of a `jev-latest` literal.
+
+## VoiceOver coverage is a ratchet (PD-171)
+
+New `tools/check_voiceover_does_not_regress.py` — counts `accessibilityLabel` / `Value` / `Element` per package and
+refuses a drop below a recorded floor; proved by removing one label and watching it fail. Corrects
+`IOS_PLATFORM_OPPORTUNITIES.md` item 14, which claimed 21 labels and zero values when it is 67 and 6. Zero custom
+actions, identifiers and `accessibilityRepresentation` remain genuinely missing, and running VoiceOver is still owed.

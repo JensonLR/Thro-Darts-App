@@ -7006,3 +7006,33 @@ look for elsewhere. It reports `reader.modelName` now, and the published card sa
 
 **Evidence.** `docs/product/JEV_SCORECARD.md`, regenerated. Run with the key from the git-ignored
 `.env.local`; nothing was written to the repository but the card.
+
+## PD-171 — VoiceOver coverage is a ratchet
+
+Accessibility does not break in one commit. It erodes: a component is replaced by a hand-rolled one, a
+label is dropped in a refactor, a new screen ships without any — and nothing fails, so nobody notices.
+
+**This repository has the receipt.** `IOS_PLATFORM_OPPORTUNITIES.md` item 14 recorded *"21 labels and 21
+element groupings with zero `accessibilityValue`"*. Counted today it is **67 labels, 6 values, 45 element
+groupings, 11 hints, 19 traits**, and `ThroDesign` carries 26 `spoken` forms extracted as static functions
+and held by `SpokenTests`. The number moved twice and the record moved neither time. Somebody planning
+work off that line would have built what was already there.
+
+`tools/check_voiceover_does_not_regress.py` counts and holds a floor per package. Raising a floor is a
+commit that says why; lowering one is refused. **Proved before it was trusted**: one
+`accessibilityLabel` removed from `ThroBoardHead` took `ThroDesign` to 25 against a floor of 26 and the
+check failed, naming the package and the count.
+
+**What it deliberately does not do.** It cannot tell a good label from a bad one and does not try. It says
+nothing about whether a screen reads in a sensible order, whether every control is reachable by swipe, or
+anything at all about running VoiceOver — which needs a person with the Accessibility Inspector and is
+**still owed**. A green tick here means "no silent loss", not "accessible", and the script says so in its
+own output.
+
+**What is genuinely still missing**, now measured rather than asserted: **zero custom actions, zero
+identifiers, zero `accessibilityRepresentation`** — the last being the doc's own recommendation for the
+keypad and the score display, and the one piece of that item still worth building. `ThroPlay` counts zero
+of its own because it composes `ThroDesign`'s controls rather than rolling its own, and `ThroVenueKit` is
+a television nobody holds; both are recorded at zero rather than left out, so the floor states the truth.
+
+**Evidence.** 35 check scripts green. 911 app tests.
