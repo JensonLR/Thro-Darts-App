@@ -15,6 +15,16 @@ import ThroTokens
 
 /// The page's sentences, apart from the drawing so they are tested.
 enum EventWords {
+    /// What a night that is not open says about getting into it, or nil when the button says it.
+    ///
+    /// One sentence, in one place, because it is drawn twice (PD-138): on the tournament's own page and on
+    /// the card under "Darts you can play". The card drew nothing at all for an invitational night, under a
+    /// heading saying a player could enter. Anything THRØ does not recognise is treated as not-open: a
+    /// player being wrongly told to ask the organiser is a smaller harm than a button that refuses.
+    static func access(_ access: String) -> String? {
+        access == "open" ? nil : "Entry is by invitation, from the organiser."
+    }
+
     static func kind(_ entrantKind: String) -> String {
         switch entrantKind { case "pair": return "Pairs"; case "team": return "Teams"; default: return "Singles" }
     }
@@ -120,7 +130,7 @@ public struct EventScreen: View {
 
     @ViewBuilder private func way(in page: EventPage) -> some View {
         DeskCard(icon: .trophy, title: page.you?.entered == true ? "You are in" : "The way in",
-                 meta: page.access == "open" ? nil : "Entry is by invitation, from the organiser.") {
+                 meta: EventWords.access(page.access)) {
             if let api, signedIn {
                 EventActions(api: api, card: DiscoveryCard(page: page)) { Task { await load() } }
             } else {

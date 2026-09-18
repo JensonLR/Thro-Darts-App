@@ -57,4 +57,17 @@ final class EventScreenTests: XCTestCase {
         XCTAssertFalse(card.entered)
         XCTAssertEqual(card.spotsRemaining, 11)
     }
+
+    /// A night nobody can enter themselves says so, in one sentence, wherever it is drawn (PD-138).
+    ///
+    /// The card under "Darts you can play" used to draw nothing at all for an invitational night: the
+    /// section heading said a player could enter, the card's own reason line said "by invitation — you
+    /// qualify", and beneath that there was no button and no sentence. The tournament's own page had the
+    /// sentence all along; it lived inline in a view, so nothing held the two surfaces together.
+    func testAnInvitationalNightSaysSoAndAnOpenOneSaysNothing() {
+        XCTAssertEqual(EventWords.access("invitational"), "Entry is by invitation, from the organiser.")
+        XCTAssertNil(EventWords.access("open"), "an open night needs no sentence: the button is the answer")
+        XCTAssertEqual(EventWords.access("anything else"), "Entry is by invitation, from the organiser.",
+                       "a kind THRØ does not know is not something a player can enter themselves")
+    }
 }

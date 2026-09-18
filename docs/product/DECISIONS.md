@@ -5837,3 +5837,35 @@ usually means something worse than a dropped connection, and the right answer th
 **Evidence.** 895 app tests pass. `tools/check_a_failed_read_is_not_empty.py` green, and proved on four
 fixtures. Every other `tools/check_*.py` green. Not looked at in the simulator yet: the five screens
 whose failure states changed — they need a server that refuses, which the screenshot stage does not do.
+
+## PD-138 — A night nobody can enter themselves says so
+
+**18 September 2026.** From the dead-end sweep. Under *Darts you can play*, a card for an invitational
+tournament drew **nothing at all**: no button, no sentence. The section heading said *You can enter*, the
+card's own reason line said *by invitation — you qualify*, and beneath that there was blank space. A
+player who had been invited was shown a heading that promised an act and no way to do it.
+
+The sentence existed. The tournament's own page has carried *"Entry is by invitation, from the
+organiser."* since PD-113 — inline in a view, so nothing held the two surfaces together and the card
+simply did not have it.
+
+**Decided.**
+
+1. **`EventWords.access(_:)` is the one place it is said**, and both surfaces read it. The claim that two
+   screens agree is now enforced rather than asserted in a comment.
+2. **Anything THRØ does not recognise is treated as not-open.** A player wrongly told to ask the organiser
+   is a smaller harm than a button that refuses.
+3. **Withdrawing after check-in is explained rather than greyed out.** The control was drawn disabled with
+   nothing saying why. Check-in is the organiser's headcount for the night, so once checked in the button
+   is gone and the line says *"Checked in · this phone scores it. To pull out now, tell the organiser."*
+
+**Evidence.** `EventScreenTests` gains a check, watched failing first — it would not compile, because the
+function it names did not exist. 896 app tests.
+
+**Still open from the same sweep**, and not done here: the inbox draws an action for two of the four task
+kinds the server can create, so a `consent_required` or `result_submission_due` task is a card with a
+reason, a due date and nothing to tap; and `SafetyModel.block` has no caller anywhere, while two screens
+tell a player blocking is available and one names a place to do it that does not exist. The second is the
+serious one — a safety promise with nothing behind it — and it is a decision for the founder rather than
+something to slip in: either the control ships where a person is read, as Report does, or the two
+sentences come out.

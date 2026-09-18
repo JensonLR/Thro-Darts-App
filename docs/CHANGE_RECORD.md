@@ -6308,3 +6308,16 @@ blocked until the list is read), `ThroApp/AccountScreens.swift` (`choicesSaid` f
 no longer claims none), `ThroApp/TeamFixtureScreens.swift` (`venueSaid` beside the picker). New
 `tools/check_a_failed_read_is_not_empty.py`, wired into `domain-spec.yml`, proved against four fixtures. App tests
 895. Eight local-store occurrences left open by decision and recorded in PD-137.
+
+## A night nobody can enter themselves says so (PD-138)
+
+`EventWords.access(_:)` in `ThroApp/EventScreen.swift`, read by the tournament page and by `EventActions`
+(`ThroApp/AccountScreens.swift`), which drew nothing at all for an invitational night. Withdraw is removed once
+checked in and the line says why. `EventScreenTests` +1, watched red. App tests 896.
+
+## Design research (Phase 2)
+
+`docs/design/RESEARCH_2026.md`: 194 lines, 47 cited sources, a what-they-do/what-THRØ-does/verdict table and ten
+ranked changes. Two adversarial passes: the first found 14 of 22 briefed products missing and six wrong counts; the
+second found a confident false claim that nothing in the repo computes contrast. Both corrected, and what the
+document still cannot verify is listed in it.

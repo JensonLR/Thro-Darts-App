@@ -612,11 +612,18 @@ struct EventActions: View {
                     if onTheDay && !checkedIn {
                         ThroButton("Check in on this phone", variant: .primary, size: .medium) { Task { await checkIn() } }.disabled(busy)
                     } else if checkedIn {
-                        Text("Checked in · this phone scores it").thro(ThroTypography.metadata).foregroundStyle(ThroColor.colorTextSecondary)
+                        Text("Checked in · this phone scores it. To pull out now, tell the organiser.")
+                            .thro(ThroTypography.metadata).foregroundStyle(ThroColor.colorTextSecondary)
+                            .fixedSize(horizontal: false, vertical: true)
                     }
                     // Before the draw only: once drawn, a player in the bracket is decided against, not withdrawn.
                     if !(page.map { $0.state != "open" && $0.state != "entries_closed" } ?? false) {
-                        ThroButton("Withdraw", variant: .secondary, size: .medium) { Task { await withdraw() } }.disabled(busy || checkedIn)
+                        // Once checked in, withdrawing is between the player and the organiser: the
+                        // check-in is the organiser's headcount for the night. Said, rather than left as
+                        // a grey button with no reason (PD-138).
+                        if !checkedIn {
+                            ThroButton("Withdraw", variant: .secondary, size: .medium) { Task { await withdraw() } }.disabled(busy)
+                        }
                     }
                 } else if card.access == "open" {
                     switch card.entrantKind {
@@ -626,6 +633,15 @@ struct EventActions: View {
                         ThroButton("Enter a team you run", variant: .primary, size: .medium) { choosing = true; Task { await loadChoices() } }.disabled(busy)
                     default:
                         ThroButton("Enter", variant: .primary, size: .medium) { Task { await enter() } }.disabled(busy)
+                    }
+                } else {
+                    // An invitational night, not entered: the card used to draw nothing at all, under a
+                    // heading that said "You can enter" (PD-138). The same sentence the tournament's own
+                    // page gives, so the two surfaces cannot disagree.
+                    if let said = EventWords.access(card.access) {
+                        Text(said)
+                            .thro(ThroTypography.metadata).foregroundStyle(ThroColor.colorTextSecondary)
+                            .fixedSize(horizontal: false, vertical: true)
                     }
                 }
             }
