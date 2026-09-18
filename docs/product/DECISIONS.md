@@ -6292,3 +6292,37 @@ and 21. Neither is wrong; both are the founder's to look at.
 **Latent.** The shared `h1, h2, h3 { line-height: 1.2 }` was replaced by paired tokens on `h2` and `h3`,
 and `h1` got neither. There is no `<h1>` anywhere in `apps/web` today, so nothing renders wrong — but the
 first one added would inherit the browser's own.
+
+## PD-150 — A page does not send a reader to a route that does not exist
+
+**18 September 2026.** From the Phase 1 sweep, recorded then as needing the founder's answer and closed
+now without needing it — because the fault is not the missing address, it is the **instruction**.
+
+**What was there.** `delete-account.html` told somebody who had lost their phone to *write to us and we
+will erase the account*, and four lines below said *Contact address: not published yet*. `privacy.html`
+told a reader exercising a UK GDPR right to *write to the address below* and *write to us first*, with the
+same footnote. And `under-18.html` — the page written for children, and the one the Children's code is
+most particular about — told a child to *tell us first* and that they could *ask for a copy of everything
+THRØ holds*, with no contact anywhere on the page at all.
+
+Telling somebody they have a right and not saying how to use it is the failure that standard is about.
+
+**Decided.** Until there is an address, no page instructs a reader to write to one. Each says the route
+does not exist, in the register of its own page: the delete page says the account can only be deleted
+from the app; the privacy page says *"there is no address to write to yet, and until there is these
+rights have no route here. That is a gap, said plainly rather than left to be found"*; the children's
+page says *"There is no way to ask yet. THRØ has no address to write to. That is not good enough, and it
+is being fixed."* The complaint route to the ICO stays everywhere it was — that one exists. Where a real
+route exists it is named instead: a walk-up's name is removed early by asking the **organiser**.
+
+**The footnote stops contradicting the page.** *"Contact address: not published yet"* becomes *"THRØ has
+no contact address yet. Nothing on this page asks you to write to one."* — which is now true, and is a
+claim the page can be checked against.
+
+**Still the founder's to answer**, and unchanged by this: what the address will be, a postal address or a
+form. Three legal pages, the children's page and the App Store listing all wait on it. This decision only
+stops them lying in the meantime.
+
+**Evidence.** No `write to us`, `address below` or `address is below` remains in any page. The children's
+page still reads at grade 3.55 over 80 sentences, which `tools/check_a_child_can_read_it.py` enforces and
+which the longer honest sentences did not break. Every `tools/check_*.py` green.

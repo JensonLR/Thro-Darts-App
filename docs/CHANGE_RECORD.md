@@ -6407,3 +6407,11 @@ with nothing after it genuinely forgets the remembered league. App tests 900.
 lose `style="font-size:28px"`. `wall.html` stops naming Inter. New `tools/check_web_type.py` in `domain-spec.yml`,
 proved against eight fixtures. Counts and fonts re-derived independently; four pages looked at at two widths in both
 schemes. Every check green.
+
+## A page does not send a reader to a route that does not exist (PD-150)
+
+`apps/web/delete-account.html`, `privacy.html`, `terms.html` and `under-18.html`: every instruction to write to a
+contact address replaced by saying the route does not exist, in each page's own register; the ICO complaint route
+kept; the walk-up removal points at the organiser, which exists. The shared footnote now says what is true. Six web
+sentences cut, and the terms' 55-word prohibition run-on becomes a seven-item list wearing the site's own class,
+with every word kept. Reading age of the children's page unchanged at 3.55.
