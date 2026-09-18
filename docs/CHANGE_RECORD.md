@@ -6368,3 +6368,9 @@ New `ThroDesign/Row.swift`: `ThroRowMetrics` (56/12/44), `ThroCardMetrics` (20, 
 the text field the third. `Readiness.swift` draws its border with `.strokeBorder`. New
 `tools/check_one_row_one_card.py` in `domain-spec.yml`, which also fails if the metrics are defined and unread.
 Two `// own-measure:` exemptions, printed. App tests 900.
+
+## Two faces, and the gap beneath them is one number (PD-145)
+
+`ThroHeaderMetrics` in `ThroDesign/Row.swift`: gutter, `boardTop(hasBack:oneLine:)`, `boardBottom(oneLine:)`,
+`paperTop`, `paperBottom`. Read by `TopBar`, `BoardHeader`, `Masthead` and You's inline header, which disagreed on
+the gap beneath the green field by 4 to 8 points. App tests 900.

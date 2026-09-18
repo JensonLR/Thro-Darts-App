@@ -95,8 +95,8 @@ public struct TopBar: View {
                 }
             }
         }
-        .padding(EdgeInsets(top: ThroSpacing.spacing3, leading: ThroSpacing.spaceScreenGutter,
-                            bottom: ThroSpacing.spacing4, trailing: ThroSpacing.spaceScreenGutter))
+        .padding(EdgeInsets(top: ThroHeaderMetrics.paperTop, leading: ThroHeaderMetrics.gutter,
+                            bottom: ThroHeaderMetrics.paperBottom, trailing: ThroHeaderMetrics.gutter))
         .frame(maxWidth: .infinity, alignment: .leading)
         // Paper and hairline to the glass on a phone turned sideways, as the bottom bar's are (PD-092): the bar is
         // laid out inside the Dynamic Island's insets and its hairline stopped short of both edges.

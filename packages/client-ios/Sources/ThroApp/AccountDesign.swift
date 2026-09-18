@@ -44,9 +44,9 @@ struct BoardHeader: View {
                     .fixedSize(horizontal: false, vertical: true)
                     .accessibilityAddTraits(.isHeader)
             }
-            .padding(.horizontal, ThroSpacing.spaceScreenGutter)
-            .padding(.top, onBack == nil ? ThroSpacing.spacing6 : ThroSpacing.spacing1)
-            .padding(.bottom, ThroSpacing.spacing5)
+            .padding(.horizontal, ThroHeaderMetrics.gutter)
+            .padding(.top, ThroHeaderMetrics.boardTop(hasBack: onBack != nil, oneLine: false))
+            .padding(.bottom, ThroHeaderMetrics.boardBottom(oneLine: false))
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         // The field the app launches on, as Home's masthead is — throGreen in light, throGreenDeep in

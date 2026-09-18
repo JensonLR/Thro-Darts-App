@@ -988,8 +988,9 @@ struct Masthead: View {
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.horizontal, ThroSpacing.spaceScreenGutter)
-        .padding(.vertical, shape == .oneLine ? ThroSpacing.spacing3 : ThroSpacing.spacing6)
+        .padding(.horizontal, ThroHeaderMetrics.gutter)
+        .padding(.top, ThroHeaderMetrics.boardTop(hasBack: false, oneLine: shape == .oneLine))
+        .padding(.bottom, ThroHeaderMetrics.boardBottom(oneLine: shape == .oneLine))
         // **The brand field, and chalk on it.** The first draft of this used `throChalkSunken` for
         // the band — a *light* neutral — under `throChalk` text: 1.08:1, which is invisible. The
         // `thro*` primitives are the raw palette and are not appearance-aware; `chalk` is the
@@ -1713,9 +1714,9 @@ public struct YouScreen: View {
                 actions
             }
         }
-        .padding(.horizontal, ThroSpacing.spaceScreenGutter)
+        .padding(.horizontal, ThroHeaderMetrics.gutter)
         .padding(.top, ThroSpacing.spacing2)
-        .padding(.bottom, oneLine ? ThroSpacing.spacing4 : ThroSpacing.spacing6)
+        .padding(.bottom, ThroHeaderMetrics.boardBottom(oneLine: oneLine))
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(ThroColor.colorBackgroundBrand)
     }

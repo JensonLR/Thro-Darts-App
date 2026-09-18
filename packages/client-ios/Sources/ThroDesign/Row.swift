@@ -54,3 +54,40 @@ public enum ThroCardMetrics {
 public enum ThroFieldMetrics {
     public static let height: CGFloat = 52
 }
+
+/// Where a page's top ends, named once for each of its two faces (PD-145).
+///
+/// **THRØ has two faces and that is right.** *Paper* is the plain top a pushed screen uses — a hairline,
+/// a back chevron, a title. *Board* is the green field with chalk on it, which is what makes the app look
+/// like itself. The design research counted six ways to top a page and called that the fault; counted
+/// again, three of the six are not vocabularies at all but **board-face headers carrying something
+/// specific**: Home's wordmark, You's person, a match's scoreline. Each is deliberate and one of them is
+/// the founder's own instruction — a large title in a system bar is what every app on the phone opens
+/// with, and the word for that was *generic*.
+///
+/// **What was actually wrong was the measurement.** All three board headers agreed on the side gutter and
+/// disagreed on the gap beneath them: 24 points under Home's masthead, 24 or 16 under You's, 20 under a
+/// board header. So the green field ended a different distance above the first thing on the page
+/// depending on which screen you were on, and a player moving between them felt the page shift without
+/// being able to say why. That is the whole of "three different tops in three taps".
+public enum ThroHeaderMetrics {
+    /// The side gutter. The one thing all of them already agreed on, named so it stays that way.
+    public static let gutter: CGFloat = ThroSpacing.spaceScreenGutter
+
+    /// Above a board header's contents. Small when a back chevron is already occupying that space.
+    public static func boardTop(hasBack: Bool, oneLine: Bool) -> CGFloat {
+        if hasBack { return ThroSpacing.spacing1 }
+        return oneLine ? ThroSpacing.spacing3 : ThroSpacing.spacing6
+    }
+
+    /// Beneath a board header, where the field meets the page. **One number**, because this is the one a
+    /// player feels moving from screen to screen.
+    public static func boardBottom(oneLine: Bool) -> CGFloat {
+        oneLine ? ThroSpacing.spacing3 : ThroSpacing.spacing5
+    }
+
+    /// The paper bar's own insets. It is a bar rather than a field, so it sits tighter, and it carries a
+    /// hairline instead of a colour change to say where it ends.
+    public static let paperTop: CGFloat = ThroSpacing.spacing3
+    public static let paperBottom: CGFloat = ThroSpacing.spacing4
+}

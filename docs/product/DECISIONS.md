@@ -6109,3 +6109,36 @@ rhythms and reads it as three apps.
 
 **Evidence.** 900 app tests. Every `tools/check_*.py` green. Looked at in the simulator: Settings, You and
 Home, where the rows now keep one rhythm down the screen and the cards sit at one inset.
+
+## PD-145 — Two faces, and the gap beneath them is one number
+
+**18 September 2026.** The design research's original number one: *six ways to top a page*, and the app
+reading as several apps that share a palette. Counted again against what the six actually are, the number
+is wrong and the fault is real.
+
+**It is two faces, not six vocabularies.** *Paper* is the plain top a pushed screen uses — a hairline, a
+back chevron, a title. *Board* is the green field with chalk on it, which is what makes the app look like
+itself. Three of the six the research counted are not vocabularies at all but **board-face headers
+carrying something specific**: Home's wordmark, You's person, a match's scoreline. Each is deliberate, and
+one is the founder's own instruction, written into the code before this: *a large title in a system bar is
+what every app on the phone opens with, and the word for that was generic.* Folding those into a general
+header would delete the thing that makes Home look like THRØ. `PageBar` is the sixth and it is not a
+header at all — it is the back chevron, used *inside* a board header.
+
+**What was actually wrong was the measurement.** All three board headers agreed on the side gutter and
+disagreed on the gap beneath them: **24 points** under Home's masthead, **24 or 16** under You's, **20**
+under a board header. The green field therefore ended a different distance above the first thing on the
+page depending on which screen you were on. That is the whole of "three different tops in three taps" —
+not six designs, one number nobody owned.
+
+**Decided.** `ThroHeaderMetrics`: the gutter, the board face's top and bottom, the paper bar's own two.
+Read by `TopBar`, `BoardHeader`, `Masthead` and You's header. The bottom is **one number** because it is
+the one a player feels moving between screens.
+
+**Not done, and why.** No `ThroHeader` wrapper that picks a face. It would be read by nothing on the day
+it was written — the screens already say which face they want by which view they use — and a component
+defined and unread is the defect `tools/check_one_row_one_card.py` was written to catch one screen later.
+The faces are the vocabulary; a wrapper would be a word for the vocabulary.
+
+**Evidence.** 900 app tests, every `tools/check_*.py` green, and looked at in the simulator: Home,
+You, Discover and Settings now end their field at the same distance above the page.
