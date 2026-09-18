@@ -5997,3 +5997,37 @@ build.
 
 **Still open.** The inbox draws an action for two of the four task kinds the server can create, so a
 `consent_required` or `result_submission_due` task is a card with a reason, a due date and nothing to tap.
+
+## PD-142 — Every card has something to do, and the sentences a card shows are testable
+
+**18 September 2026.** Two of the known issues left open by the Phase 1 sweep, closed together because
+they are the same fault at two depths: a screen that says something and offers no way to act on it, and a
+sentence that no test can reach because it is assembled inside a view.
+
+**Every inbox task has an act.** The server can create four kinds; the inbox drew a control for two. A
+`consent_required` or `result_submission_due` task was a card with a reason, a due date and nothing to
+tap — a player told a league was waiting on them, and left to work out where to go. The two kinds that
+did have controls hid the gap, because the inbox looked as though it worked.
+
+1. **Consent is answered where it is asked.** The act already existed — the *On my team's page* switch on
+   the profile — so the card calls the same thing. There is no "no" button, because a consent that is not
+   given is simply not given, and it says you can change it whenever you like.
+2. **A result that is owed reaches its fixture through its team.** The task always knew which team it
+   belonged to; the wire did not carry it. `InboxItem.team` now does, and the card opens the team's page,
+   which lists the fixture. One field, no new screen, no new route.
+3. **`tools/check_every_inbox_task_has_an_act.py`, on every push.** It reads the kinds `Secretary.kt` can
+   insert and the kinds `AccountScreens.swift` draws an act for, and fails on either gap — a kind with no
+   branch, or a branch for a kind the server stopped making. A deliberate read-only kind says `// no-act:`
+   and a reason, and is printed rather than being silently normal. Proved against fixtures: it passes the
+   tree as it stands and fails on the original defect and on a stale branch. No test could have caught
+   this: nothing in this repository builds a view.
+
+**Three sentences lifted out of the views that held them.** PD-128 promised the inbox card says the place
+and that its *Agree to…* button does; PD-129 promised the captain's own words become the reason unless
+they wrote one. All three were assembled inline, so the PD-139 audit could name them as promises and no
+test could reach them. They are `ProposalWords.card`, `.agree` and `.reason(from:existing:)` now, each
+with its test, all three watched failing first — they would not compile.
+
+**Evidence.** API suite green after a `clean` (the stale `"… 2.class"` duplicates again). 899 app tests,
+three of them new. Every `tools/check_*.py` green, including the new one. Stated counts in `README.md`
+and the iOS runbook follow the tests, as they must.

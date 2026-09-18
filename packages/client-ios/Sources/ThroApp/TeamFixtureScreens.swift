@@ -378,8 +378,7 @@ public struct TeamFixtureScreen: View {
             readBack = ProposalWords.read(r)
             if let to = ProposalWords.fills(r) {
                 proposedDate = to
-                // The captain's own words are the reason, unless they have already written one.
-                if proposedReason.trimmingCharacters(in: .whitespaces).isEmpty { proposedReason = text }
+                proposedReason = ProposalWords.reason(from: text, existing: proposedReason)
             }
         } catch { readBack = ThroAPI.refusal(error) ?? "That could not be read just now. Pick the date below." }
     }
@@ -482,6 +481,26 @@ enum ProposalWords {
 
     /// The date a reading puts in the form: only one that is ready. A day outside the season is said and not filled in.
     static func fills(_ r: MoveReading) -> Date? { r.ready ? r.to : nil }
+
+    /// The inbox card's sentence: who proposes what, instead of when, and why (PD-142).
+    ///
+    /// Lifted out of the view it was written in. PD-128 promised that the inbox card says the place, and
+    /// nothing could check that promise while the sentence was assembled inside a `Text(...)` — an audit
+    /// could name it and no test could reach it.
+    static func card(_ p: FixtureProposal) -> String {
+        "\(p.byTeam) proposes \(what(p)) instead of \(RearrangementTaskActions.when(p.scheduledAt))"
+            + (p.reason.map { " — \($0)" } ?? "")
+    }
+
+    /// The agree button's label. It carries the place as well as the date, because this is the one line a
+    /// captain reads before agreeing (PD-142).
+    static func agree(_ p: FixtureProposal) -> String { "Agree to \(what(p))" }
+
+    /// The reason the form takes after a sentence is read (PD-142): the captain's own words, unless they
+    /// have already written a reason of their own, which is theirs and is left alone.
+    static func reason(from sentence: String, existing: String) -> String {
+        existing.trimmingCharacters(in: .whitespaces).isEmpty ? sentence : existing
+    }
 
     /// The fixture screen's line: who proposed what, why, and where it stands for the team looking.
     static func line(_ p: FixtureProposal, viewing team: UUID) -> String {

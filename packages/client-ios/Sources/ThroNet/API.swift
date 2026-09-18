@@ -128,6 +128,9 @@ public struct InboxItem: Decodable, Sendable, Equatable, Identifiable {
     public let player: UUID?
     /// The proposed date a task is about, when it is (an answer owed on a rearrangement); nil otherwise.
     public let proposal: UUID?
+    /// The team a task belongs to, when it has one (PD-142). The way to a fixture that owes a result: the
+    /// team's own page lists it. Optional so a card from an older server still decodes.
+    public let team: UUID?
     public var id: UUID { taskId }
 }
 

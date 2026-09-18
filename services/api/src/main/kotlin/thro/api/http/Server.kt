@@ -1553,7 +1553,7 @@ private fun liveJson(panels: List<LiveBoard.Panel>): String =
 private fun inboxJson(sections: Map<thro.competition.InboxSection, List<Secretary.InboxItem>>): String =
     "{\"sections\":{" + sections.entries.joinToString(",") { (s, items) ->
         Contract.q(s.name) + ":[" + items.joinToString(",") { i ->
-            """{"taskId":"${i.taskId}","kind":${Contract.q(i.kind)},"reason":${Contract.q(i.reason)},"dueAt":${i.dueAt?.let { Contract.q(it.toString()) } ?: "null"},"state":${Contract.q(i.state)},"player":${i.player?.let { "\"$it\"" } ?: "null"},"proposal":${i.proposal?.let { "\"$it\"" } ?: "null"}}"""
+            """{"taskId":"${i.taskId}","kind":${Contract.q(i.kind)},"reason":${Contract.q(i.reason)},"dueAt":${i.dueAt?.let { Contract.q(it.toString()) } ?: "null"},"state":${Contract.q(i.state)},"player":${i.player?.let { "\"$it\"" } ?: "null"},"proposal":${i.proposal?.let { "\"$it\"" } ?: "null"},"team":${i.team?.let { "\"$it\"" } ?: "null"}}"""
         } + "]"
     } + "}}"
 

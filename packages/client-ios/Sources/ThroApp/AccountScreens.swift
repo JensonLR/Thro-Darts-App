@@ -257,6 +257,17 @@ public struct InboxScreen: View {
                                     if item.kind == "rearrangement_answer_due" && item.state == "open", let proposal = item.proposal {
                                         RearrangementTaskActions(account: account, proposal: proposal) { Task { await load() } }
                                     }
+                                    // Every kind the server can make has something to do (PD-142). Two of the
+                                    // four drew a reason, a due date and nothing to tap — the card said
+                                    // something was owed and offered no way to settle it.
+                                    if item.kind == "consent_required" && item.state == "open" {
+                                        ConsentTaskActions(account: account) { Task { await load() } }
+                                    }
+                                    if item.kind == "result_submission_due" && item.state == "open", let team = item.team {
+                                        ThroButton("Open the team", variant: .secondary, size: .medium) {
+                                            ThroRouter.shared.go(.team(team))
+                                        }
+                                    }
                                 }
                             }
                         }
@@ -355,6 +366,32 @@ struct RegistrationTaskActions: View {
 
 /// A proposed date the team owes an answer on (PD-108): both dates, from whom and why, and the answer — agree, or
 /// decline with a reason. Agreeing moves nothing; the league applies what was agreed, and the fixture says so then.
+/// Saying yes to a league being told who you are, from the card that asks (PD-142).
+///
+/// The act already existed — it is the *On my team's page* switch on the profile — and the card that asked
+/// for it had no control at all, so a player was told a league was waiting on them and left to find the
+/// switch themselves. This is the same call the profile makes. Not answering is still an answer: there is
+/// no "no" button, because a consent that is not given is simply not given.
+struct ConsentTaskActions: View {
+    @ObservedObject var account: AccountStore
+    let onDone: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: ThroSpacing.spacing2) {
+            ThroButton("Yes, pass my details", variant: .primary, size: .medium) {
+                Task { await account.say(consent: "listing", given: true); onDone() }
+            }
+            .disabled(account.working != nil)
+            Text("You can change this whenever you like, on your profile.")
+                .thro(ThroTypography.metadata).foregroundStyle(ThroColor.colorTextSecondary)
+                .fixedSize(horizontal: false, vertical: true)
+            if let why = account.consentRefused {
+                Snackbar(why, tone: .neutral, actionLabel: "OK") { account.dismissConsentRefusal() }
+            }
+        }
+    }
+}
+
 struct RearrangementTaskActions: View {
     @ObservedObject var account: AccountStore
     let proposal: UUID
@@ -368,7 +405,7 @@ struct RearrangementTaskActions: View {
     var body: some View {
         VStack(alignment: .leading, spacing: ThroSpacing.spacing2) {
             if let p = read {
-                Text("\(p.byTeam) proposes \(ProposalWords.what(p)) instead of \(Self.when(p.scheduledAt))" + (p.reason.map { " — \($0)" } ?? ""))
+                Text(ProposalWords.card(p))
                     .thro(ThroTypography.body).foregroundStyle(ThroColor.colorTextPrimary)
                 if p.state == "proposed" {
                     if declining {
@@ -380,7 +417,7 @@ struct RearrangementTaskActions: View {
                         }
                     } else {
                         HStack(spacing: ThroSpacing.spacing2) {
-                            ThroButton("Agree to \(ProposalWords.what(p))", variant: .primary, size: .medium) { Task { await answer("accepted") } }.disabled(busy)
+                            ThroButton(ProposalWords.agree(p), variant: .primary, size: .medium) { Task { await answer("accepted") } }.disabled(busy)
                             ThroButton("Decline", variant: .secondary, size: .medium) { declining = true; note = "" }.disabled(busy)
                         }
                     }

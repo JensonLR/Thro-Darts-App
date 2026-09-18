@@ -103,6 +103,13 @@ jobs:
       - name: A failed read is not drawn as an empty one
         run: python3 tools/check_a_failed_read_is_not_empty.py
 
+      # Two of the four kinds the server can put in an inbox drew a card with a reason, a due date and no
+      # control at all — a player told a league was waiting on them, and left to work out where to go. The
+      # two that did have controls hid the gap, because the inbox looked as though it worked. No test could
+      # have caught it: nothing in this repository builds a view.
+      - name: Every inbox task has something to do about it
+        run: python3 tools/check_every_inbox_task_has_an_act.py
+
       # Typography.kt and Typography.swift are two type scales that must stay the same shape, and
       # this is the guard that says so — cited by both the token layer and the decisions, and until
       # now run by nobody. It needs no toolchain, so it belongs beside the other pure-Python guards.

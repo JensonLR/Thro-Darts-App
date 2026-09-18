@@ -6346,3 +6346,10 @@ is behind it; `openapi.json` regenerated. `ThroAPI.block(player:)`, `SafetyModel
 roster row that is somebody else, with a confirmation that says what blocking does and where to lift it; the two
 sentences that named a place that did not exist now name the roster. `SafetyTest` +1, watched red. Staged roster
 carries player ids (Debug only). API tests 168, app tests 896.
+
+## Every card has something to do (PD-142)
+
+`Secretary.InboxItem.team` and the inbox JSON carry the owning team; `ThroNet` decodes it. `ConsentTaskActions` and
+an *Open the team* key give the two silent kinds an act. New `tools/check_every_inbox_task_has_an_act.py`, wired into
+`domain-spec.yml`, proved against three fixtures. `ProposalWords.card`, `.agree` and `.reason(from:existing:)` lifted
+out of the views that held them, with three tests watched red. App tests 899, API green, counts updated.

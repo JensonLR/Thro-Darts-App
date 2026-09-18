@@ -127,4 +127,38 @@ final class ProposalWordsTests: XCTestCase {
                      "no words from the server: the screen says its own, and never shows the body")
         XCTAssertNil(ThroAPI.refusal(APIError.unreachable("offline")), "a call that never landed carries no refusal to read back")
     }
+
+    // --- what the inbox card says, and what the form takes (PD-142) -----------------------------------
+    //
+    // These three were assembled inline in views, so the audit of PD-128 and PD-129 could name them as
+    // promises and no test could reach them. They are functions now, and these are the tests that were
+    // waiting for them.
+
+    func testTheInboxCardSaysWhoProposedWhatInsteadOfWhenAndWhy() {
+        let withPlace = ProposalWords.card(proposal(venue: "Grange Social Club", reason: "the pub is shut"))
+        XCTAssertEqual(withPlace, "Grange A proposes 19 Nov 2026 at 19:30, at Grange Social Club instead of 12 Nov 2026 at 19:30 — the pub is shut")
+
+        let noPlace = ProposalWords.card(proposal(reason: "the pub is shut"))
+        XCTAssertEqual(noPlace, "Grange A proposes 19 Nov 2026 at 19:30 instead of 12 Nov 2026 at 19:30 — the pub is shut")
+
+        let noReason = ProposalWords.card(proposal(venue: "Grange Social Club"))
+        XCTAssertEqual(noReason, "Grange A proposes 19 Nov 2026 at 19:30, at Grange Social Club instead of 12 Nov 2026 at 19:30",
+                       "no reason given: the sentence ends rather than trailing a dash")
+    }
+
+    func testTheAgreeButtonSaysWhatIsBeingAgreedTo() {
+        // The button's label is the one place a captain reads what they are about to agree to, so it
+        // carries the place as well as the date.
+        XCTAssertEqual(ProposalWords.agree(proposal(venue: "Grange Social Club")), "Agree to 19 Nov 2026 at 19:30, at Grange Social Club")
+        XCTAssertEqual(ProposalWords.agree(proposal()), "Agree to 19 Nov 2026 at 19:30")
+    }
+
+    func testTheCaptainsOwnWordsBecomeTheReasonUnlessTheyWroteOne() {
+        XCTAssertEqual(ProposalWords.reason(from: "pub's shut, can we do the 22nd", existing: ""),
+                       "pub's shut, can we do the 22nd", "an empty Why? takes the sentence that was read")
+        XCTAssertEqual(ProposalWords.reason(from: "pub's shut, can we do the 22nd", existing: "   "),
+                       "pub's shut, can we do the 22nd", "whitespace is empty")
+        XCTAssertEqual(ProposalWords.reason(from: "pub's shut, can we do the 22nd", existing: "flooded"),
+                       "flooded", "a Why? already written is the captain's and is left alone")
+    }
 }
