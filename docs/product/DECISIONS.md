@@ -5793,3 +5793,47 @@ also removes the need for the extra clause.
 by hand: `/fixtures` and `/standings` answer **404** unauthenticated and **200** to the administrator. The
 desk, loaded in a browser as that administrator, now draws the league's name, eight sections and *3 to
 enter* — where before it drew one error card. 894 app tests, every `tools/check_*.py` green.
+
+## PD-137 — A read that failed is never drawn as a read that found nothing
+
+**18 September 2026.** Seven places in the iPhone app turned a failure into a false statement about the
+world. Every one was the same line: a `catch` that wrote an empty collection, or a `try?` whose failure
+fell into `?? []`. The read failed; the screen then said something positive and untrue.
+
+**What a player was told.**
+
+- A captain with a challenge waiting for their answer: *"No friendlies yet."* Any time the connection
+  dropped. The loudest thing on the screen was the one sentence that was false.
+- Somebody opening the blocked list on a dropped connection: *"Nobody is blocked."* On the screen about
+  safety, where being wrong costs the most.
+- Somebody who runs three teams, about to enter a tournament: *"You run no team on THRØ yet."*
+- A captain searching for their pub when the search could not run: an empty list, reading as *THRØ does
+  not hold your pub*. Worse than it sounds: applying a proposal leaves the venue alone when none is
+  named, so they would then have proposed a move with the pub silently unchanged.
+- A captain whose teams could not be read: *Challenge* drawn disabled, with nothing saying why.
+
+**Decided.**
+
+1. **An empty state is a claim, and a failed read has nothing to claim.** Where a read fails the value
+   is left unread — `nil`, not `[]` — and the screen draws the failure with a way to ask again.
+2. **Clearing a stale list and saying why is right**, and is not this defect. A search box that empties
+   its last results and puts *"Venues could not be searched just now."* beside the field is correct; what
+   was wrong was the silence, not the emptying.
+3. **`tools/check_a_failed_read_is_not_empty.py`, on every push.** It reads the iPhone sources for a
+   catch that writes an empty collection, and for a `try?` that falls into `?? []` — and only where the
+   read went to **the server**, because that is the shape that was defective. A phone's own book failing
+   to read is a different thing with a different likelihood, and sweeping it in here to make one check
+   look thorough would have added ten findings and no truth. That is left open, below.
+4. **The check was proved rather than trusted.** Pointed at fixtures: it fails on the original friendlies
+   shape and the original `myTeams` shape, and passes a catch that clears-and-says-why and a read of the
+   phone's own book. A check that stops catching the defect it was written for is worse than no check.
+
+**Left open, and recorded rather than hidden.** Eight more places write an empty collection on a failed
+read of something *local* — the on-phone book's clubs, its figures, its matches, the match journal's
+ledger, and the screenshot stage's JSON. They are outside this check by decision. A local read failing
+usually means something worse than a dropped connection, and the right answer there is probably not a
+*Try again* button; it wants its own look.
+
+**Evidence.** 895 app tests pass. `tools/check_a_failed_read_is_not_empty.py` green, and proved on four
+fixtures. Every other `tools/check_*.py` green. Not looked at in the simulator yet: the five screens
+whose failure states changed — they need a server that refuses, which the screenshot stage does not do.

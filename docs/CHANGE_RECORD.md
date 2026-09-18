@@ -6299,3 +6299,12 @@ four, so the desk draws for a league started with its own private-by-default set
 promise made true in four places — `apps/web/thro.js`, `ThroApp/TeamLeagueSay.swift`, `ThroApp/LeaguesScreen.swift`,
 `ThroApp/Nearby.swift` — because `/v1/leagues` lists only public leagues. No API change; the contract was already
 held by `LeagueStartingTest`. App tests 894.
+
+## A failed read is not an empty one (PD-137)
+
+`ThroApp/TeamScreens.swift` (friendlies leave `list` nil and draw `ErrorState`; the venue search says when it could
+not run; the challenge card's teams stay nil), `ThroApp/SafetyScreens.swift` (`blocksRead`, so nothing claims who is
+blocked until the list is read), `ThroApp/AccountScreens.swift` (`choicesSaid` for the entering flow; naming a match
+no longer claims none), `ThroApp/TeamFixtureScreens.swift` (`venueSaid` beside the picker). New
+`tools/check_a_failed_read_is_not_empty.py`, wired into `domain-spec.yml`, proved against four fixtures. App tests
+895. Eight local-store occurrences left open by decision and recorded in PD-137.

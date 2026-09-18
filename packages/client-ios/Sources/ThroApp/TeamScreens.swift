@@ -131,10 +131,18 @@ public final class TeamsModel: ObservableObject {
     // MARK: home venue
 
     @Published public private(set) var venueMatches: [PublicLeague.Venue] = []
+    /// Set when the last search could not be run at all, which is not the same as finding nothing (PD-137).
+    @Published public private(set) var venueSearchSaid: String?
 
     public func searchVenues(_ query: String, _ api: ThroAPI?) async {
-        guard let api, query.trimmingCharacters(in: .whitespaces).count >= 2 else { venueMatches = []; return }
-        do { venueMatches = try await api.venues(matching: query) } catch { venueMatches = [] }
+        guard let api, query.trimmingCharacters(in: .whitespaces).count >= 2 else {
+            venueMatches = []; venueSearchSaid = nil; return
+        }
+        do { venueMatches = try await api.venues(matching: query); venueSearchSaid = nil }
+        catch {
+            venueMatches = []
+            venueSearchSaid = ThroAPI.refusal(error) ?? "Venues could not be searched just now."
+        }
     }
 
     /// Sets the home and shows the refreshed front. The note carries a refusal.
@@ -371,6 +379,9 @@ public struct TeamFrontScreen: View {
             ThroTextField("Find the pub or club", text: $venueQuery, placeholder: "Sun Inn")
                 .autocorrectionDisabled()
                 .onChange(of: venueQuery) { _, q in Task { await teams.searchVenues(q, api) } }
+            if let said = teams.venueSearchSaid {
+                Note(said, icon: .info).padding(.top, ThroSpacing.spacing2)
+            }
             if !teams.venueMatches.isEmpty {
                 ThroDivider()
                 ForEach(teams.venueMatches, id: \.venueId) { v in
@@ -505,6 +516,14 @@ struct FriendliesSection: View {
 
     var body: some View {
         SectionHeader("Friendlies", meta: list.map { "\($0.count)" } ?? "").padding(.top, ThroSpacing.spaceSectionGap)
+        if list == nil, let said {
+            // Read and failed: say so, and offer the way to ask again. Never an empty state.
+            ErrorState(title: "Friendlies could not be read", what: said,
+                       safe: "Nothing about this team has changed.",
+                       todo: "Try again with a connection.",
+                       onAction: { Task { await load() } })
+                .padding(.top, ThroSpacing.spacing2)
+        }
         if let list {
             if list.isEmpty {
                 Text("No friendlies yet. Open another team's page to challenge them.")
@@ -554,8 +573,11 @@ struct FriendliesSection: View {
     }
 
     private func load() async {
+        // `list` stays nil when the read fails (PD-137). Writing [] here said "no friendlies" to a captain
+        // with a challenge waiting for their answer, any time the connection dropped — the loudest thing on
+        // the screen being the one statement that was false.
         do { list = try await api.friendlies(team: teamId); said = nil }
-        catch { list = []; said = (error as? APIError)?.message ?? error.localizedDescription }
+        catch { said = (error as? APIError)?.message ?? error.localizedDescription }
     }
 
     private func answer(_ f: Friendly, _ answer: String) async {
@@ -621,7 +643,12 @@ struct ChallengeSection: View {
             if let said { Note(said).padding(.top, ThroSpacing.spacing2) }
             let _ = mine
         } else if mine == nil {
-            Color.clear.frame(height: 1).task { mine = (try? await api.myTeams()) ?? [] }
+            // Left nil when the read fails (PD-137): "Challenge" was drawn disabled with nothing saying
+            // why, because an unread list and a person who runs no team looked identical here.
+            Color.clear.frame(height: 1).task {
+                do { mine = try await api.myTeams() }
+                catch { said = (error as? APIError)?.message ?? "Your teams could not be read just now." }
+            }
         }
     }
 

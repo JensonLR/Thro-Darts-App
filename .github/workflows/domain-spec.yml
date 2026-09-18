@@ -95,6 +95,14 @@ jobs:
       - name: No decision number reaches a person
         run: python3 tools/check_no_decision_numbers.py
 
+      # Found seven times in one sweep. A captain with a challenge waiting for an answer was told "No
+      # friendlies yet" whenever the connection dropped; the blocked list said "Nobody is blocked" on the
+      # screen about safety; somebody who runs three teams was told they run none. Every one was a catch
+      # that wrote an empty collection, or a try? whose failure fell into ?? []. An empty state is a claim.
+      # A failed read has nothing to claim.
+      - name: A failed read is not drawn as an empty one
+        run: python3 tools/check_a_failed_read_is_not_empty.py
+
       # Typography.kt and Typography.swift are two type scales that must stay the same shape, and
       # this is the guard that says so — cited by both the token layer and the decisions, and until
       # now run by nobody. It needs no toolchain, so it belongs beside the other pure-Python guards.

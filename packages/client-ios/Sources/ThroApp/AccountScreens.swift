@@ -535,6 +535,7 @@ struct EventActions: View {
 
     @State private var choosing = false
     @State private var choices: [(id: UUID, label: String)]?
+    @State private var choicesSaid: String?
 
     private var entered: Bool { page?.you?.entered ?? card.entered }
 
@@ -553,6 +554,10 @@ struct EventActions: View {
                 .disabled(busy)
             }
             ThroTextButton("Leave it", tone: .quiet) { choosing = false }
+        } else if let choicesSaid {
+            ErrorState(title: "Your teams could not be read", what: choicesSaid,
+                       safe: "You have not been entered.", todo: "Try again with a connection.",
+                       onAction: { Task { await loadChoices() } })
         } else {
             Text("One moment…").thro(ThroTypography.metadata).foregroundStyle(ThroColor.colorTextSecondary)
         }
@@ -560,7 +565,16 @@ struct EventActions: View {
 
     private func loadChoices() async {
         var found: [(id: UUID, label: String)] = []
-        let mine = (try? await api.myTeams()) ?? []
+        // Read and failed leaves `choices` nil (PD-137). Swallowed, it told somebody who runs three teams
+        // that they run none — a false statement, louder than any spinner, on the screen that decides
+        // whether they can enter at all.
+        let mine: [TeamSummary]
+        do { mine = try await api.myTeams(); choicesSaid = nil }
+        catch {
+            choicesSaid = (error as? APIError)?.message ?? "Your teams could not be read just now."
+            choices = nil
+            return
+        }
         if card.entrantKind == "team" {
             found = mine.filter { $0.role == "admin" || $0.role == "captain" || $0.role == "vice_captain" }.map { ($0.teamId, $0.name) }
         } else {
@@ -662,7 +676,15 @@ struct EventActions: View {
                         Text("One moment…").thro(ThroTypography.metadata).foregroundStyle(ThroColor.colorTextSecondary)
                     }
                 } else {
-                    ThroButton("Name the match", variant: .secondary, size: .medium) { citing = true; Task { matches = (try? await api.myMatches()) ?? [] } }.disabled(busy)
+                    ThroButton("Name the match", variant: .secondary, size: .medium) {
+                            citing = true
+                            // Left nil when the read fails (PD-137), so nothing claims this player has no
+                            // finished match on THRØ when the truth is that THRØ could not be asked.
+                            Task {
+                                do { matches = try await api.myMatches() }
+                                catch { said = (error as? APIError)?.message ?? "Your matches could not be read just now."; citing = false }
+                            }
+                        }.disabled(busy)
                 }
             }
         } else {

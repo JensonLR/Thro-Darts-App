@@ -23,9 +23,15 @@ public final class SafetyModel: ObservableObject {
 
     public init() {}
 
+    /// True when the list has been read. Nothing is claimed about who is blocked until it has (PD-137):
+    /// an unread list and an empty one are not the same thing, and "Nobody is blocked" is the wrong one to
+    /// guess on a screen about safety.
+    @Published public private(set) var blocksRead = false
+
     public func loadBlocks(_ api: ThroAPI?) async {
         guard let api else { return }
-        do { blocked = try await api.blocks() } catch { note = ThroAPI.refusal(error) ?? "The list could not be read just now." }
+        do { blocked = try await api.blocks(); blocksRead = true }
+        catch { blocksRead = false; note = ThroAPI.refusal(error) ?? "The list could not be read just now." }
     }
 
     /// True when it was sent. The note carries the server's own sentence when it was not.
@@ -144,7 +150,13 @@ public struct BlockedAccountsScreen: View {
             TopBar("Blocked", eyebrow: "Nobody hears from them", onBack: onBack)
             ScrollView {
                 VStack(alignment: .leading, spacing: ThroSpacing.spacing3) {
-                    if safety.blocked.isEmpty {
+                    if !safety.blocksRead {
+                        ErrorState(title: "The blocked list could not be read",
+                                   what: safety.note ?? "No connection to THRØ just now.",
+                                   safe: "Anybody you have blocked is still blocked.",
+                                   todo: "Try again with a connection.",
+                                   onAction: { Task { await safety.loadBlocks(api) } })
+                    } else if safety.blocked.isEmpty {
                         EmptyState(title: "Nobody is blocked",
                                    message: "Blocking somebody stops them inviting you, adding you as a friend, taking a seat against you or watching your match. You never need a reason.")
                     } else {

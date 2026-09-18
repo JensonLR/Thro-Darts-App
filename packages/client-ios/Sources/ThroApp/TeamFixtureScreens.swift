@@ -128,6 +128,7 @@ public struct TeamFixtureScreen: View {
     @State private var proposedVenue: PublicLeague.Venue?
     @State private var venueQuery = ""
     @State private var venueHits: [PublicLeague.Venue] = []
+    @State private var venueSaid: String?
 
     public init(api: ThroAPI, teamId: UUID, fixture: LeagueFixtures.Fixture, onBack: @escaping () -> Void) {
         self.api = api; self.teamId = teamId; self.fixture = fixture; self.onBack = onBack
@@ -278,6 +279,11 @@ public struct TeamFixtureScreen: View {
                         ThroTextField("Somewhere else? (optional)", text: $venueQuery, placeholder: "a pub or club by name")
                             .padding(.top, ThroSpacing.spacing3)
                             .onChange(of: venueQuery) { _, q in Task { await findVenues(q) } }
+                        if let venueSaid {
+                            // Said where it was typed: a search that could not run must not read as a pub
+                            // THRØ does not hold (PD-137).
+                            Note(venueSaid, icon: .info).padding(.top, ThroSpacing.spacing2)
+                        }
                         ForEach(venueHits.prefix(4), id: \.venueId) { hit in
                             Button { proposedVenue = hit; venueHits = [] } label: {
                                 HStack {
@@ -379,11 +385,22 @@ public struct TeamFixtureScreen: View {
     }
 
     /// The venues THRØ holds by that name. Two letters before it asks; the last answer wins.
+    ///
+    /// A search that could not be run is not a search that found nothing (PD-137). Swallowed, it told a
+    /// captain THRØ does not hold their pub — and because applying a proposal leaves the venue alone when
+    /// none is named, they would then have proposed a move with the pub silently unchanged.
     private func findVenues(_ query: String) async {
         let q = query.trimmingCharacters(in: .whitespaces)
-        guard q.count >= 2 else { venueHits = []; return }
-        let found = (try? await api.venues(matching: q)) ?? []
-        if q == venueQuery.trimmingCharacters(in: .whitespaces) { venueHits = found }
+        guard q.count >= 2 else { venueHits = []; venueSaid = nil; return }
+        do {
+            let found = try await api.venues(matching: q)
+            if q == venueQuery.trimmingCharacters(in: .whitespaces) { venueHits = found; venueSaid = nil }
+        } catch {
+            if q == venueQuery.trimmingCharacters(in: .whitespaces) {
+                venueHits = []
+                venueSaid = (error as? APIError)?.message ?? "Venues could not be searched just now."
+            }
+        }
     }
 
     private func propose(in v: TeamFixtureView) async {
