@@ -1281,14 +1281,18 @@ public struct RecordResultScreen: View {
                 .padding(.horizontal, ThroSpacing.spaceScreenGutter)
                 .padding(.vertical, ThroSpacing.spacing5)
             }
-            ThroButton(fixture.result == nil ? "Record the result" : "Change the result",
-                       variant: .primary, size: .large, fullWidth: true,
-                       disabled: scores == nil || namedOfficial.isEmpty) {
-                if let scores { onRecord(scores.home, scores.away, namedOfficial) }
+            // The one pinned-action component (PD-146). This screen used to hand-roll it: the same button
+            // with its own padding and no hairline above it, so the key floated over whatever had scrolled
+            // under it and the screen had no floor. The commit is the moment the screen exists for, and it
+            // should sit on paper with a rule above it, here as everywhere else.
+            ThroBottomAction {
+                ThroButton(fixture.result == nil ? "Record the result" : "Change the result",
+                           variant: .primary, size: .large, fullWidth: true,
+                           disabled: scores == nil || namedOfficial.isEmpty) {
+                    if let scores { onRecord(scores.home, scores.away, namedOfficial) }
+                }
+                .throReadable()
             }
-            .padding(.horizontal, ThroSpacing.spaceScreenGutter)
-            .padding(.bottom, ThroSpacing.spacing6)
-            .throReadable()
         }
         // The screen arrives (PD-027): one beat, on the design's own curve,
         // withdrawn entirely under Reduce Motion.

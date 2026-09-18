@@ -6142,3 +6142,29 @@ The faces are the vocabulary; a wrapper would be a word for the vocabulary.
 
 **Evidence.** 900 app tests, every `tools/check_*.py` green, and looked at in the simulator: Home,
 You, Discover and Settings now end their field at the same distance above the page.
+
+## PD-146 — The screen that commits has a floor
+
+**18 September 2026.** The design research's number four. `ThroBottomAction` exists and does the right
+thing — a hairline, then the key on paper, running to the glass on a phone turned sideways. Two screens in
+the scoring flow use it. The league's *Record the result* hand-rolled the same thing without the hairline,
+so the key floated over whatever had scrolled beneath it and the screen had no floor.
+
+The commit is the moment a screen exists for. When it sits on paper with a rule above it the screen ends;
+when it floats, the screen just stops.
+
+**Decided.** *Record the result* uses the component. One wrapper, no new behaviour.
+
+**What I did not do, and the list.** There are **21** full-width primary buttons outside
+`ThroBottomAction` in the app. Converting them all would be wrong: most are buttons *inside a card* — the
+Continue on a match in progress, the act on a task — where a floor makes no sense, and only a screen whose
+button sits outside its scroll wants one. Which of the 21 those are is a judgement per screen, not a
+pattern match, and guessing would churn twenty screens to fix one. They are:
+`AccountScreens:86`, `ClubFlow:1093,1245,1307,1526,1698`, `ClubScreens:614`, `DiscoverScreen:323,343`,
+`LeagueScreens:1199,1499`, `ProfileScreens:677`, `SafetyScreens:119,129`, `ThroMatches:468`,
+`ThroRootView:919,1067`, `PlayScreens:790,1164,1286,1313`.
+
+**Not looked at in the simulator.** The league's result screen needs a season with a fixture, and the
+screenshot stage holds none — it stages an account, not a league. The change is a wrapper swap around an
+unchanged button and both suites pass, but I have not seen it, and the ledger says so rather than implying
+I have.

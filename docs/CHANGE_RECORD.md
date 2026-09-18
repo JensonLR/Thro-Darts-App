@@ -6374,3 +6374,10 @@ Two `// own-measure:` exemptions, printed. App tests 900.
 `ThroHeaderMetrics` in `ThroDesign/Row.swift`: gutter, `boardTop(hasBack:oneLine:)`, `boardBottom(oneLine:)`,
 `paperTop`, `paperBottom`. Read by `TopBar`, `BoardHeader`, `Masthead` and You's inline header, which disagreed on
 the gap beneath the green field by 4 to 8 points. App tests 900.
+
+## The screen that commits has a floor (PD-146)
+
+`ThroApp/LeagueScreens.swift` wraps *Record the result* in `ThroBottomAction` instead of repeating it without the
+hairline. 21 other full-width primaries are outside the component and listed in PD-146; most are in-card buttons
+rather than screen floors and need judging per screen. App tests 900. Not looked at in the simulator: the stage
+holds no league fixture.
