@@ -4,9 +4,9 @@ A resilience mechanism for a session that stops at a usage boundary, so the next
 audit. Kept current during the build; **not** a deliverable, and never a substitute for `docs/CHANGE_RECORD.md`
 (what happened, and how it was proven) or `docs/product/DECISIONS.md` (what was decided, and why).
 
-## 18 September 2026 — Phases 1 to 3 done; Phase 4 is what remains
+## 18 September 2026 — all four phases done; the founder chooses what Jev builds
 
-**Twenty-three decisions, PD-131 to PD-153**, all pushed and CI-green on `claude/thro-production-build-je2mkf`.
+**Twenty-four decisions, PD-131 to PD-154**, all pushed and CI-green on `claude/thro-production-build-je2mkf`.
 Production API at **V057**; thro.uk carries the dark-mode fix, the skeletons, the type scale and — for the
 first time — THRØ's own face.
 
@@ -31,9 +31,18 @@ sends a reader nowhere · PD-151 what THRØ says when there is nothing to show �
 the control — done. The league privacy default stays ticked.
 
 **Left, and why.**
-- **Phase 4 (what Jev is for)** is the only phase not started. Its workflow ran and died at a usage
-  boundary with grounding and all three proposal angles **cached**: resume `wf_f13b65d3-5cb` and only the
-  judges and the writer re-run. It stops for the founder after its ranking.
+- **Phase 4 (what Jev is for) is done and stopped at its checkpoint.** `docs/product/JEV_USES.md`
+  (PD-154) ranks fourteen proposals; eleven are ruled out, mostly because a normaliser and an edit
+  distance do the job. The recommendation is to build **"Which fixture — or none of them"** and then
+  **"The results sheet, typed once"** — one build in two parts. **Nothing is built: the founder picks
+  two first.** Before either, there is a day of code that needs no model at all (the fixture-presence
+  for loop, the string-distance team match, `pick()` returning `confidence`, `.take(254)`, pinning
+  `jev-1.13.0` over the moving `jev-latest` alias) and it should ship regardless — it is the floor the
+  questions have to beat.
+- **Three live defects found in passing** and recorded in PD-154, none fixed: `Safety.kt:165` (the
+  moderation queue has one child-safety threshold at 0.85 and nothing under it), `Seed.kt:86` (a NULL
+  locality matches a NULL locality), `Discovery.kt:96` (localities compared with an exact `equals`, and
+  dead in production — no shipped caller passes `homeLocality`, so `NEAR_YOU` is empty for everybody).
 - **The contact address.** PD-150 stopped every page instructing a reader to write to one. What the
   address will be is still the founder's: three legal pages, the children's page and the App Store
   listing wait on it.
