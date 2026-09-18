@@ -6486,3 +6486,11 @@ land the right way round. New `ResultsSheetLines` (55→62 lines, 45 results lab
 `ResultsSheetTest` (4). `ProductionDesk` rebuilt on the circle method: five fixtures a Thursday, only the opening
 week decided. Measured: 0 wrong while ready, 40 of 45 ready and right. The seven proposed questions are not built.
 API tests +4.
+
+## The results sheet, reachable (PD-160)
+
+New `POST /v1/seasons/{leagueSeasonId}/results/read` (`Api.kt`, `Server.kt`, `openapi.json`) — administrator-only,
+needs no model, returns rows and visible skips. `thro.js` gains `pasteResults` on the organiser's desk above the
+one-at-a-time boxes; ticked rows go through the ordinary result and award routes one at a time, the award carrying
+the secretary's own line as its reason. Five new assertions in `LeagueActsHttpTest`. Verified in a browser against a
+seeded season and read back out of the database.

@@ -6687,3 +6687,39 @@ that the problem is solved.
 
 **Evidence.** `ResultsSheet`, 4 tests plus the scorecard, written before the reader existed and watched
 failing. API suite green, 167 schema properties, 34 check scripts. `build/results-sheet-floor.md`.
+
+## PD-160 — The results sheet, reachable
+
+PD-159 built and measured the reading. This makes it something a secretary can use: a route, and a pane
+on the organiser's desk above the one-at-a-time boxes.
+
+**`POST /v1/seasons/{id}/results/read`, and it needs no model.** That is worth saying plainly, because
+its neighbour `seasons.understand` answers 503 on a server with no key. This one does not: the pair is
+matched by name, the scoreline by the same expression the desk already uses, and which of a pair's two
+meetings is meant comes from the date the sheet's own heading carries down. It was proved against a
+local server started deliberately **with no reader** — the boot line said so — and answered 200.
+
+**Nothing is recorded by the route.** It returns rows. The pane ticks the ones THRØ settled, greys the
+rest with the part it could not settle named, and on *Record the ticked results* sends each one through
+the **ordinary** result and award routes, one at a time, so each carries the ordinary permissions and
+the ordinary refusals. A row the server will not take is named back rather than swallowed with the rest.
+
+**A contract read rather than assumed.** The award route requires `reason` as well as `toTeamId`; the
+first version of the pane sent only the team and would have 400'd on every walkover. The reason it
+sends is **the secretary's own line** — the record says "Crown w/o Grange B" rather than a sentence this
+page invented on their behalf.
+
+**Looked at, and used.** Against a seeded season in a browser: the sheet pasted, three rows read and
+dated by their headings, ticked, recorded — and then read back out of the database. Grange A 5–3 Nags
+Head A and Feathers A 4–4 Riverside A as `declared` (no match was scored on THRØ, which is PD-055's
+rule), and the walkover as `awarded` to Nags Head A carrying the secretary's line as its reason. The
+trap case held: a table row, "Grange A 6 5 0 1 15" — a real team and five numbers — is not a result.
+
+**One wording fix that the screen taught.** The first pane said *"Left out: …"* over every line that did
+not become a row, and listed the week headings among them. A heading is not left out; it dated
+everything under it, which is the most useful thing on the sheet. It now says *"Dated by the sheet: …"*
+and *"Not a result, so left out: …"* separately.
+
+**Known limits, not hidden.** A postponement is read but not recorded from here — the pane says to move
+the fixture instead, so the season keeps a date for it. And where a sheet's heading names a date on
+which that pair does not play, the row stays in doubt rather than falling back to a guess.

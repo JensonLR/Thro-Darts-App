@@ -181,6 +181,22 @@ class LeagueActsHttpTest {
                 list.status.value == 200 && listed.contains("\"home\":\"Grange A\"") && listed.contains("\"away\":\"Riverside A\"")
                     && listed.contains("\"on\":\"2026-11-12\",\"time\":\"20:00\",\"scheduledAt\":\"2026-11-12T20:00:00Z\"") && listed.contains("\"doubt\":null")
                     && listed.contains("\"why\":\"a date, carried down\"") && listed.contains("\"why\":\"not a fixture\""))
+            // PD-159: the week's results sheet, pasted. Written before the route answered anything: the first three
+            // of these five failed, and the route needs no model, so it answers on a server with no key.
+            check("reading a sheet is the administrator's",
+                post("/v1/seasons/$season/results/read", """{"text":"Riverside A 5 Grange A 3"}""", ade).status.value == 403)
+            check("nothing pasted is a 400, said in the sheet's own words",
+                post("/v1/seasons/$season/results/read", """{"text":"   "}""", lee).let { it.status.value == 400 && it.bodyAsText().contains("Paste the week's results.") })
+            check("and a paste too long is refused rather than read slowly",
+                post("/v1/seasons/$season/results/read", """{"text":"${"Riverside A 5 Grange A 3 ".repeat(1000)}"}""", lee).let { it.status.value == 400 && it.bodyAsText().contains("Paste it in parts.") })
+            val sheet = post("/v1/seasons/$season/results/read", """{"text":"DIVISION A\nRiverside A 5 Grange A 3\nP W D L Pts"}""", lee)
+            val sheetBody = sheet.bodyAsText()
+            check("a pasted sheet comes back as rows to tick, with the legs on the right sides",
+                sheet.status.value == 200 && sheetBody.contains("\"fixtureId\":\"$fixture\"") && sheetBody.contains("\"kind\":\"played\"")
+                    && sheetBody.contains("\"legsHome\":5,\"legsAway\":3") && sheetBody.contains("\"ready\":true"))
+            check("and a line that is not a result is said back rather than dropped",
+                sheetBody.contains("\"skipped\"") && sheetBody.contains("could not see two of this season's teams"))
+
             // PD-129: the captain says it, on the fixture's own screen. Whoever may propose may have a sentence read.
             val sentence = """{"teamId":"$riverside","text":"can we do the 22nd of October instead, the pub is shut"}"""
             check("a sentence is read for whoever runs the team", post("/v1/fixtures/$fixture/proposals/read", sentence, sam).status.value == 403)

@@ -555,6 +555,20 @@ public object Contract {
                               503 to "no model on this server, or the model did not answer"),
         ),
         Endpoint(
+            id = "seasons.results.read", method = "POST", path = "/v1/seasons/{leagueSeasonId}/results/read", authenticated = true,
+            summary = "Paste the results sheet: read each line into a result to confirm (PD-159)",
+            description = "By the season's administrator. A week's sheet as it is published — a heading carrying the date, "
+                + "'Grange A 5 Dolphin 3', 'Crown w/o Grange B', 'Riverside B v Crown — postponed' — is read a line at a time "
+                + "against the season's own teams and fixtures. **No model is used**: the pair is matched by name, the "
+                + "scoreline by the same expression the desk uses, and which of a pair's two meetings is meant comes from the "
+                + "date the sheet's own heading carries down. A row that cannot be settled says which part is in doubt and is "
+                + "not offered for a tick. **Nothing is recorded here**: the rows go, confirmed, to the ordinary result and "
+                + "award routes. At most 200 lines and 20,000 characters.",
+            request = Schema("""{"type":"object","required":["text"],"properties":{"text":{"type":"string","maxLength":20000}}}"""),
+            responses = mapOf(200 to "rows (line, text, kind, fixtureId, home, away, at, legsHome, legsAway, awardToTeamId, awardTo, doubt, ready) and skipped (line, text, why)",
+                              400 to "nothing pasted, or too much", 401 to "no principal", 403 to "you do not administer this season", 404 to "no such season"),
+        ),
+        Endpoint(
             id = "seasons.understand", method = "POST", path = "/v1/seasons/{leagueSeasonId}/understand", authenticated = true,
             summary = "Tell THRØ: read a sentence on the desk into an act to confirm (PD-119)",
             description = "By the season's administrator. One sentence — 'Grange A beat Dolphin 5-3 last night', 'walkover to Riverside', "

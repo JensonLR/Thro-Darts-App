@@ -1004,6 +1004,9 @@ async function mountOrganiser(where, signInEl) {
       parts.push(make('p', null, 'Every fixture in this season has a result.'));
     } else {
       parts.push(make('h2', null, `${todo.length} to enter`));
+      // PD-159: the whole week at once, before the one-at-a-time boxes. A secretary with twenty fixtures has the
+      // sheet already typed somewhere; twenty forms is the work THRØ was supposed to take off them.
+      parts.push(pasteResults(plan, draw));
       for (const f of todo) parts.push(entry(f, draw));
     }
     if (done.length) {
@@ -1815,6 +1818,120 @@ async function mountOrganiser(where, signInEl) {
     };
     li.append(row);
     return li;
+  }
+
+  /**
+   * Paste the week's results (PD-159).
+   *
+   * THRØ reads each line against the season's own teams and fixtures — no model is asked anything, so this works
+   * on a server with no key. A row it has settled is ticked; a row it has not says which part it could not settle
+   * and is left for the boxes below. Nothing is recorded until the button is pressed, and each ticked row goes
+   * through the ordinary result route with the ordinary permissions.
+   */
+  function pasteResults(plan, redraw) {
+    const wrap = make('div', 'paste');
+    wrap.append(make('h3', null, 'Paste the week\u2019s results'),
+                make('p', 'quiet', 'As the sheet is written. A date on its own line says which week the results under it belong to, '
+                  + 'which is how THRØ tells two meetings of the same pair apart.'));
+    const area = make('textarea'); area.rows = 6; area.setAttribute('aria-label', 'The week\u2019s results');
+    area.placeholder = 'Thursday 15 October 2026\nGrange A 5 Dolphin 3\nCrown w/o Grange B\nRiverside B v Crown \u2014 postponed';
+    const go = make('button', 'primary', 'Read the sheet');
+    const note = make('p', 'note'); note.hidden = true;
+    const out = make('div');
+    const acts = make('div', 'acts'); acts.append(go);
+    wrap.append(area, acts, note, out);
+    go.onclick = async () => {
+      if (!area.value.trim()) { area.focus(); return; }
+      go.disabled = true; note.hidden = true; out.replaceChildren(make('p', 'quiet', 'Reading each line\u2026'));
+      try {
+        const read = await authorised('POST', `/v1/seasons/${encodeURIComponent(plan.leagueSeasonId)}/results/read`, { text: area.value });
+        out.replaceChildren(rowsOf(read));
+      } catch (e) { out.replaceChildren(); note.hidden = false; note.textContent = e.message; }
+      go.disabled = false;
+    };
+
+    function rowsOf(read) {
+      const holder = make('div');
+      const usable = (read.rows || []).filter(r => r.fixtureId);
+      if (!usable.length) {
+        holder.append(make('p', 'quiet', 'THR\u00d8 found no result for this season in that. One to a line, with both team names: '
+          + '\u201cGrange A 5 Dolphin 3\u201d.'));
+        if (read.skipped && read.skipped.length) holder.append(skippedLine(read));
+        return holder;
+      }
+      const list = make('ul', 'rows');
+      const made = [];
+      for (const r of usable) {
+        const li = make('li', 'paste-row');
+        const tick = make('input'); tick.type = 'checkbox'; tick.checked = !!r.ready;
+        tick.setAttribute('aria-label', `Record ${r.home} v ${r.away}`);
+        const said = r.kind === 'played' ? `${r.home} ${r.legsHome}\u2013${r.legsAway} ${r.away}`
+          : r.kind === 'awarded' ? `${r.home} v ${r.away} \u2014 awarded to ${r.awardTo || 'a team'}`
+            : `${r.home} v ${r.away} \u2014 not played`;
+        const doubt = { 'which week': 'which week this is \u2014 date the sheet', 'the score': 'the score',
+                        'which side': 'which side the numbers belong to', 'already recorded': 'this fixture already has a result',
+                        'who it was awarded to': 'who it was awarded to' }[r.doubt] || r.doubt;
+        const form = make('div', 'entry-form'); form.append(tick, make('span', null, said));
+        li.append(make('div', 'row-meta', `\u201c${r.text}\u201d` + (doubt ? ` \u00b7 ${doubt}` : '') + (r.at ? ` \u00b7 ${when(r.at)}` : '')), form);
+        list.append(li);
+        made.push({ tick, row: r });
+      }
+      holder.append(list);
+      if (read.skipped && read.skipped.length) holder.append(skippedLine(read));
+      const add = make('button', 'primary', 'Record the ticked results');
+      const told = make('p', 'note'); told.hidden = true;
+      add.onclick = async () => {
+        const ticked = made.filter(m => m.tick.checked);
+        if (!ticked.length) { told.hidden = false; told.textContent = 'Tick the results to record.'; return; }
+        add.disabled = true; told.hidden = true;
+        // One at a time, through the ordinary routes, so each carries the ordinary permissions and the ordinary
+        // refusals. A row the server will not take is named rather than swallowed with the rest.
+        const refused = [];
+        let saved = 0;
+        for (const m of ticked) {
+          const r = m.row;
+          try {
+            if (r.kind === 'played') {
+              await authorised('POST', `/v1/fixtures/${encodeURIComponent(r.fixtureId)}/result`, { legsHome: r.legsHome, legsAway: r.legsAway });
+            } else if (r.kind === 'awarded' && r.awardToTeamId) {
+              // The award route requires a reason, and the honest one is the line the secretary typed — so the
+              // record says "Crown w/o Grange B" rather than a sentence this page made up on their behalf.
+              await authorised('POST', `/v1/fixtures/${encodeURIComponent(r.fixtureId)}/award`,
+                               { toTeamId: r.awardToTeamId, reason: r.text });
+            } else { refused.push(`\u201c${r.text}\u201d (THR\u00d8 has no way to record that here)`); continue; }
+            saved++;
+          } catch (e) { refused.push(`\u201c${r.text}\u201d (${e.message})`); }
+        }
+        told.hidden = false;
+        told.textContent = refused.length
+          ? `${saved} recorded. ${refused.length} not: ${refused.join(' \u00b7 ')}`
+          : `${saved} recorded.`;
+        if (!refused.length) setTimeout(redraw, 900); else add.disabled = false;
+      };
+      const foot = make('div', 'acts'); foot.append(add);
+      holder.append(foot, told,
+        make('p', 'quiet', 'A postponement is not recorded from here \u2014 move the fixture instead, so the season keeps a date for it.'));
+      return holder;
+    }
+
+    /**
+     * What did not become a row. A heading is not "left out" — it dated everything under it, which is the most
+     * useful thing on the sheet — so it is said separately and in the past tense of a job done.
+     */
+    function skippedLine(read) {
+      const holder = make('div');
+      const headings = read.skipped.filter(s => s.why.startsWith('a heading'));
+      const rest = read.skipped.filter(s => !s.why.startsWith('a heading') && s.text.trim());
+      if (headings.length) {
+        holder.append(make('p', 'quiet', `Dated by the sheet: ${headings.map(s => `\u201c${s.text}\u201d`).join(', ')}.`));
+      }
+      if (rest.length) {
+        holder.append(make('p', 'quiet', `Not a result, so left out: ${rest.map(s => `\u201c${s.text}\u201d`).join(', ')}.`));
+      }
+      return holder;
+    }
+
+    return wrap;
   }
 
   /**

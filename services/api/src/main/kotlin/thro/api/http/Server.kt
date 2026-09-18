@@ -57,6 +57,7 @@ import thro.api.Reader
 import thro.api.Reading
 import thro.api.SeasonHistory
 import thro.api.SystemOne
+import thro.api.ResultsSheet
 import thro.api.Understanding
 import thro.api.Safety
 import thro.api.Matches
@@ -539,6 +540,23 @@ public fun Application.thro(deps: Deps) {
             }
         },
         // PD-119: Tell THRØ. A sentence on the desk, read into an act to confirm; nothing is recorded here.
+        // PD-159: a whole week's sheet, read with no model at all — so it answers on a server with no key, which
+        // "seasons.understand" beside it cannot.
+        "seasons.results.read" to { r ->
+            val season = UUID.fromString(r.call.parameters["leagueSeasonId"])
+            val desk = Understanding.desk(r.connection(), season)
+            when {
+                desk == null -> Http(404, """{"error":"THRØ has no such league season."}""")
+                else -> leagueAdmin(r, season) {
+                    val text = (Json.parseObject(r.body)["text"] as? String).orEmpty()
+                    when {
+                        text.isBlank() -> Http(400, """{"error":"Paste the week's results."}""")
+                        text.length > ResultsSheet.MAX_CHARACTERS -> Http(400, """{"error":"Paste it in parts."}""")
+                        else -> Http(200, resultsSheetJson(ResultsSheet.read(desk, text)))
+                    }
+                }
+            }
+        },
         "seasons.understand" to { r ->
             val season = UUID.fromString(r.call.parameters["leagueSeasonId"])
             val model = deps.systemOne
@@ -1163,6 +1181,20 @@ private fun withModerator(r: Req, moderators: Set<UUID>, block: (UUID) -> Http):
 }
 
 /** The queue for whoever works it: what was reported, why, when the answer is due, and how often it has been answered. */
+/** A read results sheet (PD-159): rows to tick, and every line that did not become one, said back. */
+private fun resultsSheetJson(read: ResultsSheet.Read): String =
+    "{\"rows\":[" + read.rows.joinToString(",") { row ->
+        """{"line":${row.number},"text":${Contract.q(row.text)},"kind":${row.kind?.let { Contract.q(it.name.lowercase()) } ?: "null"},""" +
+            """"fixtureId":${row.fixture?.let { "\"${it.fixtureId}\"" } ?: "null"},""" +
+            """"home":${row.fixture?.let { Contract.q(it.home) } ?: "null"},"away":${row.fixture?.let { Contract.q(it.away) } ?: "null"},""" +
+            """"at":${row.fixture?.let { "\"${it.at}\"" } ?: "null"},""" +
+            """"legsHome":${row.legsHome ?: "null"},"legsAway":${row.legsAway ?: "null"},""" +
+            """"awardToTeamId":${row.awardTo?.let { "\"${it.teamId}\"" } ?: "null"},"awardTo":${row.awardTo?.let { Contract.q(it.name) } ?: "null"},""" +
+            """"doubt":${row.doubt?.let { Contract.q(it) } ?: "null"},"ready":${row.ready}}"""
+    } + "],\"skipped\":[" + read.skipped.joinToString(",") { s ->
+        """{"line":${s.number},"text":${Contract.q(s.text)},"why":${Contract.q(s.why)}}"""
+    } + "]}"
+
 private fun queueJson(queued: List<Safety.Queued>): String =
     "{\"reports\":[" + queued.joinToString(",") { q ->
         """{"reportId":"${q.report.reportId}","subjectKind":${Contract.q(q.report.subjectKind)},""" +
