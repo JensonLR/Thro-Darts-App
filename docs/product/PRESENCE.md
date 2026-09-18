@@ -13,7 +13,7 @@ identity. What follows is the recommendation, what was actually checked, and wha
 | --- | --- |
 | **Handle, everywhere** | `throdarts` |
 | **Display name** | `THRØ Darts` |
-| **Domain** | `thro.uk` — **confirmed unregistered** at Nominet on 12 September 2026 |
+| **Domain** | `thro.uk` — **registered and live** (checked 18 September 2026: it serves the site through Cloudflare). It was confirmed unregistered at Nominet on 12 September 2026; that line is superseded. |
 | **Contact** | `hello@thro.uk`, `privacy@thro.uk`, `safeguarding@thro.uk` — three addresses, one inbox |
 | **Bluesky** | not `throdarts.bsky.social` — set the handle to **`thro.uk`** itself, which is free and verifies by DNS |
 

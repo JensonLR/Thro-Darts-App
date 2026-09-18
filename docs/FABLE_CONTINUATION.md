@@ -57,6 +57,13 @@ the control — done. The league privacy default stays ticked.
 - **Three live defects found in passing, of which two are now closed**: `Safety.kt` child-safety band (fixed in
   PD-155), `Seed.kt:86` NULL-matches-NULL, `Discovery.kt:96` exact locality compare (dead in production
   — no shipped caller passes `homeLocality`).
+- **The duplicate Render static site is gone** (checked 18 September 2026 — only `THRO-web` remains), so the
+  note asking the founder to suspend it is closed.
+- **The API is still on Render's free plan** (`plan: "free"`, checked 18 September 2026). PD-135/136's skeletons
+  hide the cold start; they do not remove it. The honest fix is the paid instance, ~$7/mo, and it is the founder's.
+- **TypeSafe has no Art 28 processor terms and the key is set.** Recorded in `docs/legal/ROPA.md` and
+  cross-referenced from the DPIA on 18 September 2026. Either obtain the terms or unset `THRO_TYPESAFE_API_KEY`;
+  unsetting degrades safely to `note: no reader`.
 - **The contact address.** PD-150 stopped every page instructing a reader to write to one. What the
   address will be is still the founder's: three legal pages, the children's page and the App Store
   listing wait on it.

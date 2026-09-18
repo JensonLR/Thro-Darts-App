@@ -109,6 +109,15 @@ Written processor terms under Art 28, as of 14 Sep 2026:
 - **Render — obtained.** The founder requested Render's GDPR DPA from its trust page (*Request Documents*) and holds the copy. It says it supplements Render's Terms of Service; whether that suffices or a signed copy is needed is for the solicitor.
 - **Neon — part of its terms, copy to keep.** Neon says its DPA is embedded in its terms of service, and publishes it at `neon.com/pdf/DPA.pdf` for download and separate signature; transfers rest on the Data Privacy Framework. The founder is to save the PDF. Whether acceptance through the terms suffices is for the solicitor.
 - **The mail host — outstanding** until one is chosen (`docs/product/MAILBOX.md`). A personal Gmail account used as the inbox would come under no business processor terms.
+- **TypeSafe — OUTSTANDING, and the key is already set (recorded 18 Sep 2026).** The DPIA's action 6 says these
+  terms are needed *"before `THRO_TYPESAFE_API_KEY` is set"*. **It is set**: every boot of the production API since
+  11 September logs `reader: TypeSafe jev-1.13.0 reads reports and names as they arrive`, so the condition was
+  crossed rather than met, and this row was missing from this list entirely rather than marked outstanding — which
+  is how it stayed invisible. What is sent is in the row above: the words of a report, a chosen name, and a
+  sentence an organiser or captain types, with no account id, no device and no author. Free text, so a person can
+  be named inside it. **For the founder:** obtain TypeSafe's DPA, or unset `THRO_TYPESAFE_API_KEY` on Render until
+  it is held. Unsetting it is safe — the API prints `note: no reader` and every reading path degrades to the
+  behaviour it had before PD-118: reports and names are simply not read, and the queue orders by the hour due.
 
 ## Technical and organisational measures
 

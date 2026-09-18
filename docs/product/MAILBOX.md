@@ -9,8 +9,9 @@ written **before** they do.
 The founder asked whether the Gmail connection could create these. It cannot, for three reasons, and the
 first is the only one that matters:
 
-1. **`thro.uk` is not registered.** No tool can create an address at a domain nobody owns. Everything below
-   is downstream of buying it.
+1. ~~**`thro.uk` is not registered.**~~ **Done — the domain is registered and serving** (checked 18 September
+   2026). It has **no MX records**, so no address exists yet, but nothing is downstream of buying it any more:
+   the only thing left is choosing a host and pointing the records. Reasons 2 and 3 below still stand.
 2. **The Gmail connection is a mailbox client, not an admin console.** It drafts, sends, searches, labels
    and trashes inside one already-authenticated account. Creating addresses at a domain happens in Google
    Workspace's admin console or a mail host's control panel. Also: a personal `@gmail.com` cannot host
