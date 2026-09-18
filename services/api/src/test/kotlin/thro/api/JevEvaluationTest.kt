@@ -188,7 +188,8 @@ class JevEvaluationTest {
         fun say(line: String) { println(line); out.appendLine(line) }
 
         say("# What THRØ gets from the System One model"); say("")
-        say("Model: ${if (endpoint != null) "the stand-in at $endpoint (a word-matcher; the floor)" else "jev-latest"} · ${Instant.now()} · desk of ${teams.size} teams, ${fixtures.size} fixtures, today ${today}."); say("")
+        // The model the reader actually asks for, not a literal beside it (PD-157 fixed the same lie in Main.kt).
+        say("Model: ${if (endpoint != null) "the stand-in at $endpoint (a word-matcher; the floor)" else reader.modelName} · ${Instant.now()} · desk of ${teams.size} teams, ${fixtures.size} fixtures, today ${today}."); say("")
         for ((title, set) in listOf("Sentences on the desk (the set the questions were tuned on)" to sentences, "Held out (written after tuning, before any answer was seen)" to heldOut)) {
         say("## $title"); say("")
         say("| | Sentence | Meant | Read | Confidence |"); say("|---|---|---|---|---|")

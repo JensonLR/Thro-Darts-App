@@ -6975,3 +6975,34 @@ check can only see what is above the fold, and the screen to check has to be cho
 rather than worked around, because the next person will try the same two things.
 
 **Evidence.** 911 app tests. Every `tools/check_*.py` green. Four screens photographed on iPhone 17 Pro.
+
+## PD-170 — The scorecard re-run, and what Jev actually costs
+
+PD-157 said plainly that its figures for the confidence floor were **indicative, not measured** — they
+were recorded when `pick()` returned `probabilities[choice]`, and the number a card carries is the model's
+own `confidence` now. This is the measurement, against the real `jev-1.13.0`.
+
+**What it cost, exactly.** `378,982` input tokens for the whole run — **$0.0159, about 1.3 pence**. That
+is the first time this repository has been able to say what a Jev run costs, and it is the answer to the
+founder's question. 148 requests, median **276 ms**, 95th percentile **431 ms**.
+
+**The floor does what it was built to do, and the scorecard shows it.**
+
+- **Tuned set: 22 of 22** whole cards right. **Held out: 15 of 15.** **Wrong and sure: 0.**
+- Read twice: of 37 sentences, **4 came out differently, and THRØ had flagged all 4 as unsure**. Four of
+  four. That is the property the floor exists for — a judgement near a coin's toss is one THRØ says it is
+  unsure of rather than one it offers for a tap.
+- The case PD-157 was written about is on the card in black and white: *"station 5 riverside b 1"* read
+  **reversed at 0.26** and then **right at 0.42**. Both are under `SURE_ENOUGH`, so **neither is offered
+  as ready**. Before the floor, the reversed one shipped as a green card.
+
+**Corrected from PD-157's estimate.** It guessed "two errors caught for two extra taps". The measurement
+is better than the guess: the reversed read now scores 0.26 rather than 0.39, so it is caught with room
+to spare, and the flip-flopping reads are flagged 4 of 4 rather than partially.
+
+**And one more literal that had started to lie.** The scorecard's own header printed `jev-latest` from a
+string beside the reader rather than from the reader — the same bug PD-157 fixed in `Main.kt` and did not
+look for elsewhere. It reports `reader.modelName` now, and the published card says `jev-1.13.0`.
+
+**Evidence.** `docs/product/JEV_SCORECARD.md`, regenerated. Run with the key from the git-ignored
+`.env.local`; nothing was written to the repository but the card.

@@ -6557,3 +6557,10 @@ No code change: *Name the match* with matches present, and the desk cards in lan
 Pro and both correct. With PD-166 and PD-168 this closes every "never looked at" gap in the ledger — three of the
 four were unreachable rather than neglected. Recorded that `simctl` swipes do not scroll a rotated scene, so a
 landscape check sees only what is above the fold.
+
+## The scorecard re-run, and what Jev actually costs (PD-170)
+
+`JEV_SCORECARD.md` regenerated against the real `jev-1.13.0`: 22/22 tuned, 15/15 held out, 0 wrong-and-sure, and of
+37 sentences read twice the 4 that differed were all flagged unsure. The reversed "station 5 riverside b 1" scores
+0.26 and 0.42 — both under the 0.6 floor, so neither is offered. **Cost measured: 378,982 input tokens, $0.0159.**
+`JevEvaluationTest` header now prints `reader.modelName` instead of a `jev-latest` literal.
