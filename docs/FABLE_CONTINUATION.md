@@ -6,7 +6,7 @@ audit. Kept current during the build; **not** a deliverable, and never a substit
 
 ## 18 September 2026 — all four phases done, and both chosen builds shipped
 
-**Thirty decisions, PD-131 to PD-160**, all pushed and CI-green on `claude/thro-production-build-je2mkf`.
+**Thirty-two decisions, PD-131 to PD-162**, all pushed and CI-green on `claude/thro-production-build-je2mkf`.
 Production API at **V057**; thro.uk carries the dark-mode fix, the skeletons, the type scale and — for the
 first time — THRØ's own face.
 
@@ -48,7 +48,13 @@ the control — done. The league privacy default stays ticked.
   `usage.input_tokens`; it counts them now and prints the running dollar figure. Jev **is** live in
   production (every boot logs `reader: TypeSafe …`), and at current volume the spend is a fraction of a
   cent — but it was unmeasured until PD-157.
-- **Three live defects found in passing, still not fixed**: `Safety.kt` child-safety band (fixed in
+- **PD-161 and PD-162 closed the loose ends.** The seed's venue collision (`IS NOT DISTINCT FROM` made
+  two Red Lions one row — **latent, not live**: all 18 seeded venues carry an OSM id and a locality);
+  `Discovery.sameLocality` so a town written two ways is one town (**still dead code** — no shipped
+  caller sends `locality`); and the last of PD-147's three abandoned changes. **That entry was wrong**:
+  it says the applier "invented a `SegmentedControl` that does not exist", and it exists in
+  `ThroDesign/Forms.swift`, public, since PD-066. Three changes were dropped on an unchecked claim.
+- **Three live defects found in passing, of which two are now closed**: `Safety.kt` child-safety band (fixed in
   PD-155), `Seed.kt:86` NULL-matches-NULL, `Discovery.kt:96` exact locality compare (dead in production
   — no shipped caller passes `homeLocality`).
 - **The contact address.** PD-150 stopped every page instructing a reader to write to one. What the
