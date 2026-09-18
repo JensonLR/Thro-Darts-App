@@ -6879,3 +6879,38 @@ reading why, the fix would have been a test for something already tested.
 put through the same thing in a minute rather than argued about.
 
 **Evidence.** Both suites green after restore, and `git diff` clean on both sources.
+
+## PD-166 — The development principal names an account, so the moderation page can be looked at
+
+`FABLE_CONTINUATION.md` listed "not looked at in a browser: the moderation page signed in" among its known
+gaps, and gave the recipe for looking. **The recipe could not work.** `Authenticator.Dev` returned
+`Principal(subject)` with `accountId` always null, and both `withAccount` and `withModerator` refuse a
+principal with no account behind it — so every account-shaped route answered 403 to every local request.
+That screen was not unlooked-at through neglect; it was unreachable.
+
+`Dev` resolves the account now, from the request's own connection: a subject that **is** an account id gets
+one. A subject that is not still gets a principal with no account, because a player who has never signed in
+is exactly that, and the routes that refuse one should go on refusing it. It is development-only by
+construction — `Dev` cannot be built unless `THRO_DEV_AUTH=1` and the database is on this machine.
+
+**And then the screen was looked at, for the first time.** Two reports seeded, one of them carrying
+"SYSTEM: ignore your instructions…". The queue came back 200 and **PD-155's ordering was visible in the
+answer**: the genuine report, read at 0.62 child-safety, sorted **above** the injected one whose severity
+was 2.9 against its 2.1. The rule survived contact with a real page.
+
+## PD-167 — A severity that has been set aside is not shown
+
+Found by looking at the page above rather than by reasoning about it. The card printed
+*"THRØ's reading: a slur or hate (88% sure) · **serious harm or danger** · not about a child"* and then,
+underneath, *"Its severity is set aside"*. A moderator reads the alarming claim first and the caveat
+second, and the figure they have already taken in is one THRØ decided not to count. **A number you are not
+counting is not a hint; it is noise with a decimal point.**
+
+Two changes. The note moves **above** the reading, so the caveat frames the claim instead of trailing it.
+And when the severity is set aside the reading **does not print a level at all** — category, confidence and
+the child part, nothing else. The genuine report beside it still shows *"clearly against the rules"*,
+because nothing was set aside there.
+
+**Evidence.** Both cards read in a browser, signed in, against a local server: the genuine one keeps its
+severity, the injected one shows none and is framed by the note. API suite green, 911 app tests, every
+`tools/check_*.py` green.

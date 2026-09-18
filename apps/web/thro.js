@@ -808,14 +808,21 @@ const ANSWERS = [
 ];
 
 /** THRØ's reading of a report (PD-118) in words, or null when there is none worth a line. */
-function readingWords(j) {
+function readingWords(j, severitySetAside) {
   if (!j || j.severity === null || j.severity === undefined) return null;
   const about = {
     harassment: 'harassment', hate_or_slur: 'a slur or hate', sexual: 'sexual', impersonation_or_fraud: 'impersonation or a scam',
     cheating_or_dispute: 'a disputed result', spam: 'spam', other: 'something else',
   }[j.category] || j.category;
-  const level = ['nothing to act on', 'mildly unpleasant', 'clearly against the rules', 'serious harm or danger'][Math.min(3, Math.max(0, Math.round(j.severity)))];
   const child = j.childSafety >= 0.85 ? 'a child may be at risk' : j.childSafety >= 0.5 ? 'possibly about a child' : 'not about a child';
+  // PD-167: when the severity has been set aside, do not print it. The first version of this card showed
+  // "serious harm or danger" and then said underneath that the severity was set aside — a moderator read the
+  // alarming claim first and the caveat second, and the figure they read is one THRØ had already decided not to
+  // count. A number you are not counting is not a hint, it is noise with a decimal point.
+  if (severitySetAside) {
+    return `THRØ's reading: ${about} (${Math.round(j.confidence * 100)}% sure) · ${child}. A hint, not an answer.`;
+  }
+  const level = ['nothing to act on', 'mildly unpleasant', 'clearly against the rules', 'serious harm or danger'][Math.min(3, Math.max(0, Math.round(j.severity)))];
   return `THRØ's reading: ${about} (${Math.round(j.confidence * 100)}% sure) · ${level} · ${child}. A hint, not an answer.`;
 }
 
@@ -850,15 +857,16 @@ async function mountModeration(where, signInEl) {
       make('div', 'row-meta', `${r.raisedBy === 'thro' ? 'Raised by THRØ' : 'Reported'} ${when(r.reportedAt)} · answer by ${when(r.answerDueAt)}`
         + (r.decisions ? ` · answered ${r.decisions} time${r.decisions === 1 ? '' : 's'}` : '')),
     );
-    // PD-118: what THRØ made of it, beside it — a hint for the person answering, never an answer.
-    const reading = readingWords(r.reading);
-    if (reading) box.append(make('p', 'reading', reading));
-    // PD-155: say so when the text is talking to THRØ. A moderator seeing a mild reading on an angry report
-    // should know THRØ set the severity aside on purpose, rather than wonder why the reading came back soft.
+    // PD-155: say so when the text is talking to THRØ, and say it BEFORE the reading (PD-167) so the caveat
+    // frames the claim rather than trailing it. A moderator who reads "serious harm or danger" and only then
+    // learns it was set aside has already taken the number in.
     if (r.addressedToSystem) {
-      box.append(make('p', 'note', 'Some of this is addressed to THRØ, not to you. Its severity is set aside; '
-        + 'what it says about a child is not.'));
+      box.append(make('p', 'note', 'Some of this is addressed to THRØ, not to you. How serious THRØ read it is '
+        + 'set aside and not shown; what it says about a child still counts.'));
     }
+    // PD-118: what THRØ made of it, beside it — a hint for the person answering, never an answer.
+    const reading = readingWords(r.reading, r.addressedToSystem);
+    if (reading) box.append(make('p', 'reading', reading));
     const form = make('div', 'entry-form');
     const answer = make('select');
     answer.setAttribute('aria-label', 'Your answer');

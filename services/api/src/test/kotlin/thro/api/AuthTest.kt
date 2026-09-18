@@ -14,6 +14,7 @@ import java.security.Signature
 import java.time.Instant
 import java.util.Base64
 import java.util.UUID
+import kotlin.test.assertNull
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
@@ -235,5 +236,41 @@ class AuthTest {
         val unavailable = try { failing.publicKey(Provider.APPLE, "apple-1"); false } catch (e: IdTokenVerifier.KeysUnavailable) { true }
         assertTrue(unavailable, "no keys at all is a typed failure the route turns into a 503, not a 500")
         println("  PASS  key fetches are throttled and a failed fetch is a 503")
+    }
+
+    /**
+     * The development authenticator names an account when the subject **is** one (PD-166).
+     *
+     * It returned `Principal(subject)` with `accountId` always null, and `withAccount` and `withModerator` both
+     * refuse a principal with no account behind it. So every account-shaped route — the moderation queue among
+     * them — answered 403 to every local request, and the documented recipe for looking at the moderation page
+     * in a browser could not reach it. That is why that screen is recorded as never looked at: not an oversight,
+     * a thing that could not be done.
+     *
+     * It resolves now, from the same database the request is already on. A subject that is not an account still
+     * gets a principal with no account, because a player who has never signed in is exactly that.
+     */
+    @Test
+    fun `the development principal names an account when its subject is one`() {
+        if (!TestDatabase.configured) return
+        TestDatabase.migrated().use { c ->
+            val account = UUID.randomUUID()
+            c.createStatement().use {
+                it.execute("INSERT INTO identity.account (account_id, display_name, age_band, age_assurance) " +
+                           "VALUES ('$account', 'Lee', 'adult', 'self_declared')")
+            }
+            val dev = Authenticator.Dev()
+            val asAccount = dev.authenticate({ if (it == Authenticator.Dev.HEADER) account.toString() else null }, { c })
+            assertEquals(account, asAccount?.subject)
+            assertEquals(account, asAccount?.accountId, "an account-shaped subject is an account, so the queue is reachable")
+
+            val stranger = UUID.randomUUID()
+            val asPlayer = dev.authenticate({ if (it == Authenticator.Dev.HEADER) stranger.toString() else null }, { c })
+            assertEquals(stranger, asPlayer?.subject)
+            assertNull(asPlayer?.accountId, "a subject that is not an account is a player who never signed in")
+
+            assertNull(dev.authenticate({ null }, { c }), "no header is nobody")
+            assertNull(dev.authenticate({ "not-a-uuid" }, { c }), "and neither is a header that is not a uuid")
+        }
     }
 }

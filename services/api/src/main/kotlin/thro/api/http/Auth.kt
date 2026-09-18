@@ -43,8 +43,26 @@ public fun interface Authenticator {
      * not so that a server can be run without deciding it.
      */
     public class Dev internal constructor() : Authenticator {
+        /**
+         * **Names an account when the subject is one** (PD-166). This returned `Principal(subject)` with
+         * `accountId` always null, and both `withAccount` and `withModerator` refuse a principal with no account
+         * behind it — so every account-shaped route answered 403 to every local request, the moderation queue
+         * among them. That is why the moderation page is recorded as never looked at in a browser: the documented
+         * recipe could not reach it, which is a different thing from nobody having bothered.
+         *
+         * A subject that is not an account still gets a principal with no account, because a player who has never
+         * signed in is exactly that, and the routes that refuse one should go on refusing it. This reads the
+         * request's own connection and opens nothing else.
+         */
         override fun authenticate(header: (String) -> String?, connection: () -> Connection): Principal? =
-            header(HEADER)?.let { runCatching { UUID.fromString(it.trim()) }.getOrNull() }?.let { Principal(it) }
+            header(HEADER)?.let { runCatching { UUID.fromString(it.trim()) }.getOrNull() }?.let { subject ->
+                val isAccount = runCatching {
+                    connection().prepareStatement("SELECT 1 FROM identity.account WHERE account_id = ?").use { ps ->
+                        ps.setObject(1, subject); ps.executeQuery().use { it.next() }
+                    }
+                }.getOrDefault(false)
+                Principal(subject, if (isAccount) subject else null)
+            }
 
         public companion object {
             public const val HEADER: String = "X-Thro-Dev-Subject"

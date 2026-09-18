@@ -6536,3 +6536,10 @@ New `tools/mutate.py` — breaks one guard, runs a suite, restores. Applied to `
 `FriendlyHttpTest` (PD-110): eight mutations, seven caught. The survivor is `Rearrangements.answer`'s
 already-answered guard, which `Secretary.answer` enforces a layer down and the suite already asserts — belt-and-braces,
 not a gap. The known-gap line in FABLE_CONTINUATION.md is struck.
+
+## The moderation page, reachable and then corrected (PD-166, PD-167)
+
+`http/Auth.kt`: `Authenticator.Dev` resolves `accountId` when the subject is an account, so account-shaped routes —
+the moderation queue among them — are reachable locally for the first time; `AuthTest` +1. Looking at the page then
+found PD-167: `thro.js` no longer prints a severity level when `addressedToSystem`, and the set-aside note moves
+above the reading so the caveat frames the claim. The known-gap line is struck.
