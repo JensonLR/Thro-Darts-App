@@ -219,7 +219,7 @@ public enum LeaguesPlot {
         guard case .located(let lat, let lon) = place, !pins.isEmpty else { return nil }
         let nearest = pins.map { NearbyLogic.distanceKm(fromLat: lat, lon: lon, toLat: $0.coordinate.latitude, lon: $0.coordinate.longitude) }.min() ?? 0
         guard nearest > NearbyLogic.farKm else { return nil }
-        return "You are \(NearbyLogic.miles(nearest)) from the nearest league THRØ has listed. Start your team here, or your league at thro.uk, and it is on the map the same day."
+        return "You are \(NearbyLogic.miles(nearest)) from the nearest league THRØ has listed. Start your team here, or your league at thro.uk — a league is on the map the same day you make it public."
     }
 
     static func day(_ iso: String) -> String {

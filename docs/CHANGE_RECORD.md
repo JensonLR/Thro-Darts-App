@@ -6291,3 +6291,11 @@ distinguishes a team THRØ does not hold from one it could not reach, and offers
 `fail()` sites gained retries. `apps/web/thro.css`: `.skeleton`, measured at 1.59:1 light and 1.74:1 dark from the
 rendered pixels. `league.html`, `event.html`, `team.html` carry `data-settle`. Verified against a server that accepts
 and never answers. Every check green. No API change; no deploy needed beyond the static site.
+
+## The desk reads as itself (PD-136)
+
+`apps/web/thro.js`: `mountOrganiser`'s season fixtures and standings reads go through `authorised()` like its other
+four, so the desk draws for a league started with its own private-by-default settings. The "it is here the same day"
+promise made true in four places — `apps/web/thro.js`, `ThroApp/TeamLeagueSay.swift`, `ThroApp/LeaguesScreen.swift`,
+`ThroApp/Nearby.swift` — because `/v1/leagues` lists only public leagues. No API change; the contract was already
+held by `LeagueStartingTest`. App tests 894.

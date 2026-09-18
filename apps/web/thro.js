@@ -198,7 +198,7 @@ async function mountLeagues(listEl, searchEl, countEl) {
     }
     if (!shown.length) {
       const none = make('li');
-      none.append(make('p', 'quiet', 'No league here by that name. If you run it, start it on the organiser’s desk and it is here the same day.'));
+      none.append(make('p', 'quiet', 'No league here by that name. If you run it, start it on the organiser’s desk; make it public when you are ready and it is here the same day.'));
       const desk = make('a', null, 'Open the desk'); desk.href = 'organiser.html'; none.append(desk);
       listEl.replaceChildren(none);
     }
@@ -974,11 +974,14 @@ async function mountOrganiser(where, signInEl) {
     try {
       plan = await authorised('GET', `/v1/seasons/${encodeURIComponent(season)}/teams`);
       offers = await read('/v1/auth/providers').catch(() => ({}));
-      data = await read(`/v1/seasons/${encodeURIComponent(season)}/fixtures`);
+      // Authorised, like every other read on this page (PD-136). A league started here is private by
+      // default, and `shown()` answers a private season 404 to anybody it cannot see administering it —
+      // so these two, sent without a bearer, failed the whole try and the desk never drew at all.
+      data = await authorised('GET', `/v1/seasons/${encodeURIComponent(season)}/fixtures`);
       policy = (await authorised('GET', `/v1/seasons/${encodeURIComponent(season)}/policy`)).policy;
       ({ registrations, registered } = await authorised('GET', `/v1/seasons/${encodeURIComponent(season)}/registrations`));
       proposals = (await authorised('GET', `/v1/seasons/${encodeURIComponent(season)}/proposals`)).proposals;
-      standings = await read(`/v1/seasons/${encodeURIComponent(season)}/standings`);
+      standings = await authorised('GET', `/v1/seasons/${encodeURIComponent(season)}/standings`);
     } catch (e) { fail(where, e, draw); return; }
 
     const todo = (data.fixtures || []).filter(f => !f.decided);

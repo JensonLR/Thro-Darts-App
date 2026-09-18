@@ -5761,3 +5761,35 @@ an opacity. Every `tools/check_*.py` green.
 **A defect in the looking, not the code.** The screenshot harness reused a Chrome profile, so it photographed the CSS
 and JavaScript it had seen on a previous run and reported them as the change. It did that once here, and the only
 reason it was caught is that the measured contrast did not move when the CSS did. The harness now disables the cache.
+
+## PD-136 — The desk reads as itself, and the sentence about starting a league is true
+
+**18 September 2026.** Two defects on the same path, found by walking the organiser's own default route.
+
+**The desk never drew.** `mountOrganiser` makes six reads. Four went through `authorised()`; two —
+the season's fixtures and its standings — went through `read()`, which sends no bearer. A league started
+on the desk is **private by default** (`quiet.checked = true`), and `shown()` answers a private season 404
+to anybody it cannot see administering it. So the two unauthenticated reads 404'd, the whole `try` failed,
+and the secretary who had just pressed *Start a league* was shown "That could not be read just now." and
+nothing else. The default path through the product's main organiser surface did not work.
+
+Nothing was wrong on the server, and the contract was already pinned: `LeagueStartingTest` asserts both
+that a private season's fixtures and standings are 404 to a stranger and that *its starter reads them*.
+The web simply did not ask as itself. So there is no new API test here, and no red was watched — this is
+a two-line change against a contract that was already tested, and saying otherwise would be dressing it up.
+
+**The sentence about starting one was false.** Four places told a player that a league started on the desk
+"is here the same day" — the web's empty search, and three screens in the app. `GET /v1/leagues` filters
+`WHERE l.visibility = 'public'`, and the desk starts every league private, so it is not here that day or
+any day until somebody makes it public. All four now say so: *"make it public when you are ready and it is
+here the same day."*
+
+**Left for the founder.** The other way to make that sentence true is to default *Keep it private for now*
+to unticked. That is a privacy default and it is yours to move, not mine: unticking it would put a
+half-built league on the public list from its first minute. Say the word and it is a one-line change that
+also removes the need for the extra clause.
+
+**Evidence.** A local API at V057, a league started with the desk's own defaults, and the two reads made
+by hand: `/fixtures` and `/standings` answer **404** unauthenticated and **200** to the administrator. The
+desk, loaded in a browser as that administrator, now draws the league's name, eight sections and *3 to
+enter* — where before it drew one error card. 894 app tests, every `tools/check_*.py` green.

@@ -104,7 +104,7 @@ public enum NearbyLogic {
                 return ("\(count) near you", "\(line) Nearest: \(near[0].league.shortName ?? near[0].league.name), \(miles(near[0].km ?? 0)).")
             }
             if let nearest = ranked.first, let km = nearest.km {
-                return ("Nothing near you yet", "The nearest league THRØ knows is \(nearest.league.shortName ?? nearest.league.name), \(miles(km)) away. Start your own team or league here and it is on the map the same day.")
+                return ("Nothing near you yet", "The nearest league THRØ knows is \(nearest.league.shortName ?? nearest.league.name), \(miles(km)) away. Start your own team here, or a league at thro.uk — a league is on the map the same day you make it public.")
             }
             return (listed, "None is placed yet, so distance cannot be shown.")
         case .denied:
