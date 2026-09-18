@@ -6258,3 +6258,11 @@ present in `entrants`; the `events.guests` route reads `names` and `partnerId`. 
 by `understand`, `readMove` and `readList` (three byte-identical copies before); `none` added to `day_anchor` and
 `week_offset`; in `date()`, a named weekday decides the date over the anchor. `UnderstandingTest` 25 (five new, three
 watched red first). API tests 165. No migration, no route change, no wording a player reads.
+
+## No decision number reaches a person (PD-132)
+
+Nine rendered sentences lost their citations: `apps/web/thro.js` (PD-103, to a moderator),
+`ThroApp/Readiness.swift` (PD-127), `ThroApp/LeagueScreens.swift` ×6 and `ThroApp/ClubFlow.swift`
+(OD-001, ADR-017). New `tools/check_no_decision_numbers.py`, wired into `domain-spec.yml` with
+`tools/check_type_parity.py`, which ran nowhere. `tools/check_migrations.py` now fails on an empty
+tree instead of passing. App tests 894. Every check green.

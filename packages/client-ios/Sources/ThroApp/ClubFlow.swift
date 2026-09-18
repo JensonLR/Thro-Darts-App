@@ -1169,7 +1169,7 @@ public struct NewClubScreen: View {
         switch kind {
         case .team:
             return "The people who play together — a darts team, a club side, a pub team — with a "
-                 + "roster and a fixture list. It competes as itself (ADR-017)."
+                 + "roster and a fixture list. It competes as itself."
         case .league:
             return "Teams that play each other over a season, with a table. Its members are the "
                  + "people who run it; the people who play are in the teams."

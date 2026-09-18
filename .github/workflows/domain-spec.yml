@@ -88,6 +88,19 @@ jobs:
       - name: A child can read the page written for them
         run: python3 tools/check_a_child_can_read_it.py
 
+      # Found twice on one morning: apps/web/thro.js printed "(PD-103)" to a moderator, and the
+      # app's readiness screen printed "(PD-127)". Both were written as citations — the habit of a
+      # codebase where every sentence has a decision behind it — and both were rendered verbatim to
+      # somebody who has never heard of the ledger. Seven more cited OD-001 and ADR-017 the same way.
+      - name: No decision number reaches a person
+        run: python3 tools/check_no_decision_numbers.py
+
+      # Typography.kt and Typography.swift are two type scales that must stay the same shape, and
+      # this is the guard that says so — cited by both the token layer and the decisions, and until
+      # now run by nobody. It needs no toolchain, so it belongs beside the other pure-Python guards.
+      - name: The two type scales are the same shape
+        run: python3 tools/check_type_parity.py
+
       # The Android launcher icon is generated from MarkGeometry.Ratios.mark and the design tokens,
       # not exported as a bitmap, so a change to the mark moves it. This fails if somebody changed
       # the ratios and did not re-run the generator — which would leave two versions of the mark in

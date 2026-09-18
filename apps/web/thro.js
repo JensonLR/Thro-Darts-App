@@ -760,7 +760,7 @@ async function mountModeration(where, signInEl) {
     const open = data.reports.filter(r => r.decisions === 0);
     const answered = data.reports.filter(r => r.decisions > 0);
     const parts = [
-      make('p', 'quiet', 'A decision is recorded, with your name and reason, and kept — and it does what it says (PD-103): '
+      make('p', 'quiet', 'A decision is recorded, with your name and reason, and kept — and it does what it says: '
         + 'hiding takes the name off every public page, suspending signs the person out everywhere and refuses their '
         + 'next sign-in, and reinstating undoes either. A match names nobody, so a report about one is answered by '
         + 'reporting the account.'),

@@ -5601,3 +5601,41 @@ date questions of the same sentence, so the three copies cannot drift apart agai
 **Not claimed.** This has not been re-run against the real model. The held-out sentences that would separate these
 rules are written down in the test and on the scorecard; the honest number stays what PD-129 reported until a
 measured run replaces it.
+
+## PD-132 — No decision number reaches a person, and a check that says so
+
+**18 September 2026.** The rule has been standing since the ledger began: a decision number is how
+*we* refer to a decision, never how THRØ speaks. It was being kept by hand, and by hand it had
+failed nine times.
+
+**Found.** `apps/web/thro.js` printed "(PD-103)" to a moderator, in the sentence explaining what a
+decision does. The app's readiness screen printed "(PD-127)" in the sentence about links. Seven more
+sentences cited "(OD-001)" or "(ADR-017)" the same way — the rating's open decision, quoted at a
+player being told why a knockout is seeded in entry order. Every one was written as a citation, which
+is the habit of a codebase where every sentence has a decision behind it, and every one was rendered
+verbatim to somebody who has never heard of the ledger.
+
+**Decided.**
+
+1. **The nine sentences say what they mean instead.** "THRØ has no rating (OD-001), so byes go to
+   whoever was entered first" becomes "Byes go to whoever was entered first: THRØ has no rating to
+   seed on." Shorter, and true without a footnote. No sentence lost a fact.
+2. **`tools/check_no_decision_numbers.py`, on every push.** It reads string literals — comments and
+   doc comments stripped first, because that is exactly where a decision number belongs — across the
+   iPhone app's Swift, the web's JavaScript and the text of every page, and fails on `PD-`, `OD-` or
+   `ADR-` followed by digits.
+3. **Its own two blind spots were found by running it and reading the output**, not by trusting it.
+   It first read only double-quoted literals, so it missed the `PD-103` leak, which is single-quoted;
+   and it read a page's `<style>` block as prose, so it reported a CSS comment. A checker is code and
+   gets the same suspicion as code.
+
+**Also done, from the same sweep.** `tools/check_migrations.py` exited 0 on an empty tree — and it is
+the gate the deploy and schema workflows lean on for ADR-013's destructive-SQL approval markers, so
+had the migrations ever moved it would have gone on printing its pass line while unmarked `DROP`s
+shipped. It now exits non-zero and says so; proved by pointing a copy at an empty directory.
+`tools/check_type_parity.py` was cited by the token layer and by the decisions as the guard that
+stops the two type scales drifting, and was run by nothing; it is wired into the spec workflow.
+
+**Evidence.** The check run against the tree before the fixes: nine findings, listed above. After:
+104 Swift files, 3 scripts and 18 pages clean. 894 app tests pass, so no sentence under test changed
+its meaning. Every `tools/check_*.py` green.

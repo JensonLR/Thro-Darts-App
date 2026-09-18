@@ -597,8 +597,8 @@ public struct TournamentScreen: View {
                            note: byes == 0
                                ? "\(field) is a power of two, so everybody plays in round one"
                                : "a bye advances an entrant and is not a win — it appears in no record "
-                                 + "of results. THRØ has no rating (OD-001), so byes go to whoever was "
-                                 + "entered first rather than to a seeding nothing has computed.")
+                                 + "of results. Byes go to whoever was entered first: THRØ has no "
+                                 + "rating to seed on.")
                 }
             }
         }
@@ -659,8 +659,8 @@ public struct TournamentScreen: View {
             groupKnockout(groups)
             Note("Entrants are dealt into groups **snake-wise** over the order they were entered — "
                  + "first seed to A, second to B, and back down again — so group A does not get both "
-                 + "the first and the third of them. THRØ has no rating (OD-001), so that order is "
-                 + "the order they went in.")
+                 + "the first and the third of them. That order is the order they went in: THRØ "
+                 + "has no rating to seed on.")
                 .padding(.top, ThroSpacing.spacing4)
         }
     }
@@ -840,9 +840,9 @@ public struct TournamentScreen: View {
             ForEach(Array(draw.rounds.enumerated()), id: \.offset) { index, matches in
                 round(index + 1, matches, of: draw)
             }
-            Note("Seeded in the order they were entered, because THRØ has no rating (OD-001) and "
-                 + "will not pretend a ranking put anybody anywhere. **A bye is not a win** — it "
-                 + "advances an entrant and appears in no record of results.")
+            Note("Seeded in the order they were entered. THRØ has no rating, and will not pretend "
+                 + "a ranking put anybody anywhere. **A bye is not a win** — it advances an entrant "
+                 + "and appears in no record of results.")
                 .padding(.top, ThroSpacing.spacing4)
         } else if tournament.shape == .knockout {
             Eyebrow("The draw").padding(.top, ThroSpacing.spaceSectionGap)
@@ -900,7 +900,7 @@ public struct TournamentScreen: View {
             Note("Lose once and you drop to the losers' side; lose twice and you are out. The "
                  + "losers' side arrives at the final with a loss already, so **they have to win it "
                  + "twice** — which is what the second final is for. Seeded in the order they were "
-                 + "entered (OD-001), and **a bye is not a win**: it drops nobody.")
+                 + "entered, and **a bye is not a win**: it drops nobody.")
                 .padding(.top, ThroSpacing.spacing4)
         } else if tournament.shape == .doubleElimination {
             Eyebrow("The draw").padding(.top, ThroSpacing.spaceSectionGap)
@@ -1072,8 +1072,8 @@ public struct TeamsScreen: View {
                     if club.kind == .tournament {
                         Note("The order here is the order they were entered, and in a knockout that "
                              + "is the seeding — the byes go to the top of this list. THRØ has no "
-                             + "rating (OD-001), so it has nothing else to seed on and does not "
-                             + "pretend otherwise.")
+                             + "rating, so it has nothing else to seed on and does not pretend "
+                             + "otherwise.")
                             .padding(.top, ThroSpacing.spacing5)
                     } else {
                         Note("A league's competitors are its **teams**. The people who play for them "
@@ -1270,7 +1270,7 @@ public struct RecordResultScreen: View {
                                         + "in \(club.name).")
                     Note("**This is your word, and the app will say so.** It counts for the table, "
                          + "and it can never move a rating — a rating built on typed numbers is a "
-                         + "rating built on nothing (OD-001).", icon: .shield)
+                         + "rating built on nothing.", icon: .shield)
                     ThroDivider()
                     unavailable
                     if let onClear, fixture.result != nil {

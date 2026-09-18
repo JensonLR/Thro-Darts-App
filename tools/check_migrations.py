@@ -102,6 +102,12 @@ def adds_and_removes(stmts: list[str]) -> list[str]:
 
 def main() -> int:
     files = sorted(MIGRATIONS.glob("*.sql"))
+    # A check that finds nothing to check is worse than one that fails: this is the gate deploy-api
+    # and schema lean on for ADR-013's destructive-SQL approval markers, so if the migrations were
+    # ever moved or renamed it would go on printing its pass line while unmarked DROPs shipped.
+    if not files:
+        sys.exit(f"check_migrations: no *.sql in {MIGRATIONS.relative_to(ROOT)} — "
+                 "the migrations moved and this check stopped checking")
     findings: list[str] = []
     versions: list[int] = []
     for f in files:
