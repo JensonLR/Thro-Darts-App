@@ -6031,3 +6031,39 @@ with its test, all three watched failing first — they would not compile.
 **Evidence.** API suite green after a `clean` (the stale `"… 2.class"` duplicates again). 899 app tests,
 three of them new. Every `tools/check_*.py` green, including the new one. Stated counts in `README.md`
 and the iOS runbook follow the tests, as they must.
+
+## PD-143 — "Everything this device holds" means everything, or it is an error
+
+**18 September 2026.** The last of the known issues PD-137 left open: eight places in the app that wrote
+an empty collection when a read of the *phone's own* store failed. PD-137 scoped its check to reads of the
+server and recorded the rest as open, on the reasoning that a local read failing is a different kind of
+event. Looked at one by one, that reasoning was half right and hid one serious defect.
+
+**Five of the eight were already correct.** `ClubFlow`'s clubs and figures and Home's match list clear
+their list *and say why* — `writeProblem`, `problem`, `listProblem`. That is the right shape, and it was
+only the check's exemption list that did not know the names this codebase uses. Three more are the
+screenshot stage parsing a request body it was handed, which is not a read of anything stored, and now
+say so with `// not-a-read:`.
+
+**One was serious.** `exportEverything` — the file PD-017 promises holds everything this device has — read
+the club book three times through `try?`. A book that would not read produced a file with the player's
+clubs, their people and their asset list quietly missing, and nothing on the file saying so. Of all the
+places to swallow a read, the one a person keeps as their own copy is the worst. It fails now. **No book
+at all stays legitimate**: somebody who has never made a club has nothing to export, and that is not a
+failure.
+
+**One was quieter but the same shape.** A match session read its ledger — the corrections both players
+agreed — through `try?`, so a ledger that would not read showed a match as one that had no corrections.
+The initialiser already throws and the caller already handles a match that will not open.
+
+**The check now covers every read, not only the server's.** It began scoped to `api.` because that is
+where the seven defects were; the export is the reason it should not have been.
+
+**What is asserted where, said plainly.** A test holds the half that stayed legitimate — no book is still
+an export. The half that changed is held by the check, which bans the `try?`-into-empty that caused it and
+is proved against fixtures. It is not asserted in a test because `ClubBook` offers no way to make a read
+fail from outside it, and a test contorted into existence around that would prove less than the check
+does. Saying which guard holds which half is better than implying both are tests.
+
+**Evidence.** 900 app tests. Every `tools/check_*.py` green, the widened one reporting its three
+exemptions rather than hiding them.

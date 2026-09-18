@@ -142,10 +142,14 @@ public final class AppStore: ObservableObject {
     /// player chooses where it goes, which is the whole point of it existing alongside the backup.
     public func exportEverything(clubs book: ClubBook?, at now: Date = Date()) throws -> URL {
         guard let journal else { throw ExportError.notAnExport("this device has no journal open") }
+        // A book that will not read fails the export (PD-143). It used to be swallowed three times over,
+        // so a player asking for everything this device holds could be handed a file that quietly left
+        // out their clubs, their people and their assets — and nothing on it would say so. No book at all
+        // is legitimately nothing; a broken one is an error, and the two are not the same.
         let document = try Export.make(journal,
-                                       clubs: (try? book?.exportRows()) ?? [],
-                                       people: (try? book?.people()) ?? [],
-                                       assetsNotIncluded: Array((try? book?.referencedAssetIds()) ?? []).sorted(),
+                                       clubs: try book?.exportRows() ?? [],
+                                       people: try book?.people() ?? [],
+                                       assetsNotIncluded: Array(try book?.referencedAssetIds() ?? []).sorted(),
                                        at: now)
         let url = FileManager.default.temporaryDirectory.appendingPathComponent(Export.filename(at: now))
         try Export.data(document).write(to: url, options: .atomic)

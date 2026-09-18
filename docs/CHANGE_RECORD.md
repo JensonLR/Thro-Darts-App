@@ -6353,3 +6353,10 @@ carries player ids (Debug only). API tests 168, app tests 896.
 an *Open the team* key give the two silent kinds an act. New `tools/check_every_inbox_task_has_an_act.py`, wired into
 `domain-spec.yml`, proved against three fixtures. `ProposalWords.card`, `.agree` and `.reason(from:existing:)` lifted
 out of the views that held them, with three tests watched red. App tests 899, API green, counts updated.
+
+## Everything means everything (PD-143)
+
+`ThroRootView.exportEverything` propagates a club book that will not read instead of swallowing it three times;
+`ThroPlay/MatchSession` reads its ledger with `try`. `tools/check_a_failed_read_is_not_empty.py` widened from
+server reads to every read, its exemption list taught the names this codebase uses for "what went wrong", and the
+screenshot stage's three JSON parses marked `// not-a-read:`. App tests 900. Counts updated.

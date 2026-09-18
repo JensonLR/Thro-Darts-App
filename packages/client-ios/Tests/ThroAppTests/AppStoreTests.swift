@@ -343,4 +343,23 @@ final class AppStoreTests: XCTestCase {
         XCTAssertEqual(file.visits, 1)
         XCTAssertTrue(file.fromThisDevice)
     }
+
+    /// Everything means everything, or it is an error (PD-143).
+    ///
+    /// `exportEverything` read the club book three times through `try?`, so a book that would not read
+    /// produced a file the player is told holds everything this device has — with their clubs, their
+    /// people and their asset list quietly missing, and nothing on the file saying so. Of all the places
+    /// to swallow a read, the one a person keeps as their own copy is the worst.
+    ///
+    /// What this test holds is the half that stayed legitimate: **no book at all is nothing to add, not a
+    /// failure.** Somebody who has never made a club has nothing to export, and the change must not have
+    /// turned that into an error. The other half — that a book which *throws* now fails the export — is
+    /// held by `tools/check_a_failed_read_is_not_empty.py`, which bans the `try?`-into-empty that caused
+    /// it, and is itself proved against fixtures. It is not asserted here because `ClubBook` offers no way
+    /// to make a read fail from outside it, and a test that contorted one into existence would prove less
+    /// than the check already does.
+    func testAnExportWithNoBookIsStillAnExport() throws {
+        let store = AppStore(journal: try journal())
+        XCTAssertNoThrow(try store.exportEverything(clubs: nil), "nothing to add is not a failure")
+    }
 }

@@ -108,14 +108,14 @@ enum ScreenshotAccount {
                 return (200, profile)
             case ("PUT", "/v1/me/profile"):
                 if failing { return (503, #"{"error":"THRØ could not save that just now. Nothing changed."}"#) }
-                let sent = body.flatMap { try? JSONSerialization.jsonObject(with: $0) as? [String: Any] } ?? [:]
+                let sent = body.flatMap { try? JSONSerialization.jsonObject(with: $0) as? [String: Any] } ?? [:]  // not-a-read: parsing a request body this stage was handed, not reading anything stored
                 if let n = sent["displayName"] as? String { name = n }
                 if let b = sent["ageBand"] as? String { band = b }
                 return (200, profile)
             // PD-088, staged with the same rule the server applies: `live` is refused for anyone not
             // recorded as an adult, and the sentence comes back rather than an error.
             case ("POST", "/v1/me/consent"):
-                let sent = body.flatMap { try? JSONSerialization.jsonObject(with: $0) as? [String: Any] } ?? [:]
+                let sent = body.flatMap { try? JSONSerialization.jsonObject(with: $0) as? [String: Any] } ?? [:]  // not-a-read: parsing a request body this stage was handed, not reading anything stored
                 let scope = sent["scope"] as? String ?? ""
                 let given = sent["given"] as? Bool ?? false
                 if given, scope == "live", band != "adult" {
@@ -181,7 +181,7 @@ enum ScreenshotAccount {
         nonisolated(unsafe) static var friendlyInState = "proposed"
 
         static func desk(_ method: String, _ path: String, _ body: Data?) -> (Int, String)? {
-            let sentBody = body.flatMap { try? JSONSerialization.jsonObject(with: $0) as? [String: Any] } ?? [:]
+            let sentBody = body.flatMap { try? JSONSerialization.jsonObject(with: $0) as? [String: Any] } ?? [:]  // not-a-read: parsing a request body this stage was handed, not reading anything stored
             switch (method, path) {
             case ("GET", "/v1/me/rating"):
                 return (200, #"{"playerId":"\#(me)","model":"glicko2","version":"1","stage":"provisional","display":{"kind":"provisional","low":1460,"high":1620,"value":null,"plusMinus":null,"matches":4,"comparedAcross":11},"asOf":{"commit":1,"seq":1},"lines":[{"matchId":"5c4ee45e-0000-4000-8000-0000000000b2","outcome":"won","delta":38,"opponent":"Ethan T.","opponentRating":1510,"words":"Won 3–2 against Ethan T. (about 1510): up 38."},{"matchId":"5c4ee45e-0000-4000-8000-0000000000b1","outcome":"won","delta":22,"opponent":null,"opponentRating":null,"words":"Won 3–1 against a player THRØ may not name: up 22."}]}"#)

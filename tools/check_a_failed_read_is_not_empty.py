@@ -16,10 +16,12 @@ What is checked, in `packages/client-ios/Sources`:
   2. **`try?` swallowed into an empty default.** `(try? await api.myTeams()) ?? []`.
 
 Both are matched only where the value is a *collection*, because `catch { count = 0 }` is arithmetic,
-not a claim about a list — and only where the read went to **the server** (`api.` in the expression),
-because that is the shape that was defective. A phone's own book failing to read is a different thing
-with a different likelihood and a different right answer, and is recorded as an open question rather
-than swept in here to make one check look thorough.
+not a claim about a list.
+
+It began as a check on reads of **the server** alone, because that is where the seven defects were. It
+covers the phone's own journal and book as well now: the same swallow there produced an *export* — the
+one file a player is promised holds everything this device has — that silently left out their clubs,
+their people and their assets whenever the book would not read.
 
 What it does not prove: that the screen draws the failure well, only that the model no longer lies to
 it. And it cannot see a read whose failure is swallowed some other way — the three shapes above are
@@ -29,7 +31,7 @@ A `catch` that clears a stale list **and says why** is not this defect and is no
 is a failure that makes a false statement, not one that empties a list. A search box that clears its
 last results and puts "Venues could not be searched just now." beside the field is right. So a catch is
 allowed when it also assigns something that carries the sentence — a name holding `said`, `note`,
-`message`, `error`, `failed` or `refus`.
+`message`, `error`, `failed`, `refus`, `problem` or `why`.
 
 An occurrence that is genuinely right for some other reason carries `// not-a-read:` and a reason on
 the same line or the line before, and is counted and printed so the exemptions stay visible rather
@@ -43,10 +45,10 @@ ROOT = pathlib.Path(__file__).resolve().parent.parent
 SOURCES = ROOT / "packages/client-ios/Sources"
 EMPTY = r"(?:\[\s*\]|\[\s*:\s*\])"
 # `api.` in the same statement is what makes it a read of the server rather than of this phone.
-CATCH_EMPTY = re.compile(r"\bapi\.[^\n]*\n(?:[^\n]*\n){0,6}?[^\n]*catch\s*\{(?P<body>[^}]*?\b\w+\s*=\s*" + EMPTY + r"[^}]*)", re.S)
+CATCH_EMPTY = re.compile(r"catch\s*\{(?P<body>[^}]*?\b\w+\s*=\s*" + EMPTY + r"[^}]*)", re.S)
 # The catch said something as well as clearing: not a false statement, so not this defect.
-SAYS_WHY = re.compile(r"\b\w*(?:said|note|message|error|failed|refus)\w*\s*=", re.I)
-TRY_DEFAULT = re.compile(r"try\?[^\n]*\bapi\.[^\n]*?\?\?\s*" + EMPTY)
+SAYS_WHY = re.compile(r"\b\w*(?:said|note|message|error|failed|refus|problem|why)\w*\s*=", re.I)
+TRY_DEFAULT = re.compile(r"try\?[^\n]*?\?\?\s*" + EMPTY)
 ALLOWED = "not-a-read:"
 
 

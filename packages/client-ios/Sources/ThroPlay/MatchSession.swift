@@ -109,7 +109,10 @@ public final class MatchSession: ObservableObject {
         let replayed = try journal.replayVisits(record.id)
         self.state = replayed.state
         self.visits = replayed.visits
-        self.ledger = (try? journal.ledger(record.id)) ?? []
+        // Not `try?` (PD-143): a ledger that will not read is a match whose agreed corrections are
+        // missing, and showing it as a match that had none is the shape this whole family of defects
+        // takes. The initialiser already throws, and the caller already handles a match that will not open.
+        self.ledger = try journal.ledger(record.id)
         // Read on open, so reopening a finished match shows what was actually agreed (PD-011)
         // rather than starting again from nothing.
         self.standing = try journal.standing(for: record.id)
