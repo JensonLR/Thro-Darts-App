@@ -193,14 +193,26 @@ public struct TeamFixtureScreen: View {
         // You.
         if let me, let mine = v.member(me) {
             SectionHeader("Can you play?").padding(.top, ThroSpacing.spaceSectionGap)
-            HStack(spacing: ThroSpacing.spacing2) {
-                ForEach(["available", "maybe", "unavailable"], id: \.self) { status in
-                    ThroButton(Self.availabilityLabel(status), variant: mine.availability == status ? .primary : .secondary, size: .medium) {
-                        Task { await say(status, for: mine, in: v) }
-                    }
-                    .disabled(busy)
-                }
-            }
+            // **A choice, not three actions** (PD-147, finished in PD-162). These were three `ThroButton`s with
+            // the chosen one `.primary`, so an answer a player had already given sat on the screen wearing the
+            // weight of its one real action — *Propose it to …* below. An answer is a state, and `SegmentedControl`
+            // is the state control THRØ already has: the chosen segment is the brand's green with chalk on it,
+            // which is the same statement the primary button makes, so the two do not compete for the same job.
+            //
+            // PD-147 recorded that the applier "invented a SegmentedControl that does not exist". It does exist,
+            // in `ThroDesign/Forms.swift`, and has since PD-066; the mistake was in the applier, not the palette.
+            SegmentedControl(
+                [("available", Self.availabilityLabel("available")),
+                 ("maybe", Self.availabilityLabel("maybe")),
+                 ("unavailable", Self.availabilityLabel("unavailable"))],
+                selection: Binding(
+                    get: { mine.availability ?? "" },
+                    // The control writes a selection; saying it is an async round trip, so the set is the act.
+                    // While one is in flight the control still shows what the player tapped, which is what they
+                    // expect to see — the server's answer replaces it when it lands.
+                    set: { status in if !busy && status != mine.availability { Task { await say(status, for: mine, in: v) } } },
+                ),
+            )
             .padding(.top, ThroSpacing.spacing2)
         }
 

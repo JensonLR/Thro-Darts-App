@@ -6768,3 +6768,31 @@ remaining half and is not done here.
 
 **Evidence.** Two tests, each watched failing first: the seed test reproduced the collision (2 expected,
 1 got) before the fix. API suite green, 167 schema properties, 34 check scripts.
+
+## PD-162 — "Can you play?" is a choice, not three actions
+
+The last of PD-147's three unfinished changes, and the record of why it was unfinished was wrong.
+
+**What was there.** Three `ThroButton`s — *Can play*, *Maybe*, *Can't play* — with the chosen one drawn
+`.primary`. So an answer a player had already given sat on the screen wearing the full weight of a
+primary key, next to the screen's one real action, *Propose it to …*. PD-147's whole rule is one primary
+per screen; this was a screen where the primary was an answer to a question, not a thing to do.
+
+**Corrected from PD-147.** That entry says the applier "invented a `SegmentedControl` that does not
+exist". **It does exist** — `ThroDesign/Forms.swift`, public, since PD-066, and its chosen segment is
+already "a block of the brand's green with chalk text … the same statement the primary button makes".
+The mistake was in the applier's use of it, not in the palette. Three changes were abandoned on the
+strength of a claim nobody checked; checking it took one grep.
+
+**What it is now.** One `SegmentedControl` bound through a computed `Binding` whose setter is the act —
+the control writes a selection, and saying it is an async round trip. The guard is `!busy && status !=
+mine.availability`, so a tap on the answer already given costs nothing.
+
+**Looked at on iPhone 17 Pro.** *Can play | Maybe | Can't play* reads as one control with the chosen
+segment filled, clearly a state, and *Pick the side* beneath it is plainly the secondary it always was.
+Tapping *Maybe* fired the action — the screenshot account has no server, so the note *"not staged for
+screenshots"* appeared and the selection correctly stayed where it was rather than lying about a change
+that had not happened. **That is verified rendering and a verified action, not a verified round trip**;
+the round trip is covered by the API tests.
+
+**Evidence.** 911 app tests. Every `tools/check_*.py` green.

@@ -6502,3 +6502,10 @@ Red Lions one row. `Discovery.kt`: new `sameLocality` strips punctuation and spa
 "Stockton on Tees" are one town, used by both the reason line and `NEAR_YOU`. Tests +2. Recorded that the seed bug
 was latent rather than live (all 18 seeded venues carry an OSM id and a locality) and that `NEAR_YOU` is still dead
 because no shipped caller sends `locality`.
+
+## "Can you play?" is a choice, not three actions (PD-162)
+
+`TeamFixtureScreens.swift`: the three availability `ThroButton`s (chosen one `.primary`) become one `SegmentedControl`
+bound through a computed `Binding` whose setter says the availability. Finishes the last of PD-147's three abandoned
+changes, and corrects its record — `SegmentedControl` has existed in `ThroDesign/Forms.swift` since PD-066. App tests
+911, unchanged. Looked at on iPhone 17 Pro.
