@@ -4,41 +4,54 @@ A resilience mechanism for a session that stops at a usage boundary, so the next
 audit. Kept current during the build; **not** a deliverable, and never a substitute for `docs/CHANGE_RECORD.md`
 (what happened, and how it was proven) or `docs/product/DECISIONS.md` (what was decided, and why).
 
-## 18 September 2026 — Phases 1 and 2 done, Phase 3 begun
+## 18 September 2026 — Phases 1 to 3 done; Phase 4 is what remains
 
-**Eleven decisions, PD-131 to PD-141, all pushed and CI-green.** Phase 1 (the founder's five known issues)
-is complete; Phase 2's research is `docs/design/RESEARCH_2026.md` (190 lines, 47 cited sources, two
-adversarial passes); Phase 3 is under way.
+**Twenty decisions, PD-131 to PD-150**, all pushed and CI-green on `claude/thro-production-build-je2mkf`.
+Production API at **V057**; thro.uk carries the dark-mode fix, the skeletons, the type scale and — for the
+first time — THRØ's own face.
 
-- **PD-131** a number is one thing at a time — `daysOfMonth(text)`, a named weekday beats the anchor, the
-  rule for "this &lt;today's weekday&gt;" recorded, three copies of the date questions collapsed to one.
-- **PD-132** no decision number reaches a person — nine rendered sentences fixed, `check_no_decision_numbers.py`
-  in CI, `check_migrations.py` no longer passes on an empty tree, `check_type_parity.py` wired in.
-- **PD-133** a pair reads in the order it was typed — **V057** `typed_first`. Deployed.
-- **PD-134** the colour scheme is the stylesheet's job — seven pages never followed the reader. **Live.**
-- **PD-135** a page that is waiting says so — a timeout, skeletons, truthful absence, retries.
-- **PD-136** the desk reads as itself — it could not draw at all for a league started with its own default.
-- **PD-137** a failed read is never an empty one — seven screens, plus `check_a_failed_read_is_not_empty.py`.
-- **PD-138** an invitational night says so — `EventWords.access`, one sentence for two surfaces.
-- **PD-139** the failure cases PD-128/129 were missing — 84 checks, no defect found, said so plainly.
-- **PD-140** the chrome grows with the text and the bar stays a bar — the Phase 2 list's number one.
-- **PD-141** blocking exists, where the person is read — `Safety.accountBehind`, a ⋯ on the roster row.
+**Phase 1 (the five known issues): done.** PD-131 dates · PD-132 no decision numbers · PD-133 pair order
+(V057) · PD-134 colour scheme · PD-135 waiting and giving up · PD-136 the desk reads as itself ·
+PD-137 a failed read is not an empty one.
 
-**Founder's answers at the Phase 2 checkpoint (do not re-ask).** Phase 3 runs as two change sets in
-parallel: the bottom bar + chrome-grows-with-text (done, PD-140), and the header/row/card vocabulary
-(**next**). Blocking: build the control (done, PD-141). The league privacy default stays ticked.
+**Phase 2 (research): done.** `docs/design/RESEARCH_2026.md`, 190 lines, 47 cited sources, two adversarial
+passes.
 
-**Next, in order.** The research's ranked list, minus what is done: one primary action per screen (2);
-design for the empty state, because production *is* one — 329 leagues, all listed, zero run here, no
-events (3); one pinned-action component (4); the web on the design system (5); one header, two faces (6);
-one row, one card (7); halve the sentences (9); open lists where the reader is (10). Then Phase 4, whose
-ranking stops for the founder.
+**The known issues left open at that checkpoint: all closed.** PD-142 every inbox card has an act, and the
+three sentences that lived in views are testable · PD-143 the export is everything or an error.
 
-**Left open and recorded, not hidden.** The inbox draws an action for two of four task kinds the server
-creates. Eight local-store reads still write an empty collection on failure (PD-137 says why they are out
-of scope). Four iOS wording cases need strings lifted out of views before they can be tested (PD-139).
-The screenshot harness had been reusing a Chrome profile and photographing cached CSS — fixed, and the
-lesson is in PD-135.
+**Phase 3 (screens): done, bar what is listed below.** PD-140 the chrome grows and the bar stays a bar ·
+PD-141 blocking exists, where the person is read · PD-144 one row, one card · PD-145 two faces, one gap ·
+PD-146 the screen that commits has a floor · PD-147 one primary per screen · PD-148 fewer words and a
+state that is not a claim · PD-149 the web on the design system · PD-150 no page sends a reader nowhere.
+
+**Founder's answers (do not re-ask).** Phase 3 as two parallel change sets — both done. Blocking: build
+the control — done. The league privacy default stays ticked.
+
+**Left, and why.**
+- **Phase 4 (what Jev is for)** is the only phase not started. Its workflow ran and died at a usage
+  boundary with grounding and all three proposal angles **cached**: resume `wf_f13b65d3-5cb` and only the
+  judges and the writer re-run. It stops for the founder after its ranking.
+- **The contact address.** PD-150 stopped every page instructing a reader to write to one. What the
+  address will be is still the founder's: three legal pages, the children's page and the App Store
+  listing wait on it.
+- **Twenty full-width primaries** outside `ThroBottomAction`, listed in PD-146. Most are in-card buttons
+  rather than screen floors; which want one is a judgement per screen.
+- **Three `TeamFixtureScreens.swift` changes** from the PD-147 survey were prose, not substitutions, and
+  are not done.
+- **Six line-height moves** in PD-149 were under-disclosed by the change list and are recorded in it.
+- **The `h1` line-height** is unset in `apps/web`; no page has an `<h1>` today.
+
+**Lessons this session, worth not relearning.**
+- **Local green is not CI green.** Three tests asserting locale-formatted date literals passed here and
+  failed on a US-locale runner. Assert what a function composes, never a formatted date.
+- **A change list is only mechanical where every entry is a substitution.** An applier took three prose
+  descriptions literally and mangled a file, inventing a component that does not exist.
+- **A screenshot harness that reuses a Chrome profile photographs cached CSS** and reports it as the
+  change. Only the measured contrast failing to move gave it away.
+- **Verify a theme or a token by reading computed custom properties**, not by comparing PNG bytes.
+- **Production is empty**: 329 leagues, all listed, none run here, no events. The empty state is the
+  product, not an edge case.
 
 ## Where things are (16 September 2026, morning)
 
