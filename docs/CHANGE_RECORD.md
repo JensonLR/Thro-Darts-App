@@ -6251,3 +6251,10 @@ captain's sets and prints the parts read on a miss. Privacy page and ROPA. API t
 `Editions.enterGuestPair`, `guestPlayer`, `roomFor`, `together`; a pair's halves named as walk-ups in `competitorName`;
 present in `entrants`; the `events.guests` route reads `names` and `partnerId`. Web: *Add a pair with a walk-up*.
 `GuestsHttpTest` 26. No migration.
+
+## A number is one thing at a time (PD-131)
+
+`Understanding.daysOfMonth(text)` and an `ORDINAL` regex; `dateQuestions(text)` now built from the sentence and shared
+by `understand`, `readMove` and `readList` (three byte-identical copies before); `none` added to `day_anchor` and
+`week_offset`; in `date()`, a named weekday decides the date over the anchor. `UnderstandingTest` 25 (five new, three
+watched red first). API tests 165. No migration, no route change, no wording a player reads.

@@ -5551,3 +5551,53 @@ to an account, which is an identity decision for the founder and the DPIA, not s
 present, a walk-up with somebody on THRØ, a partner already paired, a partner THRØ does not know, a name already on the
 night, nothing left behind by a refusal, the public page counting and naming nobody unsaid, the organiser's draw naming
 every half, and the public draw naming only whom it may. Looked at in the browser: a pair added through the form.
+
+## PD-131 — A number is one thing at a time; a named day of the week decides the date
+
+**18 September 2026.** The scorecard's one held-out miss, read properly. *How about this Friday at 7?*, typed on a
+Friday, came back **Thu 7 Oct** — a date a year away, presented as a reading. Two faults, and the second is only
+visible once the first is fixed.
+
+**What was actually wrong.** The model answered `date_mode=absolute day_anchor=today weekday=Friday week_offset=this
+month=October day=7`. The "7" is the *time*: `times()` had already found it. But the day-of-month question offered
+1 to 31 whatever the sentence said, so the same code was a legal answer to two questions at once, and the model gave
+it to both. `date()` then took the absolute branch — 7 October is behind 9 October, so the year rolled and the card
+said Thursday 7 October 2027. The weekday branch, which is right and is tested, was never reached. Fixing only the
+day question moves the fault rather than closing it: with `day=none` the reading falls to the relative branch, the
+anchor says *today*, and the card confidently says the Friday it was typed on.
+
+**Decided.**
+
+1. **A code found as a time is never offered as a day of the month.** `daysOfMonth(text)` offers only what the
+   sentence writes as a day: an ordinal (*the 22nd*), or a bare number beside a month's name (*5 November*,
+   *October 15*). Nothing else. For *at 7* the set is `none` alone and the model cannot answer 7. This is the same
+   move as PD-125's *never writes a number*: an answer that cannot be given cannot be wrong, which is cheaper and
+   surer than reconciling two answers afterwards.
+2. **A bare number with no ordinal and no month beside it is left out**, deliberately. In a captain's sentence
+   *7* is a time far more often than a date. Leaving it out costs a glance at the date picker; taking it costs a
+   wrong date that reads as certain. *Can we do the 7 instead* now fills nothing in; *the 7th* still works.
+3. **Where the sentence names a day of the week, that decides.** PD-123's lesson a third time: the weekday is a
+   thing in the sentence, the anchor is a category about it, and the model is surer of things. `today` is left to
+   the sentences that say today, tonight or this evening — which name no weekday at all, so *tonight instead?*
+   is untouched.
+4. **The rule for "this &lt;today's weekday&gt;": the next one to come.** Said on a Friday, *this Friday* is the Friday
+   after. Three arguments. League darts is arranged days ahead, not hours. A captain who means tonight has the
+   plainer word and uses it. And it is already what the code does and what the scorecard expects, so no third
+   behaviour is invented for one sentence. The cost is real and accepted: a captain who does mean the evening they
+   are typing on must say *tonight* or pick the date. It fails visibly — the form shows the date before anything
+   is sent.
+5. **`day_anchor` and `week_offset` gain a "none".** Both were forced choices, so the model had to answer them on
+   sentences that said nothing of the kind, and `week_offset = "this"` was read nowhere. A question with no way out
+   is a question that invents an answer.
+6. **One copy of the date questions, not three.** They were byte-identical in `understand`, `dateQuestions` and
+   `readList`, and a fix in one left the other two wrong — which is how `readList` could read *Stn Hotel v
+   Riverside B - 8.15* as the 8th. `dateQuestions(text)` is now asked of the sentence, and all three call it.
+
+**Evidence.** `UnderstandingTest` 25, five of them new and three watched failing first: the "7" is not on offer and
+the reading is Friday 16 October at seven in the evening; an ordinal and a number beside a month are still offered;
+a named weekday beats the anchor; *tonight* still means tonight; and the desk and the captain's screen ask the same
+date questions of the same sentence, so the three copies cannot drift apart again. Full API suite green.
+
+**Not claimed.** This has not been re-run against the real model. The held-out sentences that would separate these
+rules are written down in the test and on the scorecard; the honest number stays what PD-129 reported until a
+measured run replaces it.

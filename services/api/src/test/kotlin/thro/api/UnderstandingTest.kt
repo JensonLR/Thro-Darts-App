@@ -2,6 +2,7 @@ package thro.api
 
 import java.time.Instant
 import java.time.LocalDate
+import java.time.LocalTime
 import java.util.UUID
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -404,5 +405,86 @@ class UnderstandingTest {
                                      "day" to choice("20", 0.95), "time" to choice(keyOf(q, "time", "8 o'clock"), 0.9)) }
         val read = Understanding(stub) { today }.readMove(thursday, desk.seasonStart, desk.seasonEnd, "Tuesday the 20th, 8 o'clock")
         assertEquals(Instant.parse("2026-09-20T19:00:00Z"), read?.move?.to, "the next 20th from 15 September, at eight in the evening in London")
+    }
+
+    // --- what a number is, and what a named weekday is (PD-131) -------------------------------------------------------
+
+    /**
+     * Held out on the real model and recorded on the scorecard as the one miss: "how about this Friday at 7?", typed on
+     * a Friday. The model read `date_mode=absolute day_anchor=today weekday=Friday week_offset=this month=October day=7`
+     * — the "7" of "at 7", offered as a day of the month because the day question offered 1..31 whatever the sentence
+     * said. The stub below answers exactly that, except that it can only answer "7" if "7" is still offered: the
+     * assertion is on the question, not on the reading of an answer.
+     */
+    @Test
+    fun `a number the text gives as a time is not offered as a day of the month`() {
+        val friday = LocalDate.of(2026, 10, 9)   // a Friday, and the fixture is Thu 15 October
+        val stub = Stub { q ->
+            mapOf("asks_move" to choice("yes", 0.9), "shift" to choice("none", 0.9),
+                  "date_mode" to choice("absolute", 0.62), "day_anchor" to choice("today", 0.55),
+                  "weekday" to choice("Friday", 0.88), "week_offset" to choice("this", 0.7),
+                  "month" to choice("October", 0.6),
+                  "day" to choice(if (options(q, "day").containsKey("7")) "7" else "none", 0.5),
+                  "time" to choice(keyOf(q, "time", "'7'"), 0.7))
+        }
+        val read = Understanding(stub) { friday }.readMove(thursday, desk.seasonStart, desk.seasonEnd, "how about this Friday at 7?")
+        assertEquals(listOf("7"), Understanding.times("how about this Friday at 7?"), "the 7 in this sentence is the time")
+        assertFalse(options(stub.asked, "day").containsKey("7"), "a code already found as a time must not also be a day of the month")
+        assertTrue(options(stub.asked, "day").containsKey("none"), "when the sentence names no day of the month, only 'none' is left")
+        assertNotNull(read)
+        assertEquals(LocalDate.of(2026, 10, 16), read.move?.on, "this Friday, said on a Friday, is the Friday to come")
+        assertEquals(LocalTime.of(19, 0), read.move?.time, "seven, in the evening, because darts is")
+    }
+
+    /** An ordinal, and a number beside a month's name, are days of the month and stay on offer. */
+    @Test
+    fun `an ordinal and a number beside a month are still offered as days of the month`() {
+        val stub = Stub { q -> mapOf("asks_move" to choice("yes", 0.9), "shift" to choice("none", 0.9), "date_mode" to choice("absolute", 0.9),
+                                     "month" to choice("November", 0.9), "day" to choice("5", 0.9), "time" to choice("none", 0.9)) }
+        val read = Understanding(stub) { today }.readMove(thursday, desk.seasonStart, desk.seasonEnd, "5 November instead?")
+        assertTrue(options(stub.asked, "day").containsKey("5"), "a number beside a month's name is a day of the month")
+        assertEquals(LocalDate.of(2026, 11, 5), read?.move?.on)
+
+        val ordinal = Stub { q -> mapOf("asks_move" to choice("yes", 0.9), "shift" to choice("none", 0.9), "date_mode" to choice("absolute", 0.9),
+                                        "month" to choice("none", 0.9), "day" to choice("22", 0.9), "time" to choice(keyOf(q, "time", "'7'"), 0.8)) }
+        val second = Understanding(ordinal) { today }.readMove(thursday, desk.seasonStart, desk.seasonEnd, "the 22nd at 7?")
+        assertTrue(options(ordinal.asked, "day").containsKey("22"), "an ordinal is a day of the month")
+        assertFalse(options(ordinal.asked, "day").containsKey("7"), "the 7 of 'at 7' is still only a time")
+        assertEquals(LocalDate.of(2026, 9, 22), second?.move?.on)
+    }
+
+    /** A weekday is a thing in the sentence; the anchor is a category about it, and PD-123's lesson is that things win. */
+    @Test
+    fun `a named weekday decides the date even when the model anchors on today`() {
+        val friday = LocalDate.of(2026, 10, 9)
+        val stub = Stub { mapOf("asks_move" to choice("yes", 0.9), "shift" to choice("none", 0.9), "date_mode" to choice("relative", 0.9),
+                                "day_anchor" to choice("today", 0.8), "weekday" to choice("Monday", 0.9), "week_offset" to choice("none", 0.5),
+                                "month" to choice("none", 0.9), "day" to choice("none", 0.9), "time" to choice("none", 0.9)) }
+        val read = Understanding(stub) { friday }.readMove(thursday, desk.seasonStart, desk.seasonEnd, "Monday any good?")
+        assertEquals(LocalDate.of(2026, 10, 12), read?.move?.on, "Monday is the Monday to come, not today")
+    }
+
+    /** "tonight" names no weekday, so the today anchor still means today. */
+    @Test
+    fun `tonight still means tonight`() {
+        val friday = LocalDate.of(2026, 10, 9)
+        val stub = Stub { mapOf("asks_move" to choice("yes", 0.9), "shift" to choice("none", 0.9), "date_mode" to choice("relative", 0.9),
+                                "day_anchor" to choice("today", 0.66), "weekday" to choice("none", 0.9), "week_offset" to choice("none", 0.5),
+                                "month" to choice("none", 0.9), "day" to choice("none", 0.9), "time" to choice("none", 0.9)) }
+        val read = Understanding(stub) { friday }.readMove(thursday, desk.seasonStart, desk.seasonEnd, "tonight instead?")
+        assertEquals(friday, read?.move?.on)
+    }
+
+    /** The three copies of the date questions were byte-identical and drifted apart at every fix. Now there is one. */
+    @Test
+    fun `the desk and the captain's screen ask the same date questions of the same sentence`() {
+        val sentence = "how about this Friday at 7?"
+        val deskStub = Stub { mapOf("act" to choice("none", 0.9)) }
+        Understanding(deskStub) { today }.understand(desk, sentence)
+        val captainStub = Stub { mapOf("asks_move" to choice("no", 0.9)) }
+        Understanding(captainStub) { today }.readMove(thursday, desk.seasonStart, desk.seasonEnd, sentence)
+        for (id in listOf("date_mode", "day_anchor", "weekday", "week_offset", "month", "day")) {
+            assertEquals(options(deskStub.asked, id), options(captainStub.asked, id), "$id must be asked the same way on both screens")
+        }
     }
 }

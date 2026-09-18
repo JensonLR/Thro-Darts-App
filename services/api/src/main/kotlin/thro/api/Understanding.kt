@@ -66,6 +66,8 @@ public class Understanding(private val model: SystemOne, private val today: () -
         private val SCORE = Regex("""(?<!\d)(\d{1,2})\s*(?:-|–|—|to|v)\s*(\d{1,2})(?!\d)""", RegexOption.IGNORE_CASE)
         /** "8", "20:30", "7.30pm", "8 o'clock". Not "15th": an ordinal is a day of the month. */
         private val TIME = Regex("""(?<![\d.:])(\d{1,2})(?:[.:](\d{2}))?\s*(am|pm|o'clock)?(?!\d|st|nd|rd|th)""", RegexOption.IGNORE_CASE)
+        /** "15th", "22nd", "3rd", "1st": a day of the month, written as one. Never a time — TIME refuses the suffix. */
+        private val ORDINAL = Regex("""(?<![\d.:])(\d{1,2})(?:st|nd|rd|th)\b""", RegexOption.IGNORE_CASE)
         /** A number standing alone: not part of a clock ("7.30", "8pm"), not an ordinal ("8th"), at most two digits. */
         private val BARE = Regex("""(?<![\d.:])\d{1,2}(?![\d.:]|\s*(?:am|pm|o'clock)|st|nd|rd|th)""", RegexOption.IGNORE_CASE)
         private val MONTH_AFTER = Regex("""^\s*(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)""", RegexOption.IGNORE_CASE)
@@ -87,6 +89,29 @@ public class Understanding(private val model: SystemOne, private val today: () -
                 !(MONTH_AFTER.containsMatchIn(text.substring(m.range.last + 1)) || MONTH_BEFORE.containsMatchIn(text.substring(0, m.range.first)))
             }.map { it.value }.toList()
             return if (bare.size == 2) listOf("${bare[0]}-${bare[1]}") else emptyList()
+        }
+
+        /**
+         * The days of the month the text actually offers, as numbers: an ordinal ("the 22nd"), or a bare number beside a
+         * month's name ("5 November", "October 15"). Nothing else.
+         *
+         * **Why this exists (PD-131).** The day question used to offer 1..31 whatever the sentence said, so the "7" of
+         * "at 7" — already found by `times()` — was a legal answer to it as well, and on the real model it was given as
+         * one: "how about this Friday at 7?" came back `month=October day=7` and resolved a year away. A code cannot be
+         * read as two things at once if it is only ever offered as one, which is cheaper and surer than reconciling two
+         * answers afterwards. A bare number with no ordinal and no month beside it is left out: in a captain's sentence
+         * it is a time far more often than a date, and leaving it out costs a glance at the date picker, while taking it
+         * costs a wrong date that reads as certain.
+         */
+        public fun daysOfMonth(text: String): List<String> {
+            val scores = SCORE.findAll(text).map { it.range }.toList()
+            fun inScore(r: IntRange) = scores.any { s -> r.first in s }
+            val ordinals = ORDINAL.findAll(text).filterNot { inScore(it.range) }.map { it.groupValues[1] }
+            val besideMonth = BARE.findAll(text).filterNot { inScore(it.range) }.filter { m ->
+                MONTH_AFTER.containsMatchIn(text.substring(m.range.last + 1)) || MONTH_BEFORE.containsMatchIn(text.substring(0, m.range.first))
+            }.map { it.value }
+            return (ordinals + besideMonth).map { it.trimStart('0').ifEmpty { "0" } }
+                .filter { (it.toIntOrNull() ?: 0) in 1..31 }.distinct().toList()
         }
 
         /**
@@ -148,13 +173,7 @@ public class Understanding(private val model: SystemOne, private val today: () -
                                    teamKeys.mapValues { it.value.name } + ("none" to "the sentence awards nothing to anybody")),
             "home_team" to choice("For a new fixture: which team is the home side — named first, or said to be at home?", teamKeys.mapValues { it.value.name } + ("none" to "not stated")),
             "away_team" to choice("For a new fixture: which team is the away side — named second, or said to be away?", teamKeys.mapValues { it.value.name } + ("none" to "not stated")),
-            "date_mode" to choice("How is the fixture's date written? 'absolute' names a month or a day of the month; 'relative' is given from today (today, tomorrow, a named weekday such as 'next Thursday'); 'none' when no date is stated.",
-                                  mapOf("absolute" to null, "relative" to null, "none" to null)),
-            "day_anchor" to choice("If the date is relative to today, which day is it?", mapOf("today" to null, "tomorrow" to null, "day_after" to "the day after tomorrow", "weekday" to "a named day of the week")),
-            "weekday" to choice("If the date names a day of the week, which?", WEEKDAYS.associateWith { null } + ("none" to "no weekday named")),
-            "week_offset" to choice("If the date names a weekday: 'this' means the coming one, 'next' means the one in the week after.", mapOf("this" to "this week, or the coming one", "next" to "next week")),
-            "month" to choice("If the date is absolute, which month?", MONTHS.associateWith { null } + ("none" to "no month named; the day of the month alone, or none")),
-            "day" to choice("If the date is absolute, which day of the month?", (1..31).associate { it.toString() to null } + ("none" to "no day of the month named")),
+            *dateQuestions(clean).toTypedArray(),
             // The league's rules (PD-125): small whole numbers offered, never written. "none" is "the sentence does not say".
             "win_points" to choice("How many points does the sentence give for a WIN?", pointOptions),
             "draw_points" to choice("How many points does the sentence give for a DRAW?", pointOptions),
@@ -336,7 +355,7 @@ public class Understanding(private val model: SystemOne, private val today: () -
             "shift" to choice("Does the sentence move the fixture by a number of weeks from the date it is on, rather than naming a date?",
                               mapOf("none" to "no: it names a date or a day, or says nothing of when", "week_later" to "one week later: 'back a week', 'the week after'",
                                     "fortnight_later" to "two weeks later: 'a fortnight', 'two weeks on'", "week_earlier" to "one week earlier: 'forward a week', 'the week before'")),
-            *dateQuestions().toTypedArray(),
+            *dateQuestions(clean).toTypedArray(),
             "time" to choice("Which of these times found in the text is when the fixture would be played?", times.mapValues { "the time written as '${it.value}'" } + ("none" to "no time stated")),
         )
         val answers = try { model.answers(state.s, questions.s) } catch (e: Exception) { null } ?: return null
@@ -371,15 +390,28 @@ public class Understanding(private val model: SystemOne, private val today: () -
         "to" to m.move?.to?.toString(), "on" to m.move?.on?.toString(), "time" to m.move?.time?.toString(),
     ))
 
-    /** The date's parts, asked the same way wherever a date is read: the model reads the parts, code does the calendar. */
-    private fun dateQuestions(): List<Pair<String, Any?>> = listOf(
+    /**
+     * The date's parts, asked the same way wherever a date is read: the model reads the parts, code does the calendar.
+     *
+     * Asked of the sentence, not in the abstract (PD-131): the day of the month is offered only where the text writes
+     * one, so a code `times()` already found cannot be answered here too. There were three byte-identical copies of
+     * this list — here, in `understand` and in `readList` — and a fix applied to one left the other two wrong; there is
+     * one now, and `the desk and the captain's screen ask the same date questions` holds them together.
+     */
+    private fun dateQuestions(text: String): List<Pair<String, Any?>> = listOf(
         "date_mode" to choice("How is the fixture's date written? 'absolute' names a month or a day of the month; 'relative' is given from today (today, tomorrow, a named weekday such as 'next Thursday'); 'none' when no date is stated.",
                               mapOf("absolute" to null, "relative" to null, "none" to null)),
-        "day_anchor" to choice("If the date is relative to today, which day is it?", mapOf("today" to null, "tomorrow" to null, "day_after" to "the day after tomorrow", "weekday" to "a named day of the week")),
+        "day_anchor" to choice("If the date is given from today, which day is it?",
+                               mapOf("today" to "the sentence says today, tonight or this evening, and names no day of the week",
+                                     "tomorrow" to "the sentence says tomorrow", "day_after" to "the day after tomorrow",
+                                     "weekday" to "a named day of the week, such as 'this Friday'",
+                                     "none" to "the date is not given from today")),
         "weekday" to choice("If the date names a day of the week, which?", WEEKDAYS.associateWith { null } + ("none" to "no weekday named")),
-        "week_offset" to choice("If the date names a weekday: 'this' means the coming one, 'next' means the one in the week after.", mapOf("this" to "this week, or the coming one", "next" to "next week")),
+        "week_offset" to choice("If the date names a weekday: 'this' means the coming one, 'next' means the one in the week after.",
+                                mapOf("this" to "this week, or the coming one", "next" to "next week", "none" to "the date names no day of the week")),
         "month" to choice("If the date is absolute, which month?", MONTHS.associateWith { null } + ("none" to "no month named; the day of the month alone, or none")),
-        "day" to choice("If the date is absolute, which day of the month?", (1..31).associate { it.toString() to null } + ("none" to "no day of the month named")),
+        "day" to choice("If the date is absolute, which day of the month? Only the days written in the sentence are offered.",
+                        daysOfMonth(text).associateWith { null } + ("none" to "no day of the month named")),
     )
 
     public data class ListRow(val line: Int, val text: String, val homeTeamId: UUID?, val home: String?, val awayTeamId: UUID?, val away: String?,
@@ -410,7 +442,9 @@ public class Understanding(private val model: SystemOne, private val today: () -
                 "home_team" to choice("Which of the season's teams is the home side in `line` — the one named first? A name may be shortened or misspelt.", teamOptions),
                 "away_team" to choice("Which of the season's teams is the away side in `line` — the one named second? A name may be shortened or misspelt.", teamOptions),
                 "month" to choice("Which month does `line` name, if any?", MONTHS.associateWith { null } + ("none" to "no month is named")),
-                "day" to choice("Which day of the month does `line` name, if any?", (1..31).associate { it.toString() to null } + ("none" to "no day of the month is named")),
+                // Only the days the line writes (PD-131): "Stn Hotel v Riverside B - 8.15" must not answer day = 8.
+                "day" to choice("Which day of the month does `line` name, if any? Only the days written in the line are offered.",
+                                daysOfMonth(line).associateWith { null } + ("none" to "no day of the month is named")),
                 "time" to choice("Which of these times found in `line` is when the fixture is played?", found.mapValues { "the time written as '${it.value}'" } + ("none" to "no time is stated")),
             )
             return (try { model.answers(state.s, questions.s) } catch (e: Exception) { null }) to found
@@ -495,17 +529,26 @@ public class Understanding(private val model: SystemOne, private val today: () -
         // (PD-123, and seen again in PD-129: "tomorrow at 8" read as tomorrow, and called absolute). So where it says
         // absolute and read no day of the month, and the relative parts make a date, the parts decide. The mode's own
         // probability stays in `used`, so a reading rescued this way is never more confident than the part it got wrong.
-        val relativeParts = anchor?.first in setOf("today", "tomorrow", "day_after") || (anchor?.first == "weekday" && weekday?.first != null && weekday.first != "none")
+        //
+        // The same lesson once more (PD-131): a named day of the week is a thing in the sentence, and the anchor is a
+        // category about it. Read on the real model, "how about this Friday at 7?" came back anchored on *today* and
+        // naming *Friday* in the same breath. Where a weekday is named, it decides; "today" is left to the sentences
+        // that say today, tonight or this evening, which name no weekday at all.
+        val named = weekday?.first?.takeIf { it != "none" }
+            ?.let { name -> DayOfWeek.values().firstOrNull { it.getDisplayName(TextStyle.FULL, Locale.UK) == name } }
+        val anchorKey = if (named != null) "weekday" else anchor?.first
+        val relativeParts = anchorKey in setOf("today", "tomorrow", "day_after", "weekday")
         val read = if (mode?.first == "absolute" && day?.first?.toIntOrNull() == null && relativeParts) "relative" else mode?.first
         return when (read) {
-            "relative" -> when (anchor?.first) {
+            "relative" -> when (anchorKey) {
                 "today" -> { used += anchor!!.second; now }
                 "tomorrow" -> { used += anchor!!.second; now.plusDays(1) }
                 "day_after" -> { used += anchor!!.second; now.plusDays(2) }
                 "weekday" -> {
-                    val wd = weekday?.first?.let { name -> DayOfWeek.values().firstOrNull { it.getDisplayName(TextStyle.FULL, Locale.UK) == name } } ?: return null
-                    weekday.let { used += it.second }
-                    // From tomorrow: said on a Thursday, "Thursday" is next week's — nobody names today by its weekday.
+                    val wd = named ?: return null
+                    weekday!!.let { used += it.second }
+                    // From tomorrow: said on a Friday, "this Friday" is the Friday to come — nobody proposes a move to
+                    // the day they are speaking on, and a captain who means tonight says tonight (PD-131 records this).
                     var d = now.plusDays(1)
                     while (d.dayOfWeek != wd) d = d.plusDays(1)
                     if (offset?.first == "next") { used += offset.second; d = d.plusWeeks(1) }
