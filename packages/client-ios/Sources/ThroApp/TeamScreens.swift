@@ -581,14 +581,14 @@ struct FriendliesSection: View {
                             if declining == f.friendlyId {
                                 ThroTextField("Why not?", text: $note, placeholder: "cup night")
                                 HStack(spacing: ThroSpacing.spacing2) {
-                                    ThroButton("Decline", variant: .primary, size: .medium) { Task { await answer(f, "declined") } }
+                                    ThroButton("Decline", variant: .secondary, size: .medium) { Task { await answer(f, "declined") } }
                                         .disabled(note.trimmingCharacters(in: .whitespaces).count < 3 || busy)
                                     ThroTextButton("Not yet", tone: .quiet) { declining = nil }
                                 }
                             } else {
                                 HStack(spacing: ThroSpacing.spacing2) {
-                                    ThroButton("Accept", variant: .primary, size: .medium) { Task { await answer(f, "accepted") } }.disabled(busy)
-                                    ThroButton("Decline", variant: .secondary, size: .medium) { declining = f.friendlyId; note = "" }.disabled(busy)
+                                    ThroButton("Accept", variant: .secondary, size: .medium) { Task { await answer(f, "accepted") } }.disabled(busy)
+                                    ThroTextButton("Decline", tone: .quiet) { declining = f.friendlyId; note = "" }.disabled(busy)
                                 }
                             }
                         } else {

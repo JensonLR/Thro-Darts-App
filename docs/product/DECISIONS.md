@@ -6168,3 +6168,41 @@ pattern match, and guessing would churn twenty screens to fix one. They are:
 screenshot stage holds none — it stages an account, not a league. The change is a wrapper swap around an
 unchanged button and both suites pass, but I have not seen it, and the ledger says so rather than implying
 I have.
+
+## PD-147 — One primary action per screen
+
+**18 September 2026.** The research's number two, and the one it said was "almost all deletion". It was —
+with one thing the ranking had not seen.
+
+**Six screens carried competing primaries, and three of them carried an unbounded number**, because a
+`.primary` sat inside a card that is drawn once per row. Three matches in progress meant three full-width
+green keys, one under the other. Two tasks in the inbox meant two. A list of tournament nights meant one
+per night. A screen with three primaries has none, and the count was not six — it was however many rows
+the server sent.
+
+**Decided.**
+
+1. **A card drawn in a list does not hold the screen's primary.** `ContinueCard` and `EventActions` take a
+   `prominent` flag: on the one-subject page — a tournament's own page, the first match in progress — the
+   action keeps its weight; everywhere else it goes quiet. This is the fix the ranking missed, because it
+   is the difference between six primaries and an unbounded number.
+2. **An answer inside a card is secondary, and its refusal is quieter still.** *Agree to…* and *Decline*
+   were both filled keys on the same card, asking a captain to choose between two shouts; *Decline* is a
+   quiet text button now and *Agree* is secondary, because the card itself is the thing being answered.
+3. **Home's *Start match* keeps its weight only when there is nothing in progress.** With a match going,
+   *Continue* on the card above is the screen's action, and two full-width green keys one under the other
+   made Home a choice between equals when it is not one. It says *Start another* there, too.
+4. **Four screens were left alone, argued rather than assumed.** The friends screen's chalk key and its
+   small primary are a slate act and a paper act and do not compete. A prompt card's preset answer is a
+   *recommendation among answers*, which is what a primary is for. The end-of-match card has **zero**
+   primaries on purpose — a retirement and an abandonment must not be picked for the player — and is the
+   best argument in the codebase for the rule this decision applies.
+
+**A mistake worth recording.** Three of the twenty proposed changes were prose descriptions of a
+restructuring, not replacements, and applying them mechanically mangled `TeamFixtureScreens.swift` —
+it invented a `SegmentedControl` that does not exist and left two statements where a view belonged. The
+build caught it, the file was reverted to its committed state, and those three are not done. A change
+list is only mechanical where every entry is a substitution, and checking which is the applier's job.
+
+**Evidence.** 900 app tests. Every `tools/check_*.py` green. Looked at in the simulator: Home now carries
+one filled key — *Continue* — with *Start another* quiet beneath it.

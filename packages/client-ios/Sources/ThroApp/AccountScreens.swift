@@ -313,7 +313,7 @@ struct RegistrationTaskActions: View {
                     if confirming == requirement {
                         ThroTextField("How was the \(requirement) met?", text: $note, placeholder: "paid in cash, 14 Sep")
                         HStack(spacing: ThroSpacing.spacing2) {
-                            ThroButton("Confirm \(requirement)", variant: .primary, size: .medium) { Task { await confirm(requirement) } }
+                            ThroButton("Confirm \(requirement)", variant: .secondary, size: .medium) { Task { await confirm(requirement) } }
                                 .disabled(note.trimmingCharacters(in: .whitespaces).count < 3 || busy)
                             ThroTextButton("Not yet", tone: .quiet) { confirming = nil }
                         }
@@ -324,7 +324,7 @@ struct RegistrationTaskActions: View {
                 }
                 if let submission = a.submissionId {
                     if a.state == "ready" {
-                        ThroButton("Send it to the league", variant: .primary, size: .medium) { Task { await send(submission) } }.disabled(busy)
+                        ThroButton("Send it to the league", variant: .secondary, size: .medium) { Task { await send(submission) } }.disabled(busy)
                     } else {
                         Text("Sent · \(a.state ?? "with the league") — the league answers, and only its answer registers the player.")
                             .thro(ThroTypography.metadata).foregroundStyle(ThroColor.colorTextSecondary)
@@ -378,7 +378,7 @@ struct ConsentTaskActions: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: ThroSpacing.spacing2) {
-            ThroButton("Yes, pass my details", variant: .primary, size: .medium) {
+            ThroButton("Yes, pass my details", variant: .secondary, size: .medium) {
                 Task { await account.say(consent: "listing", given: true); onDone() }
             }
             .disabled(account.working != nil)
@@ -411,14 +411,14 @@ struct RearrangementTaskActions: View {
                     if declining {
                         ThroTextField("Why not?", text: $note, placeholder: "we cannot raise a side that night")
                         HStack(spacing: ThroSpacing.spacing2) {
-                            ThroButton("Decline", variant: .primary, size: .medium) { Task { await answer("rejected") } }
+                            ThroButton("Decline", variant: .secondary, size: .medium) { Task { await answer("rejected") } }
                                 .disabled(note.trimmingCharacters(in: .whitespaces).count < 3 || busy)
                             ThroTextButton("Not yet", tone: .quiet) { declining = false }
                         }
                     } else {
                         HStack(spacing: ThroSpacing.spacing2) {
-                            ThroButton(ProposalWords.agree(p), variant: .primary, size: .medium) { Task { await answer("accepted") } }.disabled(busy)
-                            ThroButton("Decline", variant: .secondary, size: .medium) { declining = true; note = "" }.disabled(busy)
+                            ThroButton(ProposalWords.agree(p), variant: .secondary, size: .medium) { Task { await answer("accepted") } }.disabled(busy)
+                            ThroTextButton("Decline", tone: .quiet) { declining = true; note = "" }.disabled(busy)
                         }
                     }
                 } else {
@@ -533,7 +533,7 @@ public struct DiscoveryScreen: View {
                                         Text(card.reasons.joined(separator: " · ")).thro(ThroTypography.metadata).foregroundStyle(ThroColor.colorTextBrand)
                                             .fixedSize(horizontal: false, vertical: true)
                                     }
-                                    EventActions(api: account.api, card: card) { Task { await load() } }
+                                    EventActions(api: account.api, card: card, prominent: false) { Task { await load() } }
                                 }
                             }
                         }
@@ -563,6 +563,9 @@ struct EventActions: View {
     /// under Discover (PD-126) uses them as they are.
     let api: ThroAPI
     let card: DiscoveryCard
+    /// Whether this card is the whole page (PD-147). On a tournament's own page the way in IS the page's
+    /// one action; in a list of nights it is one row's, and a list of primaries is a list of nothing.
+    var prominent: Bool = true
     let reload: () -> Void
     @State private var page: EventPage?
     @State private var said: String?
@@ -647,7 +650,7 @@ struct EventActions: View {
             HStack(spacing: ThroSpacing.spacing2) {
                 if entered {
                     if onTheDay && !checkedIn {
-                        ThroButton("Check in on this phone", variant: .primary, size: .medium) { Task { await checkIn() } }.disabled(busy)
+                        ThroButton("Check in on this phone", variant: prominent ? .primary : .secondary, size: .medium) { Task { await checkIn() } }.disabled(busy)
                     } else if checkedIn {
                         Text("Checked in · this phone scores it. To pull out now, tell the organiser.")
                             .thro(ThroTypography.metadata).foregroundStyle(ThroColor.colorTextSecondary)
@@ -665,7 +668,7 @@ struct EventActions: View {
                 } else if card.access == "open" {
                     switch card.entrantKind {
                     case "pair":
-                        ThroButton("Enter with a partner", variant: .primary, size: .medium) { choosing = true; Task { await loadChoices() } }.disabled(busy)
+                        ThroButton("Enter with a partner", variant: prominent ? .primary : .secondary, size: .medium) { choosing = true; Task { await loadChoices() } }.disabled(busy)
                     case "team":
                         ThroButton("Enter a team you run", variant: .primary, size: .medium) { choosing = true; Task { await loadChoices() } }.disabled(busy)
                     default:

@@ -916,7 +916,13 @@ public struct HomeScreen: View {
             .throEntrance(first + 3)
         }
         block {
-            ThroButton("Start match", variant: .primary, size: .large, fullWidth: true) { store.flow = .new }
+            // One primary per screen (PD-147). With a match in progress, *Continue* on the card above is
+            // the screen's action and this one is the alternative — two full-width green keys one under
+            // the other made Home a choice between equals when it is not one. With nothing in progress
+            // this is the only thing to do, and it keeps the weight.
+            ThroButton(inProgress == nil ? "Start match" : "Start another",
+                       variant: inProgress == nil ? .primary : .secondary,
+                       size: .large, fullWidth: true) { store.flow = .new }
         }
         .throEntrance(first + 4)
     }
@@ -1028,6 +1034,10 @@ struct Masthead: View {
 /// only by a small blue tag.
 struct ContinueCard: View {
     let match: AppStore.HomeMatch
+    /// Whether this card carries the screen's one prominent action (PD-147). A card drawn once per row
+    /// cannot each hold the screen's primary: three matches in progress meant three full-width green keys
+    /// competing, and a screen with three primaries has none. The first keeps it; the rest go quiet.
+    var prominent: Bool = true
     let onContinue: () -> Void
 
     var body: some View {
@@ -1064,7 +1074,7 @@ struct ContinueCard: View {
                 .thro(ThroTypography.metadata)
                 .foregroundStyle(ThroColor.colorTextSecondary)
                 .lineLimit(1)
-            ThroButton("Continue", variant: .primary, size: .large, fullWidth: true, action: onContinue)
+            ThroButton("Continue", variant: prominent ? .primary : .secondary, size: .large, fullWidth: true, action: onContinue)
         }
         .padding(ThroCardMetrics.padding)
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -1916,8 +1926,8 @@ public struct LiveScreen: View {
                     if !inProgress.isEmpty {
                         block {
                             SectionHeader("On this phone", meta: inProgress.count == 1 ? "1 match" : "\(inProgress.count) matches")
-                            ForEach(inProgress) { match in
-                                ContinueCard(match: match) { store.flow = .resume(match.id) }
+ForEach(Array(inProgress.enumerated()), id: \.element.id) { index, match in
+    ContinueCard(match: match, prominent: index == 0) { store.flow = .resume(match.id) }
                                 // Shared live (PD-044): the other player follows it on their own phone.
                                 if let liveShare, signedIn {
                                     LiveShareRow(share: liveShare, match: match)

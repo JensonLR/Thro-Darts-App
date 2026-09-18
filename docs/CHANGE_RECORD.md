@@ -6381,3 +6381,12 @@ the gap beneath the green field by 4 to 8 points. App tests 900.
 hairline. 21 other full-width primaries are outside the component and listed in PD-146; most are in-card buttons
 rather than screen floors and need judging per screen. App tests 900. Not looked at in the simulator: the stage
 holds no league fixture.
+
+## One primary action per screen (PD-147)
+
+`ContinueCard` and `EventActions` gain `prominent`, so a card drawn once per row stops each holding the screen's
+primary; Home's *Start match* becomes *Start another* and secondary while a match is in progress; in-card answers
+(registration, consent, a proposal, a friendly) demote to `.secondary` with their refusals as quiet text buttons.
+Four screens left alone with the argument written down. Three proposed changes to `TeamFixtureScreens.swift` were
+prose rather than substitutions, mangled the file when applied mechanically, and were reverted; they are not done.
+App tests 900.
