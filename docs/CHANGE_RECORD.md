@@ -6360,3 +6360,11 @@ out of the views that held them, with three tests watched red. App tests 899, AP
 `ThroPlay/MatchSession` reads its ledger with `try`. `tools/check_a_failed_read_is_not_empty.py` widened from
 server reads to every read, its exemption list taught the names this codebase uses for "what went wrong", and the
 screenshot stage's three JSON parses marked `// not-a-read:`. App tests 900. Counts updated.
+
+## One row, one card (PD-144)
+
+New `ThroDesign/Row.swift`: `ThroRowMetrics` (56/12/44), `ThroCardMetrics` (20, radiusCard), `ThroFieldMetrics` (52).
+`CardRow`, `LinkRow` and `SettingsRow` read the first; `DeskCard` and `ContinueCard` the second; the result field and
+the text field the third. `Readiness.swift` draws its border with `.strokeBorder`. New
+`tools/check_one_row_one_card.py` in `domain-spec.yml`, which also fails if the metrics are defined and unread.
+Two `// own-measure:` exemptions, printed. App tests 900.

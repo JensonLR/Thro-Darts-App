@@ -199,7 +199,7 @@ public struct OrganisationHeader: View {
     public var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             accent
-                .frame(height: 64)
+                .frame(height: 64)  // own-measure: the club's colour band, the one place its colour is large
                 .padding(.horizontal, -ThroSpacing.spaceScreenGutter)
             Badge(initials, size: 62, accent: accent, image: image)
                 .padding(5)

@@ -40,7 +40,7 @@ public struct ThroTextField: View {
                     .autocorrectionDisabled()
             }
             .padding(.horizontal, ThroSpacing.spacing4)
-            .frame(minHeight: 52)
+            .frame(minHeight: ThroFieldMetrics.height)
             .background(RoundedRectangle(cornerRadius: ThroSpacing.radiusField).fill(ThroColor.colorSurfacePrimary))
             .overlay(RoundedRectangle(cornerRadius: ThroSpacing.radiusField)
                 .strokeBorder(error != nil ? ThroColor.colorStatusError : ThroColor.colorBorderStrong, lineWidth: 1))

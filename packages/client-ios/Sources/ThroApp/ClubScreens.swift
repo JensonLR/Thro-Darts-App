@@ -48,7 +48,7 @@ struct BackChevron: View {
         Button(action: action) {
             Icon(.chevronLeft, size: 20)
                 .foregroundStyle(ink)
-                .frame(width: 44, height: 44, alignment: .leading)
+                .frame(width: ThroSpacing.touchTargetMinimum, height: ThroSpacing.touchTargetMinimum, alignment: .leading)
                 // Without this the 44 points are decoration: SwiftUI hit-tests the chevron's ink,
                 // so three quarters of the target did nothing.
                 .contentShape(Rectangle())

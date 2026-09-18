@@ -6067,3 +6067,45 @@ does. Saying which guard holds which half is better than implying both are tests
 
 **Evidence.** 900 app tests. Every `tools/check_*.py` green, the widened one reporting its three
 exemptions rather than hiding them.
+
+## PD-144 — One row, one card
+
+**18 September 2026.** The design research's diagnosis, applied: *the style guide is kept; the vocabulary
+is not.* THRØ has a generated token layer and the app obeys it — and a row, which is most of this app, was
+built three times with three different sets of numbers.
+
+**What was there.** `CardRow` stood 56 points tall, `LinkRow` 52, and `SettingsRow` set no height at all
+and used a bare `12` for its gap where every other row read the token. `DeskCard` padded itself 16 and
+`ContinueCard` 20 — both on the same screens, a match in progress above a task waiting on you, four points
+apart with nothing to say why. And one card drew its border with `.stroke` rather than `.strokeBorder`, so
+half a point of its hairline fell outside the shape: it was the one card in the app that looked very
+slightly soft, and nobody could name it.
+
+Four points is not seen. It is felt. A player going from Settings to their profile to a team meets three
+rhythms and reads it as three apps.
+
+**Decided.**
+
+1. **`ThroRowMetrics` — one height, one gap, one minimum.** 56, which is `CardRow`'s: it is the row that
+   carries two lines, and a row that fits its contents at the largest text is worth four points. There was
+   never an argument for 52 over 56; there was only nobody to ask.
+2. **`ThroCardMetrics` — one padding, one radius.** 20, which is `ContinueCard`'s. A card's padding is what
+   makes it read as an object rather than a boxed paragraph, so the more generous of the two is the one
+   doing the job.
+3. **`ThroFieldMetrics` — because a field is not a row.** Something a person types into and something they
+   read or tap are allowed to differ, but each only once. One result field had drifted to 56; it is 52 with
+   the rest.
+4. **This is not one `ThroRow` component**, deliberately. The three rows differ in what they *hold* — an
+   icon tile and two lines, an icon and a chevron, an icon and a value — and collapsing those into one view
+   with three modes trades a felt inconsistency for a knot. The numbers are what a player feels; the
+   contents are what the screen means.
+5. **`tools/check_one_row_one_card.py`, on every push.** It fails on a rounded shape stroked as a border,
+   on a bare height in the row band, and — the part that matters most — on `ThroRowMetrics` or
+   `ThroCardMetrics` being defined and read by nothing, which is the `ClubStore.setAvatar` shape:
+   a set of numbers nobody reads is worse than none, because it looks like the thing is solved.
+6. **Two places measure their own and say so.** A mark's ring, and a club's colour band — the one place a
+   club's colour is allowed to be large. They carry `// own-measure:` and the check prints them, so an
+   exemption stays visible rather than quietly becoming the rule.
+
+**Evidence.** 900 app tests. Every `tools/check_*.py` green. Looked at in the simulator: Settings, You and
+Home, where the rows now keep one rhythm down the screen and the cards sit at one inset.

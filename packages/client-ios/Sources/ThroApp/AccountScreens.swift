@@ -181,7 +181,7 @@ struct LinkRow: View {
                 Spacer(minLength: ThroSpacing.spacing3)
                 Icon(.chevronRight, size: 16).foregroundStyle(ThroColor.colorTextSecondary)
             }
-            .frame(minHeight: 52)
+            .frame(minHeight: ThroRowMetrics.height)
             .throRowTapTarget()
         }
         .buttonStyle(ThroPressStyle(radius: 0, pressedFill: ThroColor.colorBackgroundSecondary, scales: false))
@@ -216,7 +216,7 @@ struct DeskCard<Content: View>: View {
             }
             content
         }
-        .padding(ThroSpacing.spacing4)
+        .padding(ThroCardMetrics.padding)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(ThroColor.colorBackgroundRaised)
         .clipShape(RoundedRectangle(cornerRadius: ThroSpacing.radiusCard, style: .continuous))

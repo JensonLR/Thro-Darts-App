@@ -1065,7 +1065,7 @@ struct ContinueCard: View {
                 .lineLimit(1)
             ThroButton("Continue", variant: .primary, size: .large, fullWidth: true, action: onContinue)
         }
-        .padding(ThroSpacing.spacing5)
+        .padding(ThroCardMetrics.padding)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(RoundedRectangle(cornerRadius: ThroSpacing.radiusCard, style: .continuous)
             .fill(ThroColor.colorBackgroundRaised))
@@ -1807,7 +1807,7 @@ public struct SettingsRow: View {
     }
 
     public var body: some View {
-        HStack(spacing: 12) {
+        HStack(spacing: ThroRowMetrics.gap) {
             Icon(icon, size: 18).foregroundStyle(ThroColor.colorTextSecondary)
             Text(label).thro(ThroTypography.body).foregroundStyle(ThroColor.colorTextPrimary)
             Spacer(minLength: ThroSpacing.spacing3)
@@ -1816,7 +1816,7 @@ public struct SettingsRow: View {
                     .multilineTextAlignment(.trailing)
             }
         }
-        .frame(minHeight: 52)
+        .frame(minHeight: ThroRowMetrics.height)
         .overlay(alignment: .bottom) { Rectangle().fill(ThroColor.colorBorderDefault).frame(height: 1) }
         .accessibilityElement(children: .combine)
     }

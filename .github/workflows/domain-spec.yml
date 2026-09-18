@@ -110,6 +110,13 @@ jobs:
       - name: Every inbox task has something to do about it
         run: python3 tools/check_every_inbox_task_has_an_act.py
 
+      # The app had three rows and two cards: CardRow 56, LinkRow 52, SettingsRow no height at all and a
+      # bare 12 where every other row used the token; DeskCard 16 and ContinueCard 20, on the same screens,
+      # four points apart with nothing to say why. Four points is not seen and is felt — a player moving
+      # between screens meets different rhythms and reads it as different apps.
+      - name: One row height, one card padding
+        run: python3 tools/check_one_row_one_card.py
+
       # Typography.kt and Typography.swift are two type scales that must stay the same shape, and
       # this is the guard that says so — cited by both the token layer and the decisions, and until
       # now run by nobody. It needs no toolchain, so it belongs beside the other pure-Python guards.

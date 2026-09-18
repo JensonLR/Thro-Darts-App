@@ -135,7 +135,7 @@ struct CardRow: View {
     var leads: Bool = true
     let action: () -> Void
 
-    static let height: CGFloat = 56
+    static let height: CGFloat = ThroRowMetrics.height
     /// Where a row's words start. The hairline between two rows starts there too.
     static let textInset: CGFloat = ThroSpacing.spacing4 + IconTile.side + ThroSpacing.spacing3
 
@@ -327,7 +327,7 @@ struct AccountSlate: View {
             ThroMark()
                 .fill(ThroColor.colorMarkOnBoard)
                 .frame(width: 34, height: 34)
-                .frame(width: 52, height: 52)
+                .frame(width: 52, height: 52)  // own-measure: the mark's ring, not a row
                 .accessibilityHidden(true)
         }
     }

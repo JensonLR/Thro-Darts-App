@@ -1366,7 +1366,7 @@ public struct RecordResultScreen: View {
                 .keyboardType(.numberPad)
                 #endif
                 .padding(.horizontal, ThroSpacing.spacing4)
-                .frame(minHeight: 56)
+                .frame(minHeight: ThroFieldMetrics.height)  // own-measure: a field stands with the other fields
                 .background(RoundedRectangle(cornerRadius: ThroSpacing.radiusField)
                     .fill(ThroColor.colorSurfacePrimary))
                 .overlay(RoundedRectangle(cornerRadius: ThroSpacing.radiusField)

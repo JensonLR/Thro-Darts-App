@@ -760,8 +760,11 @@ public struct ReadinessScreen: View {
                 .fill(ThroColor.colorBackgroundSecondary)
         )
         .overlay(
-            RoundedRectangle(cornerRadius: ThroSpacing.radiusCard, style: .continuous)
-                .stroke(ThroColor.colorBorderDefault, lineWidth: 1)
+            // `.strokeBorder`, not `.stroke` (PD-144): `.stroke` centres the line on the shape's edge, so
+            // half a point of it sat outside every other card's boundary in the app. Nobody could name it
+            // and it was the one card that looked very slightly soft.
+            RoundedRectangle(cornerRadius: ThroCardMetrics.radius, style: .continuous)
+                .strokeBorder(ThroColor.colorBorderDefault, lineWidth: 1)
         )
         // `.contain` rather than `.combine`: the state and the sentence are read as one thing by
         // the label and hint below, and the button stays a button. `.combine` would fold a control
