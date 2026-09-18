@@ -6326,3 +6326,41 @@ stops them lying in the meantime.
 **Evidence.** No `write to us`, `address below` or `address is below` remains in any page. The children's
 page still reads at grade 3.55 over 80 sentences, which `tools/check_a_child_can_read_it.py` enforces and
 which the longer honest sentences did not break. Every `tools/check_*.py` green.
+
+## PD-151 — What THRØ says when there is nothing to show, in one place
+
+**18 September 2026.** Production holds 329 leagues, every one *listed*, none run here, and no events at
+all. So in production **the empty state is the product** — the most-seen screen in the app and the least
+designed. Nineteen of them existed, written in nineteen places, and nine of their bodies were over
+fourteen words. The longest was thirty-eight. A body is the easiest place in a codebase to answer a
+question nobody asked.
+
+**Decided.**
+
+1. **`ThroDesign/EmptyWords.swift` holds every title and body**, and the call sites name a place rather
+   than repeating a sentence. `EmptyState(.inbox)` and `ThroNothingYet(.home, seed:)` read it.
+2. **The rule is written down where it compiles**: *the board when the emptiness is the whole page; the
+   card when it is a section.* Reach for the card on a page with nothing else on it and you get a notice
+   pinned to a sheet of cream.
+3. **Two exceptions, recorded rather than silently broken.** The **inbox** carries no action — it is the
+   one empty state in the app that is a good outcome, and a button there would mirror a noun that is not
+   missing. The **blocked list** stays a card although it is the whole page: a cheerful green field with a
+   lamp is the app's welcome, and that is the wrong register for the safety screen.
+4. **Fourteen words, held by a test.** Prose does not compile, so the rule was kept by nobody.
+5. **A debt list closed from both ends.** Two bodies are still over, each with its reason — one waits on
+   an unanswered question about whether the Live tab should be shortened or anchored, and the other
+   explains a rule of the draw rather than describing an empty list. The test fails if a body is over and
+   *not* on the list, **and** if a body on the list has come under the ceiling. Otherwise the list becomes
+   a licence rather than a debt, and the next reader learns the wrong lesson.
+6. **The blocked list's card and its note are separate things now.** What the list is belongs in the empty
+   state; how to add to it and what it does belongs in a note beneath. They were one paragraph, and the
+   paragraph was the body — the one sentence a reader takes in on a screen with nothing on it.
+
+**Not done, and why.** The board/card conversions the survey proposed for Home, the archive, the inbox and
+the gone-team screen need a distinct board seed each, and two screens sharing a seed draw the same field
+and read as the same screen twice. The seeds are a small deliberate set and adding five is a change worth
+its own look. The registry is in place and the conversions land against it.
+
+**Evidence.** 904 app tests, four of them new. Every `tools/check_*.py` green. Six call sites read the
+registry; the rest keep their literals until their screens are converted, and the registry is read rather
+than defined-and-ignored.

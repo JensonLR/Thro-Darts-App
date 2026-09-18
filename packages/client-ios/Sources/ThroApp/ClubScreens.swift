@@ -391,12 +391,10 @@ public struct ClubMembersScreen: View {
                     }
                     if club.visibleMembers.isEmpty && club.hiddenMembers == 0 {
                         if let onAdd {
-                            EmptyState(title: "Nobody here yet",
-                                       message: "Add the people who play for this team. Each person's age is asked, because who is listed and who is reached follows from it.",
-                                       actionLabel: "Add a member", onAction: onAdd)
+                            EmptyState(.roster, onAction: onAdd)
                                 .padding(.top, ThroSpacing.spacing6)
                         } else {
-                            EmptyState(title: "Nobody here yet", message: "An admin keeps the roster.")
+                            EmptyState(.rosterKept)
                                 .padding(.top, ThroSpacing.spacing6)
                         }
                     }

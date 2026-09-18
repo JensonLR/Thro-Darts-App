@@ -78,7 +78,7 @@ public struct LeaguesScreen: View {
                 // Not "for this area" (PD-148): `Nearby.load` asks for every league THRØ holds and passes
                 // no locality, so the sentence named a filter that was never applied and told somebody in
                 // a well-served town that their area was empty when the whole map was.
-                paper { EmptyState(title: "No leagues yet", message: "THRØ has no leagues on the map yet.") }
+                paper { EmptyState(.leaguesOnTheMap) }
             case .loading:
                 board(Board(atlas: LeagueAtlas([]), pins: [], leagues: []))
             case .loaded(let leagues):

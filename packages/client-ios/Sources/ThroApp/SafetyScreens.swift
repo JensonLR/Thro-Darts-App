@@ -168,8 +168,14 @@ public struct BlockedAccountsScreen: View {
                                    todo: "Try again with a connection.",
                                    onAction: { Task { await safety.loadBlocks(api) } })
                     } else if safety.blocked.isEmpty {
-                        EmptyState(title: "Nobody is blocked",
-                                   message: "Blocking somebody stops them inviting you, adding you as a friend, taking a seat against you or watching your match. Block them from the ⋯ beside their name on your team's roster. You never need a reason.")
+                        EmptyState(.blocked)
+                        // The card says what the list is; the note says how to add to it and what it does
+                        // (PD-151). Both were one paragraph, and the paragraph was the empty state's body —
+                        // which is the one sentence a reader takes in on a screen with nothing on it.
+                        Note("Block somebody from the ⋯ beside their name on your team's roster. "
+                             + "It stops them inviting you, adding you as a friend, taking a seat against "
+                             + "you or watching your match. You never need a reason.")
+                            .padding(.top, ThroSpacing.spacing3)
                     } else {
                         Text("Blocked while these stand, neither of you can reach the other on THRØ.")
                             .thro(ThroTypography.body).foregroundStyle(ThroColor.colorTextSecondary)

@@ -348,6 +348,14 @@ public struct EmptyState: View {
     private let actionLabel: String?
     private let onAction: (() -> Void)?
 
+    /// The card, from the words registry (PD-151). A call site names a place; the sentence lives in
+    /// `EmptyWords`, where a test holds it to fourteen words and a debt list records every body that is
+    /// still over. A literal here is how nine of nineteen bodies came to be over the ceiling.
+    public init(_ words: EmptyWords, onAction: (() -> Void)? = nil) {
+        self.init(title: words.title ?? "", message: words.body,
+                  actionLabel: words.actionLabel, onAction: onAction)
+    }
+
     public init(title: String, message: String? = nil, actionLabel: String? = nil, onAction: (() -> Void)? = nil) {
         self.title = title
         self.message = message

@@ -27,6 +27,13 @@ public struct ThroNothingYet: View {
     private let onAction: (() -> Void)?
     private let seed: UInt32
 
+    /// The board, from the words registry (PD-151). The seed is never defaulted at a call site: two
+    /// screens sharing a seed draw the same field, which reads as the same screen twice.
+    public init(_ words: EmptyWords, seed: UInt32, onAction: (() -> Void)? = nil) {
+        self.init(title: words.title ?? "", message: words.body,
+                  actionLabel: words.actionLabel, seed: seed, onAction: onAction)
+    }
+
     public init(title: String, message: String, actionLabel: String? = nil,
                 seed: UInt32 = ThroBoardSeed.home, onAction: (() -> Void)? = nil) {
         self.title = title

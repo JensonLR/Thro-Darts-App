@@ -245,7 +245,7 @@ public struct InboxScreen: View {
                         ErrorState(title: "Could not load your inbox", what: problem, safe: "Nothing on this phone changed.", todo: "Try again when you are online.") { Task { await load() } }
                     } else if let sections {
                         if sections.values.allSatisfy(\.isEmpty) {
-                            EmptyState(title: "Nothing waiting on you", message: "When a league or a team needs something from you, it appears here with the reason.")
+                            EmptyState(.inbox)
                         }
                         ForEach(InboxOrder.sections.filter { !(sections[$0]?.isEmpty ?? true) }, id: \.self) { key in
                             SectionHeader(InboxOrder.title(key), meta: "\(sections[key]?.count ?? 0)")
@@ -523,7 +523,7 @@ public struct DiscoveryScreen: View {
                         ErrorState(title: "Could not load events", what: problem, safe: "Nothing on this phone changed.", todo: "Try again when you are online.") { Task { await load() } }
                     } else if let sections {
                         if sections.values.allSatisfy(\.isEmpty) {
-                            EmptyState(title: "Nothing coming up", message: "No open events in the next sixty days on THRØ yet. When an organiser opens one, it appears here with why it is offered to you.")
+                            EmptyState(.discovery)
                         }
                         ForEach(DiscoveryOrder.sections.filter { !(sections[$0]?.isEmpty ?? true) }, id: \.self) { key in
                             SectionHeader(DiscoveryOrder.title(key), meta: "\(sections[key]?.count ?? 0)")

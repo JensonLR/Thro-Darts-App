@@ -6415,3 +6415,11 @@ contact address replaced by saying the route does not exist, in each page's own 
 kept; the walk-up removal points at the organiser, which exists. The shared footnote now says what is true. Six web
 sentences cut, and the terms' 55-word prohibition run-on becomes a seven-item list wearing the site's own class,
 with every word kept. Reading age of the children's page unchanged at 3.55.
+
+## What THRØ says when there is nothing to show (PD-151)
+
+New `ThroDesign/EmptyWords.swift`: every empty-state title and body, the board-or-card rule, two recorded
+exceptions, a fourteen-word ceiling and a debt list. `EmptyState(_:onAction:)` and `ThroNothingYet(_:seed:onAction:)`
+read it; six call sites converted. New `EmptyWordsTests` (4), which fails both when a body is over the ceiling
+without a reason and when one on the debt list has come under it. The blocked list's how-to-block moves from the
+body into a note. App tests 904, counts updated.
