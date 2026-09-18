@@ -76,7 +76,37 @@ public class Discovery(private val connection: Connection) {
      * the reasons it appears. [homeLocality] is the player's team's locality where known; nothing
      * here reads a person's location.
      */
+    /**
+     * The town this player's own teams play in, where they agree on one (PD-163).
+     *
+     * `NEAR_YOU` used to depend entirely on a `locality` query parameter, and **no shipped caller sent one** — the
+     * phone called `discovery()` with no argument and the web never called the route at all — so the section was
+     * empty for every real player and existed only in the code. THRØ does not need to be told: it already knows
+     * which teams somebody is in and where those teams play.
+     *
+     * Where a player's teams name two different towns, this returns null rather than choosing one. Somebody who
+     * plays for a side in Stockton and a side in Redcar is not "near" either more than the other, and picking the
+     * first by row order would be a guess wearing a fact's clothes. The query parameter is still there for the
+     * player who wants to look somewhere specific.
+     */
+    private fun townOfTheirTeams(playerId: UUID): String? =
+        connection.prepareStatement(
+            """SELECT DISTINCT t.locality
+                 FROM competition.team_membership m
+                 JOIN competition.team t ON t.team_id = m.team_id
+                WHERE m.player_id = ? AND m.valid_until IS NULL AND t.locality IS NOT NULL""",
+        ).use { ps ->
+            ps.setObject(1, playerId)
+            ps.executeQuery().use { rs ->
+                val towns = generateSequence { if (rs.next()) rs.getString(1) else null }.toList()
+                // Two towns is not one town. One, or nothing.
+                towns.distinctBy { it.lowercase().replace(Regex("""[^a-z0-9]+"""), "") }.singleOrNull()
+            }
+        }
+
     public fun forPlayer(playerId: UUID, from: Instant, to: Instant, homeLocality: String? = null): Map<Section, List<Card>> {
+        // A locality asked for wins; otherwise the one this player's own teams imply.
+        @Suppress("NAME_SHADOWING") val homeLocality = homeLocality ?: townOfTheirTeams(playerId)
         val cards = mutableListOf<Card>()
         val mySeries = seriesEnteredBy(playerId, from)
         connection.prepareStatement(

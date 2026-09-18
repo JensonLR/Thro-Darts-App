@@ -6796,3 +6796,27 @@ that had not happened. **That is verified rendering and a verified action, not a
 the round trip is covered by the API tests.
 
 **Evidence.** 911 app tests. Every `tools/check_*.py` green.
+
+## PD-163 — "Near you" reads the town instead of being told it
+
+PD-161 fixed how two localities are compared and said plainly that the section was still dead: `forPlayer`
+took `homeLocality` from a query parameter and **no shipped caller sent one**. The phone called
+`discovery()` with no argument; the web never called the route at all. So `NEAR_YOU` was empty for every
+real player, and a section of the Discover tab existed in the code and nowhere else.
+
+**The parameter was the wrong shape.** THRØ does not need to be told which town somebody is near — it
+already knows which teams they are in and where those teams play. `townOfTheirTeams` reads it. That fixes
+the phone and the web at once, with no client release, which passing a parameter from `AccountScreens`
+would not have done.
+
+**Two towns is not one town.** A player in a Stockton side and a Redcar side gets **null**, not the first
+row. They are not nearer one than the other, and picking by row order would be a guess wearing a fact's
+clothes — the same failure as the NULL-matches-NULL venue collision PD-161 closed. Comparison is
+`sameLocality`, so the team's "Stockton-on-Tees" and the venue's "Stockton on Tees" are one town.
+
+**A locality asked for still wins.** Looking at another town is a real thing to want, and the parameter
+stays for it.
+
+**Evidence.** Three tests, watched failing first — and failing for exactly the right reason: one red, on
+the town the player's team implies. A player with no team gets an empty section rather than the whole
+list relabelled as nearby. API suite green, 167 schema properties, 34 check scripts.

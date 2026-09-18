@@ -165,4 +165,78 @@ class DiscoveryTest {
         assertFalse(Discovery.sameLocality(null, "Redcar"))
         assertFalse(Discovery.sameLocality("Redcar", null))
     }
+
+    /** An open singles event at a venue in [locality], for the "near you" tests below. */
+    private fun nearEvent(c: java.sql.Connection, orgs: Organisations, name: String, locality: String, at: Instant): UUID {
+        val venue = orgs.createVenue("$name Venue", locality)
+        val id = UUID.randomUUID()
+        Competitions(c).openEvent(id, name, at, at.plus(8, ChronoUnit.HOURS), venueId = venue,
+                                  entrantKind = EntrantKind.PLAYER, access = EventAccess.OPEN)
+        return id
+    }
+
+    /**
+     * "Near you" finds the player's own town without being told it (PD-163).
+     *
+     * `forPlayer` took `homeLocality` from a query parameter, and **no shipped caller sent one** — the phone called
+     * `discovery()` with no argument and the web never called the route at all. So `NEAR_YOU` was empty for every
+     * real player, and the section existed in the code and nowhere else. The locality is not a thing THRØ should be
+     * told anyway: it already knows which teams a player is in and where those teams play. It reads it.
+     *
+     * A parameter still wins when one is given, because a player looking at another town is a real thing to want.
+     */
+    @Test
+    fun `near you finds the player's own town without being told it`() {
+        if (!TestDatabase.configured) return
+        TestDatabase.migrated().use { c ->
+            val now = Instant.parse("2026-09-18T18:00:00Z")
+            val orgs = Organisations(c)
+            val sam = orgs.createPlayer()
+            val team = orgs.createTeam("The Bell B", "Stockton-on-Tees")
+            orgs.addMember(team, sam, MembershipRole.PLAYER, from = now.minus(30, ChronoUnit.DAYS))
+
+            // An event in the team's own town, and one somewhere else.
+            val here = nearEvent(c, orgs, "Stockton Singles", "Stockton on Tees", now.plus(7, ChronoUnit.DAYS))
+            val away = nearEvent(c, orgs, "Redcar Singles", "Redcar", now.plus(7, ChronoUnit.DAYS))
+
+            val d = Discovery(c).forPlayer(sam, from = now, to = now.plus(60, ChronoUnit.DAYS))
+            val near = d[Discovery.Section.NEAR_YOU].orEmpty().map { it.eventId }.toSet()
+            assertTrue(near.contains(here), "the team plays in Stockton-on-Tees and the event says Stockton on Tees — one town")
+            assertFalse(near.contains(away), "Redcar is not Stockton")
+        }
+    }
+
+    @Test
+    fun `a locality asked for beats the one the player's team implies`() {
+        if (!TestDatabase.configured) return
+        TestDatabase.migrated().use { c ->
+            val now = Instant.parse("2026-09-18T18:00:00Z")
+            val orgs = Organisations(c)
+            val sam = orgs.createPlayer()
+            val team = orgs.createTeam("The Bell B", "Stockton-on-Tees")
+            orgs.addMember(team, sam, MembershipRole.PLAYER, from = now.minus(30, ChronoUnit.DAYS))
+            val here = nearEvent(c, orgs, "Stockton Singles", "Stockton-on-Tees", now.plus(7, ChronoUnit.DAYS))
+            val away = nearEvent(c, orgs, "Redcar Singles", "Redcar", now.plus(7, ChronoUnit.DAYS))
+
+            val d = Discovery(c).forPlayer(sam, from = now, to = now.plus(60, ChronoUnit.DAYS), homeLocality = "Redcar")
+            val near = d[Discovery.Section.NEAR_YOU].orEmpty().map { it.eventId }.toSet()
+            assertTrue(near.contains(away), "a player looking at another town is a real thing to want")
+            assertFalse(near.contains(here), "and it replaces the implied one rather than adding to it")
+        }
+    }
+
+    @Test
+    fun `a player with no team is not near anything, rather than near everything`() {
+        if (!TestDatabase.configured) return
+        TestDatabase.migrated().use { c ->
+            val now = Instant.parse("2026-09-18T18:00:00Z")
+            val orgs = Organisations(c)
+            val sam = orgs.createPlayer()
+            nearEvent(c, orgs, "Stockton Singles", "Stockton-on-Tees", now.plus(7, ChronoUnit.DAYS))
+
+            val d = Discovery(c).forPlayer(sam, from = now, to = now.plus(60, ChronoUnit.DAYS))
+            assertTrue(d[Discovery.Section.NEAR_YOU].orEmpty().isEmpty(),
+                       "unplaced is unplaced: an empty section, never the whole list relabelled as nearby")
+        }
+    }
 }

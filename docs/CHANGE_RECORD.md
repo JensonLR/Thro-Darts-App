@@ -6515,3 +6515,10 @@ changes, and corrects its record — `SegmentedControl` has existed in `ThroDesi
 `thro.css`: `h1` had a family and a weight and no `font-size` or `line-height`, so an `<h1>` would have set at body
 size — a heading only bolder than the paragraph beneath it. No page carries one today, which is why it was never
 seen. It takes `--typography-heading-1-*` now, which had been generated and unused.
+
+## "Near you" reads the town instead of being told it (PD-163)
+
+`Discovery.kt`: new `townOfTheirTeams` derives the locality from the player's own current team memberships, used
+when no `locality` parameter is given; two different towns return null rather than the first row. Closes the dead
+half PD-161 recorded — the section was empty for every real player because nothing sent the parameter. Fixes the
+phone and the web at once with no client release. Tests +3.

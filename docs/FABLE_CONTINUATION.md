@@ -115,7 +115,7 @@ entitlements and refused if the signed app lacks Sign in with Apple or the passk
 
 PD-095 deploy pipeline · PD-096 retention sweep · PD-097 Android notice · PD-098 TestFlight entitlements ·
 PD-099 fixtures · PD-100 start a league · PD-101 moderation page · PD-102 ways in · PD-103 decisions enforce +
-league management · PD-104 organiser email · PD-105 provisional rating · PD-106 the team's fixture · PD-107 registrations · PD-108 moving a fixture by agreement · PD-109 a knockout · PD-110 a friendly · PD-111 rounds · PD-112 the organiser's remaining acts · PD-113 invitationals · PD-114 sign in by the phone · PD-115 pairs, teams, seeds, boards · PD-116 Apple and Google on the web (awaiting the founder's console work) · PD-117 the phone that is already here (Open THRØ from the web's sign-in, `/link/<code>`) · PD-118 THRØ reads reports and names with TypeSafe's System One model (V054) · PD-119 Tell THRØ, the desk reads a sentence into an act (the key was set 17 Sep: production says `reads:true`) · PD-120 who changed what (V055) · PD-121 the sign-in code as a QR · PD-122 paste the fixture list · PD-124 walk-ups (V056) · PD-125 the desk reads the points rules; the model read twice · PD-123 the model measured (`JevEvaluationTest`; key in the git-ignored `.env.local`; held out 11 of 12, list 10 of 10, scorecard in `docs/product/JEV_SCORECARD.md`) · two design passes (web, phone).
+league management · PD-104 organiser email · PD-105 provisional rating · PD-106 the team's fixture · PD-107 registrations · PD-108 moving a fixture by agreement · PD-109 a knockout · PD-110 a friendly · PD-111 rounds · PD-112 the organiser's remaining acts · PD-113 invitationals · PD-114 sign in by the phone · PD-115 pairs, teams, seeds, boards · PD-116 Apple and Google on the web (**done** — `api.thro.uk/v1/auth/providers` answers `apple: uk.thro.web` and a Google web client id, checked 18 Sep 2026) · PD-117 the phone that is already here (Open THRØ from the web's sign-in, `/link/<code>`) · PD-118 THRØ reads reports and names with TypeSafe's System One model (V054) · PD-119 Tell THRØ, the desk reads a sentence into an act (the key was set 17 Sep: production says `reads:true`) · PD-120 who changed what (V055) · PD-121 the sign-in code as a QR · PD-122 paste the fixture list · PD-124 walk-ups (V056) · PD-125 the desk reads the points rules; the model read twice · PD-123 the model measured (`JevEvaluationTest`; key in the git-ignored `.env.local`; held out 11 of 12, list 10 of 10, scorecard in `docs/product/JEV_SCORECARD.md`) · two design passes (web, phone).
 
 ## Completion matrix (from four read-only audits, 16 September; details in PD-106 and CHANGE_RECORD)
 
@@ -179,9 +179,11 @@ venue on a rearrangement is PD-128, done the same evening.) (The single-league r
    TypeSafe's cookbooks describe). Same key. Next, in the order they pay: the fixture screen's *say it* for a captain
    (a proposal card); a typed player name matched to a registered one at registration (entity alignment); a league's
    typed rules read into a points policy.
-8. PD-116 lands the server and web sides of Apple/Google sign-in on the web; the buttons appear only once the founder
-   creates the Services ID and the Web OAuth client and sets `THRO_APPLE_WEB_CLIENT_ID` / `THRO_GOOGLE_WEB_CLIENT_ID`
-   on Render (the clicks are in PD-116). Until then the web offers the phone code and the passkey.
+8. ~~PD-116 waits on the founder's console work.~~ **Done, checked 18 September 2026.** The Services ID and the
+   Web OAuth client exist and both variables are set on Render: `GET /v1/auth/providers` answers
+   `{"apple":"uk.thro.web","google":"5826…apps.googleusercontent.com","reads":true}`. The web offers Apple and
+   Google beside the phone code and the passkey. This item was still being reported as outstanding three days
+   after it was finished, which is the cost of a ledger line nobody re-checks.
 
 ## Known gaps after PD-113 (small, recorded rather than hidden)
 
