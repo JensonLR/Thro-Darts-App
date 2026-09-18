@@ -4,6 +4,42 @@ A resilience mechanism for a session that stops at a usage boundary, so the next
 audit. Kept current during the build; **not** a deliverable, and never a substitute for `docs/CHANGE_RECORD.md`
 (what happened, and how it was proven) or `docs/product/DECISIONS.md` (what was decided, and why).
 
+## 18 September 2026 — Phases 1 and 2 done, Phase 3 begun
+
+**Eleven decisions, PD-131 to PD-141, all pushed and CI-green.** Phase 1 (the founder's five known issues)
+is complete; Phase 2's research is `docs/design/RESEARCH_2026.md` (190 lines, 47 cited sources, two
+adversarial passes); Phase 3 is under way.
+
+- **PD-131** a number is one thing at a time — `daysOfMonth(text)`, a named weekday beats the anchor, the
+  rule for "this &lt;today's weekday&gt;" recorded, three copies of the date questions collapsed to one.
+- **PD-132** no decision number reaches a person — nine rendered sentences fixed, `check_no_decision_numbers.py`
+  in CI, `check_migrations.py` no longer passes on an empty tree, `check_type_parity.py` wired in.
+- **PD-133** a pair reads in the order it was typed — **V057** `typed_first`. Deployed.
+- **PD-134** the colour scheme is the stylesheet's job — seven pages never followed the reader. **Live.**
+- **PD-135** a page that is waiting says so — a timeout, skeletons, truthful absence, retries.
+- **PD-136** the desk reads as itself — it could not draw at all for a league started with its own default.
+- **PD-137** a failed read is never an empty one — seven screens, plus `check_a_failed_read_is_not_empty.py`.
+- **PD-138** an invitational night says so — `EventWords.access`, one sentence for two surfaces.
+- **PD-139** the failure cases PD-128/129 were missing — 84 checks, no defect found, said so plainly.
+- **PD-140** the chrome grows with the text and the bar stays a bar — the Phase 2 list's number one.
+- **PD-141** blocking exists, where the person is read — `Safety.accountBehind`, a ⋯ on the roster row.
+
+**Founder's answers at the Phase 2 checkpoint (do not re-ask).** Phase 3 runs as two change sets in
+parallel: the bottom bar + chrome-grows-with-text (done, PD-140), and the header/row/card vocabulary
+(**next**). Blocking: build the control (done, PD-141). The league privacy default stays ticked.
+
+**Next, in order.** The research's ranked list, minus what is done: one primary action per screen (2);
+design for the empty state, because production *is* one — 329 leagues, all listed, zero run here, no
+events (3); one pinned-action component (4); the web on the design system (5); one header, two faces (6);
+one row, one card (7); halve the sentences (9); open lists where the reader is (10). Then Phase 4, whose
+ranking stops for the founder.
+
+**Left open and recorded, not hidden.** The inbox draws an action for two of four task kinds the server
+creates. Eight local-store reads still write an empty collection on failure (PD-137 says why they are out
+of scope). Four iOS wording cases need strings lifted out of views before they can be tested (PD-139).
+The screenshot harness had been reusing a Chrome profile and photographing cached CSS — fixed, and the
+lesson is in PD-135.
+
 ## Where things are (16 September 2026, morning)
 
 **Live** — actually reachable in the intended environment:
