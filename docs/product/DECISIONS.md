@@ -6413,3 +6413,48 @@ both opens a shortened page part-way down, which is worse than either. It is one
 and then an afternoon's work.
 
 **Evidence.** 907 app tests. Every `tools/check_*.py` green.
+
+## PD-154 — What Jev is for, and what a for loop is for
+
+**The question.** Fourteen proposals for using TypeSafe's System One reader were written against the
+cookbook and the repo, then judged on four lenses — does the model do work code cannot, does it fail
+safe, is the measurement honest, is it worth the build. `docs/product/JEV_USES.md` carries the ranking.
+
+**Eleven of the fourteen were ruled out, and most died the same death:** a normaliser and an edit
+distance do the job, with no probability anywhere and no network round trip. One judge stopped arguing
+and wrote the code — a twenty-line normaliser plus `difflib` reproduces the hand-written `TEAM_VENUES`
+dict **25 out of 25**, including every case held up as needing semantic understanding. That is the rule
+this phase establishes and it is worth more than any of the three survivors:
+
+> **Write the for loop first and publish its number.** The model is only allowed to buy the residue.
+
+**Three survived.** (1) *Which fixture — or none of them* — the desk's fixture Choice cannot decline,
+because its probabilities add to 1, so a sentence about a fixture the season has not got returns a
+confidently named wrong one. (2) *A queue that cannot be talked into a hurry.* (3) *The results sheet,
+typed once.*
+
+**The two to build are (1) then (3), and they are one build in two parts.** Not the top two by score.
+The queue ties on points but its own analysis takes it apart: the sort clause, the per-reporter cap and
+the keyword guard are the work, and none of them is a Jev build. The desk and the sheet share a single
+failure — a Choice over fixtures that must always name a winner — and the desk's fixes (`pick()`
+returning `confidence`, the `.take(254)` ceiling, a `ready` confidence floor, pinning `jev-1.13.0` in
+place of the moving `jev-latest` alias) are prerequisites of the sheet's row gate. They also share one
+thing the repo does not have: **a held-out fixture desk at production size.** Today's is 8 teams and 10
+fixtures, where no pair ever meets twice — so the hardest case, two teams' second meeting, has never
+been measured. Built once, it scores both.
+
+**Three live defects were found in passing and are not fixed here** — each read in the source, not
+inferred:
+
+- `Safety.kt:165` — the moderation queue sorts on `r.urgent`, `severity` and age. `j.child_safety` is
+  selected at :162 and never sorted on. It is not ignored: at or above `ACTS_AT` = 0.85 it sets
+  `urgent` at :66. But there is **one threshold and nothing under it**, so a reading of 0.7 — which the
+  web already labels "possibly about a child" at 0.5 — queues no higher than an abusive name.
+- `Seed.kt:86` — `WHERE name = ? AND locality IS NOT DISTINCT FROM ?` matches a NULL locality to a NULL
+  locality, so two same-named pubs in different towns collapse into one row when neither names a town.
+- `Discovery.kt:96` and `:132` — locality is compared with an exact `equals`, so "Stockton-on-Tees" and
+  "Stockton on Tees" are different places. **It never runs in production**: `homeLocality` is passed by
+  `DiscoveryTest` only and by no shipped caller, so `NEAR_YOU` is empty for every real player and THRØ
+  is currently making no false claim of nearness to anybody. A latent bug, not a live one.
+
+**Deliberately not decided here.** Nothing was built. The founder chooses before any of it starts.

@@ -6435,3 +6435,11 @@ archive, a gone team, the inbox and *Darts you can play* move from the card to t
 `ThroApp/TeamFixtureScreens.swift`: the list splits at today — a section for fixtures whose night has gone with no
 result, taking the name Live already uses; what is coming sorted soonest first. The Live tab's own half waits on the
 founder's choice between shortening and anchoring, recorded in PD-153. App tests 907.
+
+## What Jev is for, and what a for loop is for (PD-154)
+
+`docs/product/JEV_USES.md` — fourteen proposals for the TypeSafe reader, judged on four lenses. Eleven ruled out,
+most because a normaliser and an edit distance do the work; one judge reproduced the hand-written `TEAM_VENUES`
+dict 25/25 with `difflib` rather than argue it. Three survived; two are recommended to build, and they share one
+defect and one missing held-out set. Three live defects recorded in passing at `Safety.kt:165`, `Seed.kt:86` and
+`Discovery.kt:96`. No code changed.
