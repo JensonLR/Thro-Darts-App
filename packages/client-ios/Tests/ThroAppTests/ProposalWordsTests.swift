@@ -134,23 +134,38 @@ final class ProposalWordsTests: XCTestCase {
     // promises and no test could reach them. They are functions now, and these are the tests that were
     // waiting for them.
 
+    // These assert the SENTENCE, never the formatted date. `Date.formatted` follows the reader's locale, so
+    // "19 Nov 2026 at 19:30" here and "Nov 19, 2026 at 7:30 PM" on a runner set to American English — and a
+    // test that pins the literal passes on the machine it was written on and fails everywhere else. It did
+    // exactly that: green locally, five red in CI. What these hold is what the function composes.
     func testTheInboxCardSaysWhoProposedWhatInsteadOfWhenAndWhy() {
-        let withPlace = ProposalWords.card(proposal(venue: "Grange Social Club", reason: "the pub is shut"))
-        XCTAssertEqual(withPlace, "Grange A proposes 19 Nov 2026 at 19:30, at Grange Social Club instead of 12 Nov 2026 at 19:30 — the pub is shut")
+        let p = proposal(venue: "Grange Social Club", reason: "the pub is shut")
+        XCTAssertEqual(ProposalWords.card(p),
+                       "Grange A proposes \(ProposalWords.what(p)) instead of \(RearrangementTaskActions.when(p.scheduledAt)) — the pub is shut")
+        XCTAssertTrue(ProposalWords.card(p).contains("at Grange Social Club"), "the card says the place")
 
-        let noPlace = ProposalWords.card(proposal(reason: "the pub is shut"))
-        XCTAssertEqual(noPlace, "Grange A proposes 19 Nov 2026 at 19:30 instead of 12 Nov 2026 at 19:30 — the pub is shut")
+        let noPlace = proposal(reason: "the pub is shut")
+        XCTAssertEqual(ProposalWords.card(noPlace),
+                       "Grange A proposes \(ProposalWords.what(noPlace)) instead of \(RearrangementTaskActions.when(noPlace.scheduledAt)) — the pub is shut")
+        XCTAssertFalse(ProposalWords.card(noPlace).contains(", at "), "no venue: no place in the sentence")
 
-        let noReason = ProposalWords.card(proposal(venue: "Grange Social Club"))
-        XCTAssertEqual(noReason, "Grange A proposes 19 Nov 2026 at 19:30, at Grange Social Club instead of 12 Nov 2026 at 19:30",
+        let noReason = proposal(venue: "Grange Social Club")
+        XCTAssertFalse(ProposalWords.card(noReason).contains("—"),
                        "no reason given: the sentence ends rather than trailing a dash")
+        XCTAssertTrue(ProposalWords.card(noReason).hasSuffix(RearrangementTaskActions.when(noReason.scheduledAt)),
+                      "and it ends on the date it is instead of")
     }
 
     func testTheAgreeButtonSaysWhatIsBeingAgreedTo() {
         // The button's label is the one place a captain reads what they are about to agree to, so it
         // carries the place as well as the date.
-        XCTAssertEqual(ProposalWords.agree(proposal(venue: "Grange Social Club")), "Agree to 19 Nov 2026 at 19:30, at Grange Social Club")
-        XCTAssertEqual(ProposalWords.agree(proposal()), "Agree to 19 Nov 2026 at 19:30")
+        let withPlace = proposal(venue: "Grange Social Club")
+        XCTAssertEqual(ProposalWords.agree(withPlace), "Agree to \(ProposalWords.what(withPlace))")
+        XCTAssertTrue(ProposalWords.agree(withPlace).hasSuffix(", at Grange Social Club"))
+
+        let plain = proposal()
+        XCTAssertEqual(ProposalWords.agree(plain), "Agree to \(ProposalWords.what(plain))")
+        XCTAssertFalse(ProposalWords.agree(plain).contains(", at "), "no venue: the date alone")
     }
 
     func testTheCaptainsOwnWordsBecomeTheReasonUnlessTheyWroteOne() {
