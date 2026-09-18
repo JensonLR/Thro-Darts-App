@@ -139,8 +139,12 @@ class LeagueActsHttpTest {
                 fun pick(id: String, vararg words: String) = options(id).entries.first { (_, v) -> words.all { w -> (v?.toString() ?: "").contains(w) } }.key
                 fun choice(option: String, p: Double) = mapOf("type" to "choice", "choice" to option, "probabilities" to mapOf(option to p), "confidence" to p)
                 if (q.containsKey("asks_move")) {
-                    // PD-129: a captain's sentence about one fixture.
-                    return mapOf("asks_move" to choice("yes", 0.92), "date_mode" to choice("absolute", 0.9), "month" to choice("October", 0.9), "day" to choice("22", 0.94), "time" to choice("none", 0.9))
+                    // PD-129: a captain's sentence about one fixture. The month is the one the sentence names and the
+                    // day is the one code found written in it, so a sentence about June is not read as one about October.
+                    val said = Json.parseObject(state)["text"] as String
+                    val month = options("month").keys.firstOrNull { it != "none" && said.contains(it) } ?: "none"
+                    val day = options("day").keys.firstOrNull { it != "none" } ?: "none"
+                    return mapOf("asks_move" to choice("yes", 0.92), "date_mode" to choice("absolute", 0.9), "month" to choice(month, 0.9), "day" to choice(day, 0.94), "time" to choice("none", 0.9))
                 }
                 if (q.containsKey("is_fixture")) {
                     // PD-122: one line of a pasted list. Teams by name, in the order the line names them.
@@ -182,13 +186,72 @@ class LeagueActsHttpTest {
             check("a sentence is read for whoever runs the team", post("/v1/fixtures/$fixture/proposals/read", sentence, sam).status.value == 403)
             check("and only for a team in the fixture", post("/v1/fixtures/$fixture/proposals/read", """{"teamId":"$dolphin","text":"the 22nd"}""", gil).status.value == 403)
             check("a sentence with nothing in it is a 400", post("/v1/fixtures/$fixture/proposals/read", """{"teamId":"$riverside","text":" "}""", ade).status.value == 400)
+            check("and it asks for one rather than leaving the captain looking at nothing",
+                post("/v1/fixtures/$fixture/proposals/read", """{"teamId":"$riverside","text":" "}""", ade).bodyAsText().contains("Say when, in a sentence."))
+            check("an empty sentence is asked for again in the same words",
+                post("/v1/fixtures/$fixture/proposals/read", """{"teamId":"$riverside","text":""}""", ade).let { it.status.value == 400 && it.bodyAsText().contains("Say when, in a sentence.") })
+            check("and so is a body that says nothing about what was typed",
+                post("/v1/fixtures/$fixture/proposals/read", """{"teamId":"$riverside"}""", ade).let { it.status.value == 400 && it.bodyAsText().contains("Say when, in a sentence.") })
+            val page = "the pub is shut and the darts are lost. ".repeat(10)
+            check("a page pasted where a sentence goes is refused as a page",
+                post("/v1/fixtures/$fixture/proposals/read", """{"teamId":"$riverside","text":"$page"}""", ade).let { it.status.value == 400 && it.bodyAsText().contains("A sentence, not a page.") })
+            check("reading a sentence needs a principal", post("/v1/fixtures/$fixture/proposals/read", sentence, null).status.value == 401)
+            check("a fixture THRØ does not hold is a 404, and says so",
+                post("/v1/fixtures/${UUID.randomUUID()}/proposals/read", sentence, ade).let { it.status.value == 404 && it.bodyAsText().contains("THRØ has no such fixture.") })
+            check("a teamId that is not a team's id is refused in words",
+                post("/v1/fixtures/$fixture/proposals/read", """{"teamId":"riverside","text":"the 22nd"}""", ade).let { it.status.value == 400 && it.bodyAsText().contains("teamId is required") })
+            check("and so is a sentence that names no team at all",
+                post("/v1/fixtures/$fixture/proposals/read", """{"text":"the 22nd"}""", ade).let { it.status.value == 400 && it.bodyAsText().contains("teamId is required") })
             val moved = post("/v1/fixtures/$fixture/proposals/read", sentence, ade)
             check("the captain's sentence comes back as a day and the time the fixture already had, to confirm",
                 moved.status.value == 200 && moved.bodyAsText().contains("\"to\":\"2026-10-22T19:30:00Z\"") && moved.bodyAsText().contains("\"ready\":true")
                     && moved.bodyAsText().contains("\"say\":\"Thu 22 Oct, 8:30 pm\""))
+            val bracketed = "[derby] is off, can we do the 22nd"
+            val brackets = post("/v1/fixtures/$fixture/proposals/read", """{"teamId":"$riverside","text":"$bracketed"}""", ade)
+            check("a sentence that opens with a bracket is read, and comes back word for word",
+                brackets.status.value == 200 && brackets.bodyAsText().contains("\"text\":\"$bracketed\""))
+            val outside = post("/v1/fixtures/$fixture/proposals/read", """{"teamId":"$riverside","text":"can we do the 10th of June instead"}""", ade)
+            check("a day past the end of the season is shown, said to be outside it, and not ready to send",
+                outside.status.value == 200 && outside.bodyAsText().contains("\"ready\":false") && outside.bodyAsText().contains("\"doubt\":\"date\"")
+                    && outside.bodyAsText().contains("\"to\":\"2027-06-10T19:30:00Z\"") && outside.bodyAsText().contains("outside the season"))
+            check("and a date outside the season proposes nothing either", get("/v1/fixtures/$fixture/proposals", ade).bodyAsText() == """{"proposals":[]}""")
+            val already = post("/v1/fixtures/$fixture/proposals/read", """{"teamId":"$riverside","text":"can we do the 8th of October instead"}""", ade)
+            check("the fixture's own date read back is no move at all, and says so",
+                already.status.value == 200 && already.bodyAsText().contains("\"ready\":false")
+                    && already.bodyAsText().contains("\"say\":\"That is when it already is. To when?\""))
             check("reading proposes nothing", get("/v1/fixtures/$fixture/proposals", ade).bodyAsText() == """{"proposals":[]}""")
+            post("/v1/fixtures/$fixture/proposals/read", sentence, ade)
+            check("and reading the same sentence a second time proposes nothing a second time",
+                get("/v1/fixtures/$fixture/proposals", ade).bodyAsText() == """{"proposals":[]}""")
             check("and the server tells the web it can read", client.get("/v1/auth/providers").bodyAsText().contains("\"reads\":true"))
         }
+
+        // PD-129: a server that has a model can still fail to read a sentence — the model says nothing, or says
+        // something with no answer in it. Both send the captain to the date below, and neither is the server falling over.
+        val askOnce = """{"teamId":"$riverside","text":"can we do the 22nd of October instead"}"""
+        fun readWith(one: SystemOne): Pair<Int, String> {
+            var answer = 0 to ""
+            testApplication {
+                application { thro(Deps(connect = { TestDatabase.connect() }, authenticator = Authenticator.Dev(), now = { Instant.parse("2026-09-16T12:00:00Z") }, systemOne = one)) }
+                val r = client.post("/v1/fixtures/$fixture/proposals/read") {
+                    header(Authenticator.Dev.HEADER, ade.toString()); header("X-Thro-Device", device.toString()); setBody(askOnce)
+                }
+                answer = r.status.value to r.bodyAsText()
+            }
+            return answer
+        }
+        val silent = readWith(object : SystemOne {
+            override fun answers(state: String, questions: String): Map<String, Any?>? = null
+        })
+        check("a model that answers nothing sends the captain to the date below",
+            silent.first == 503 && silent.second.contains("THRØ could not read that just now. Pick the date below."))
+        check("and that is not the sentence a server with no model at all says",
+            !silent.second.contains("cannot read sentences on this server yet"))
+        val babble = readWith(object : SystemOne {
+            override fun answers(state: String, questions: String): Map<String, Any?>? = mapOf("mood" to "cheerful")
+        })
+        check("an answer with no answer in it is read as nothing read, not as a server that broke",
+            babble.first == 503 && babble.second.contains("THRØ could not read that just now. Pick the date below."))
         println("league acts over HTTP: $passed checks passed")
     }
 }

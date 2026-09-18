@@ -5869,3 +5869,43 @@ tell a player blocking is available and one names a place to do it that does not
 serious one — a safety promise with nothing behind it — and it is a decision for the founder rather than
 something to slip in: either the control ships where a person is read, as Report does, or the two
 sentences come out.
+
+## PD-139 — The failure cases PD-128 and PD-129 were missing
+
+**18 September 2026.** The founder: *PD-128/129 app wording tests and PD-129 HTTP checks were written with the
+code, not before it; add any missing failure cases now.* Eighty-four checks added across four files, and the
+honest headline is that **not one of them found a defect.**
+
+**What that means, said plainly.** These were missing *coverage*, not missing *behaviour*. Every refusal the two
+decisions promised was already refused; what was missing was any test that the refusal still said anything. Red
+was therefore impossible for almost all of them, and each agent reported which of its checks were green first
+time rather than pretending to a discipline it could not practise. One check was watched failing — the new
+`EventWords.access` test in PD-138, which would not compile because the function it named did not exist.
+
+**Decided.**
+
+1. **A refusal is asserted by its words, not its number.** The three that promised words and asserted only a
+   status code now read the body: a venue that is not an id, one THRØ does not hold, and one it hides — the last
+   two byte-for-byte identical, so a proposer cannot tell a private room from an unheld one.
+2. **The thresholds are pinned from both sides.** `shift` at 0.55 is left out and the parts decide; at 0.60 it is
+   taken. A guard tested only from the passing side is not tested.
+3. **The model is allowed to misbehave.** A stand-in that answers nothing, answers a map with no answer in it, or
+   throws — all three give 503 and never a 500.
+4. **One case could not be written, and is recorded rather than faked.** *A date in the past from an absolute
+   reading* is unreachable: `date()` rolls a past month-and-day forward a year and starts a bare day-of-month at
+   today, so the "has gone" refusal is reachable only through `shift = week_earlier`. That is documented intent,
+   not a defect, and the wording is asserted on the path that does reach it.
+5. **Four iOS cases could not be written either**, for a better reason: the strings are assembled inline in views
+   — the inbox card's sentence and its *Agree to…* button (`AccountScreens.swift:371`, `:383`), and the
+   reason-filling decision in `readIt` (`TeamFixtureScreens.swift:375`). Testing them means lifting them out of
+   the view first, which is a change to the source, and the agents writing tests were not allowed to make one.
+   Named here with the signatures they want, so it is a piece of work rather than a gap.
+
+**A note on the counts.** `tools/check_test_counts.py` went red on this change, correctly: the README and the
+iOS runbook stated 420 and 894, and the sources now hold 422 and 896. The stated numbers follow the tests.
+
+**Evidence.** API suite 167 tests, 0 failures, after a `clean` — the first run failed on three stale
+`"… 2.class"` duplicates in the build directory, which is iCloud's file-sync and not a source change. App suite
+896. `RearrangementHttpTest` 38 → 59 checks, `LeagueActsHttpTest` 38 → 54, `UnderstandingTest` 25 tests,
+`ProposalWordsTests` +22. Every `tools/check_*.py` green. An independent verifier ran both suites, read the diff
+for edits outside each agent's own file (none), and grepped for checks claimed but not written (none).

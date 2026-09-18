@@ -328,9 +328,20 @@ class UnderstandingTest {
         val outside = Stub { mapOf("asks_move" to choice("yes", 0.9), "date_mode" to choice("absolute", 0.9), "month" to choice("July", 0.9), "day" to choice("2", 0.9), "time" to choice("none", 0.9)) }
         val late = Understanding(outside) { today }.readMove(thursday, desk.seasonStart, desk.seasonEnd, "2nd of July?")
         assertNotNull(late); assertFalse(late.ready); assertEquals("date", late.doubt); assertNotNull(late.move, "read, shown, and said to be outside the season")
+        assertEquals("Fri 2 Jul, 7:30 pm is outside the season", late.say, "the day it would be, and the reason it cannot be")
+
+        // A time the model chose that was never on offer is no time at all: the fixture keeps the one it had.
+        val notOffered = Stub { mapOf("asks_move" to choice("yes", 0.9), "shift" to choice("none", 0.9), "date_mode" to choice("absolute", 0.9),
+                                      "month" to choice("none", 0.9), "day" to choice("22", 0.9), "time" to choice("h9", 0.99)) }
+        val ownTime = Understanding(notOffered) { today }.readMove(thursday, desk.seasonStart, desk.seasonEnd, "the 22nd?")
+        assertNotNull(ownTime)
+        assertEquals(LocalTime.of(19, 30), ownTime.move?.time, "half past seven, as the fixture already was")
+        assertEquals(0.9, ownTime.confidence, 1e-9, "and the 0.99 of a time nobody offered is not counted as something read")
 
         assertNull(Understanding(Stub { emptyMap() }.let { object : SystemOne { override fun answers(state: String, questions: String): Map<String, Any?>? = null } }) { today }
             .readMove(thursday, desk.seasonStart, desk.seasonEnd, "the 22nd"), "no answer from the model is no reading")
+        assertNull(Understanding(Stub { throw IllegalStateException("down") }) { today }
+            .readMove(thursday, desk.seasonStart, desk.seasonEnd, "the 22nd"), "a model that falls over is no reading either")
     }
 
     /** Found on review: the builder took a string that began with a bracket for JSON it had made itself. */
@@ -345,6 +356,15 @@ class UnderstandingTest {
         val braced = u.understand(desk, """{"text":"x"}""")
         assertNotNull(braced)
         assertEquals("""{"text":"x"}""", stub.state["text"])
+
+        // The captain's screen builds the same request, and a sentence in brackets goes through it whole as well.
+        val captain = Stub { mapOf("asks_move" to choice("no", 0.9)) }
+        val c = Understanding(captain) { today }
+        val said = c.readMove(thursday, desk.seasonStart, desk.seasonEnd, """[Grange] can't do it, {"day":22}""")
+        assertNotNull(said)
+        assertEquals("""[Grange] can't do it, {"day":22}""", captain.state["text"], "sent as the text it is, not spliced into the request")
+        assertEquals("""[Grange] can't do it, {"day":22}""", said.text)
+        assertEquals("""[Grange] can't do it, {"day":22}""", Json.parseObject(c.json(said))["text"], "and it comes back whole")
     }
 
     /** Seen on the first real run (PD-129): the model read the fixture's own date back as the new one, twice. */
@@ -354,6 +374,15 @@ class UnderstandingTest {
         val read = Understanding(stub) { today }.readMove(thursday, desk.seasonStart, desk.seasonEnd, "tomorrow night instead?")
         assertNotNull(read); assertFalse(read.ready); assertNull(read.move); assertEquals("date", read.doubt)
         assertEquals("That is when it already is. To when?", read.say)
+
+        // The same day at another time is a move, though: what it already is means the day and the hour together.
+        val laterThatDay = Stub { q -> mapOf("asks_move" to choice("yes", 0.9), "shift" to choice("none", 0.9), "date_mode" to choice("absolute", 0.9),
+                                             "month" to choice("October", 0.9), "day" to choice("15", 0.9), "time" to choice(keyOf(q, "time", "8"), 0.85)) }
+        val retimed = Understanding(laterThatDay) { today }.readMove(thursday, desk.seasonStart, desk.seasonEnd, "15 October but at 8 instead?")
+        assertNotNull(retimed); assertTrue(retimed.ready); assertNull(retimed.doubt)
+        assertEquals(Instant.parse("2026-10-15T19:00:00Z"), retimed.move?.to, "the day it was already on, an hour and a half later")
+        assertEquals("Thu 15 Oct, 8:00 pm", retimed.say)
+        assertEquals(0.85, retimed.confidence, 1e-9, "the time is the weakest part read, and it was read")
     }
 
     @Test
@@ -368,10 +397,29 @@ class UnderstandingTest {
         assertEquals(0.88, read.confidence, 1e-9)
         val fortnight = Stub { mapOf("asks_move" to choice("yes", 0.9), "shift" to choice("fortnight_later", 0.9), "date_mode" to choice("none", 0.9), "time" to choice("none", 0.9)) }
         assertEquals(LocalDate.of(2026, 10, 29), Understanding(fortnight) { today }.readMove(thursday, desk.seasonStart, desk.seasonEnd, "a fortnight later")?.move?.on)
+
+        // The guard on that shift, from both sides. Below it the shift is not taken and the date the sentence
+        // writes down is read instead; at it exactly the shift is taken and counted from the fixture.
+        val both = "put it back a week — the 5th of November?"
+        val hedged = Stub { mapOf("asks_move" to choice("yes", 0.9), "shift" to choice("week_later", 0.55), "date_mode" to choice("absolute", 0.9),
+                                  "month" to choice("November", 0.9), "day" to choice("5", 0.9), "time" to choice("none", 0.9)) }
+        val fromParts = Understanding(hedged) { today }.readMove(thursday, desk.seasonStart, desk.seasonEnd, both)
+        assertNotNull(fromParts)
+        assertEquals(LocalDate.of(2026, 11, 5), fromParts.move?.on, "a shift read at 0.55 is not taken: the date the sentence names is")
+        assertEquals(0.9, fromParts.confidence, 1e-9, "and a shift that was not taken does not drag the card down with it")
+
+        val sure = Stub { mapOf("asks_move" to choice("yes", 0.9), "shift" to choice("week_later", 0.6), "date_mode" to choice("absolute", 0.9),
+                                "month" to choice("November", 0.9), "day" to choice("5", 0.9), "time" to choice("none", 0.9)) }
+        val fromFixture = Understanding(sure) { today }.readMove(thursday, desk.seasonStart, desk.seasonEnd, both)
+        assertNotNull(fromFixture)
+        assertEquals(LocalDate.of(2026, 10, 22), fromFixture.move?.on, "at 0.6 exactly the shift is taken, and a week later than the fixture is where it lands")
+        assertEquals(0.6, fromFixture.confidence, 1e-9, "the shift is the weakest part read, and the card says so")
+
         // An earlier week that has already gone is a date in the past: read, and not ready.
         val gone = Stub { mapOf("asks_move" to choice("yes", 0.9), "shift" to choice("week_earlier", 0.9), "date_mode" to choice("none", 0.9), "time" to choice("none", 0.9)) }
         val early = Understanding(gone) { LocalDate.of(2026, 10, 9) }.readMove(thursday, desk.seasonStart, desk.seasonEnd, "bring it forward a week")
-        assertNotNull(early); assertFalse(early.ready); assertEquals("date", early.doubt)
+        assertNotNull(early); assertFalse(early.ready); assertEquals("date", early.doubt); assertNull(early.move)
+        assertEquals("Thu 8 Oct has gone. To when?", early.say, "the day it would have been, named, and the question put again")
     }
 
     /**
@@ -405,6 +453,15 @@ class UnderstandingTest {
                                      "day" to choice("20", 0.95), "time" to choice(keyOf(q, "time", "8 o'clock"), 0.9)) }
         val read = Understanding(stub) { today }.readMove(thursday, desk.seasonStart, desk.seasonEnd, "Tuesday the 20th, 8 o'clock")
         assertEquals(Instant.parse("2026-09-20T19:00:00Z"), read?.move?.to, "the next 20th from 15 September, at eight in the evening in London")
+
+        // Only "am" means the morning, and a time written with its half says what it says.
+        val morning = Stub { q -> mapOf("asks_move" to choice("yes", 0.9), "shift" to choice("none", 0.9), "date_mode" to choice("absolute", 0.9), "month" to choice("none", 0.9),
+                                        "day" to choice("22", 0.9), "time" to choice(keyOf(q, "time", "11am"), 0.9)) }
+        assertEquals(LocalTime.of(11, 0), Understanding(morning) { today }.readMove(thursday, desk.seasonStart, desk.seasonEnd, "the 22nd at 11am, it is a daytime match")?.move?.time,
+                     "eleven in the morning, because the sentence said the morning")
+        val evening = Stub { q -> mapOf("asks_move" to choice("yes", 0.9), "shift" to choice("none", 0.9), "date_mode" to choice("absolute", 0.9), "month" to choice("none", 0.9),
+                                        "day" to choice("22", 0.9), "time" to choice(keyOf(q, "time", "7.30pm"), 0.9)) }
+        assertEquals(LocalTime.of(19, 30), Understanding(evening) { today }.readMove(thursday, desk.seasonStart, desk.seasonEnd, "the 22nd at 7.30pm")?.move?.time)
     }
 
     // --- what a number is, and what a named weekday is (PD-131) -------------------------------------------------------

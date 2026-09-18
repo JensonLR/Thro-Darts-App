@@ -6321,3 +6321,11 @@ checked in and the line says why. `EventScreenTests` +1, watched red. App tests 
 ranked changes. Two adversarial passes: the first found 14 of 22 briefed products missing and six wrong counts; the
 second found a confident false claim that nothing in the repo computes contrast. Both corrected, and what the
 document still cannot verify is listed in it.
+
+## The failure cases PD-128 and PD-129 were missing (PD-139)
+
+84 checks across `RearrangementHttpTest` (38→59), `LeagueActsHttpTest` (38→54), `UnderstandingTest` (25 tests) and
+`ProposalWordsTests` (+22). No defect found: missing coverage, not missing behaviour, and reported as such. Refusals
+now assert their words; the `shift` threshold is pinned from both sides; a model that answers nothing, answers
+rubbish or throws gives 503 not 500. Stated test counts in `README.md` and `docs/runbooks/CLIENT_IOS.md` brought up
+to date (422, 896). API tests 167, app tests 896, every check green.
