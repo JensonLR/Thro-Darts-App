@@ -6522,3 +6522,10 @@ seen. It takes `--typography-heading-1-*` now, which had been generated and unus
 when no `locality` parameter is given; two different towns return null rather than the first row. Closes the dead
 half PD-161 recorded — the section was empty for every real player because nothing sent the parameter. Fixes the
 phone and the web at once with no client release. Tests +3.
+
+## A digest that cannot be computed is an error (PD-164)
+
+`ThroJournal/Export.swift`: `digest` throws instead of absorbing `Data()` for a part that would not encode, and its
+two call sites propagate. The swallow meant an export whose matches failed to encode hashed the same as one with no
+matches — on both the stamping and the verifying side, so they would agree. Recorded that PD-137's other eight local
+reads are already closed by PD-143's widened check. App tests 911.

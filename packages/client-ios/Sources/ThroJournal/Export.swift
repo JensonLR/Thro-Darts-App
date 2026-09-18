@@ -151,7 +151,7 @@ public enum Export {
             app: "THRØ",
             exportedAt: Journal.iso.string(from: now),
             deviceId: journal.deviceId.value,
-            digest: digest(matches: matches, rows: rows, people: peopleOut, clubs: clubs),
+            digest: try digest(matches: matches, rows: rows, people: peopleOut, clubs: clubs),
             matches: matches, journal: rows, people: peopleOut, clubs: clubs,
             assetsNotIncluded: assetsNotIncluded)
     }
@@ -188,8 +188,8 @@ public enum Export {
         guard document.format == ExportDocument.currentFormat else {
             throw ExportError.unknownFormat(document.format)
         }
-        let recomputed = digest(matches: document.matches, rows: document.journal,
-                                people: document.people, clubs: document.clubs)
+        let recomputed = try digest(matches: document.matches, rows: document.journal,
+                                    people: document.people, clubs: document.clubs)
         guard recomputed == document.digest else {
             throw ExportError.digestMismatch(expected: document.digest, found: recomputed)
         }
@@ -211,8 +211,13 @@ public enum Export {
     /// lets the digest be computed before the header that carries it exists, and means re-exporting
     /// the same matches a second later gives the same digest — which is the property that makes two
     /// exports comparable.
+    /// **Throws rather than hashing an empty part** (PD-164). This read `try? encoder.encode(part)` and absorbed
+    /// `Data()` when it failed — which defeats the one property the comment above claims. An export whose
+    /// `matches` would not encode hashed identically to an export with no matches at all, on both the writing
+    /// side and the verifying side, so the two would agree and the digest would certify a file it had not read.
+    /// A digest that cannot be computed is an error; it is never a hash of nothing.
     static func digest(matches: [ExportDocument.Match], rows: [ExportDocument.Row],
-                       people: [ExportDocument.Person], clubs: [ExportDocument.Club]) -> String {
+                       people: [ExportDocument.Person], clubs: [ExportDocument.Club]) throws -> String {
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.sortedKeys, .withoutEscapingSlashes]
         var hash: UInt64 = 0xcbf29ce484222325
@@ -224,9 +229,9 @@ public enum Export {
         }
         // Encoded separately and in a fixed order, so a person moving between two lists could never
         // hash the same as one staying put.
-        for part in [try? encoder.encode(matches), try? encoder.encode(rows),
-                     try? encoder.encode(people), try? encoder.encode(clubs)] {
-            absorb(part ?? Data())
+        for part in [try encoder.encode(matches), try encoder.encode(rows),
+                     try encoder.encode(people), try encoder.encode(clubs)] {
+            absorb(part)
             absorb(Data([0]))
         }
         return String(format: "%016llx", hash)

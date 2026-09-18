@@ -6820,3 +6820,34 @@ stays for it.
 **Evidence.** Three tests, watched failing first — and failing for exactly the right reason: one red, on
 the town the player's team implies. A player with no team gets an empty section rather than the whole
 list relabelled as nearby. API suite green, 167 schema properties, 34 check scripts.
+
+## PD-164 — A digest that cannot be computed is an error, not a hash of nothing
+
+Found while closing what PD-137 left open. `Export.digest` is the fingerprint that tells a player whether
+two copies of their exported file are the same, and it is used **twice**: once to stamp a file on the way
+out, once to verify one on the way in.
+
+It read `try? encoder.encode(part)` for each of its four parts and absorbed `Data()` when a part failed.
+That defeats the one property its own comment claims — *"so a person moving between two lists could never
+hash the same as one staying put"*. An export whose `matches` would not encode hashed **identically to an
+export with no matches at all**, and because the same swallow sits on the verifying side, the two would
+agree: the digest would certify a file it had not actually read.
+
+`digest` throws now, and the two call sites propagate. The failure it removes is unlikely — `JSONEncoder`
+over plain `Codable` structs rarely throws — and that is the point: it is the kind of failure nobody sees
+until it matters, and it was hidden behind the one function whose whole job is not to be fooled.
+
+**Honest about what this is.** No bug was reproduced. The `try?` is gone by construction rather than by a
+test, because forcing `JSONEncoder` to fail on these concrete types would mean inventing a type the export
+does not use — a test of the test. The existing round-trip and content-sensitivity tests still pass, and
+the type system now refuses the empty.
+
+**Also checked and found already closed.** PD-137 left "eight more places [that] write an empty collection
+on a failed read of something local — the on-phone book's clubs, its figures, its matches, the match
+journal's ledger, and the screenshot stage's JSON". `tools/check_a_failed_read_is_not_empty.py` was widened
+in PD-143 to cover the journal and the book, and it now reports **106 Swift files, no failed read drawn as
+an empty one**, with three exemptions, all of them parsing a request body the screenshot stage was handed
+rather than reading anything stored. The remaining 37 `?? []` in the client are nil-coalescing on optional
+model fields and dictionary lookups, not swallowed failures. That item is closed; only this one was real.
+
+**Evidence.** 911 app tests. Every `tools/check_*.py` green.
