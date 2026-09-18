@@ -92,12 +92,14 @@ class GuestsHttpTest {
             check("a pair is two names", post("/v1/events/$doubles/guests", """{"names":["Big Dave"]}""", lee).status.value == 400)
             check("and two different ones", post("/v1/events/$doubles/guests", """{"names":["Big Dave","big dave"]}""", lee).status.value == 400)
             val twoDaves = post("/v1/events/$doubles/guests", """{"names":["Big Dave","Little Dave"]}""", lee)
-            check("two walk-ups enter as a pair, named for the organiser", twoDaves.status.value == 200
-                && twoDaves.bodyAsText().let { it.contains("Big Dave & Little Dave") || it.contains("Little Dave & Big Dave") } && twoDaves.bodyAsText().contains("\"kind\":\"pair\""))
-            check("and is here, because the organiser could not have typed them otherwise", Regex("Dave & (Big|Little) Dave\",\"checkedIn\":true").containsMatchIn(twoDaves.bodyAsText()))
+            // PD-133: in the order the organiser typed them, never the order two ids happen to sort in.
+            check("two walk-ups enter as a pair, named for the organiser, in the order they were typed", twoDaves.status.value == 200
+                && twoDaves.bodyAsText().contains("Big Dave & Little Dave") && twoDaves.bodyAsText().contains("\"kind\":\"pair\""))
+            check("and is here, because the organiser could not have typed them otherwise", twoDaves.bodyAsText().contains("Big Dave & Little Dave\",\"checkedIn\":true"))
             val mixed = post("/v1/events/$doubles/guests", """{"name":"Carol Smith","partnerId":"$alice","mayBeNamed":true}""", lee)
-            check("a walk-up pairs with somebody on THRØ", mixed.status.value == 200
-                && mixed.bodyAsText().let { it.contains("Alice Aims & Carol Smith") || it.contains("Carol Smith & Alice Aims") })
+            // The walk-up is the name typed, and the partner is the one chosen: the typed name comes first.
+            check("a walk-up pairs with somebody on THRØ, the typed name first", mixed.status.value == 200
+                && mixed.bodyAsText().contains("Carol Smith & Alice Aims"))
             check("somebody already in a pair here is not paired again", post("/v1/events/$doubles/guests", """{"name":"Another","partnerId":"$alice"}""", lee).status.value == 409)
             check("a partner THRØ does not know is a 404", post("/v1/events/$doubles/guests", """{"name":"Another","partnerId":"${UUID.randomUUID()}"}""", lee).status.value == 404)
             check("the same name twice on one night is still refused", post("/v1/events/$doubles/guests", """{"names":["Little Dave","Somebody New"]}""", lee).status.value == 409)

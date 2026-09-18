@@ -6266,3 +6266,11 @@ Nine rendered sentences lost their citations: `apps/web/thro.js` (PD-103, to a m
 (OD-001, ADR-017). New `tools/check_no_decision_numbers.py`, wired into `domain-spec.yml` with
 `tools/check_type_parity.py`, which ran nowhere. `tools/check_migrations.py` now fails on an empty
 tree instead of passing. App tests 894. Every check green.
+
+## A pair reads in the order it was typed (PD-133)
+
+`V057__a_pair_reads_in_the_order_it_was_typed.sql` adds `competition.pair.typed_first` (nullable, constrained to one
+of the pair's own halves); `Organisations.createPair` records it; `Editions.competitorName` derives first/second
+through it with a lateral join, so the draw, the entrant list and the public page move together. The uuid
+normalisation stays: it is identity, not display. `GuestsHttpTest`, `EntrantsHttpTest` tightened from either-order to
+typed-order, watched red, then run five times green. API tests 165. Needs a deploy.

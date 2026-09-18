@@ -5639,3 +5639,39 @@ stops the two type scales drifting, and was run by nothing; it is wired into the
 **Evidence.** The check run against the tree before the fixes: nine findings, listed above. After:
 104 Swift files, 3 scripts and 18 pages clean. 894 app tests pass, so no sentence under test changed
 its meaning. Every `tools/check_*.py` green.
+
+## PD-133 — A pair reads in the order it was typed
+
+**18 September 2026.** The founder: *pair names show in uuid order ("Little Dave & Big Dave"), not typed order.*
+Exactly so, and worse than it looks: the order was not merely wrong, it was **random**. Tightening the two existing
+checks to assert typed order made them fail on some runs and pass on others, because the pair's two ids are freshly
+made each run and the display followed whichever happened to sort first. The same two people could read one way on
+one night and the other way on the next.
+
+**What was wrong.** `competition.pair` (V014) normalises its halves — `CHECK (player_a < player_b)` by uuid, plus a
+UNIQUE — and `Organisations.createPair` sorted its two arguments one line before the insert. The one SQL that names a
+competitor (`Editions.competitorName`, the single query behind the draw, the entrant list and the public page) read
+`player_a` then `player_b`. Nothing anywhere recorded which half was typed first, so nothing could have shown it.
+
+**Decided.**
+
+1. **The normalising stays.** It is about *identity* — whether two entries are the same pair — and it is what stops
+   one night holding the same two people twice. It was never the defect.
+2. **V057 adds `typed_first`**, a nullable uuid constrained to be one of the pair's own two halves. Identity and
+   presentation are then separate and cannot argue. Null means a pair made before the migration; those read in the
+   normalised order, as they always did. There is nothing to recover: the order was never written down, and no
+   created_at, serial or array preserved it.
+3. **`createPair(playerA, playerB)` records `playerA` as the one named first.** Both callers already passed them in
+   typed order — the entering player then their partner, or the organiser's two ids as typed — so the order had been
+   arriving here all along and being discarded on the next line.
+4. **The one SQL derives the two halves through the column**, not by column name, so every surface moves together and
+   the naming rules for a walk-up half are untouched.
+5. **A pair's order is set when the pair is first made, and not re-typed on re-entry.** If Alice enters with Bob and
+   later Bob enters with Alice, the same pair row is reused and still reads "Alice Aims & Bob Board". The alternative
+   — updating the order on every entry — would silently reorder a past night's draw, because the name is computed at
+   read time. A stable order is worth more than a freshly typed one.
+
+**Evidence.** `GuestsHttpTest` and `EntrantsHttpTest` no longer accept either order: "Big Dave & Little Dave", "Carol
+Smith & Alice Aims" (the typed name before the chosen partner), "Alice Aims & Bob Board", "Cara Checkout & Dave
+Drifter". Watched failing first, and run five times after the fix, because a defect that depends on random ids does
+not fail every time. Full API suite green.

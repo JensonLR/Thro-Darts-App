@@ -84,19 +84,24 @@ public class Editions(
     private val competitorName = """(
         SELECT coalesce(
           (SELECT tm.name FROM competition.team tm WHERE tm.team_id = %s),
+          -- The two halves in the order they were typed (PD-133), not the order their ids sort in. `typed_first`
+          -- is null on a pair made before V057, and those read in the normalised order as they always did.
           (SELECT concat_ws(' & ',
                     coalesce((SELECT CASE WHEN identity.player_may_be_disclosed(c.player_id) AND a.display_name <> $placeholderLit THEN a.display_name END
                                 FROM identity.player_claim c JOIN identity.account a ON a.account_id = c.account_id AND a.deleted_at IS NULL
-                               WHERE c.player_id = pr.player_a AND c.revoked_at IS NULL),
+                               WHERE c.player_id = h.first_id AND c.revoked_at IS NULL),
                              -- A walk-up half of a pair (PD-130), named exactly as a walk-up alone is.
-                             (SELECT CASE WHEN g.name IS NOT NULL AND (g.may_be_named OR %o) THEN g.name ELSE 'A guest' END FROM competition.guest g WHERE g.player_id = pr.player_a),
+                             (SELECT CASE WHEN g.name IS NOT NULL AND (g.may_be_named OR %o) THEN g.name ELSE 'A guest' END FROM competition.guest g WHERE g.player_id = h.first_id),
                              'A player'),
                     coalesce((SELECT CASE WHEN identity.player_may_be_disclosed(c.player_id) AND a.display_name <> $placeholderLit THEN a.display_name END
                                 FROM identity.player_claim c JOIN identity.account a ON a.account_id = c.account_id AND a.deleted_at IS NULL
-                               WHERE c.player_id = pr.player_b AND c.revoked_at IS NULL),
-                             (SELECT CASE WHEN g.name IS NOT NULL AND (g.may_be_named OR %o) THEN g.name ELSE 'A guest' END FROM competition.guest g WHERE g.player_id = pr.player_b),
+                               WHERE c.player_id = h.second_id AND c.revoked_at IS NULL),
+                             (SELECT CASE WHEN g.name IS NOT NULL AND (g.may_be_named OR %o) THEN g.name ELSE 'A guest' END FROM competition.guest g WHERE g.player_id = h.second_id),
                              'A player'))
-             FROM competition.pair pr WHERE pr.pair_id = %s),
+             FROM competition.pair pr
+             CROSS JOIN LATERAL (SELECT CASE WHEN pr.typed_first = pr.player_b THEN pr.player_b ELSE pr.player_a END AS first_id,
+                                        CASE WHEN pr.typed_first = pr.player_b THEN pr.player_a ELSE pr.player_b END AS second_id) h
+            WHERE pr.pair_id = %s),
           (SELECT CASE WHEN identity.player_may_be_disclosed(c.player_id) AND a.display_name <> $placeholderLit THEN a.display_name END
              FROM identity.player_claim c JOIN identity.account a ON a.account_id = c.account_id AND a.deleted_at IS NULL
             WHERE c.player_id = %s AND c.revoked_at IS NULL),

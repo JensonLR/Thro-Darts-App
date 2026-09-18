@@ -395,14 +395,20 @@ public class Organisations(private val connection: Connection) {
         return id
     }
 
-    /** A pair is normalised so that (a, b) and (b, a) are the same row. */
+    /**
+     * A pair is normalised so that (a, b) and (b, a) are the same row — and remembers which half was named first.
+     *
+     * The normalising is identity: it is what stops one night holding the same two people twice. The typed order is
+     * presentation, and until V057 it was thrown away here, one line before the insert, so a pair read back in
+     * whichever order two random uuids sorted in (PD-133). `playerA` is the one that was named first.
+     */
     public fun createPair(playerA: UUID, playerB: UUID): UUID {
         require(playerA != playerB) { "a pair is two distinct players" }
         val (a, b) = if (playerA.toString() < playerB.toString()) playerA to playerB else playerB to playerA
         val id = UUID.randomUUID()
         connection.prepareStatement(
-            "INSERT INTO competition.pair (pair_id, player_a, player_b) VALUES (?, ?, ?)",
-        ).use { ps -> ps.setObject(1, id); ps.setObject(2, a); ps.setObject(3, b); ps.executeUpdate() }
+            "INSERT INTO competition.pair (pair_id, player_a, player_b, typed_first) VALUES (?, ?, ?, ?)",
+        ).use { ps -> ps.setObject(1, id); ps.setObject(2, a); ps.setObject(3, b); ps.setObject(4, playerA); ps.executeUpdate() }
         return id
     }
 

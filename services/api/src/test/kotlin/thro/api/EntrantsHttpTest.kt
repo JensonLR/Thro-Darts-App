@@ -99,9 +99,9 @@ class EntrantsHttpTest {
             check("Bob cannot enter again with Cara", post("/v1/events/$doubles/entries", """{"partnerId":"$cara"}""", bob).status.value == 409)
             check("the organiser enters a pair by two ids", post("/v1/events/$doubles/entries", """{"playerIds":["$cara","$dave"]}""", lee).status.value == 200)
             val pairsDrawn = post("/v1/events/$doubles/draw", "{}", lee).bodyAsText()
-            // A pair's two names come in the pair's own fixed order (V014: player_a < player_b by id), so either way round.
-            fun named(a: String, b: String) = pairsDrawn.contains("$a & $b") || pairsDrawn.contains("$b & $a")
-            check("the draw names the pairs", named("Alice Aims", "Bob Board") && named("Cara Checkout", "Dave Drifter"))
+            // PD-133: a pair reads in the order it was entered — Alice named Bob, and the organiser typed Cara then Dave.
+            check("the draw names the pairs in the order they were entered",
+                  pairsDrawn.contains("Alice Aims & Bob Board") && pairsDrawn.contains("Cara Checkout & Dave Drifter"))
             clock = Instant.parse("2026-10-16T18:30:00Z")
             check("either of a pair checks the pair in", post("/v1/events/$doubles/check-in", "{}", bob).status.value == 200 && get("/v1/events/$doubles", alice).bodyAsText().contains("\"checkedIn\":true"))
             clock = Instant.parse("2026-09-16T12:00:00Z")
