@@ -36,7 +36,24 @@ chance the owner role was reached.
 **3. Take the service down if you cannot contain it.** A dark API is a bad day. An API quietly
 serving somebody else's data is a different kind of day. Render's dashboard suspends the service.
 
-**4. Only now, write down what you know.** Time, what you saw, what made you look. This becomes the
+**4. Stop sending report text to TypeSafe**, if the incident touches `safety` or you cannot yet say what
+it touches. One variable, and it degrades safely:
+
+    unset THRO_TYPESAFE_API_KEY on Render, and redeploy
+
+The API then prints `note: no reader` at boot and every reading path returns to what it did before
+PD-118 — reports and names are simply not read, and the queue orders by the hour due. **Nothing breaks
+and nothing is lost**; the readings already stored stay where they are. Verified 18 September 2026 by
+starting the API without the key and watching the moderation queue answer normally.
+
+**Why this is in the first hour.** TypeSafe is sent the words of every report and every chosen name
+(PD-118, `ROPA.md`). The form asks people to leave names out and the request carries no account id, no
+device and no author — but it is free text, so a person can be named inside it. That makes TypeSafe a
+processor holding personal data in an incident's scope, and **its Art 28 terms are outstanding**
+(`ROPA.md`, recorded 18 September 2026). Until they are held, the fastest honest containment is to stop
+sending.
+
+**5. Only now, write down what you know.** Time, what you saw, what made you look. This becomes the
 Art 33(5) record, which you must keep **whether or not you notify anybody**.
 
 ## What could actually have gone
@@ -73,6 +90,10 @@ data is a breach even if nobody saw it. A database wiped with no backup is repor
 - A backup or export left somewhere readable.
 - The migration owner role reached by something that should only have had `app_*`.
 - A logging change that starts writing report text to Render's log stream.
+- **Anything at TypeSafe.** It receives the text of reports and chosen names. A breach on their side is a
+  breach of THRØ's data, and THRØ would learn of it only from them — there is no monitoring here that
+  would see it. Their status page and their notice to us are the whole detection story, which is a thing
+  to know before the day rather than on it.
 - Somebody's refresh token reused — which THRØ *detects*, because a refresh token is single-use and
   using one twice revokes the whole family (`Accounts`, V023). If you see family revocations you did
   not cause, that is a signal, not noise.
@@ -199,6 +220,21 @@ switched off. GitHub's own editor is enough: no terminal, no deploy, no database
   Neon is not, so a Neon-side loss and an accidental destruction have the same answer, and it is a
   short one. Widening it costs a few pounds a month and should be done before launch, not after the
   incident that needs it.
-- **This has never been rehearsed.** A plan nobody has walked through is a document, not a plan.
+- ~~**This has never been rehearsed.**~~ **Partly rehearsed, 18 September 2026 (PD-172).** What was
+  actually run, against a local scratch database and never production:
+  - **Step 1's statement works.** Two live session families, the statement exactly as published above,
+    and afterwards: none live, both carrying `revoked_reason`. The columns it names are the columns
+    `identity.session_family` has.
+  - **The 15 minutes is true.** `Accounts.ACCESS_TTL` is `Duration.ofMinutes(15)`.
+  - **The reuse detection is true and tested.** `AuthTest` holds it three ways, including two refreshes
+    racing with one token: one rotates, the other is answered as reuse, the family is revoked, and the
+    reason is recorded in the family's own row.
+  - **Step 4 is new**, and was added by the rehearsal rather than found in it: the plan had **no mention
+    of TypeSafe at all**, having been written before the key was set.
+
+  **Still not rehearsed, and it needs the founder**: steps 2 and 3 — rotating the database password and
+  suspending the service — are both done signed in to Neon and Render, and cannot be practised from here.
+  **That is the plan's real single point of failure**: every containment step after the first needs one
+  person's console access, and the first hour does not wait for anybody to be reachable.
 
 *Written 12 September 2026, from the schema and the deploy runbook. Nothing here is legal advice.*

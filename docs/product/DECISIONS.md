@@ -7036,3 +7036,44 @@ of its own because it composes `ThroDesign`'s controls rather than rolling its o
 a television nobody holds; both are recorded at zero rather than left out, so the floor states the truth.
 
 **Evidence.** 35 check scripts green. 911 app tests.
+
+## PD-172 — The breach plan, partly rehearsed
+
+`BREACH_PLAN.md` ended with a line that was the most honest thing in it: *"This has never been rehearsed.
+A plan nobody has walked through is a document, not a plan."* This is the walk-through, as far as one can
+go without the founder's consoles.
+
+**What was run, on a local scratch database and never production.**
+
+- **Step 1's statement does what it says.** Two live session families, the statement exactly as the plan
+  publishes it, and afterwards: none live, both carrying `revoked_reason`. The columns it names are the
+  columns `identity.session_family` actually has — worth checking, because a containment statement that
+  fails on a typo fails at the worst moment.
+- **The fifteen minutes is true.** `Accounts.ACCESS_TTL` is `Duration.ofMinutes(15)`.
+- **The reuse detection is true and tested**, which matters because it is the plan's whole detection
+  story for a stolen token. `AuthTest` holds it three ways, including two refreshes racing with one
+  token: one rotates, the other is answered as reuse, the family is revoked, and the reason is written
+  into the family's own row.
+
+**What the rehearsal found, which is the point of doing one.**
+
+**The plan had no mention of TypeSafe at all.** It was written on 12 September; the key was set on the
+17th. Since then TypeSafe receives the words of every report and every chosen name — free text, so a
+person can be named inside it — and its Art 28 terms are outstanding (PD-161). So the plan's first hour
+had no step for the one processor most likely to be holding somebody's words on a bad day, and its list
+of "things that are breaches and do not look like one" did not include anything happening at a company
+THRØ sends report text to.
+
+A new **step 4** stops the sending: unset `THRO_TYPESAFE_API_KEY` and redeploy. It degrades safely —
+verified today by starting the API without the key and watching the moderation queue answer normally —
+and nothing already stored is lost. And a new line under "breaches that do not look like one" says the
+uncomfortable part plainly: **THRØ would learn of a TypeSafe breach only from TypeSafe.** There is no
+monitoring here that would see it.
+
+**The plan's real single point of failure, now written in it.** Steps 2 and 3 — rotating the database
+password, suspending the service — are done signed in to Neon and Render. Neither can be practised from
+here, and neither can be *done* by anybody but the founder. The first hour does not wait for one person
+to be reachable, and that is a fact about the plan rather than a task in it.
+
+**Evidence.** The rehearsal SQL is `scratchpad/rehearse.sql`; nothing ran against production. Every
+`tools/check_*.py` green.

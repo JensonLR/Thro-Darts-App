@@ -6571,3 +6571,11 @@ New `tools/check_voiceover_does_not_regress.py` — counts `accessibilityLabel` 
 refuses a drop below a recorded floor; proved by removing one label and watching it fail. Corrects
 `IOS_PLATFORM_OPPORTUNITIES.md` item 14, which claimed 21 labels and zero values when it is 67 and 6. Zero custom
 actions, identifiers and `accessibilityRepresentation` remain genuinely missing, and running VoiceOver is still owed.
+
+## The breach plan, partly rehearsed (PD-172)
+
+`BREACH_PLAN.md`: step 1's revoke-everything statement rehearsed on a local database (2 live families → 0, both with
+a reason); `ACCESS_TTL` and the refresh-reuse detection verified against the code and `AuthTest`. New **step 4** —
+unset `THRO_TYPESAFE_API_KEY` — because the plan predated the key being set and had no mention of the processor that
+now receives every report's text; a TypeSafe incident added to the "does not look like one" list. Recorded that
+steps 2 and 3 need the founder's consoles and cannot be practised or performed by anyone else.
