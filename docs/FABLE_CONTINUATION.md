@@ -4,9 +4,9 @@ A resilience mechanism for a session that stops at a usage boundary, so the next
 audit. Kept current during the build; **not** a deliverable, and never a substitute for `docs/CHANGE_RECORD.md`
 (what happened, and how it was proven) or `docs/product/DECISIONS.md` (what was decided, and why).
 
-## 18 September 2026 — all four phases done, and both chosen builds shipped
+## 18 September 2026 — all four phases done, both chosen builds shipped, and a weekend of loose ends
 
-**Thirty-two decisions, PD-131 to PD-162**, all pushed and CI-green on `claude/thro-production-build-je2mkf`.
+**Forty-two decisions, PD-131 to PD-172**, all pushed and CI-green on `claude/thro-production-build-je2mkf`.
 Production API at **V057**; thro.uk carries the dark-mode fix, the skeletons, the type scale and — for the
 first time — THRØ's own face.
 
@@ -48,6 +48,27 @@ the control — done. The league privacy default stays ticked.
   `usage.input_tokens`; it counts them now and prints the running dollar figure. Jev **is** live in
   production (every boot logs `reader: TypeSafe …`), and at current volume the spend is a fraction of a
   cent — but it was unmeasured until PD-157.
+- **PD-163 to PD-172 were done while the founder was away**, on the standing instruction to proceed with
+  anything not needing them. Three shapes of finding, and the third is the one worth carrying forward:
+  1. **Dead code made live.** `NEAR_YOU` was empty for every player because nothing sent `locality`;
+     `Discovery` reads the town from the player's own teams now (PD-163), so the phone and the web both
+     work with no client release. Two towns gives null rather than the first row.
+  2. **Silent failure removed.** `Export.digest` absorbed an empty part when an encode failed, so an
+     export whose matches would not encode hashed the same as one with no matches — on both the stamping
+     and the verifying side, so they agreed (PD-164).
+  3. **Three "never looked at" screens were unreachable, not neglected** (PD-166, PD-168, PD-169). The dev
+     authenticator never named an account, so every account-shaped route 403'd locally; the screenshot
+     stage had no team you do not run. Both fixed, all four screens looked at, and **looking found a real
+     defect**: a moderation card printed a severity THRØ had already decided to set aside (PD-167).
+- **Two harnesses were kept, not just results.** `tools/mutate.py` (PD-165) breaks a guard and sees whether
+  a suite notices — seven of eight caught, and the survivor was a guard duplicated a layer down rather than
+  a gap. `tools/check_voiceover_does_not_regress.py` (PD-171) holds an accessibility floor per package,
+  after the ledger's own figure turned out to be three times out of date.
+- **What Jev costs is measured, not estimated** (PD-170): a full scorecard run is **378,982 input tokens,
+  $0.0159**. 22/22 tuned, 15/15 held out, 0 wrong-and-sure, and of 37 sentences read twice the 4 that
+  differed were all flagged unsure — the confidence floor doing exactly its job.
+- **The breach plan is partly rehearsed** (PD-172) and gained a step it was missing: it had **no mention of
+  TypeSafe**, having been written before the key was set.
 - **PD-161 and PD-162 closed the loose ends.** The seed's venue collision (`IS NOT DISTINCT FROM` made
   two Red Lions one row — **latent, not live**: all 18 seeded venues carry an OSM id and a locality);
   `Discovery.sameLocality` so a town written two ways is one town (**still dead code** — no shipped
