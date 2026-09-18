@@ -188,7 +188,9 @@ venue on a rearrangement is PD-128, done the same evening.) (The single-league r
 ## Known gaps after PD-113 (small, recorded rather than hidden)
 
 - ~~cite's other seat~~, ~~sentAt~~: closed 16 September (PD-108 addendum commit).
-- The PD-108 and PD-110 HTTP tests were written before their routes but their first red run was not watched.
+- ~~The PD-108 and PD-110 HTTP tests were written before their routes but their first red run was not watched.~~
+  **Closed by PD-165**: eight mutations, 7 caught, and the one survivor is a guard duplicated a layer down in
+  `Secretary` rather than a gap. `tools/mutate.py` is kept so the next doubted suite is a minute's work.
 - Not looked at in the simulator: the challenge form on another team's front; *Name the match* with matches present;
   the desk cards in landscape (You was looked at on the iPad and in landscape, 16 September). Not looked at in a browser: the moderation page signed in.
 - How to look again: `THRO_DEV_AUTH=1 PGHOST=localhost … gradle -p services/api serve`, `python3 tools/web_serve.py`,

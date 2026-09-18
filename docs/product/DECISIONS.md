@@ -6851,3 +6851,31 @@ rather than reading anything stored. The remaining 37 `?? []` in the client are 
 model fields and dictionary lookups, not swallowed failures. That item is closed; only this one was real.
 
 **Evidence.** 911 app tests. Every `tools/check_*.py` green.
+
+## PD-165 — The two suites whose first red run was never watched, checked by mutation
+
+`FABLE_CONTINUATION.md` recorded a specific worry: *"The PD-108 and PD-110 HTTP tests were written before
+their routes but their first red run was not watched."* A test that has only ever been green is a test
+nobody has shown can fail — and this session has twice caught a green test that was wrong.
+
+A red run cannot be recovered after the fact. **Mutation testing answers the same question better**: break
+the behaviour the test claims to hold and see whether the test notices. Eight mutations, each applied to
+one guard, the suite run, the file restored:
+
+| Suite | Mutations | Caught |
+| --- | --- | --- |
+| `RearrangementHttpTest` (PD-108) | 4 | **3** |
+| `FriendlyHttpTest` (PD-110) | 4 | **4** |
+
+**The one survivor is not a gap, and checking why mattered.** Removing
+`if (p.state != "proposed") throw Refused("This proposal was already …", 409)` from
+`Rearrangements.answer` changed nothing the suite could see — and the suite *does* assert it, at
+"answering again is a 409". It survived because `Secretary.answer`'s own state machine refuses the second
+answer and the route turns that into the same 409. The guard is belt-and-braces over a rule enforced a
+layer down. **The test has teeth; the code has two sets.** Had it been reported as a test gap without
+reading why, the fix would have been a test for something already tested.
+
+**Kept: a harness, not a result.** `tools/mutate.py` is the script, so the next suite anybody doubts can be
+put through the same thing in a minute rather than argued about.
+
+**Evidence.** Both suites green after restore, and `git diff` clean on both sources.

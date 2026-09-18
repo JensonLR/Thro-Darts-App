@@ -6529,3 +6529,10 @@ phone and the web at once with no client release. Tests +3.
 two call sites propagate. The swallow meant an export whose matches failed to encode hashed the same as one with no
 matches — on both the stamping and the verifying side, so they would agree. Recorded that PD-137's other eight local
 reads are already closed by PD-143's widened check. App tests 911.
+
+## The two suites whose first red run was never watched, checked by mutation (PD-165)
+
+New `tools/mutate.py` — breaks one guard, runs a suite, restores. Applied to `RearrangementHttpTest` (PD-108) and
+`FriendlyHttpTest` (PD-110): eight mutations, seven caught. The survivor is `Rearrangements.answer`'s
+already-answered guard, which `Secretary.answer` enforces a layer down and the suite already asserts — belt-and-braces,
+not a gap. The known-gap line in FABLE_CONTINUATION.md is struck.
