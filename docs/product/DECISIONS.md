@@ -6585,3 +6585,53 @@ API suite green, 167 schema properties, all 34 check scripts.
 **Deliberately not done.** The held-out desk at production size, which both builds need and neither has.
 Until it exists the numbers above are untested against the only case that matters — two teams' second
 meeting — and any measurement returns a green figure for a case it was never shown.
+
+## PD-158 — The held-out desk at production size, and what the floor scores on it
+
+Both Jev builds needed one thing the repository did not have, and PD-154 said so: a fixture desk the size
+a real division is. `JevEvaluationTest`'s board is 8 teams and 10 fixtures, and **no pair in it ever meets
+twice**. A real division is a double round-robin — Redcar Division 1's eleven teams play 110 fixtures,
+Stockton Thursday's eighteen play 306. So the one failure that can quietly corrupt a league table, a
+sentence matched to the wrong leg of a fixture a pair plays twice, was not on the board that any published
+number was measured against.
+
+`ProductionDesk` is that board: eleven teams, 110 fixtures, 55 pairs each meeting twice months apart, and
+two sides of one club among the names.
+
+**And then the floor was measured on it, which settles build 1.**
+
+`TeamNames` folds a name to what it has in common with the ways people write it, and `fixturesNamed`
+returns the season's fixtures whose *both* sides a sentence names. No model, no key, no tokens. On the
+sealed twenty — sentences about fixtures the season has not got, written before any was run —
+
+> **20 of 20 refused. 11 of 11 real fixtures still found.**
+
+The second number is the point. A check that rejected everything would score the sealed set perfectly, so
+both halves are asserted, and `build/fixture-floor.md` prints them together.
+
+**So the two Nouls PD-154 proposed are not built, and should not be.** `names_two_teams` and
+`fixture_is_listed` existed to stop the desk naming a fixture for a sentence about one the season has not
+got. Code does that for nothing, on the board where the case is hardest. Buying a question to do a job a
+`for` loop already does is the shape this phase ruled out eleven proposals for; it would have been
+embarrassing to then do it.
+
+**What the floor honestly cannot do, written down rather than found later.** It finds the *pair* and says
+nothing about *which of their two meetings* is meant — `fixturesNamed("Grange A beat Dolphin 5-3")`
+returns two fixtures, and nothing in that sentence chooses between them. That is the one job on this desk
+where a question might still earn its keep, and it is the job the results sheet has to solve to be safe.
+
+**The A and B rule is why there is no similarity threshold anywhere in this.** Two names sharing a stem
+and differing only in a trailing letter are different sides. Grange A is not Grange B, and a matcher
+scoring them 95% alike would be confidently wrong about the distinction a league cares most about. The
+side letter is split off first and compared exactly; everything fuzzy happens to what is left.
+
+**Tuned-on and held-out, kept apart.** The eleven positive sentences are tuned-on: two were misses on the
+first run — "the Crown and the Sun" (both words of *Sun Inn* are three letters, and the floor was four)
+and "o grady s lost at thornaby" (no word matching meets that) — so the matcher was widened to a
+three-letter word and a spaces-removed stem of six or more. **The sealed twenty were re-run after that
+change and still refuse all twenty**, which is the only reason the widening was kept. The sealed set has
+not been edited since it was written.
+
+**Evidence.** 17 new tests (6 on the matcher, 4 on the floor, 7 carried from PD-157), each watched
+failing first — the floor test failed at 9 of 11 before the matcher was widened, which is what a positive
+control is for. API suite green, 167 schema properties, 34 check scripts.

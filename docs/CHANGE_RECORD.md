@@ -6467,3 +6467,12 @@ six arms, with doubt `sure`; `OPTION_CEILING` = 254 replaces `take(200)`; two ba
 `Reader.kt`: model pinned to `jev-1.13.0`, `inputTokensSoFar` counts `usage.input_tokens` and logs the running cost.
 `Main.kt` boot line reports the real model instead of a literal. API tests +7. Recorded that the ranking's premise —
 a fixture Choice that cannot decline — was wrong: `none` was always an option.
+
+## The held-out desk at production size, and the floor on it (PD-158)
+
+New `TeamNames` (fold, stem, same, mentions) — a normaliser and a presence check, with the side letter split off and
+compared exactly so Grange A never matches Grange B. New `Understanding.fixturesNamed`. New test fixture
+`ProductionDesk`: 11 teams, 110 fixtures, 55 pairs meeting twice. New `FixtureFloorTest` and `TeamNamesTest` (10),
+which need no key and spend nothing: the sealed twenty "no fixture" sentences are refused 20 of 20 while 11 of 11
+real fixtures are still found, written to `build/fixture-floor.md`. Recorded that build 1's two proposed Nouls are
+therefore not worth building. API tests +10.

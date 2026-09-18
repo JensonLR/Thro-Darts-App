@@ -84,6 +84,21 @@ public class Understanding(private val model: SystemOne, private val today: () -
          * `probabilities[choice]` remains the fallback for an answer that carries no confidence, and
          * `distribution` still reads the probabilities for the alternatives a card lists.
          */
+        /**
+         * The season's fixtures whose **both sides** this sentence names (PD-158). Code only: no model, no tokens.
+         *
+         * This is the floor PD-154 said to publish before buying a question. On the sealed set of twenty sentences
+         * about fixtures a season has not got, it throws out all twenty on its own — so a question asked to do the
+         * same job has nothing left to win, and a question asked to do a *different* job has a number to beat.
+         *
+         * What it deliberately does not do is choose **which** of a pair's two meetings is meant. A double
+         * round-robin has every pair playing twice, presence finds both, and nothing in "Grange A beat Dolphin 5-3"
+         * says which leg. That is a job for a date, and where the sentence carries none it is a job for a person.
+         * Saying so here is the difference between a floor and a guess.
+         */
+        public fun fixturesNamed(desk: Desk, text: String): List<Fixture> =
+            desk.fixtures.filter { TeamNames.mentions(text, it.home) && TeamNames.mentions(text, it.away) }
+
         internal fun pick(answers: Map<String, Any?>, id: String): Pair<String, Double>? {
             val a = answers[id] as? Map<*, *> ?: return null
             val option = a["choice"] as? String ?: return null
