@@ -6,6 +6,7 @@ import java.time.temporal.ChronoUnit
 import java.util.UUID
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 import thro.competition.Entrant
 import thro.competition.EntrantKind
@@ -142,5 +143,26 @@ class DiscoveryTest {
 
         println("  $passed discovery properties held")
         assertEquals(26, passed)
+    }
+
+    /**
+     * A town written two ways is one town (PD-161).
+     *
+     * `NEAR_YOU` compared localities with an exact `equals`, so "Stockton-on-Tees" and "Stockton on Tees" were
+     * different places — and a league writes both. The section is empty for every real player today because no
+     * shipped caller sends `locality` at all, which is why this was never seen; that makes it a latent bug rather
+     * than a live one, and it is fixed here so it cannot come alive with the caller.
+     */
+    @Test
+    fun `a town written two ways is the same town`() {
+        assertTrue(Discovery.sameLocality("Stockton-on-Tees", "Stockton on Tees"))
+        assertTrue(Discovery.sameLocality("stockton on tees", "Stockton-on-Tees"))
+        assertTrue(Discovery.sameLocality("Newcastle upon Tyne", "Newcastle-upon-Tyne"))
+        assertTrue(Discovery.sameLocality("St. Helens", "St Helens"))
+        assertFalse(Discovery.sameLocality("Stockton-on-Tees", "Stockton-on-the-Forest"),
+                    "two real and different places that share a first word")
+        assertFalse(Discovery.sameLocality("Redcar", "Marske"))
+        assertFalse(Discovery.sameLocality(null, "Redcar"))
+        assertFalse(Discovery.sameLocality("Redcar", null))
     }
 }

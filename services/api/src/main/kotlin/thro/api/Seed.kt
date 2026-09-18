@@ -82,8 +82,14 @@ public class Seed(private val c: Connection, private val now: Instant = Instant.
         val osm = v["osm"] as String?
         val name = v["name"] as String
         val locality = v["locality"] as String?
+        // **A name with no town is not an identity** (PD-161). This was `locality IS NOT DISTINCT FROM ?`, and that
+        // operator treats NULL as equal to NULL — so two pubs called the Red Lion, neither saying which town it is
+        // in, became one row, and the second league's fixtures hung on the first league's pub. The team above it has
+        // been guarded since PD-053; the venue under it had not. Where a venue names no locality there is nothing to
+        // match it by, so it is a new row: a duplicate a person can merge is recoverable, and two leagues sharing one
+        // pub they never agreed to share is not.
         val existing = osm?.let { bySource("venue", "OpenStreetMap", it) }
-            ?: one("SELECT venue_id FROM competition.venue WHERE name = ? AND locality IS NOT DISTINCT FROM ?", name, locality)
+            ?: locality?.let { one("SELECT venue_id FROM competition.venue WHERE name = ? AND locality = ?", name, it) }
         val id = existing ?: org.createVenue(name, locality).also {
             made = made.copy(venues = made.venues + 1)
         }

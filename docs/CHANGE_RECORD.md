@@ -6494,3 +6494,11 @@ needs no model, returns rows and visible skips. `thro.js` gains `pasteResults` o
 one-at-a-time boxes; ticked rows go through the ordinary result and award routes one at a time, the award carrying
 the secretary's own line as its reason. Five new assertions in `LeagueActsHttpTest`. Verified in a browser against a
 seeded season and read back out of the database.
+
+## Two of the three defects found in passing, closed (PD-161)
+
+`Seed.kt`: a venue with no locality no longer matches another with no locality — `IS NOT DISTINCT FROM` made two
+Red Lions one row. `Discovery.kt`: new `sameLocality` strips punctuation and spacing so "Stockton-on-Tees" and
+"Stockton on Tees" are one town, used by both the reason line and `NEAR_YOU`. Tests +2. Recorded that the seed bug
+was latent rather than live (all 18 seeded venues carry an OSM id and a locality) and that `NEAR_YOU` is still dead
+because no shipped caller sends `locality`.

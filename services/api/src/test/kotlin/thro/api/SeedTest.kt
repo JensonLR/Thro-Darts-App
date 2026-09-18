@@ -145,6 +145,34 @@ class SeedTest {
     }
 
     /**
+     * The same rule, one level down and untested until now (PD-161): a **venue** name with no town is not an
+     * identity either.
+     *
+     * `venue()` looked for an existing row with `name = ? AND locality IS NOT DISTINCT FROM ?`, and
+     * `IS NOT DISTINCT FROM` treats NULL as equal to NULL — so two pubs called the Red Lion, neither saying
+     * which town it is in, collapsed into one row, and the second league's fixtures were quietly hung on the
+     * first league's pub. The team case above has been guarded since PD-053; the venue behind it had not.
+     */
+    @Test
+    fun `a pub name with no town is not the same pub as another with no town`() {
+        if (!configured) return
+        migrated().use { c ->
+            fun venue(key: String) = """{"key":"$key","osm":null,"name":"The Red Lion","locality":null,
+                "latitude":null,"longitude":null,"postcode":null,"source":"test","retrieved_on":"2026-09-11"}"""
+            val json = """
+                {"retrieved_on":"2026-09-11","method":"test","personal_data":"none",
+                 "venues":[${venue("halifax_red_lion")},${venue("burnley_red_lion")}],
+                 "team_venues":[],"leagues":[]}
+            """.trimIndent()
+            val file = File.createTempFile("thro-two-red-lions", ".json").also { it.writeText(json); it.deleteOnExit() }
+
+            val made = Seed(c, Instant.parse("2026-09-11T12:00:00Z")).importFile(file)
+            assertEquals(2, made.venues, "two pubs neither of which says where it is are two pubs, not one")
+            assertEquals(2, count(c, "SELECT count(*) FROM competition.venue WHERE name = 'The Red Lion'"))
+        }
+    }
+
+    /**
      * A team's own say (PD-049) reaches the public map beside the league's listing and never inside it: a
      * division is what the league published, and saying "we play in this league" gives it no season, no
      * division and no affiliation.

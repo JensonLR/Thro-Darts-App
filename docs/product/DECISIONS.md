@@ -6734,3 +6734,37 @@ and *"Not a result, so left out: …"* separately.
 **Known limits, not hidden.** A postponement is read but not recorded from here — the pane says to move
 the fixture instead, so the season keeps a date for it. And where a sheet's heading names a date on
 which that pair does not play, the row stays in doubt rather than falling back to a guess.
+
+## PD-161 — Two of the three defects found in passing, closed
+
+PD-154 recorded three defects the Jev work surfaced and did not fix. Two are closed here; the third was
+the moderation queue's child-safety band and went in PD-155.
+
+**A pub name with no town is not an identity.** `Seed.venue` looked for an existing row with
+`name = ? AND locality IS NOT DISTINCT FROM ?`, and that operator treats NULL as equal to NULL — so two
+pubs called the Red Lion, neither saying which town it is in, became **one row**, and the second
+league's fixtures hung on the first league's pub. The team a level above it has been guarded since
+PD-053 and has a test saying so; the venue underneath had neither. Where a venue names no locality there
+is nothing to match it by, so it is now a new row: a duplicate a person can merge is recoverable, and
+two leagues silently sharing a pub is not.
+
+**Corrected from the ranking: this was latent, not live.** PD-154 called it "the Red Lion in Burnley bug
+still live". It is not — all 18 seeded venues carry both an OSM id and a locality, so the fallback never
+reaches the NULL case on today's data. It would have come alive the first time a seed omitted a town.
+Checking that before repeating it is the difference between a fix and a story.
+
+**A town written two ways is one town.** `Discovery` compared localities with an exact, case-insensitive
+`equals`, so "Stockton-on-Tees" and "Stockton on Tees" were different places — and a league writes both
+in one season. `sameLocality` takes punctuation and spacing out and compares what is left. Nothing else
+is loosened, because "Stockton-on-Tees" and "Stockton-on-the-Forest" are two real and different places
+and a looser rule would merge them. Null is never near anything: a player with no town is unplaced, not
+nearby.
+
+**This one is still dead code, and is fixed anyway.** `Discovery.forPlayer` takes `homeLocality` from a
+query parameter that **no shipped caller sends** — not the phone, not the web — so `NEAR_YOU` is empty
+for every real player and THRØ is currently making no false claim of nearness to anybody. Fixing the
+comparison now means it cannot come alive together with its first caller. Sending the parameter is the
+remaining half and is not done here.
+
+**Evidence.** Two tests, each watched failing first: the seed test reproduced the collision (2 expected,
+1 got) before the fix. API suite green, 167 schema properties, 34 check scripts.

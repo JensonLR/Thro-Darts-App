@@ -25,6 +25,26 @@ import java.util.UUID
  */
 public class Discovery(private val connection: Connection) {
 
+    public companion object {
+        /**
+         * Whether two localities name the same place (PD-161).
+         *
+         * They were compared with an exact, case-insensitive `equals`, so "Stockton-on-Tees" and "Stockton on Tees"
+         * were different towns — and a league writes both, in the same season. Punctuation and spacing are not part
+         * of a town's identity, so they are taken out before the comparison; nothing else is, because "Stockton-on-
+         * Tees" and "Stockton-on-the-Forest" are two real and different places and a looser rule would merge them.
+         *
+         * Null is never near anything: a player with no town stated is not near a town, they are unplaced.
+         */
+        public fun sameLocality(a: String?, b: String?): Boolean {
+            if (a == null || b == null) return false
+            fun flat(s: String) = s.lowercase().replace(Regex("""[^a-z0-9]+"""), "")
+            val x = flat(a); val y = flat(b)
+            return x.isNotEmpty() && x == y
+        }
+    }
+
+
     private val london = ZoneId.of("Europe/London")
 
     public enum class Section { THIS_WEEKEND, NEAR_YOU, CLOSING_SOON, YOU_ARE_ELIGIBLE, YOUR_SERIES, ALREADY_ENTERED, ALL }
@@ -93,7 +113,7 @@ public class Discovery(private val connection: Connection) {
                     val reasons = mutableListOf<String>()
                     reasons += "starts ${startsAt.atZone(london).toLocalDate()}"
                     if (isThisWeekend(startsAt, from)) reasons += "this weekend"
-                    if (homeLocality != null && locality != null && locality.equals(homeLocality, ignoreCase = true)) reasons += "in $locality, where your team plays"
+                    if (sameLocality(locality, homeLocality)) reasons += "in $locality, where your team plays"
                     if (closes != null && !closes.isBefore(from) && closes.isBefore(from.plusSeconds(7 * 86_400))) reasons += "entries close ${closes.atZone(london).toLocalDate()}"
                     if (closes == null) reasons += "closing date not stated by the organiser"
                     reasons += when (kind) { "player" -> "singles"; "pair" -> "pairs"; else -> "team entry" }
@@ -129,7 +149,7 @@ public class Discovery(private val connection: Connection) {
             put(Section.ALL, c)
             if (c.entered) { put(Section.ALREADY_ENTERED, c); continue }
             if (isThisWeekend(c.startsAt, from)) put(Section.THIS_WEEKEND, c)
-            if (homeLocality != null && c.locality.equals(homeLocality, ignoreCase = true)) put(Section.NEAR_YOU, c)
+            if (sameLocality(c.locality, homeLocality)) put(Section.NEAR_YOU, c)
             if (c.entriesCloseAt != null && !c.entriesCloseAt.isBefore(from) && c.entriesCloseAt.isBefore(from.plusSeconds(7 * 86_400))) put(Section.CLOSING_SOON, c)
             // Eligible means THRØ can say so: open entry or a stated requirement met, singles (a player
             // enters alone), entries not closed, and a place if the organiser stated a capacity.
