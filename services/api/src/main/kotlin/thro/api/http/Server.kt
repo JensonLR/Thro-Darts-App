@@ -1169,7 +1169,10 @@ private fun queueJson(queued: List<Safety.Queued>): String =
             """"subjectId":"${q.report.subjectId}","subject":${Contract.q(q.subject)},"reason":${Contract.q(q.report.reason)},""" +
             """"urgent":${q.report.urgent},"reportedAt":"${q.report.reportedAt}",""" +
             """"answerDueAt":"${q.report.answerDueAt}","decisions":${q.decisions},""" +
-            """"raisedBy":${if (q.report.raisedByAPerson) "\"player\"" else "\"thro\""},"reading":${readingJson(q.reading)}}"""
+            """"raisedBy":${if (q.report.raisedByAPerson) "\"player\"" else "\"thro\""},""" +
+            // PD-155: the moderator is told when the text is talking to the computer, so a set-aside severity
+            // reads as a decision THRØ made rather than as a reading that came back mild.
+            """"addressedToSystem":${q.report.addressedToSystem},"reading":${readingJson(q.reading)}}"""
     } + "]}"
 
 /** THRØ's reading of a report (PD-118), or null: a hint beside it, in the words the queue shows. A NaN is a number the reading did not have. */

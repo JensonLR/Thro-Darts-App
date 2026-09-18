@@ -1004,6 +1004,18 @@ r=$($PSQL -c "SET ROLE app_competition; INSERT INTO rating.snapshot (player_id, 
 if echo "$r" | grep -qi 'permission denied'; then ok "and no other application role may"
 else bad "and no other application role may" "${r:-the competition role wrote a rating}"; fi
 
+# V058 — the queue is not ordered by the person writing the report (PD-155). The flag is decided once, at insert, and
+# defaults false for every report written before it; a report is append-only, so nobody can flip it afterwards.
+check "a report says nothing about the system unless it was written that way" "$($PSQL -c "SELECT addressed_to_system FROM safety.report WHERE report_id='$RP';")" "f"
+# Two things stop it being flipped, and the outer one answers first: the application role has no UPDATE on the
+# table at all, and behind that V040's trigger refuses the update whoever attempts it.
+r=$($PSQL -c "SET ROLE app_competition; UPDATE safety.report SET addressed_to_system=true WHERE report_id='$RP';" 2>&1)
+if echo "$r" | grep -qi 'permission denied'; then ok "and the application role cannot flip it afterwards"
+else bad "and the application role cannot flip it afterwards" "${r:-addressed_to_system changed after the report was written}"; fi
+r=$($PSQL -c "UPDATE safety.report SET addressed_to_system=true WHERE report_id='$RP';" 2>&1)
+if echo "$r" | grep -qi 'a report is kept'; then ok "and nor can the owner, because a report is kept"
+else bad "and nor can the owner, because a report is kept" "${r:-a report was edited after it was raised}"; fi
+
 echo
 echo "-------------------------------------------"
 echo "  $PASS passed, $FAIL failed"

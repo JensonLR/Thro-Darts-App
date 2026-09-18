@@ -6443,3 +6443,11 @@ most because a normaliser and an edit distance do the work; one judge reproduced
 dict 25/25 with `difflib` rather than argue it. Three survived; two are recommended to build, and they share one
 defect and one missing held-out set. Three live defects recorded in passing at `Safety.kt:165`, `Seed.kt:86` and
 `Discovery.kt:96`. No code changed.
+
+## The queue is not ordered by the person writing the report (PD-155)
+
+`V058` adds `safety.report.addressed_to_system`, set once at insert. `Safety.kt`: a `MAY_CONCERN_A_CHILD` band at 0.5
+enters the queue's ORDER BY above severity; `alreadyAtTheFront` caps the reading's promotion at one per reporter;
+`addressedToAComputer` matches eight naive injection forms over a casefolded, punctuation-stripped copy. The guard sets
+aside severity only — never the child-safety reading. `Server.kt` puts `addressedToSystem` on the queue JSON and
+`thro.js` says so on the card. API tests +4, schema properties +2 (167).

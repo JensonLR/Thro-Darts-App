@@ -853,6 +853,12 @@ async function mountModeration(where, signInEl) {
     // PD-118: what THRØ made of it, beside it — a hint for the person answering, never an answer.
     const reading = readingWords(r.reading);
     if (reading) box.append(make('p', 'reading', reading));
+    // PD-155: say so when the text is talking to THRØ. A moderator seeing a mild reading on an angry report
+    // should know THRØ set the severity aside on purpose, rather than wonder why the reading came back soft.
+    if (r.addressedToSystem) {
+      box.append(make('p', 'note', 'Some of this is addressed to THRØ, not to you. Its severity is set aside; '
+        + 'what it says about a child is not.'));
+    }
     const form = make('div', 'entry-form');
     const answer = make('select');
     answer.setAttribute('aria-label', 'Your answer');

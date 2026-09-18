@@ -26,7 +26,9 @@ public class Safety(private val connection: Connection, private val reader: Read
     public data class Report(val reportId: UUID, val subjectKind: String, val subjectId: UUID,
                              val reason: String, val urgent: Boolean, val reportedAt: Instant, val answerDueAt: Instant,
                              /** False for a report THRØ raised itself from its reading of a name (PD-118). */
-                             val raisedByAPerson: Boolean = true)
+                             val raisedByAPerson: Boolean = true,
+                             /** The reason talks to the computer rather than about a person (PD-155). Sets aside severity, never a child. */
+                             val addressedToSystem: Boolean = false)
     /**
      * A report as the person answering it needs it: with [subject], the name somebody read (PD-101), and [reading],
      * what THRØ made of it (PD-118) — a hint beside the report, never an answer to it. A moderator cannot judge an
@@ -47,6 +49,46 @@ public class Safety(private val connection: Connection, private val reader: Read
          * on purpose — a reading below it changes nothing but the order — and to be revisited against real reports.
          */
         public const val ACTS_AT: Double = 0.85
+        /**
+         * The probability at which a reading is treated as *possibly* about a child (PD-155) and queued above
+         * reports that are not, though below the urgent. It is deliberately the number the web already prints
+         * "possibly about a child" at, rather than a third threshold nobody can hold in their head.
+         *
+         * Before this there was one threshold and nothing under it: a report read at 0.7 queued no higher than a
+         * complaint about a team's kit.
+         */
+        public const val MAY_CONCERN_A_CHILD: Double = 0.5
+
+        /**
+         * The naive forms of somebody writing to the computer instead of about a person (PD-155).
+         *
+         * This is a floor, not a filter. It catches what exists at THRØ's size — a reporter who has read that
+         * models can be talked to — and it is the number a model has to beat before a model is worth paying for.
+         * Matching is done on a casefolded, punctuation-stripped copy so "S Y S T E M :" and "ignore  your
+         * instructions!!" do not walk past it.
+         */
+        internal val ADDRESSED_TO_A_COMPUTER: List<Regex> = listOf(
+            Regex("""\bsystem\s*:"""),
+            Regex("""\bassistant\s*:"""),
+            Regex("""\bignore\s+(all\s+|any\s+|your\s+|the\s+|previous\s+|prior\s+)*instructions?\b"""),
+            Regex("""\bdisregard\s+(all\s+|any\s+|your\s+|the\s+|previous\s+|prior\s+)*instructions?\b"""),
+            Regex("""\byou\s+are\s+(now\s+)?(a|an)\b.{0,40}\b(model|assistant|ai)\b"""),
+            Regex("""\b(new|updated)\s+instructions?\b"""),
+            Regex("""\bprompt\s+injection\b"""),
+            Regex("""\boverride\s+(your\s+|the\s+)?(rules?|instructions?|settings?)\b"""),
+        )
+
+        /**
+         * Whether [reason] contains words aimed at a computer reading it rather than at the person answering it.
+         *
+         * Deliberately dull: it does not try to read intent, and it says nothing about whether the report is true.
+         * A genuine reporter who happens to write "ignore the previous message" loses nothing but the severity
+         * their reading claimed, which a person then reads for themselves.
+         */
+        public fun addressedToAComputer(reason: String): Boolean {
+            val flat = reason.lowercase().replace(Regex("""[^a-z0-9:]+"""), " ").trim()
+            return ADDRESSED_TO_A_COMPUTER.any { it.containsMatchIn(flat) }
+        }
     }
 
     /**
@@ -61,23 +103,29 @@ public class Safety(private val connection: Connection, private val reader: Read
         if (subjectKind !in SUBJECTS) throw Refused("THRØ does not know how to report that.")
         val clean = reason.trim()
         if (clean.length !in 3..600) throw Refused("Say what is wrong with it, in a sentence.")
+        val talksToTheComputer = addressedToAComputer(clean)
         // Read before it is written: a report is append-only (V040's trigger), so whether it is urgent is decided once.
         val reading = runCatching { reader?.readReport(subjectKind, subjectName(subjectKind, subjectId), clean) }.getOrNull()
-        val front = urgent || (reading != null && reading.childSafety >= ACTS_AT)
+        // **The cap** (PD-155). [urgent] is THRØ's own, set for somebody it already knows to be a child, and is never
+        // capped. The reading's promotion is: one reporter may hold one report at the front at a time. A bound beats a
+        // detector here — it holds against a phrasing no guard has seen, and it costs a genuine second report only its
+        // place in a queue a person is already working through.
+        val front = urgent || (reading != null && reading.childSafety >= ACTS_AT && !alreadyAtTheFront(by))
         val at = now()
         val due = at.plus(ANSWER_WITHIN)
         val id = UUID.randomUUID()
         connection.prepareStatement(
-            """INSERT INTO safety.report (report_id, subject_kind, subject_id, reported_by, reason, urgent, reported_at, answer_due_at)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+            """INSERT INTO safety.report (report_id, subject_kind, subject_id, reported_by, reason, urgent, reported_at, answer_due_at, addressed_to_system)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
         ).use { ps ->
             ps.setObject(1, id); ps.setString(2, subjectKind); ps.setObject(3, subjectId); ps.setObject(4, by)
             ps.setString(5, clean); ps.setBoolean(6, front)
             ps.setTimestamp(7, Timestamp.from(at)); ps.setTimestamp(8, Timestamp.from(due))
+            ps.setBoolean(9, talksToTheComputer)
             ps.executeUpdate()
         }
         if (reading != null) keep(id, reading.category, reading.categoryConfidence, reading.childSafety, reading.severity, reading.model)
-        return Report(id, subjectKind, subjectId, clean, front, at, due)
+        return Report(id, subjectKind, subjectId, clean, front, at, due, addressedToSystem = talksToTheComputer)
     }
 
     /**
@@ -114,6 +162,17 @@ public class Safety(private val connection: Connection, private val reader: Read
         keep(id, category, probability, null, null, reading.model)
     }
 
+    /**
+     * Whether this reporter already has a report at the front that nobody has answered (PD-155). Their own urgent
+     * report is not in their way for long: it stops counting the moment a person decides it.
+     */
+    private fun alreadyAtTheFront(reporter: UUID): Boolean =
+        connection.prepareStatement(
+            """SELECT count(*) FROM safety.report r
+                WHERE r.reported_by = ? AND r.urgent
+                  AND NOT EXISTS (SELECT 1 FROM safety.decision d WHERE d.report_id = r.report_id)""",
+        ).use { ps -> ps.setObject(1, reporter); ps.executeQuery().use { rs -> rs.next(); rs.getInt(1) > 0 } }
+
     private fun keep(reportId: UUID, category: String, confidence: Double, childSafety: Double?, severity: Double?, model: String) {
         connection.prepareStatement(
             "INSERT INTO safety.judgment (report_id, category, confidence, child_safety, severity, model, judged_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
@@ -141,8 +200,13 @@ public class Safety(private val connection: Connection, private val reader: Read
     }
 
     /**
-     * What is waiting to be answered: the urgent first, then what THRØ read as most serious (PD-118), then by the
-     * hour it is due. A report with no reading sorts as least serious, never as unread.
+     * What is waiting to be answered: the urgent first, then what may concern a child, then what THRØ read as most
+     * serious (PD-118), then by the hour it is due. A report with no reading sorts as least serious, never as unread.
+     *
+     * **Three of these four the reporter cannot reach** (PD-155). *Urgent* is capped at one per reporter. *May
+     * concern a child* is a band at [MAY_CONCERN_A_CHILD] over a reading the reporter does not write. *Due* is a
+     * clock. Only *severity* was ever worth talking the model into, and a reason that talks to the computer has its
+     * severity set aside — while keeping its place in the child band, which is never set aside for anybody.
      */
     public fun queue(limit: Int = 50): List<Queued> =
         connection.prepareStatement(
@@ -159,20 +223,26 @@ public class Safety(private val connection: Connection, private val reader: Read
                         WHEN 'match'   THEN 'A match'
                       END,
                       r.reported_by IS NOT NULL,
-                      j.category, j.confidence, j.child_safety, j.severity, j.model
+                      j.category, j.confidence, j.child_safety, j.severity, j.model,
+                      r.addressed_to_system
                  FROM safety.report r
                  LEFT JOIN safety.judgment j ON j.report_id = r.report_id
                 ORDER BY (SELECT count(*) FROM safety.decision d WHERE d.report_id = r.report_id) ASC,
-                         r.urgent DESC, coalesce(j.severity, -1) DESC, r.answer_due_at ASC
+                         r.urgent DESC,
+                         (coalesce(j.child_safety, 0) >= ?) DESC,
+                         (CASE WHEN r.addressed_to_system THEN -1 ELSE coalesce(j.severity, -1) END) DESC,
+                         r.answer_due_at ASC
                 LIMIT ?""",
         ).use { ps ->
-            ps.setInt(1, limit)
+            ps.setDouble(1, MAY_CONCERN_A_CHILD)
+            ps.setInt(2, limit)
             ps.executeQuery().use { rs ->
                 generateSequence {
                     if (!rs.next()) null
                     else Queued(
                         Report(rs.getObject(1) as UUID, rs.getString(2), rs.getObject(3) as UUID, rs.getString(4),
-                               rs.getBoolean(5), rs.getTimestamp(6).toInstant(), rs.getTimestamp(7).toInstant(), rs.getBoolean(10)),
+                               rs.getBoolean(5), rs.getTimestamp(6).toInstant(), rs.getTimestamp(7).toInstant(), rs.getBoolean(10),
+                               addressedToSystem = rs.getBoolean(16)),
                         rs.getInt(8),
                         rs.getString(9) ?: "Not on THRØ any more",
                         rs.getString(11)?.let { category ->
