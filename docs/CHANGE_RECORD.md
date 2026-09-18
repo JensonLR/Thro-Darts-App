@@ -6509,3 +6509,9 @@ because no shipped caller sends `locality`.
 bound through a computed `Binding` whose setter says the availability. Finishes the last of PD-147's three abandoned
 changes, and corrects its record — `SegmentedControl` has existed in `ThroDesign/Forms.swift` since PD-066. App tests
 911, unchanged. Looked at on iPhone 17 Pro.
+
+## An h1 on the web has a size (PD-162)
+
+`thro.css`: `h1` had a family and a weight and no `font-size` or `line-height`, so an `<h1>` would have set at body
+size — a heading only bolder than the paragraph beneath it. No page carries one today, which is why it was never
+seen. It takes `--typography-heading-1-*` now, which had been generated and unused.

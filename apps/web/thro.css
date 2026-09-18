@@ -91,6 +91,10 @@ body {
 main { padding-block: 28px 56px; }
 
 h1, h2, h3 { font-family: var(--font-ui); font-weight: var(--font-weight-bold); }
+/* h1 had a family and a weight and no size, so an <h1> would have set at body size — a heading that is
+   only bolder than the paragraph under it. No page carries one today, which is why it was never seen;
+   the rule is here so the first page to want one does not have to discover that. */
+h1 { font-size: var(--typography-heading-1-size); line-height: var(--typography-heading-1-line); margin: var(--spacing-7) 0 var(--spacing-3); }
 h2 { font-size: var(--typography-heading-3-size); line-height: var(--typography-heading-3-line); margin: var(--spacing-7) 0 var(--spacing-2); }
 /* h3 sets at body size, which is what its raw 17px asked for. The scale has no step between 18 and 21,
    so a heading here is bold rather than bigger. */
