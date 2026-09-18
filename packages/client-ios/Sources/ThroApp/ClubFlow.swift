@@ -986,9 +986,7 @@ public struct ClubsFlow: View {
 
     /// A club that was there and is not. Only reachable by deleting one, and it says which.
     @ViewBuilder private var gone: some View {
-        EmptyState(title: "That team is gone",
-                   message: "It is no longer on this device.",
-                   actionLabel: "Back to teams", onAction: { route = .list })
+        ThroNothingYet(.teamGone, seed: ThroBoardSeed.teamGone) { route = .list }
             .padding(ThroSpacing.spaceScreenGutter)
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
             .background(ThroColor.colorBackgroundPrimary.ignoresSafeArea())

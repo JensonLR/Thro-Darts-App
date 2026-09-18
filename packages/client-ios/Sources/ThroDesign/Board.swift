@@ -169,6 +169,24 @@ public struct ChalkField: View {
 public enum ThroBoardSeed {
     /// `THR\0` — Home.
     public static let home: UInt32 = 0x5448_5200
+    /// One field per place that draws a board (PD-152).
+    ///
+    /// **Why a seed each, rather than letting them share.** The field is generated from the seed, so two
+    /// screens with the same seed draw the same 180 specks in the same places. A player moving from Home
+    /// to their archive would meet a board they have already seen and read it as not having moved — the
+    /// field is the one thing on those screens that is not text, and the only thing telling them apart.
+    /// `0x5448_5201` is taken: `match(_:)` uses it as its never-zero fallback.
+    public static let archive: UInt32 = 0x5448_5202
+    public static let inbox: UInt32 = 0x5448_5203
+    public static let discover: UInt32 = 0x5448_5204
+    public static let leagues: UInt32 = 0x5448_5205
+    public static let teamGone: UInt32 = 0x5448_5206
+
+    /// Every fixed seed, so a test can hold them apart and none can quietly become another.
+    public static let fixed: [String: UInt32] = [
+        "home": home, "archive": archive, "inbox": inbox,
+        "discover": discover, "leagues": leagues, "teamGone": teamGone,
+    ]
     /// A match's own field, from its identifier, so a player's board is that match's board.
     public static func match(_ id: String) -> UInt32 {
         var hash: UInt32 = 2_166_136_261

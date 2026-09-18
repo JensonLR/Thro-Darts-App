@@ -6423,3 +6423,9 @@ exceptions, a fourteen-word ceiling and a debt list. `EmptyState(_:onAction:)` a
 read it; six call sites converted. New `EmptyWordsTests` (4), which fails both when a body is over the ceiling
 without a reason and when one on the debt list has come under it. The blocked list's how-to-block moves from the
 body into a note. App tests 904, counts updated.
+
+## One field per place (PD-152)
+
+`ThroBoardSeed` gains `archive`, `inbox`, `discover`, `leagues` and `teamGone`, plus `fixed` so a test can hold them
+apart; new `BoardSeedTests` (3) for distinctness, non-zero and no collision with `match(_:)`'s fallback. Home, the
+archive, a gone team, the inbox and *Darts you can play* move from the card to the board. App tests 907.

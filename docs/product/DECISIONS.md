@@ -6364,3 +6364,26 @@ its own look. The registry is in place and the conversions land against it.
 **Evidence.** 904 app tests, four of them new. Every `tools/check_*.py` green. Six call sites read the
 registry; the rest keep their literals until their screens are converted, and the registry is read rather
 than defined-and-ignored.
+
+## PD-152 — One field per place, and the board where the emptiness is the page
+
+**18 September 2026.** The half of PD-151 that was waiting on a decision about seeds, taken and done.
+
+**Why a seed each.** `ThroNothingYet`'s field is *generated* from its seed, so two screens with the same
+seed draw the same 180 specks in the same places. The field is the one thing on an empty screen that is
+not text — it is the only thing telling two of them apart. A player moving from Home to their archive
+would meet a board they had already seen and read it as not having moved. So: `home`, `archive`, `inbox`,
+`discover`, `leagues` and `teamGone`, each its own value in the same `0x5448_52xx` family, and
+`0x5448_5201` left alone because `match(_:)` uses it as its never-zero fallback.
+
+**Held by a test**, not by care: every fixed seed distinct, none zero — a zero seed makes the generator
+emit one value for ever and the field becomes 180 specks in one place — and none equal to the match
+fallback.
+
+**Five screens moved from the card to the board**, which is the rule PD-151 wrote down: Home, the archive,
+a team that is gone, the inbox with nothing waiting, and *Darts you can play* with nothing open. Each was
+a notice pinned to the top of a sheet of cream on a page with nothing else on it. In production, where
+329 leagues are listed and none is run here and there are no events at all, two of those five are what a
+new player actually sees.
+
+**Evidence.** 907 app tests, three of them new. Every `tools/check_*.py` green. Looked at in the simulator.

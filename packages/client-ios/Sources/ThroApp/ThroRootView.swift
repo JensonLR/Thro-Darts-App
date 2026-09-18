@@ -790,10 +790,7 @@ public struct HomeScreen: View {
             VStack(spacing: 0) {
                 Masthead(line: mastheadLine).throEntrance(0)
                 noticeCard
-                ThroNothingYet(title: "No matches yet",
-                               message: "Score a match on this device and it will appear here. Nothing is "
-                                      + "sent anywhere unless you send it.",
-                               actionLabel: "Start match") { store.flow = .new }
+                ThroNothingYet(.home, seed: ThroBoardSeed.home) { store.flow = .new }
                     .throEntrance(1)
             }
         } else {
@@ -1186,8 +1183,7 @@ public struct ArchiveScreen: View {
                     }
                     if store.archived.isEmpty {
                         block {
-                            EmptyState(title: "Nothing archived",
-                                       message: "Matches you put away from Home appear here. They stay in your history and in every export.")
+                            ThroNothingYet(.archive, seed: ThroBoardSeed.archive)
                         }
                         .throEntrance(0)
                     } else {

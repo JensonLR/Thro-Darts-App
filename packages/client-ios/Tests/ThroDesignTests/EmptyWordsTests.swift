@@ -44,3 +44,26 @@ final class EmptyWordsTests: XCTestCase {
         XCTAssertNil(EmptyWords.inbox.actionLabel)
     }
 }
+
+/// The fields a board draws. Generated from a seed, so two screens sharing one draw the same 180 specks
+/// in the same places — and a player moving between them reads it as not having moved.
+final class BoardSeedTests: XCTestCase {
+
+    func testEveryPlaceHasItsOwnField() {
+        let seeds = Array(ThroBoardSeed.fixed.values)
+        XCTAssertEqual(Set(seeds).count, seeds.count, "two places share a seed, so they draw the same field")
+    }
+
+    func testNoSeedIsZeroBecauseAZeroFieldIsOneSpeck() {
+        for (place, seed) in ThroBoardSeed.fixed {
+            XCTAssertNotEqual(seed, 0, "\(place): a zero seed makes the generator emit one value for ever")
+        }
+    }
+
+    /// `match(_:)` falls back to 0x54485201 when its hash lands on zero, so no fixed seed may be that.
+    func testNoFixedSeedCollidesWithTheMatchFallback() {
+        for (place, seed) in ThroBoardSeed.fixed {
+            XCTAssertNotEqual(seed, 0x5448_5201, "\(place) has taken match(_:)'s never-zero fallback")
+        }
+    }
+}
