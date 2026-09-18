@@ -6543,3 +6543,10 @@ not a gap. The known-gap line in FABLE_CONTINUATION.md is struck.
 the moderation queue among them — are reachable locally for the first time; `AuthTest` +1. Looking at the page then
 found PD-167: `thro.js` no longer prints a severity level when `addressedToSystem`, and the set-aside note moves
 above the reading so the caveat frames the claim. The known-gap line is struck.
+
+## A second team on the screenshot stage (PD-168)
+
+`ScreenshotAccount.swift`: stages *The Sun Inn A* (`…c2`) with `yourRole: null`, and keeps it on the stage in
+`passesThrough` so the challenge form — which only appears on a team you do not run — has somewhere to appear. It
+was unreachable before, not unlooked-at. Looked at on iPhone 17 Pro: secondary on the front, one primary in the
+form with *Leave it* quiet beside it. App tests 911.

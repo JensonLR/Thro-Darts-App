@@ -191,7 +191,8 @@ venue on a rearrangement is PD-128, done the same evening.) (The single-league r
 - ~~The PD-108 and PD-110 HTTP tests were written before their routes but their first red run was not watched.~~
   **Closed by PD-165**: eight mutations, 7 caught, and the one survivor is a guard duplicated a layer down in
   `Secretary` rather than a gap. `tools/mutate.py` is kept so the next doubted suite is a minute's work.
-- Not looked at in the simulator: the challenge form on another team's front; *Name the match* with matches present;
+- Not looked at in the simulator: ~~the challenge form on another team's front~~ (**looked at 18 September**,
+  PD-168 — it was unreachable: the stage had no team you do not run); *Name the match* with matches present;
   the desk cards in landscape (You was looked at on the iPad and in landscape, 16 September). **Looked at 18 September** (PD-166): it was unreachable, not unlooked-at — the dev authenticator never named
   an account, so every account-shaped route 403'd locally. Fixed, looked at, and the looking found PD-167.
 - How to look again: `THRO_DEV_AUTH=1 PGHOST=localhost … gradle -p services/api serve`, `python3 tools/web_serve.py`,

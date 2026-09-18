@@ -6914,3 +6914,33 @@ because nothing was set aside there.
 **Evidence.** Both cards read in a browser, signed in, against a local server: the genuine one keeps its
 severity, the injected one shows none and is framed by the note. API suite green, 911 app tests, every
 `tools/check_*.py` green.
+
+## PD-168 — A second team on the screenshot stage, and the challenge form seen at last
+
+Third of the "never looked at" gaps, and the third to turn out to be **unreachable rather than neglected**.
+
+`ChallengeSection` appears only where `front.yourRole == nil` — on a team you do not run. The screenshot
+stage served exactly one team, `…c1`, and it is yours; and `Stage.passesThrough` deliberately sends every
+*other* `/v1/teams/` path to the real server, so that a stranger's side reads as a stranger's rather than
+as your own (which is a good rule and stays). With no real server behind a staged account, every other
+team answered 404. **There was nowhere for the form to appear.**
+
+A second team is staged now — *The Sun Inn A*, `…c2`, with `yourRole: null`, a venue, two on the roster —
+and kept on the stage by name so the pass-through rule is otherwise untouched:
+
+    -ThroScreen team/5c4ee45e-0000-4000-8000-0000000000c2
+
+**And then it was looked at.** It reads well and it follows PD-147 without having been revisited for it:
+*Challenge them to a friendly* is a **secondary** button on the team's front, and opening it gives one
+primary — *Challenge The Sun Inn A* — with *Leave it* as a quiet text button beside it, not a second key.
+The note under it says the two things a captain needs: the other team answers from their own page, and a
+friendly reaches no league table.
+
+**Two mistakes worth recording, both mine, both caught by looking.** The first stub used
+`…0000000000v1` as a venue id — `v` is not hex, so the document would not decode and the screen showed
+*"The team could not be read · no such team"*. The second was forgetting `passesThrough`, so the new team
+went to a server that was not there and showed the same card. That card is PD-137 working exactly as
+intended — a failed read said what happened, what was safe and what to do, rather than drawing an empty
+team — so the tooling that found my mistake was a thing an earlier decision built.
+
+**Evidence.** 911 app tests, every `tools/check_*.py` green, and the form photographed on iPhone 17 Pro.

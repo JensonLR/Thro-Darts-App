@@ -75,12 +75,15 @@ enum ScreenshotAccount {
         /// every team as the account's own made the board say "You play for it" of a stranger's side.
         static let passedThrough: Set<String> = ["/v1/leagues", "/v1/events", "/v1/venues"]
         static let stagedTeam = "/v1/teams/5c4ee45e-0000-4000-8000-0000000000c1"
+        /// A second team, which this account does NOT run (PD-168), so the challenge form has somewhere to appear.
+        static let otherTeam = "/v1/teams/5c4ee45e-0000-4000-8000-0000000000c2"
 
         static func passesThrough(_ method: String, _ path: String) -> Bool {
             guard method == "GET" else { return false }
             // The staged team and everything under it (its friendlies, its inbox) are the stage's; other teams are real.
             // A tournament night's own page is a public read too (PD-126), so a staged account can open a real one.
-            return passedThrough.contains(path) || (path.hasPrefix("/v1/teams/") && !path.hasPrefix(stagedTeam))
+            return passedThrough.contains(path)
+                || (path.hasPrefix("/v1/teams/") && !path.hasPrefix(stagedTeam) && !path.hasPrefix(otherTeam))
                 || (path.hasPrefix("/v1/events/") && path.split(separator: "/").count == 3 && path != "/v1/events/\(event)")
         }
 
@@ -141,6 +144,15 @@ enum ScreenshotAccount {
             default:
                 // The desk's answers (PD-107..PD-113) first: the staged team's friendlies live under its path.
                 if let staged = Self.desk(method, path, body) { return staged }
+                // **A team this account does NOT run** (PD-168), so the challenge form can be looked at. It only
+                // appears where `yourRole` is null, and until now the stage served exactly one team — your own —
+                // so the form was unreachable by the documented method. That is why it is recorded as never
+                // looked at: not neglect, a stage with no other team on it.
+                //
+                //     -ThroScreen team/5c4ee45e-0000-4000-8000-0000000000c2
+                if method == "GET", path.hasPrefix("/v1/teams/5c4ee45e-0000-4000-8000-0000000000c2") {
+                    return (200, #"{"teamId":"5c4ee45e-0000-4000-8000-0000000000c2","name":"The Sun Inn A","locality":"Stockton-on-Tees","venue":{"venueId":"5c4ee45e-0000-4000-8000-0000000000a9","name":"The Sun Inn","locality":"Stockton-on-Tees","basis":"set by whoever runs the team"},"seasons":[{"league":"Teesside Thursday League","label":"2026/27","division":null,"leagueSeasonId":"5c4ee45e-0000-4000-8000-0000000000f5","accepted":true}],"roster":[{"name":"A player","role":"player","memberId":"5c4ee45e-0000-4000-8000-0000000000d7","playerId":"5c4ee45e-0000-4000-8000-0000000000e7"},{"name":"Another player","role":"captain","memberId":"5c4ee45e-0000-4000-8000-0000000000d8","playerId":"5c4ee45e-0000-4000-8000-0000000000e8"}],"yourRole":null}"#)
+                }
                 // The team this account runs, as its admin reads it: a handle on each entry (PD-045).
                 if method == "GET", path.hasPrefix("/v1/teams/") {
                     return (200, #"{"teamId":"5c4ee45e-0000-4000-8000-0000000000c1","name":"The Bell B","locality":"Stockton-on-Tees","venue":null,"seasons":[{"league":"Teesside Thursday League","label":"2026/27","division":null,"leagueSeasonId":"5c4ee45e-0000-4000-8000-0000000000f5","accepted":true}],"roster":[{"name":"Jenson R.","role":"admin","memberId":"5c4ee45e-0000-4000-8000-0000000000d1","playerId":"5c4ee45e-0000-4000-8000-000000000002"},{"name":"Ethan T.","role":"captain","memberId":"5c4ee45e-0000-4000-8000-0000000000d2","playerId":"5c4ee45e-0000-4000-8000-0000000000e2"},{"name":null,"role":"player","memberId":"5c4ee45e-0000-4000-8000-0000000000d3","playerId":"5c4ee45e-0000-4000-8000-0000000000e3"}],"yourRole":"admin"}"#)
