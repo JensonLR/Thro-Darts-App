@@ -123,15 +123,33 @@ public struct OrganisationRow: View {
         self.image = image
     }
 
+    @ScaledMetric(relativeTo: .body) private var badgeScale: CGFloat = 1
+    @Environment(\.dynamicTypeSize) private var typeSize
+
+    /// The mark grows with the text, but only so far (PD-140).
+    ///
+    /// **Measured on the phone, twice.** A literal 48 left the mark unmoved beside a name at three times
+    /// its size. Scaling it freely was worse: at the largest size a 96-point badge took the width the name
+    /// needed and "The Bell B" truncated to "The…". A badge is a decoration and the name is the content, so
+    /// the mark takes a quarter more and stops there, and past the accessibility sizes the row stacks and
+    /// gives the name the whole width.
+    private var badgeSide: CGFloat { min(48 * badgeScale, 60) }
+
     public var body: some View {
-        HStack(spacing: ThroSpacing.spacing3) {
-            Badge(initials, size: 48, accent: accent, image: image)
+        let layout = typeSize.isAccessibilitySize
+            ? AnyLayout(VStackLayout(alignment: .leading, spacing: ThroSpacing.spacing2))
+            : AnyLayout(HStackLayout(spacing: ThroSpacing.spacing3))
+        layout {
+            Badge(initials, size: badgeSide, accent: accent, image: image)
             VStack(alignment: .leading, spacing: 2) {
                 Text(name)
                     .thro(ThroTypography.label.weight(.bold))
                     .foregroundStyle(ThroColor.colorTextPrimary)
-                    .lineLimit(1)
+                    // One line while there is room for one; at accessibility sizes a name that cannot fit
+                    // wraps rather than becoming "The…", because the name is the thing the row is for.
+                    .lineLimit(typeSize.isAccessibilitySize ? 3 : 1)
                     .minimumScaleFactor(0.85)
+                    .fixedSize(horizontal: false, vertical: typeSize.isAccessibilitySize)
                 // The meta is a three-part join — "Thursday nights · 18 teams · Stockton-on-Tees" — which
                 // does not fit one line of a phone, and this row is the backbone of Discover, You and a
                 // club's page. So it wraps: two readable lines beat one line of type too small to read
@@ -141,9 +159,10 @@ public struct OrganisationRow: View {
                     .foregroundStyle(ThroColor.colorTextSecondary)
                     .lineLimit(2)
             }
-            Spacer(minLength: ThroSpacing.spacing2)
+            if !typeSize.isAccessibilitySize { Spacer(minLength: ThroSpacing.spacing2) }
             if let trailing { Tag(trailing) }
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.vertical, ThroSpacing.spacing3)
         .accessibilityElement(children: .combine)
     }

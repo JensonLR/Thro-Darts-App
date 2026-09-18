@@ -114,6 +114,20 @@ public struct TopBar: View {
 /// type scale and recorded as a bypass in TOKEN_HEALTH.md; this uses the nearest on-scale role
 /// (metadata, 13) rather than reproduce the bypass in a platform source.
 public struct BottomBar: View {
+    /// How large the bar's own labels are allowed to get (PD-140).
+    ///
+    /// **Why a ceiling here, when the rule everywhere else is that text grows.** Looked at on the phone at
+    /// the largest accessibility size, this bar stopped being a bar: "Home" wrapped to "Ho/me", "Discover"
+    /// to "Dis/cov/er", the five items pushed each other into three lines apiece, the bar reached roughly
+    /// 500 points — more than half the screen — and *Your teams* was pushed off the bottom of You. A player
+    /// at that size could not see their own team.
+    ///
+    /// Apple's own `TabView` does not grow either: past a point it stops being a row of labels and becomes
+    /// a list. A hand-built bar inherits none of that, so the ceiling is written here. The label is capped,
+    /// shrinks a little before it truncates, and never wraps; the icon and the 44-point target are
+    /// untouched, so nothing a finger aims at gets smaller. Everything *inside* the tabs still grows.
+    public static let labelCeiling: DynamicTypeSize = .xxLarge
+
     public enum Tab: String, CaseIterable, Identifiable, Sendable {
         case home, play, live, discover, you
         public var id: String { rawValue }
@@ -185,6 +199,10 @@ public struct BottomBar: View {
                             }
                         Text(tab.label)
                             .thro(ThroTypography.metadata.weight(on ? .bold : .medium).tracking(em: 0.02))
+                            .dynamicTypeSize(...Self.labelCeiling)
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.8)
+                            .accessibilityLabel(tab.label)
                     }
                     .frame(maxWidth: .infinity, minHeight: sideways ? ThroSpacing.touchTargetMinimum : 52)
                     .foregroundStyle(on ? ThroColor.colorTextPrimary : ThroColor.colorTextSecondary)

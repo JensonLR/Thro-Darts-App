@@ -107,16 +107,30 @@ public enum ThroIcon: String, CaseIterable, Sendable {
 public struct Icon: View {
     private let icon: ThroIcon
     private let size: CGFloat
+    /// The size, scaled by the reader's text size (PD-140).
+    ///
+    /// **Found by looking at the phone at the largest accessibility size.** The frame was a literal, so a
+    /// row's name doubled and the chevron beside it did not move: the glyph sat at the top of a
+    /// two-line name, the alignment of every row broke, and the rows stopped looking drawn. An icon that
+    /// labels text is part of that text and grows with it.
+    ///
+    /// `@ScaledMetric` on `.body` rather than the icon's own role, because an icon sits beside body text
+    /// far more often than beside anything else, and one rule that is right nearly always beats five.
+    @ScaledMetric(relativeTo: .body) private var scale: CGFloat = 1
 
     public init(_ icon: ThroIcon, size: CGFloat = 20) {
         self.icon = icon
         self.size = size
     }
 
+    /// Capped so a glyph never becomes a picture: at the largest sizes a 24pt icon would reach 80pt and
+    /// push the words it labels off the row. Twice its drawn size is the most it takes.
+    private var drawn: CGFloat { min(size * scale, size * 2) }
+
     public var body: some View {
         IconShape(icon: icon)
-            .stroke(style: StrokeStyle(lineWidth: 2 * size / 24, lineCap: .round, lineJoin: .round))
-            .frame(width: size, height: size)
+            .stroke(style: StrokeStyle(lineWidth: 2 * drawn / 24, lineCap: .round, lineJoin: .round))
+            .frame(width: drawn, height: drawn)
             .accessibilityHidden(true)
     }
 }

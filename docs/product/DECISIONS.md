@@ -5909,3 +5909,45 @@ iOS runbook stated 420 and 894, and the sources now hold 422 and 896. The stated
 896. `RearrangementHttpTest` 38 → 59 checks, `LeagueActsHttpTest` 38 → 54, `UnderstandingTest` 25 tests,
 `ProposalWordsTests` +22. Every `tools/check_*.py` green. An independent verifier ran both suites, read the diff
 for edits outside each agent's own file (none), and grepped for checks claimed but not written (none).
+
+## PD-140 — The chrome grows with the text, and the bar stays a bar
+
+**18 September 2026.** Number one on the Phase 2 list, and the only fault in it that a player can be
+**stopped** by rather than merely irritated by. Looked at on the phone at the largest accessibility text
+size, the app's own furniture broke.
+
+**What it looked like.** The bottom bar is hand-built — an `HStack` of five items, each framed at a
+52-point minimum, with no ceiling on the label anywhere in the file. At AX5 *Home* wrapped to "Ho/me",
+*Discover* to "Dis/cov/er", the five items pushed each other into three lines apiece, the bar reached
+roughly 500 points — more than half the screen — and **Your teams was pushed off You entirely**. A player
+at that size could not see their own team. *PROFILE* was clipped off the right edge of the header, so one
+of the two things the You tab offers could not be read or aimed at. And `Icon` was a fixed frame, so a
+name at three times its size sat beside a chevron that had not moved.
+
+**Decided.**
+
+1. **The bar's labels have a ceiling** — `BottomBar.labelCeiling`, at `.xxLarge`. They shrink a little
+   before they truncate and never wrap. Apple's own `TabView` stops growing too: past a point it becomes
+   a list rather than a row of labels. A hand-built bar inherits none of that, so the ceiling is written
+   down. **The icon and the 44-point target are untouched**, so nothing a finger aims at gets smaller,
+   and everything *inside* the tabs still grows without limit.
+2. **`Icon` scales with the text it labels**, capped at twice its drawn size, because an icon beside a
+   name is part of that name and a glyph at 80 points is a picture.
+3. **Two keys that do not fit side by side stack**, through `ViewThatFits`. Nothing is clipped.
+4. **A label column that cannot hold its label stacks** — `ThroChoiceRow` goes from row to two lines at
+   accessibility sizes rather than wrapping "START ON" into a paragraph beside its control.
+5. **A badge is a decoration; the name is the content.** This one was got wrong first and fixed by looking
+   again: scaling the organisation badge freely took the width the name needed, and *The Bell B* truncated
+   to *"The…"* — the row was worse than before the change. The mark now takes a quarter more and stops, and
+   at accessibility sizes the row stacks so the name has the whole width.
+
+**Evidence, looked at rather than reasoned about.** Built to the simulator and opened at
+`accessibility-extra-extra-extra-large`, three times: once to see the fault, once to see the fix, and once
+more after the badge made the row worse. After: the bar is one line of five labels at its proper height,
+*PROFILE* is on screen under *FRIENDS*, the chevrons sit level with the names, and scrolling You reaches
+*Your teams* and reads *The Bell B* in full with its ADMIN tag. 896 app tests, every `tools/check_*.py`
+green.
+
+**Not done here.** The research's number 1 also proposes dropping to four tabs, on the grounds that five
+is past what a thumb finds reliably. That is a product change, not an accessibility fix, and it is the
+founder's to make.

@@ -1741,12 +1741,21 @@ public struct YouScreen: View {
         case .signedOut:
             slateButton("SIGN IN", lit: true, seed: 11, action: onAccount)
         case .signedIn:
-            HStack(spacing: ThroSpacing.spacing3) {
-                slateButton("FRIENDS", lit: true, seed: 13, action: onFriends)
-                // **PROFILE, and it goes to the profile.** It used to say ACCOUNT and open a
-                // settings list, from which the profile was another row — five steps to the
-                // page that is about you, on the tab called You.
-                slateButton("PROFILE", lit: false, seed: 17, action: onProfile)
+            // Side by side while both fit; stacked when the text is large enough that they do not
+            // (PD-140). At the largest accessibility size PROFILE was clipped off the right edge of the
+            // screen, so the second of the two things the You tab offers could not be read or aimed at.
+            ViewThatFits(in: .horizontal) {
+                HStack(spacing: ThroSpacing.spacing3) {
+                    slateButton("FRIENDS", lit: true, seed: 13, action: onFriends)
+                    // **PROFILE, and it goes to the profile.** It used to say ACCOUNT and open a
+                    // settings list, from which the profile was another row — five steps to the
+                    // page that is about you, on the tab called You.
+                    slateButton("PROFILE", lit: false, seed: 17, action: onProfile)
+                }
+                VStack(alignment: .leading, spacing: ThroSpacing.spacing2) {
+                    slateButton("FRIENDS", lit: true, seed: 13, action: onFriends)
+                    slateButton("PROFILE", lit: false, seed: 17, action: onProfile)
+                }
             }
         case .unverified:
             slateButton("TRY AGAIN", lit: true, seed: 19, action: onRetry)

@@ -247,10 +247,19 @@ public struct ThroChoiceRow<Control: View>: View {
         self.control = control()
     }
 
+    @Environment(\.dynamicTypeSize) private var typeSize
+
     public var body: some View {
-        HStack(alignment: .center, spacing: ThroSpacing.spacing3) {
+        // Side by side while the label fits its column; stacked once the text is large enough that a fixed
+        // 108-point column would wrap "START ON" into a paragraph beside its control (PD-140). Apple's own
+        // forms do the same at accessibility sizes: the pair stops being a row and becomes two lines.
+        let layout = typeSize.isAccessibilitySize
+            ? AnyLayout(VStackLayout(alignment: .leading, spacing: ThroSpacing.spacing2))
+            : AnyLayout(HStackLayout(alignment: .center, spacing: ThroSpacing.spacing3))
+        layout {
             Eyebrow(label)
-                .frame(width: ThroChoiceRow<EmptyView>.labelWidth, alignment: .leading)
+                .frame(width: typeSize.isAccessibilitySize ? nil : ThroChoiceRow<EmptyView>.labelWidth,
+                       alignment: .leading)
             control
         }
         .accessibilityElement(children: .contain)

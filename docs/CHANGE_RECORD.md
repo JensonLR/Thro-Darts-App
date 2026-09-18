@@ -6329,3 +6329,12 @@ document still cannot verify is listed in it.
 now assert their words; the `shift` threshold is pinned from both sides; a model that answers nothing, answers
 rubbish or throws gives 503 not 500. Stated test counts in `README.md` and `docs/runbooks/CLIENT_IOS.md` brought up
 to date (422, 896). API tests 167, app tests 896, every check green.
+
+## The chrome grows with the text, and the bar stays a bar (PD-140)
+
+`ThroDesign/Navigation.swift` (`BottomBar.labelCeiling` at `.xxLarge`, label capped, one line, shrinks before it
+truncates; icon and target untouched), `ThroDesign/Icon.swift` (`@ScaledMetric`, capped at twice),
+`ThroDesign/Club.swift` (`OrganisationRow` badge capped at 60 and the row stacks at accessibility sizes so the name
+keeps its width), `ThroDesign/Slate.swift` (`ThroChoiceRow` stacks), `ThroApp/ThroRootView.swift` (`ViewThatFits` on
+the You header's two keys). Verified in the simulator at AX5 before and after, and again after the badge made the row
+worse. App tests 896.
