@@ -4,9 +4,9 @@ A resilience mechanism for a session that stops at a usage boundary, so the next
 audit. Kept current during the build; **not** a deliverable, and never a substitute for `docs/CHANGE_RECORD.md`
 (what happened, and how it was proven) or `docs/product/DECISIONS.md` (what was decided, and why).
 
-## 18 September 2026 — all four phases done; the founder chooses what Jev builds
+## 18 September 2026 — all four phases done, and both chosen builds shipped
 
-**Twenty-four decisions, PD-131 to PD-154**, all pushed and CI-green on `claude/thro-production-build-je2mkf`.
+**Thirty decisions, PD-131 to PD-160**, all pushed and CI-green on `claude/thro-production-build-je2mkf`.
 Production API at **V057**; thro.uk carries the dark-mode fix, the skeletons, the type scale and — for the
 first time — THRØ's own face.
 
@@ -31,18 +31,26 @@ sends a reader nowhere · PD-151 what THRØ says when there is nothing to show �
 the control — done. The league privacy default stays ticked.
 
 **Left, and why.**
-- **Phase 4 (what Jev is for) is done and stopped at its checkpoint.** `docs/product/JEV_USES.md`
-  (PD-154) ranks fourteen proposals; eleven are ruled out, mostly because a normaliser and an edit
-  distance do the job. The recommendation is to build **"Which fixture — or none of them"** and then
-  **"The results sheet, typed once"** — one build in two parts. **Nothing is built: the founder picks
-  two first.** Before either, there is a day of code that needs no model at all (the fixture-presence
-  for loop, the string-distance team match, `pick()` returning `confidence`, `.take(254)`, pinning
-  `jev-1.13.0` over the moving `jev-latest` alias) and it should ship regardless — it is the floor the
-  questions have to beat.
-- **Three live defects found in passing** and recorded in PD-154, none fixed: `Safety.kt:165` (the
-  moderation queue has one child-safety threshold at 0.85 and nothing under it), `Seed.kt:86` (a NULL
-  locality matches a NULL locality), `Discovery.kt:96` (localities compared with an exact `equals`, and
-  dead in production — no shipped caller passes `homeLocality`, so `NEAR_YOU` is empty for everybody).
+- **Phase 4 is finished, and the headline is that the model was not needed.** The founder chose builds 1
+  and 3 and the queue's code fixes. All shipped: PD-155 (the moderation queue cannot be ordered by the
+  reporter — a child-safety band at 0.5, a one-per-reporter cap on promotion, an injection guard that
+  sets aside severity and never a child), PD-156 (Live shortened), PD-157 (the no-model floor:
+  `pick()` returns `confidence`, a `SURE_ENOUGH` = 0.6 gate on `ready`, 254 options, `jev-1.13.0`
+  pinned, and input tokens counted), PD-158 (`ProductionDesk` + `TeamNames` + `fixturesNamed`),
+  PD-159 (`ResultsSheet`), PD-160 (the route and the organiser's paste pane).
+- **Two premises in the ranking were wrong, and checking them changed the plan.** The fixture Choice
+  **already had a `none` option**, so build 1's two proposed Nouls had nothing to win; and on the
+  production-size desk the code floor refuses **20 of 20** sealed "no fixture" sentences while still
+  finding **11 of 11** real ones. The results sheet then scored **0 wrong while ready, 40 of 45 ready and
+  right** with no model at all. **So none of the nine proposed questions was built.** That is the phase's
+  real finding: write the `for` loop first and publish its number.
+- **What Jev costs, now measurable.** $42 per billion input tokens, output free. `Reader.kt` discarded
+  `usage.input_tokens`; it counts them now and prints the running dollar figure. Jev **is** live in
+  production (every boot logs `reader: TypeSafe …`), and at current volume the spend is a fraction of a
+  cent — but it was unmeasured until PD-157.
+- **Three live defects found in passing, still not fixed**: `Safety.kt` child-safety band (fixed in
+  PD-155), `Seed.kt:86` NULL-matches-NULL, `Discovery.kt:96` exact locality compare (dead in production
+  — no shipped caller passes `homeLocality`).
 - **The contact address.** PD-150 stopped every page instructing a reader to write to one. What the
   address will be is still the founder's: three legal pages, the children's page and the App Store
   listing wait on it.
@@ -50,8 +58,6 @@ the control — done. The league privacy default stays ticked.
   rather than screen floors; which want one is a judgement per screen.
 - **Three `TeamFixtureScreens.swift` changes** from the PD-147 survey were prose, not substitutions, and
   are not done.
-- **The Live tab** is the other half of PD-153 and needs one sentence from the founder: shortened, or
-  anchored? They are alternatives; doing both opens a shortened page part-way down.
 - **Six line-height moves** in PD-149 were under-disclosed by the change list and are recorded in it.
 - **The `h1` line-height** is unset in `apps/web`; no page has an `<h1>` today.
 
