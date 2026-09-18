@@ -6451,3 +6451,10 @@ enters the queue's ORDER BY above severity; `alreadyAtTheFront` caps the reading
 `addressedToAComputer` matches eight naive injection forms over a casefolded, punctuation-stripped copy. The guard sets
 aside severity only — never the child-safety reading. `Server.kt` puts `addressedToSystem` on the queue JSON and
 `thro.js` says so on the card. API tests +4, schema properties +2 (167).
+
+## Live ends where the reader's own things end (PD-156)
+
+`ThroRootView.swift`: new `LiveSection` enum declares the Live tab's seven sections and which are the reader's own;
+`WallSection` moves from fourth of eight to below `ThroMatchesBlock`; every `throEntrance` index on the screen now
+comes from the enum rather than a literal. New `LiveOrderTests` (4). App tests 911; README and CLIENT_IOS.md counts
+updated.

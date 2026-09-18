@@ -6501,3 +6501,32 @@ written before the field reached the wire; the existing exact-JSON assertion cau
 itself, which is the argument for asserting exact JSON. Two new schema properties: the column defaults
 false, and neither the application role (no `UPDATE` grant) nor the owner (V040's trigger) can flip it.
 API suite green, 167 schema properties pass.
+
+## PD-156 — Live ends where the reader's own things end
+
+PD-153 left this open and named the two ways to do it. The founder chose **shortened**, then asked for
+the best recommendation rather than their own word, and the recommendation is the same: shortening
+removes the cause, anchoring only hides it. An anchored page still has an offer meant for a pub sitting
+in the middle of somebody's own matches; it just opens past it, and the reader who scrolls up finds it
+anyway.
+
+**What was wrong.** `WallSection` — the pub-screen chooser — sat fourth of eight, between *Waiting on a
+result* and *Still to play*. So a player scrolling Live for their own matches met a chooser for a
+television in the middle of them, and nothing told them their own content carried on below it. Live is
+the longest tab in the app and this was the reason it felt endless: not the length, but that the
+reader's own things did not run out in one place.
+
+**What changed.** One block moved, to below *On THRØ*. The order is now: a match being scored now, what
+they owe, what is coming, what is ready to send, what THRØ holds — then the offer, then a closing note.
+A reader can stop when their own things stop.
+
+**The order is a value now, not the order the code happens to be written in.** `LiveSection` declares
+the seven sections and which of them are the reader's own, and the screen takes its `throEntrance`
+stagger from the same enum — so a section cannot be moved in the body without the enum and its tests
+moving too. `LiveOrderTests` asserts the rule (everything the reader owns reads before the pub screen),
+that a match going on right now is first, and the whole order written out on one line, so changing it
+is a change to that line.
+
+**Evidence.** Four tests, watched failing to compile before the enum existed. 911 app tests. Looked at
+on iPhone 17 Pro: the tab now reads *On this phone → Send to THRØ → On THRØ → On the telly → the note*
+for a seeded adult account, and the page ends one screen after the reader's own record.

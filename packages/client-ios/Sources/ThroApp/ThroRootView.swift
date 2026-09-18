@@ -1841,6 +1841,46 @@ public struct SettingsRow: View {
 /// invented** — including the ordering, which is the order an official typed the fixtures in,
 /// because `Fixture.when` is a line of text an official wrote and not a date this app can sort by.
 /// Saying that is better than sorting text and calling it a diary.
+/// The order the Live tab reads in (PD-156).
+///
+/// **Why the order is a value and not just the order the code happens to be written in.** Live is the
+/// longest tab in the app, and the pub-screen chooser used to sit fourth of eight — above *Still to
+/// play*, above *Send to THRØ*, above the player's own record on THRØ. A player scrolling for their own
+/// matches met an offer meant for a venue in the middle of them, and nothing told them their own
+/// content carried on below it. The fix is not a shorter page; it is a page whose reader can stop when
+/// their own things run out.
+///
+/// The screen takes its `throEntrance` order from these cases, so the sections cannot be reordered in
+/// the body without this enum — and `LiveOrderTests` — moving with them.
+enum LiveSection: Int, CaseIterable {
+    /// A match being scored on this phone right now, which is why somebody opens Live.
+    case onThisPhone
+    /// Played, and nobody has said what happened. What the reader owes.
+    case waitingOnAResult
+    /// Fixtures still ahead of them.
+    case stillToPlay
+    /// Finished on this phone and not yet sent.
+    case sendToThro
+    /// What THRØ holds of the matches they played.
+    case onThro
+    /// Setting a pub's screen going. An offer, for a venue — not this reader's own.
+    case pubScreen
+    /// A closing note about following a match. A footer, not content.
+    case followingAMatch
+
+    /// True for the sections that are this reader's own matches and obligations. Everything true here
+    /// reads before ``pubScreen``; that is the whole rule, and `LiveOrderTests` holds it.
+    var isTheReadersOwn: Bool {
+        switch self {
+        case .onThisPhone, .waitingOnAResult, .stillToPlay, .sendToThro, .onThro: return true
+        case .pubScreen, .followingAMatch: return false
+        }
+    }
+
+    /// Where this section sits in the staggered entrance, so the animation cannot disagree with the order.
+    var entrance: Int { rawValue }
+}
+
 public struct LiveScreen: View {
     @ObservedObject var store: AppStore
     private let clubs: [Club]
@@ -1930,7 +1970,7 @@ ForEach(Array(inProgress.enumerated()), id: \.element.id) { index, match in
                                 }
                             }
                         }
-                        .throEntrance(0)
+                        .throEntrance(LiveSection.onThisPhone.entrance)
                     }
                     if !awaiting.isEmpty {
                         block {
@@ -1950,14 +1990,7 @@ ForEach(Array(inProgress.enumerated()), id: \.element.id) { index, match in
                                 ThroDivider()
                             }
                         }
-                        .throEntrance(1)
-                    }
-                    // A league on the pub screen (PD-089). Needs a server to read the leagues from, so
-                    // it is offered only where there is one — a build with no server would show a
-                    // chooser that can never fill.
-                    if let api {
-                        block { WallSection(api: api) }
-                            .throEntrance(2)
+                        .throEntrance(LiveSection.waitingOnAResult.entrance)
                     }
                     if !upcoming.isEmpty {
                         block {
@@ -1973,7 +2006,7 @@ ForEach(Array(inProgress.enumerated()), id: \.element.id) { index, match in
                                  + "official typed, not something this app reads, so it is not "
                                  + "sorted into a diary it cannot honestly build.")
                         }
-                        .throEntrance(2)
+                        .throEntrance(LiveSection.stillToPlay.entrance)
                     }
                     // Sending a match to THRØ (PD-040). Here rather than on the result screen
                     // because ThroPlay has no network target — that is the rule that keeps scoring
@@ -2009,7 +2042,7 @@ ForEach(Array(inProgress.enumerated()), id: \.element.id) { index, match in
                                 Note(sendNote, icon: .info)
                             }
                         }
-                        .throEntrance(3)
+                        .throEntrance(LiveSection.sendToThro.entrance)
                     }
                     // What THRØ holds of the matches this person played (PD-043): where each one
                     // stands, the code for the other player, and the way in for somebody given one.
@@ -2019,7 +2052,19 @@ ForEach(Array(inProgress.enumerated()), id: \.element.id) { index, match in
                                              onOpen: { sheet = .match($0.matchId) },
                                              onEnterCode: { sheet = .enterCode })
                         }
-                        .throEntrance(4)
+                        .throEntrance(LiveSection.onThro.entrance)
+                    }
+                    // A league on the pub screen (PD-089). Needs a server to read the leagues from, so
+                    // it is offered only where there is one — a build with no server would show a
+                    // chooser that can never fill.
+                    //
+                    // **Below everything the reader owns** (PD-156). This sat fourth of eight, between
+                    // *Waiting on a result* and *Still to play*, so somebody scrolling Live for their own
+                    // matches met a chooser meant for a pub's television in the middle of them. It is an
+                    // offer, and an offer reads after the things somebody came for.
+                    if let api {
+                        block { WallSection(api: api) }
+                            .throEntrance(LiveSection.pubScreen.entrance)
                     }
                     // It said "watching is next" until PD-044 built it; now it says how, and to whom.
                     block {
@@ -2032,7 +2077,7 @@ ForEach(Array(inProgress.enumerated()), id: \.element.id) { index, match in
                                  + "in: it is shared live from its card here, and only with them.")
                         }
                     }
-                    .throEntrance(5)
+                    .throEntrance(LiveSection.followingAMatch.entrance)
                 }
                 .padding(.bottom, ThroSpacing.spacing6)
             }
