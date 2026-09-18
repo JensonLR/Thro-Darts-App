@@ -293,8 +293,20 @@ public fun Application.thro(deps: Deps) {
         "safety.block" to { r ->
             withAccount(r) { a ->
                 safely {
-                    val other = try { UUID.fromString(str(Json.parseObject(r.body), "accountId")) } catch (e: IllegalArgumentException) { throw IllegalArgumentException("accountId must be a UUID") }
-                    Safety(r.connection(), deps.reader, deps.now).let { s -> s.block(a, other); Http(200, blocksJson(s.blocking(a))) }
+                    // Either the account, or the player the phone can actually see (PD-141). A roster row,
+                    // a seat and an opponent line all carry a player id and never an account id, so the
+                    // joining is done here and the account id stays on this side of the wire.
+                    val body = Json.parseObject(r.body)
+                    val safety = Safety(r.connection(), deps.reader, deps.now)
+                    val other = when {
+                        body["playerId"] != null -> {
+                            val player = try { UUID.fromString(str(body, "playerId")) } catch (e: IllegalArgumentException) { throw IllegalArgumentException("playerId must be a UUID") }
+                            safety.accountBehind(player)
+                                ?: throw Safety.Refused("Nobody holds that player on THRØ, so there is no account to block.", 404)
+                        }
+                        else -> try { UUID.fromString(str(body, "accountId")) } catch (e: IllegalArgumentException) { throw IllegalArgumentException("accountId must be a UUID") }
+                    }
+                    safety.let { s -> s.block(a, other); Http(200, blocksJson(s.blocking(a))) }
                 }
             }
         },

@@ -5951,3 +5951,49 @@ green.
 **Not done here.** The research's number 1 also proposes dropping to four tabs, on the grounds that five
 is past what a thumb finds reliably. That is a product change, not an accessibility fix, and it is the
 founder's to make.
+
+## PD-141 — Blocking exists, where the person is read
+
+**18 September 2026.** The founder, asked at the Phase 2 checkpoint: *build the control.* Until now
+`SafetyModel.block` had **no caller anywhere**. The server route, the model method and the blocked list
+all existed; only the thing a person taps did not. Two screens told a player blocking was available and
+one named a place to do it that did not exist. A safety promise with nothing behind it is the worst kind
+of dead end, because the moment somebody needs it is the moment they find out.
+
+**The reason it was never built, found by trying to.** `block` takes an **account** id, and no screen in
+the app has one. A roster row, a seat at a match and an opponent line all carry a **player** id — and
+deliberately: an account id is the stable handle to a person, and putting one on every roster so the
+phone could block would hand every team-mate a permanent identifier for everybody else, to buy one
+button. That is a worse trade than the thing it buys.
+
+**Decided.**
+
+1. **The phone names the player it can see, and the server does the joining.** `POST /v1/blocks` takes
+   `playerId` as well as `accountId`; `Safety.accountBehind` resolves it through the claim. The account
+   id never crosses the wire, so nothing is exposed that was not exposed before.
+2. **A player nobody has claimed cannot be blocked**, and is refused in words rather than failing as
+   though something went wrong: a walk-up (PD-124) has no account, so there is nothing to block.
+3. **The control sits on the roster row**, behind a ⋯ beside the name — the same principle PD-050 used
+   for reporting. Somebody who wants nothing more to do with a team-mate is *looking at that team-mate*,
+   not hunting a settings list for a screen they must already suspect exists.
+4. **Never offered on yourself**, and never on a row with no player behind it.
+5. **It asks first, and says what it does**: who cannot reach whom, that no reason is asked for, that the
+   other person is not told, and where to lift it. Then it says that it took.
+6. **The two sentences that named a place now name one that exists** — the ⋯ beside a name on your team's
+   roster — instead of "their page", which was never built.
+
+**Evidence.** `SafetyTest` gains a check, watched failing first (it would not compile: `accountBehind`
+did not exist), then failing twice more on the fixture until the claim row was written properly — the
+player's account is found, a player nobody has is nobody, an unclaimed player is nobody, and blocking by
+player blocks the person. The contract was regenerated and its diff read: one endpoint, `playerId` added,
+the 404 documented. Looked at in the simulator, the whole way through: the ⋯ appears on the two rows that
+are other people and **not** on the signed-in person's own row; it opens *Block Ethan T.* in red; that
+opens the confirmation with the full sentence. API suite green, 896 app tests, every check green.
+
+**One change to a Debug-only file, said rather than slipped in.** The screenshot stage's roster carried no
+player ids, so the control was drawn on no row and the screen could not be looked at. The stage now sends
+them, as the real server does to a team's own members. It is behind `#if DEBUG` and is not in a shipped
+build.
+
+**Still open.** The inbox draws an action for two of the four task kinds the server can create, so a
+`consent_required` or `result_submission_due` task is a card with a reason, a due date and nothing to tap.

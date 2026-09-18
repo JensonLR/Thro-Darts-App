@@ -267,6 +267,23 @@ public class Safety(private val connection: Connection, private val reader: Read
      * and its lifting in another, and a lift a minute after a block made at a fixed hour then matched no row
      * at all.
      */
+    /**
+     * The account behind a player, or null when there is none to block (PD-141).
+     *
+     * **Why the joining happens here and not on the phone.** Blocking takes an account id, and no screen
+     * in the app has one: a roster row, a seat at a match and an opponent line all carry a *player* id.
+     * That is deliberate — an account id is the stable handle to a person, and putting it on every roster
+     * so the phone could block would hand every team-mate a permanent identifier for everybody else, to
+     * buy one button. So the phone sends the player it can see and the account id never leaves here.
+     *
+     * Null for a player nobody has claimed — a walk-up (PD-124) has no account, so there is nothing to
+     * block and the refusal says so rather than failing as though something went wrong.
+     */
+    public fun accountBehind(playerId: UUID): UUID? = connection.prepareStatement(
+        "SELECT c.account_id FROM identity.player_claim c JOIN identity.account a ON a.account_id = c.account_id "
+            + "AND a.deleted_at IS NULL WHERE c.player_id = ? AND c.revoked_at IS NULL",
+    ).use { ps -> ps.setObject(1, playerId); ps.executeQuery().use { rs -> if (rs.next()) rs.getObject(1) as UUID else null } }
+
     public fun block(blocker: UUID, blocked: UUID) {
         if (blocker == blocked) throw Refused("You cannot block yourself.")
         connection.prepareStatement(

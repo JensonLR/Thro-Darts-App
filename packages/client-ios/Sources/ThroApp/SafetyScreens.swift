@@ -49,8 +49,19 @@ public final class SafetyModel: ObservableObject {
 
     public func block(_ accountId: UUID, _ api: ThroAPI?) async {
         guard let api else { note = "This build names no server."; return }
-        do { blocked = try await api.block(accountId); note = nil }
+        do { blocked = try await api.block(accountId); blocksRead = true; note = nil }
         catch { note = ThroAPI.refusal(error) ?? "That could not be done just now." }
+    }
+
+    /// Blocks the person behind a player — the only id a roster, a seat or a fixture has (PD-141).
+    /// True when it was done, so the screen that asked can say so and close.
+    @discardableResult
+    public func block(player playerId: UUID, _ api: ThroAPI?) async -> Bool {
+        guard let api else { note = "This build names no server."; return false }
+        sending = true
+        defer { sending = false }
+        do { blocked = try await api.block(player: playerId); blocksRead = true; note = nil; return true }
+        catch { note = ThroAPI.refusal(error) ?? "That could not be done just now."; return false }
     }
 
     public func unblock(_ accountId: UUID, _ api: ThroAPI?) async {
@@ -120,7 +131,7 @@ public struct ReportSheet: View {
                         }
                         .disabled(safety.sending || reason.trimmingCharacters(in: .whitespacesAndNewlines).count < 3)
                         .padding(.top, ThroSpacing.spacing3)
-                        Note("Reporting is not the same as blocking. If you would rather not hear from somebody at all, block them from their page.")
+                        Note("Reporting is not the same as blocking. If you would rather not hear from somebody at all, block them from the ⋯ beside their name on your team's roster.")
                             .padding(.top, ThroSpacing.spaceSectionGap)
                     }
                 }
@@ -158,7 +169,7 @@ public struct BlockedAccountsScreen: View {
                                    onAction: { Task { await safety.loadBlocks(api) } })
                     } else if safety.blocked.isEmpty {
                         EmptyState(title: "Nobody is blocked",
-                                   message: "Blocking somebody stops them inviting you, adding you as a friend, taking a seat against you or watching your match. You never need a reason.")
+                                   message: "Blocking somebody stops them inviting you, adding you as a friend, taking a seat against you or watching your match. Block them from the ⋯ beside their name on your team's roster. You never need a reason.")
                     } else {
                         Text("Blocked while these stand, neither of you can reach the other on THRØ.")
                             .thro(ThroTypography.body).foregroundStyle(ThroColor.colorTextSecondary)

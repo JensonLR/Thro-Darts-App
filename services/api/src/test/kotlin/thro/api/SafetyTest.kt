@@ -7,6 +7,7 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 /**
@@ -242,5 +243,46 @@ class SafetyTest {
             assertEquals(2, count(c, "SELECT count(*) FROM safety.terms_acceptance WHERE account_id = '$ann'"),
                          "and what they agreed to on each day is still readable")
         }
+    }
+
+    /// A person is blocked by the player somebody can actually see (PD-141).
+    ///
+    /// Blocking has always taken an account id, and no screen in the app has one: a roster row, a seat and
+    /// an opponent line all carry a *player* id, and deliberately so — an account id is the stable handle
+    /// to a person and handing it to every team-mate to make blocking possible would be a worse trade than
+    /// the thing it bought. So the server does the joining, and the account id stays on the server.
+    @Test
+    fun `the player somebody can see is joined to the account behind them, and an unclaimed player is nobody`() {
+        if (!configured) return
+        migrated().use { c ->
+            val safety = Safety(c) { Instant.parse("2026-09-11T21:00:00Z") }
+            val ann = account(c, "Ann")
+            val bea = account(c, "Bea")
+            val beaPlayer = claimedPlayer(c, bea)
+
+            assertEquals(bea, safety.accountBehind(beaPlayer), "the player's account, for the server alone")
+            assertNull(safety.accountBehind(UUID.randomUUID()), "a player nobody has is nobody")
+            assertNull(safety.accountBehind(unclaimedPlayer(c)), "a walk-up has no account to block")
+
+            safety.block(ann, safety.accountBehind(beaPlayer)!!)
+            assertTrue(safety.blocked(ann, bea), "blocking by player blocks the person")
+        }
+    }
+
+    private fun claimedPlayer(c: Connection, accountId: UUID): UUID {
+        val id = unclaimedPlayer(c)
+        c.createStatement().use { st ->
+            st.execute("INSERT INTO identity.player_claim (claim_id, player_id, account_id, method, claimed_at) " +
+                       "VALUES ('${UUID.randomUUID()}', '$id', '$accountId', 'self_created', now())")
+        }
+        return id
+    }
+
+    private fun unclaimedPlayer(c: Connection): UUID {
+        val id = UUID.randomUUID()
+        c.createStatement().use { st ->
+            st.execute("INSERT INTO competition.player (player_id, source) VALUES ('$id', 'organiser')")
+        }
+        return id
     }
 }

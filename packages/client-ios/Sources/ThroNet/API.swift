@@ -1502,6 +1502,18 @@ public actor ThroAPI {
         return answered.blocked
     }
 
+    /// Asks not to be reached by the person behind a player (PD-141).
+    ///
+    /// The phone names whoever it can actually see. A roster row, a seat at a match and an opponent line
+    /// all carry a player id and never an account id — deliberately, because an account id is the stable
+    /// handle to a person — so THRØ joins the two on the server and the account id never comes back except
+    /// in the list of who this account has blocked, which is its own to hold.
+    public func block(player playerId: UUID) async throws -> [UUID] {
+        let body = try JSONSerialization.data(withJSONObject: ["playerId": playerId.uuidString.lowercased()])
+        let answered: BlockedAccounts = try decode(await authorised("POST", "/v1/blocks", body: body))
+        return answered.blocked
+    }
+
     /// Lifts a block. The block is kept on the server, marked lifted.
     public func unblock(_ accountId: UUID) async throws -> [UUID] {
         let answered: BlockedAccounts = try decode(await authorised("DELETE", "/v1/blocks/\(accountId.uuidString.lowercased())"))

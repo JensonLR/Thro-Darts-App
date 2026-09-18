@@ -6338,3 +6338,11 @@ truncates; icon and target untouched), `ThroDesign/Icon.swift` (`@ScaledMetric`,
 keeps its width), `ThroDesign/Slate.swift` (`ThroChoiceRow` stacks), `ThroApp/ThroRootView.swift` (`ViewThatFits` on
 the You header's two keys). Verified in the simulator at AX5 before and after, and again after the badge made the row
 worse. App tests 896.
+
+## Blocking exists, where the person is read (PD-141)
+
+`Safety.accountBehind(playerId)`; `POST /v1/blocks` takes `playerId` as well as `accountId` and 404s when no account
+is behind it; `openapi.json` regenerated. `ThroAPI.block(player:)`, `SafetyModel.block(player:)`; a ⋯ menu on each
+roster row that is somebody else, with a confirmation that says what blocking does and where to lift it; the two
+sentences that named a place that did not exist now name the roster. `SafetyTest` +1, watched red. Staged roster
+carries player ids (Debug only). API tests 168, app tests 896.

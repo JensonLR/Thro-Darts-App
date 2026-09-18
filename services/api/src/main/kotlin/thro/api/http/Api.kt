@@ -237,9 +237,13 @@ public object Contract {
             id = "safety.block", method = "POST", path = "/v1/blocks", authenticated = true,
             summary = "Ask not to be reached by an account (PD-050)",
             description = "No reason is asked for and none is stored. Neither account can invite, befriend, claim a seat "
-                + "against or watch the other while it stands. Blocking twice is blocking once.",
-            request = Schema("""{"type":"object","required":["accountId"],"properties":{"accountId":{"type":"string","format":"uuid"}}}"""),
-            responses = mapOf(200 to "the accounts you have blocked", 400 to "you cannot block yourself", 401 to "no principal"),
+                + "against or watch the other while it stands. Blocking twice is blocking once. Name the person by "
+                + "`playerId` — the id a roster, a seat or a fixture shows — and THRØ joins it to the account behind "
+                + "them; `accountId` is accepted too, for a caller that already holds one. A player nobody has "
+                + "claimed, such as a walk-up, has no account and cannot be blocked.",
+            request = Schema("""{"type":"object","properties":{"accountId":{"type":"string","format":"uuid"},"playerId":{"type":"string","format":"uuid"}},"oneOf":[{"required":["accountId"]},{"required":["playerId"]}]}"""),
+            responses = mapOf(200 to "the accounts you have blocked", 400 to "you cannot block yourself", 401 to "no principal",
+                              404 to "no account behind that player"),
         ),
         Endpoint(
             id = "safety.unblock", method = "DELETE", path = "/v1/blocks/{accountId}", authenticated = true,

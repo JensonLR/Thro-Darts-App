@@ -168,6 +168,13 @@ public struct TeamFrontScreen: View {
     /// nothing worth holding once it is sent — the record of it lives where it was sent to.
     @StateObject private var safety = SafetyModel()
     @State private var reporting = false
+    /// Who is about to be blocked, while the confirmation is up (PD-141).
+    @State private var blocking: (playerId: UUID, name: String)?
+    /// Said after a block, because the person who did it should see that it took.
+    @State private var blocked: String?
+    /// The signed-in player, read once: `ThroAPI.session` belongs to the client's actor, and a view body
+    /// runs on the main one. Held so a roster row never offers to block the person reading it.
+    @State private var mePlayerId: UUID?
     /// PD-106: the season whose fixtures are open, and the team's name to say them under.
     @State private var fixturesIn: TeamFront.SeasonLine?
     @State private var teamName = "The team"
@@ -317,6 +324,24 @@ public struct TeamFrontScreen: View {
                         } else {
                             Text(TeamFrontScreen.roleLabel(member.role)).thro(ThroTypography.metadata).foregroundStyle(ThroColor.colorTextSecondary)
                         }
+                        // Blocking, where the person is read (PD-141), for the same reason reporting is:
+                        // somebody who wants nothing more to do with a team-mate is looking at that
+                        // team-mate, not hunting through a settings list for a screen they must already
+                        // suspect exists. Not offered on yourself, and not on a roster entry with no player
+                        // behind it — a walk-up has no account, and the server says so.
+                        if let playerId = member.playerId, playerId != mePlayerId {
+                            Menu {
+                                Button("Block \(member.name ?? "this player")", role: .destructive) {
+                                    blocking = (playerId, member.name ?? "this player")
+                                }
+                            } label: {
+                                Icon(.ellipsis, size: 20)
+                                    .frame(width: ThroSpacing.touchTargetMinimum, height: ThroSpacing.touchTargetMinimum)
+                                    .foregroundStyle(ThroColor.colorTextTertiary)
+                                    .contentShape(Rectangle())
+                            }
+                            .accessibilityLabel("More for \(member.name ?? "this player")")
+                        }
                     }
                     .padding(.vertical, ThroSpacing.spacing2)
                     ThroDivider()
@@ -332,12 +357,30 @@ public struct TeamFrontScreen: View {
                 // PD-050: reportable from where it is read. A team's name is the whole of what a stranger
                 // sees of it, so the way to say that name is wrong belongs on the page carrying the name,
                 // not in a settings list somebody would have to already suspect exists.
+                if let blocked { Snackbar(blocked, tone: .success).padding(.top, ThroSpacing.spacing3) }
+                if let said = safety.note { Snackbar(said, tone: .error).padding(.top, ThroSpacing.spacing3) }
                 ThroTextButton("Report this team", tone: .quiet) { reporting = true }
                     .padding(.top, ThroSpacing.spaceSectionGap)
             }
             .padding(.horizontal, ThroSpacing.spaceScreenGutter)
             .padding(.bottom, ThroSpacing.spacing6)
             .throReadable()
+        }
+        .task { mePlayerId = await api?.session?.playerId }
+        .confirmationDialog("Block \(blocking?.name ?? "")?",
+                            isPresented: Binding(get: { blocking != nil }, set: { if !$0 { blocking = nil } }),
+                            titleVisibility: .visible) {
+            Button("Block", role: .destructive) {
+                if let who = blocking {
+                    Task {
+                        if await safety.block(player: who.playerId, api) { blocked = "Blocked. Neither of you can reach the other on THRØ." }
+                        blocking = nil
+                    }
+                }
+            }
+            Button("Not now", role: .cancel) { blocking = nil }
+        } message: {
+            Text("Neither of you can invite, befriend, take a seat against or watch the other. No reason is asked for, and they are not told. You can lift it from You → Settings → Blocked.")
         }
         .sheet(isPresented: $reporting) {
             ReportSheet(safety: safety, kind: "team", subjectId: front.teamId, subjectName: front.name, api: api) {
