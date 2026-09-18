@@ -10,8 +10,9 @@ package thro.api
  * The pairs under each heading are the ones that week's round actually plays, because that is what a sheet is. The
  * *wording* is hand-written and deliberately inconsistent; that is what is being read.
  *
- * 55 lines: 45 report a match, 10 do not. The number that matters is not how many are read — it is how many are
- * read **wrongly while looking ready**, because that is the one a secretary ticks without noticing.
+ * 62 lines: 45 report a match, 17 do not (nine week headings among them). The number that matters is not how many
+ * are read — it is how many are read **wrongly while looking ready**, because that is the one a secretary ticks
+ * without noticing.
  */
 internal object ResultsSheetLines {
 
