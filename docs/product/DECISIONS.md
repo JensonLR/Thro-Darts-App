@@ -6387,3 +6387,29 @@ a notice pinned to the top of a sheet of cream on a page with nothing else on it
 new player actually sees.
 
 **Evidence.** 907 app tests, three of them new. Every `tools/check_*.py` green. Looked at in the simulator.
+
+## PD-153 — A fixture list opens where the reader is
+
+**18 September 2026.** The last of the research's ten. A team's fixtures ran as one flat column — *To
+play*, then *Played* — from the first unplayed fixture of the season. A captain in March scrolled past
+five months of settled nights to reach this week's.
+
+**Decided.**
+
+1. **The list splits at today.** What is coming is sorted soonest first; what has already been played is
+   newest first, as it was.
+2. **A night that has gone with no result is neither.** It was sitting in date order among games months
+   away, and it is the thing most likely to be why the captain opened the screen. It has its own section
+   at the top.
+3. **It is called what Live already calls it.** *Waiting on a result* — not a second name for the same
+   set. Live's is the older wording and says what is true of the fixture rather than what somebody did
+   with it. Two names for one thing is the drift this whole phase has been about.
+
+**Not done, and it needs the founder.** The Live tab is the other half of this change and the research's
+survey raised a question nobody has answered: Live is three to five screens long, and it can be
+**shortened** (move the pub-screen block below the player's own matches, so the page ends where the
+reader's content ends) or **anchored** (open it at what is happening now). They are alternatives — doing
+both opens a shortened page part-way down, which is worse than either. It is one sentence of an answer
+and then an afternoon's work.
+
+**Evidence.** 907 app tests. Every `tools/check_*.py` green.

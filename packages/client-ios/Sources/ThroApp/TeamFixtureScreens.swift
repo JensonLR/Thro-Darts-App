@@ -44,7 +44,16 @@ public struct TeamFixturesScreen: View {
                                    todo: "Try again when you are online.", actionLabel: "Try again") { Task { await load() } }
                     } else if let fixtures {
                         let ours = fixtures.filter { $0.involves(teamId) }
-                        let toPlay = ours.filter { $0.decided == nil }
+                        // The list opens where the reader is (PD-153). "To play" ran as one flat column
+                        // from the first unplayed fixture of the season, so a captain in March scrolled
+                        // past five months of settled nights to reach this week's. A fixture whose night
+                        // has gone and whose result nobody has entered is not "to play" either — it is the
+                        // thing most likely to be why they opened the screen, and it now sits at the top
+                        // under its own heading rather than buried in date order among games months away.
+                        let now = Date()
+                        let undecided = ours.filter { $0.decided == nil }
+                        let overdue = undecided.filter { $0.scheduledAt < now }.sorted { $0.scheduledAt > $1.scheduledAt }
+                        let toPlay = undecided.filter { $0.scheduledAt >= now }.sorted { $0.scheduledAt < $1.scheduledAt }
                         let played = ours.filter { $0.decided != nil }.reversed()
                         if ours.isEmpty {
                             Text(season.accepted == false
@@ -53,8 +62,14 @@ public struct TeamFixturesScreen: View {
                                 .thro(ThroTypography.body).foregroundStyle(ThroColor.colorTextSecondary)
                                 .fixedSize(horizontal: false, vertical: true).padding(.top, ThroSpacing.spacing4)
                         }
+                        if !overdue.isEmpty {
+                            SectionHeader("Waiting on a result", meta: "\(overdue.count)").padding(.top, ThroSpacing.spacing4)
+                            ThroDivider().padding(.top, ThroSpacing.spacing2)
+                            ForEach(overdue) { f in row(f) }
+                        }
                         if !toPlay.isEmpty {
-                            SectionHeader("To play", meta: "\(toPlay.count)").padding(.top, ThroSpacing.spacing4)
+                            SectionHeader("To play", meta: "\(toPlay.count)")
+                                .padding(.top, overdue.isEmpty ? ThroSpacing.spacing4 : ThroSpacing.spaceSectionGap)
                             ThroDivider().padding(.top, ThroSpacing.spacing2)
                             ForEach(toPlay) { f in row(f) }
                         }

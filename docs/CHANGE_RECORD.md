@@ -6429,3 +6429,9 @@ body into a note. App tests 904, counts updated.
 `ThroBoardSeed` gains `archive`, `inbox`, `discover`, `leagues` and `teamGone`, plus `fixed` so a test can hold them
 apart; new `BoardSeedTests` (3) for distinctness, non-zero and no collision with `match(_:)`'s fallback. Home, the
 archive, a gone team, the inbox and *Darts you can play* move from the card to the board. App tests 907.
+
+## A fixture list opens where the reader is (PD-153)
+
+`ThroApp/TeamFixtureScreens.swift`: the list splits at today — a section for fixtures whose night has gone with no
+result, taking the name Live already uses; what is coming sorted soonest first. The Live tab's own half waits on the
+founder's choice between shortening and anchoring, recorded in PD-153. App tests 907.
