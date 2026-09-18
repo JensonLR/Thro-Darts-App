@@ -1,27 +1,57 @@
-/* THRØ on the web. The colours, spacing and radii are the generated tokens (tokens.css); nothing here
-   invents one. What this file adds is the arrangement: a brand field that bleeds, paper under it, and
+/* THRØ on the web. The colours, spacing, radii and type are the generated tokens (tokens.css); nothing
+   here invents one. What this file adds is the arrangement: a brand field that bleeds, paper under it, and
    content held to the same 560-point measure the app holds it to (PD-052). */
+
+/* --- The face ------------------------------------------------------------------------------------------
+   The token layer has named Archivo since the tokens existed, and until now no page loaded it: --font-ui
+   fell straight through to system-ui, so nobody who has visited thro.uk had seen THRØ's type. These are the
+   same bytes the app ships (apps/ios/ThroDarts/Fonts/Archivo-*.ttf, OFL, licence beside them in fonts/),
+   subset to Latin and packed as woff2 — about 12 KB a weight against 180 KB a face.
+
+   Self-hosted, not fetched from a font host. The site is served from one origin; a font request to another
+   party tells that party who read which page, and that is a decision about other people's information
+   nobody here has made.
+
+   The subset is the standard Latin range PLUS U+2190-2193. The arrows are not in it by default and these
+   pages use → twenty-three times ("Search below →"), so without them a sentence changes face halfway
+   through. `font-display: swap` because words a reader cannot see are worse than words in the wrong face.
+
+   Six weights are declared and no page pays for six: a browser fetches a face only when something on the
+   page is set in it. A typical page draws 400, 600 and 700. 900 is the wall's alone.
+   wall.html repeats this block, deliberately — it is a television that fetches one stylesheet and does not
+   link this one — and tools/check_web_type.py holds the two copies to the same bytes. */
+@font-face { font-family: "Archivo"; font-style: normal; font-weight: 400; font-display: swap; src: url("fonts/archivo-400.woff2") format("woff2"); }
+@font-face { font-family: "Archivo"; font-style: normal; font-weight: 500; font-display: swap; src: url("fonts/archivo-500.woff2") format("woff2"); }
+@font-face { font-family: "Archivo"; font-style: normal; font-weight: 600; font-display: swap; src: url("fonts/archivo-600.woff2") format("woff2"); }
+@font-face { font-family: "Archivo"; font-style: normal; font-weight: 700; font-display: swap; src: url("fonts/archivo-700.woff2") format("woff2"); }
+@font-face { font-family: "Archivo"; font-style: normal; font-weight: 800; font-display: swap; src: url("fonts/archivo-800.woff2") format("woff2"); }
+@font-face { font-family: "Archivo"; font-style: normal; font-weight: 900; font-display: swap; src: url("fonts/archivo-900.woff2") format("woff2"); }
 
 *, *::before, *::after { box-sizing: border-box; }
 
 html { -webkit-text-size-adjust: 100%; }
 
+/* The body sets the scale. It had no font-size at all, so every page ran at whatever the browser's default
+   was — 16px — while the token layer said the body is 17. Everything that inherits from here inherits the
+   pair: a fixed line-height inherits as a length, so every element that changes size below also states its
+   own line. */
 body {
   margin: 0;
   font-family: var(--font-ui);
+  font-size: var(--typography-body-default-size);
+  line-height: var(--typography-body-default-line);
   background: var(--color-background-primary);
   color: var(--color-text-primary);
-  line-height: 1.5;
 }
 
 /* The measure. A column of comfortable width with the room around it left as room. */
-.measure { max-width: 560px; margin-inline: auto; padding-inline: 20px; }
+.measure { max-width: 560px; margin-inline: auto; padding-inline: var(--space-screen-gutter); }
 
 /* The board bleeds; what is read under it sits in the column. */
 .field {
   background: var(--color-background-brand);
   color: var(--color-text-on-board);
-  padding-block: 28px 32px;
+  padding-block: 28px var(--spacing-7);
 }
 .field a { color: var(--color-text-on-board); }
 /* The brand, on every page, as the mark and never as type.
@@ -35,117 +65,129 @@ body {
 /* The front page wears it at size: it is the only page whose subject is the product itself. */
 .brand-hero { height: 56px; margin-bottom: 14px; }
 
+/* The page's own title. Every page but the front one used to carry `style="font-size:28px"` on this,
+   overriding the 34px below — two raw numbers arguing, neither of them a token. It is heading-1 now, in
+   one place, and the pages say nothing about their own size. */
 .wordmark {
   font-family: var(--font-sport);
   font-weight: var(--font-weight-extrabold);
-  font-size: 34px;
+  font-size: var(--typography-heading-1-size);
+  line-height: var(--typography-heading-1-line);
+  /* No positive tracking token exists; the scale carries only the negative display trackings and the
+     eyebrow's 0.09em. Left raw rather than invented. */
   letter-spacing: 0.02em;
   margin: 0;
 }
 .eyebrow {
-  font-size: 13px;
-  letter-spacing: 0.08em;
+  font-size: var(--typography-eyebrow-size);
+  line-height: var(--typography-eyebrow-line);
+  letter-spacing: var(--typography-eyebrow-tracking);
   text-transform: uppercase;
   color: var(--color-text-on-board-secondary);
   margin: 6px 0 0;
 }
-.field .lede { color: var(--color-text-on-board-secondary); margin: 16px 0 0; }
+.field .lede { color: var(--color-text-on-board-secondary); margin: var(--spacing-4) 0 0; }
 
 main { padding-block: 28px 56px; }
 
-h1, h2, h3 { font-family: var(--font-ui); font-weight: var(--font-weight-bold); line-height: 1.2; }
-h2 { font-size: 22px; margin: 32px 0 8px; }
-h3 { font-size: 17px; margin: 24px 0 4px; }
-p { margin: 0 0 12px; }
-.quiet { color: var(--color-text-secondary); font-size: 14px; }
+h1, h2, h3 { font-family: var(--font-ui); font-weight: var(--font-weight-bold); }
+h2 { font-size: var(--typography-heading-3-size); line-height: var(--typography-heading-3-line); margin: var(--spacing-7) 0 var(--spacing-2); }
+/* h3 sets at body size, which is what its raw 17px asked for. The scale has no step between 18 and 21,
+   so a heading here is bold rather than bigger. */
+h3 { font-size: var(--typography-body-default-size); line-height: var(--typography-body-default-line); margin: var(--spacing-6) 0 var(--spacing-1); }
+p { margin: 0 0 var(--spacing-3); }
+.quiet { color: var(--color-text-secondary); font-size: var(--typography-label-strong-size); line-height: var(--typography-label-strong-line); }
 
 a { color: var(--color-text-brand); }
 
 input[type="search"] {
   width: 100%;
   font: inherit;
-  padding: 12px 14px;
+  padding: var(--spacing-3) 14px;
   color: var(--color-text-primary);
   background: var(--color-background-raised);
-  border: 1px solid var(--color-border-default);
+  border: var(--border-width-hairline) solid var(--color-border-default);
   border-radius: var(--radius-field);
 }
-input[type="search"]:focus-visible { outline: 2px solid var(--color-border-focus); outline-offset: 2px; }
+input[type="search"]:focus-visible { outline: var(--focus-ring-width) solid var(--color-border-focus); outline-offset: var(--focus-ring-offset); }
 
-ul.rows { list-style: none; margin: 16px 0 0; padding: 0; }
-ul.rows li { border-top: 1px solid var(--color-border-default); }
-ul.rows li:last-child { border-bottom: 1px solid var(--color-border-default); }
+ul.rows { list-style: none; margin: var(--spacing-4) 0 0; padding: 0; }
+ul.rows li { border-top: var(--border-width-hairline) solid var(--color-border-default); }
+ul.rows li:last-child { border-bottom: var(--border-width-hairline) solid var(--color-border-default); }
 ul.rows a { display: block; padding: 14px 0; text-decoration: none; color: inherit; }
 ul.rows a:hover, ul.rows a:focus-visible { background: var(--color-background-secondary); }
 .row-name { font-weight: var(--font-weight-semibold); }
-.row-meta { color: var(--color-text-secondary); font-size: 14px; }
+.row-meta { color: var(--color-text-secondary); font-size: var(--typography-label-strong-size); line-height: var(--typography-label-strong-line); }
 
 /* A result and the word that corrects it, on one line: the scoreline takes the room and the correction
    sits at the end of it, so a season of right answers reads as a list and not as a page of open forms. */
-.row-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+.row-head { display: flex; align-items: baseline; justify-content: space-between; gap: var(--spacing-3); }
 .row-head .row-name { min-width: 0; }
-.row-head button.quiet-button { flex: none; padding: 0; font-size: 14px; }
+.row-head button.quiet-button { flex: none; padding: 0; font-size: var(--typography-label-strong-size); line-height: var(--typography-label-strong-line); }
 /* The form a correction opens belongs to the row above it, not beside it. */
 .row-head + .row-meta + .entry { margin-top: 10px; }
 
 /* A table is not prose, so it may scroll inside its own box rather than force the page sideways. */
-.table-scroll { overflow-x: auto; margin-top: 8px; }
+.table-scroll { overflow-x: auto; margin-top: var(--spacing-2); }
 table { border-collapse: collapse; width: 100%; font-variant-numeric: tabular-nums; }
-caption { text-align: left; color: var(--color-text-secondary); font-size: 14px; padding-bottom: 8px; }
-th, td { padding: 10px 6px; border-bottom: 1px solid var(--color-border-default); text-align: right; }
+caption { text-align: left; color: var(--color-text-secondary); font-size: var(--typography-label-strong-size); line-height: var(--typography-label-strong-line); padding-bottom: var(--spacing-2); }
+th, td { padding: 10px 6px; border-bottom: var(--border-width-hairline) solid var(--color-border-default); text-align: right; }
 th:nth-child(1), td:nth-child(1) { width: 2ch; text-align: left; color: var(--color-text-secondary); }
 th:nth-child(2), td:nth-child(2) { text-align: left; width: auto; }
-thead th { font-size: 13px; color: var(--color-text-secondary); font-weight: var(--font-weight-medium); }
+thead th { font-size: var(--typography-metadata-size); line-height: var(--typography-metadata-line); color: var(--color-text-secondary); font-weight: var(--font-weight-medium); }
 td.points { font-family: var(--font-sport); font-weight: var(--font-weight-bold); }
 td.team { font-weight: var(--font-weight-semibold); }
 .evidenced { color: var(--color-status-verified); }
 
 .note {
-  border-left: 3px solid var(--color-border-brand);
+  /* The chalk rule, at the weight the token says a chalk rule is. */
+  border-left: var(--space-chalk-rule-weight) solid var(--color-border-brand);
   padding: 10px 0 10px 14px;
-  margin: 20px 0;
+  margin: var(--spacing-5) 0;
   color: var(--color-text-secondary);
-  font-size: 14px;
+  font-size: var(--typography-label-strong-size);
+  line-height: var(--typography-label-strong-line);
 }
-.goes li, .stays li { margin-bottom: 8px; }
+.goes li, .stays li { margin-bottom: var(--spacing-2); }
 
-footer { border-top: 1px solid var(--color-border-default); padding-block: 24px 40px; color: var(--color-text-secondary); font-size: 14px; }
+footer { border-top: var(--border-width-hairline) solid var(--color-border-default); padding-block: var(--spacing-6) var(--spacing-8); color: var(--color-text-secondary); font-size: var(--typography-label-strong-size); line-height: var(--typography-label-strong-line); }
 
 /* Running a league: two boxes and a button, on a card. */
-.entry { border: 1px solid var(--color-border-default); border-radius: var(--radius-card);
-         background: var(--color-background-raised); padding: 14px; margin-bottom: 12px; }
+.entry { border: var(--border-width-hairline) solid var(--color-border-default); border-radius: var(--radius-card);
+         background: var(--color-background-raised); padding: 14px; margin-bottom: var(--spacing-3); }
 .entry-form { display: flex; align-items: center; gap: 10px; margin-top: 10px; flex-wrap: wrap; }
-.entry-form input, .entry-form select, .acts input[type="number"] { font: inherit; padding: 10px; min-height: 44px;
+.entry-form input, .entry-form select, .acts input[type="number"] { font: inherit; padding: 10px; min-height: var(--touch-target-minimum);
                     color: var(--color-text-primary); background: var(--color-background-primary);
-                    border: 1px solid var(--color-border-default); border-radius: var(--radius-field); }
+                    border: var(--border-width-hairline) solid var(--color-border-default); border-radius: var(--radius-field); }
 /* A score is two small boxes; a name, a date or a time is not. */
 .entry-form input[type="number"] { width: 5rem; text-align: center; }
 .entry-form input[type="text"], .entry-form input[type="date"], .entry-form input[type="time"], .entry-form select { flex: 1 1 11rem; max-width: 100%; }
 .entry-form button:focus-visible, button.primary:focus-visible, a.primary:focus-visible, button.quiet-button:focus-visible {
-  outline: 3px solid var(--color-border-focus, var(--color-background-brand)); outline-offset: 2px; }
+  outline: 3px solid var(--color-border-focus, var(--color-background-brand)); outline-offset: var(--focus-ring-offset); }
 .entry-form .v { color: var(--color-text-secondary); }
-button.primary, a.primary { font: inherit; font-weight: var(--font-weight-semibold); padding: 12px 20px;
+button.primary, a.primary { font: inherit; font-weight: var(--font-weight-semibold); padding: var(--spacing-3) var(--space-control-pad-x);
                  /* Chalk on the green in both themes. `text-inverse` turns to ink in the dark theme, where the brand
                     ground is still green, and ink on deep green is a button nobody can read. */
                  color: var(--color-text-on-board); background: var(--color-background-brand);
-                 border: 0; border-radius: var(--radius-control); cursor: pointer; min-height: 44px; }
+                 border: 0; border-radius: var(--radius-control); cursor: pointer; min-height: var(--touch-target-minimum); }
 /* A link dressed as the primary act (PD-117: Open THRØ) reads as the button it is. */
-a.primary { display: inline-block; text-decoration: none; text-align: center; line-height: 20px; box-sizing: border-box; }
-.signin a.primary { display: block; margin: 4px 0 14px; }
+a.primary { display: inline-block; text-decoration: none; text-align: center; line-height: var(--typography-label-default-line); box-sizing: border-box; }
+.signin a.primary { display: block; margin: var(--spacing-1) 0 14px; }
 /* PD-127: the same place in the app. On a phone a button; on a bigger screen this page's own address as a QR, for the
    phone in the reader's pocket. Sits at the foot of a league's, a night's or a team's page. */
 .app-link { display: flex; gap: 18px; align-items: center; margin-top: 28px; }
-.app-link .qr { flex: 0 0 132px; width: 132px; height: 132px; padding: 8px; box-sizing: border-box;
+.app-link .qr { flex: 0 0 132px; width: 132px; height: 132px; padding: var(--spacing-2); box-sizing: border-box;
                 background: var(--thro-chalk-raised); border-radius: var(--radius-control); }
 .app-link .qr svg { width: 100%; height: 100%; display: block; }
-.app-link .app-link-title { font-weight: var(--font-weight-bold); margin: 0 0 4px; }
+.app-link .app-link-title { font-weight: var(--font-weight-bold); margin: 0 0 var(--spacing-1); }
 .app-link p { margin: 0; }
 .app-link a.primary { flex: 0 0 auto; }
 @media (max-width: 560px) { .app-link { flex-direction: column; align-items: stretch; } .app-link .qr { align-self: center; } }
-.lede-line { font-size: 18px; margin: 0 0 18px; }
-.address { font-family: var(--font-family-mono, ui-monospace, monospace); font-size: 17px; margin: 4px 0; overflow-wrap: anywhere; user-select: all; }
+.lede-line { font-size: var(--typography-body-large-size); line-height: var(--typography-body-large-line); margin: 0 0 18px; }
+/* There is no mono token in the generated scale; the stack falls through to the system's own. */
+.address { font-family: var(--font-family-mono, ui-monospace, monospace); font-size: var(--typography-body-default-size); line-height: var(--typography-body-default-line); margin: var(--spacing-1) 0; overflow-wrap: anywhere; user-select: all; }
 button.primary:disabled { opacity: 1; background: var(--color-text-tertiary); cursor: default; }
-button.quiet-button { font: inherit; padding: 8px 0; color: var(--color-text-brand);
+button.quiet-button { font: inherit; padding: var(--spacing-2) 0; color: var(--color-text-brand);
                       background: none; border: 0; cursor: pointer; text-decoration: underline; }
 
 /* A notice about people's information (PD-094). Drawn only from notice.json, and only while a notice is live. The
@@ -153,21 +195,22 @@ button.quiet-button { font: inherit; padding: 8px 0; color: var(--color-text-bra
    tokens have dark values, so the card reads in either theme. */
 .notice {
   background: var(--color-status-warning-surface);
-  border-left: 4px solid var(--color-status-warning);
+  border-left: var(--spacing-1) solid var(--color-status-warning);
   border-radius: var(--radius-card);
-  padding: 14px 16px;
-  margin: 20px 0;
+  padding: 14px var(--spacing-4);
+  margin: var(--spacing-5) 0;
   color: var(--color-text-primary);
 }
 .notice p { margin: 0 0 10px; }
 .notice p:last-child { margin-bottom: 0; }
-.notice .notice-title { font-weight: var(--font-weight-bold); font-size: 18px; margin-bottom: 4px; }
-.notice .notice-when { color: var(--color-text-secondary); font-size: 14px; }
+.notice .notice-title { font-weight: var(--font-weight-bold); font-size: var(--typography-body-large-size); line-height: var(--typography-body-large-line); margin-bottom: var(--spacing-1); }
+.notice .notice-when { color: var(--color-text-secondary); font-size: var(--typography-label-strong-size); line-height: var(--typography-label-strong-line); }
 
 /* A phone in one hand. Below 420 CSS pixels a form's fields take the full measure one under another, a row's head
-   wraps rather than squeezes its name, and the gutter narrows to the 16 the app keeps. */
+   wraps rather than squeezes its name, and the gutter narrows to the 16 the app keeps — which is a token with that
+   name, so the sentence and the number can no longer disagree. */
 @media (max-width: 420px) {
-  .measure { padding-inline: 16px; }
+  .measure { padding-inline: var(--space-gutter-android); }
   .entry-form input[type="text"], .entry-form input[type="date"], .entry-form input[type="time"],
   .entry-form input[type="search"], .entry-form input[type="datetime-local"], .entry-form select { flex-basis: 100%; }
   .entry-form button.primary { flex: 1 1 100%; }
@@ -181,72 +224,77 @@ button.quiet-button { font: inherit; padding: 8px 0; color: var(--color-text-bra
    Every control a person touches in a box shares one shape: the same height, the same corner, the same ink. A checkbox
    is a checkbox, beside its words, not a 44-pixel field with its words underneath. Two quiet acts side by side have
    air between them. A list and the box after it do not touch. */
-.entry input:not([type="checkbox"]), .entry select { font: inherit; padding: 10px 12px; min-height: 44px; border-radius: var(--radius-control, 10px);
-  border: 1px solid var(--color-border-default); background: var(--color-surface-primary); color: var(--color-text-primary); max-width: 100%; }
+.entry input:not([type="checkbox"]), .entry select { font: inherit; padding: 10px var(--spacing-3); min-height: var(--touch-target-minimum); border-radius: var(--radius-control);
+  border: var(--border-width-hairline) solid var(--color-border-default); background: var(--color-surface-primary); color: var(--color-text-primary); max-width: 100%; }
 .entry select { appearance: none; -webkit-appearance: none; padding-right: 36px;
   background-image: linear-gradient(45deg, transparent 50%, var(--color-text-secondary) 50%), linear-gradient(135deg, var(--color-text-secondary) 50%, transparent 50%);
-  background-position: calc(100% - 20px) 50%, calc(100% - 14px) 50%; background-size: 6px 6px, 6px 6px; background-repeat: no-repeat; }
+  background-position: calc(100% - var(--spacing-5)) 50%, calc(100% - 14px) 50%; background-size: 6px 6px, 6px 6px; background-repeat: no-repeat; }
 .entry-form input[type="checkbox"], .check input[type="checkbox"] { width: 22px; height: 22px; min-height: 0; padding: 0; margin: 0; flex: none;
-  accent-color: var(--color-text-brand); border-radius: 6px; }
-label.check { display: inline-flex; align-items: center; gap: 10px; min-height: 44px; color: var(--color-text-primary); font-size: 16px; cursor: pointer; }
-label.spec { display: inline-flex; align-items: center; gap: 8px; color: var(--color-text-secondary); font-size: 14px; white-space: nowrap; }
-label.spec input, label.spec select { color: var(--color-text-primary); font-size: 16px; }
+  accent-color: var(--color-text-brand); border-radius: var(--radius-medium); }
+/* A form's own words sit at body size. Below 16px iOS Safari zooms the page when the field takes focus, so a label
+   or a field here never goes under the body token. */
+label.check { display: inline-flex; align-items: center; gap: 10px; min-height: var(--touch-target-minimum); color: var(--color-text-primary); font-size: var(--typography-body-default-size); cursor: pointer; }
+label.spec { display: inline-flex; align-items: center; gap: var(--spacing-2); color: var(--color-text-secondary); font-size: var(--typography-label-strong-size); line-height: var(--typography-label-strong-line); white-space: nowrap; }
+label.spec input, label.spec select { color: var(--color-text-primary); font-size: var(--typography-body-default-size); }
 button.quiet-button + button.quiet-button, button.quiet-button + label.check { margin-left: 18px; }
 .entry > button.quiet-button, li > button.quiet-button { margin-top: 6px; }
-ul.rows + .entry, p.quiet + .entry, .entry + .entry, .entry + ul.rows, .note + .entry { margin-top: 16px; }
+ul.rows + .entry, p.quiet + .entry, .entry + .entry, .entry + ul.rows, .note + .entry { margin-top: var(--spacing-4); }
 ul.rows li .row-meta { padding: 0 0 10px; }
 ul.rows li .row-head + .row-meta { margin-top: -6px; }
 .entry h2:first-child, .entry .entry-form:first-child { margin-top: 0; }
 .entry h2 { margin-top: 0; }
-.entry .entry-form + p.quiet, .entry .note + p.quiet { margin-top: 12px; }
+.entry .entry-form + p.quiet, .entry .note + p.quiet { margin-top: var(--spacing-3); }
 /* THRØ's reading of a report (PD-118): beside it, quieter than the report, never louder. */
-.entry p.reading { margin: 6px 0 0; color: var(--color-text-secondary); font-size: 14px; }
-.acts { display: flex; flex-wrap: wrap; gap: 8px 18px; align-items: center; margin-top: 8px; }
+.entry p.reading { margin: 6px 0 0; color: var(--color-text-secondary); font-size: var(--typography-label-strong-size); line-height: var(--typography-label-strong-line); }
+.acts { display: flex; flex-wrap: wrap; gap: var(--spacing-2) 18px; align-items: center; margin-top: var(--spacing-2); }
 .acts button.quiet-button { margin: 0; }
 /* A seed beside its entrant: the same field as any other, a number's width. */
 .acts input[type="number"] { width: 5.5rem; text-align: center; box-sizing: border-box; }
-.entry label.check { margin-top: 12px; }
+.entry label.check { margin-top: var(--spacing-3); }
 p.eyebrow + p.wordmark { margin-top: 2px; }
 
 /* --- The site's places, and the way in (PD-114) --------------------------------------------------------------- */
-.nav { display: flex; flex-wrap: wrap; gap: 4px 22px; align-items: center; margin-top: 20px; }
-.nav a { color: var(--color-text-on-board); text-decoration: none; font-weight: var(--font-weight-semibold); padding: 8px 0;
-         border-bottom: 2px solid transparent; }
+.nav { display: flex; flex-wrap: wrap; gap: var(--spacing-1) 22px; align-items: center; margin-top: var(--spacing-5); }
+.nav a { color: var(--color-text-on-board); text-decoration: none; font-weight: var(--font-weight-semibold); padding: var(--spacing-2) 0;
+         border-bottom: var(--border-width-strong) solid transparent; }
 .nav a.here { border-bottom-color: var(--color-text-on-board); }
 .nav a:hover { border-bottom-color: var(--color-text-on-board-secondary); }
-.nav-state { margin-left: auto; color: var(--color-text-on-board-secondary); font-size: 13px; letter-spacing: 0.06em; text-transform: uppercase; }
+/* The same uppercase micro-label as .eyebrow, and set from the same tokens. */
+.nav-state { margin-left: auto; color: var(--color-text-on-board-secondary); font-size: var(--typography-eyebrow-size); line-height: var(--typography-eyebrow-line); letter-spacing: var(--typography-eyebrow-tracking); text-transform: uppercase; }
 .signin h2 { margin-top: 0; }
-.signin .code { font-family: var(--font-sport); font-weight: var(--font-weight-extrabold); font-size: 40px; letter-spacing: 0.18em;
+/* The sign-in code is the display size. Its tracking is wide on purpose, so a person reads it a character at a
+   time to somebody across a room; no token carries a tracking that wide, so it stays a raw number. */
+.signin .code { font-family: var(--font-sport); font-weight: var(--font-weight-extrabold); font-size: var(--typography-display-size); line-height: var(--typography-display-line); letter-spacing: 0.18em;
                 margin: 14px 0 10px; color: var(--color-text-primary); }
-.signin .steps { margin: 0 0 12px; padding-left: 1.3em; color: var(--color-text-secondary); }
-.signin .steps li { margin: 4px 0; }
+.signin .steps { margin: 0 0 var(--spacing-3); padding-left: 1.3em; color: var(--color-text-secondary); }
+.signin .steps li { margin: var(--spacing-1) 0; }
 /* The code as a QR (PD-121). Dark on light in both themes: a camera reads an inverted code badly, if at all. */
-.signin .qr { width: 176px; max-width: 60%; margin: 6px 0 4px; border-radius: var(--radius-field); overflow: hidden; line-height: 0; }
+.signin .qr { width: 176px; max-width: 60%; margin: 6px 0 var(--spacing-1); border-radius: var(--radius-field); overflow: hidden; line-height: 0; }
 .signin .qr svg { display: block; width: 100%; height: auto; }
-.signin .qr + p.quiet { margin-top: 4px; }
-.cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 12px; margin: 20px 0 8px; }
-.card { display: block; border: 1px solid var(--color-border-default); border-radius: var(--radius-card); padding: 18px;
+.signin .qr + p.quiet { margin-top: var(--spacing-1); }
+.cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: var(--spacing-3); margin: var(--spacing-5) 0 var(--spacing-2); }
+.card { display: block; border: var(--border-width-hairline) solid var(--color-border-default); border-radius: var(--radius-card); padding: 18px;
         background: var(--color-background-raised); color: inherit; text-decoration: none; }
 .card:hover { border-color: var(--color-text-brand); }
-.card h3 { margin: 0 0 6px; font-size: 18px; }
-.card p { margin: 0; color: var(--color-text-secondary); font-size: 14px; }
+.card h3 { margin: 0 0 6px; font-size: var(--typography-body-large-size); line-height: var(--typography-body-large-line); }
+.card p { margin: 0; color: var(--color-text-secondary); font-size: var(--typography-label-strong-size); line-height: var(--typography-label-strong-line); }
 .card .go { display: inline-block; margin-top: 10px; color: var(--color-text-brand); font-weight: var(--font-weight-semibold); }
-ul.rows li.more { padding: 12px 0; }
+ul.rows li.more { padding: var(--spacing-3) 0; }
 
 /* A section folded behind its name (PD-120: Who changed what). Opened by whoever wants it; never in the way. */
-details.fold { margin-top: 32px; border-top: 1px solid var(--color-border-default); padding-top: 8px; }
-details.fold > summary { cursor: pointer; list-style: none; display: flex; align-items: center; min-height: 44px;
-                         font-weight: var(--font-weight-semibold); font-size: 20px; color: var(--color-text-primary); }
+details.fold { margin-top: var(--spacing-7); border-top: var(--border-width-hairline) solid var(--color-border-default); padding-top: var(--spacing-2); }
+details.fold > summary { cursor: pointer; list-style: none; display: flex; align-items: center; min-height: var(--touch-target-minimum);
+                         font-weight: var(--font-weight-semibold); font-size: var(--typography-heading-3-size); line-height: var(--typography-heading-3-line); color: var(--color-text-primary); }
 details.fold > summary::-webkit-details-marker { display: none; }
-details.fold > summary::after { content: '+'; margin-left: auto; font-size: 24px; color: var(--color-text-brand); }
+details.fold > summary::after { content: '+'; margin-left: auto; font-size: var(--typography-heading-2-size); line-height: var(--typography-heading-2-line); color: var(--color-text-brand); }
 details.fold[open] > summary::after { content: '–'; }
-details.fold > summary:focus-visible { outline: 3px solid var(--color-border-focus, var(--color-background-brand)); outline-offset: 2px; }
+details.fold > summary:focus-visible { outline: 3px solid var(--color-border-focus, var(--color-background-brand)); outline-offset: var(--focus-ring-offset); }
 
 /* A pasted fixture list (PD-122): the league's own words above each row THRØ read from them. */
-.paste { margin-top: 18px; border-top: 1px solid var(--color-border-default); padding-top: 12px; }
-.paste textarea { width: 100%; box-sizing: border-box; font: inherit; padding: 12px; color: var(--color-text-primary);
-                  background: var(--color-background-primary); border: 1px solid var(--color-border-default); border-radius: var(--radius-field); }
-.paste textarea:focus-visible { outline: 3px solid var(--color-border-focus, var(--color-background-brand)); outline-offset: 2px; }
+.paste { margin-top: 18px; border-top: var(--border-width-hairline) solid var(--color-border-default); padding-top: var(--spacing-3); }
+.paste textarea { width: 100%; box-sizing: border-box; font: inherit; padding: var(--spacing-3); color: var(--color-text-primary);
+                  background: var(--color-background-primary); border: var(--border-width-hairline) solid var(--color-border-default); border-radius: var(--radius-field); }
+.paste textarea:focus-visible { outline: 3px solid var(--color-border-focus, var(--color-background-brand)); outline-offset: var(--focus-ring-offset); }
 .paste-row .entry-form { margin-top: 6px; }
 .paste-row input[type="checkbox"] { width: 22px; height: 22px; flex: none; accent-color: var(--color-background-brand); }
 
@@ -256,10 +304,10 @@ details.fold > summary:focus-visible { outline: 3px solid var(--color-border-foc
    the page's own background, a surface bar sits at about 1.05:1 and is not visible at all.
    `prefers-reduced-motion` already zeroes the motion durations in tokens.css; the pulse is stopped here
    as well, because a duration of zero on an alternating animation still flickers. */
-.skeleton { display: flex; flex-direction: column; gap: 12px; margin-top: 12px; }
-.skeleton-bar { height: 14px; border-radius: var(--radius-small, 4px); background: var(--color-border-strong);
+.skeleton { display: flex; flex-direction: column; gap: var(--spacing-3); margin-top: var(--spacing-3); }
+.skeleton-bar { height: 14px; border-radius: var(--radius-small); background: var(--color-border-strong);
                 animation: skeleton-pulse 1400ms ease-in-out infinite alternate; }
-.skeleton-hero { height: 52px; width: 58%; margin-bottom: 8px; }
+.skeleton-hero { height: 52px; width: 58%; margin-bottom: var(--spacing-2); }
 /* The pulse stays inside a band that is still visible. The first version of this faded to 0.35, which
    took --color-border-strong from about 1.70:1 against the page down to about 1.06:1 — bars that were
    in the DOM, the right size, and could not be seen. Measured from the rendered pixels, not by eye. */

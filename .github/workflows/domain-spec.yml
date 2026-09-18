@@ -117,6 +117,13 @@ jobs:
       - name: One row height, one card padding
         run: python3 tools/check_one_row_one_card.py
 
+      # thro.css carried 184 raw lengths and 25 raw font-sizes, `body` set no size at all, and `--font-ui`
+      # named Archivo with no @font-face, no font file and no link anywhere — so nobody who had visited
+      # thro.uk had seen THRØ's type, and wall.html drew every pub television in Inter, a face the brand
+      # does not own. Each of those renders. None of them errors. That is what makes them worth a check.
+      - name: The web's type is the design system's type
+        run: python3 tools/check_web_type.py
+
       # Typography.kt and Typography.swift are two type scales that must stay the same shape, and
       # this is the guard that says so — cited by both the token layer and the decisions, and until
       # now run by nobody. It needs no toolchain, so it belongs beside the other pure-Python guards.

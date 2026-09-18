@@ -6399,3 +6399,11 @@ typing, so a search before the leagues arrive no longer says nothing matched; "f
 locality is ever passed; the map's accessibility label follows the state. `Nearby.Loading.isLoading`. `apps/web/wall.js`:
 a focusable *Try again*, a thirty-second retry, a five-minute re-ask when no season is published, and `?season=`
 with nothing after it genuinely forgets the remembered league. App tests 900.
+
+## The web is on the design system (PD-149)
+
+`apps/web/thro.css`: 25 raw font-sizes → 0, 184 raw lengths → 73, `body` given a size, six `@font-face` rules.
+`apps/web/fonts/`: Archivo 400–900 subset from the repo's own OFL faces, 92KB total, plus the licence. Fifteen pages
+lose `style="font-size:28px"`. `wall.html` stops naming Inter. New `tools/check_web_type.py` in `domain-spec.yml`,
+proved against eight fixtures. Counts and fonts re-derived independently; four pages looked at at two widths in both
+schemes. Every check green.

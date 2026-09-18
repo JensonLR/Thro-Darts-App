@@ -6245,3 +6245,50 @@ the app's was cut. It is named here rather than left to be found.
 **Evidence.** 900 app tests, one word test updated to the sentence it asserts. Every `tools/check_*.py`
 green. Looked at in the simulator: Discover, Settings; and in a browser: the wall's failure, where *Try
 again* is drawn large and already focused.
+
+## PD-149 — The web is on the design system, and thro.uk has THRØ's own type
+
+**18 September 2026.** The research's number five, and the widest gap between the app and the site: the
+app obeys a generated token layer and the web did not. `apps/web/thro.css` carried **184 raw lengths
+across 37 values** and **25 raw font-sizes**; `body` set no font-size at all, so every page ran at the
+browser's 16px while the token layer said 17. And `--font-ui` named Archivo with no `@font-face`, no font
+file and no link anywhere under `apps/web` — **nobody who had visited thro.uk had ever seen THRØ's type.**
+
+**Decided.**
+
+1. **THRØ's own face ships, self-hosted.** Subset from the repository's own OFL-licensed
+   `apps/ios/ThroDarts/Fonts/Archivo-*.ttf` — the app already carried them — to Latin plus the arrows,
+   because these pages draw → twenty-three times and without it a sentence changes face mid-line. 180KB a
+   face became about 12KB; 92KB for all six weights, and a page fetches only the weights it draws. Not a
+   font host: the site is served from one origin, and a font request to a third party is a decision about
+   readers' data that nobody made.
+2. **`body` has a size, and every raw font-size is a token.** 25 became 0. Every page grew about 6% in
+   body type, which is what the token layer had always asked for.
+3. **A page does not decide its own type.** Fifteen pages carried `style="font-size:28px"` on their title,
+   overriding a class that declared 34px — two raw numbers arguing, neither a token. The class alone sets
+   it now, at 32px. **This is the largest visible move in the pass: titles render 14% larger.** If that is
+   too much, heading-2 at 25px is the other nearest token and it is a one-line change.
+4. **A tie is broken upward on a form.** 16px sits exactly between two tokens, and below 16px iOS Safari
+   zooms the page when a field takes focus. Rounding up is a deliberate departure from nearest-wins.
+5. **`tools/check_web_type.py`, on every push.** A raw font-size renders, at a size the scale never agreed
+   to. A `font-family` naming a face renders, in whatever the reader's machine has. A `font-weight` with no
+   matching `@font-face` renders *most* convincingly of all — the browser smears the nearest weight into a
+   synthetic bold, nothing errors, and the type is simply wrong. Eight fixtures prove the check fails.
+6. **The pub television was drawing in the wrong typeface entirely.** `wall.html` named `Inter` — a face
+   THRØ does not own, does not ship and never loaded — so every screen running THRØ in a pub drew in
+   whatever the television had, under THRØ's colours. It names the token now.
+
+**Checked independently, not taken on trust.** A second agent re-derived both counts with the comments
+stripped, opened all six fonts with fontTools rather than trusting their filenames (each a valid woff2 at
+the weight its name claims, 236 characters, every glyph these pages draw present), and looked at four
+pages at two widths in both schemes on a cache-disabled browser. Nothing broke.
+
+**Under-disclosed, and recorded here rather than left to be found.** The pass moved six **line-heights**
+by more than two points and the change list called them "1px smaller". Line height changes what a block
+occupies as visibly as size does. And prose `h3` is now body size *and* body leading — a heading by weight
+alone, which is the weakest rung on the ladder and points at a real gap: the scale has no step between 18
+and 21. Neither is wrong; both are the founder's to look at.
+
+**Latent.** The shared `h1, h2, h3 { line-height: 1.2 }` was replaced by paired tokens on `h2` and `h3`,
+and `h1` got neither. There is no `<h1>` anywhere in `apps/web` today, so nothing renders wrong — but the
+first one added would inherit the browser's own.
