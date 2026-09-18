@@ -6206,3 +6206,42 @@ list is only mechanical where every entry is a substitution, and checking which 
 
 **Evidence.** 900 app tests. Every `tools/check_*.py` green. Looked at in the simulator: Home now carries
 one filled key — *Continue* — with *Start another* quiet beneath it.
+
+## PD-148 — Fewer words, and a state that is not a claim
+
+**18 September 2026.** Two of the ranked ten, done together because both are about a screen saying only
+what is true and only as much as it needs.
+
+**Nineteen sentences cut.** The house voice is plain and exact; the sentences were twice too long. Every
+cut keeps every fact and keeps the founder's words — clauses, hedges and restatements go, and a semicolon
+becomes a full stop. The worst were the haptics footnote (44 words), the links readiness line (34) and a
+snake-wise draw note (37). Four cuts drop something the survey flagged as a possible keep — the haptics
+note loses *why* haptics exist, the calendar note broadens "wherever you have it set to" to "anywhere" —
+and each is a one-line restore if the founder disagrees. Six web sentences are **not** done, including a
+55-word run-on in the terms that wants to be a list rather than new wording.
+
+**A false empty state, in its purest form.** A name typed into Discover's search *before the leagues had
+arrived* searched an empty list and said nothing matched. The reading line already existed; it simply sat
+in the branch a typed name never reached. Reading wins over typing now.
+
+**Two sentences that were not true.** "THRØ has not been given any leagues **for this area**" — the read
+asks for every league THRØ holds and passes no locality, so it named a filter that was never applied and
+told somebody in a well-served town that their area was empty when the whole map was. And the map's
+accessibility label said "Map of 0 leagues and pubs" while the leagues were still arriving: a count of a
+thing that has not been read, said aloud, and only to the people who cannot see that it is still coming.
+`Loading.isLoading` exists now so a screen can say what it has rather than what it would have.
+
+**The television can ask again.** From the Phase 1 sweep and left open there: the wall's chooser printed
+its failure and stopped, on the one device with no keyboard and no reachable reload. It offers a focusable
+*Try again* a remote can land on, keeps asking every thirty seconds on its own, and re-asks every five
+minutes when no league has published a season — a screen whose wifi comes back at closing time should be
+showing the league by opening time. And the chooser said a screen keeps its league for ever; `?season=`
+with nothing after it forgets it, which the sentence now says **and the code now does** — before this the
+empty value was falsy and the remembered season won, so the sentence would have been false.
+
+**One thing the app and the web now disagree about.** The delete-account sentence exists in both and only
+the app's was cut. It is named here rather than left to be found.
+
+**Evidence.** 900 app tests, one word test updated to the sentence it asserts. Every `tools/check_*.py`
+green. Looked at in the simulator: Discover, Settings; and in a browser: the wall's failure, where *Try
+again* is drawn large and already focused.

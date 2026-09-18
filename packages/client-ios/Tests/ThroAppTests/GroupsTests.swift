@@ -258,7 +258,7 @@ final class GroupsTests: XCTestCase {
 
         // Once a result exists the store refuses the change, so neither reader may be told to make
         // it — a button there would look like it worked and do nothing.
-        XCTAssertTrue(tooLate.contains("too late"), tooLate)
+        XCTAssertTrue(tooLate.contains("Too late"), tooLate)
         XCTAssertEqual(TournamentScreen.groupsSetupNote(mayEdit: false, setupIsStillOpen: false),
                        tooLate, "who is reading does not change whether it is too late")
         for note in [admin, watcher, tooLate] {

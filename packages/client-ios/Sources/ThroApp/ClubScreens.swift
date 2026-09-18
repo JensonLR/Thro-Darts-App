@@ -521,10 +521,9 @@ public struct FixturesScreen: View {
                     // the player's own action, and each is worth knowing before it is taken.
                     Note("A reminder is scheduled by this phone and delivered by it — nothing is "
                          + "sent anywhere. **Adding a fixture to your calendar puts it in your "
-                         + "calendar app**, which is not THRØ and may sync wherever you have it set "
-                         + "to; THRØ asks only for permission to add, never to read. Finding the "
-                         + "venue searches Maps for the venue exactly as it is typed here — THRØ "
-                         + "does not know where it is.")
+                         + "calendar app**, which is not THRØ and may sync anywhere. THRØ asks to "
+                         + "add, never to read. Finding the venue searches Maps for the venue "
+                         + "exactly as it is typed here — THRØ does not know where it is.")
                         .padding(.top, ThroSpacing.spacing4)
                 }
                 .padding(.horizontal, ThroSpacing.spaceScreenGutter)

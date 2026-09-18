@@ -394,8 +394,8 @@ public enum ThroReadiness {
     static func venue(_ f: Facts) -> Surface {
         Surface(id: "venue", name: "Find the venue in Maps", state: .waiting,
                 detail: "\(fixtureRoute(f)) **Find the venue** is there only on a fixture with a "
-                      + "venue typed into it, and searches Maps for exactly what was typed — THRØ "
-                      + "has never known where it is, and does not ask this phone where you are.",
+                      + "venue typed into it. It searches Maps for exactly what was typed. THRØ "
+                      + "has never known where it is, and never asks where you are.",
                 go: .place("Open a team", .tab(.discover)))
     }
 
@@ -456,9 +456,9 @@ public enum ThroReadiness {
         // PD-117: thro.uk serves the association file and the entitlement names it, so a link to
         // thro.uk/link/<code> — a screen's sign-in code — opens the app on the card that approves it.
         Surface(id: "links", name: "Links that open the app", state: .on,
-                detail: "A link to thro.uk/link/… opens THRØ on the card that signs a screen in; a league's, a "
-                      + "tournament night's and a team's page at thro.uk open the same thing here; and "
-                      + "the app's own links open it anywhere. The file thro.uk serves for iOS is "
+                detail: "A link to thro.uk/link/… opens THRØ on the card that signs a screen in. A "
+                      + "league's, a tournament night's and a team's page at thro.uk open here. The "
+                      + "app's own links open it anywhere. The file thro.uk serves for iOS is "
                       + "checked against the app's own link grammar on every push.")
     }
 

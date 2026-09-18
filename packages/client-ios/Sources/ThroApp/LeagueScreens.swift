@@ -149,9 +149,8 @@ struct LeagueTableView: View {
             }
             Note(counted + "**\(pointsForWin) point\(pointsForWin == 1 ? "" : "s") for a win, "
                  + "\(pointsForDraw) for a draw.** Sorted on points, then difference, then what a "
-                 + "team scored. **E** counts the results in that row that came from a match scored "
-                 + "in THRØ — the rest are an official's word, which counts here and can never move "
-                 + "a rating.")
+                 + "team scored. **E** counts the results in that row from a match scored in THRØ. "
+                 + "The rest are an official's word: it counts here, and never moves a rating.")
                 .padding(.top, ThroSpacing.spacing3)
         }
     }
@@ -657,10 +656,9 @@ public struct TournamentScreen: View {
                 groupBlock(group, of: groups)
             }
             groupKnockout(groups)
-            Note("Entrants are dealt into groups **snake-wise** over the order they were entered — "
-                 + "first seed to A, second to B, and back down again — so group A does not get both "
-                 + "the first and the third of them. That order is the order they went in: THRØ "
-                 + "has no rating to seed on.")
+            Note("Entrants are dealt into groups **snake-wise**: first seed to A, second to B, and "
+                 + "back down again. So group A does not get both the first and the third. That "
+                 + "order is the order they went in: THRØ has no rating to seed on.")
                 .padding(.top, ThroSpacing.spacing4)
         }
     }
@@ -687,9 +685,8 @@ public struct TournamentScreen: View {
                 + "many go through from each, decide what every match in it is for — so THRØ asks "
                 + "rather than guessing. "
         guard setupIsStillOpen else {
-            return why + "It is too late to set them: a result has already been recorded, and "
-                       + "deciding now what every match was for would move the target under a field "
-                       + "that is part way through."
+            return why + "Too late: a result is already recorded. Deciding now what every match "
+                       + "was for moves the target under a field part way through."
         }
         return mayEdit
             ? why + "Set them below, before the first result goes in — after that they are fixed."
@@ -1070,10 +1067,9 @@ public struct TeamsScreen: View {
                     }
                     if club.teams.isEmpty { empty }
                     if club.kind == .tournament {
-                        Note("The order here is the order they were entered, and in a knockout that "
-                             + "is the seeding — the byes go to the top of this list. THRØ has no "
-                             + "rating, so it has nothing else to seed on and does not pretend "
-                             + "otherwise.")
+                        Note("The order here is the order they were entered. In a knockout that is "
+                             + "the seeding: the byes go to the top. THRØ has no rating, so it has "
+                             + "nothing else to seed on and does not pretend otherwise.")
                             .padding(.top, ThroSpacing.spacing5)
                     } else {
                         Note("A league's competitors are its **teams**. The people who play for them "
@@ -1188,9 +1184,8 @@ public struct NewTeamScreen: View {
                         Note("An entrant may be one player or a team of them — THRØ stores the name "
                              + "either way, because a tournament of pairs is still a tournament.")
                     } else {
-                        Note("**The Feathers A** and **The Feathers B** are two teams, and the letter "
-                             + "is the whole difference between them — so it is kept, in the name and "
-                             + "on the badge.")
+                        Note("**The Feathers A** and **The Feathers B** are two teams. The letter is "
+                             + "the whole difference, so it is kept — in the name and on the badge.")
                     }
                 }
                 .padding(.horizontal, ThroSpacing.spaceScreenGutter)
@@ -1390,8 +1385,8 @@ public struct RecordResultScreen: View {
                     .foregroundStyle(ThroColor.colorTextTertiary)
             }
             Text("The other way to fill this in, and the one THRØ is for: every visit and every dart "
-                 + "behind the score. It needs a match this phone can tie to \(home) and \(away), "
-                 + "and a match here is two names typed at an oche — nothing yet says which team "
+                 + "behind the score. It needs a match this phone can tie to \(home) and \(away). "
+                 + "A match here is two names typed at an oche: nothing yet says which team "
                  + "somebody played for. That arrives with accounts.")
                 .thro(ThroTypography.metadata)
                 .foregroundStyle(ThroColor.colorTextTertiary)

@@ -6390,3 +6390,12 @@ primary; Home's *Start match* becomes *Start another* and secondary while a matc
 Four screens left alone with the argument written down. Three proposed changes to `TeamFixtureScreens.swift` were
 prose rather than substitutions, mangled the file when applied mechanically, and were reverted; they are not done.
 App tests 900.
+
+## Fewer words, and a state that is not a claim (PD-148)
+
+19 sentences cut across `SettingsScreen`, `LeagueScreens`, `ClubFlow`, `Readiness`, `ProfileScreens`, `ClubScreens`
+and `ThroDesign/Accent.swift`; `GroupsTests` updated to the sentence it asserts. `LeagueBoard.swift`: reading beats
+typing, so a search before the leagues arrive no longer says nothing matched; "for this area" dropped, because no
+locality is ever passed; the map's accessibility label follows the state. `Nearby.Loading.isLoading`. `apps/web/wall.js`:
+a focusable *Try again*, a thirty-second retry, a five-minute re-ask when no season is published, and `?season=`
+with nothing after it genuinely forgets the remembered league. App tests 900.

@@ -299,9 +299,8 @@ public struct SettingsScreen: View {
         // player is looking at the board. Off is offered because a phone buzzing in a pocket through
         // a match is somebody else's idea of help.
         CardGroup("Haptics",
-                  footnote: "A light tap on every key, a firmer one when a visit is saved, and its own "
-                      + "sensation for a bust, a checkout coming up, an undo, a leg, and the match — so "
-                      + "the ones that matter are felt without looking at the phone.") {
+                  footnote: "A light tap on every key. A firmer one when a visit is saved. Its own "
+                      + "sensation for a bust, a checkout, an undo, a leg and the match.") {
             CardToggleRow(icon: .target, label: "Haptics", isOn: $haptics)
         }
     }
@@ -406,8 +405,8 @@ public struct SettingsScreen: View {
             // than a limitation.
             CardGroup("Check a file",
                       footnote: "Checking a file reads it and nothing else. Bringing one back into the app "
-                          + "is not built: merging two journals is the same problem as syncing two phones, "
-                          + "and doing it badly would leave a record that lies about what this phone wrote.") {
+                          + "is not built. Merging two journals is syncing two phones, and doing it badly "
+                          + "leaves a record that lies about what this phone wrote.") {
                 CardRow(icon: .search, label: "Check a file", value: "Open an export and see what is in it",
                         leads: false) { picking = true }
             }
@@ -468,9 +467,9 @@ public struct SettingsScreen: View {
     static func entryModeNote(_ mode: ScoringEntryMode) -> String {
         switch mode {
         case .visitTotal:
-            return "Type the total of three darts. Fewer taps, and the way every darts app works — "
-                 + "but a checkout stops to ask how many darts it took and how many were at a "
-                 + "double, because nothing else can know."
+            return "Type the total of three darts. Fewer taps, and the way every darts app works. "
+                 + "A checkout stops to ask how many darts it took and how many were at a double — "
+                 + "nothing else can know."
         case .perDart:
             return "Tap each dart as it lands. A checkout asks nothing, because the answers are in "
                  + "what you entered — and your checkout percentage becomes exact instead of a "

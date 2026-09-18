@@ -75,7 +75,10 @@ public struct LeaguesScreen: View {
                                onAction: { Task { await nearby.load(api, force: true) } })
                 }
             case .loaded(let leagues) where leagues.isEmpty:
-                paper { EmptyState(title: "No leagues yet", message: "THRØ has not been given any leagues for this area.") }
+                // Not "for this area" (PD-148): `Nearby.load` asks for every league THRØ holds and passes
+                // no locality, so the sentence named a filter that was never applied and told somebody in
+                // a well-served town that their area was empty when the whole map was.
+                paper { EmptyState(title: "No leagues yet", message: "THRØ has no leagues on the map yet.") }
             case .loading:
                 board(Board(atlas: LeagueAtlas([]), pins: [], leagues: []))
             case .loaded(let leagues):
@@ -191,7 +194,11 @@ public struct LeaguesScreen: View {
         .safeAreaPadding(.bottom, drawerHeight)
         // And below the status bar and the two coins, so nothing framed lands under them.
         .safeAreaPadding(.top, 104)
-        .accessibilityLabel("Map of \(b.pins.count) leagues and pubs")
+        // The label follows the state (PD-148): on the loading board `pins` is empty, and "Map of 0 leagues
+        // and pubs" is a count of a thing that has not been read — said aloud, and only to the people who
+        // cannot see that it is still arriving.
+        .accessibilityLabel(nearby.leagues.isLoading ? "Map of the leagues, still reading"
+                                                     : "Map of \(b.pins.count) leagues and pubs")
     }
 
     /// Which pins are in the light, which one is chosen, and whether the rest sink.
@@ -381,16 +388,20 @@ public struct LeaguesScreen: View {
                 }
             }
             searchField
-            if typed {
+            // Reading wins over typing (PD-148). A name typed before the leagues had arrived drew the
+            // results of searching an empty list — "nothing by that name" over a list that had not been
+            // read yet, which is the false empty state in its purest form. The reading line was already
+            // written; it simply sat in the branch a typed name never reached.
+            if case .loading = nearby.leagues {
+                HStack(spacing: ThroSpacing.spacing2) {
+                    ProgressView().tint(ThroColor.colorMarkOnBoard)
+                    Text("Reading the leagues").thro(ThroTypography.label).foregroundStyle(ThroColor.colorTextOnBoardSecondary)
+                }
+            } else if typed {
                 results(b)
             } else {
                 chips(b)
-                if case .loading = nearby.leagues {
-                    HStack(spacing: ThroSpacing.spacing2) {
-                        ProgressView().tint(ThroColor.colorMarkOnBoard)
-                        Text("Reading the leagues").thro(ThroTypography.label).foregroundStyle(ThroColor.colorTextOnBoardSecondary)
-                    }
-                } else {
+                Group {
                     Text(LeagueBoardWords.census(b.atlas, bare: b.leagues.count - b.atlas.leagues.count))
                         .thro(ThroTypography.metadata).foregroundStyle(ThroColor.colorTextOnBoardSecondary)
                         .fixedSize(horizontal: false, vertical: true)

@@ -235,9 +235,9 @@ public struct AccentPicker: View {
     /// What the screen says about the current choice.
     static func explain(_ accent: Color?) -> String {
         guard let accent else {
-            return "No colour chosen, so this wears THRØ's own green. Pick one and the initials on it "
-                 + "are set in whichever of THRØ's two colours reads better — you never choose that, "
-                 + "so there is nothing you can pick that makes the badge unreadable."
+            return "No colour chosen, so this wears THRØ's own green. Pick one and the initials are "
+                 + "set in whichever of THRØ's two colours reads better. You never choose that, so "
+                 + "nothing you pick makes the badge unreadable."
         }
         let ratio = AccentBranding.ratioOn(accent)
         let neutral = AccentBranding.textOn(accent) == ThroColor.colorTextInverse ? "light" : "dark"

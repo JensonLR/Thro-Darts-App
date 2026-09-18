@@ -149,7 +149,12 @@ public enum NearbyLogic {
 /// the player has said it may know. Loaded once per visit; location read once per grant.
 @MainActor
 public final class Nearby: NSObject, ObservableObject, CLLocationManagerDelegate {
-    public enum Loading<T: Equatable>: Equatable { case loading, loaded(T), failed(String) }
+    public enum Loading<T: Equatable>: Equatable {
+        case loading, loaded(T), failed(String)
+        /// True while the answer has not arrived. Read where a screen must say what it has, rather than
+        /// what it would have (PD-148): a count of a list that has not been read is not a small count.
+        public var isLoading: Bool { if case .loading = self { return true } else { return false } }
+    }
 
     @Published public private(set) var leagues: Loading<[PublicLeague]> = .loading
     @Published public private(set) var events: Loading<[PublicEvent]> = .loading

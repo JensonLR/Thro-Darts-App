@@ -499,7 +499,7 @@ public struct YourProfileScreen: View {
     private var signInAScreen: some View {
         CardGroup(screenFromLink ? "A screen asked for you" : "Sign in on a screen",
                   footnote: screenFromLink
-                    ? "The link you opened carries this code. If the screen showing it is yours, sign it in; if you do not know it, do nothing — a code does nothing until you say so, and it dies in five minutes."
+                    ? "The link you opened carries this code. If the screen is yours, sign it in. If not, do nothing: a code does nothing until you say so, and it dies in five minutes."
                     : "On thro.uk, choose Sign in with your phone. It shows a six-character code; type it here and that screen is signed in as you.") {
             VStack(alignment: .leading, spacing: ThroSpacing.spacing2) {
                 ThroTextField("The code on the screen", text: $screenCode, placeholder: "K7TQ2M")
@@ -588,7 +588,7 @@ public struct DeleteAccountScreen: View {
     /// What stays, and why. Honest about the part that is not the person's alone to erase.
     public static let stays = [
         "Matches you have played. A leg is the other player's record too, and a league's table "
-            + "stands on it — so the result stays, with no name on it and nothing pointing back to you.",
+            + "stands on it. The result stays, with no name on it and nothing pointing back to you.",
         "Matches scored on this phone. They were never sent anywhere unless you sent them; delete "
             + "them from Home if you want them gone as well.",
     ]

@@ -313,15 +313,34 @@ async function mountChooser(root) {
   try {
     leagues = (await read('/v1/leagues')).leagues ?? [];
   } catch (e) {
-    return root.replaceChildren(el('p', 'saying', `THRØ could not be reached. ${e.message}`));
+    // A television has no keyboard and usually no reachable reload (PD-148). Left as a sentence, this was
+    // the end of the screen: a landlord watching a green rectangle with no way to ask again short of
+    // finding the browser's own controls on an unfamiliar remote. So it says it, offers a button a remote
+    // can reach, and keeps asking on its own — the board already runs two refresh loops, and a screen
+    // whose wifi comes back at closing time should be showing the league by opening time.
+    const said = el('p', 'saying', `THRØ could not be reached. ${e.message}`);
+    const again = el('button', 'choice');
+    again.append(el('span', 'choice-name', 'Try again'));
+    again.addEventListener('click', () => mountChooser(root));
+    root.replaceChildren(said, again);
+    again.focus();
+    clearTimeout(mountChooser.retry);
+    mountChooser.retry = setTimeout(() => mountChooser(root), 30000);
+    return;
   }
+  clearTimeout(mountChooser.retry);
   const choosable = leagues.filter(l => l.seasons?.length);
   root.replaceChildren();
   root.append(el('h2', null, 'Which league is this screen for?'));
   root.append(el('p', 'saying', 'Pick it once. This screen shows that league from then on, and remembers it '
-    + 'if the television is switched off.'));
+    + 'if the television is switched off. To change it later, open this page with ?season= and nothing after it.'));
   if (!choosable.length) {
+    // Nothing to pick is not nothing to do: the first league to publish a season should appear here
+    // without anybody touching the television (PD-148).
     root.append(el('p', 'saying', 'No league has published a season yet. There is nothing a screen could show.'));
+    root.append(el('p', 'saying', 'This screen keeps looking. Leave it on.'));
+    clearTimeout(mountChooser.retry);
+    mountChooser.retry = setTimeout(() => mountChooser(root), 300000);
     return;
   }
   const list = el('div', 'choices');
@@ -342,7 +361,13 @@ async function mountChooser(root) {
 }
 
 function start() {
-  const asked = new URLSearchParams(location.search).get('season') || localStorage.getItem(REMEMBERED);
+  // `?season=` with nothing after it forgets the remembered league and asks again (PD-148). The chooser
+  // says so, and a sentence that says a thing has to be a thing: without this the empty value is falsy,
+  // the remembered season wins, and the screen a landlord is trying to re-point stays where it was.
+  const params = new URLSearchParams(location.search);
+  const named = params.get('season');
+  if (named === '') localStorage.removeItem(REMEMBERED);
+  const asked = named || (named === '' ? null : localStorage.getItem(REMEMBERED));
   const root = document.getElementById('wall');
   if (asked) return mountWall(asked);
   document.body.classList.remove('wall-on');

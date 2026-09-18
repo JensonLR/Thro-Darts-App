@@ -1563,8 +1563,8 @@ public struct EditClubScreen: View {
                     .thro(ThroTypography.metadata)
                     .foregroundStyle(ThroColor.colorStatusError)
             }
-            Note("The table is worked out from these every time it is drawn — nothing is stored, so "
-                 + "changing them changes the table rather than leaving it disagreeing with itself.")
+            Note("The table is worked out from these every time it is drawn. Nothing is stored, so "
+                 + "changing them changes the table.")
             counting
         }
     }
@@ -1591,7 +1591,7 @@ public struct EditClubScreen: View {
                 }
                 Note("Entrants are dealt into the groups snake-wise over the order they were "
                      + "entered. **You can change this until the first result goes in, and not "
-                     + "after** — changing how many qualify once people have played changes what "
+                     + "after.** Changing how many qualify once people have played changes what "
                      + "those matches were for.")
             } else {
                 Text(club.groupCount.map { "\($0) groups, top \(club.qualifiersPerGroup ?? 0) through" }
@@ -1632,9 +1632,8 @@ public struct EditClubScreen: View {
                 Text(club.unit?.label ?? "Not set")
                     .thro(ThroTypography.body)
                     .foregroundStyle(ThroColor.colorTextPrimary)
-                Note("**Settled.** This league has results in it, and changing what they are "
-                     + "counted in would quietly turn every number already entered into a claim "
-                     + "about something else.")
+                Note("**Settled.** This league has results in it. Changing what they are counted "
+                     + "in turns every number already entered into a claim about something else.")
             }
         }
     }
@@ -1687,8 +1686,8 @@ public struct EditMemberPictureScreen: View {
                     // Said on the screen where somebody is putting a real person's face into an app,
                     // rather than only in a document nobody on a phone will read.
                     Note("\(member.name) has not been asked. This is \(club.name)'s copy of a "
-                         + "picture of somebody who has no account here and cannot remove it "
-                         + "themselves — so use one they would be happy to be shown by.",
+                         + "picture of somebody with no account here, who cannot remove it. Use "
+                         + "one they would be happy to be shown by.",
                          icon: .shield)
                 }
                 .padding(.horizontal, ThroSpacing.spaceScreenGutter)
