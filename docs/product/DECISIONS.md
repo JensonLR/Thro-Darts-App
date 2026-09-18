@@ -6582,6 +6582,17 @@ measured". An absent `usage` block adds nothing: it is not an estimate.
 alias change turned an existing assertion red, which is the argument for asserting the exact wire.
 API suite green, 167 schema properties, all 34 check scripts.
 
+**What the floor will cost and catch, from the last real run.** `JEV_SCORECARD.md` holds 59 scored
+sentences read by the real model. Four of them sit below `SURE_ENOUGH`: **0.39, 0.41, 0.42, 0.56**. Two
+of those four were *already wrong* — the floor catches them, including the reversed "station 5 riverside
+b 1" that shipped ready. The other two were right, and now cost a tap. Two errors caught for two extra
+taps on 59 sentences is the trade, and for something that writes a league table it is the right way
+round. **This is indicative, not exact**: those figures were recorded when `pick()` returned
+`probabilities[choice]`, and after this change the number a card carries is the model's own
+`confidence`. The scorecard needs one re-run against the real model to replace the estimate with a
+measurement — deliberately not done here, because it spends tokens and the founder had just asked what
+Jev costs.
+
 **Deliberately not done.** The held-out desk at production size, which both builds need and neither has.
 Until it exists the numbers above are untested against the only case that matters — two teams' second
 meeting — and any measurement returns a green figure for a case it was never shown.
