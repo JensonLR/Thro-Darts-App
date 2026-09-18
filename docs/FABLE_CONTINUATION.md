@@ -6,7 +6,7 @@ audit. Kept current during the build; **not** a deliverable, and never a substit
 
 ## 18 September 2026 — Phases 1 to 3 done; Phase 4 is what remains
 
-**Twenty decisions, PD-131 to PD-150**, all pushed and CI-green on `claude/thro-production-build-je2mkf`.
+**Twenty-three decisions, PD-131 to PD-153**, all pushed and CI-green on `claude/thro-production-build-je2mkf`.
 Production API at **V057**; thro.uk carries the dark-mode fix, the skeletons, the type scale and — for the
 first time — THRØ's own face.
 
@@ -20,10 +20,12 @@ passes.
 **The known issues left open at that checkpoint: all closed.** PD-142 every inbox card has an act, and the
 three sentences that lived in views are testable · PD-143 the export is everything or an error.
 
-**Phase 3 (screens): done, bar what is listed below.** PD-140 the chrome grows and the bar stays a bar ·
-PD-141 blocking exists, where the person is read · PD-144 one row, one card · PD-145 two faces, one gap ·
-PD-146 the screen that commits has a floor · PD-147 one primary per screen · PD-148 fewer words and a
-state that is not a claim · PD-149 the web on the design system · PD-150 no page sends a reader nowhere.
+**Phase 3 (screens): all ten of the research's ranked changes addressed.** PD-140 the chrome grows and
+the bar stays a bar · PD-141 blocking exists, where the person is read · PD-144 one row, one card ·
+PD-145 two faces, one gap · PD-146 the screen that commits has a floor · PD-147 one primary per screen ·
+PD-148 fewer words and a state that is not a claim · PD-149 the web on the design system · PD-150 no page
+sends a reader nowhere · PD-151 what THRØ says when there is nothing to show · PD-152 one field per place
+· PD-153 a fixture list opens where the reader is.
 
 **Founder's answers (do not re-ask).** Phase 3 as two parallel change sets — both done. Blocking: build
 the control — done. The league privacy default stays ticked.
@@ -39,6 +41,8 @@ the control — done. The league privacy default stays ticked.
   rather than screen floors; which want one is a judgement per screen.
 - **Three `TeamFixtureScreens.swift` changes** from the PD-147 survey were prose, not substitutions, and
   are not done.
+- **The Live tab** is the other half of PD-153 and needs one sentence from the founder: shortened, or
+  anchored? They are alternatives; doing both opens a shortened page part-way down.
 - **Six line-height moves** in PD-149 were under-disclosed by the change list and are recorded in it.
 - **The `h1` line-height** is unset in `apps/web`; no page has an `<h1>` today.
 
