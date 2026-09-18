@@ -5711,3 +5711,53 @@ dark **with no `data-theme` attribute present**, which is the proof that the sty
 `wall.html` and `tv.html` resolve to the dark board under both. Every `tools/check_*.py` green, including
 `check_web_tokens.py`, which holds `apps/web/tokens.css` byte-for-byte against the generated one — so the
 change had to be made in `packages/design-tokens/build.py`, which is where it belongs.
+
+## PD-135 — A page that is waiting says so, and a page that gave up says what to do
+
+**18 September 2026.** The founder: *the shared web pages wait on a cold Render free instance; add a skeleton, and
+tell me plainly if the honest fix is the paid instance.* Looking properly found that the waiting was the smaller half
+of the problem.
+
+**Measured first.** `api.thro.uk` answered `/healthz` in 0.24–0.35s at every attempt over 23 minutes, including after
+a gap longer than Render's documented fifteen-minute spin-down. **The cold start could not be reproduced today**, so
+the thirty-to-sixty-second wait is unconfirmed, and something is keeping the instance awake — which matters, because
+the free tier allows 750 instance-hours a month and a month is 744. What *is* slow is `/v1/leagues`: 4.6 to 5.8
+seconds for 152KB of 329 leagues, measured seven times, on an instance answering `/healthz` in a quarter of a second.
+That is a query, not a sleep, and it is what makes the site feel slow when everything is awake.
+
+**Decided.**
+
+1. **A page gives up.** `read()` had no timeout, so nothing ever stopped waiting: a bare `fetch` stays pending until
+   the browser's own limit — over a minute on a phone — and until then the page showed "One moment…" and no way out.
+   Ten seconds, which is thirty times the warm answer.
+2. **A timeout says THRØ is being woken**, not that something failed. "THRØ is taking longer than usual to answer."
+   Anything else reads as it always did.
+3. **Bars where the content will be**, on the league, tournament and team pages, and on the table and fixture lists.
+4. **A skeleton says it is one**, with `data-skeleton`. `fail()` decided whether to replace a placeholder or prepend
+   to real content by sniffing for one child whose text ends in an ellipsis — so an error would have been prepended
+   above bars that went on pulsing beneath it.
+5. **A title settles.** The hero line is seeded "One moment…" and was only overwritten on the way that succeeded, so
+   a page that failed read "One moment…" in 28px above its own error, for ever. `data-settle` carries the word.
+6. **An unreachable team is not a missing team.** `mountTeam` reported *every* failure as "No team at this address" —
+   a dropped connection, a timeout, a 500. Only the server's own words for a team it does not hold mean that now, as
+   `mountLeague` has always had it, and the way back to all leagues is offered as it is there.
+7. **Five `fail()` sites gained a retry**, and an address naming no season gets the way back rather than a retry that
+   cannot mend it.
+
+**The paid instance, plainly.** Not yet, and not for this. Render's Starter is $7 a month and buys two things: no
+spin-down, and five times the CPU. It would not have fixed any of the seven defects above, all of which are in the
+page. The order to do things in: this change; then the `/v1/leagues` query, which is almost certainly an N+1 over
+seasons and is the one measurable slowness; then read the instance-hours in the dashboard, because if something is
+already pinning the service awake then a keep-warm cron is not a cheap fix but the thing that suspends the service.
+If a cold start is reproduced after that, $7 is cheap and the answer changes.
+
+**Evidence.** A black-hole server that accepts and never answers, standing in for a sleeping instance: the skeleton
+draws, and after ten seconds it is replaced — not prepended to — by "That could not be read just now. THRØ is taking
+longer than usual to answer." with *Try again*, under a title that has settled to "A league". The bars were measured
+from the rendered pixels at 1.59:1 in light and 1.74:1 against the page in dark. **The first version of them measured
+1.06:1** — in the document, the right size, and invisible, because the colour was chosen well and then thrown away by
+an opacity. Every `tools/check_*.py` green.
+
+**A defect in the looking, not the code.** The screenshot harness reused a Chrome profile, so it photographed the CSS
+and JavaScript it had seen on a previous run and reported them as the change. It did that once here, and the only
+reason it was caught is that the measured contrast did not move when the CSS did. The harness now disables the cache.

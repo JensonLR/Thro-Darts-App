@@ -13,8 +13,26 @@
 // this needs no configuration; `?api=https://…` overrides it for looking at another one.
 const API = new URLSearchParams(location.search).get('api') || window.THRO_API || '';
 
+/**
+ * How long a page waits before it stops waiting (PD-135).
+ *
+ * THRØ's API answers a warm read in about a third of a second. It sleeps after a quarter of an hour
+ * of nothing, and the first request after that wakes a JVM, which is the wait this exists for.
+ * Without it nothing ever gave up: a bare `fetch` stays pending until the browser's own limit — over
+ * a minute on a phone — and until then the page showed "One moment…" and no way out.
+ */
+const PATIENCE = 10000;
+
 async function read(path) {
-  const res = await fetch(`${API}${path}`, { headers: { Accept: 'application/json' } });
+  let res;
+  try {
+    res = await fetch(`${API}${path}`, { headers: { Accept: 'application/json' }, signal: AbortSignal.timeout(PATIENCE) });
+  } catch (e) {
+    // A timeout is not a fault, and saying so wrongly is worse than saying nothing: THRØ is asleep
+    // and being woken. Anything else — no network, a refused connection — reads as it always did.
+    if (e && (e.name === 'TimeoutError' || e.name === 'AbortError')) throw new Error('THRØ is taking longer than usual to answer.');
+    throw e;
+  }
   if (!res.ok) {
     const body = await res.text();
     let said = '';
@@ -63,8 +81,43 @@ function fail(where, error, retry) {
     again.onclick = () => { again.disabled = true; retry(); };
     note.append(again);
   }
-  const placeholder = where.children.length <= 1 && where.textContent.trim().endsWith('…');
+  // A skeleton says so, rather than being guessed at (PD-135). The old test — one child whose text
+  // ends in an ellipsis — is kept for the places that still say "One moment…", but a skeleton is
+  // several bars and no text, so it passed neither half and the error was prepended above bars that
+  // went on pulsing under it.
+  const placeholder = where.querySelector('[data-skeleton]') || (where.children.length <= 1 && where.textContent.trim().endsWith('…'));
   if (placeholder || !where.children.length) where.replaceChildren(note); else where.prepend(note);
+  // A hero line seeded with "One moment…" is only overwritten on the way that succeeded, so a page
+  // that failed read "One moment…" in 28px above its own error, for ever.
+  for (const el of document.querySelectorAll('[data-settle]')) {
+    if (el.textContent.trim().endsWith('…')) el.textContent = el.dataset.settle;
+  }
+}
+
+/** An address that names no season. A retry cannot mend it, so the page says so and offers the way back. */
+function noSeason(where, titleEl) {
+  if (titleEl) titleEl.textContent = 'No season at this address';
+  const said = make('p', 'quiet', 'The link is missing the season it meant. Pick a league and open its table from there.');
+  const all = make('a', null, 'All leagues');
+  all.href = 'index.html';
+  const line = make('p', null);
+  line.append(all);
+  where.replaceChildren(said, line);
+}
+
+/** Bars where the content will be, while THRØ is asked (PD-135). Marked, so `fail` can replace them. */
+function skeleton(where, rows = 4) {
+  const box = make('div', 'skeleton');
+  box.setAttribute('data-skeleton', '');
+  box.setAttribute('aria-hidden', 'true');
+  box.append(make('div', 'skeleton-bar skeleton-hero'));
+  for (let i = 0; i < rows; i++) {
+    const bar = make('div', 'skeleton-bar');
+    if (i % 3 === 2) bar.style.width = '62%';
+    box.append(bar);
+  }
+  where.replaceChildren(box);
+  return box;
 }
 
 // --- the leagues -------------------------------------------------------------------------------
@@ -112,7 +165,7 @@ async function mountLeagues(listEl, searchEl, countEl) {
     // The read is an envelope — {"leagues": [...]} — and taking the object for the array is how the
     // first version of this page came to report "undefined leagues" over an empty list.
     leagues = (await read('/v1/leagues')).leagues || [];
-  } catch (e) { fail(listEl, e); return; }
+  } catch (e) { fail(listEl, e, () => mountLeagues(listEl, searchEl, countEl)); return; }
   // What THRØ holds most of comes first: a league run here, then one with its teams, then the map's pins.
   const order = { run: 0, teams: 1, placed: 2 };
   leagues = leagues.map((l, i) => [l, i]).sort((a, b) => (order[heldAs(a[0])] - order[heldAs(b[0])]) || (a[1] - b[1])).map(x => x[0]);
@@ -184,6 +237,7 @@ const idFromPath = what => decodeURIComponent((location.pathname.match(new RegEx
 
 /** A league's own page: what THRØ holds for it, said first; then its table and fixtures where they exist, and its teams. */
 async function mountLeague(where, titleEl, eyebrowEl) {
+  skeleton(where, 6);
   const id = idFromPath('league').toLowerCase();
   let league;
   // One league, not the directory: the page is what gets shared, and it should not wait on 329 leagues to show one.
@@ -249,12 +303,22 @@ async function mountLeague(where, titleEl, eyebrowEl) {
 
 /** A team's page: who it is, where it plays, what it plays in. Nothing on it is a person unless they said they may be named. */
 async function mountTeam(where, titleEl, eyebrowEl) {
+  skeleton(where, 5);
   const id = idFromPath('team').toLowerCase();
   let team;
   try { team = await read(`/v1/teams/${encodeURIComponent(id)}`); }
   catch (e) {
+    // Only the server's own words for a team it does not hold mean the team is not there (PD-135).
+    // Every other failure — a dropped connection, a timeout, a 500 — used to be reported as absence,
+    // so a reader on a train was told the team had folded. mountLeague has always made this test.
+    if (!/^(no public team|teamId must)/.test(e.message || '')) { fail(where, e, () => mountTeam(where, titleEl, eyebrowEl)); return; }
     titleEl.textContent = 'No team at this address';
-    where.replaceChildren(make('p', 'quiet', 'It may be private, or have folded, or the link may be old.'));
+    const said = make('p', 'quiet', 'It may be private, or have folded, or the link may be old.');
+    const all = make('a', null, 'All leagues');
+    all.href = 'index.html';
+    const line = make('p', null);
+    line.append(all);
+    where.replaceChildren(said, line);
     return;
   }
   titleEl.textContent = team.name;
@@ -348,11 +412,13 @@ function tableFor(division) {
 
 async function mountTable(where, titleEl, eyebrowEl) {
   const season = new URLSearchParams(location.search).get('season');
-  if (!season) { fail(where, new Error('This address names no season.')); return; }
+  // No season in the address is not something a retry can mend: offer the way back instead (PD-135).
+  if (!season) { noSeason(where, titleEl); return; }
+  skeleton(where, 8);
   let t;
   try {
     t = await read(`/v1/seasons/${encodeURIComponent(season)}/standings`);
-  } catch (e) { fail(where, e); return; }
+  } catch (e) { fail(where, e, () => mountTable(where, titleEl, eyebrowEl)); return; }
 
   document.title = `${t.league} — table — THRØ`;
   titleEl.textContent = t.league;
@@ -392,11 +458,12 @@ const when = iso => new Date(iso).toLocaleDateString('en-GB', { weekday: 'short'
 
 async function mountFixtures(where, titleEl, eyebrowEl) {
   const season = new URLSearchParams(location.search).get('season');
-  if (!season) { fail(where, new Error('This address names no season.')); return; }
+  if (!season) { noSeason(where, titleEl); return; }
+  skeleton(where, 6);
   let data;
   try {
     data = await read(`/v1/seasons/${encodeURIComponent(season)}/fixtures`);
-  } catch (e) { fail(where, e); return; }
+  } catch (e) { fail(where, e, () => mountFixtures(where, titleEl, eyebrowEl)); return; }
 
   const fixtures = data.fixtures || [];
   const back = make('p', 'quiet');
@@ -756,7 +823,7 @@ async function mountModeration(where, signInEl) {
   const draw = async () => {
     if (!signInGate(signInEl, where, 'Sign in to answer reports.', draw)) return;
     let data;
-    try { data = await authorised('GET', '/v1/reports'); } catch (e) { fail(where, e); return; }
+    try { data = await authorised('GET', '/v1/reports'); } catch (e) { fail(where, e, draw); return; }
     const open = data.reports.filter(r => r.decisions === 0);
     const answered = data.reports.filter(r => r.decisions > 0);
     const parts = [
@@ -2245,6 +2312,7 @@ function entrantsSection(e, redraw) {
 }
 
 async function mountEvent(where, signInEl, eventId) {
+  skeleton(where, 6);
   const draw = async () => {
     // The page reads without a session; the organiser's acts appear with one.
     let e;

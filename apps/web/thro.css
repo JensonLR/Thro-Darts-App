@@ -249,3 +249,19 @@ details.fold > summary:focus-visible { outline: 3px solid var(--color-border-foc
 .paste textarea:focus-visible { outline: 3px solid var(--color-border-focus, var(--color-background-brand)); outline-offset: 2px; }
 .paste-row .entry-form { margin-top: 6px; }
 .paste-row input[type="checkbox"] { width: 22px; height: 22px; flex: none; accent-color: var(--color-background-brand); }
+
+/* Bars where the content will be (PD-135). THRØ's API sleeps after a quarter of an hour, and the first
+   read after that wakes a JVM — so these three pages waited on "One moment…" with nothing moving and no
+   way out. The bars are drawn from --color-border-strong rather than a surface token: measured against
+   the page's own background, a surface bar sits at about 1.05:1 and is not visible at all.
+   `prefers-reduced-motion` already zeroes the motion durations in tokens.css; the pulse is stopped here
+   as well, because a duration of zero on an alternating animation still flickers. */
+.skeleton { display: flex; flex-direction: column; gap: 12px; margin-top: 12px; }
+.skeleton-bar { height: 14px; border-radius: var(--radius-small, 4px); background: var(--color-border-strong);
+                animation: skeleton-pulse 1400ms ease-in-out infinite alternate; }
+.skeleton-hero { height: 52px; width: 58%; margin-bottom: 8px; }
+/* The pulse stays inside a band that is still visible. The first version of this faded to 0.35, which
+   took --color-border-strong from about 1.70:1 against the page down to about 1.06:1 — bars that were
+   in the DOM, the right size, and could not be seen. Measured from the rendered pixels, not by eye. */
+@keyframes skeleton-pulse { from { opacity: 0.72; } to { opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { .skeleton-bar { animation: none; opacity: 0.9; } }

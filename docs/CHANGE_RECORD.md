@@ -6282,3 +6282,12 @@ alongside the existing `[data-theme="dark"]` block; `tokens.css` regenerated and
 JavaScript flip is gone from `apps/web/thro.js`. `apps/web/wall.html` is pinned `data-theme="dark"` as a fixed
 installation. Seven pages that never followed the reader now do. Proved by reading computed custom properties from a
 headless browser under both emulated schemes, not by comparing screenshots. Every check green.
+
+## A page that is waiting says so (PD-135)
+
+`apps/web/thro.js`: `read()` takes an `AbortSignal.timeout` of 10s and words a timeout as waking; `skeleton()` and a
+`noSeason()` way back; `fail()` detects `[data-skeleton]` and settles any `[data-settle]` title; `mountTeam`
+distinguishes a team THRØ does not hold from one it could not reach, and offers *All leagues*; five retry-less
+`fail()` sites gained retries. `apps/web/thro.css`: `.skeleton`, measured at 1.59:1 light and 1.74:1 dark from the
+rendered pixels. `league.html`, `event.html`, `team.html` carry `data-settle`. Verified against a server that accepts
+and never answers. Every check green. No API change; no deploy needed beyond the static site.
