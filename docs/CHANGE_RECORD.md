@@ -6274,3 +6274,11 @@ of the pair's own halves); `Organisations.createPair` records it; `Editions.comp
 through it with a lateral join, so the draw, the entrant list and the public page move together. The uuid
 normalisation stays: it is identity, not display. `GuestsHttpTest`, `EntrantsHttpTest` tightened from either-order to
 typed-order, watched red, then run five times green. API tests 165. Needs a deploy.
+
+## The reader's colour scheme is the stylesheet's job (PD-134)
+
+`packages/design-tokens/build.py` emits `@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) }`
+alongside the existing `[data-theme="dark"]` block; `tokens.css` regenerated and copied to `apps/web`. The four-line
+JavaScript flip is gone from `apps/web/thro.js`. `apps/web/wall.html` is pinned `data-theme="dark"` as a fixed
+installation. Seven pages that never followed the reader now do. Proved by reading computed custom properties from a
+headless browser under both emulated schemes, not by comparing screenshots. Every check green.

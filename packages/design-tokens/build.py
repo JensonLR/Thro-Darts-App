@@ -288,6 +288,22 @@ def emit_css(doc):
         if "dark" in t["$value"]:
             L.append(f"  {n}: {t['$value']['dark']};")
     L.append("}")
+    # The reader's own setting, with no script (PD-134). The flip used to be four lines of JavaScript
+    # in apps/web/thro.js, which is the page's API client — so the seven pages that fetch nothing
+    # loaded no script, were never given a data-theme, and stayed chalk-white on a dark machine:
+    # privacy, terms, delete-account, under-18, link, tv and wall. Measured by screenshotting every
+    # page at both settings; those seven came back byte-identical.
+    #
+    # `:not([data-theme="light"])` is what keeps a chosen theme winning: somebody who has asked for
+    # light gets light on a dark machine, and `[data-theme="dark"]` above still serves a chosen dark
+    # on a light one. The script becomes an override rather than the mechanism.
+    L.append("@media (prefers-color-scheme: dark) {")
+    L.append('  :root:not([data-theme="light"]) {')
+    for n, t in doc["tokens"].items():
+        if "dark" in t["$value"]:
+            L.append(f"    {n}: {t['$value']['dark']};")
+    L.append("  }")
+    L.append("}")
     L.append("@media (prefers-reduced-motion: reduce) {")
     L.append("  :root {")
     for n, t in doc["tokens"].items():

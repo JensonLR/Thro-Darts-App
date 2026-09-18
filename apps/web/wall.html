@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en-GB">
+<html lang="en-GB" data-theme="dark">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -14,6 +14,8 @@
      browser fetches one stylesheet and one script and never needs anything else. thro.css is built for
      a document somebody reads at thirty centimetres; nothing on this screen is read closer than four
      metres, so it shares the tokens and none of the type. */
+  /* The board is a fixed installation — a pub television, not a reader's machine — so it is pinned
+     dark on the <html> element rather than following whatever colour scheme a TV browser reports. */
   :root { color-scheme: dark; }
   html, body { height: 100%; margin: 0; }
   body {

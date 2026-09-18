@@ -3,11 +3,11 @@
 // No framework and no build step. The pages need the generated tokens, one fetch and a little DOM —
 // a dependency here would have to earn itself against that, and none can yet.
 
-// tokens.css switches on [data-theme="dark"], so the page follows the reader's system setting.
-const dark = window.matchMedia('(prefers-color-scheme: dark)');
-const applyTheme = () => { document.documentElement.dataset.theme = dark.matches ? 'dark' : 'light'; };
-applyTheme();
-dark.addEventListener('change', applyTheme);
+// The reader's colour scheme is the stylesheet's job, not this file's (PD-134). It used to be four
+// lines here — and this file is the API client, so the seven pages that fetch nothing loaded no
+// script, were never given a data-theme, and stayed chalk-white on a dark machine. tokens.css now
+// carries a `@media (prefers-color-scheme: dark)` block, so every page follows the reader with no
+// JavaScript at all and nothing flashes before a script runs. `[data-theme]` still overrides it.
 
 // Where THRØ answers. Same origin by default, so a deployment can put the API behind the same host and
 // this needs no configuration; `?api=https://…` overrides it for looking at another one.

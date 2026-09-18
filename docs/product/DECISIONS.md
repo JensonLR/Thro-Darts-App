@@ -5675,3 +5675,39 @@ competitor (`Editions.competitorName`, the single query behind the draw, the ent
 Smith & Alice Aims" (the typed name before the chosen partner), "Alice Aims & Bob Board", "Cara Checkout & Dave
 Drifter". Watched failing first, and run five times after the fix, because a defect that depends on random ids does
 not fail every time. Full API suite green.
+
+## PD-134 — The reader's colour scheme is the stylesheet's job
+
+**18 September 2026.** Found by measurement, not by reading: every page of thro.uk was screenshotted at
+`prefers-color-scheme: light` and again at `dark`. Seven came back **byte-identical** — `privacy.html`,
+`terms.html`, `delete-account.html`, `under-18.html`, `link.html`, `tv.html` and `wall.html`. They do not
+follow the reader at all.
+
+**Why.** The flip was four lines of JavaScript in `apps/web/thro.js`, setting `data-theme` from
+`matchMedia`. `thro.js` is the page's **API client**. So the seven pages that fetch nothing loaded no
+script, were never given a `data-theme`, and stayed chalk-white on a dark machine — including the three a
+worried parent or a store reviewer opens. Theming was coupled to data fetching, and the coupling was
+invisible because the eleven pages that do fetch looked right.
+
+**Decided.**
+
+1. **`tokens.css` carries the flip**, generated beside the `[data-theme="dark"]` block it already emits:
+   `@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { … } }`. Every page follows the
+   reader with no JavaScript, and nothing flashes before a script runs — which the eleven fetching pages
+   were also doing, unnoticed, on every load.
+2. **`:not([data-theme="light"])` is what keeps a chosen theme winning.** Somebody who has asked for light
+   gets light on a dark machine; `[data-theme="dark"]` still serves a chosen dark on a light one. The
+   attribute becomes an override rather than the mechanism, which is the right way round.
+3. **The four lines come out of `thro.js`.** Nothing read `dataset.theme`, so nothing depended on it.
+4. **The board is pinned dark.** `wall.html` already declared `color-scheme: dark` but never set a theme,
+   so it had been drawing light-theme values on a dark green field — and would now have followed whatever
+   a television's browser happens to report. It is a fixed installation, so it carries
+   `data-theme="dark"` on its own element and looks the same in every pub.
+
+**Evidence.** Not pixels — pixels were misleading, because the wall's live content differs between two
+loads. The computed custom properties were read out of a headless browser under both emulated schemes.
+The six reader-facing pages resolve `--color-background-primary` to `#F7F6F2` in light and `#101211` in
+dark **with no `data-theme` attribute present**, which is the proof that the stylesheet is doing it;
+`wall.html` and `tv.html` resolve to the dark board under both. Every `tools/check_*.py` green, including
+`check_web_tokens.py`, which holds `apps/web/tokens.css` byte-for-byte against the generated one — so the
+change had to be made in `packages/design-tokens/build.py`, which is where it belongs.
