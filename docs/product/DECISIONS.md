@@ -7077,3 +7077,40 @@ to be reachable, and that is a fact about the plan rather than a task in it.
 
 **Evidence.** The rehearsal SQL is `scratchpad/rehearse.sql`; nothing ran against production. Every
 `tools/check_*.py` green.
+
+## PD-173 — A board to throw at
+
+**19 September 2026.** The founder asked for the opening to be pushed further: *"more beautiful, cinematic
+& utterly stunning & memorable. An instant timeless classic."* It is already eight versions of careful
+work — one `Canvas`, a pure function of `t`, exponential perspective, speed-derived smear, a ring set by a
+modelled shock wave. So the question was not what to tune. It was what is **missing**.
+
+**The film was aimed at a wall.** The code calls the target surface "the wall" throughout and that is what
+it drew: a flat green plane with 420 chalk specks. The perspective dust is the best idea in the file and it
+sells *flying at a surface* beautifully — it just never said which surface. The most recognisable object in
+the sport, and the one thing that makes THRØ read as darts rather than as a throw, was not in a darts app's
+opening. Watching the frames, the throw had no destination; a critique run against the source reached the
+same conclusion independently, which is the only reason it is here rather than in a list of opinions.
+
+**`BoardFace` is a real board.** 451 mm across the double ring, 214 across the treble, 31.8 outer bull,
+12.7 bull — the specification's own numbers, so anybody who has stood in front of one recognises it without
+a single number or colour being drawn. Twenty wires, **half a bed off vertical** so the 20 sits under the
+light rather than split down the middle: off by half a bed is the kind of mistake nobody can name and
+everybody can see.
+
+**Two gates, and the second one is a thing looking at it taught.** `Throw.approach` brings the board in
+with the wall, so at distance there is nothing to resolve and no detail to shimmer. Then it leaves **across
+the strike** — not across the ring, which is where the first version faded it. Fading it over the ring left
+the board at full strength through the whole impact, and the impact throws a radial burst of chalk from the
+point across twenty radial chalk wires: same material, same angles. The burst had nothing to be seen
+against and the strike lost its punch. The board's job is done the instant the dart lands in it.
+
+**Drawn in chalk, after the first attempt was invisible.** It went in as `colorBoardLit` on the reasoning
+that the board must never outshine the mark. That token is `#174F3C`; the field is `#0F3D2E`. Two dark
+greens a few percent apart — at any alpha faint enough to be subordinate it could not be seen at all, and
+the first capture showed nothing. The reasoning did not apply either: the board is gone before a single
+stroke of the ring is set, so the board and the mark are never on screen together. Chalk is the same
+material as the dust already on the wall, which is exactly what a board's wires are.
+
+**Evidence.** Five tests, watched failing first. 916 app tests. Looked at on iPhone 17 Pro at 1.20, 1.55,
+1.85 and 2.30: the dart flies at something, lands in the bull, and the board has left before the Ø is whole.

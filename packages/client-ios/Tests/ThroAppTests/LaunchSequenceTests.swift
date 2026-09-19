@@ -468,4 +468,76 @@ extension DartInkTests {
         XCTAssertEqual(DartInk.morph(wordmark: 0.4, ring: 0.8), 0.4, accuracy: 1e-9)
         XCTAssertEqual(DartInk.morph(wordmark: 0.1, ring: 0.95), 0.8, accuracy: 1e-9)
     }
+
+    // MARK: - the board (PD-173)
+
+    /// The board's proportions are a real board's, not invented ones.
+    ///
+    /// A clock dartboard is 451 mm across the double ring's outer edge, the treble ring's outer edge sits at
+    /// 214 mm diameter and the bull is 12.7 mm. Those are the ratios the film uses, so that anybody who has
+    /// stood in front of one recognises it at a glance without a single number or colour being drawn.
+    func testTheBoardHasARealBoardsProportions() {
+        // Against the double ring's OUTER radius, which is the board's own 1.0.
+        XCTAssertEqual(BoardFace.doubleRing, 1.0, accuracy: 0.0001)
+        XCTAssertEqual(BoardFace.trebleRing, 214.0 / 451.0, accuracy: 0.01, "the treble ring, to the real board")
+        XCTAssertEqual(BoardFace.bull, 12.7 / 451.0, accuracy: 0.005, "the bull, to the real board")
+        XCTAssertEqual(BoardFace.outerBull, 31.8 / 451.0, accuracy: 0.01, "the 25, to the real board")
+        XCTAssertTrue(BoardFace.bull < BoardFace.outerBull)
+        XCTAssertTrue(BoardFace.outerBull < BoardFace.trebleRing)
+        XCTAssertTrue(BoardFace.trebleRing < BoardFace.doubleRing)
+    }
+
+    /// Twenty beds, and the wire between two of them is where a real board puts it.
+    ///
+    /// A board's 20 is at the top, and the wires sit HALFWAY between bed centres — a wire at 0° would put the
+    /// 20 on one side of a wire rather than under the light. Getting this wrong is the kind of thing nobody
+    /// can name and everybody can see.
+    func testTheBoardHasTwentyBedsWithTheWiresBetweenThem() {
+        let wires = BoardFace.wireAngles
+        XCTAssertEqual(wires.count, 20)
+        // Evenly spaced, 18° apart, and none of them straight up: the 20 sits under the light, not a wire.
+        for (a, b) in zip(wires, wires.dropFirst()) {
+            XCTAssertEqual(b - a, 18, accuracy: 0.0001, "the beds are equal")
+        }
+        XCTAssertEqual(wires.first, -81, "half a bed off vertical, so the top bed is whole")
+        XCTAssertFalse(wires.contains(where: { abs($0 + 90) < 0.001 }), "no wire straight up the middle")
+    }
+
+    /// The board is gone before the chalk arrives.
+    ///
+    /// It exists to be thrown at and for no other reason. The moment the shock starts setting the ring, the
+    /// board must be leaving — two circles competing for the same centre is the one way this idea could
+    /// spoil the thing it is meant to serve.
+    func testTheBoardIsGoneBeforeTheChalkIsSet() {
+        let t = LaunchTimeline.standard
+        XCTAssertGreaterThan(BoardFace.presence(at: t.impact.start, timeline: t), 0, "it is there to be hit")
+        // It goes across the strike, not after it: the burst is radial chalk and so are the wires, so the
+        // board must be leaving while the burst is thrown or the burst has nothing to be seen against.
+        XCTAssertLessThan(BoardFace.presence(at: t.impact.start + 0.6 * t.impact.duration, timeline: t),
+                          0.5 * BoardFace.presence(at: t.impact.start, timeline: t),
+                          "half gone before the strike's own segment is over")
+        XCTAssertEqual(BoardFace.presence(at: t.ring.start, timeline: t), 0, accuracy: 0.0001,
+                       "and gone before the first chalk is set")
+        XCTAssertEqual(BoardFace.presence(at: t.ring.end, timeline: t), 0, accuracy: 0.0001,
+                       "and gone by the time the ring is whole")
+        XCTAssertEqual(BoardFace.presence(at: t.word.start, timeline: t), 0, accuracy: 0.0001)
+        XCTAssertEqual(BoardFace.presence(at: t.hold.start, timeline: t), 0, accuracy: 0.0001)
+    }
+
+    /// It arrives with the wall, not with the film. Far away there is nothing to see.
+    func testTheBoardResolvesOnlyAsTheWallArrives() {
+        let t = LaunchTimeline.standard
+        let early = BoardFace.presence(at: t.flight.start + 0.1 * t.flight.duration, timeline: t)
+        let late = BoardFace.presence(at: t.flight.end - 0.05, timeline: t)
+        XCTAssertLessThan(early, late * 0.5, "it is a suggestion at distance and a board on arrival")
+        XCTAssertLessThanOrEqual(late, 1.0)
+    }
+
+    /// Reduce Motion has no throw, so there is nothing to throw at.
+    func testTheBoardIsNotDrawnWhenNothingMoves() {
+        let t = LaunchTimeline.reduced
+        for at in [0.0, 0.5, 1.0, 1.2] {
+            XCTAssertEqual(BoardFace.presence(at: at, timeline: t), 0, accuracy: 0.0001)
+        }
+    }
 }

@@ -141,6 +141,60 @@ public struct LaunchCue: Equatable, Sendable {
 /// every 0.43 of the flight and there is no part of the throw without approach in it. The camera's aim
 /// lags at the start and catches up: the dart crosses a screen and a half in the first fifth of the
 /// flight, then settles into a slow closing drift and drives in at the strike.
+/// The board the dart is thrown at (PD-173).
+///
+/// **The film was aimed at a wall.** The code called the target surface "the wall" throughout and that is
+/// exactly what it drew: a flat green plane with chalk dust on it. The perspective dust is the best idea in
+/// this file and it sells *flying at a surface* beautifully — it just never said which surface. The most
+/// recognisable object in the sport, and the one thing that makes THRØ read as darts rather than as a throw,
+/// was not in a darts app's opening.
+///
+/// So: the faintest possible board, in the same perspective, under the same fade, and **gone before the chalk
+/// arrives**. It exists to be thrown at and for no other reason. Two circles competing for one centre is the
+/// single way this idea could spoil the mark it is meant to serve, so `presence` takes it off the board as
+/// the shock begins setting the ring, and a test holds that.
+///
+/// The proportions are a real board's, from the BDO/WDF specification: 451 mm across the double ring's outer
+/// edge, 214 mm across the treble's, 31.8 mm outer bull, 12.7 mm bull. Nobody will measure them and everybody
+/// who has stood in front of one will recognise it, which is the whole return on using the real numbers.
+public enum BoardFace {
+    /// Every radius is a fraction of the double ring's outer edge, which is the board's own 1.0.
+    public static let doubleRing: Double = 1.0
+    public static let trebleRing: Double = 214.0 / 451.0
+    public static let outerBull: Double = 31.8 / 451.0
+    public static let bull: Double = 12.7 / 451.0
+    /// How wide the double and treble bands are, as a fraction — 8 mm on a real board.
+    public static let bandWidth: Double = 8.0 / 451.0
+
+    /// The twenty wires, in degrees, with 0° to the right and -90° straight up.
+    ///
+    /// **Halfway between bed centres, not on them.** A board's 20 sits under the light; a wire at -90° would
+    /// split it and put half a bed either side. Off by half a bed is the kind of mistake nobody can name and
+    /// everybody can see.
+    public static let wireAngles: [Double] = (0..<20).map { -81.0 + 18.0 * Double($0) }
+
+    /// How present the board is at [at]: nothing at distance, a board on arrival, gone as the chalk is set.
+    ///
+    /// Two gates multiplied. `Throw.approach` brings it in with the wall, so at the far end of the flight
+    /// there is nothing to resolve and no detail to shimmer. Then it leaves **across the strike**, and is
+    /// gone by the time the first chalk is set.
+    ///
+    /// **It leaves at the strike and not at the ring, which is a thing looking at it taught.** Fading it over
+    /// the ring segment left the board at full strength through the whole impact — and the impact throws a
+    /// radial burst of chalk from the point, over twenty radial chalk wires, in the same material at the same
+    /// angles. The burst had nothing to be seen against and the strike lost its punch. The board's whole job
+    /// is done the instant the dart lands in it, so that is when it starts to go.
+    ///
+    /// Under Reduce Motion there is no throw, so there is nothing to throw at and this is flatly zero.
+    public static func presence(at: Double, timeline: LaunchTimeline) -> Double {
+        guard timeline.isAnimated else { return 0 }
+        if at < timeline.flight.start { return 0 }
+        let arriving = Throw.approach(timeline.flight.progress(at: at))
+        let leaving = 1 - Easing.unit(timeline.impact.progress(at: at))
+        return max(0, min(1, arriving * leaving))
+    }
+}
+
 public enum Throw {
     /// How large the wall is when the throw starts, of its size at the strike — a fifth, which is a
     /// distance of five board-widths closing to one.
@@ -848,6 +902,14 @@ struct LaunchFrame: View {
                          with: .radialGradient(light, center: lightC, startRadius: 0, endRadius: r))
         }
 
+        // The board being thrown at (PD-173), under the dust and under the same light. It arrives with the
+        // wall and is gone before a single stroke of chalk is set, so it can never fight the mark.
+        let boardPresence = BoardFace.presence(at: t, timeline: timeline)
+        if boardPresence > 0 {
+            drawBoard(&context, centre: lightC, scale: scale, unit: L,
+                      alpha: pField * 0.30 * boardPresence * Double(wallFade), lit: inBeam(lightC.x, lightC.y))
+        }
+
         // The dust on the wall, through the wall's own perspective.
         if pField > 0 {
             drawDust(&context, in: canvas, centre: lightC, scale: scale, previousScale: prevScale, unit: L,
@@ -1278,6 +1340,64 @@ struct LaunchFrame: View {
     /// looks like. The moment the point lands the growth stops and the streaks collapse to specks: the
     /// world has stopped with it. Dust falls away from the lit spot, as light on a wall does, so the
     /// corners of the frame stay dark instead of filling with what would read as rain.
+    /// The board, as faint as it can be and still be a board (PD-173).
+    ///
+    /// **Drawn in light, not in colour.** A real board is red, green, black and cream; every one of those
+    /// fights the brand and two of them fight the chalk. So this is the board's *geometry* lit by the same
+    /// lamp as everything else.
+    ///
+    /// **In chalk, and the first attempt was in `colorBoardLit`, which was invisible.** That token is
+    /// `#174F3C` and the field is `#0F3D2E` — two dark greens a few percent apart, so at any alpha faint
+    /// enough to be subordinate it could not be seen at all. The reason for reaching for it was that the
+    /// board must never outshine the mark, and that reason does not apply: `presence` takes the board off
+    /// before a single stroke of the ring is set, so the two are never on screen together. Chalk at a low
+    /// alpha is the same material as the dust already on the wall, which is exactly what a board's wires
+    /// are — a faint bright thing catching the same lamp.
+    ///
+    /// The wires stop short of the centre and short of the rim: a wire drawn to the middle makes a star, and
+    /// a real board's spider does not read that way at a glance. Everything is one `Path` per kind, so the
+    /// whole board is four fills however many wires it has.
+    private func drawBoard(_ context: inout GraphicsContext, centre: CGPoint, scale: CGFloat, unit L: CGFloat,
+                           alpha: Double, lit: Bool) {
+        guard alpha > 0.001 else { return }
+        // The board is a little wider than the mark that replaces it, so the mark lands inside its treble.
+        let r = 1.45 * L * scale
+        let ink = ThroColor.throChalk.opacity(alpha * (lit ? 1.0 : 0.70))
+        let hair = max(0.5, 0.0045 * L * scale)
+
+        var spider = Path()
+        for degrees in BoardFace.wireAngles {
+            let a = degrees * .pi / 180
+            let from = CGPoint(x: centre.x + cos(a) * r * CGFloat(BoardFace.outerBull),
+                               y: centre.y + sin(a) * r * CGFloat(BoardFace.outerBull))
+            let to = CGPoint(x: centre.x + cos(a) * r, y: centre.y + sin(a) * r)
+            spider.move(to: from)
+            spider.addLine(to: to)
+        }
+        context.stroke(spider, with: .color(ink), lineWidth: hair)
+
+        // The two rings that make a board a board: a double at the rim and a treble two thirds in.
+        for fraction in [BoardFace.doubleRing, BoardFace.trebleRing] {
+            let ringR = r * CGFloat(fraction)
+            let band = r * CGFloat(BoardFace.bandWidth)
+            for edge in [ringR - band, ringR] {
+                context.stroke(Path(ellipseIn: CGRect(x: centre.x - edge, y: centre.y - edge,
+                                                      width: 2 * edge, height: 2 * edge)),
+                               with: .color(ink), lineWidth: hair)
+            }
+        }
+
+        // The bull, which is where the dart is going.
+        let bullR = r * CGFloat(BoardFace.outerBull)
+        context.stroke(Path(ellipseIn: CGRect(x: centre.x - bullR, y: centre.y - bullR,
+                                              width: 2 * bullR, height: 2 * bullR)),
+                       with: .color(ink), lineWidth: hair)
+        let eyeR = r * CGFloat(BoardFace.bull)
+        context.fill(Path(ellipseIn: CGRect(x: centre.x - eyeR, y: centre.y - eyeR,
+                                            width: 2 * eyeR, height: 2 * eyeR)),
+                     with: .color(ThroColor.throChalk.opacity(alpha * 0.85)))
+    }
+
     private func drawDust(_ context: inout GraphicsContext, in rect: CGRect, centre: CGPoint, scale: CGFloat,
                           previousScale: CGFloat, unit L: CGFloat, alpha: Double, colour: Color, lit: (CGFloat, CGFloat) -> Bool) {
         let tiers = Self.dustTiers

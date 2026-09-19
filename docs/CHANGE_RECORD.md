@@ -6579,3 +6579,10 @@ a reason); `ACCESS_TTL` and the refresh-reuse detection verified against the cod
 unset `THRO_TYPESAFE_API_KEY` — because the plan predated the key being set and had no mention of the processor that
 now receives every report's text; a TypeSafe incident added to the "does not look like one" list. Recorded that
 steps 2 and 3 need the founder's consoles and cannot be practised or performed by anyone else.
+
+## A board to throw at (PD-173)
+
+`LaunchSequence.swift`: new `BoardFace` (real board proportions; twenty wires half a bed off vertical; a `presence`
+that arrives with the wall and leaves across the strike) and `drawBoard`, four paths, called under the dust and
+under the same fade. Drawn in chalk — `colorBoardLit` against the field is two dark greens a few percent apart and
+was invisible. Tests +5 (916). New `tools/shoot.sh --opening` is how it was judged.
