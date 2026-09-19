@@ -6610,3 +6610,11 @@ The old pair had the dart arriving at 0.61 against a launch of 2.48 — the last
 a shake and a ring that were both building. It now bottoms out at 0.613 mid-frame and arrives at 1.040. Endpoints are
 unchanged, so nothing else in the film moves. Tests +3 (922), one of them the landing-faster-than-mid-flight assertion
 that the old curve failed.
+
+## A number for the frame, before spending any more of it (PD-177)
+
+New `OpeningCostTests`: renders the film through `ImageRenderer` at twenty-four instants, median of three, minus an
+empty canvas of the same size. About 3 ms of drawing per frame on an M-series Mac; dearest frames 5–8 ms, all inside
+the flight, where the dart is drawn fifteen times. Ceilings at 30 ms peak and 18 ms mean as regression guards, and a
+floor at 0.5 ms because the first version reused one renderer, hit `cgImage`'s cache and reported the film as free.
+Tests +1 (923).

@@ -7222,3 +7222,35 @@ point of it.
 **Evidence.** 922 app tests, 0 failures. Looked at on iPhone 17 Pro at 1.60 and at 1.85: more speed means
 more smear, and the question was whether the dart still reads. It does — the barrel's knurling is legible
 mid-flight, and at the strike it is a dart entering a board rather than a white streak.
+
+## PD-177 — A number for the frame, before spending any more of it
+
+Every change to the opening so far has added drawing, and every one was judged by looking at it on a
+device fast enough to hide the cost. The next changes on the list — a barrel with a gradient down it, a
+specular that moves, additive light — are the expensive kind, and there was no budget to spend them
+against because nobody had ever measured one.
+
+`OpeningCostTests` renders `LaunchFrame` through `ImageRenderer` at 402 × 874 points and scale 3, at
+twenty-four instants spread across the whole film, and subtracts the cost of rasterising an empty canvas
+of the same size so what is reported is `draw` and not the bitmap.
+
+**What it says.** About **3 ms of drawing per frame** on an M-series Mac, with the dearest frames around
+**5 to 8 ms** and all of them inside the flight — which is where the dart is drawn **fifteen times**: one
+sharp and fourteen smear copies, seven behind it and seven ahead. There is room, and where there is least
+of it is the flight.
+
+**That changes the next change.** The smear copies are already drawn `shaded: false` — no grooves, no
+knurl, no highlight. The barrel's material and its specular belong in the same branch, so the fifteen-dart
+frames stay fifteen plain silhouettes and the cost lands only on the one dart anybody can actually see.
+
+**Honest about what it is not.** It is CPU rasterisation on a Mac, not Core Animation on an A19. It cannot
+tell anyone the film runs at 60 Hz on a phone. It answers the two questions a budget is really for: the
+order of magnitude before spending, and a loud failure if a change multiplies it.
+
+**Two things the measurement got wrong before it got them right.** A single render per instant reported
+peaks of 26 and 67 ms that moved to a different instant on every run — a busy machine, not a frame. It
+takes the median of three now. And the first version of *that* reused one `ImageRenderer` for all three
+runs: `cgImage` memoises, so it timed the drawing once and a cache lookup twice, and cheerfully reported
+the entire film as costing **0.00 ms** while passing both ceilings. There is a floor assertion now — the
+film must cost at least half a millisecond more than an empty canvas — because a ceiling cannot tell a
+fast frame from a frame that was never drawn.
