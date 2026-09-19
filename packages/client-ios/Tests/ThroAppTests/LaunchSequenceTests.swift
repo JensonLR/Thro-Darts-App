@@ -540,4 +540,55 @@ extension DartInkTests {
             XCTAssertEqual(BoardFace.presence(at: at, timeline: t), 0, accuracy: 0.0001)
         }
     }
+
+    // MARK: - the camera (PD-175)
+
+    /// The camera never steps. It used to, twice.
+    ///
+    /// The sway took its sine on the absolute clock behind a `tau > 0` gate, so on the first frame of the
+    /// flight `sin(2π · 0.45 · 0.28)` was already 0.712 and the whole frame moved most of the sway in one
+    /// frame — a jump landing on the film's first real movement — then moved back when the gate closed.
+    /// Walking it at 120 Hz is the cheapest way to say "and it must never do that again".
+    func testTheCameraNeverStepsBetweenOneFrameAndTheNext() {
+        let t = LaunchTimeline.standard
+        var previous = LaunchCamera.sway(at: 0, timeline: t)
+        var biggest = 0.0
+        var at = 0.0
+        while at <= t.total {
+            let now = LaunchCamera.sway(at: at, timeline: t)
+            let step = hypot(now.dx - previous.dx, now.dy - previous.dy)
+            biggest = max(biggest, step)
+            previous = now
+            at += 1.0 / 120.0
+        }
+        // A point and a half at 120 Hz would be 180 points a second, which is a cut rather than a camera.
+        XCTAssertLessThan(biggest, 0.5, "the camera moves smoothly or it is not a camera")
+    }
+
+    /// It starts still, ends still, and is felt in between.
+    func testTheCameraIsStillAtBothEndsOfTheThrowAndMovesInTheMiddle() {
+        let t = LaunchTimeline.standard
+        XCTAssertEqual(hypot(LaunchCamera.sway(at: t.flight.start, timeline: t).dx,
+                             LaunchCamera.sway(at: t.flight.start, timeline: t).dy), 0, accuracy: 0.001)
+        XCTAssertEqual(hypot(LaunchCamera.sway(at: t.flight.end, timeline: t).dx,
+                             LaunchCamera.sway(at: t.flight.end, timeline: t).dy), 0, accuracy: 0.001)
+        // Somewhere in the middle it is actually felt: 2.6 points on a 402-point screen was not.
+        var most = 0.0
+        var at = t.flight.start
+        while at <= t.flight.end {
+            let v = LaunchCamera.sway(at: at, timeline: t)
+            most = max(most, hypot(v.dx, v.dy))
+            at += 1.0 / 60.0
+        }
+        XCTAssertGreaterThan(most, 2.5, "a camera you cannot see is a tripod")
+    }
+
+    /// Reduce Motion has no camera at all.
+    func testTheCameraDoesNotMoveWhenNothingMoves() {
+        let t = LaunchTimeline.reduced
+        for at in [0.0, 0.4, 0.9, 1.3] {
+            let v = LaunchCamera.sway(at: at, timeline: t)
+            XCTAssertEqual(hypot(v.dx, v.dy), 0, accuracy: 0.0001)
+        }
+    }
 }

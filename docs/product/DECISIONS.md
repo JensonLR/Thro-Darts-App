@@ -7156,3 +7156,31 @@ vignette resolves to `0.46 - 0.08 = 0.38` — the number it was before.
 
 **Evidence.** 916 app tests, every `tools/check_*.py` green. Looked at on iPhone 17 Pro at 1.85, 2.90 and
 4.20 against the same instants captured before the change.
+
+## PD-175 — A camera you can see, that never steps
+
+Two things, one of them a defect nobody had noticed because it was too small to see and too fast to catch.
+
+**The sway jumped, twice.** It took its sine on the **absolute** clock behind a `tau > 0` gate. The flight
+begins at t = 0.28, so on its very first frame `sin(2π · 0.45 · 0.28)` is already **0.712** — the whole
+frame stepped sideways by most of the sway in a single frame, landing on the film's first real movement.
+Then it stepped back when the gate closed at `tau = 1`. The sine is taken from the flight's own start now,
+so it begins at zero, and an envelope eases it out rather than a gate cutting it.
+
+**And the camera could not be seen at all.** `Tune.sway` was 2.6 points. On a 402-point-wide screen that is
+six tenths of one percent, at a frequency slow enough that no two consecutive frames differ visibly — so a
+film whose every other element is cinematic was playing inside a camera nailed to a tripod. The first
+capture of this film reported the camera as never moving, and reading the code afterwards showed movement
+that was there and imperceptible, which is the same thing as absent. It is 5 points now, with a second
+slower rate under it at 0.17 Hz, because a hand holding a camera drifts as well as breathes and one sine
+alone reads as a wobble.
+
+**Lifted out so it can be asserted.** `LaunchCamera.sway(at:timeline:)` is the same expression the frame
+uses, and `draw` calls it. Three tests: that it is still at both ends of the throw, that somewhere in the
+middle it exceeds 2.5 points — *a camera you cannot see is a tripod* — and that **walking it at 120 Hz
+across the whole film, no single step exceeds half a point**. The last one is the guard: the defect above
+was a 1.85-point step, and it would have failed this on the frame it happened.
+
+**Evidence.** 919 app tests. Looked at on iPhone 17 Pro at 0.90: with PD-173's board and PD-174's lamp, the
+frame now reads as a dart in the foreground travelling toward a lit board in the distance, which is a shot
+rather than a sprite on a colour.

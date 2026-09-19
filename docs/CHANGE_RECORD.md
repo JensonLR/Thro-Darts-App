@@ -6594,3 +6594,11 @@ than to zero — they were multiplied out at t=2.403, leaving 50.6% of the film 
 stops move from `throGreenDeep` (1.29:1 on the field, invisible) to `throGreenOnink`. The lamp travels to the design
 system's own `(0.5, 0.30)` as the name assembles, and the vignette opens instead of closing. All gated on `animated`;
 Reduce Motion resolves to the previous 0.38.
+
+## A camera you can see, that never steps (PD-175)
+
+`LaunchSequence.swift`: the sway's sine moves onto the flight's own clock (it was on the absolute clock behind a
+`tau > 0` gate, so it stepped 1.85pt on the flight's first frame and stepped back at its last), gains an easing
+envelope and a second 0.17 Hz drift, and rises from 2.6pt to 5pt — 2.6 on a 402pt screen could not be seen. Lifted
+into `LaunchCamera.sway` so it can be asserted; tests +3 (919), including a 120 Hz walk holding every frame-to-frame
+step under half a point.

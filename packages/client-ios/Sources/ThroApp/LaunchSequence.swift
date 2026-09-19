@@ -157,6 +157,28 @@ public struct LaunchCue: Equatable, Sendable {
 /// The proportions are a real board's, from the BDO/WDF specification: 451 mm across the double ring's outer
 /// edge, 214 mm across the treble's, 31.8 mm outer bull, 12.7 mm bull. Nobody will measure them and everybody
 /// who has stood in front of one will recognise it, which is the whole return on using the real numbers.
+/// Where the camera is, in points from its rest position (PD-175).
+///
+/// Lifted out of `draw` so the thing that used to step sideways by 1.85 points on a single frame can be
+/// asserted rather than watched for. It is the same expression the frame uses; `draw` calls this.
+public enum LaunchCamera {
+    /// The breathing of a carried camera through the throw. Zero before the flight and zero after it, and
+    /// **continuous at both ends** — which the first version was not.
+    public static func sway(at t: Double, timeline: LaunchTimeline) -> CGVector {
+        guard timeline.isAnimated else { return .zero }
+        let tau = timeline.flight.progress(at: t)
+        guard tau > 0, tau < 1 else { return .zero }
+        let since = t - timeline.flight.start
+        let envelope = Easing.unit(tau / 0.10) * Easing.unit((1 - tau) / 0.14)
+        let s = Double(LaunchFrame.Tune.sway) * (1 - tau * 0.4) * envelope
+        let f = LaunchFrame.Tune.swayHertz
+        let d = LaunchFrame.Tune.swayDrift
+        return CGVector(
+            dx: s * (sin(2 * .pi * f * since) + 0.55 * sin(2 * .pi * d * since + 0.6)),
+            dy: s * 0.7 * (sin(2 * .pi * f * 0.63 * since + 1.1) + 0.55 * sin(2 * .pi * d * 0.8 * since)))
+    }
+}
+
 public enum BoardFace {
     /// Every radius is a fraction of the double ring's outer edge, which is the board's own 1.0.
     public static let doubleRing: Double = 1.0
@@ -693,7 +715,7 @@ struct LaunchFrame: View {
     }
 
     /// The numbers that are taste rather than measurement, in one place.
-    enum Tune {
+    public enum Tune {
         static let dustAlpha = 0.42                      // chalk on the wall, at its strongest
         static let dustCount = 420
         static let dustSpread: CGFloat = 3.2             // how far the dust reaches across the wall, in dart-lengths
@@ -701,8 +723,17 @@ struct LaunchFrame: View {
         static let beamAlpha = 0.075                     // the stage light's beam, at its brightest
         static let beamLift: Double = 2.6                // how much brighter the dust is inside the beam
         static let rollTurns = 0.5                       // over the whole flight, at a steady rate
-        static let sway: CGFloat = 2.6                   // the camera breathes as a carried camera does
+        /// How far the camera breathes, in points.
+        ///
+        /// **It was 2.6 and could not be seen.** On a 402-point-wide screen that is six tenths of a percent,
+        /// at a frequency slow enough that no two consecutive frames differ by a visible amount — so a film
+        /// whose every other element is cinematic was playing inside a camera nailed to a tripod, and the
+        /// first capture of it reported the camera as never moving. Raised to where a hand is actually felt,
+        /// with a second slower rate under it (PD-175).
+        static let sway: CGFloat = 5.0
         static let swayHertz = 0.45
+        /// The slow component: a hand drifting, under the breathing.
+        static let swayDrift = 0.17
         static let driveSeconds = 0.09                   // the board gives, and holds
         static let drive: CGFloat = 0.020                // of the dart's length
         static let shakeSeconds = 0.22
@@ -811,10 +842,17 @@ struct LaunchFrame: View {
 
         // The camera: it breathes through the flight as a carried camera does, and the strike shakes it,
         // mostly along the line of the throw, dying in a fifth of a second.
+        // **Phase-locked to the flight, and eased in and out of** (PD-175). The sine used to be taken on the
+        // absolute clock while the gate was `tau > 0`, so on the first frame of the flight — t = 0.28 —
+        // `sin(2π · 0.45 · 0.28)` is already 0.712 and the whole frame stepped sideways by most of the sway
+        // in one frame, then stepped back when the gate closed at `tau = 1`. Two jumps, and the first of them
+        // landed on the film's first real movement. Taking the sine from the flight's own start makes it
+        // begin at zero, and the envelope takes it out again rather than a gate cutting it.
         if animated && tau > 0 && tau < 1 {
-            let s = Tune.sway * CGFloat(1 - tau * 0.4)
-            context.translateBy(x: s * CGFloat(sin(2 * Double.pi * Tune.swayHertz * t)),
-                                y: s * 0.7 * CGFloat(sin(2 * Double.pi * Tune.swayHertz * 0.63 * t + 1.1)))
+            // Two rates, because a hand holding a camera drifts as well as breathes; one sine alone reads
+            // as a wobble. The expression is `LaunchCamera.sway` so it can be asserted.
+            let v = LaunchCamera.sway(at: t, timeline: timeline)
+            context.translateBy(x: CGFloat(v.dx), y: CGFloat(v.dy))
         }
         if animated && sinceImpact >= 0 && sinceImpact < Tune.shakeSeconds {
             let along = CGFloat(Easing.damped(sinceImpact, amplitude: 5, hertz: 11, decay: 0.075))
