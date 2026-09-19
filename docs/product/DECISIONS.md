@@ -7114,3 +7114,45 @@ material as the dust already on the wall, which is exactly what a board's wires 
 
 **Evidence.** Five tests, watched failing first. 916 app tests. Looked at on iPhone 17 Pro at 1.20, 1.55,
 1.85 and 2.30: the dart flies at something, lands in the bull, and the board has left before the Ø is whole.
+
+## PD-174 — The lamp does not go out
+
+The film's largest single defect, and it was arithmetic rather than taste.
+
+`wallFade = 1 - pRing` did two jobs with one number, and `pRing` reaches 1 at **t = 2.403**. From there to
+the end at 4.86 — **2.46 seconds, 50.6% of the runtime** — the beam, the pool and all 420 dust specks were
+multiplied out of existence. The reveal, the word, the tagline and the entire 1.04 s hold played on flat
+`#0F3D2E` with a screen-centred vignette and nothing else. **Half the film, including all of its climax,
+was a logo on a colour chip.**
+
+And the vignette *closed a further 6%* through exactly the beat the tagline is read in. So the picture said
+*one lamp, then less of it, then nothing* while the line under it said **FROM THE PUB BOARD TO THE WORLD
+STAGE**. A throw in a dark corner is the right picture for the first half; the second half is the part that
+has to feel like somewhere bigger.
+
+**Four changes, all inside the existing draw.**
+
+1. **Two fades instead of one.** `dustFade = 1 - pRing` keeps the dust clearing, which is what the single
+   fade was really protecting — specks crawling over pure chalk. `lampFade = 1 - 0.55 * pRing` settles the
+   lamp to just under half instead of extinguishing it, so the name and the tagline are lit by the lamp
+   that lit the throw.
+2. **The pool is made of light now.** Its middle stops were `throGreenDeep` `#174F3C` over a `throGreen`
+   `#0F3D2E` field — a 1.29:1 ratio, the same near-invisible pairing the board hit in PD-173 — so the lamp
+   read as a small bright dot rather than as light falling on a surface. `throGreenOnink` `#57A385` is the
+   brand's own lighter green and is what a lit patch of board looks like.
+3. **The lamp travels onto the composition.** Through the throw it points at the spot being aimed at; as
+   the name assembles it moves to `(0.5, 0.30)` — `ThroLampKey.defaultValue`, the lamp every `ThroBoard` in
+   the app is lit from. The film's last frame is now lit the way the app is, so the hand-over to Home is a
+   cut between two rooms with the same light in them.
+4. **The vignette opens.** It starts a little tighter and then relaxes by more than it ever closed.
+
+**Opened too far on the first attempt, and looking at it is what caught that.** The pool was widened 2.35×
+and the vignette let go by 0.26; the frame went evenly lit — open, flat, and no longer a room with one lamp
+in it. Half of each keeps the drama and still opens. That iteration took two minutes because
+`tools/shoot.sh --opening` exists; by hand it is the reason this kind of note never gets acted on.
+
+**Reduce Motion is unchanged in tone.** Every new term is gated on `animated`, and with the gates taken the
+vignette resolves to `0.46 - 0.08 = 0.38` — the number it was before.
+
+**Evidence.** 916 app tests, every `tools/check_*.py` green. Looked at on iPhone 17 Pro at 1.85, 2.90 and
+4.20 against the same instants captured before the change.

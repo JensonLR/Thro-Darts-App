@@ -6586,3 +6586,11 @@ steps 2 and 3 need the founder's consoles and cannot be practised or performed b
 that arrives with the wall and leaves across the strike) and `drawBoard`, four paths, called under the dust and
 under the same fade. Drawn in chalk — `colorBoardLit` against the field is two dark greens a few percent apart and
 was invisible. Tests +5 (916). New `tools/shoot.sh --opening` is how it was judged.
+
+## The lamp does not go out (PD-174)
+
+`LaunchSequence.swift`: `wallFade` splits into `dustFade` and `lampFade`, so the beam and pool settle to 45% rather
+than to zero — they were multiplied out at t=2.403, leaving 50.6% of the film on a flat colour chip. The pool's mid
+stops move from `throGreenDeep` (1.29:1 on the field, invisible) to `throGreenOnink`. The lamp travels to the design
+system's own `(0.5, 0.30)` as the name assembles, and the vignette opens instead of closing. All gated on `animated`;
+Reduce Motion resolves to the previous 0.38.

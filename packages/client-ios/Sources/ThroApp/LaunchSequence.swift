@@ -823,9 +823,20 @@ struct LaunchFrame: View {
         }
         let canvas = CGRect(origin: .zero, size: size).insetBy(dx: -12, dy: -12)
 
-        // The field, in screen space: the launch screen's flat green on the first frame, then a vignette
-        // that closes a little further as the name settles, to put the frame around what is to be read.
-        let vignette = 0.38 * pField + 0.06 * (animated ? Easing.resolve(pHold) : 1)
+        // The field, in screen space: the launch screen's flat green on the first frame, then a vignette —
+        // and **it opens as the name lands rather than closing** (PD-174).
+        //
+        // It used to add `0.06 * resolve(pHold)`, so the frame drew tighter through exactly the beat the
+        // tagline is read in. The picture said *one lamp, then less of it* while the line under it said FROM
+        // THE PUB BOARD TO THE WORLD STAGE. A throw in a dark corner is the right picture for the first half;
+        // the second half is the part that has to feel like somewhere bigger, and a vignette that keeps
+        // shutting is the opposite of that. It starts a little tighter now and relaxes by more than it ever
+        // closed, so the room opens under the name.
+        //
+        // **Opened too far on the first try**, which is what looking at it is for: the pool was widened by
+        // 2.35× and the vignette let go by 0.26, and the frame went evenly lit — open, and flat, and no
+        // longer a room with one lamp in it. Half of each keeps the drama and still opens.
+        let vignette = 0.46 * pField - (animated ? 0.15 * Easing.resolve(pHold) : 0.08)
         let field = Gradient(colors: [ThroColor.throInk.opacity(0), ThroColor.throInk.opacity(vignette)])
         context.fill(Path(canvas),
                      with: .radialGradient(field, center: CGPoint(x: size.width / 2, y: size.height / 2),
@@ -858,21 +869,45 @@ struct LaunchFrame: View {
         // light that lit the spot becomes the light the chalk is drawn in, sliding back to the ring.
         let off = animated ? Throw.targetOffset(tau) : CGVector(dx: 0, dy: 0)
         let aim = lerp(lerp(bigCentre, landed, 0.45), centre, animated ? CGFloat(Easing.resolve(Easing.unit(Double(pRing) / 0.7))) : 1)
-        let lightC = CGPoint(x: aim.x + off.dx * L, y: aim.y + off.dy * L)
+        // Where the lamp is pointed. Through the throw it is on the spot being aimed at; as the name assembles
+        // it travels to where the design system's own lamp lives — `ThroLampKey.defaultValue`, the (0.5, 0.30)
+        // every `ThroBoard` in the app is lit from — so the film's last frame is lit the way the app is, and
+        // the hand-over to Home is a cut between two rooms with the same light in them rather than two
+        // different places (PD-174).
+        let struck = CGPoint(x: aim.x + off.dx * L, y: aim.y + off.dy * L)
+        let settled = CGPoint(x: size.width * 0.5, y: size.height * 0.30)
+        let lamp = animated ? Easing.resolve(timeline.word.progress(at: t)) : 1
+        let lightC = CGPoint(x: struck.x + (settled.x - struck.x) * CGFloat(lamp),
+                             y: struck.y + (settled.y - struck.y) * CGFloat(lamp))
         let scale = animated ? Throw.targetScale(tau) : 1
         let prevScale = animated ? Throw.targetScale(timeline.flight.progress(at: t - 2.0 / 60.0)) : 1
         let near = animated ? Throw.approach(tau) : 1
-        let poolR = big.ringOuter * Tune.lightRadius * scale
-        let wallFade = 1 - pRing            // the wall's light and dust give way to the chalk ring
+        // The pool widens as the lamp settles: a spot on a board through the throw, a wash over the name after.
+        let poolSettle = animated ? Easing.resolve(timeline.word.progress(at: t)) : 1
+        let poolR = big.ringOuter * Tune.lightRadius * scale * (1 + 0.62 * CGFloat(poolSettle))
+        // **The dust gives way to the chalk. The lamp does not go out** (PD-174).
+        //
+        // There was one `wallFade = 1 - pRing` doing both jobs, and `pRing` reaches 1 at t = 2.403 — so for
+        // the last **2.46 seconds, 50.6% of the film**, the beam, the pool and all 420 specks were multiplied
+        // out of existence. The reveal, the word, the tagline and the whole 1.04 s hold played on flat
+        // `#0F3D2E` with a vignette and nothing else. A title sequence should get richer as it lands, and this
+        // one stripped to a colour chip at exactly its climax — while the line under it promises the world
+        // stage.
+        //
+        // Two fades now. The dust must still clear, because specks crawling over pure chalk is what the single
+        // fade was protecting; the lamp settles to just under half instead of going out, so the name and the
+        // tagline are lit by the same lamp that lit the throw.
+        let dustFade = 1 - pRing
+        let lampFade = 1 - 0.55 * pRing
         func beamHalf(_ y: CGFloat) -> CGFloat {
             poolR * (0.16 + 0.94 * CGFloat(pow(Easing.unit(Double((y - canvas.minY) / (lightC.y - canvas.minY))), 1.35)))
         }
-        let beamLit = animated && wallFade > 0
+        let beamLit = animated && lampFade > 0
         func inBeam(_ x: CGFloat, _ y: CGFloat) -> Bool { beamLit && abs(x - lightC.x) < beamHalf(y) && y < lightC.y + poolR * 0.4 }
 
         // The beam: a cone from a lamp above the frame, narrow at the lamp, opening onto the spot it lights.
         if beamLit {
-            let strength = (0.55 + 0.45 * near) * pField * wallFade
+            let strength = (0.55 + 0.45 * near) * pField * lampFade
             let yTop = canvas.minY - 40
             var beam = Path()
             beam.move(to: CGPoint(x: lightC.x - beamHalf(yTop), y: yTop))
@@ -890,14 +925,19 @@ struct LaunchFrame: View {
         }
 
         // The pool of light on the wall, breathing once at the strike, spent as the chalk takes its place.
-        if animated && wallFade > 0 {
+        if animated && lampFade > 0 {
             let breath = (sinceImpact >= 0 && sinceImpact < 0.55) ? sin(Double.pi * sinceImpact / 0.55) : 0
-            let strength = (0.55 + 0.45 * near) * pField * wallFade * (1 + 1.9 * breath)
+            let strength = (0.55 + 0.45 * near) * pField * lampFade * (1 + 1.9 * breath)
             let r = poolR * (1 + 0.14 * CGFloat(breath))
+            // **The pool's middle was two greens a few percent apart** (PD-174), the same mistake the board
+            // made: `throGreenDeep` #174F3C laid over a `throGreen` #0F3D2E field is a 1.29:1 ratio, so the
+            // body of the pool was doing almost nothing and the lamp read as a small bright dot rather than
+            // as light falling on a surface. `throGreenOnink` #57A385 is the brand's own lighter green and is
+            // what a lit patch of board actually looks like.
             let light = Gradient(stops: [.init(color: chalk.opacity(0.055 * strength), location: 0),
-                                         .init(color: ThroColor.throGreenDeep.opacity(0.50 * strength), location: 0.28),
-                                         .init(color: ThroColor.throGreenDeep.opacity(0.30 * strength), location: 0.62),
-                                         .init(color: ThroColor.throGreenDeep.opacity(0), location: 1)])
+                                         .init(color: ThroColor.throGreenOnink.opacity(0.26 * strength), location: 0.28),
+                                         .init(color: ThroColor.throGreenOnink.opacity(0.13 * strength), location: 0.62),
+                                         .init(color: ThroColor.throGreenOnink.opacity(0), location: 1)])
             context.fill(Path(ellipseIn: CGRect(x: lightC.x - r, y: lightC.y - r, width: 2 * r, height: 2 * r)),
                          with: .radialGradient(light, center: lightC, startRadius: 0, endRadius: r))
         }
@@ -907,13 +947,13 @@ struct LaunchFrame: View {
         let boardPresence = BoardFace.presence(at: t, timeline: timeline)
         if boardPresence > 0 {
             drawBoard(&context, centre: lightC, scale: scale, unit: L,
-                      alpha: pField * 0.30 * boardPresence * Double(wallFade), lit: inBeam(lightC.x, lightC.y))
+                      alpha: pField * 0.30 * boardPresence * Double(dustFade), lit: inBeam(lightC.x, lightC.y))
         }
 
         // The dust on the wall, through the wall's own perspective.
         if pField > 0 {
             drawDust(&context, in: canvas, centre: lightC, scale: scale, previousScale: prevScale, unit: L,
-                     alpha: pField * Tune.dustAlpha * (0.45 + 0.55 * near) * (animated ? Double(wallFade) : 0.5),
+                     alpha: pField * Tune.dustAlpha * (0.45 + 0.55 * near) * (animated ? Double(dustFade) : 0.5),
                      colour: chalk, lit: inBeam)
         }
 
