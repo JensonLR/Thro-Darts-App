@@ -238,9 +238,20 @@ public enum Throw {
         Double((targetScale(tau) - farScale) / (1 - farScale))
     }
     /// How much of its journey across the frame the dart has made, 0 at the first frame to 1 at the strike.
+    /// **It leaves fast, loses speed to the air, and then the wall comes up to meet it** (PD-176).
+    ///
+    /// This used to be `0.62(1-(1-u)⁴) + 0.38u^1.6`, whose derivative falls monotonically from 3.72 to 0.91
+    /// dart-lengths per unit of flight: the dart was at its fastest leaving the hand and its **slowest on
+    /// the frame it landed**. It crossed most of the frame in the first fifth and then floated the last
+    /// third into the board. Everything the strike does afterwards — the whip, the shake, the flash, the
+    /// shock — is paid for by the arrival, and a dart that drifts in does not earn it.
+    ///
+    /// The second term's exponent carries the change: at 1.6 it is nearly linear and adds a constant drift,
+    /// at 2.6 it is a curve that arrives. Speed now falls from 2.40 to 0.61 by the middle of the flight and
+    /// climbs back to 1.04 at the board.
     public static func reach(_ tau: Double) -> Double {
         let u = Easing.unit(tau)
-        return 0.62 * (1 - pow(1 - u, 4)) + 0.38 * pow(u, 1.6)
+        return 0.60 * (1 - pow(1 - u, 4)) + 0.40 * pow(u, 2.6)
     }
     /// Where the dart is along its own line relative to its landed place, in dart-lengths: behind it,
     /// closing to nothing at the strike.
@@ -250,7 +261,9 @@ public enum Throw {
     /// The derivative of `reach`, in dart-lengths per unit of flight: the dart's speed across the frame.
     public static func speed(_ tau: Double) -> CGFloat {
         let u = Easing.unit(tau)
-        return travelLength * CGFloat(2.48 * pow(1 - u, 3) + 0.608 * pow(u, 0.6))
+        // d(reach)/du exactly, and a test holds it so: the smear is this and nothing else, which is the
+        // whole reason the blur looks right.
+        return travelLength * CGFloat(2.40 * pow(1 - u, 3) + 1.04 * pow(u, 1.6))
     }
     /// The motion smear along the dart's line, in dart-lengths: its speed, so it is never longer than the
     /// motion and never outlives it.

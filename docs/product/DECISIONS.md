@@ -7184,3 +7184,41 @@ was a 1.85-point step, and it would have failed this on the frame it happened.
 **Evidence.** 919 app tests. Looked at on iPhone 17 Pro at 0.90: with PD-173's board and PD-174's lamp, the
 frame now reads as a dart in the foreground travelling toward a lit board in the distance, which is a shot
 rather than a sprite on a colour.
+
+## PD-176 — The wall comes up to meet it
+
+A dart leaves the hand fast, loses a little to the air, and then arrives. This one drifted in.
+
+`Throw.reach` was `0.62 · (1 − (1−u)⁴) + 0.38 · u^1.6`, and `Throw.speed` is its derivative by
+construction — the smear is `0.17 × speed` and nothing else, which is the whole reason the blur has ever
+looked right. Differentiating it says what the eye was seeing without being able to name it:
+
+| u | old | new |
+|---|---|---|
+| 0.00 | 2.480 | 2.400 |
+| 0.25 | 1.311 | 1.126 |
+| 0.50 | 0.711 | 0.643 |
+| 0.75 | 0.550 | 0.694 |
+| 0.90 | 0.573 | 0.881 |
+| 1.00 | 0.608 | 1.040 |
+
+The old curve fell to 0.55 around three-quarters of the way and recovered only to **0.61** — the dart
+reached the board at a quarter of the speed it left at, and the last third of the flight was a float. A
+float robs the strike of everything the strike then does: the chalk, the shake, the ring. The camera sway,
+the impact shake and the board's arrival are all timed against a throw that was slowing down while they
+were all building up.
+
+`0.60 · (1 − (1−u)⁴) + 0.40 · u^2.6` keeps both endpoints exactly — it still starts behind the frame and
+lands where it lands — and moves the second term's weight late. Speed now dips to **0.613 at u = 0.59**
+and rises to **1.040** at the board: the dart loses speed to the air across the middle of the frame and
+then the wall comes up to meet it.
+
+**Three tests, written before the change and watched to fail.** That the landing speed exceeds the
+mid-flight speed and that the hand is still the fastest moment of all; that `speed` equals `d(reach)/du`
+to 1e-3 at six points, so the smear stays a measurement rather than a decoration; and that `reach` is
+strictly increasing from 0 to 1 across a hundred steps. The first failed on the old curve, which is the
+point of it.
+
+**Evidence.** 922 app tests, 0 failures. Looked at on iPhone 17 Pro at 1.60 and at 1.85: more speed means
+more smear, and the question was whether the dart still reads. It does — the barrel's knurling is legible
+mid-flight, and at the strike it is a dart entering a board rather than a white streak.

@@ -6602,3 +6602,11 @@ Reduce Motion resolves to the previous 0.38.
 envelope and a second 0.17 Hz drift, and rises from 2.6pt to 5pt — 2.6 on a 402pt screen could not be seen. Lifted
 into `LaunchCamera.sway` so it can be asserted; tests +3 (919), including a 120 Hz walk holding every frame-to-frame
 step under half a point.
+
+## The wall comes up to meet it (PD-176)
+
+`LaunchSequence.swift`: `Throw.reach` becomes `0.60·(1−(1−u)⁴) + 0.40·u^2.6` and `Throw.speed` its exact derivative.
+The old pair had the dart arriving at 0.61 against a launch of 2.48 — the last third of the flight was a float, under
+a shake and a ring that were both building. It now bottoms out at 0.613 mid-frame and arrives at 1.040. Endpoints are
+unchanged, so nothing else in the film moves. Tests +3 (922), one of them the landing-faster-than-mid-flight assertion
+that the old curve failed.

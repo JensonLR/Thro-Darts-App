@@ -591,4 +591,42 @@ extension DartInkTests {
             XCTAssertEqual(hypot(v.dx, v.dy), 0, accuracy: 0.0001)
         }
     }
+
+    // MARK: - the throw's own speed (PD-176)
+
+    /// A dart arrives. It does not drift in.
+    ///
+    /// `speed` used to fall monotonically from 3.72 to 0.91 dart-lengths per unit of flight — fastest as it
+    /// left, slowest as it landed — so the throw crossed the frame early and then floated the last third into
+    /// the board. A dart that floats in robs the strike of everything the strike does afterwards. It leaves
+    /// fast, loses speed to the air, and then the wall comes up to meet it.
+    func testTheDartArrivesFasterThanItDrifts() {
+        let mid = Throw.speed(0.55)
+        let landing = Throw.speed(0.98)
+        XCTAssertGreaterThan(landing, mid, "the wall comes up to meet it")
+        XCTAssertGreaterThan(Throw.speed(0.0), landing, "and it still leaves the hand fastest of all")
+    }
+
+    /// `speed` is `reach`'s own derivative, or the smear is a decoration rather than a measurement.
+    ///
+    /// The blur is `smearGain * speed` and nothing else, which is the whole reason it looks right. If the two
+    /// ever drift apart the dart is blurred by an amount unrelated to how fast it is going, and nobody would
+    /// be able to say why it looked wrong.
+    func testSpeedIsTheDerivativeOfReach() {
+        let h = 1e-5
+        for u in [0.05, 0.2, 0.4, 0.6, 0.8, 0.95] {
+            let numerical = (Throw.reach(u + h) - Throw.reach(u - h)) / (2 * h)
+            let analytic = Double(Throw.speed(u) / Throw.travelLength)
+            XCTAssertEqual(analytic, numerical, accuracy: 1e-3, "speed must be d(reach)/du at \(u)")
+        }
+    }
+
+    /// It still starts behind the frame and lands where it lands.
+    func testTheThrowStillCoversItsWholeJourney() {
+        XCTAssertEqual(Throw.reach(0), 0, accuracy: 1e-9)
+        XCTAssertEqual(Throw.reach(1), 1, accuracy: 1e-9)
+        for (a, b) in zip(stride(from: 0.0, through: 0.99, by: 0.01), stride(from: 0.01, through: 1.0, by: 0.01)) {
+            XCTAssertGreaterThan(Throw.reach(b), Throw.reach(a), "it never goes backwards")
+        }
+    }
 }
