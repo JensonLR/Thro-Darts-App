@@ -9,13 +9,23 @@ import SwiftUI
 /// and blend modes, which are the expensive kind. **Nobody had a number**, so "can we afford this" had
 /// only ever been answered by looking at it, on a device fast enough to hide the answer.
 ///
-/// This is that number. It is not the phone's number and does not pretend to be: it renders through
-/// `ImageRenderer` on the test host's CPU, with no GPU path and no display link. What it is good for is
-/// the two things a budget is actually for — knowing the order of magnitude before spending, and failing
-/// loudly if a change makes the frame several times more expensive than it was.
+/// This is that number, and it is important to be exact about which number it is.
 ///
-/// The empty canvas of the same size is measured alongside it and subtracted, so what is reported is the
-/// cost of `LaunchFrame.draw` rather than the cost of rasterising a bitmap.
+/// **It is the cost of building a frame, not of painting one.** `ThroColor` is an asset-catalogue
+/// colour and the catalogue does not resolve inside this test bundle: every token here is fully
+/// transparent, which was found by rendering a frame and reading its pixels — the whole film came back
+/// as nothing over a red background. So the arithmetic, the four hundred dust positions, the path
+/// construction, the gradient construction and every `fill` call all happen exactly as they do on a
+/// phone, and then Core Graphics is handed clear paint and does very little with it.
+///
+/// That is still the number worth watching. What runs on the main thread sixty times a second is this
+/// closure, and a frame that costs too much to *build* is a dropped frame whatever the GPU does. What
+/// it cannot tell anyone is how expensive the film is to rasterise, or whether it holds 60 Hz on an
+/// A19. For that there is a device and a pair of eyes, and for the picture itself there is
+/// `tools/check_opening_is_never_flat.py`, which reads real screenshots off a real simulator.
+///
+/// The empty canvas of the same size is measured alongside it and subtracted, so what is reported is
+/// `LaunchFrame.draw` rather than the fixed cost of producing a bitmap.
 @MainActor
 final class OpeningCostTests: XCTestCase {
     /// An iPhone 17 Pro's points, which is the device the film has been judged on.

@@ -6627,3 +6627,18 @@ along the barrel is computed from where the lamp actually is. The glint is `.plu
 first blend mode in the client — so the knurl shows through it. All of it inside the `shaded` branch, so the fourteen
 smear copies are untouched and the frame cost is unchanged at 2.0 yardsticks. Every stop resolves to chalk with the
 dart's own morph. Tests +4 (927).
+
+## Looking at the picture (PD-179)
+
+New `tools/check_opening_is_never_flat.py`: decodes simulator screenshots of the opening and holds two things the
+package tests cannot — that no frame past the flight is a flat colour, that every frame before it is, and that the
+lamp is still on under the name. The lamp is measured against its own mirror through the frame's centre so the
+vignette cancels; measured against the corners, as the first version did, PD-174's defect passed. Proved by
+restoring the defect and watching three frames fail at 1.00x.
+
+`OpeningCostTests`: corrected. `ThroColor` does not resolve in the test bundle, so a rendered frame there is fully
+transparent — the bench measures building a frame, not painting one.
+
+Reverted before commit: `.screen` on the beam and pool. Measured at +1% of lamp luminance, because over a field as
+dark as `#0F3D2E` normal blending at low alpha is already almost additive. Additive light pays on the barrel, where
+PD-178 uses it, and not on the field.

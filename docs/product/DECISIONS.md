@@ -7299,3 +7299,59 @@ frame before, 2.0 after.
 **Evidence.** 927 app tests. Looked at on iPhone 17 Pro at 1.10 and 1.60, at full resolution and
 magnified: the knurl now reads as rings cut into something round, the collar reads as a separate part,
 and the point carries the lamp.
+
+## PD-179 — Looking at the picture, and what the picture is drawn with
+
+Two findings, and the second one refuses an item on this film's own plan.
+
+### The film cannot be looked at in a unit test, and now can be looked at anyway
+
+`ThroColor` is an asset-catalogue colour, and the catalogue does not resolve inside the client's macOS
+test bundle. A frame of the opening rendered there through `ImageRenderer` comes back **entirely
+transparent** — every fill in the film drawn in invisible ink over nothing. This was found by writing
+the pixel test, watching it report a luminance of 0.000 everywhere, and refusing to believe the film
+was black: a plain red rectangle rendered fine, a `Canvas` rendered fine, a `Canvas` with a blur
+rendered fine, and a `Canvas` filled with `ThroColor.throChalk` rendered *nothing*.
+
+So `tools/check_opening_is_never_flat.py` reads the real thing instead: PNGs shot off a real simulator
+by `tools/shoot.sh --opening`, with the real tokens and the real compositor. It decodes the PNG itself
+— zlib and the five row filters, no dependency — and asks two questions.
+
+**Is it a picture?** The spread between the brightest and dimmest of an 81-point grid. This is the
+assertion PD-174's defect would have failed for half the running time, and nothing in this repository
+could make it before now. It starts at the flight, and **before that the frame must be flat**: the
+opening's first frames are the launch screen's own green held still so that iOS handing the app its
+window is not a visible cut, and texture there would be a seam on every cold start. Two checks in
+opposite directions, which is the honest shape of that invariant.
+
+**Is the lamp on?** The patch under the lamp against **its own mirror through the middle of the
+frame**. That pairing is the whole trick, and the first version did not have it: it compared the lamp
+with the frame's corners, the defect was put back to prove the check worked, and **the defect passed
+at 1.42×** — because a radial vignette alone makes the middle of any frame about 1.4 times its
+corners, and the lamp was contributing nothing at all. Mirrored, the vignette lands on both patches
+and cancels. With the defect restored the mirror reads **1.00×**: nothing there, stated exactly.
+
+The film as it stands reads 1.30 to 1.61×, and the check was proved by building the defect, shooting
+it, and watching all three of its frames fail.
+
+### Additive light pays on the dart and not on the field
+
+The plan said: `.screen` for the beam and the pool. Built and measured, it moves the lamp from 1.59×
+to 1.61× and leaves every other figure identical to three decimals. The arithmetic says why, and it is
+not subtle: `normal` composites to `b + a(s − b)` and `screen` to `b + a(s − b + b·s)`. They differ by
+`a·b·s`, and the field is **dark** — `throGreen` is #0F3D2E. Over a dark backdrop, painting light on at
+a low alpha is *already* very nearly adding it.
+
+Reverted. Two extra context copies per frame for a one per cent change nobody can see is not a trade,
+and the item was wrong about where the win was. It is on the **dart**: PD-178's glint is `.plusLighter`
+over a barrel that is nearly white, where `b·s` is the whole difference between a highlight that lets
+the knurl show through it and one that wipes it out. Additive compositing earns its keep against bright
+backdrops, and this film has exactly one.
+
+### And PD-177's number needed correcting
+
+The same discovery says what the frame-cost bench measures: the arithmetic, the four hundred dust
+positions, the path construction and every `fill` call happen exactly as on a phone, and then Core
+Graphics is handed clear paint. It is the cost of **building** a frame, not of painting one. That is
+still the number worth watching — what runs on the main thread sixty times a second is that closure —
+but the entry said "the cost of rasterising" and it is not that. Corrected in place.
