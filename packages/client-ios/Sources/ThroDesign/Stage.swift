@@ -79,6 +79,11 @@ public struct ThroStage: Equatable, Sendable {
     public static let dartLine: CGFloat = ThroSpacing.touchTargetMinimum + ThroSpacing.spacing2
     /// The head's fixed furniture — names, the gap, the basis rules, and its padding — everything
     /// except the numerals themselves, whose height is the cap box of whichever rung is chosen.
+    ///
+    /// **At the default text size.** This, `checkoutRow` and `ledgerRow` all measure *text*, and text
+    /// grows with Dynamic Type — so read as constants they under-measure every row on the screen by
+    /// up to 2.35× and the arithmetic promises room that is not there (PD-185). They go through
+    /// `textBox` wherever the stage uses them.
     public static let headFurniture: CGFloat = 63
     /// What a checkout route adds to the head when the thrower is on a finish.
     public static let checkoutRow: CGFloat = 39
@@ -145,7 +150,10 @@ public struct ThroStage: Equatable, Sendable {
         // the iPhone SE upright at the largest accessibility sizes, a player entering darts got a
         // board 5 points shorter than its own smallest layout — and `keysFit` would have reported a
         // comfortable 64 pt key sitting above a clipped board.
-        let boardFloor = headFurniture + dart
+        let head = textBox(headFurniture, textScale: textScale)
+        let route = textBox(checkoutRow, textScale: textScale)
+        let row = textBox(ledgerRow, textScale: textScale)
+        let boardFloor = head + dart
             + capBox(ThroTypography.ladder.last ?? 40, textScale: textScale)
 
         // The tray's height. Stacked, it takes what it needs and no more than is left; beside, it
@@ -165,10 +173,10 @@ public struct ThroStage: Equatable, Sendable {
         // The route gives way where the board cannot hold it and the smallest rung together. It is
         // a suggestion; the number is the product.
         var checkout = onAFinish
-        var headFixed = headFurniture + (checkout ? checkoutRow : 0) + dart
+        var headFixed = head + (checkout ? route : 0) + dart
         if checkout, headFixed + capBox(ThroTypography.ladder.last ?? 40, textScale: textScale) > boardHeight {
             checkout = false
-            headFixed = headFurniture + dart
+            headFixed = head + dart
         }
 
         // The largest rung whose two registers fit across the board AND whose head fits down it,
@@ -182,7 +190,7 @@ public struct ThroStage: Equatable, Sendable {
         let ledgerRoom = boardHeight - headHeight
         let ledger: Ledger
         if ledgerRoom >= ledgerFloor {
-            ledger = .rows(min(6, Int(((ledgerRoom - 20) / ledgerRow).rounded(.down))))
+            ledger = .rows(min(6, Int(((ledgerRoom - 20) / row).rounded(.down))))
         } else if ledgerRoom >= tallyHeight {
             ledger = .tally
         } else {
@@ -205,6 +213,13 @@ public struct ThroStage: Equatable, Sendable {
             return headFixed + capBox(rung, textScale: textScale) <= boardHeight
         }
         return fits ?? ThroTypography.ladder.last ?? 40
+    }
+
+    /// A box of text at a given scale. The three furniture constants above are measurements of rows
+    /// of words taken at the default size, and a row of words at `accessibility5` is two and a third
+    /// times as tall.
+    public static func textBox(_ base: CGFloat, textScale: CGFloat) -> CGFloat {
+        (base * max(1, textScale)).rounded()
     }
 
     /// The cap box for a rung at a given text scale, without touching UIKit — so the choice is a

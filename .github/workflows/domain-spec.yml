@@ -251,6 +251,12 @@ jobs:
       - name: Discover answers trouble the same way everywhere
         run: python3 tools/check_discover_answers_once.py
 
+      # And PD-024's reflow being wired to the screen it was decided for. It was decided, tested and
+      # called from no view: at an accessibility size the scoring screen drew both remainders through
+      # two rows of the ledger instead of scrolling.
+      - name: The scoring screen reflows at accessibility sizes
+        run: python3 tools/check_the_scoring_screen_reflows.py
+
       # And the type, read from the font files rather than from their names. A face that does not
       # register does not raise: iOS falls back, every screen still draws, and the app looks like
       # every other app — the founder's "no generic slop anywhere" arriving as a build problem. The

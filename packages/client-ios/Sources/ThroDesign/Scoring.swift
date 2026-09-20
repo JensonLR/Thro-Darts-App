@@ -316,7 +316,12 @@ public struct MatchHeader: View {
 
     private func cell(_ label: String, _ value: String, sport: Bool) -> some View {
         VStack(alignment: .leading, spacing: 2) {
+            // One line, always. At an accessibility size in a column this narrow, "Competition" set
+            // free wraps to **one letter per line** and the rail alone fills the phone — which is
+            // what it did until PD-185 looked at it.
             Eyebrow(label, color: secondaryInk)
+                .lineLimit(1)
+                .truncationMode(.tail)
             Text(value)
                 .thro(sport ? ThroTypography.label.family(.sport).weight(.bold) : ThroTypography.label.weight(.bold))
                 .foregroundStyle(primaryInk)

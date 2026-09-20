@@ -7581,3 +7581,63 @@ said once.
 **Left alone, and said so:** the slate still offers **Use my location** while the server is unreachable.
 Granting location is not wasted — the list uses it the moment the connection comes back — but a control
 that cannot do anything this second is worth the founder's eye rather than mine.
+
+## PD-185 — The scoring screen at the sizes it was built for
+
+**PD-024's reflow was never wired to anything.**
+
+`ThroDynamicType.reflows(at:)` has existed since that decision was written. `DesignTests` holds
+exactly where its threshold sits and what the ceiling becomes either side of it. And it was called
+from **no view in the app**. The decision reads: *the scoring screen reflows instead of stopping — the
+upper region scrolling, the keypad pinned*. What the screen did instead was keep laying the head, the
+route and the ledger out in a box that could not hold them.
+
+On an iPhone 17 Pro at accessibility-XXXL, the app's core screen — the one a player looks at sixty
+times a leg — drew **both players' remainders on top of two rows of the ledger, with a chalk line
+struck through all four**, under a rail whose two labels had wrapped to one letter per line and filled
+a third of the phone. This was found by turning the text size up and looking, which nothing in nine
+hundred passing tests could do.
+
+### Three things were wrong, and they hid each other
+
+**The region did not scroll.** Now it does, above the threshold and only there — a scroll view that
+never scrolls still eats a gesture. Scrolling rather than shrinking is the point: a player at an
+accessibility size asked for bigger numbers, and squeezing the rung back down to fit the ledger would
+hand back the one thing they turned the setting up for.
+
+**The rail scrolled with it, and grew.** It is chrome — Back, two reference cells, the notation
+switch, End — so it now sits above the scroll and keeps the scoring ceiling, for the same reason iOS
+caps a navigation bar: its controls are icons with spoken labels, and the text the player turned the
+setting up to read is the score below it. Its eyebrows are held to one line, because "Competition" set
+free in a column that narrow wraps to one letter per line.
+
+**And three of the stage's constants are made of words.** `headFurniture` (63), `checkoutRow` (39) and
+`ledgerRow` (24) measure names, basis rules, a checkout route and a row of the ledger — all text,
+measured once at the default size and then used as though made of wood. At 2.35× every one of those
+rows is over twice as tall, so the arithmetic promised room that was not there. They go through
+`textBox` now, so the ledger asks for fewer rows as the words get bigger, which a test holds across
+five scales.
+
+**The ledger's own row was framed at a hard `height: 24`.** A hard frame around 55 points of text does
+not clip it — it **centres** it, and every row is then drawn through the one above. `minHeight`.
+
+### Two things checked, and one thing that could not be
+
+`StageTests` gains the row-count and text-box assertions, the first proved by putting the constant
+back and watching six rows stay six at every size. `tools/check_the_scoring_screen_reflows.py` holds
+the wire itself, because the failure that actually happened was a decision recorded, tested, and
+connected to nothing.
+
+What no check can do is say whether it *looks* right. That took a simulator, an accessibility text
+size and a pair of eyes — and it is the third time on this work that looking found what testing could
+not.
+
+**Evidence.** 941 tests. Photographed on iPhone 17 Pro at accessibility-XXXL four times — before, after
+the scroll, after the rail, after the ledger — and at the default size afterwards to confirm the screen
+a million players see is exactly what it was.
+
+**Not fixed, and recorded rather than left:** at the largest sizes the legs pill still wraps `0–0` onto
+two lines and the format label truncates to `B…`. Both are legible and neither collides with anything.
+And there is a visible empty band between the scores and the ledger at the default size — the ledger is
+pushed to the foot of the board the way a scoresheet does it, which is deliberate, but it reads as a
+hole and is worth the founder's eye.

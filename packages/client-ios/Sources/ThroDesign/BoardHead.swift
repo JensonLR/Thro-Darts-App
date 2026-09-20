@@ -260,7 +260,12 @@ public struct ThroLedger: View {
                             }
                         }
                 }
-                .frame(height: ThroStage.ledgerRow)
+                // **`minHeight`, not `height`.** A hard 24 points around a row whose text is 55
+                // points tall at an accessibility size does not clip it — it centres it, and every
+                // row on the column is then drawn through the one above it. That is what the
+                // scoring screen did (PD-185): two players' remainders written over two visits with
+                // a chalk line through all four.
+                .frame(minHeight: ThroStage.ledgerRow)
                 .overlay {
                     if row.struck {
                         // A retraction: chalk scraped off, in the board's own colour, across the

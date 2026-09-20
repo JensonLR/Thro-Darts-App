@@ -365,4 +365,42 @@ final class StageTests: XCTestCase {
             }
         }
     }
+
+    // MARK: - The furniture is made of words (PD-185)
+
+    /// **Three of the stage's constants measure text, and text grows.**
+    ///
+    /// `headFurniture` (63), `checkoutRow` (39) and `ledgerRow` (24) are the names, the basis rules,
+    /// the checkout route and a row of the ledger — all of them words, all of them measured once at
+    /// the default size and then used as though they were made of wood. At `accessibility5` every one
+    /// of those rows is 2.35 times as tall, so the arithmetic promised the board room that was not
+    /// there and the screen answered by drawing the rows through each other.
+    ///
+    /// The ledger is where it shows first, because it is what gives way last: the room it is given
+    /// divided by a row height that never changed is a row count that only goes up.
+    func testTheLedgerAsksForFewerRowsAsTheWordsGetBigger() {
+        var previous = Int.max
+        for scale in [1.0, 1.35, 1.6, 2.0, 2.35] {
+            let stage = ThroStage.choose(width: 402, height: 874, onAFinish: false,
+                                         perDart: false, textScale: scale)
+            XCTAssertLessThanOrEqual(stage.ledgerRows, previous,
+                                     "at \(scale) the ledger asks for more rows than at a smaller size")
+            previous = stage.ledgerRows
+        }
+        let small = ThroStage.choose(width: 402, height: 874, onAFinish: false,
+                                     perDart: false, textScale: 1.0)
+        let large = ThroStage.choose(width: 402, height: 874, onAFinish: false,
+                                     perDart: false, textScale: 2.35)
+        XCTAssertGreaterThan(small.ledgerRows, large.ledgerRows,
+                             "the ledger asks for the same rows whatever the text size")
+    }
+
+    /// And the box a row of words needs is the row times the scale, never less than the row.
+    func testABoxOfWordsGrowsWithTheWordsAndNeverShrinks() {
+        XCTAssertEqual(ThroStage.textBox(24, textScale: 1), 24)
+        XCTAssertEqual(ThroStage.textBox(24, textScale: 2), 48)
+        // Below the default, iOS makes text smaller but the padding inside these rows does not go
+        // with it, so the measurement holds at its own floor rather than under-reserving.
+        XCTAssertEqual(ThroStage.textBox(24, textScale: 0.8), 24)
+    }
 }

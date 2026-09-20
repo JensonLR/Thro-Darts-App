@@ -6687,3 +6687,13 @@ the read has failed. `LeaguesScreen.swift`: new `LeaguesModel.trouble` splits th
 absence, so the cause is stated once on the screen instead of three times; `explain` composes them and every other
 caller is unchanged. New `tools/check_discover_answers_once.py`, wired into domain-spec and proved against the old
 branch. Tests +1 (939).
+
+## The scoring screen at the sizes it was built for (PD-185)
+
+`PlayScreens.swift`: PD-024's reflow wired at last — `ThroDynamicType.reflows` was tested and called from no view,
+so at accessibility sizes the scoring screen drew both remainders through two ledger rows instead of scrolling. The
+upper region scrolls above the threshold, the rail sits outside the scroll and keeps the scoring ceiling, and the
+keypad is unchanged. `Stage.swift`: `headFurniture`, `checkoutRow` and `ledgerRow` measure text, so they go through
+the new `textBox` and grow with it. `BoardHead.swift`: a ledger row is `minHeight`, not `height` — a hard frame
+centres overflowing text rather than clipping it, which is what drew the rows through each other. `Scoring.swift`:
+the rail's eyebrows hold one line. New `tools/check_the_scoring_screen_reflows.py`. Tests +2 (941).

@@ -410,6 +410,16 @@ public struct ScoringScreen: View {
         // phone turned on its side and on a tablet — see `StageTests`, which walks eleven devices
         // both ways up at four text sizes and holds that the whole thing still fits.
         GeometryReader { proxy in
+            // **PD-024, finally wired.** `ThroDynamicType.reflows(at:)` has existed, with tests, since
+            // that decision was written — and it was called from no view in the app. So at the
+            // accessibility sizes it was written for, the scoring screen did not reflow: it kept
+            // laying the head, the route and the ledger out in a fixed box, and they overlapped each
+            // other. On an iPhone 17 Pro at accessibility-XXXL both players' scores sat on top of two
+            // rows of the ledger with a line struck through all four.
+            //
+            // Above the threshold the upper region scrolls and the keypad stays exactly where it is,
+            // which is what "the keypad is pinned" was always supposed to mean.
+            let reflowing = ThroDynamicType.reflows(at: typeSize)
             let stage = ThroStage.choose(width: proxy.size.width, height: proxy.size.height,
                                          onAFinish: session.throwerOnAFinish,
                                          perDart: entryMode == .perDart,
@@ -418,12 +428,12 @@ public struct ScoringScreen: View {
                 ZStack {
                     if stage.arrangement == .beside {
                         HStack(spacing: 0) {
-                            boardSide(stage)
+                            board(stage, reflowing: reflowing)
                             lower.frame(width: proxy.size.width * stage.trayFraction)
                         }
                     } else {
                         VStack(spacing: 0) {
-                            boardSide(stage)
+                            board(stage, reflowing: reflowing)
                             lower
                         }
                     }
@@ -565,16 +575,48 @@ public struct ScoringScreen: View {
         }
     }
 
+    /// The board, scrolling where the text is too big for it to stand still (PD-024).
+    ///
+    /// **Scrolling rather than shrinking.** A player at an accessibility size asked for bigger
+    /// numbers; squeezing the rung back down to give the ledger its rows would hand back the one
+    /// thing they turned the setting up for. So above the threshold nothing gives way — the region
+    /// takes the height it needs and the player moves it. Below the threshold this is exactly what it
+    /// was, a fixed box, because nothing there needs to scroll and a scroll view that never scrolls
+    /// still eats a gesture.
+    @ViewBuilder private func board(_ stage: ThroStage, reflowing: Bool) -> some View {
+        if reflowing {
+            VStack(spacing: 0) {
+                // **The rail does not scroll and does not grow.** It is chrome: Back, the two
+                // reference cells, the notation switch and End. Inside the scroll it went with the
+                // board, taking Back and End off the screen; at the reading ceiling its two eyebrows
+                // wrapped to one letter per line and the rail alone filled the phone. It keeps the
+                // scoring ceiling for the same reason iOS caps a navigation bar — its controls are
+                // icons with spoken labels, and the text a player turned the setting up to read is
+                // the score, which is below it and now as large as they asked for.
+                rail.throScoringTypeCeiling()
+                ScrollView { boardSide(stage, includingRail: false) }
+                    .scrollBounceBehavior(.basedOnSize)
+            }
+        } else {
+            boardSide(stage)
+        }
+    }
+
+    /// The rail: back, what this match is, how it is scored, and the way out.
+    @ViewBuilder private var rail: some View {
+        MatchHeader(competition: "\(session.name(.home)) v \(session.name(.away))",
+                    format: session.formatLabel,
+                    onBack: onLeave,
+                    onEnd: session.mayEndShort ? session.offerToEnd : nil,
+                    mode: entryMode.label, modeSpoken: entryMode.spoken,
+                    onSwitchMode: switchEntryMode,
+                    onBoard: true)
+    }
+
     /// Everything that is not the keys: the rail, the head, and the leg so far.
-    @ViewBuilder private func boardSide(_ stage: ThroStage) -> some View {
+    @ViewBuilder private func boardSide(_ stage: ThroStage, includingRail: Bool = true) -> some View {
         VStack(spacing: 0) {
-            MatchHeader(competition: "\(session.name(.home)) v \(session.name(.away))",
-                        format: session.formatLabel,
-                        onBack: onLeave,
-                        onEnd: session.mayEndShort ? session.offerToEnd : nil,
-                        mode: entryMode.label, modeSpoken: entryMode.spoken,
-                        onSwitchMode: switchEntryMode,
-                        onBoard: true)
+            if includingRail { rail }
             ThroBoardHead(home: ScoringScreen.column(session, .home),
                           away: ScoringScreen.column(session, .away),
                           legs: "\(session.legsWon(.home))–\(session.legsWon(.away))",
