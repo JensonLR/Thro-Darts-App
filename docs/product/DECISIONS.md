@@ -7355,3 +7355,41 @@ positions, the path construction and every `fill` call happen exactly as on a ph
 Graphics is handed clear paint. It is the cost of **building** a frame, not of painting one. That is
 still the number worth watching — what runs on the main thread sixty times a second is that closure —
 but the entry said "the cost of rasterising" and it is not that. Corrected in place.
+
+## PD-180 — A strike you can feel
+
+The board is hit at 1.68 s. What the camera did about it was a shake peaking at **3.8 points on an
+874-point screen** — four tenths of one percent, and *less than the breathing sway that runs through the
+whole flight*. The loudest moment in the film moved the frame less than its quietest one, which is how
+an impact ends up reading as a cut.
+
+**A kick, at three times that.** Twenty points along the throw and seven across it, on their own rates
+as before. It runs for 0.32 s rather than 0.22 and comes down through an envelope that reaches
+**exactly** zero, rather than a gate cutting it mid-swing — which is the defect PD-175 found in the
+sway, and at this amplitude it would be four times louder.
+
+**And the frame is punched at the thing it hit.** Three percent, snapping in over 22 ms and let go over
+half a second, scaled about the point where the dart went in rather than about the middle of the screen
+— so the picture jumps *toward* the impact instead of merely wobbling near it. Scaling up only ever
+covers more of the canvas than it started with, so there are no edges to find; the small negative lobe
+on the way out stays well inside the canvas's existing inset.
+
+It has to put the composition back **exactly**, because what it leaves behind is the finished frame,
+and a punch that does not return is a layout error that only happens sometimes. It returns to 1 inside
+its own window and a test holds it there at 0.6 s, 1 s and 3 s.
+
+### The flights were the same part as the shaft
+
+Both were given 8 Hz and the same 0.22 decay, 25 ms apart. That is not two parts ringing, it is one
+part drawn twice — the dart whipped as a single bent rod. A flight is a few grams of folded plastic on
+the end of a stiff shaft: lighter, so it rings faster; with far more air on it, so it stops sooner.
+They are 14 Hz and 0.115 now against the shaft's 8 Hz and 0.22, and in the air they waggle at 4.7 Hz
+against the shaft's 3.1 rather than sharing its rate with a phase offset.
+
+`DartRing` holds all four, lifted out of `draw` the way `LaunchCamera` was, so a test can count zero
+crossings and ask which part goes quiet first. **Proved by putting the old numbers back**: both
+assertions fail — five crossings against six, and the flights still ringing 86 ms after the shaft has
+stopped.
+
+**Evidence.** 930 app tests. Looked at on iPhone 17 Pro either side of the strike, at 1.70 and 1.73:
+the whole composition moves between the two frames, which it did not before.

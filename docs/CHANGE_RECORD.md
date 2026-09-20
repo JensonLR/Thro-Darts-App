@@ -6642,3 +6642,12 @@ transparent — the bench measures building a frame, not painting one.
 Reverted before commit: `.screen` on the beam and pool. Measured at +1% of lamp luminance, because over a field as
 dark as `#0F3D2E` normal blending at low alpha is already almost additive. Additive light pays on the barrel, where
 PD-178 uses it, and not on the field.
+
+## A strike you can feel (PD-180)
+
+`LaunchSequence.swift`: new `LaunchCamera.kick` (20pt along the throw, 7pt across, 0.32s, enveloped to exactly zero)
+replacing a 3.8pt shake that was smaller than the film's own breathing sway, and new `LaunchCamera.punch` — the frame
+scaled 3% about the spot the dart went into, snapping in over 22ms and returning to exactly 1 inside 0.55s. The
+composition's size-only constants are hoisted above the camera so the punch knows where the strike is. New `DartRing`
+gives the flights their own frequency and decay — they were a delayed copy of the shaft at identical 8Hz/0.22 — and
+their own rate in the air. `Tune.shakeSeconds` is gone. Tests +3 (930), all three proved against the old numbers.

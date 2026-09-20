@@ -164,6 +164,45 @@ public struct LaunchCue: Equatable, Sendable {
 public enum LaunchCamera {
     /// The breathing of a carried camera through the throw. Zero before the flight and zero after it, and
     /// **continuous at both ends** — which the first version was not.
+    /// The strike, felt.
+    ///
+    /// **What was here was a 3.8-point shake on an 874-point screen** — four tenths of one percent,
+    /// less than the breathing sway that runs through the entire flight. The loudest moment in the
+    /// film moved the frame less than its quietest one, which is how a strike ends up reading as a
+    /// cut rather than as an impact.
+    ///
+    /// Two rates again, along the throw and across it, and an envelope that brings both to **exactly**
+    /// zero at the end of the window rather than a gate cutting them mid-swing — which is the defect
+    /// PD-175 found in the sway, and it would be far louder here.
+    public static func kick(sinceImpact s: Double) -> CGVector {
+        guard s > 0, s < strikeSeconds else { return .zero }
+        let out = pow(1 - s / strikeSeconds, 2)
+        let along = 20.0 * out * exp(-s / 0.075) * sin(2 * .pi * 11 * s)
+        let across = 7.0 * out * exp(-s / 0.060) * sin(2 * .pi * 17 * s)
+        let axis = MarkGeometry.axis
+        return CGVector(dx: CGFloat(along) * axis.dx - CGFloat(across) * axis.dy,
+                        dy: CGFloat(along) * axis.dy + CGFloat(across) * axis.dx)
+    }
+
+    /// And the whole picture punched at the thing that was hit, then let go.
+    ///
+    /// A camera that is only shaken sideways reads as a wobble. An impact reads when the frame jumps
+    /// **toward** what it hit. It returns to exactly 1 inside its window, because the composition it
+    /// leaves behind is the finished frame and a punch that does not put the wordmark back is a layout
+    /// error that only happens sometimes.
+    public static func punch(sinceImpact s: Double) -> CGFloat {
+        guard s > 0, s < punchSeconds else { return 1 }
+        let attack = Easing.unit(s / 0.022)
+        let out = pow(1 - s / punchSeconds, 2)
+        return 1 + CGFloat(0.030 * attack * out * exp(-s / 0.115) * cos(2 * .pi * 2.6 * s))
+    }
+
+    /// How long the kick runs. Longer than the 0.22 it replaces, because it has further to come down
+    /// from and an envelope rather than a cut-off to do it with.
+    public static let strikeSeconds = 0.32
+    /// How long the punch takes to give the frame back.
+    public static let punchSeconds = 0.55
+
     public static func sway(at t: Double, timeline: LaunchTimeline) -> CGVector {
         guard timeline.isAnimated else { return .zero }
         let tau = timeline.flight.progress(at: t)
@@ -176,6 +215,39 @@ public enum LaunchCamera {
         return CGVector(
             dx: s * (sin(2 * .pi * f * since) + 0.55 * sin(2 * .pi * d * since + 0.6)),
             dy: s * 0.7 * (sin(2 * .pi * f * 0.63 * since + 1.1) + 0.55 * sin(2 * .pi * d * 0.8 * since)))
+    }
+}
+
+/// How the dart rings after it goes in.
+///
+/// **The shaft and the flights were the same part.** Both were given 8 Hz and the same 0.22 decay, 25 ms
+/// apart, so the flights were a delayed copy of the shaft and the whole dart whipped as one bent rod. A
+/// flight is a few grams of folded plastic on the end of a stiff shaft: lighter, so it rings faster;
+/// with far more air on it, so it stops sooner. Two rates is the difference between a dart that landed
+/// and a shape that bent.
+///
+/// Lifted out of `draw` so it can be asserted, the way `LaunchCamera` was.
+public enum DartRing {
+    /// The shaft's whip after the strike, in radians. It pivots where it meets the barrel.
+    public static func shaft(_ sinceImpact: Double) -> Double {
+        Easing.damped(sinceImpact, amplitude: 5.5 * .pi / 180, hertz: 8, decay: 0.22)
+    }
+
+    /// The flights', a beat behind and at their own rate. Wider, faster, and quiet while the shaft is
+    /// still going.
+    public static func flights(_ sinceImpact: Double) -> Double {
+        Easing.damped(sinceImpact - 0.022, amplitude: 9 * .pi / 180, hertz: 14, decay: 0.115)
+    }
+
+    /// In the air, where nothing has been struck: the shaft holds its line and the flights waggle.
+    public static func shaftInFlight(_ tau: Double) -> Double {
+        1.1 * .pi / 180 * sin(2 * .pi * 3.1 * tau)
+    }
+
+    /// Their own rate here too, and a faster one — in the air the flights are what the air is working
+    /// on. At the shaft's rate they read as one stiff thing wagging.
+    public static func flightsInFlight(_ tau: Double) -> Double {
+        2.4 * .pi / 180 * sin(2 * .pi * 4.7 * tau - 0.8)
     }
 }
 
@@ -830,7 +902,7 @@ struct LaunchFrame: View {
         static let swayDrift = 0.17
         static let driveSeconds = 0.09                   // the board gives, and holds
         static let drive: CGFloat = 0.020                // of the dart's length
-        static let shakeSeconds = 0.22
+        // The strike's shake lives in `LaunchCamera.kick` now, with its own window (PD-180).
         static let flashSeconds = 0.13                   // the light of the strike, brightest on its first frame
         static let stampSeconds = 0.05                   // a letter is struck on, not faded in
         static let settleSeconds = 0.20
@@ -933,6 +1005,13 @@ struct LaunchFrame: View {
         let sinceRing = t - (timeline.ring.start + timeline.ring.duration * Tune.chalkRunsFor)
         let axis = MarkGeometry.axis
         let across = CGVector(dx: -axis.dy, dy: axis.dx)
+        // The composition, as far as it depends on nothing but the size of the screen — hoisted above
+        // the camera because the strike punches the frame *at the spot that was hit*, and the camera
+        // has to know where that is before it moves.
+        let bigTip = min(size.width * 0.84, 380)
+        let big = MarkGeometry(tipToTip: bigTip)
+        let bigCentre = CGPoint(x: size.width / 2, y: size.height * 0.44)
+        let landed = big.onAxis(bigCentre, big.tip)
 
         // The camera: it breathes through the flight as a carried camera does, and the strike shakes it,
         // mostly along the line of the throw, dying in a fifth of a second.
@@ -948,10 +1027,19 @@ struct LaunchFrame: View {
             let v = LaunchCamera.sway(at: t, timeline: timeline)
             context.translateBy(x: CGFloat(v.dx), y: CGFloat(v.dy))
         }
-        if animated && sinceImpact >= 0 && sinceImpact < Tune.shakeSeconds {
-            let along = CGFloat(Easing.damped(sinceImpact, amplitude: 5, hertz: 11, decay: 0.075))
-            let side = CGFloat(Easing.damped(sinceImpact, amplitude: 1.8, hertz: 17, decay: 0.06))
-            context.translateBy(x: axis.dx * along + across.dx * side, y: axis.dy * along + across.dy * side)
+        // The strike (PD-180). A kick along the throw and across it — three times what was here, which
+        // was less than the sway — and the whole frame punched at the spot that was hit and let go.
+        // Both are expressions in `LaunchCamera` so they can be asserted, and both reach exactly zero
+        // inside their own window rather than being cut off mid-swing.
+        if animated && sinceImpact > 0 {
+            let kick = LaunchCamera.kick(sinceImpact: sinceImpact)
+            context.translateBy(x: kick.dx, y: kick.dy)
+            let punch = LaunchCamera.punch(sinceImpact: sinceImpact)
+            if punch != 1 {
+                context.translateBy(x: landed.x, y: landed.y)
+                context.scaleBy(x: punch, y: punch)
+                context.translateBy(x: -landed.x, y: -landed.y)
+            }
         }
         let canvas = CGRect(origin: .zero, size: size).insetBy(dx: -12, dy: -12)
 
@@ -978,9 +1066,6 @@ struct LaunchFrame: View {
         // its Ø, which is also the finished composition; the tagline beneath it.
         func lerp(_ a: CGPoint, _ b: CGPoint, _ s: CGFloat) -> CGPoint { CGPoint(x: a.x + (b.x - a.x) * s, y: a.y + (b.y - a.y) * s) }
         let (perCap, extra) = typeMetrics(context)
-        let bigTip = min(size.width * 0.84, 380)
-        let big = MarkGeometry(tipToTip: bigTip)
-        let bigCentre = CGPoint(x: size.width / 2, y: size.height * 0.44)
         let wordC = bigTip / (perCap + extra)
         let wordThr = perCap * wordC
         let wordLeft = (size.width - bigTip) / 2
@@ -993,7 +1078,6 @@ struct LaunchFrame: View {
         let q = CGFloat(Easing.unit(Double((pMove - 0.5) / 0.5)))
         let geo = MarkGeometry.mix(MarkGeometry(unit: big.unit + (wordC - big.unit) * pMove), MarkGeometry(unit: wordC, ratios: .wordmark), q)
         let centre = lerp(bigCentre, oCentre, pMove)
-        let landed = big.onAxis(bigCentre, big.tip)
         let L = big.tipToTip
 
         // The wall, coming: the throw is aimed at the spot the point will enter — between the mark's
@@ -1273,13 +1357,13 @@ struct LaunchFrame: View {
             }
             var bendShaft = 0.0, bendFlights = 0.0, drive: CGFloat = 0
             if animated && tau > 0 && tau < 1 {     // the flights waggle in the air; the barrel's line never moves
-                bendShaft = 1.1 * Double.pi / 180 * sin(2 * Double.pi * 3.1 * tau)
-                bendFlights = 2.4 * Double.pi / 180 * sin(2 * Double.pi * 3.1 * tau - 0.8)
+                bendShaft = DartRing.shaftInFlight(tau)
+                bendFlights = DartRing.flightsInFlight(tau)
             }
             if animated && sinceImpact >= 0 {
                 if sinceImpact < Tune.driveSeconds { drive = Tune.drive * L * CGFloat(sin(Double.pi * sinceImpact / Tune.driveSeconds)) }
-                bendShaft = Easing.damped(sinceImpact, amplitude: 5.5 * Double.pi / 180, hertz: 8, decay: 0.22)
-                bendFlights = Easing.damped(sinceImpact - 0.025, amplitude: 7 * Double.pi / 180, hertz: 8, decay: 0.22)
+                bendShaft = DartRing.shaft(sinceImpact)
+                bendFlights = DartRing.flights(sinceImpact)
             }
             let parts = anatomy.parts(spin: 2 * Double.pi * Tune.rollTurns * tau, morph: morph)
             let fine = max(0.8, geo.unit * 0.004), groove = max(1.2, geo.unit * 0.007)

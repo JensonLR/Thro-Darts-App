@@ -703,4 +703,77 @@ extension DartInkTests {
         XCTAssertGreaterThan(seen.max()! - seen.min()!, 0.30,
                              "the glint barely moves across the whole throw — it is a decal")
     }
+
+    // MARK: - The strike (PD-180)
+
+    /// **A strike you cannot feel is a cut.** The board is hit at 1.68 s, and what the camera did
+    /// about it was a 3.8-point shake on an 874-point screen: four tenths of one percent, less than
+    /// the breathing sway that runs through the whole flight. The loudest moment in the film moved the
+    /// frame less than its quietest one.
+    ///
+    /// This asks for a real one, and for it to start and finish at exactly nothing — a kick that is
+    /// cut off mid-swing steps the frame on the way out, which is the defect PD-175 found in the sway.
+    func testTheStrikeIsFeltAndLeavesNothingBehind() {
+        XCTAssertEqual(LaunchCamera.kick(sinceImpact: 0).dx, 0, accuracy: 1e-9)
+        XCTAssertEqual(LaunchCamera.kick(sinceImpact: 0).dy, 0, accuracy: 1e-9)
+        var peak = 0.0
+        for step in 0...600 {
+            let s = 0.5 * Double(step) / 600
+            let v = LaunchCamera.kick(sinceImpact: s)
+            peak = max(peak, (v.dx * v.dx + v.dy * v.dy).squareRoot())
+        }
+        XCTAssertGreaterThan(peak, 11, "the strike moves the camera less than a breath does")
+        for s in [0.34, 0.5, 1.0, 3.0] {
+            let v = LaunchCamera.kick(sinceImpact: s)
+            XCTAssertEqual((v.dx * v.dx + v.dy * v.dy).squareRoot(), 0, accuracy: 1e-9,
+                           "the kick is still running at \(s) s")
+        }
+    }
+
+    /// And the frame is punched. A camera that is only shaken sideways reads as a wobble; an impact
+    /// reads when the whole picture jumps *at* the thing that was hit and settles back.
+    ///
+    /// It has to leave the composition exactly where it found it — the wordmark's position is the
+    /// finished frame, and a punch that does not return is a layout error that only happens sometimes.
+    func testTheFrameIsPunchedAndPutBackExactly() {
+        XCTAssertEqual(LaunchCamera.punch(sinceImpact: 0), 1, accuracy: 1e-9)
+        for s in [0.6, 1.0, 3.0] {
+            XCTAssertEqual(LaunchCamera.punch(sinceImpact: s), 1, accuracy: 1e-9,
+                           "the punch is still going at \(s) s")
+        }
+        let peak = stride(from: 0.0, through: 0.6, by: 0.001).map { LaunchCamera.punch(sinceImpact: $0) }.max()!
+        XCTAssertGreaterThan(peak, 1.015, "the punch cannot be seen")
+        XCTAssertLessThan(peak, 1.05, "the punch is a zoom")
+    }
+
+    /// The flights ring at their own rate.
+    ///
+    /// The shaft and the flights were both given 8 Hz and the same 0.22 decay, 25 ms apart — so the
+    /// flights were a delayed copy of the shaft and the dart whipped as **one bent rod**. A flight is
+    /// a few grams of folded plastic on the end of a stiff shaft: it is lighter, so it rings faster,
+    /// and it has far more air on it, so it stops sooner. Two rates is the difference between a dart
+    /// that landed and a shape that bent.
+    func testTheFlightsRingFasterThanTheShaftAndStopFirst() {
+        func crossings(_ f: (Double) -> Double) -> Int {
+            var count = 0, previous = f(0.0)
+            for step in 1...2000 {
+                let value = f(0.4 * Double(step) / 2000)
+                if (previous < 0) != (value < 0) { count += 1 }
+                previous = value
+            }
+            return count
+        }
+        XCTAssertGreaterThan(crossings(DartRing.flights), crossings(DartRing.shaft),
+                             "the flights are a delayed copy of the shaft, not a lighter part")
+        // Quiet first: a tenth of a degree is nothing anybody can see at this size.
+        func quietAt(_ f: (Double) -> Double) -> Double {
+            for step in 0...2400 {
+                let s = 1.2 * Double(step) / 2400
+                if stride(from: s, through: 1.2, by: 0.01).allSatisfy({ abs(f($0)) < 0.1 * .pi / 180 }) { return s }
+            }
+            return 1.2
+        }
+        XCTAssertLessThan(quietAt(DartRing.flights), quietAt(DartRing.shaft),
+                          "the flights are still ringing after the shaft has stopped")
+    }
 }
