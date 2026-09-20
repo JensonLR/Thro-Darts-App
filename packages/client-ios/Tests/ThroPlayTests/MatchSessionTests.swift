@@ -1036,4 +1036,49 @@ final class MatchSessionTests: XCTestCase {
                                                from: 60, outRule: .double)?.written, "T20")
     }
 
+    // MARK: - What a player is told when a visit will not save (PD-186)
+
+    /// **A player at the oche was being shown a Swift error.**
+    ///
+    ///     Not saved, so not scored. SQLite: disk I/O error
+    ///     Not saved, so not scored. journal entry 47 rejected on replay: …
+    ///     Not saved, so not scored. command id 9F3C… is already in this journal, for …
+    ///
+    /// The first sentence is exactly right and stays. What followed it was the engineering, printed
+    /// into a snackbar over a dartboard, in the middle of a leg, for somebody holding three darts —
+    /// and it never once said the thing a player needs, which is whether to throw again or stop.
+    func testWhatAPlayerIsToldNeverQuotesTheEngineering() {
+        let errors: [Error] = [
+            JournalError.sqlite("disk I/O error"),
+            JournalError.configurationNotInForce(pragma: "journal_mode", wanted: "wal", got: "delete"),
+            JournalError.matchNotFound("9F3C-0000"),
+            JournalError.nothingToRetract,
+            JournalError.commandIdReused(commandId: "9F3C", stored: "visit"),
+            JournalError.replayRejected(seq: 47, reason: "IMPOSSIBLE_VISIT_TOTAL"),
+            JournalError.alreadyEnded(.retired(by: .home)),
+        ]
+        for error in errors {
+            let said = Copy.notSaved(error)
+            XCTAssertTrue(said.hasPrefix("Not saved, so not scored."), said)
+            // Nothing a player reads may carry the machine's own words for it.
+            for leak in ["SQLite", "PRAGMA", "journal entry", "command id", "replay", "9F3C", "47"] {
+                XCTAssertFalse(said.contains(leak), "\(leak) reached the board: \(said)")
+            }
+            // And it must say what to do next, because "not scored" on its own leaves somebody
+            // standing at an oche deciding whether to throw.
+            XCTAssertTrue(said.count > "Not saved, so not scored.".count + 12,
+                          "nothing but the bad news: \(said)")
+        }
+    }
+
+    /// The two kinds are told apart, because the answer differs. A write that failed may well take
+    /// the second time; a record the app cannot add to will not, and saying "try again" to that is
+    /// sending somebody round a loop.
+    func testAWriteThatMayTakeIsNotTheSameAsARecordThatWillNot() {
+        let retry = Copy.notSaved(JournalError.sqlite("disk I/O error"))
+        let hopeless = Copy.notSaved(JournalError.replayRejected(seq: 47, reason: "…"))
+        XCTAssertNotEqual(retry, hopeless)
+        XCTAssertTrue(retry.lowercased().contains("again"), retry)
+        XCTAssertFalse(hopeless.lowercased().contains("again"), hopeless)
+    }
 }

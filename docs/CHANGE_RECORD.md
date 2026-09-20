@@ -6697,3 +6697,10 @@ keypad is unchanged. `Stage.swift`: `headFurniture`, `checkoutRow` and `ledgerRo
 the new `textBox` and grow with it. `BoardHead.swift`: a ledger row is `minHeight`, not `height` — a hard frame
 centres overflowing text rather than clipping it, which is what drew the rows through each other. `Scoring.swift`:
 the rail's eyebrows hold one line. New `tools/check_the_scoring_screen_reflows.py`. Tests +2 (941).
+
+## What a player is told when a visit will not save (PD-186)
+
+`MatchSession.swift`: `Copy.notSaved` no longer interpolates the error. A failed write and a record that cannot
+take another visit now say different things, because one may take on a second try and the other never will. The
+detail goes to `Logger` instead, which stays on the phone. Tests +2 (943), holding that no player-facing sentence
+carries SQLite, a pragma, a sequence number or a match id, and that only the retryable case says "again".

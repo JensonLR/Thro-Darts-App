@@ -1,4 +1,5 @@
 import Foundation
+import os
 import ThroDesign
 import ThroEngine
 import ThroJournal
@@ -494,6 +495,7 @@ public final class MatchSession: ObservableObject {
             notice = Notice(text: Copy.undone(name(proposal.seat), proposal.visitTotal, next: thrower.map(name) ?? ""),
                             tone: .neutral)
         } catch {
+Copy.log(error)
             notice = Notice(text: Copy.notSaved(error), tone: .error)
         }
     }
@@ -530,7 +532,8 @@ public final class MatchSession: ObservableObject {
             do {
                 written = try journal.append(command, to: record.id)   // flush …
             } catch {
-                notice = Notice(text: Copy.notSaved(error), tone: .error)
+    Copy.log(error)
+            notice = Notice(text: Copy.notSaved(error), tone: .error)
                 return                                                  // … or nothing happened
             }
             let ordinal = visits.filter { $0.seat == seat && $0.legOrdinal == leg }.count + 1
@@ -883,8 +886,43 @@ public enum Copy {
         }
     }
 
+    /// What the board says when a visit would not go into the journal.
+    ///
+    /// **It used to print the error.** `"Not saved, so not scored. \(error)"` puts *SQLite: disk I/O
+    /// error*, or *journal entry 47 rejected on replay: IMPOSSIBLE_VISIT_TOTAL*, into a snackbar over
+    /// a dartboard, in the middle of a leg, for somebody holding three darts (PD-186). The first
+    /// sentence was always right and stays; what followed it was the engineering, and it never once
+    /// answered the only question a player has at that moment — **do I throw again, or do I stop?**
+    ///
+    /// So the two cases are told apart, because the answers differ. A write that failed may well take
+    /// the second time. A record the app cannot add to will not, and telling that player to try again
+    /// sends them round a loop at the oche. Nothing here is a diagnosis: the detail goes to the
+    /// device's own log, which stays on the device, where somebody who can act on it will look.
     public static func notSaved(_ error: Error) -> String {
-        "Not saved, so not scored. \(error)"
+        let opening = "Not saved, so not scored."
+        guard let journal = error as? JournalError else {
+            return "\(opening) The phone would not write it down. Enter it again."
+        }
+        switch journal {
+        case .sqlite, .configurationNotInForce:
+            // The write itself failed. Everything already on the board is still on it.
+            return "\(opening) The phone would not write it down. Enter it again — the leg so far is safe."
+        case .matchNotFound, .commandIdReused, .replayRejected:
+            // The record cannot take another visit. Repeating the entry cannot change that.
+            return "\(opening) This match's record on the phone cannot take another visit. "
+                 + "Everything already scored is safe; start a new match to carry on."
+        case .alreadyEnded:
+            return "\(opening) This match has already been ended."
+        case .nothingToRetract:
+            return "\(opening) There is no visit to undo."
+        }
+    }
+
+    /// Where the detail goes instead of onto the board: the device's own log, which stays on the
+    /// device. Interpolations in `Logger` are private by default, so a log another person collects
+    /// carries the fact and not the strings.
+    static func log(_ error: Error) {
+        Logger(subsystem: "app.thro.darts", category: "journal").error("a visit would not save: \(error)")
     }
 
     public static let nothingToUndo = "Nothing to undo."

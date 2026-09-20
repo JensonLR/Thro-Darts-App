@@ -7641,3 +7641,33 @@ two lines and the format label truncates to `B…`. Both are legible and neither
 And there is a visible empty band between the scores and the ledger at the default size — the ledger is
 pushed to the foot of the board the way a scoresheet does it, which is deliberate, but it reads as a
 hole and is worth the founder's eye.
+
+## PD-186 — What a player is told when a visit will not save
+
+A snackbar over a dartboard, in the middle of a leg, for somebody holding three darts:
+
+> Not saved, so not scored. **SQLite: disk I/O error**
+> Not saved, so not scored. **journal entry 47 rejected on replay: IMPOSSIBLE_VISIT_TOTAL**
+> Not saved, so not scored. **command id 9F3C… is already in this journal, for visit**
+
+The first sentence was always right and stays. What followed it was `"\(error)"` — the engineering,
+printed at the oche — and it never once answered the only question a player has at that moment: **do I
+throw again, or do I stop?**
+
+**Two cases, two answers, because the answers differ.** A write that failed — SQLite, a pragma not in
+force — may well take the second time, so it says to enter it again and that the leg so far is safe. A
+record the app cannot add to — a match not found, a reused command id, a replay the engine rejects —
+will not take, ever, and telling that player to try again sends them round a loop at the oche. It says
+what is safe and how to carry on instead. A test holds the two apart, and holds that only one of them
+says "again".
+
+**And nothing a player reads carries the machine's words for it.** Seven error cases, each checked
+against seven leaks — *SQLite*, *PRAGMA*, *journal entry*, *command id*, *replay*, the match id and the
+sequence number. Nor may it be only bad news: a sentence that stops at "not scored" leaves somebody
+standing there deciding, so the test also holds that there is more said than that.
+
+The detail is not thrown away. It goes to the device's own log, where somebody who can act on it will
+look — `Logger`, whose interpolations are private by default, so a log another person collects carries
+the fact and not the strings, and nothing leaves the phone.
+
+**Evidence.** 943 tests, the two new ones watched to fail against every case first.
