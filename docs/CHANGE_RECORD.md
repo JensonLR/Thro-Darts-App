@@ -6713,3 +6713,12 @@ carries SQLite, a pragma, a sequence number or a match id, and that only the ret
 bar already fold on — it passed `oneLine: false` unconditionally, which cost nothing on a pushed page and would
 have cost a quarter of a sideways phone on a tab root. `tools/check_screen_bars.py` blanks comments before looking,
 because it failed on a comment explaining why a negative inset had been avoided.
+
+## The one score a room reacts to (PD-188)
+
+`Interaction.swift`: new `ThroHaptics.Event.maximum`, between a commit and a leg in the ordering. `BoardHead.swift`:
+new `ThroChalkMark.Kind.maximum` — same brightest ink as any scored visit, ringed with a second chalk box, spoken
+as "One hundred and eighty". `MatchSession.swift`: `MatchSession.maximum` names 180 once. `PlayScreens.swift`
+chooses the kind. The first version drew the figure in `colorMarkOnBoard` and a 180 came out fainter than a 26 —
+found by photographing it. Tests +3 (946), including that every chalk-mark kind has an ink, a basis, a haptic and
+something to say.

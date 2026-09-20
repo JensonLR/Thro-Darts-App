@@ -501,7 +501,11 @@ public struct ScoringScreen: View {
         .onChange(of: session.visits.count) { was, now in
             guard now > was, let visit = session.visits.last, now != markedAt else { return }
             markedAt = now
-            show(ThroChalkMark(kind: visit.bust ? .bust : .scored,
+            // A maximum is its own mark (PD-188). The room reacts to a 180; until now the board
+            // did not, and drew it exactly as it drew a 26.
+            let kind: ThroChalkMark.Kind = visit.bust ? .bust
+                : visit.visitTotal == MatchSession.maximum ? .maximum : .scored
+            show(ThroChalkMark(kind: kind,
                                figure: "\(visit.visitTotal)",
                                detail: visit.bust ? "score restored"
                                                   : "\(session.name(visit.seat)) · \(visit.remainingAfter) left"))

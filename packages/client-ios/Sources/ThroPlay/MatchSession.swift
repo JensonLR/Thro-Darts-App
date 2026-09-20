@@ -346,6 +346,11 @@ public final class MatchSession: ObservableObject {
         darts = ThroDartEntry()
     }
 
+    /// Three trebles: the highest a visit can be, and the one score in darts a room reacts to.
+    /// Named rather than typed, so the board, the statistics and the keypad cannot disagree about
+    /// what a maximum is.
+    public static let maximum = 180
+
     public func quick(_ total: Int) {
         guard prompt == nil, retraction == nil, announcement == nil else { return }
         bust = nil

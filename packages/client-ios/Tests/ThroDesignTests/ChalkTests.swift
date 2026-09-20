@@ -259,4 +259,54 @@ extension ChalkTests {
         XCTAssertTrue(ThroMark().path(in: CGRect(x: 0, y: 0, width: 100, height: 100))
                         .contains(MarkGeometry(tipToTip: 100).onAxis(CGPoint(x: 50, y: 50), MarkGeometry(tipToTip: 100).ringCentreRadius), eoFill: false))
     }
+
+    // MARK: - The one score a room reacts to (PD-188)
+
+    /// **THRØ had nothing to say about a 180.**
+    ///
+    /// The app's whole feedback vocabulary is built on the idea that a player should know what
+    /// happened without reading the screen: eleven named haptics, three chalk marks, an announcement
+    /// for a bust and one for a leg. `ThroHaptics.Event.checkout` exists with a comment saying *the
+    /// one moment in a leg that a player wants to know about before they look up, and no darts app
+    /// marks it*.
+    ///
+    /// And a maximum — the one score in this game that makes a pub look up — drew the same chalk
+    /// mark as a 26, in the same ink, with the same haptic, and said "180 scored".
+    func testAMaximumIsNotJustAnotherNumber() {
+        let maximum = ThroChalkMark(kind: .maximum, figure: "180", detail: "Jenson R. · 321 left")
+        let ordinary = ThroChalkMark(kind: .scored, figure: "26", detail: "Jenson R. · 295 left")
+
+        XCTAssertNotEqual(maximum.haptic, ordinary.haptic, "it feels like every other visit")
+        // **Ringed, not recoloured**, and that is a correction rather than a preference. The first
+        // version gave a maximum `colorMarkOnBoard` — #8FB3A4 where an ordinary figure is #F7F6F2 —
+        // so the one score a room reacts to came out fainter than a 26. There is nothing brighter
+        // than the board's brightest ink, so what marks it is the second box round it.
+        XCTAssertTrue(maximum.ringed, "nothing marks it out on the board")
+        XCTAssertFalse(ordinary.ringed, "everything is ringed, so nothing is")
+        XCTAssertEqual(maximum.ink, ordinary.ink, "a maximum is drawn in anything but the brightest ink")
+        XCTAssertNotEqual(maximum.spoken, ordinary.spoken.replacingOccurrences(of: "26", with: "180"),
+                          "it is read out like every other visit")
+        // It still went on the board, so it is still exact: a flourish may not change what the
+        // figure claims about itself.
+        XCTAssertEqual(maximum.basis, ordinary.basis)
+    }
+
+    /// A maximum is called by its name. "One hundred and eighty" is what the caller says and what a
+    /// screen reader should say; "180 scored" is what a spreadsheet says.
+    func testAMaximumIsCalledTheWayACallerCallsIt() {
+        let spoken = ThroChalkMark(kind: .maximum, figure: "180", detail: "Ann · 321 left").spoken
+        XCTAssertTrue(spoken.lowercased().contains("one hundred and eighty"), spoken)
+    }
+
+    /// Every kind still has an ink, a basis, a haptic and something to say — so a kind added later
+    /// cannot be half-built.
+    func testEveryChalkMarkIsWholeWhateverItIs() {
+        for kind in ThroChalkMark.Kind.allCases {
+            let mark = ThroChalkMark(kind: kind, figure: "180", detail: "a detail")
+            XCTAssertFalse(mark.spoken.isEmpty, "\(kind) says nothing")
+            XCTAssertTrue(ThroHaptics.Event.allCases.contains(mark.haptic), "\(kind) has no haptic")
+            XCTAssertEqual(mark.ringed, kind == .maximum, "\(kind) is ringed when it should not be")
+        }
+        XCTAssertEqual(ThroChalkMark.Kind.allCases.count, 4)
+    }
 }

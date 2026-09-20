@@ -296,6 +296,9 @@ public struct ThroChalkMark: Equatable, Sendable {
     public enum Kind: String, CaseIterable, Sendable {
         /// It went on the board.
         case scored
+        /// It went on the board and it was **180** (PD-188). A maximum is the one score in darts
+        /// that a room reacts to, and it used to be drawn, felt and read out exactly like a 26.
+        case maximum
         /// It could not: a bust. The score is restored and the darts did not count.
         case bust
         /// It was refused before it reached the board — a total no three darts can make, or one
@@ -321,7 +324,9 @@ public struct ThroChalkMark: Equatable, Sendable {
     /// it, and a refusal is `absent` because nothing was ever written.
     public var basis: ThroBasis {
         switch kind {
-        case .scored: return .exact
+        // A flourish may not change what a figure claims about itself: a maximum is a visit that
+        // went on the board, exactly as any other scored visit is.
+        case .scored, .maximum: return .exact
         case .bust: return .struck
         case .refused: return .absent
         }
@@ -330,17 +335,33 @@ public struct ThroChalkMark: Equatable, Sendable {
     /// The ink. All three are on the contrast matrix against every board ground.
     public var ink: Color {
         switch kind {
-        case .scored: return ThroColor.colorTextOnBoard
+        // **The same ink, and the reason is a mistake that was caught by looking.** The first
+        // version of a maximum drew its figure in `colorMarkOnBoard` — the ink the chalk rules and
+        // the key boxes are drawn in — on the reasoning that it is the board's own chalk. It is
+        // #8FB3A4 against `colorTextOnBoard`'s #F7F6F2, so a 180 came out **fainter than a 26**,
+        // which is the exact opposite of the point. There is nothing brighter than the brightest
+        // ink; what marks a maximum is the ring round it.
+        case .scored, .maximum: return ThroColor.colorTextOnBoard
         case .bust: return ThroColor.colorStatusErrorOnBoard
         case .refused: return ThroColor.colorStatusWarningOnBoard
         }
     }
+
+    /// Whether the chalker rings it (PD-188). A maximum, and nothing else.
+    ///
+    /// This is what marks it rather than a colour, because the board's brightest ink is already
+    /// under every scored figure and there is nothing above it. A second box round the first is what
+    /// a chalker actually does to a 180, costs one path, and cannot be mistaken for anything else on
+    /// the screen.
+    public var ringed: Bool { kind == .maximum }
 
     /// One sentence, spoken once. The keypad already announces what was typed, so this announces
     /// what became of it and never repeats the entry back.
     public var spoken: String {
         switch kind {
         case .scored: return detail.map { "\(figure) scored. \($0)" } ?? "\(figure) scored"
+        // Called the way a caller calls it. "180 scored" is what a spreadsheet says.
+        case .maximum: return detail.map { "One hundred and eighty. \($0)" } ?? "One hundred and eighty"
         case .bust: return detail.map { "Bust. \($0)" } ?? "Bust. Score restored"
         case .refused: return detail ?? "Not accepted"
         }
@@ -351,6 +372,7 @@ public struct ThroChalkMark: Equatable, Sendable {
     public var haptic: ThroHaptics.Event {
         switch kind {
         case .scored: return .commit
+        case .maximum: return .maximum
         case .bust, .refused: return .refused
         }
     }
@@ -380,6 +402,15 @@ public struct ThroChalkMarkView: View {
         .padding(.horizontal, ThroSpacing.spacing4)
         .background(ThroColor.colorBoardSunken)
         .overlay(ChalkBox().fill(ThroColor.colorMarkOnBoard))
+        // The chalker's ring: a second box, just outside the first, drawn on its own seed so the two
+        // do not wander together and read as one thick line.
+        .overlay {
+            if mark.ringed {
+                ChalkBox(weight: ChalkKeyStyle.restingWeight, seedAngle: 137)
+                    .fill(ThroColor.colorMarkOnBoard)
+                    .padding(-ThroSpacing.spacing2)
+            }
+        }
         .overlay {
             if mark.kind == .bust {
                 ChalkStrike(capHeight: ThroTypography.heading1.family(.sport).capHeight).fill(ThroColor.colorBoardField)

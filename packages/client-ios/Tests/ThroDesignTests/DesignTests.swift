@@ -207,7 +207,7 @@ final class DesignTests: XCTestCase {
             XCTAssertLessThanOrEqual(ThroHaptics.intensity(event), 1, "\(event) is over full")
             XCTAssertGreaterThan(ThroHaptics.magnitude(event), 0, "\(event) has no magnitude")
         }
-        XCTAssertEqual(ThroHaptics.Event.allCases.count, 10,
+        XCTAssertEqual(ThroHaptics.Event.allCases.count, 11,
                        "a case was added or removed without the vocabulary being reviewed")
     }
 
@@ -222,6 +222,11 @@ final class DesignTests: XCTestCase {
         XCTAssertLessThan(key, commit, "a digit is lighter than a committed visit")
         XCTAssertLessThan(checkout, commit, "news is lighter than a change to the record")
         XCTAssertLessThan(commit, leg, "a visit is lighter than a leg")
+        // A maximum sits where it belongs: firmer than any other visit, and short of a leg. It is
+        // the best thing that can happen inside a leg without ending it (PD-188).
+        let maximum = ThroHaptics.magnitude(.maximum)
+        XCTAssertLessThan(commit, maximum, "a maximum is felt harder than an ordinary visit")
+        XCTAssertLessThan(maximum, leg, "a maximum does not out-weigh winning the leg")
         XCTAssertLessThan(leg, match, "a leg is lighter than the match")
         XCTAssertEqual(match, ThroHaptics.magnitude(.strike), "the two heaviest are the two heaviest")
     }

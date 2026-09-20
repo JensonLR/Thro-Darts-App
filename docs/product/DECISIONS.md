@@ -7711,3 +7711,52 @@ place on screen, in a number that cannot be wrong about a margin that is not the
 **Evidence.** 943 tests. Play, Live, Discover, Home, the You tab and Settings looked at on iPhone 17
 Pro; Discover looked at turned sideways, where the band folds to one shallow row and the two-column
 layout is unchanged.
+
+## PD-188 — The one score a room reacts to
+
+THRØ had nothing to say about a 180.
+
+The app's whole feedback vocabulary rests on a player knowing what happened without reading the
+screen: ten named haptics, three chalk marks, an announcement for a bust and one for a leg. One of
+those haptics is `.checkout`, and its comment reads *"the one moment in a leg that a player wants to
+know about **before** they look up, and the reason this vocabulary is worth having: no darts app marks
+it."*
+
+And a maximum — the one score in this game that makes a pub look up — drew the same chalk mark as a
+26, in the same ink, with the same haptic, and was read out to a screen-reader as "180 scored".
+
+**A maximum is its own kind now.** Its own haptic, between a commit and a leg, because that is exactly
+where it sits: the best thing that can happen inside a leg without ending it. Its own sentence — *"One
+hundred and eighty"*, which is what a caller says; "180 scored" is what a spreadsheet says. And its own
+mark on the board: **ringed**, a second chalk box just outside the first, on its own seed so the two do
+not wander together and read as one thick line. That is what a chalker actually does to a 180.
+
+It does **not** stop play. A bust and a won leg hold the keypad because the players have to see them;
+a maximum is a flourish over a mark that is already there, and a modal between two visits would turn
+the best moment in the game into an interruption.
+
+### A mistake, caught by looking
+
+The first version gave the figure `colorMarkOnBoard` — the ink the chalk rules and the key boxes are
+drawn in — on the reasoning that it is the board's own chalk. Photographed on the simulator, the 180
+came out **fainter than a 26**: #8FB3A4 against an ordinary figure's #F7F6F2. The brightest ink on the
+board is already under every scored figure and there is nothing above it, so nothing can be marked out
+by colour. It is the ring, and the ink is the same as any other visit's. The test says so in those
+words, so the next person does not try the same thing.
+
+**Evidence.** 946 tests: the kind, the ring, the ink, the haptic's place in the ordering, the sentence,
+and that every chalk-mark kind is whole. Photographed on iPhone 17 Pro: `180 — ETHAN T. · 70 LEFT` in
+its box under the head, which is how the ink error was found.
+
+**Not photographed, and said so rather than implied:** the ring itself, which was added *after* that
+photograph. Catching a 1.1-second flourish on a simulator took eleven attempts to get one frame of the
+mark at all, and the leg had run out of numbers above 180 by the time the ring existed. It is held by
+test at the level the drawing obeys — `mark.ringed` — and it is the first thing worth a glance when the
+founder next opens the app.
+
+### And two switches inside `#if os(iOS)`
+
+Adding a case to `ThroHaptics.Event` failed the **iOS** build in two places the macOS test build cannot
+see — `play(_:)` and the held generator, both inside `#if os(iOS)`. Worth writing down: `swift test`
+passing is not the same as the app compiling, and a vocabulary that is exhaustively switched on in
+platform-guarded code has a blind spot on this machine.

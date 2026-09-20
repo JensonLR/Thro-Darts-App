@@ -222,6 +222,14 @@ public enum ThroHaptics {
         /// on purpose — it is news, not a change to the record, and the visit that produced it has
         /// already had its own.
         case checkout
+        /// A maximum: 180, and nothing else.
+        ///
+        /// **The one score in this game a room looks up for**, and THRØ had nothing to say about it
+        /// — the same chalk mark as a 26, the same haptic as any commit, and "180 scored" read out
+        /// as though it were a bookkeeping entry (PD-188). It is firmer than a commit and lighter
+        /// than a leg, because that is where it sits: the best thing that can happen inside a leg
+        /// without ending it.
+        case maximum
         /// A visit struck from the record (PD-004). Deliberately unlike a commit: an undo is a
         /// correction, and a correction that felt like an entry would be the wrong feedback for the
         /// one action in the app that takes something back.
@@ -263,7 +271,7 @@ public enum ThroHaptics {
             UIImpactFeedbackGenerator(style: .rigid).impactOccurred()
         case .refused:
             UINotificationFeedbackGenerator().notificationOccurred(.warning)
-        case .legWon, .attested:
+        case .maximum, .legWon, .attested:
             UINotificationFeedbackGenerator().notificationOccurred(.success)
         case .matchWon:
             UIImpactFeedbackGenerator(style: .heavy).impactOccurred()
@@ -286,6 +294,7 @@ public enum ThroHaptics {
         case .commit: return "medium"
         case .retracted: return "rigid"
         case .refused: return "warning"
+        case .maximum: return "success"
         case .legWon: return "success"
         case .matchWon: return "heavy"
         case .attested: return "success"
@@ -321,7 +330,7 @@ public enum ThroHaptics {
             case .commit: generator = UIImpactFeedbackGenerator(style: .medium)
             // The notification generator is a different class and does not take an intensity;
             // these events are not ones anything schedules to a frame, so they go the short way.
-            case .refused, .legWon, .attested: generator = nil
+            case .refused, .maximum, .legWon, .attested: generator = nil
             }
             #endif
         }
@@ -354,6 +363,9 @@ public enum ThroHaptics {
         case .stamp: return 0.55
         case .retracted: return 0.7
         case .commit: return 0.8
+        // Harder than a commit and short of a leg: the best thing that can happen inside a leg
+        // without ending it.
+        case .maximum: return 0.9
         case .checkout: return 0.6
         case .key: return 1.0
         case .refused, .legWon, .attested: return 1.0
@@ -370,6 +382,7 @@ public enum ThroHaptics {
         case .commit: return 0.5
         case .retracted: return 0.6
         case .refused: return 0.7
+        case .maximum: return 0.75
         case .legWon: return 0.8
         case .attested: return 0.8
         case .matchWon: return 1.0
