@@ -7393,3 +7393,38 @@ stopped.
 
 **Evidence.** 930 app tests. Looked at on iPhone 17 Pro either side of the strike, at 1.70 and 1.73:
 the whole composition moves between the two frames, which it did not before.
+
+## PD-181 — The same picture on every screen
+
+The mark's width was `min(size.width * 0.84, 380)`.
+
+On every iPhone ever made the first term wins, so the cap is dead code — which is why nobody had ever
+seen what it does. On an iPad Pro 13 it wins by a mile: 380 points on a 1024-point screen. The same
+composition rendered at a third of the size, marooned in a very large green field, with two thirds of
+the screen doing nothing. THRØ ships no iPad build; iOS runs the app on an iPad anyway, and the opening
+is the first thing it shows.
+
+A bigger cap would be the wrong shape of answer. What bounds this composition is the width it must fit
+across **and** the height it must leave the tagline room in — both properties of the screen, neither a
+constant. `LaunchComposition.markWidth` is `min(width × 0.84, height × 0.48)` and there is no number in
+points anywhere in it.
+
+**0.48 is not a taste.** It is the largest value that does not move a single iPhone, which is the whole
+reason this is safe: the founder has judged this film frame by frame on a 402-point screen, and a
+composition change that moved it would throw every one of those judgements away to fix a screen nobody
+has run it on yet. A test holds all four iPhone sizes to the point.
+
+**And writing the test found a second screen it was wrong on.** A short wide window — an iPad in Split
+View, a Stage Manager tile — took the 380 and made the mark **wider than the height had room for**:
+1366 × 600 gave the composition 1.27 times the space it had. Nobody had thought about that screen at
+all, and it is a screen an iPad user can make in one gesture.
+
+The test is the thing anybody actually wanted from the cap: that the opening looks like itself
+everywhere. The share of available space the mark takes must be within five per cent across nine
+screens, where "available" is stated from the composition's own geometry — the mark is centred at 0.44
+of the height, so half of it plus the tagline plus room to breathe is about 0.57 of it — rather than
+from the implementation. It was 2.28 apart before and is within a rounding error now.
+
+**Evidence.** 932 app tests. Looked at on an iPad Pro 13-inch simulator at 1.10 and 3.60: the wordmark
+now spans two thirds of the width with the beam coming down onto it, where before it was a small card
+in the middle.

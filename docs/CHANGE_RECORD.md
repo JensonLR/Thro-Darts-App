@@ -6651,3 +6651,10 @@ scaled 3% about the spot the dart went into, snapping in over 22ms and returning
 composition's size-only constants are hoisted above the camera so the punch knows where the strike is. New `DartRing`
 gives the flights their own frequency and decay — they were a delayed copy of the shaft at identical 8Hz/0.22 — and
 their own rate in the air. `Tune.shakeSeconds` is gone. Tests +3 (930), all three proved against the old numbers.
+
+## The same picture on every screen (PD-181)
+
+`LaunchSequence.swift`: new `LaunchComposition.markWidth` — `min(width × 0.84, height × 0.48)`, replacing a 380-point
+cap that was dead code on every iPhone and shrank the title card to a third of its size on an iPad. 0.48 is the
+largest factor that moves no iPhone, held by a test at all four sizes. A second defect fell out: on a short wide
+window the old cap made the mark wider than the height allowed. Tests +2 (932).

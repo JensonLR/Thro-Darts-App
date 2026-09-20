@@ -227,6 +227,35 @@ public enum LaunchCamera {
 /// and a shape that bent.
 ///
 /// Lifted out of `draw` so it can be asserted, the way `LaunchCamera` was.
+/// How big the title card is on the screen it has been given.
+///
+/// **It was `min(size.width * 0.84, 380)`.** On every iPhone ever made the first term wins and the cap
+/// is dead code. On an iPad Pro the cap wins by a mile: the same composition rendered at a third of the
+/// size, marooned in the middle of a very large green field, with two thirds of the screen doing
+/// nothing. THRØ ships no iPad build, but iOS runs the app on one anyway and this is the first thing it
+/// shows.
+///
+/// A bigger cap is the wrong shape of answer. What bounds this composition is the width it has to fit
+/// across **and** the height it has to leave the tagline room in, and both are properties of the screen.
+/// Written that way there is no constant in points anywhere in it, and the title card is the same
+/// picture everywhere — which is what anybody actually wanted from the cap.
+///
+/// Writing it also turned up a second screen it was wrong on, which nobody had thought about: a short
+/// wide window — an iPad in Split View, a Stage Manager tile — took the 380 and made the mark **wider
+/// than the height had room for**.
+public enum LaunchComposition {
+    /// Of the width. The founder's number, judged frame by frame on a 402-point screen.
+    public static let ofWidth: CGFloat = 0.84
+    /// And never more than this of the height. The largest value that does not move a single iPhone —
+    /// which is the whole reason this change is safe to make, because moving one would throw away
+    /// every judgement already passed on this film.
+    public static let ofHeight: CGFloat = 0.48
+
+    public static func markWidth(in size: CGSize) -> CGFloat {
+        min(size.width * ofWidth, size.height * ofHeight)
+    }
+}
+
 public enum DartRing {
     /// The shaft's whip after the strike, in radians. It pivots where it meets the barrel.
     public static func shaft(_ sinceImpact: Double) -> Double {
@@ -1008,7 +1037,7 @@ struct LaunchFrame: View {
         // The composition, as far as it depends on nothing but the size of the screen — hoisted above
         // the camera because the strike punches the frame *at the spot that was hit*, and the camera
         // has to know where that is before it moves.
-        let bigTip = min(size.width * 0.84, 380)
+        let bigTip = LaunchComposition.markWidth(in: size)
         let big = MarkGeometry(tipToTip: bigTip)
         let bigCentre = CGPoint(x: size.width / 2, y: size.height * 0.44)
         let landed = big.onAxis(bigCentre, big.tip)

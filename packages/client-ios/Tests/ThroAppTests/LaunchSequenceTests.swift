@@ -776,4 +776,59 @@ extension DartInkTests {
         XCTAssertLessThan(quietAt(DartRing.flights), quietAt(DartRing.shaft),
                           "the flights are still ringing after the shaft has stopped")
     }
+
+    // MARK: - The composition, on a screen that is not an iPhone (PD-181)
+
+    /// Every screen THRØ has ever been run on or asked about, in points. The iPads are here because
+    /// the app ships without an iPad-only build but iOS runs it on one anyway, and the opening is the
+    /// first thing it shows.
+    private static let screens: [(name: String, size: CGSize)] = [
+        ("iPhone SE", CGSize(width: 375, height: 667)),
+        ("iPhone 17", CGSize(width: 393, height: 852)),
+        ("iPhone 17 Pro", CGSize(width: 402, height: 874)),
+        ("iPhone 17 Pro Max", CGSize(width: 440, height: 956)),
+        ("iPad mini", CGSize(width: 744, height: 1133)),
+        ("iPad Pro 11", CGSize(width: 834, height: 1210)),
+        ("iPad Pro 13", CGSize(width: 1024, height: 1366)),
+        ("iPad Pro 13, turned", CGSize(width: 1366, height: 1024)),
+        ("a window half a desk wide", CGSize(width: 1366, height: 600)),
+    ]
+
+    /// **The same picture on every screen.**
+    ///
+    /// The mark's width was `min(size.width * 0.84, 380)`. On every iPhone ever made the first term
+    /// wins and the cap is dead code; on an iPad Pro the cap wins by a mile and the title card becomes
+    /// a small island in the middle of a very large green field — the same composition it is on a
+    /// phone, rendered at a third of the size, with two thirds of the screen doing nothing.
+    ///
+    /// The fix is not a bigger cap. A cap is the wrong shape of answer: what bounds this composition
+    /// is the width it has to fit across *and* the height it has to leave the tagline room in, and
+    /// both of those are properties of the screen. So the assertion is the thing anybody actually
+    /// wants — that the opening looks like itself everywhere — expressed as the mark taking the same
+    /// share of the space available to it on all of them.
+    func testTheTitleCardIsTheSamePictureOnEveryScreen() {
+        let shares = Self.screens.map { screen -> (String, Double) in
+            // What the composition has to work with, stated from the composition's own geometry and
+            // not from the implementation: the mark is centred at 0.44 of the height, so half of it
+            // plus the tagline under it plus room to breathe is about 0.57 of the height — and it
+            // must fit across the width whatever else is true.
+            let available = min(screen.size.width, screen.size.height * 0.57)
+            return (screen.name, Double(LaunchComposition.markWidth(in: screen.size) / available))
+        }
+        let smallest = shares.min { $0.1 < $1.1 }!
+        let largest = shares.max { $0.1 < $1.1 }!
+        XCTAssertLessThan(largest.1 / smallest.1, 1.05,
+                          "\(smallest.0) gets \(smallest.1) of its frame and \(largest.0) gets \(largest.1)")
+    }
+
+    /// And no iPhone moves. This is the whole reason the change is safe to make: the founder has judged
+    /// this film frame by frame on a 402-point screen, and a composition change that moved it would
+    /// throw that away to fix a screen nobody has yet run it on.
+    func testNoPhoneMovesByAPoint() {
+        for screen in Self.screens where screen.name.hasPrefix("iPhone") {
+            XCTAssertEqual(LaunchComposition.markWidth(in: screen.size),
+                           min(screen.size.width * 0.84, 380), accuracy: 1e-9,
+                           "\(screen.name) is not where it was")
+        }
+    }
 }
