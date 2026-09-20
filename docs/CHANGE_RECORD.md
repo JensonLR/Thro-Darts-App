@@ -6677,3 +6677,13 @@ masthead's line and `WeekStrip.meta` lifted out as statics so a test can hold th
 the meta now returns nothing; Play's "Lately" drops the match the card above already offers, and is not drawn when
 that leaves it empty. `OpeningCostTests` asserts on the median frame rather than the maximum, which false-alarmed.
 Tests +4 (938).
+
+## One cause, one answer (PD-184)
+
+`DiscoverScreen.swift`: new `DiscoverTrouble` answers every trouble branch — the leagues' red Snackbar, the
+tournaments' and the teams' retry-less grey prose, and the "not asked yet" state — with one quiet shape carrying a
+retry. `Nearby.swift`: `headline` takes the cause, so the slate stops saying "Finding the leagues" for ever after
+the read has failed. `LeaguesScreen.swift`: new `LeaguesModel.trouble` splits the explanation into cause and
+absence, so the cause is stated once on the screen instead of three times; `explain` composes them and every other
+caller is unchanged. New `tools/check_discover_answers_once.py`, wired into domain-spec and proved against the old
+branch. Tests +1 (939).

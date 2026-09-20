@@ -12,6 +12,41 @@ import ThroTokens
 // own clubs with a note that nothing here had left the phone; that is still true of their clubs,
 // and it is now one section of a screen about darts around here rather than the whole of it.
 
+/// What a section of Discover shows when it could not be read.
+///
+/// **There was one cause and three presentations.** With no connection to THRØ the screen showed a red
+/// Snackbar with a Try again button for the leagues, a line of grey prose for the tournaments, and
+/// another line of grey prose for your teams — three different answers to one question, on one screen,
+/// at one moment, and only one of them offering the tap that fixes all three. A player is left to
+/// decide whether the red one is worse than the grey ones. It is not. It is the same thing.
+///
+/// One shape now, and a quiet one. Three red alarms for a phone that is off the network is shouting
+/// about something the player did not do and can fix with one tap, so the shape is the one the "not
+/// asked yet" state already used here: the reason, and the control that tries again.
+struct DiscoverTrouble: View {
+    let why: String
+    let label: String
+    let onRetry: () -> Void
+
+    init(_ why: String, label: String = DiscoverScreen.tryAgain, onRetry: @escaping () -> Void) {
+        self.why = why
+        self.label = label
+        self.onRetry = onRetry
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: ThroSpacing.spacing2) {
+            Text(why)
+                .thro(ThroTypography.body)
+                .foregroundStyle(ThroColor.colorTextSecondary)
+                .fixedSize(horizontal: false, vertical: true)
+            ThroTextButton(label, action: onRetry)
+        }
+        .padding(.vertical, ThroSpacing.spacing3)
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+}
+
 public struct DiscoverScreen: View {
     @ObservedObject private var nearby: Nearby
     @ObservedObject private var teams: TeamsModel
@@ -88,7 +123,8 @@ public struct DiscoverScreen: View {
     // MARK: the slate
 
     private var slate: some View {
-        let words = NearbyLogic.headline(place: nearby.place, leagues: nearby.leagueList)
+        let words = NearbyLogic.headline(place: nearby.place, leagues: nearby.leagueList,
+                                         trouble: nearby.trouble)
         return ThroSlate(seed: 21) {
             VStack(alignment: .leading, spacing: ThroSpacing.spacing3) {
                 HStack {
@@ -163,6 +199,9 @@ public struct DiscoverScreen: View {
 
     // MARK: leagues
 
+    /// The words on every retry on this screen. One control, one name for it.
+    static let tryAgain = "Try again"
+
     @ViewBuilder private var leagues: some View {
         SectionHeader("Leagues", action: nearby.leagueList?.isEmpty == false ? "Map" : nil, onAction: { onLeague(nil) })
             .padding(.top, ThroSpacing.spaceSectionGap)
@@ -171,8 +210,7 @@ public struct DiscoverScreen: View {
             HStack { ProgressView(); Text("Reading the leagues").thro(ThroTypography.body).foregroundStyle(ThroColor.colorTextSecondary) }
                 .padding(.vertical, ThroSpacing.spacing4)
         case .failed(let why):
-            Snackbar(why, tone: .error, actionLabel: "Try again", onAction: onRetry)
-                .padding(.top, ThroSpacing.spacing2)
+            DiscoverTrouble(why, onRetry: onRetry)
         case .loaded(let list):
             if list.isEmpty {
                 Text("None listed yet.").thro(ThroTypography.body).foregroundStyle(ThroColor.colorTextSecondary)
@@ -270,7 +308,7 @@ public struct DiscoverScreen: View {
             HStack { ProgressView(); Text("Reading what is coming up").thro(ThroTypography.body).foregroundStyle(ThroColor.colorTextSecondary) }
                 .padding(.vertical, ThroSpacing.spacing4)
         case .failed(let why):
-            Text(why).thro(ThroTypography.body).foregroundStyle(ThroColor.colorTextSecondary).padding(.vertical, ThroSpacing.spacing3)
+            DiscoverTrouble(why, onRetry: onRetry)
         case .loaded(let list):
             if list.isEmpty {
                 Text("No tournament is taking entries on THRØ just now. One opened on the organiser's desk at thro.uk shows here the moment it opens.")
@@ -329,11 +367,10 @@ public struct DiscoverScreen: View {
                     .padding(.vertical, ThroSpacing.spacing3)
             // Idle is not reading: nothing has been asked yet. A spinner here would spin for ever if the ask never came.
             case .idle:
-                Text("Your teams have not been read yet.").thro(ThroTypography.body).foregroundStyle(ThroColor.colorTextSecondary)
-                    .padding(.top, ThroSpacing.spacing3)
-                ThroTextButton("Read them now", action: onRetry)
+                DiscoverTrouble("Your teams have not been read yet.",
+                                label: "Read them now", onRetry: onRetry)
             case .failed(let why):
-                Text(why).thro(ThroTypography.body).foregroundStyle(ThroColor.colorTextSecondary).padding(.vertical, ThroSpacing.spacing3)
+                DiscoverTrouble(why, onRetry: onRetry)
             case .loaded(let list):
                 if list.isEmpty {
                     Text("None yet. Join one with your captain's code, or start one and become its admin.")

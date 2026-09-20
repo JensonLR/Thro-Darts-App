@@ -88,7 +88,17 @@ public enum NearbyLogic {
 
     /// What the slate says under AROUND YOU. It says how many leagues are near when some are, how far
     /// the nearest is when none are, and what to do when it cannot tell.
-    public static func headline(place: Place, leagues: [PublicLeague]?) -> (title: String, detail: String) {
+    /// `unreachable` is the difference between *not yet* and *not at all*, and without it there was
+    /// none (PD-184): `leagueList` is nil while the read is in flight and nil again once it has
+    /// failed, so the slate said **"Finding the leagues — Reading THRØ's list of leagues and
+    /// venues"** for ever, directly above two sections that had already given up and were offering a
+    /// retry. One screen, contradicting itself inside one scroll. It is the rule this file already
+    /// states for `isLoading`, in the one place that had no way to obey it.
+    public static func headline(place: Place, leagues: [PublicLeague]?,
+                                trouble: String? = nil) -> (title: String, detail: String) {
+        if leagues == nil, let trouble {
+            return ("Nothing from THRØ yet", trouble)
+        }
         guard let leagues else { return ("Finding the leagues", "Reading THRØ's list of leagues and venues.") }
         if leagues.isEmpty { return ("No leagues listed yet", "THRØ has not been given any leagues yet.") }
         let listed = leagues.count == 1 ? "1 league on the map" : "\(leagues.count) leagues on the map"
@@ -159,6 +169,9 @@ public final class Nearby: NSObject, ObservableObject, CLLocationManagerDelegate
     @Published public private(set) var leagues: Loading<[PublicLeague]> = .loading
     @Published public private(set) var events: Loading<[PublicEvent]> = .loading
     @Published public private(set) var place: NearbyLogic.Place = .unknown
+    /// Why the server could not be read, in one sentence, when it could not. The sections under the
+    /// slate carry what each of them has not got; this is the cause, and it is said once (PD-184).
+    @Published public private(set) var trouble: String?
 
     private var manager: CLLocationManager?
     private let makeManager: () -> CLLocationManager
@@ -181,11 +194,24 @@ public final class Nearby: NSObject, ObservableObject, CLLocationManagerDelegate
         guard let api else { leagues = .failed("This build names no server."); events = .failed("This build names no server."); return }
         if force || leagues != .loading && leagues.isFailed { leagues = .loading }
         if case .loading = leagues {
-            do { leagues = .loaded(try await api.leagues()) } catch { leagues = .failed(LeaguesModel.explain(error)) }
+            do {
+                leagues = .loaded(try await api.leagues())
+                trouble = nil
+            } catch {
+                let t = LeaguesModel.trouble(error)
+                leagues = .failed(t.missing)
+                trouble = t.cause
+            }
         }
         if force || events.isFailed { events = .loading }
         if case .loading = events {
-            do { events = .loaded(try await api.events()) } catch { events = .failed(LeaguesModel.explain(error, what: "the tournaments")) }
+            do {
+                events = .loaded(try await api.events())
+            } catch {
+                let t = LeaguesModel.trouble(error, what: "the tournaments")
+                events = .failed(t.missing)
+                if trouble == nil { trouble = t.cause }
+            }
         }
         if place == .unknown { adopt(status: (manager ?? makeManager()).authorizationStatus) }
     }

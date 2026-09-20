@@ -190,4 +190,39 @@ extension NearbyTests {
         XCTAssertFalse(NearbyLogic.usingLocation(nearby.place))
         XCTAssertTrue(DiscoverScreen.offersLocation(nearby.place), "and it can be turned back on")
     }
+
+    /// **The slate says it is still reading a list that failed to arrive** (PD-184).
+    ///
+    /// `leagueList` is nil while the read is in flight and nil again when it has failed, and the
+    /// headline reads that one nil as *"Finding the leagues — Reading THRØ's list of leagues and
+    /// venues."* So with no connection the top of Discover claims to be working on it, for ever,
+    /// directly above two sections that have already given up and are offering a retry. The screen
+    /// contradicts itself in the space of one scroll.
+    ///
+    /// This is the rule the file already states for `isLoading` — *a screen must say what it has,
+    /// rather than what it would have* (PD-148) — applied to the one place on the screen that had
+    /// no way to tell the two apart.
+    @MainActor
+    func testTheSlateDoesNotClaimToBeReadingAListThatFailed() {
+        let reading = NearbyLogic.headline(place: .unknown, leagues: nil, trouble: nil)
+        XCTAssertEqual(reading.title, "Finding the leagues", "a read in flight is still a read in flight")
+
+        let failed = NearbyLogic.headline(place: .unknown, leagues: nil,
+                                          trouble: "No connection to THRØ just now.")
+        XCTAssertNotEqual(failed.title, reading.title)
+        for words in [failed.title, failed.detail] {
+            XCTAssertFalse(words.lowercased().contains("finding"), words)
+            XCTAssertFalse(words.lowercased().contains("reading"), words)
+        }
+        XCTAssertTrue(failed.title.contains("THRØ") || failed.detail.contains("THRØ"),
+                      "it should say what cannot be reached")
+
+        // And the cause is said once on the screen: the slate carries it, so a section under the
+        // slate carries only what it has not got.
+        let t = LeaguesModel.trouble(APIError.unreachable("offline"))
+        XCTAssertTrue(t.cause.contains("No connection"))
+        XCTAssertFalse(t.missing.contains("No connection"), t.missing)
+        XCTAssertTrue(t.missing.contains("leagues"), t.missing)
+        XCTAssertEqual(LeaguesModel.explain(APIError.unreachable("offline")), "\(t.cause) \(t.missing)")
+    }
 }

@@ -245,6 +245,12 @@ jobs:
       - name: The opening's score is as long as the opening
         run: python3 tools/check_opening_sounds.py
 
+      # And Discover answering one cause of trouble one way. With no connection it showed a red
+      # Snackbar with a retry for the leagues and grey prose with no retry for the tournaments and
+      # for your teams — three answers to one question, on one screen, at one moment.
+      - name: Discover answers trouble the same way everywhere
+        run: python3 tools/check_discover_answers_once.py
+
       # And the type, read from the font files rather than from their names. A face that does not
       # register does not raise: iOS falls back, every screen still draws, and the app looks like
       # every other app — the founder's "no generic slop anywhere" arriving as a build problem. The

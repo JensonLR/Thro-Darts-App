@@ -32,14 +32,28 @@ public final class LeaguesModel: ObservableObject {
     }
 
     static func explain(_ error: Error, what: String = "the leagues") -> String {
+        let t = trouble(error, what: what)
+        return "\(t.cause) \(t.missing)"
+    }
+
+    /// The same explanation in its two parts: **what went wrong**, and **what is therefore missing**.
+    ///
+    /// A screen with three sections reading from one server has one cause of trouble and three
+    /// absences. Composed, it said "No connection to THRØ just now" three times on one screen
+    /// (PD-184). Split, the screen can name the cause once where the reader looks first and let each
+    /// section say only what it has not got.
+    static func trouble(_ error: Error, what: String = "the leagues") -> (cause: String, missing: String) {
+        let subject = what.prefix(1).uppercased() + what.dropFirst()
         if let e = error as? APIError {
             switch e {
-            case .unreachable: return "No connection to THRØ just now. \(what.prefix(1).uppercased() + what.dropFirst()) are on the server, not on this phone yet."
-            case .status(let code, _): return "The server answered \(code) instead of \(what)."
+            case .unreachable:
+                return ("No connection to THRØ just now.", "\(subject) are on the server, not on this phone yet.")
+            case .status(let code, _):
+                return ("The server answered \(code).", "\(subject) could not be read.")
             default: break
             }
         }
-        return "\(what.prefix(1).uppercased() + what.dropFirst()) could not be read: \(error.localizedDescription)"
+        return ("\(error.localizedDescription)", "\(subject) could not be read.")
     }
 }
 

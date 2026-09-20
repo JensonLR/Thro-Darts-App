@@ -7529,3 +7529,55 @@ the maximum of sixteen samples is the noisiest statistic available, and on a hos
 other tests it is not an instrument. The assertion is on the **median** frame now, which is stable
 across runs at about three yardsticks. The peak is still printed, because it is the figure worth
 reading; it is only not a figure worth failing on.
+
+## PD-184 — One cause, one answer
+
+With no connection to THRØ, Discover showed a player this, in one scroll:
+
+> **AROUND YOU** — *Finding the leagues. Reading THRØ's list of leagues and venues.*
+> **LEAGUES** — a red alarm: *No connection to THRØ just now…* with a **Try again**.
+> **TOURNAMENTS** — grey prose: *No connection to THRØ just now…* with no way to try again.
+> **YOUR TEAMS ON THRØ** — grey prose: *…could not be read*, with no way to try again.
+
+One cause. Four answers, in three different visual registers, with the retry on exactly one of them —
+and the hero card at the top **claiming to still be working on it**, for ever, directly above a section
+that had already given up.
+
+### The slate was lying, and could not have known
+
+`leagueList` is nil while the read is in flight and nil again once it has failed, so `headline` read
+one nil and said *"Finding the leagues"* in both. This is the rule the file already states one screen
+up, for `isLoading`: *a screen must say what it has, rather than what it would have* (PD-148). The one
+place on the screen that had no way to tell the two apart was the biggest thing on it.
+
+### Three registers became one
+
+`DiscoverTrouble` — the reason, and the control that tries again — answers every trouble branch on the
+screen, including the "not asked yet" one that already had that shape. **Quietly.** Three red alarms
+for a phone that is off the network is shouting about something the player did not do and can fix with
+one tap.
+
+`tools/check_discover_answers_once.py` holds it: every `case .failed` and `case .idle` in
+`DiscoverScreen.swift` must be answered by that view and nothing else, so a fourth section cannot
+arrive with a fourth presentation and a red alarm cannot creep back into one of them. Proved by putting
+the plain `Text` back into the tournaments branch and watching it fail on that line.
+
+### And then it said the same sentence three times
+
+Which is the same fault wearing different clothes, and looking at the screen is what caught it. The
+explanation was composed — *"No connection to THRØ just now. The leagues are on the server, not on
+this phone yet."* — so every section that used it announced the cause again.
+
+`LeaguesModel.trouble` returns the two parts separately: **what went wrong** and **what is therefore
+missing**. `explain` composes them, so every other caller is untouched. Discover's slate carries the
+cause, once, where the reader looks first; each section under it carries only what it has not got. The
+screen now reads: *Nothing from THRØ yet — No connection to THRØ just now* / *The leagues are on the
+server, not on this phone yet* / *The tournaments are on the server, not on this phone yet.*
+
+**Evidence.** 939 tests. Photographed on iPhone 17 Pro against a dead server (`-ThroAPIBaseURL
+http://127.0.0.1:9/`) at three stages: before, after the shapes were unified, and after the cause was
+said once.
+
+**Left alone, and said so:** the slate still offers **Use my location** while the server is unreachable.
+Granting location is not wasted — the list uses it the moment the connection comes back — but a control
+that cannot do anything this second is worth the founder's eye rather than mine.
