@@ -7788,3 +7788,24 @@ with nothing, and the strip stays exactly what it was.
 **Evidence.** 947 tests. Looked at on iPhone 17 Pro in both states: an empty phone, which leads with
 nothing; and a phone with a match on it this week, which opens on **3-DART AVERAGE / 120.0** with the
 best leg's dash and its reason in the grid below.
+
+## PD-190 — The hole in the middle of the scoring screen
+
+Two faults that turned out to be one.
+
+**The hole.** The ledger was pinned to the foot of the board with a `Spacer` above it, so a leg with
+three visits in it left a band of empty board roughly a third of the screen deep between the scores
+and the column that is their working. It is in every screenshot this project has ever taken of its
+own most-used screen, and nobody had named it.
+
+**The mark landed on the ledger.** The chalk confirmation drops at the bottom of the board for its
+1.1 seconds — and with the ledger pinned there too, the confirmation of a visit was drawn **over the
+very rows a player would check it against**. `ThroChalkMarkView`'s own comment says it "never covers
+the numerals it is confirming"; it was covering the other ones.
+
+The ledger sits under the head now and the `Spacer` is beneath it. The empty board is at the bottom,
+which is where the mark wants it: the figure appears in clear space instead of across two rows, and the
+column sits with the numbers it explains. One change, both faults, and no new component.
+
+**Evidence.** 947 tests. Looked at on iPhone 17 Pro with a two-visit leg: `100 401` and `140 361` sit
+directly under the scores, and the board below them is clear.

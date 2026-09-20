@@ -6729,3 +6729,9 @@ something to say.
 want it. `ThroRootView.swift`: `WeekStrip.lead`/`rest` — Home leads with the first figure the week can give and
 keeps the rest in the grid, and leads with nothing at all on a week with no darts in it, because the first
 available figure on an empty phone is a count of zero. Tests +1 (947).
+
+## The hole in the middle of the scoring screen (PD-190)
+
+`PlayScreens.swift`: the ledger moves out from under a `Spacer` to directly under the head, with the `Spacer`
+beneath it. That closes the band of empty board between the scores and their working, and takes the ledger out
+from under the chalk mark, which lands at the foot of the board and was being drawn across the rows it confirms.

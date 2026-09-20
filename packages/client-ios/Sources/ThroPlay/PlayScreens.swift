@@ -660,13 +660,24 @@ public struct ScoringScreen: View {
                     .padding(.horizontal, ThroStage.gutter)
                     .padding(.top, ThroSpacing.spacing2)
             }
-            Spacer(minLength: 0)
             // The leg so far: the running column every paper scoresheet has had for a century, and
             // the only way a player catches a mis-key without replaying the leg in their head.
+            //
+            // **Under the head, not pinned to the foot** (PD-190), which fixes two things that were
+            // really one. Pinned, a leg with three visits in it left a band of empty board a third
+            // of the screen deep between the scores and the column that explains them — the hole in
+            // every screenshot of this app's most-used screen. And the chalk mark lands at the foot
+            // for its beat, so the confirmation of a visit was drawn **over the very rows a player
+            // would check it against**.
+            //
+            // The empty board is at the bottom now, which is where the mark wants it: the figure
+            // appears in clear space instead of across two ledger rows, and the column sits with the
+            // numbers it is the working for.
             ThroLedger(rows: ScoringScreen.ledger(session), stage: stage) { seat in
                 session.name(seat == 0 ? .home : .away)
             }
-            .padding(.bottom, ThroSpacing.spacing3)
+            .padding(.top, ThroSpacing.spaceSectionGap)
+            Spacer(minLength: 0)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         // A refusal floats over the board and clears on the next key; it takes no height.
