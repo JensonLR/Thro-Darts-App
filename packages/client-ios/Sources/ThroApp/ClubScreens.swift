@@ -789,37 +789,16 @@ public struct ProfileScreen: View {
         .accessibilityElement(children: .contain)
     }
 
-    /// The headline figure. Big, in the sport family, with its window under it.
+    /// The headline figure, drawn by the design system since PD-189 — Home leads with one too, and
+    /// one drawing means a figure cannot read as more confident on one screen than on the other.
+    ///
+    /// `ratingHero` is a **size**, and this was the first thing in the app to use it. The role exists
+    /// because a hero figure about a player was always intended; PD-018 decided what that figure
+    /// honestly is, and it is not a rating. What PD-018 forbids is the word, and the word here is
+    /// "Recent form" over a note ending "Not a rating." OD-001 stays open and nothing about it moves:
+    /// no rating VALUE exists anywhere in this build, which is registered absence claim #2.
     @ViewBuilder private func headlineFigure(_ item: Headline) -> some View {
-        VStack(alignment: .leading, spacing: ThroSpacing.spacing2) {
-            Eyebrow(item.label)
-            HStack(alignment: .firstTextBaseline, spacing: ThroSpacing.spacing3) {
-                // `ratingHero` is a **size**, and this is the first thing in the app to use it.
-                // The role exists because a hero figure about a player was always intended; PD-018
-                // decided what that figure honestly is, and it is not a rating. What PD-018 forbids
-                // is the word, and the word here is "Recent form" over a note ending "Not a rating."
-                // OD-001 stays open and nothing about it moves: no rating VALUE exists anywhere in
-                // this build, which is registered absence claim #2 and is the claim that matters.
-                Text(item.value)
-                    .thro(ThroTypography.ratingHero.family(.sport).weight(.bold))
-                    .foregroundStyle(StatGrid.valueColour(item.confidence))
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.5)
-                if item.confidence == .range { Tag("Range", tone: .neutral, shape: .basis) }
-            }
-            if let note = item.note {
-                Text(note)
-                    .thro(item.confidence == .unavailable ? ThroTypography.body
-                                                          : ThroTypography.metadata)
-                    .foregroundStyle(StatGrid.noteColour(item.confidence))
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-        }
-        .padding(.top, ThroSpacing.spaceSectionGap)
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel(item.label)
-        .accessibilityValue(StatGrid.spokenValue(item))
-        .accessibilityHint(item.note ?? "")
+        StatHeadline(item).padding(.top, ThroSpacing.spaceSectionGap)
     }
 
     /// The initials a name is drawn as when there is no picture. The same rule `LocalPerson` and

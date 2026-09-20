@@ -7760,3 +7760,31 @@ Adding a case to `ThroHaptics.Event` failed the **iOS** build in two places the 
 see — `play(_:)` and the held generator, both inside `#if os(iOS)`. Worth writing down: `swift test`
 passing is not the same as the app compiling, and a vocabulary that is exhaustively switched on in
 platform-guarded code has a blind spot on this machine.
+
+## PD-189 — Home leads with a figure
+
+The scoring screen has a ninety-six-point register. A player's own page leads with a figure at
+`ratingHero`. Home — the first screen of the app, the one somebody opens on the bus — drew its three
+figures at heading-two in a two-column grid, all the same size as each other, and had nothing on it
+bigger than a section heading.
+
+`StatHeadline` is the profile page's own hero drawing, lifted into the design system where two call
+sites make it belong. Home leads with the first figure the week can actually give; the rest stay in the
+grid beneath it, and the lead is never drawn twice.
+
+Everything the grid does about honesty, the headline does: the same colour per confidence, the same
+**Range** mark, the same inversion when the reason is the content, the same spoken value and hint. **A
+figure may not become more confident by being made larger.**
+
+### And the guard that the test found
+
+The first version led with *the first figure that is not unavailable*. On an empty phone that is
+**`180s: 0`** — because a count of zero is a fact and therefore exact — so Home would have opened on a
+fifty-six-point **0** under the word 180S. The rule this repository already states three files away is
+that a zero reads as *they are bad at darts* where a dash reads as *this cannot be worked out*, and
+blowing the zero up is the loudest possible way to say the wrong one. A week with no darts in it leads
+with nothing, and the strip stays exactly what it was.
+
+**Evidence.** 947 tests. Looked at on iPhone 17 Pro in both states: an empty phone, which leads with
+nothing; and a phone with a match on it this week, which opens on **3-DART AVERAGE / 120.0** with the
+best leg's dash and its reason in the grid below.

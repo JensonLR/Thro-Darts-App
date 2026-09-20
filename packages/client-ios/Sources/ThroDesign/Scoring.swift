@@ -537,6 +537,47 @@ public struct StatItem: Identifiable, Equatable, Sendable {
     }
 }
 
+/// One figure, led with: big, in the sport family, with its window under it.
+///
+/// **Lifted out of `ProfileScreen`** (PD-189), which is where the drawing was invented and where it
+/// was the only hero figure in the app outside the scoring screen. Home had none at all: the first
+/// screen of a darts app, and nothing on it bigger than a section heading. Two call sites drawing one
+/// thing is where this repository's own rule says it belongs to the design system.
+///
+/// Everything the grid does about honesty, this does: the same colour rule per confidence, the same
+/// "Range" mark, the same inversion when the reason is the content, the same spoken value and hint.
+/// A figure may not become more confident by being made larger.
+public struct StatHeadline: View {
+    private let item: StatItem
+
+    public init(_ item: StatItem) { self.item = item }
+
+    public var body: some View {
+        VStack(alignment: .leading, spacing: ThroSpacing.spacing2) {
+            Eyebrow(item.label)
+            HStack(alignment: .firstTextBaseline, spacing: ThroSpacing.spacing3) {
+                Text(item.value)
+                    .thro(ThroTypography.ratingHero.family(.sport).weight(.bold))
+                    .foregroundStyle(StatGrid.valueColour(item.confidence))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.5)
+                if item.confidence == .range { Tag("Range", tone: .neutral, shape: .basis) }
+            }
+            if let note = item.note {
+                Text(note)
+                    .thro(item.confidence == .unavailable ? ThroTypography.body
+                                                          : ThroTypography.metadata)
+                    .foregroundStyle(StatGrid.noteColour(item.confidence))
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(item.label)
+        .accessibilityValue(StatGrid.spokenValue(item))
+        .accessibilityHint(item.note ?? "")
+    }
+}
+
 /// The two-column figures grid from MatchSummary.jsx, usable on its own.
 ///
 /// Three drawn forms, one per confidence (PD-015). Colour alone would not carry it — a screen

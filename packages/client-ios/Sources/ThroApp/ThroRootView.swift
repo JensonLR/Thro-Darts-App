@@ -1100,7 +1100,19 @@ struct WeekStrip: View {
     var body: some View {
         VStack(alignment: .leading, spacing: ThroSpacing.spacing4) {
             SectionHeader("Last 7 days", meta: WeekStrip.meta(for: week))
-            StatGrid(week.figures.map(WeekStrip.item))
+            // **Home leads with a figure** (PD-189). The scoring screen has a 96-point register and a
+            // player's own page leads at `ratingHero`; Home drew its three figures at heading-two in
+            // a grid, all the same size, and had no moment on it at all.
+            //
+            // Only a figure the week can actually give. On an empty phone every one of them is a
+            // dash with a reason, and a dash at 56 points would make *this cannot be worked out* the
+            // loudest thing on the first screen of the app.
+            if let lead = WeekStrip.lead(of: week) {
+                StatHeadline(lead)
+                StatGrid(WeekStrip.rest(of: week))
+            } else {
+                StatGrid(week.figures.map(WeekStrip.item))
+            }
             if week.unreadable > 0 {
                 Text("\(week.unreadable) match\(week.unreadable == 1 ? "" : "es") this week could not be replayed, so no dart in \(week.unreadable == 1 ? "it is" : "them is") counted above.")
                     .thro(ThroTypography.metadata)
@@ -1123,6 +1135,26 @@ struct WeekStrip: View {
     /// facts. It stays a function rather than being deleted because the thing worth holding is that
     /// Home states the week **once**, and a test can only hold that if there is something to ask.
     static func meta(for week: DeviceSummary.Week) -> String? { nil }
+
+    /// The figure Home leads with: the first one the week can actually give, or nothing.
+    ///
+    /// **A week with no darts in it leads with nothing**, and that guard is not belt and braces —
+    /// the test found it. A count is *exact* even at zero, because a count of zero is a fact, so the
+    /// first available figure on an empty phone is `180s: 0` and Home would have opened on a
+    /// fifty-six-point **0** under the word 180S. The codebase's own rule about this is written
+    /// three files away: a zero reads as *they are bad at darts* where a dash reads as *this cannot
+    /// be worked out*, and blowing the zero up is the loudest possible way to say the wrong one.
+    static func lead(of week: DeviceSummary.Week) -> StatItem? {
+        guard week.matches > 0 else { return nil }
+        return week.figures.map(WeekStrip.item).first { $0.confidence != .unavailable }
+    }
+
+    /// Everything else, in the grid — never including the lead, or it is drawn twice.
+    static func rest(of week: DeviceSummary.Week) -> [StatItem] {
+        let items = week.figures.map(WeekStrip.item)
+        guard let lead = lead(of: week) else { return items }
+        return items.filter { $0.label != lead.label }
+    }
 
     /// `StatLine` carries the basis; `StatItem` draws it. The mapping is total on purpose — a new
     /// confidence would fail to compile here rather than silently drawing as a confident number.

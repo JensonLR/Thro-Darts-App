@@ -6722,3 +6722,10 @@ as "One hundred and eighty". `MatchSession.swift`: `MatchSession.maximum` names 
 chooses the kind. The first version drew the figure in `colorMarkOnBoard` and a 180 came out fainter than a 26 —
 found by photographing it. Tests +3 (946), including that every chalk-mark kind has an ink, a basis, a haptic and
 something to say.
+
+## Home leads with a figure (PD-189)
+
+`Scoring.swift`: new `StatHeadline`, the hero-figure drawing lifted out of `ProfileScreen` now that two screens
+want it. `ThroRootView.swift`: `WeekStrip.lead`/`rest` — Home leads with the first figure the week can give and
+keeps the rest in the grid, and leads with nothing at all on a week with no darts in it, because the first
+available figure on an empty phone is a count of zero. Tests +1 (947).

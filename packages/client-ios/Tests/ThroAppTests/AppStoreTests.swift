@@ -450,4 +450,40 @@ final class AppStoreTests: XCTestCase {
         XCTAssertTrue(PlayLandingScreen.lately([offered!], offering: offered).isEmpty,
                       "a heading with nothing under it")
     }
+
+    // MARK: - Home leads with a figure (PD-189)
+
+    /// **Nothing on Home is bigger than a section heading.**
+    ///
+    /// The scoring screen has a 96-point register, a player's own page leads with a figure at
+    /// `ratingHero`, and the first screen of the app — the one somebody opens on the bus — draws its
+    /// three figures at heading-two, all the same size, in a two-column grid. There is no moment on
+    /// it.
+    ///
+    /// The lead is the first figure the week can actually give. Which matters more than it sounds:
+    /// on an empty phone every figure is a dash with a reason, and blowing a dash up to 56 points
+    /// would make *this cannot be worked out* the loudest thing on the screen.
+    func testHomeLeadsWithAFigureItHasAndOtherwiseWithNothing() throws {
+        let j = try journal()
+        let empty = try DeviceSummary.week(in: j, now: Date(timeIntervalSince1970: 1_000_000))
+        // Not a dash at 56 points, and — which is what this actually caught — not a 0 either: a
+        // count is exact even at zero, so the first *available* figure on an empty phone is
+        // "180s: 0", and Home would have opened on a fifty-six-point nought.
+        XCTAssertNil(WeekStrip.lead(of: empty), "an empty phone leads with a figure")
+
+        let now = Date(timeIntervalSince1970: 1_000_000)
+        let match = try j.createMatch(NewMatch(homeName: "Ann", awayName: "Ben"),
+                                      startedAt: now.addingTimeInterval(-3600))
+        for total in [140, 100, 60] { try j.append(.visit(Seat.home.playerId, total), to: match.id) }
+        let played = try DeviceSummary.week(in: j, now: now)
+        let lead = try XCTUnwrap(WeekStrip.lead(of: played), "a phone with darts on it has a figure")
+        XCTAssertNotEqual(lead.value, "—", "the lead is a dash")
+        XCTAssertNotEqual(lead.confidence, .unavailable)
+
+        // And it is not drawn twice. The whole point of leading with one is that it is not in the
+        // grid at the same size as the rest.
+        XCTAssertFalse(WeekStrip.rest(of: played).contains { $0.label == lead.label },
+                       "the lead is in the grid as well")
+        XCTAssertEqual(WeekStrip.rest(of: played).count, played.figures.count - 1)
+    }
 }
