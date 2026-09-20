@@ -7671,3 +7671,43 @@ look — `Logger`, whose interpolations are private by default, so a log another
 the fact and not the strings, and nothing leaves the phone.
 
 **Evidence.** 943 tests, the two new ones watched to fail against every case first.
+
+## PD-187 — The three tabs that were somebody else's app
+
+Home opens on the board. The You tab opens on the board. Settings, Account, the inbox, Friends, a
+tournament, a match on THRØ — fourteen screens open on the green field with chalk on it, through one
+component, `BoardHeader`.
+
+Play, Live and Discover opened on a white page with a large black system title.
+
+That is the founder's *generic* — *"plain iOS lists get rejected"* — sitting on three of the five tabs,
+which is to say on three fifths of the app's front door. And it was never a decision: `BoardHeader`
+already existed, already did the right thing, and simply had not been taken to the tab roots.
+
+It is now. Nothing new was designed, and no copy was invented for it — a line of made-up fact under a
+tab's name would be the same mistake PD-183 had just finished taking out of Home.
+
+**Two things the component needed first.**
+
+It carries **actions**, because Discover's bar has one: *join or start a team*. Drawn in chalk, because
+this bar is on the board.
+
+And it **folds on a phone on its side**. `Masthead` and the large `TopBar` both do, by PD-061's rule
+and PD-092's; `BoardHeader` passed `oneLine: false` unconditionally, which nobody had noticed because
+its fourteen screens are all pushed pages nobody turns sideways. Taken to a tab root it would have
+spent a quarter of a landscape phone on a single word.
+
+### And a check that was reading prose
+
+`check_screen_bars.py` refuses a negative horizontal inset outside `ThroDesign` — correctly, and for a
+defect that happened three times. It failed this work on **a comment explaining why the author had not
+used one**. A check that fires on a description of the thing it forbids teaches people to stop
+describing it, which is the opposite of what this repository wants from its comments. It blanks
+comments before it looks now, and was proved still to catch the real thing by putting one back.
+
+The action button gets there by taking the gutter in rather than by pushing the button out — the same
+place on screen, in a number that cannot be wrong about a margin that is not there.
+
+**Evidence.** 943 tests. Play, Live, Discover, Home, the You tab and Settings looked at on iPhone 17
+Pro; Discover looked at turned sideways, where the band folds to one shallow row and the two-column
+layout is unchanged.

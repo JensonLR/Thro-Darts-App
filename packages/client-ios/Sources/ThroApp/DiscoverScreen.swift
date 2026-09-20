@@ -92,8 +92,9 @@ public struct DiscoverScreen: View {
             // Large, as the approved export draws it (`screens-discover.jsx`: `large: true`) and as Play and Live already
             // are (PD-092). It went compact in 4d3b225 with no decision recorded; turned sideways the large bar now folds to
             // this same compact row, so the height it costs is only spent on an upright phone.
-            TopBar("Discover", actions: signedIn ? [TopBar.Action(icon: .plus, label: "Join or start a team", action: onJoinOrStart)] : [],
-                   large: true)
+            BoardHeader(title: "Discover",
+                        actions: signedIn ? [TopBar.Action(icon: .plus, label: "Join or start a team",
+                                                           action: onJoinOrStart)] : [])
             // Discover is two things, and says so on a screen with room for two (PD-062): what is out
             // there — the leagues near you and the tournaments taking entries — and what is yours. On a
             // phone they run one after the other as they always have; on a tablet the second half stops

@@ -21,6 +21,11 @@ negative *of*. Two checks follow from that, and both are exact rather than heuri
      the gutter it is insetting from; in a screen it is arithmetic against a margin that may not be
      there. Every one that exists today is in `ThroDesign` and is correct.
 
+**It reads code, not prose.** Comments are blanked before either pattern is looked for, because the
+first thing this ever failed on after the four screens was a comment *explaining why the author had
+not used a negative inset*. A check that fires on a description of the thing it forbids teaches people
+to stop describing it, which is the opposite of what this repository wants from its comments.
+
 What this does not prove: that any of it looks right. Nothing here renders a pixel. It proves that the
 one shape which produced the defect three times cannot be written again without failing a build.
 """
@@ -35,6 +40,14 @@ SOURCES = ROOT / "packages/client-ios/Sources"
 BAR = "PageBar"
 CHEVRON = re.compile(r"\bBackChevron\s*\(")
 NEGATIVE = re.compile(r"\.padding\(\s*\.(?:leading|trailing|horizontal)\s*,\s*-")
+# `//` to end of line, and `/* … */`. Swift nests block comments; this does not, which is enough for
+# the one thing it is for — and a nested one would only ever blank more, never less.
+COMMENT = re.compile(r"//[^\n]*|/\*.*?\*/", re.S)
+
+
+def without_comments(text):
+    """The same text with every comment replaced by spaces, so offsets and line numbers hold."""
+    return COMMENT.sub(lambda m: re.sub(r"[^\n]", " ", m.group(0)), text)
 
 
 def main() -> int:
@@ -45,7 +58,7 @@ def main() -> int:
     chevrons = 0
     insets = 0
     for path in sorted(SOURCES.rglob("*.swift")):
-        text = path.read_text()
+        text = without_comments(path.read_text())
         where = path.relative_to(ROOT)
         module = path.relative_to(SOURCES).parts[0]
 

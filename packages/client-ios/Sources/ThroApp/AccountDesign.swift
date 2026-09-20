@@ -28,25 +28,60 @@ struct BoardHeader: View {
     let title: String
     var eyebrow: String? = nil
     var onBack: (() -> Void)? = nil
+    /// Controls that belong to the page rather than to a row of it — the way a tab root carries
+    /// *join or start a team*. Drawn in chalk here, because this bar is on the board (PD-187).
+    var actions: [TopBar.Action] = []
+
+    /// A phone on its side gets a shallower band, by PD-061's rule and PD-092's — the same rule the
+    /// masthead and the large `TopBar` already fold on. This header did not, so the three tab roots
+    /// that took it (PD-187) would have spent a quarter of a landscape phone on a word.
+    @Environment(\.verticalSizeClass) private var verticalSizeClass
+    private var oneLine: Bool {
+        ThroMasthead.shape(verticalSizeClassIsCompact: verticalSizeClass == .compact) == .oneLine
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             if let onBack {
                 PageBar(onBack: onBack, ink: ThroColor.throChalk)
             }
-            VStack(alignment: .leading, spacing: ThroSpacing.spacing1) {
-                if let eyebrow {
-                    Eyebrow(eyebrow, color: ThroColor.throChalk.opacity(0.78))
+            HStack(alignment: .firstTextBaseline, spacing: ThroSpacing.spacing3) {
+                VStack(alignment: .leading, spacing: ThroSpacing.spacing1) {
+                    if let eyebrow {
+                        Eyebrow(eyebrow, color: ThroColor.throChalk.opacity(0.78))
+                    }
+                    Text(title)
+                        .thro(ThroTypography.heading1.family(.sport).weight(.bold).tracking(em: 0))
+                        .foregroundStyle(ThroColor.throChalk)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .accessibilityAddTraits(.isHeader)
                 }
-                Text(title)
-                    .thro(ThroTypography.heading1.family(.sport).weight(.bold).tracking(em: 0))
+                .frame(maxWidth: .infinity, alignment: .leading)
+                ForEach(actions) { action in
+                    Button(action: action.action) {
+                        Icon(action.icon, size: 24)
+                            .frame(width: ThroSpacing.touchTargetMinimum,
+                                   height: ThroSpacing.touchTargetMinimum)
+                            .contentShape(Rectangle())
+                    }
+                    .buttonStyle(ThroPressStyle(radius: ThroSpacing.radiusStatus))
                     .foregroundStyle(ThroColor.throChalk)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .accessibilityAddTraits(.isHeader)
+                    .accessibilityLabel(action.label)
+                }
             }
-            .padding(.horizontal, ThroHeaderMetrics.gutter)
-            .padding(.top, ThroHeaderMetrics.boardTop(hasBack: onBack != nil, oneLine: false))
-            .padding(.bottom, ThroHeaderMetrics.boardBottom(oneLine: false))
+            .padding(.leading, ThroHeaderMetrics.gutter)
+            // **A positive number, not a negative inset.** A 44-point tap target holds a 24-point
+            // icon, so the icon sits 10 points inside its own frame; pulling the frame out past the
+            // gutter with `.padding(.trailing, -spacing3)` is how every bar in ThroDesign does it,
+            // and `check_screen_bars.py` refuses it outside ThroDesign for a good reason — there, the
+            // negative is measured against a gutter the component applies, and in a screen it is
+            // measured against a margin that may not exist. Taking the gutter in by the same amount
+            // puts the icon in the same place and says so in a number that cannot go wrong.
+            .padding(.trailing, actions.isEmpty
+                     ? ThroHeaderMetrics.gutter
+                     : max(0, ThroHeaderMetrics.gutter - ThroSpacing.spacing3))
+            .padding(.top, ThroHeaderMetrics.boardTop(hasBack: onBack != nil, oneLine: oneLine))
+            .padding(.bottom, ThroHeaderMetrics.boardBottom(oneLine: oneLine))
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         // The field the app launches on, as Home's masthead is — throGreen in light, throGreenDeep in

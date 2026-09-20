@@ -1393,7 +1393,7 @@ public struct PlayLandingScreen: View {
 
     public var body: some View {
         VStack(spacing: 0) {
-            TopBar("Play", large: true)
+            BoardHeader(title: "Play")
             // **Play stays one column, and that was tried the other way** (PD-069). Splitting it into what
             // you do and how it works halved the height of the content and left the page emptier than
             // before, because Play's problem is that it has little to say and not that it is stacked — and
@@ -1969,7 +1969,7 @@ public struct LiveScreen: View {
 
     public var body: some View {
         VStack(spacing: 0) {
-            TopBar("Live", large: true)
+            BoardHeader(title: "Live")
             ScrollView {
                 VStack(alignment: .leading, spacing: 0) {
                     if inProgress.isEmpty && awaiting.isEmpty && upcoming.isEmpty {

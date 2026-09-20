@@ -6704,3 +6704,12 @@ the rail's eyebrows hold one line. New `tools/check_the_scoring_screen_reflows.p
 take another visit now say different things, because one may take on a second try and the other never will. The
 detail goes to `Logger` instead, which stays on the phone. Tests +2 (943), holding that no player-facing sentence
 carries SQLite, a pragma, a sequence number or a match id, and that only the retryable case says "again".
+
+## The three tabs that were somebody else's app (PD-187)
+
+`ThroRootView.swift`, `DiscoverScreen.swift`: Play, Live and Discover take `BoardHeader` instead of a large system
+`TopBar`, so all five tabs and the fourteen pushed pages now open on the same green field. `AccountDesign.swift`:
+`BoardHeader` gains actions, drawn in chalk, and folds on a landscape phone by the rule the masthead and the large
+bar already fold on — it passed `oneLine: false` unconditionally, which cost nothing on a pushed page and would
+have cost a quarter of a sideways phone on a tab root. `tools/check_screen_bars.py` blanks comments before looking,
+because it failed on a comment explaining why a negative inset had been avoided.
