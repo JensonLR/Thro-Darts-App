@@ -7471,3 +7471,61 @@ for longer than 0.45 s.
 whether the room is the right room needs the founder and a pair of speakers. What is claimed is that
 the hole is closed, that the lengths cannot drift again, and that the app carries the file — checked in
 the built bundle rather than assumed from the project file.
+
+## PD-183 — Say it once, and say it about the right thing
+
+Three things the app was saying twice or saying wrong, all of them on the two screens a player opens
+most.
+
+### Home's empty state is about a match that does not exist
+
+The week strip's figures come from the audited `Statistics` layer — which is right, and is the whole
+reason a figure with nothing behind it draws a dash instead of a zero. What came with them was that
+layer's *wording*, which is written for a result screen and a person's own page:
+
+> 3-DART AVERAGE — *No visits have been recorded for **this match** yet.*
+> BEST LEG — ***This player** has not won a leg, so there is no best leg to report.*
+
+The strip is neither. It is seven days of every match on the phone, with both players' darts in it,
+which the footnote three lines below says in so many words. So on an empty phone — **the state every
+new player sees Home in** — the first thing THRØ ever says to anybody is about a match they have not
+played and a player who is not them.
+
+`DeviceSummary` supplies the sentence now, because it is the thing that knows what it is summarising:
+*"Nothing has been thrown on this phone in the last seven days."* The numbers are still the audited
+layer's, untouched; only the words belong to the caller. Two tests: that no figure on the strip says
+"this match" or "this player", and that the ones it cannot give name the phone and the window.
+
+### Home states the week twice
+
+Under the wordmark: *"3 matches · 9 legs this week"*. A hundred and sixty points below: *"LAST 7 DAYS ·
+3 matches · 9 legs"*. On an empty phone: *"Nothing in the last seven days"* and *"nothing yet"*. One
+fact, two places, in every state — and the second one is the one nobody needs, because the figures
+themselves are directly underneath it.
+
+The header names the window, the masthead gives the count, the footnote gives the basis: three lines,
+three facts. `WeekStrip.meta` returns nothing and stays a function rather than being deleted, because
+what is worth holding is that Home states the week **once**, and a test can only hold that if there is
+something to ask.
+
+### Play shows the same match twice on one screen
+
+The card at the top offers to continue it. Eight hundred points down, "Lately" lists it again with an
+IN PROGRESS badge. Both resume the same match. A list of what you played lately is not the place for
+the one you are playing now and have just been offered.
+
+**And taking it out left a worse thing**, which is what looking at the screen is for: a phone with one
+match showed a "LATELY · 1 on this device" heading with nothing under it. The section is not drawn
+when it has nothing to draw, and its count is now of what it lists rather than of what the phone
+holds.
+
+**Evidence.** 938 tests, the four new ones each watched to fail first. Home and Play looked at on
+iPhone 17 Pro before and after.
+
+### And the frame-cost bench stopped crying wolf
+
+It failed this suite once at 24 yardsticks against a ceiling of 20, with nothing changed in the film —
+the maximum of sixteen samples is the noisiest statistic available, and on a host running nine hundred
+other tests it is not an instrument. The assertion is on the **median** frame now, which is stable
+across runs at about three yardsticks. The peak is still printed, because it is the figure worth
+reading; it is only not a figure worth failing on.

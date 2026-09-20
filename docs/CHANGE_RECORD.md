@@ -6667,3 +6667,13 @@ renderer, the files and the loader all agree with, held by `tools/check_opening_
 goes from 1.2 s to 1.4 — it was rendered for a flight that had since grown, and stopped 200 ms before the dart
 landed. The film's longest silence between the first sound and the cross-fade falls from 2.00 s to zero. Tests +2
 (934); the new check is wired into domain-spec.
+
+## Say it once, and say it about the right thing (PD-183)
+
+`MatchSession.swift`: `DeviceSummary` words its own unavailable figures. The audited layer says "this match" and
+"this player" because it is read on a result screen; Home's week strip is seven days of every match on the phone,
+so on an empty phone the app's first sentence was about a match nobody had played. `ThroRootView.swift`: the
+masthead's line and `WeekStrip.meta` lifted out as statics so a test can hold that Home states the week once, and
+the meta now returns nothing; Play's "Lately" drops the match the card above already offers, and is not drawn when
+that leaves it empty. `OpeningCostTests` asserts on the median frame rather than the maximum, which false-alarmed.
+Tests +4 (938).

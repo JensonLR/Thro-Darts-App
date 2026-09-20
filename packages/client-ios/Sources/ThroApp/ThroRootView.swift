@@ -928,12 +928,18 @@ public struct HomeScreen: View {
     /// player nothing; the number of matches this phone has watched this week tells them where they
     /// are.
     private var mastheadLine: String {
-        if store.openProblem != nil { return "The journal could not be opened" }
-        guard let week = store.week else { return "Nothing has left this phone" }
+        HomeScreen.masthead(week: store.week,
+                            hasHistory: !(store.matches.isEmpty && store.archived.isEmpty),
+                            openProblem: store.openProblem)
+    }
+
+    /// Lifted out of the view so that what Home says can be asked about (PD-183) — the week was
+    /// being stated here and again in the section header a hundred and sixty points below.
+    static func masthead(week: DeviceSummary.Week?, hasHistory: Bool, openProblem: String?) -> String {
+        if openProblem != nil { return "The journal could not be opened" }
+        guard let week else { return "Nothing has left this phone" }
         if week.matches == 0 {
-            return store.matches.isEmpty && store.archived.isEmpty
-                ? "Nothing on this phone yet"
-                : "Nothing in the last seven days"
+            return hasHistory ? "Nothing in the last seven days" : "Nothing on this phone yet"
         }
         let matches = "\(week.matches) match\(week.matches == 1 ? "" : "es")"
         let legs = week.legs == 0 ? "" : " · \(week.legs) leg\(week.legs == 1 ? "" : "s")"
@@ -1093,7 +1099,7 @@ struct WeekStrip: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: ThroSpacing.spacing4) {
-            SectionHeader("Last 7 days", meta: meta)
+            SectionHeader("Last 7 days", meta: WeekStrip.meta(for: week))
             StatGrid(week.figures.map(WeekStrip.item))
             if week.unreadable > 0 {
                 Text("\(week.unreadable) match\(week.unreadable == 1 ? "" : "es") this week could not be replayed, so no dart in \(week.unreadable == 1 ? "it is" : "them is") counted above.")
@@ -1110,11 +1116,13 @@ struct WeekStrip: View {
         }
     }
 
-    private var meta: String {
-        week.matches == 0
-            ? "nothing yet"
-            : "\(week.matches) match\(week.matches == 1 ? "" : "es") · \(week.legs) leg\(week.legs == 1 ? "" : "s")"
-    }
+    /// Nothing (PD-183). **The masthead has already said it** — "3 matches · 9 legs this week"
+    /// under the wordmark, and then "LAST 7 DAYS · 3 matches · 9 legs" a hundred and sixty points
+    /// below, which is the same sentence with the words in a different order. The header names the
+    /// window, the masthead gives the count, and the footnote gives the basis: three lines, three
+    /// facts. It stays a function rather than being deleted because the thing worth holding is that
+    /// Home states the week **once**, and a test can only hold that if there is something to ask.
+    static func meta(for week: DeviceSummary.Week) -> String? { nil }
 
     /// `StatLine` carries the basis; `StatItem` draws it. The mapping is total on purpose — a new
     /// confidence would fail to compile here rather than silently drawing as a confident number.
@@ -1364,6 +1372,15 @@ public struct PlayLandingScreen: View {
         store.matches.first { !$0.complete && $0.unreadable == nil }
     }
 
+    /// What "Lately" lists: the newest three, **without the one the card above is already offering**
+    /// (PD-183). Play was showing the running match twice on one screen — once as the hero card with
+    /// a Continue button, and again eight hundred points down with an IN PROGRESS badge, both of them
+    /// resuming the same match. A list of what you played lately is not the place for the one you are
+    /// playing now and have just been offered.
+    static func lately(_ matches: [AppStore.HomeMatch], offering: AppStore.HomeMatch?) -> [AppStore.HomeMatch] {
+        Array(matches.filter { $0.id != offering?.id }.prefix(3))
+    }
+
     /// The format of the last match started on this phone, described. Not a setting and not a
     /// preference — the record, read back, which is why it cannot drift from what was played.
     private var lastFormat: String? {
@@ -1418,10 +1435,14 @@ public struct PlayLandingScreen: View {
                         }
                     }
                     .throEntrance(1)
-                    if !store.matches.isEmpty {
+                    // Only when there is something under it. Taking the running match out of this
+                    // list (PD-183) left a phone with one match showing a "LATELY" heading with
+                    // nothing beneath it, which is a worse thing than the duplicate was.
+                    let lately = PlayLandingScreen.lately(store.matches, offering: inProgress)
+                    if !lately.isEmpty {
                         block {
-                            SectionHeader("Lately", meta: "\(store.matches.count) on this device")
-                            ForEach(store.matches.prefix(3)) { match in
+                            SectionHeader("Lately", meta: "\(lately.count) more on this device")
+                            ForEach(lately) { match in
                                 MatchRow(match: match) { store.flow = .resume(match.id) }
                                 ThroDivider()
                             }

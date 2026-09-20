@@ -763,13 +763,34 @@ public enum DeviceSummary {
         // one device are both throwing on it. It is labelled "on this phone" for exactly that
         // reason and is never presented as one person's average; a person's own figures live on
         // their page, where `PersonSummary` pools only the visits they threw.
+        let nothingThrown = "Nothing has been thrown on this phone in the last seven days."
         let figures = [
-            StatPresentation.line("3-dart average", Statistics.threeDartAverage(records), kind: .average),
-            StatPresentation.line("Best leg", Statistics.bestLegInVisits(records), kind: .count),
-            StatPresentation.line("180s", Statistics.maximums(records), kind: .count),
+            forTheWeek(StatPresentation.line("3-dart average", Statistics.threeDartAverage(records), kind: .average),
+                       whenThereIsNothing: nothingThrown),
+            forTheWeek(StatPresentation.line("Best leg", Statistics.bestLegInVisits(records), kind: .count),
+                       whenThereIsNothing: "No leg has been won on this phone in the last seven days."),
+            forTheWeek(StatPresentation.line("180s", Statistics.maximums(records), kind: .count),
+                       whenThereIsNothing: nothingThrown),
         ]
         return Week(matches: recent.count, legs: legs, unreadable: unreadable,
                     figures: figures, quietWeek: recent.isEmpty && !all.isEmpty)
+    }
+
+    /// A figure the week cannot give, said in the week's own words (PD-183).
+    ///
+    /// **The audited layer's reasons are written for a match and a player**, which is right where
+    /// they are read — on a result screen and on somebody's own page. This strip is neither. It is
+    /// seven days of every match on the phone with both players' darts in it, and the footnote under
+    /// it says so; carrying the layer's wording up here made Home tell a player with an empty phone
+    /// that "no visits have been recorded for **this match**" and that "**this player** has not won
+    /// a leg". There is no such match and no such player, and that is the first sentence THRØ ever
+    /// says to anybody.
+    ///
+    /// The numbers are still the audited layer's, untouched. Only the sentence belongs to the caller
+    /// that knows what it is summarising.
+    private static func forTheWeek(_ line: StatLine, whenThereIsNothing reason: String) -> StatLine {
+        guard line.confidence == .unavailable else { return line }
+        return StatLine(label: line.label, value: line.value, note: reason, confidence: .unavailable)
     }
 }
 

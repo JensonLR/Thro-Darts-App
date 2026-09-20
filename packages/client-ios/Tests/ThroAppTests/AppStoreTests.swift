@@ -362,4 +362,92 @@ final class AppStoreTests: XCTestCase {
         let store = AppStore(journal: try journal())
         XCTAssertNoThrow(try store.exportEverything(clubs: nil), "nothing to add is not a failure")
     }
+
+    // MARK: - Home says it once, and says it about the right thing (PD-183)
+
+    /// **Home's empty state tells a new player about a match that does not exist.**
+    ///
+    /// The week strip's figures come from the audited `Statistics` layer, which is right, and it
+    /// carries that layer's *wording*, which is not: a figure with nothing behind it says "No visits
+    /// have been recorded for **this match** yet" and "**This player** has not won a leg". The strip
+    /// is neither. It is seven days of every match on the phone, with both players' darts in it —
+    /// which the footnote under it says in so many words.
+    ///
+    /// This is the first screen of the app in the state every new player sees it in, so it is the
+    /// first thing THRØ ever says to anybody, and it is about a match they have not played.
+    func testTheWeekNeverTalksAboutAMatchOrAPlayer() throws {
+        let j = try journal()
+        for week in [try DeviceSummary.week(in: j, now: Date(timeIntervalSince1970: 1_000_000)),
+                     try quietWeek(j)] {
+            for figure in week.figures {
+                guard let note = figure.note else { continue }
+                XCTAssertFalse(note.lowercased().contains("this match"),
+                               "\(figure.label): \(note)")
+                XCTAssertFalse(note.lowercased().contains("this player"),
+                               "\(figure.label): \(note)")
+            }
+        }
+    }
+
+    /// And what it says instead names the two things that make it honest: the phone, and the window.
+    func testTheWeekSaysWhoseDartsAndHowLongAgo() throws {
+        let j = try journal()
+        let week = try DeviceSummary.week(in: j, now: Date(timeIntervalSince1970: 1_000_000))
+        let unavailable = week.figures.filter { $0.confidence == .unavailable }
+        XCTAssertFalse(unavailable.isEmpty, "an empty phone has figures it cannot give")
+        for figure in unavailable {
+            let note = figure.note ?? ""
+            XCTAssertTrue(note.contains("phone"), "\(figure.label): \(note)")
+            XCTAssertTrue(note.contains("seven days"), "\(figure.label): \(note)")
+        }
+    }
+
+    private func quietWeek(_ j: Journal) throws -> DeviceSummary.Week {
+        let now = Date(timeIntervalSince1970: 2_000_000)
+        let old = try j.createMatch(NewMatch(homeName: "Ann", awayName: "Ben"),
+                                    startedAt: now.addingTimeInterval(-30 * 86_400))
+        try j.append(.visit(Seat.home.playerId, 180), to: old.id)
+        return try DeviceSummary.week(in: j, now: now)
+    }
+
+    /// **Home states the week twice.** The masthead, under the wordmark, says "3 matches · 9 legs
+    /// this week". A hundred and sixty points below it, the section header says "LAST 7 DAYS · 3
+    /// matches · 9 legs". On an empty phone they are "Nothing in the last seven days" and "nothing
+    /// yet". One fact, two places, every time — and the second one is the one nobody needs, because
+    /// the figures are right underneath it.
+    func testHomeStatesTheWeekExactlyOnce() {
+        for (matches, legs) in [(0, 0), (1, 0), (1, 3), (3, 9)] {
+            let week = DeviceSummary.Week(matches: matches, legs: legs, unreadable: 0,
+                                          figures: [], quietWeek: matches == 0)
+            let lines = [HomeScreen.masthead(week: week, hasHistory: true, openProblem: nil),
+                         WeekStrip.meta(for: week)].compactMap { $0 }
+            let stating = lines.filter { $0.lowercased().contains("match") || $0.lowercased().contains("nothing") }
+            XCTAssertEqual(stating.count, 1,
+                           "the week is stated \(stating.count) times: \(stating)")
+        }
+    }
+
+    /// **Play shows the same match twice, eight hundred points apart.** The card at the top offers
+    /// to continue it; "Lately", below, lists it again with an IN PROGRESS badge. Both rows resume
+    /// the same match. A list of what you played lately should not include the one you are playing
+    /// now and have just been offered.
+    func testPlayDoesNotListTheMatchItHasAlreadyOffered() throws {
+        let j = try journal()
+        let now = Date(timeIntervalSince1970: 1_000_000)
+        let running = try j.createMatch(NewMatch(homeName: "Cara", awayName: "Dai"), startedAt: now)
+        let older = try j.createMatch(NewMatch(homeName: "Ann", awayName: "Ben"),
+                                      startedAt: now.addingTimeInterval(-3600))
+        let store = AppStore(journal: j)
+        let offered = store.matches.first { $0.id == running.id }
+        XCTAssertNotNil(offered, "the running match is on the phone")
+        let lately = PlayLandingScreen.lately(store.matches, offering: offered)
+        XCTAssertFalse(lately.contains { $0.id == running.id },
+                       "Lately lists the match the card above already offers")
+        XCTAssertTrue(lately.contains { $0.id == older.id }, "and still lists the rest")
+
+        // And with nothing else on the phone the section has nothing to be: taking the running match
+        // out left a "LATELY" heading with a blank under it, which Play now does not draw at all.
+        XCTAssertTrue(PlayLandingScreen.lately([offered!], offering: offered).isEmpty,
+                      "a heading with nothing under it")
+    }
 }
