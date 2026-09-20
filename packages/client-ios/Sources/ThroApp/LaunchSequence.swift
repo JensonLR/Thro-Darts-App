@@ -100,15 +100,17 @@ public struct LaunchTimeline: Equatable, Sendable {
     /// the first frame: no flight, no strike, no dust, no pulse, no cue.
     public var isAnimated: Bool { flight.duration > 0 }
 
-    /// Sound and haptic cues, by name and time: the whoosh with the flight, the thud and the heavy haptic
-    /// at the strike, the chalk with the ring, a firm stamp as each letter lands. None under Reduce
-    /// Motion: no motion, nothing to score.
+    /// Sound and haptic cues, by name, time and length: the whoosh with the flight, the thud and the
+    /// heavy haptic at the strike, the chalk with the ring, the room the strike wakes up and which
+    /// carries the rest of the film, and a firm stamp as each letter lands. None under Reduce Motion:
+    /// no motion, nothing to score.
     public var cues: [LaunchCue] {
         guard isAnimated else { return [] }
-        var cues = [LaunchCue(name: "whoosh", at: flight.start),
-                    LaunchCue(name: "thud", at: impact.start),
+        var cues = [LaunchCue(name: "whoosh", at: flight.start, seconds: OpeningSounds.seconds["whoosh"]!),
+                    LaunchCue(name: "thud", at: impact.start, seconds: OpeningSounds.seconds["thud"]!),
                     LaunchCue(name: "haptic", at: impact.start),
-                    LaunchCue(name: "chalk", at: ring.start)]
+                    LaunchCue(name: "chalk", at: ring.start, seconds: OpeningSounds.seconds["chalk"]!),
+                    LaunchCue(name: "room", at: impact.start, seconds: OpeningSounds.seconds["room"]!)]
         for fraction in Self.stampFractions {
             cues.append(LaunchCue(name: "stamp", at: word.start + fraction * word.duration))
         }
@@ -123,9 +125,40 @@ public struct LaunchTimeline: Equatable, Sendable {
     }
 }
 
+/// How long each of the opening's sounds runs, and why.
+///
+/// It is a table rather than four numbers scattered through a synthesiser because it has to agree with
+/// three other things: the timeline that schedules the cues, the Python that renders the files, and the
+/// files themselves. Two tests hold the first, and `tools/check_opening_sounds.py` holds the other two
+/// by reading this table out of the source and the lengths out of the WAV headers.
+///
+/// **The whoosh is here because it had already drifted.** It was rendered at 1.2 s with a docstring
+/// saying *"the tracking shot's length"*; the tracking shot became 1.4 s and the sound did not, so the
+/// air had been running out two tenths of a second before the dart landed — under the loudest-looking
+/// part of the film.
+public enum OpeningSounds {
+    public static let seconds: [String: Double] = [
+        "whoosh": 1.40,   // the flight, exactly: 1.68 − 0.28
+        "thud": 0.75,
+        "chalk": 0.80,
+        "room": 3.18,     // the strike to the end of the cross-fade: 4.86 − 1.68
+    ]
+}
+
 public struct LaunchCue: Equatable, Sendable {
     public let name: String
     public let at: Double
+    /// How long this cue sounds for. Zero is a touch rather than a sound — a haptic has no length
+    /// anybody hears. It is here so that *"is the film silent through its own ending?"* is a question
+    /// something can answer, and `tools/check_opening_sounds.py` holds each of these against the
+    /// length of the file it names, so the score cannot drift away from the film again.
+    public let seconds: Double
+
+    public init(name: String, at: Double, seconds: Double = 0) {
+        self.name = name
+        self.at = at
+        self.seconds = seconds
+    }
 }
 
 // `Easing` and `MarkGeometry` moved to `ThroDesign/Geometry.swift` (SLATE B.0): the token

@@ -237,6 +237,14 @@ jobs:
       - name: The wall can be given a screen
         run: python3 tools/check_scene_manifest.py
 
+      # And the opening's score against the opening. A sound's length lived in a Python default
+      # argument and the film's length in a Swift array of cut points, and nothing looked at both:
+      # the flight grew from 1.2 s to 1.4 and the whoosh did not, so the air ran out two tenths of a
+      # second before the dart landed. Four things have to agree — the film, the synthesiser, the
+      # files on disk and the list the app loads — and now they are held together.
+      - name: The opening's score is as long as the opening
+        run: python3 tools/check_opening_sounds.py
+
       # And the type, read from the font files rather than from their names. A face that does not
       # register does not raise: iOS falls back, every screen still draws, and the app looks like
       # every other app — the founder's "no generic slop anywhere" arriving as a build problem. The

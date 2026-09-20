@@ -6,12 +6,14 @@ import ThroDesign
 public enum OpeningPreferences {
     public static let soundKey = "thro.openingSound"
     public static let hapticsKey = "thro.openingHaptics"
-    /// The three sounds the app bundle carries, synthesised by docs/design/brand/render_sounds.py and
+    /// The four sounds the app bundle carries, synthesised by docs/design/brand/render_sounds.py and
     /// meant to be replaced by recorded foley under the same names.
-    public static let soundFiles = ["thro-whoosh", "thro-thud", "thro-chalk"]
+    public static let soundFiles = ["thro-whoosh", "thro-thud", "thro-chalk", "thro-room"]
 }
 
-/// Scores the opening: a whoosh for the flight, a thud for the dart in the board, chalk for the ring;
+/// Scores the opening: a whoosh for the flight, a thud for the dart in the board, chalk for the ring,
+/// and the room the strike wakes up — which is what carries the name, the tagline and the hold, and
+/// what the film used to play in silence;
 /// one heavy haptic at the strike and a firm one as each letter of the name lands. Sound plays through the ambient session, so the phone's silent
 /// switch silences it and other audio keeps playing. A bundle without the files stays silent.
 final class LaunchSoundtrack {

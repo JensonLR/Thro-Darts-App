@@ -831,4 +831,56 @@ extension DartInkTests {
                            "\(screen.name) is not where it was")
         }
     }
+
+    // MARK: - The score (PD-182)
+
+    /// **The film goes silent through its own climax.**
+    ///
+    /// The chalk scratch ends at 2.86 s. The name assembles at 2.58, the letters are struck between
+    /// 2.97 and 3.15 with a haptic each and no sound, the tagline tracks in at 3.42, and then the
+    /// picture holds for a full second. Two seconds of a five-second title sequence — the whole of its
+    /// resolution — play in silence, which is the one thing a title sequence cannot do: the pictures
+    /// say *this is the world stage* and the room says nothing at all.
+    ///
+    /// Cues carry how long they sound for now, so this can be asked at all, and the question is the
+    /// honest one: walking the film from the first sound to the cross-fade, how long is the longest
+    /// stretch with nothing in it?
+    func testTheFilmIsNeverSilentThroughItsOwnClimax() {
+        let t = LaunchTimeline.standard
+        let sounds = t.cues.filter { $0.seconds > 0 }
+        XCTAssertFalse(sounds.isEmpty)
+        var longest = (from: 0.0, seconds: 0.0)
+        var quietSince: Double? = nil
+        var at = t.flight.start
+        while at <= t.finishAt {
+            let heard = sounds.contains { at >= $0.at && at < $0.at + $0.seconds }
+            if heard {
+                if let since = quietSince, at - since > longest.seconds { longest = (since, at - since) }
+                quietSince = nil
+            } else if quietSince == nil {
+                quietSince = at
+            }
+            at += 0.005
+        }
+        if let since = quietSince, t.finishAt - since > longest.seconds {
+            longest = (since, t.finishAt - since)
+        }
+        XCTAssertLessThan(longest.seconds, 0.45,
+                          String(format: "the film is silent for %.2f s from %.2f s",
+                                 longest.seconds, longest.from))
+    }
+
+    /// And the air runs out before the dart lands.
+    ///
+    /// `whoosh()` was written at 1.2 seconds and its own docstring says why — *"the tracking shot's
+    /// length"*. The tracking shot is 1.4 seconds: the flight segment grew and the sound did not. Its
+    /// envelope swells and is cut at the end precisely so that the cut lands on the thud, and instead
+    /// it has been cutting **200 milliseconds early** and leaving the last stretch of the throw in
+    /// silence — the loudest-looking part of the film, with nothing on it.
+    func testTheAirLastsAsLongAsTheThrow() {
+        let t = LaunchTimeline.standard
+        let whoosh = t.cues.first { $0.name == "whoosh" }!
+        XCTAssertEqual(whoosh.at + whoosh.seconds, t.impact.start, accuracy: 1e-9,
+                       "the air stops before the dart does")
+    }
 }

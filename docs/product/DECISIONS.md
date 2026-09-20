@@ -7428,3 +7428,46 @@ from the implementation. It was 2.28 apart before and is within a rounding error
 **Evidence.** 932 app tests. Looked at on an iPad Pro 13-inch simulator at 1.10 and 3.60: the wordmark
 now spans two thirds of the width with the beam coming down onto it, where before it was a small card
 in the middle.
+
+## PD-182 — The room the strike wakes up
+
+Two faults in the score, and the second one had been there long enough that nobody remembered it.
+
+**The film went silent through its own ending.** The chalk scratch stops at 2.86 s. After that: the
+three letters are struck in with a haptic each and no sound, the tagline tracks in, and the picture
+holds for a full second. That is **two seconds of a five-second title sequence** — all of its
+resolution — playing with the room switched off, while the line on screen promises the world stage.
+
+**And the air ran out before the dart landed.** `whoosh()` was rendered at 1.2 seconds, and its own
+docstring gave the reason: *"the tracking shot's length"*. The tracking shot is 1.4 seconds. The flight
+segment grew and the sound did not, so the whoosh — whose envelope swells and is cut at the end
+precisely so the cut lands on the thud — had been cutting **200 ms early**, leaving the last stretch of
+the throw silent. Nothing could have caught it. A sound's length lived in a Python default argument,
+the film's length lived in a Swift array of cut points, and no third thing looked at both.
+
+### What was added
+
+`room`, 3.18 seconds, starting **on the strike** — because that is what wakes a room up, not the name.
+It is not a sting and not a chord: it is what a dart into sisal actually leaves behind, a low bed with
+two long resonances in it, a quiet band of air above them, a slow swell over the first 350 ms and a
+fall away across the last fifth so the hand-over to Home is into silence rather than off a cliff. It
+sits at −21 dB, well under everything, because a bed that announces itself is a sting.
+
+Under it the gap closes completely: whoosh 0.28–1.68, thud 1.68–2.43, chalk 2.06–2.86, room 1.68–4.86.
+The longest silence between the first sound and the cross-fade is now zero, where it was two seconds.
+
+### And the score is held to the film
+
+`LaunchCue` carries how long it sounds for, which is what makes *"is the film ever silent?"* a question
+something can answer at all. Four things have to agree about a sound's length and
+`tools/check_opening_sounds.py` holds them together on every push: `OpeningSounds.seconds` in the
+Swift, `LENGTHS` in the renderer, **the WAV files' own headers** — because a synthesiser that is never
+re-run leaves yesterday's file next to today's number — and `OpeningPreferences.soundFiles`, the list
+the app actually loads. Two Swift tests hold the other end: that the whoosh's length **is** the flight
+segment rather than a number that happens to match it today, and that no stretch of the film is silent
+for longer than 0.45 s.
+
+**Not claimed: that it sounds good.** These are synthesised placeholders in the honest sense, and
+whether the room is the right room needs the founder and a pair of speakers. What is claimed is that
+the hole is closed, that the lengths cannot drift again, and that the app carries the file — checked in
+the built bundle rather than assumed from the project file.

@@ -6658,3 +6658,12 @@ their own rate in the air. `Tune.shakeSeconds` is gone. Tests +3 (930), all thre
 cap that was dead code on every iPhone and shrank the title card to a third of its size on an iPad. 0.48 is the
 largest factor that moves no iPhone, held by a test at all four sizes. A second defect fell out: on a short wide
 window the old cap made the mark wider than the height allowed. Tests +2 (932).
+
+## The room the strike wakes up (PD-182)
+
+`render_sounds.py`: new `room()` — a low bed with two resonances, swelling on the strike and falling away under the
+cross-fade, at −21 dB. `LaunchCue` gains `seconds`; new `OpeningSounds.seconds` is the one table the film, the
+renderer, the files and the loader all agree with, held by `tools/check_opening_sounds.py` on every push. The whoosh
+goes from 1.2 s to 1.4 — it was rendered for a flight that had since grown, and stopped 200 ms before the dart
+landed. The film's longest silence between the first sound and the cross-fade falls from 2.00 s to zero. Tests +2
+(934); the new check is wired into domain-spec.
