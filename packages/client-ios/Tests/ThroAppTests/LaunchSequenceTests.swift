@@ -629,4 +629,78 @@ extension DartInkTests {
             XCTAssertGreaterThan(Throw.reach(b), Throw.reach(a), "it never goes backwards")
         }
     }
+
+    // MARK: - The barrel's material (PD-178)
+
+    /// WCAG 2.x, the same arithmetic the design system's `AccentBranding` uses. Repeated here rather
+    /// than imported because these are fixed sRGB colours and that one takes the token layer.
+    private func luminance(_ colour: Color) -> Double {
+        let r = colour.resolve(in: EnvironmentValues())
+        func channel(_ v: Float) -> Double {
+            let d = Double(v)
+            return d <= 0.03928 ? d / 12.92 : pow((d + 0.055) / 1.055, 2.4)
+        }
+        return 0.2126 * channel(r.red) + 0.7152 * channel(r.green) + 0.0722 * channel(r.blue)
+    }
+
+    private func contrast(_ a: Color, _ b: Color) -> Double {
+        let (la, lb) = (luminance(a), luminance(b))
+        return (max(la, lb) + 0.05) / (min(la, lb) + 0.05)
+    }
+
+    /// **A highlight nobody can see is a flat shape.** The barrel was filled in chalk (#F7F6F2) with
+    /// a highlight stroked along it in chalk-raised (#FFFFFF): four values apart in eight bits, a
+    /// contrast ratio of 1.08:1. That is not a machined cylinder catching a stage lamp, it is a white
+    /// rectangle, and no amount of camera work rescues a sprite.
+    ///
+    /// A cylinder has a range. This asks for one — not a specific palette, just that the darkest
+    /// thing on the barrel and the brightest are far enough apart to read as the same object turning
+    /// away from a light.
+    func testTheBarrelIsMadeOfSomethingRatherThanNothing() {
+        let stops = BarrelMaterial.across(morph: 0)
+        let darkest = stops.min { luminance($0.color) < luminance($1.color) }!.color
+        let brightest = stops.max { luminance($0.color) < luminance($1.color) }!.color
+        XCTAssertGreaterThan(contrast(brightest, darkest), 2.5,
+                             "the barrel has no tonal range — it is a white shape, not a cylinder")
+    }
+
+    /// The shaft takes the same light at less of it. Both halves of that matter: a shaft with no
+    /// range is the flat stick the barrel's new material made obvious, and a shaft with the barrel's
+    /// full range is nylon pretending to be tungsten.
+    func testTheShaftIsLitLikeTheBarrelButIsNotMadeOfIt() {
+        func range(_ stops: [Gradient.Stop]) -> Double {
+            let d = stops.min { luminance($0.color) < luminance($1.color) }!.color
+            let b = stops.max { luminance($0.color) < luminance($1.color) }!.color
+            return contrast(b, d)
+        }
+        let shaft = range(BarrelMaterial.across(morph: 0, gloss: 0.66))
+        XCTAssertGreaterThan(shaft, 1.6, "the shaft is a flat white stick")
+        XCTAssertLessThan(shaft, range(BarrelMaterial.across(morph: 0)), "the shaft is not tungsten")
+    }
+
+    /// And it still resolves. The ring's band is pure chalk, so anything darker laid across it shows
+    /// as a grey line through the Ø — which is the seam the founder saw, and the reason the dart's
+    /// material resolves with the dart rather than outlasting it.
+    func testTheBarrelResolvesIntoTheBarWithoutASeam() {
+        for stop in BarrelMaterial.across(morph: 1) {
+            XCTAssertEqual(contrast(stop.color, BarrelMaterial.chalk), 1.0, accuracy: 0.001,
+                           "a stop that is not chalk at full morph is a line through the Ø")
+        }
+    }
+
+    /// The glint must travel. A highlight painted at a fixed place on a barrel is a decal: it says
+    /// the dart is a picture of a dart. It moves because the angle between a cylinder and its light
+    /// changes as the cylinder crosses the room, and in this film both of them are moving.
+    func testTheGlintTravelsAlongTheBarrel() {
+        let axis = CGVector(dx: cos(-Double.pi / 4), dy: sin(-Double.pi / 4))
+        // The dart's barrel walking its own path up the frame, against a lamp above the middle.
+        let light = CGPoint(x: 201, y: 262)
+        let seen = stride(from: 0.0, through: 1.0, by: 0.1).map { u -> Double in
+            let at = CGPoint(x: 40 + 220 * u, y: 700 - 400 * u)
+            return BarrelMaterial.glint(axis: axis, from: at, toLight: light)
+        }
+        for g in seen { XCTAssertTrue(g >= 0 && g <= 1, "the glint left the barrel: \(g)") }
+        XCTAssertGreaterThan(seen.max()! - seen.min()!, 0.30,
+                             "the glint barely moves across the whole throw — it is a decal")
+    }
 }

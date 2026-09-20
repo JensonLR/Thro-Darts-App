@@ -7254,3 +7254,48 @@ runs: `cgImage` memoises, so it timed the drawing once and a cache lookup twice,
 the entire film as costing **0.00 ms** while passing both ceilings. There is a floor assertion now — the
 film must cost at least half a millisecond more than an empty canvas — because a ceiling cannot tell a
 fast frame from a frame that was never drawn.
+
+## PD-178 — A barrel made of something
+
+The dart was a white shape. Not a badly lit one — an unlit one.
+
+The barrel was filled flat in chalk (#F7F6F2) with a highlight stroked along it in chalk-raised
+(#FFFFFF). Those are four values apart in eight bits: a contrast ratio of **1.08:1**, which is to say a
+highlight that is not there. Everything else in the film had been made cinematic around an object that
+was, at the centre of every frame of the flight, a white rectangle with lines on it. No camera move
+rescues that.
+
+**A cylinder has a range**, and `BarrelMaterial.across` is that range, laid across the barrel's short
+axis: a rim turned away from the light, a lit flank, a specular line, a terminator, and a near rim
+lifted by what comes back off the board. Pewter-light, chalk, chalk-raised, chalk-hairline and pewter —
+all of them the palette's own, none of them new. Darkest to brightest is **4.3:1**.
+
+**And the shaft, at two thirds of it.** This was not planned and was not optional: the first look at the
+finished barrel showed a machined cylinder with a flat white stick bolted to the back of it, and the
+stick was now the thing the eye went to. `gloss` takes each stop toward chalk, so one ramp serves both
+and nylon does not pretend to be tungsten.
+
+**A glint that travels.** `BarrelMaterial.glint` puts the highlight where the lamp actually is —
+forward by the point while the lamp is ahead of the dart, running back toward the flights as the dart
+draws level. A highlight painted at a fixed place on a barrel is a decal; it says the dart is a picture
+of a dart. This one moves because the dart and the lamp are both moving, and it is computed from their
+two positions rather than from the clock.
+
+**The first blend mode in this client.** The glint is `.plusLighter`, clipped to the barrel, because a
+specular is light arriving rather than paint applied: added to what is under it, the grooves and the
+knurl show *through* the highlight the way they do on a real barrel. `.normal` would have wiped them.
+
+**It resolves.** Every stop mixes toward chalk with the same `morph` the rest of the dart uses, so at
+full morph the whole silhouette is one colour and there is no grey line through the Ø. That invariant
+has a test of its own, and it is the reason the material is a function of morph rather than a constant.
+
+**It costs nothing measurable**, which was decided before it was written rather than discovered after.
+PD-177's bench said the dearest frames are the flight's, where the dart is drawn **fifteen times** —
+one sharp and fourteen smear copies. The smear copies are already drawn `shaded: false`, so the
+gradients and the glint went in the same branch as the grooves. Fifteen-dart frames are still fifteen
+plain silhouettes; the material lands on the one dart anybody can see. Measured after: 2.0 yardsticks a
+frame before, 2.0 after.
+
+**Evidence.** 927 app tests. Looked at on iPhone 17 Pro at 1.10 and 1.60, at full resolution and
+magnified: the knurl now reads as rings cut into something round, the collar reads as a separate part,
+and the point carries the lamp.

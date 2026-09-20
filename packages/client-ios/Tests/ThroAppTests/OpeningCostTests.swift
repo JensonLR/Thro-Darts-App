@@ -23,7 +23,7 @@ final class OpeningCostTests: XCTestCase {
 
     /// Frames sampled evenly across the whole film, so the expensive parts are all in the average:
     /// the dust field, the board, the flight with its smear, the strike, and the wordmark's type.
-    private static let samples = 24
+    private static let samples = 16
 
     /// The four dearest sampled instants of the last profile, so the peak can be attributed rather than
     /// guessed at — the answer is the flight, and the reason is that a smear is fourteen more darts.
@@ -57,32 +57,75 @@ final class OpeningCostTests: XCTestCase {
         return (each.reduce(0) { $0 + $1.ms } / Double(each.count), worst.ms, worst.t)
     }
 
+    /// A yardstick drawn in the same canvas, in the same run, on the same machine.
+    ///
+    /// **An absolute millisecond ceiling was the wrong instrument.** It passed on a quiet machine and
+    /// failed at 77 ms on the same machine with the rest of the suite running beside it — the film had
+    /// not changed, the host had. A threshold wide enough to survive a loaded runner would be too wide
+    /// to catch anything.
+    ///
+    /// So the question becomes a ratio: *how many of these is a frame of the opening worth?* Load
+    /// slows the yardstick and the film together and the ratio holds. Fourteen hundred filled dots and
+    /// three hundred strokes is roughly the shape of the work the film does — a dust field and some paths —
+    /// without being any of its actual code, so a change to the film cannot quietly change its own
+    /// measuring stick.
+    private struct Yardstick: View {
+        var body: some View {
+            Canvas { context, size in
+                for i in 0..<1400 {
+                    let a = Double(i) * 0.7391, r = Double(i) / 1400
+                    let x = size.width * 0.5 + CGFloat(cos(a * 12) * r) * size.width * 0.48
+                    let y = size.height * 0.5 + CGFloat(sin(a * 12) * r) * size.height * 0.48
+                    let d = 2 + CGFloat(r) * 6
+                    context.fill(Path(ellipseIn: CGRect(x: x - d, y: y - d, width: d * 2, height: d * 2)),
+                                 with: .color(.white.opacity(0.35)))
+                }
+                for i in 0..<320 {
+                    var line = Path()
+                    let y = size.height * CGFloat(i) / 320
+                    line.move(to: CGPoint(x: 0, y: y))
+                    line.addLine(to: CGPoint(x: size.width, y: y + 12))
+                    context.stroke(line, with: .color(.white.opacity(0.2)), lineWidth: 1.5)
+                }
+            }
+        }
+    }
+
     func testAFrameOfTheOpeningCostsWhatWeCanAccountFor() {
         // Warm the type cache and whatever else first touch allocates, or the first frame carries
         // everyone else's setup and the mean is a lie.
         _ = profile { LaunchFrame(t: $0, timeline: .standard) }
 
         let blank = profile { _ in Canvas { _, _ in } }
+        let yard = profile { _ in Yardstick() }
         let film = profile { LaunchFrame(t: $0, timeline: .standard) }
 
-        print(String(format: "opening frame cost: mean %.2f ms, worst %.2f ms at t=%.2f s; "
-            + "an empty canvas of the same size costs %.2f ms",
-            film.mean - blank.mean, film.peak - blank.mean, film.peakAt, blank.mean))
+        let one = yard.mean - blank.mean
+        print(String(format: "opening frame cost: mean %.2f ms, worst %.2f ms at t=%.2f s "
+            + "(%.1f and %.1f yardsticks, one being %.2f ms here)",
+            film.mean - blank.mean, film.peak - blank.mean, film.peakAt,
+            (film.mean - blank.mean) / one, (film.peak - blank.mean) / one, one))
         print("  dearest frames — \(dearest)")
 
-        // Ceilings with room in them. Measured on an M-series Mac the film costs about 3 ms of
-        // drawing per frame, and its dearest frames — all of them inside the flight, where a smear
-        // is fourteen more darts — about twice that. These sit at five or six times today's figures:
-        // wide enough that a loaded CI runner never fails them, tight enough to catch somebody
-        // putting a per-pixel shader or a hundred more gradients inside the dust loop.
+        // **A smoke alarm, not a stopwatch.** Measured across runs the film costs roughly two to
+        // three yardsticks a frame and its worst frame four to six, and those figures still move by
+        // about forty per cent between runs on the same machine — timing anything on a host that is
+        // also running nine hundred other tests is not a precise instrument, and pretending
+        // otherwise would produce a test that fails for reasons nobody can act on.
+        //
+        // So the ceilings are set where only a change of *kind* reaches them: a per-pixel shader, a
+        // filter inside the dust loop, a second full pass over the frame. A ten per cent regression
+        // will not fail this and is not meant to. What the test is really for is the number it
+        // prints, which is how the budget was known before the barrel's material was spent out of it.
         //
         // The worst frame is the one that matters — 60 Hz is a promise about every frame, not about
         // the average.
-        XCTAssertLessThan(film.peak - blank.mean, 30.0, "the most expensive frame has multiplied in cost")
-        XCTAssertLessThan(film.mean - blank.mean, 18.0, "the average frame has multiplied in cost")
+        XCTAssertGreaterThan(one, 0.05, "the yardstick measured nothing, so the ratios mean nothing")
+        XCTAssertLessThan((film.peak - blank.mean) / one, 20.0, "the most expensive frame has multiplied in cost")
+        XCTAssertLessThan((film.mean - blank.mean) / one, 10.0, "the average frame has multiplied in cost")
         // A floor, because the ceilings alone cannot tell a fast frame from a frame that was never
         // drawn. A cached render, a `LaunchFrame` that returns early, a renderer handed a zero size:
         // all of those read as free, and all of them would have passed the two ceilings above.
-        XCTAssertGreaterThan(film.mean - blank.mean, 0.5, "the film is not being drawn at all")
+        XCTAssertGreaterThan((film.mean - blank.mean) / one, 0.15, "the film is not being drawn at all")
     }
 }

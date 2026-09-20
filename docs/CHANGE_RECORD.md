@@ -6618,3 +6618,12 @@ empty canvas of the same size. About 3 ms of drawing per frame on an M-series Ma
 the flight, where the dart is drawn fifteen times. Ceilings at 30 ms peak and 18 ms mean as regression guards, and a
 floor at 0.5 ms because the first version reused one renderer, hit `cgImage`'s cache and reported the film as free.
 Tests +1 (923).
+
+## A barrel made of something (PD-178)
+
+`LaunchSequence.swift`: new `BarrelMaterial` — a cross-axis ramp for the barrel (4.3:1 darkest to brightest, against
+the 1.08:1 of chalk-with-a-white-line-on-it), the same ramp at `gloss: 0.66` for the shaft, and a glint whose place
+along the barrel is computed from where the lamp actually is. The glint is `.plusLighter` clipped to the barrel — the
+first blend mode in the client — so the knurl shows through it. All of it inside the `shaded` branch, so the fourteen
+smear copies are untouched and the frame cost is unchanged at 2.0 yardsticks. Every stop resolves to chalk with the
+dart's own morph. Tests +4 (927).

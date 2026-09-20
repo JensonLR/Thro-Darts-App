@@ -314,6 +314,87 @@ public enum DartInk {
     public static func material(_ morph: Double) -> Double { 1 - min(1, max(0, morph)) }
 }
 
+/// The barrel's material: tungsten, which is the one part of a dart that is not chalk.
+///
+/// **What was here was a 1.08:1 highlight.** The barrel was filled flat in chalk (#F7F6F2) and a
+/// highlight was stroked along it in chalk-raised (#FFFFFF) — four values apart in eight bits. A
+/// highlight nobody can see is a flat shape, and a flat shape is a sprite: no amount of camera work,
+/// motion blur or stage lighting rescues an object that does not turn away from its own light.
+///
+/// A cylinder has a range: a rim that faces away, a lit flank, a specular line, a terminator, and a
+/// near rim lifted by whatever bounces back off the board. These are those, across the barrel's short
+/// axis — and they resolve into chalk with the rest of the dart, because the ring's band is pure chalk
+/// and anything darker laid across it shows as a grey line through the Ø.
+public enum BarrelMaterial {
+    /// Fixed sRGB rather than the tokens, for the reason `AccentBranding` states in the design
+    /// system: an asset-catalogue colour cannot be resolved into components for arithmetic on every
+    /// platform, so a test that asks what this material's tonal range is would get black. It is also
+    /// the right kind of colour here — a dart inside a film that is always dark is a fixed-colour
+    /// surface, and a semantic token that flipped with the phone's appearance would be wrong on it.
+    /// The values are the palette's own.
+    private static let chalkRGB = (0xF7 / 255.0, 0xF6 / 255.0, 0xF2 / 255.0)
+    private static let raisedRGB = (1.0, 1.0, 1.0)
+    private static let hairlineRGB = (0xDF / 255.0, 0xDC / 255.0, 0xD3 / 255.0)
+    private static let pewterLightRGB = (0x9C / 255.0, 0xA2 / 255.0, 0x9F / 255.0)
+    private static let pewterRGB = (0x71 / 255.0, 0x78 / 255.0, 0x75 / 255.0)
+
+    public static let chalk = colour(chalkRGB)
+    public static let raised = colour(raisedRGB)
+    public static let hairline = colour(hairlineRGB)
+    public static let pewterLight = colour(pewterLightRGB)
+    public static let pewter = colour(pewterRGB)
+
+    private static func colour(_ c: (Double, Double, Double)) -> Color {
+        Color(.sRGB, red: c.0, green: c.1, blue: c.2)
+    }
+
+    /// Toward chalk by `m`, in sRGB. Written out rather than taken from `Color.mix`, which needs a
+    /// newer macOS than this package's tests run on.
+    private static func toChalk(_ c: (Double, Double, Double), _ m: Double) -> Color {
+        colour((c.0 + (chalkRGB.0 - c.0) * m,
+                c.1 + (chalkRGB.1 - c.1) * m,
+                c.2 + (chalkRGB.2 - c.2) * m))
+    }
+
+    /// A round part across its short axis, 0 at the rim turning away from the light and 1 at the rim
+    /// nearest the viewer. `morph` resolves every stop into chalk as the dart becomes the mark's bar.
+    ///
+    /// `gloss` is how much of the full tungsten range the part takes. The barrel is 1. The shaft is
+    /// less, and gets the same shape of light for the same reason it needs any: once the barrel is a
+    /// cylinder, a flat white stick bolted to the back of it is the thing the eye goes to.
+    public static func across(morph: Double, gloss: Double = 1) -> [Gradient.Stop] {
+        let g = min(1, max(0, gloss))
+        let m = 1 - g * (1 - min(1, max(0, morph)))
+        let ramp: [(Double, (Double, Double, Double))] = [
+            (0.00, pewterLightRGB),   // the far rim, turned away
+            (0.16, chalkRGB),         // the lit flank
+            (0.31, raisedRGB),        // the specular line
+            (0.52, chalkRGB),
+            (0.74, hairlineRGB),      // the terminator
+            (0.90, pewterRGB),        // the shadowed underside
+            (1.00, pewterLightRGB),   // and a rim lifted by what comes back off the board
+        ]
+        return ramp.map { .init(color: toChalk($0.1, m), location: $0.0) }
+    }
+
+    /// Where the glint sits along the barrel, 0 at the point end and 1 at the collar.
+    ///
+    /// A cylinder's highlight slides along it as the angle to the light changes, which is the single
+    /// thing that reads as *metal in motion* rather than as a white shape moving. A highlight painted
+    /// at a fixed place is a decal, and says the dart is a picture of a dart.
+    ///
+    /// `axis` points the way the dart is going. When the lamp is ahead of it the glint sits up by the
+    /// point; as the dart draws level and past, the glint runs back down the barrel toward the
+    /// flights. The dart crosses the whole frame toward a lamp that is itself travelling, so there is
+    /// a great deal of that angle to work with.
+    public static func glint(axis: CGVector, from barrel: CGPoint, toLight light: CGPoint) -> Double {
+        let dx = light.x - barrel.x, dy = light.y - barrel.y
+        let distance = max(1e-6, (dx * dx + dy * dy).squareRoot())
+        let along = Double((dx * axis.dx + dy * axis.dy) / distance)
+        return min(1, max(0, 0.5 - 0.46 * along))
+    }
+}
+
 public struct DartAnatomy: Equatable, Sendable {
     public static let point: CGFloat = 0.24
     public static let barrel: CGFloat = 0.30
@@ -1202,6 +1283,16 @@ struct LaunchFrame: View {
             }
             let parts = anatomy.parts(spin: 2 * Double.pi * Tune.rollTurns * tau, morph: morph)
             let fine = max(0.8, geo.unit * 0.004), groove = max(1.2, geo.unit * 0.007)
+            // Where the light is on the barrel. Computed once per frame from the scene rather than
+            // per copy of the dart, because it is the same light on all of them and because the only
+            // copy that carries a material is the sharp one.
+            let barrelMid = (anatomy.pointEnd + anatomy.barrelEnd) / 2
+            let glintAt = BarrelMaterial.glint(
+                axis: axis,
+                from: CGPoint(x: tipPoint.x + axis.dx * barrelMid, y: tipPoint.y + axis.dy * barrelMid),
+                toLight: lightC)
+            let barrelR = anatomy.barrelRadius(at: barrelMid, morph: morph)
+            let shaftR = (DartAnatomy.shaftHalf + (DartAnatomy.barHalf - DartAnatomy.shaftHalf) * morph) * geo.tipToTip
             // The dart at an alpha, offset along its own line; the shaft pivots where it meets the barrel and the
             // flights pivot again where they meet the shaft, a beat behind. `shaded` draws the material; a
             // `tint` draws the whole silhouette in one colour, which is what a shadow is.
@@ -1239,11 +1330,46 @@ struct LaunchFrame: View {
                     // `m` rather than `morph`: the grooves and the knurl are the darkest things on
                     // the dart, so they are the first that must not be over the ring.
                     let solid = alpha * (1 - m)
-                    d.fill(parts.shade, with: .color(ThroColor.throChalkHairline.opacity(0.95 * solid)))
+                    // **The barrel is a cylinder of tungsten**, so it is drawn as one: a rim turned
+                    // away, a lit flank, a specular line, a terminator, and a near rim lifted by what
+                    // comes back off the board. What was here — flat chalk with a white line stroked
+                    // along it — was a difference of four values in eight bits (PD-178).
+                    d.fill(parts.barrel, with: .linearGradient(
+                        Gradient(stops: BarrelMaterial.across(morph: m)),
+                        startPoint: CGPoint(x: 0, y: -barrelR), endPoint: CGPoint(x: 0, y: barrelR)))
+                    // And the shaft with it, at two thirds of the range — a nylon shaft is not
+                    // tungsten. It is here because the barrel made it necessary: a machined cylinder
+                    // with a flat white stick bolted to the back of it looks unfinished in a way the
+                    // flat white barrel never did.
+                    shaft.fill(parts.shaft, with: .linearGradient(
+                        Gradient(stops: BarrelMaterial.across(morph: m, gloss: 0.66)),
+                        startPoint: CGPoint(x: 0, y: -shaftR), endPoint: CGPoint(x: 0, y: shaftR)))
+                    // The flat shade band stays, at a third of its old weight: the gradient carries
+                    // the roundness now and this only deepens the terminator where the two agree.
+                    d.fill(parts.shade, with: .color(ThroColor.throChalkHairline.opacity(0.32 * solid)))
                     d.stroke(parts.highlight, with: .color(ThroColor.throChalkRaised.opacity(0.9 * solid)), style: StrokeStyle(lineWidth: fine, lineCap: .round))
                     d.stroke(parts.pointCore, with: .color(ThroColor.throChalkRaised.opacity(0.9 * solid)), style: StrokeStyle(lineWidth: fine, lineCap: .round))
                     d.stroke(parts.knurl, with: .color(ThroColor.throGreen.opacity(0.42 * solid)), lineWidth: max(0.7, geo.unit * 0.0035))
                     d.stroke(parts.grooves, with: .color(ThroColor.throInk.opacity(0.28 * solid)), lineWidth: groove)
+                    // The glint, where the lamp actually is on it, clipped to the barrel and added to
+                    // what is already there rather than painted over it. **This is the first blend
+                    // mode in the client**, and it is here because a specular is light arriving, not
+                    // paint: `.plusLighter` over the knurl lets the grooves show through the highlight
+                    // the way they do on a real barrel, where `.normal` would wipe them out.
+                    if solid > 0.01 {
+                        var g = d
+                        g.clip(to: parts.barrel)
+                        g.blendMode = .plusLighter
+                        let x = anatomy.pointEnd + (anatomy.barrelEnd - anatomy.pointEnd) * CGFloat(glintAt)
+                        let w = abs(anatomy.barrelEnd - anatomy.pointEnd) * 0.22
+                        let heart = CGPoint(x: x, y: -barrelR * 0.30)
+                        g.fill(Path(ellipseIn: CGRect(x: x - w, y: -barrelR * 1.2,
+                                                      width: w * 2, height: barrelR * 1.7)),
+                               with: .radialGradient(
+                                Gradient(colors: [ThroColor.throChalkRaised.opacity(0.36 * solid),
+                                                  ThroColor.throChalkRaised.opacity(0)]),
+                                center: heart, startRadius: 0, endRadius: w))
+                    }
                 }
                 flights.fill(parts.nearFlights, with: .color(chalk.opacity(chalked(0.97) * alpha)))
                 if shaded {
