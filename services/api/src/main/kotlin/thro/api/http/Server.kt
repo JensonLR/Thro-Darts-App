@@ -76,6 +76,8 @@ import thro.api.LeagueActs
 import thro.api.Relations
 import thro.api.Secretary
 import thro.api.VisitCommand
+import thro.api.Visits
+import thro.api.bustRuleOf
 import thro.authz.ObjectRef
 import thro.authz.ObjectType
 
@@ -388,7 +390,7 @@ public fun Application.thro(deps: Deps) {
         "openapi" to { _ -> Http(200, Contract.openApi()) },
         "commands" to { r ->
             // A visit is the match module's; everything else on this endpoint is organisational.
-            if (r.body.contains("\"RecordVisit\"")) r.role = DbRole.MATCH
+            if (r.body.contains("\"RecordVisit\"") || r.body.contains("\"RecordDarts\"")) r.role = DbRole.MATCH
             command(r.connection(), r.principal!!, r.call.request.headers["X-Thro-Device"], r.body)
         },
         "me.inbox" to { r -> Http(200, inboxJson(Secretary(r.connection()).inboxForPlayer(r.principal!!.subject, deps.now()))) },
@@ -1430,6 +1432,8 @@ private fun upload(c: Connection, deps: Deps, p: Principal, body: String): Http 
             outRule = OutRule.valueOf(fstr("outRule").uppercase()),
             legs = Structure(StructureMode.valueOf(fstr("legsMode").uppercase()), fint("legsTarget")),
             throwFirst = PlayerId(fstr("throwFirst")),
+            // Absent is the standard rule: every phone that sent a match before OD-023 played it.
+            bustRule = bustRuleOf(f["bustRule"]?.toString()),
         )
     } catch (e: Exception) {
         return Http(400, """{"error":${Contract.q("that match format is not one THRØ can read: " + (e.message ?: "unreadable"))}}""")
@@ -1446,6 +1450,9 @@ private fun upload(c: Connection, deps: Deps, p: Principal, body: String): Http 
             correctsSeq = (r["correctsSeq"] as? Number)?.toLong(),
             occurredAt = try { Instant.parse(r["occurredAt"] as? String ?: "") } catch (e: Exception) { throw IllegalArgumentException("occurredAt must be an instant") },
             occurredTz = r["occurredTz"] as? String ?: "Europe/London",
+            // A visit the phone recorded dart by dart (OD-023). A name that is not a dart is a 400 here;
+            // a dart that is not on the board is the engine's refusal, in the upload's sentence.
+            darts = r["darts"]?.let { Visits.parseDarts(it, "the darts of row ${r["deviceSeq"]}") },
         )
     } ?: return Http(400, """{"error":"rows is required"}""")
 
@@ -1473,7 +1480,17 @@ private fun command(c: Connection, principal: Principal, deviceHeader: String?, 
     fun intOrNull(k: String): Int? = m[k]?.let { int(k) }
     val commandId = uuid("commandId")
     return when (val type = m["type"]) {
-        "RecordVisit" -> {
+        "RecordVisit", "RecordDarts" -> {
+            // A visit given as darts (OD-023) carries no total and no dart counts: the engine derives them,
+            // and a body that sent them as well would be two accounts of one visit.
+            val darts = if (type == "RecordDarts") {
+                for (k in listOf("visitTotal", "dartsUsed", "dartsAtDouble")) {
+                    require(m[k] == null) { "a visit recorded as darts does not also carry $k: THRØ works it out from the darts" }
+                }
+                Visits.parseDarts(m["darts"])
+            } else {
+                null
+            }
             val matchId = uuid("matchId")
             // The role the evidence is annotated with is what the store knows about the caller:
             // a participant of the match, else the role their grant names, else a stranger's
@@ -1486,10 +1503,11 @@ private fun command(c: Connection, principal: Principal, deviceHeader: String?, 
                     commandId = commandId, matchId = matchId, deviceId = device,
                     deviceSeq = long("deviceSeq"),
                     actorId = principal.subject, actorRole = role, correlationId = UUID.randomUUID(),
-                    player = str(m, "player"), visitTotal = int("visitTotal"),
+                    player = str(m, "player"), visitTotal = if (darts == null) int("visitTotal") else null,
                     dartsUsed = intOrNull("dartsUsed"), dartsAtDouble = intOrNull("dartsAtDouble"),
                     occurredAt = str(m, "occurredAt"), occurredTz = (m["occurredTz"] as? String) ?: "Europe/London",
                     clientEffect = m["clientEffect"] as? String, engineVersion = (m["engineVersion"] as? String) ?: "unknown",
+                    darts = darts,
                 ),
             ),
             )

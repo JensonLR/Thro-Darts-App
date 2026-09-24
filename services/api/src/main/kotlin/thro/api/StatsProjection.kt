@@ -18,8 +18,8 @@ import thro.stats.VisitRecord
 /**
  * Turns one device's account of a match into the per-visit records the statistics layer consumes.
  *
- * The event payload carries what the scorer was told — the player, the visit total, and the two
- * optional dart counts. It does not carry the remaining before and after, or whether the visit
+ * The event payload carries what the scorer was told — the player and the visit total with its two
+ * optional dart counts, or since OD-023 the darts themselves. It does not carry the remaining before and after, or whether the visit
  * busted or won the leg, because those are **derived** facts and storing them would let a stored
  * copy disagree with the rules. They are recovered here the only honest way: by replaying the log
  * through the same engine that accepted it.
@@ -53,10 +53,7 @@ public class StatsProjection(private val connection: Connection) {
 
         connection.prepareStatement(
             """
-            SELECT payload->>'player' AS player,
-                   (payload->>'visitTotal')::int AS visit_total,
-                   payload->>'dartsUsed' AS darts_used,
-                   payload->>'dartsAtDouble' AS darts_at_double
+            SELECT payload::text
             FROM evidence.event
             WHERE match_id = ? AND device_id = ? AND event_type = 'VisitRecorded'
             ORDER BY device_seq
@@ -66,15 +63,23 @@ public class StatsProjection(private val connection: Connection) {
             ps.setObject(2, deviceId)
             ps.executeQuery().use { rs ->
                 while (rs.next()) {
-                    val player = PlayerId(rs.getString("player"))
-                    val total = rs.getInt("visit_total")
-                    val darts = rs.getString("darts_used")?.toIntOrNull()
-                    val atDouble = rs.getString("darts_at_double")?.toIntOrNull()
+                    val visit = Visits.commandOf(rs.getString(1)) ?: continue
+                    val player = when (visit) {
+                        is Command.RecordVisit -> visit.player
+                        is Command.RecordDarts -> visit.player
+                    }
 
                     val legBefore = state.currentLeg
-                    val before = state.remaining.getValue(player)
-                    val outcome = Engine.apply(state, Command.RecordVisit(player, total, darts, atDouble))
+                    val before = state.remaining[player] ?: continue
+                    val outcome = Engine.apply(state, visit)
                     if (outcome !is Outcome.Accepted) continue
+                    // What the visit amounted to is the engine's reading, not the payload's: a darts visit
+                    // carries no total of its own worth trusting, and under the keep rule a bust scores the
+                    // darts before the busting one — which only the reading says.
+                    val reading = outcome.reading
+                    val total = reading?.visitTotal ?: (visit as? Command.RecordVisit)?.visitTotal ?: continue
+                    val darts = reading?.dartsUsed ?: (visit as? Command.RecordVisit)?.dartsUsed
+                    val atDouble = reading?.dartsAtDouble ?: (visit as? Command.RecordVisit)?.dartsAtDouble
 
                     val key = player.value to legBefore
                     val visitOrdinal = (ordinals[key] ?: 0) + 1
@@ -88,10 +93,13 @@ public class StatsProjection(private val connection: Connection) {
                         dartsUsed = darts,
                         bust = bust,
                         remainingBefore = before,
-                        // a bust leaves the player where they started; a win takes them to zero
-                        remainingAfter = if (won) 0 else if (bust) before else before - total,
+                        // A win takes them to zero. Anything else leaves them where the engine put them —
+                        // not "where they started if it bust", which is the standard rule's answer and wrong
+                        // under a league that keeps the darts scored before the bust.
+                        remainingAfter = if (won) 0 else outcome.state.remaining.getValue(player),
                         wonLeg = won,
                         dartsAtDouble = atDouble,
+                        scored = reading?.scored,
                     ))
                     state = outcome.state
                 }

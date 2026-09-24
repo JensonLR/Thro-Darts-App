@@ -50,6 +50,12 @@ public class LeagueTable(private val connection: Connection) {
     /** Which rules ordered the table, and whose they are. Never absent from an answer. */
     public data class Rules(
         val policyId: UUID?, val version: Int?, val mine: Boolean, val says: String, val orderedBy: List<String>,
+        /**
+         * The numbers behind the sentence. The organiser's page sets a league's rules as a whole, so it needs
+         * every number in force to start from — without them, changing a tie-break reset a league's walkover
+         * value to THRØ's default, because the page had nothing to send back.
+         */
+        val policy: PointsPolicy = PointsPolicy.STANDARD,
     )
 
     public data class Table(
@@ -134,7 +140,7 @@ public class LeagueTable(private val connection: Connection) {
             throw Refused("This league's points rules cannot be applied: ${e.message}", 409)
         }
         return policy to Rules(found.first, found.second, mine = true, says = saysOf(policy),
-                               orderedBy = policy.chain.map(::stepName))
+                               orderedBy = policy.chain.map(::stepName), policy = policy)
     }
 
     private fun divisions(seasonId: UUID, only: UUID?): List<Triple<UUID?, String, Int?>> =
@@ -321,7 +327,11 @@ public class LeagueTable(private val connection: Connection) {
             // says which of the two it is leaves room for a third answer without changing the shape.
             """"version":${t.rules.version ?: "null"},"whose":${q(if (t.rules.mine) "league" else "thro")},""" +
             """"says":${q(t.rules.says)},""" +
-            """"orderedBy":[${t.rules.orderedBy.joinToString(",") { q(it) }}]},""" +
+            """"orderedBy":[${t.rules.orderedBy.joinToString(",") { q(it) }}],""" +
+            t.rules.policy.let { p ->
+                """"points":{"win":${p.win},"draw":${p.draw},"loss":${p.loss},"awarded":${p.awarded},""" +
+                    """"pointsPerLegWon":${p.perLegWon},"awardsCountAsPlayed":${p.awardsCountAsPlayed}}},"""
+            } +
             """"divisions":[$divisions]}"""
     }
 }

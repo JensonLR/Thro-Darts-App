@@ -1016,6 +1016,22 @@ r=$($PSQL -c "UPDATE safety.report SET addressed_to_system=true WHERE report_id=
 if echo "$r" | grep -qi 'a report is kept'; then ok "and nor can the owner, because a report is kept"
 else bad "and nor can the owner, because a report is kept" "${r:-a report was edited after it was raised}"; fi
 
+# V059 — a match says what a bust keeps (OD-023). A match opened without saying plays the standard rule, the match
+# role may open one under the local rule, and a rule THRØ does not play is refused rather than stored for the engine
+# to meet later.
+check "a match opened without a bust rule plays the standard one" "$($PSQL -c "SELECT bust_rule FROM evidence.match WHERE match_id='$M';")" "restore_visit"
+M59=$($PSQL -c "SELECT gen_random_uuid();")
+$PSQL -c "SET ROLE app_match; INSERT INTO evidence.match (match_id,home_id,away_id,starting_score,in_rule,out_rule,legs_mode,legs_target,throw_first,bust_rule)
+  VALUES ('$M59','$DA','$DB',501,'straight','double','first_to',3,'$DA','keep_scored_darts');" >/dev/null 2>&1
+check "and the match role may open one under the local rule" "$($PSQL -c "SELECT bust_rule FROM evidence.match WHERE match_id='$M59';")" "keep_scored_darts"
+r=$($PSQL -c "SET ROLE app_match; INSERT INTO evidence.match (match_id,home_id,away_id,starting_score,in_rule,out_rule,legs_mode,legs_target,throw_first,bust_rule)
+  VALUES (gen_random_uuid(),'$DA','$DB',501,'straight','double','first_to',3,'$DA','keep_everything');" 2>&1)
+if echo "$r" | grep -qi 'match_bust_rule_is_one_thro_plays'; then ok "a bust rule THRØ does not play is refused"
+else bad "a bust rule THRØ does not play is refused" "${r:-a match was opened under an unknown bust rule}"; fi
+r=$($PSQL -c "SET ROLE app_match; UPDATE evidence.match SET bust_rule='restore_visit' WHERE match_id='$M59';" 2>&1)
+if echo "$r" | grep -qi 'permission denied'; then ok "and the rule a match opened under is not changed afterwards"
+else bad "and the rule a match opened under is not changed afterwards" "${r:-the bust rule of a match was rewritten}"; fi
+
 echo
 echo "-------------------------------------------"
 echo "  $PASS passed, $FAIL failed"

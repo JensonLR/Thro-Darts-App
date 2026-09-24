@@ -4,7 +4,7 @@ import java.sql.Connection
 import java.time.Instant
 import java.util.UUID
 import thro.engine.Command
-import thro.engine.Effect
+import thro.engine.Dart
 import thro.engine.Engine
 import thro.engine.InRule
 import thro.engine.MatchFormat
@@ -33,7 +33,8 @@ public data class VisitCommand(
     val actorRole: String,
     val correlationId: UUID,
     val player: String,
-    val visitTotal: Int,
+    /** The visit's total. Null only on a visit given as [darts], whose total the engine derives. */
+    val visitTotal: Int?,
     val dartsUsed: Int?,
     /** Darts thrown at a double. Recorded on every visit that began on a finish, not only one that
      *  ended in one — see PD-001. Null means unknown, never zero. */
@@ -43,7 +44,24 @@ public data class VisitCommand(
     /** What the client's engine computed. Cross-checked, never trusted. */
     val clientEffect: String? = null,
     val engineVersion: String = "unknown",
-)
+    /**
+     * The darts thrown, in order (OD-023). When present the visit is a `RecordDarts` and [visitTotal], [dartsUsed]
+     * and [dartsAtDouble] are not read: the engine derives every one of them from the darts, so a client cannot
+     * send a total that contradicts its own darts.
+     */
+    val darts: List<Dart>? = null,
+) {
+    /** The engine command this is. */
+    public fun command(): Command = if (darts != null) {
+        Command.RecordDarts(PlayerId(player), darts)
+    } else {
+        Command.RecordVisit(
+            PlayerId(player),
+            requireNotNull(visitTotal) { "a visit is recorded as a total or as its darts, and this was neither" },
+            dartsUsed, dartsAtDouble,
+        )
+    }
+}
 
 public sealed interface CommandResult {
     public data class Applied(val effect: String, val reason: String?, val deviceSeq: Long) : CommandResult
@@ -63,7 +81,7 @@ public sealed interface CommandResult {
  * a different format would derive different remainings from the same events, and the figures would
  * disagree with the scoreboard that produced them.
  */
-internal fun playtestFormat(home: PlayerId = Seat.home): MatchFormat = MatchFormat(
+public fun playtestFormat(home: PlayerId = Seat.home): MatchFormat = MatchFormat(
     startingScore = 501,
     inRule = InRule.STRAIGHT,
     outRule = OutRule.DOUBLE,
@@ -142,18 +160,16 @@ public class CommandHandler(private val connection: Connection) {
             // 4. Rehydrate from the server's own log. The client's view is not consulted.
             val state = rehydrate(cmd.matchId, cmd.deviceId, match)
 
-            // 5. Revalidate through the same engine the client ran.
-            val outcome = Engine.apply(
-                state,
-                Command.RecordVisit(
-                    PlayerId(cmd.player), cmd.visitTotal, cmd.dartsUsed, cmd.dartsAtDouble,
-                ),
-            )
+            // 5. Revalidate through the same engine the client ran. A visit given as darts is
+            //    revalidated as darts: the engine decides what they scored, where they bust and how
+            //    many were thrown at a double, and that is what is stored.
+            val command = cmd.command()
+            val outcome = Engine.apply(state, command)
 
             val result = when (outcome) {
                 is Outcome.Rejected -> CommandResult.Refused(outcome.reason.name)
                 is Outcome.Accepted -> CommandResult.Applied(
-                    effect = effectName(outcome.effect),
+                    effect = Visits.effectName(outcome.effect),
                     reason = outcome.bustReason?.name,
                     deviceSeq = cmd.deviceSeq,
                 )
@@ -161,7 +177,7 @@ public class CommandHandler(private val connection: Connection) {
 
             // 6. A refusal is recorded as a receipt but produces no evidence: it did not happen.
             if (result is CommandResult.Applied) {
-                appendEvent(cmd, result, authority, grantId)
+                appendEvent(cmd, command, (outcome as Outcome.Accepted).reading, result, authority, grantId)
             }
             writeReceipt(cmd, result)
             connection.commit()
@@ -190,10 +206,7 @@ public class CommandHandler(private val connection: Connection) {
         var state = MatchState.start(match.format, Seat.home, Seat.away)
         connection.prepareStatement(
             """
-            SELECT payload->>'player' AS player,
-                   (payload->>'visitTotal')::int AS visit_total,
-                   payload->>'dartsUsed' AS darts_used,
-                   payload->>'dartsAtDouble' AS darts_at_double
+            SELECT payload::text
             FROM evidence.event
             WHERE match_id = ? AND device_id = ? AND event_type = 'VisitRecorded'
             ORDER BY device_seq
@@ -203,15 +216,10 @@ public class CommandHandler(private val connection: Connection) {
             ps.setObject(2, deviceId)
             ps.executeQuery().use { rs ->
                 while (rs.next()) {
-                    val outcome = Engine.apply(
-                        state,
-                        Command.RecordVisit(
-                            PlayerId(rs.getString("player")),
-                            rs.getInt("visit_total"),
-                            rs.getString("darts_used")?.toIntOrNull(),
-                            rs.getString("darts_at_double")?.toIntOrNull(),
-                        ),
-                    )
+                    // Each visit replays as what it was entered as — its darts, or its total — because
+                    // under the keep rule, or a dart that reaches zero on a treble, the two differ.
+                    val visit = Visits.commandOf(rs.getString(1)) ?: continue
+                    val outcome = Engine.apply(state, visit)
                     if (outcome is Outcome.Accepted) state = outcome.state
                 }
             }
@@ -241,41 +249,38 @@ public class CommandHandler(private val connection: Connection) {
 
     private fun appendEvent(
         cmd: VisitCommand,
+        command: Command,
+        reading: thro.engine.VisitReading?,
         applied: CommandResult.Applied,
         authority: Authority,
         grantId: UUID?,
     ) {
-        val payload = buildString {
-            append("{")
-            append("\"player\":\"").append(cmd.player).append("\",")
-            append("\"visitTotal\":").append(cmd.visitTotal).append(",")
-            append("\"dartsUsed\":").append(cmd.dartsUsed?.toString() ?: "null").append(",")
-            append("\"dartsAtDouble\":").append(cmd.dartsAtDouble?.toString() ?: "null").append(",")
-            append("\"effect\":\"").append(applied.effect).append("\"")
-            append("}")
-        }
+        // A darts visit keeps its darts, and beside them what the engine derived, so a reader that
+        // knows only totals still reads it (schema 2). A total is stored exactly as it always was.
+        val payload = Visits.payload(cmd.player, command, reading, applied.effect)
         connection.prepareStatement(
             """
             INSERT INTO evidence.event
               (event_id, match_id, device_id, device_seq, event_type, schema_version,
                engine_version, correlation_id, actor_id, actor_role, occurred_at, occurred_tz,
                payload, authority, grant_id)
-            VALUES (?, ?, ?, ?, 'VisitRecorded', 1, ?, ?, ?, ?, ?::timestamptz, ?, ?::jsonb, ?, ?)
+            VALUES (?, ?, ?, ?, 'VisitRecorded', ?, ?, ?, ?, ?, ?::timestamptz, ?, ?::jsonb, ?, ?)
             """.trimIndent(),
         ).use { ps ->
             ps.setObject(1, UUID.randomUUID())
             ps.setObject(2, cmd.matchId)
             ps.setObject(3, cmd.deviceId)
             ps.setLong(4, cmd.deviceSeq)
-            ps.setString(5, cmd.engineVersion)
-            ps.setObject(6, cmd.correlationId)
-            ps.setObject(7, cmd.actorId)
-            ps.setString(8, cmd.actorRole)
-            ps.setString(9, cmd.occurredAt)
-            ps.setString(10, cmd.occurredTz)
-            ps.setString(11, payload)
-            ps.setString(12, authority.name.lowercase())
-            ps.setObject(13, grantId)
+            ps.setInt(5, Visits.schemaOf(command))
+            ps.setString(6, cmd.engineVersion)
+            ps.setObject(7, cmd.correlationId)
+            ps.setObject(8, cmd.actorId)
+            ps.setString(9, cmd.actorRole)
+            ps.setString(10, cmd.occurredAt)
+            ps.setString(11, cmd.occurredTz)
+            ps.setString(12, payload)
+            ps.setString(13, authority.name.lowercase())
+            ps.setObject(14, grantId)
             ps.executeUpdate()
         }
     }
@@ -308,13 +313,5 @@ public class CommandHandler(private val connection: Connection) {
             ps.setString(6, body)
             ps.executeUpdate()
         }
-    }
-
-    private fun effectName(e: Effect): String = when (e) {
-        Effect.SCORED -> "scored"
-        Effect.BUST -> "bust"
-        Effect.LEG_WON -> "leg_won"
-        Effect.SET_WON -> "set_won"
-        Effect.MATCH_WON -> "match_won"
     }
 }

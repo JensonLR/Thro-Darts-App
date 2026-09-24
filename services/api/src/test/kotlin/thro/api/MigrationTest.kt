@@ -246,4 +246,24 @@ class MigrationTest {
         assertTrue(stillNamed(twins))
         println("  PASS  a match whose two seats share a name is refused rather than mapped to home")
     }
+    @Test
+    fun `V059 reads every match already held as played under the standard bust rule`() {
+        if (!TestDatabase.configured) {
+            println("no database configured (set PGHOST) — migration test skipped")
+            return
+        }
+        // A match as V058 held it: no bust rule, because there was only one.
+        val c = TestDatabase.migratedUpTo(58)
+        val match = UUID.randomUUID(); val a = UUID.randomUUID(); val b = UUID.randomUUID()
+        c.prepareStatement(
+            """
+            INSERT INTO evidence.match (match_id, home_id, away_id, starting_score, in_rule, out_rule, legs_mode, legs_target, throw_first)
+            VALUES (?, ?, ?, 501, 'straight', 'double', 'first_to', 5, ?)
+            """.trimIndent(),
+        ).use { ps -> ps.setObject(1, match); ps.setObject(2, a); ps.setObject(3, b); ps.setObject(4, a); ps.executeUpdate() }
+        TestDatabase.apply(c, after = 58)
+        assertEquals(thro.engine.BustRule.RESTORE_VISIT, Matches(c).load(match)?.format?.bustRule,
+                     "a match opened before V059 was played under the only rule there was")
+        println("  PASS  a match held before V059 reads as the standard bust rule")
+    }
 }

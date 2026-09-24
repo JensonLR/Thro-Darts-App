@@ -5,12 +5,10 @@ import java.sql.Timestamp
 import java.time.Duration
 import java.time.Instant
 import java.util.UUID
-import thro.engine.Command
 import thro.engine.Engine
 import thro.engine.MatchFormat
 import thro.engine.MatchState
 import thro.engine.Outcome
-import thro.engine.PlayerId
 
 /**
  * A match on THRØ once it has been sent (PD-043): the code the sender makes for the other seat, the
@@ -323,11 +321,8 @@ public class MatchRecords(private val connection: Connection, private val now: (
         var visits = 0
         for (row in log) {
             if (row.type != "VisitRecorded" || row.id in struck) continue
-            val seat = row.payload["player"] as? String ?: continue
-            val total = (row.payload["visitTotal"] as? Number)?.toInt() ?: continue
-            val visit = Command.RecordVisit(PlayerId(seat), total,
-                                            (row.payload["dartsUsed"] as? Number)?.toInt(),
-                                            (row.payload["dartsAtDouble"] as? Number)?.toInt())
+            // As it was entered: its darts when it has them (OD-023), else its total.
+            val visit = Visits.commandOf(row.payload) ?: continue
             val outcome = Engine.apply(state, visit)
             if (outcome is Outcome.Accepted) { state = outcome.state; visits++ }
         }
@@ -404,7 +399,8 @@ public class MatchRecords(private val connection: Connection, private val now: (
         val seats = s.seats.joinToString(",") { """{"seat":"${it.seat}","you":${it.you},"name":${q(it.name)},"claimable":${it.claimable}}""" }
         return """{"matchId":"${s.matchId}","openedAt":"${s.openedAt}",""" +
             """"format":{"startingScore":${f.startingScore},"inRule":"${f.inRule.name.lowercase()}","outRule":"${f.outRule.name.lowercase()}",""" +
-            """"legsMode":"${f.legs.mode.name.lowercase()}","legsTarget":${f.legs.target},"throwFirst":"${f.throwFirst.value}"},""" +
+            """"legsMode":"${f.legs.mode.name.lowercase()}","legsTarget":${f.legs.target},"throwFirst":"${f.throwFirst.value}",""" +
+            """"bustRule":"${bustRuleName(f.bustRule)}"},""" +
             """"selfReported":${s.selfReported},"seats":[$seats],"legs":{"home":${s.legs[Seat.HOME]},"away":${s.legs[Seat.AWAY]}},""" +
             """"visits":${s.visits},"ending":${q(s.ending)},"retired":${q(s.retired)},"winner":${q(s.winner)},"sentBy":${q(s.sentBy)},""" +
             """"answers":{"home":${q(s.answers[Seat.HOME])},"away":${q(s.answers[Seat.AWAY])}},"standing":"${s.standing}"}"""

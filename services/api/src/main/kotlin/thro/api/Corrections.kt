@@ -5,6 +5,11 @@ import java.time.Instant
 import java.util.UUID
 import thro.authz.ObjectRef
 import thro.authz.ObjectType
+import thro.engine.Command
+import thro.engine.Engine
+import thro.engine.MatchState
+import thro.engine.Outcome
+import thro.engine.PlayerId
 
 /**
  * Correcting a recorded visit — the flow the approved organiser dispute screen draws.
@@ -18,6 +23,11 @@ import thro.authz.ObjectType
  * Second, **a correction never edits the original.** It appends a new event that supersedes it, so
  * the log still shows what was recorded, what it was changed to, by whom, and under what authority.
  * A dispute six months later is unanswerable if the disputed value was overwritten.
+ *
+ * Third, **a correction is played before it is kept.** An official's authority is to say what was
+ * thrown, not to say something that cannot have been: the visit's stream is replayed through the engine
+ * with the correction in its place, and a correction the engine refuses — or one that would leave a
+ * later visit impossible — is refused in a sentence. The effect stored is the one the engine gave it.
  */
 public class Corrections(private val connection: Connection) {
 
@@ -58,6 +68,10 @@ public class Corrections(private val connection: Connection) {
         if (match.idFor(original.player) == null) {
             return Result.Refused("that visit names someone who is not in this match")
         }
+        val effect = when (val played = play(match, original, eventId, newTotal)) {
+            is Played.Refused -> return Result.Refused(played.why)
+            is Played.Stands -> played.effect
+        }
 
         val correctionId = UUID.randomUUID()
         connection.prepareStatement(
@@ -81,7 +95,7 @@ public class Corrections(private val connection: Connection) {
                 9,
                 """{"player":"${original.player}","visitTotal":$newTotal,""" +
                     """"was":${original.visitTotal},"dartsUsed":null,"dartsAtDouble":null,""" +
-                    """"effect":"scored"}""",
+                    """"effect":"$effect"}""",
             )
             ps.setObject(10, eventId)
             ps.executeUpdate()
@@ -89,12 +103,13 @@ public class Corrections(private val connection: Connection) {
         return Result.Corrected(correctionId, eventId)
     }
 
-    private data class RecordedVisit(val player: String, val visitTotal: Int)
+    /** The visit being corrected, and the device stream it belongs to. */
+    private data class RecordedVisit(val player: String, val visitTotal: Int?, val deviceId: UUID)
 
     private fun loadVisit(matchId: UUID, eventId: UUID): RecordedVisit? {
         connection.prepareStatement(
             """
-            SELECT payload->>'player' AS player, (payload->>'visitTotal')::int AS total
+            SELECT payload->>'player' AS player, (payload->>'visitTotal')::int AS total, device_id
               FROM evidence.event
              WHERE event_id = ? AND match_id = ? AND event_type = 'VisitRecorded'
             """.trimIndent(),
@@ -102,8 +117,100 @@ public class Corrections(private val connection: Connection) {
             ps.setObject(1, eventId)
             ps.setObject(2, matchId)
             ps.executeQuery().use { rs ->
-                return if (rs.next()) RecordedVisit(rs.getString("player"), rs.getInt("total")) else null
+                return if (rs.next()) {
+                    RecordedVisit(rs.getString("player"), rs.getObject("total") as Int?, rs.getObject("device_id") as UUID)
+                } else {
+                    null
+                }
             }
+        }
+    }
+
+    private sealed interface Played {
+        class Stands(val effect: String) : Played
+        class Refused(val why: String) : Played
+    }
+
+    /**
+     * Replays the stream [original] belongs to — its device's visits, less any its scorer struck, with every earlier
+     * correction in place — twice: as it stands, and with this correction too. The correction has to be a visit the
+     * engine accepts from where it was thrown, and every visit that stood before it has to stand after it; a
+     * correction that turned a later checkout into a turn out of order is not a correction of one visit, it is a
+     * rewrite of the leg.
+     */
+    private fun play(match: MatchAggregate, original: RecordedVisit, eventId: UUID, newTotal: Int): Played {
+        class Visit(val id: UUID, val command: Command)
+        val corrected = HashMap<UUID, Command>()
+        connection.prepareStatement(
+            """
+            SELECT corrects_event_id, payload::text FROM evidence.event
+             WHERE match_id = ? AND event_type = 'VisitCorrected' AND corrects_event_id IS NOT NULL
+             ORDER BY commit_xid, global_seq
+            """.trimIndent(),
+        ).use { ps ->
+            ps.setObject(1, match.matchId)
+            ps.executeQuery().use { rs ->
+                // The latest correction of a visit is the one that stands.
+                while (rs.next()) Visits.commandOf(rs.getString(2))?.let { corrected[rs.getObject(1) as UUID] = it }
+            }
+        }
+        val struck = HashSet<UUID>()
+        val stream = mutableListOf<Visit>()
+        connection.prepareStatement(
+            """
+            SELECT event_id, event_type, payload::text, corrects_event_id FROM evidence.event
+             WHERE match_id = ? AND device_id = ? AND event_type IN ('VisitRecorded', 'VisitRetracted')
+             ORDER BY device_seq
+            """.trimIndent(),
+        ).use { ps ->
+            ps.setObject(1, match.matchId)
+            ps.setObject(2, original.deviceId)
+            ps.executeQuery().use { rs ->
+                while (rs.next()) {
+                    val id = rs.getObject(1) as UUID
+                    if (rs.getString(2) == "VisitRetracted") {
+                        (rs.getObject(4) as UUID?)?.let(struck::add)
+                    } else {
+                        Visits.commandOf(rs.getString(3))?.let { stream += Visit(id, it) }
+                    }
+                }
+            }
+        }
+        if (eventId in struck) {
+            return Played.Refused("that visit was struck by its scorer, so it is not part of the record to correct")
+        }
+        val standing = stream.filter { it.id !in struck }
+
+        fun replay(swap: Map<UUID, Command>): Map<UUID, Outcome> {
+            var state = MatchState.start(match.format, Seat.home, Seat.away)
+            val out = LinkedHashMap<UUID, Outcome>()
+            for (v in standing) {
+                val outcome = Engine.apply(state, swap[v.id] ?: v.command)
+                if (outcome is Outcome.Accepted) state = outcome.state
+                out[v.id] = outcome
+            }
+            return out
+        }
+        val correction = Command.RecordVisit(PlayerId(original.player), newTotal)
+        val before = replay(corrected)
+        val after = replay(corrected + (eventId to correction))
+
+        when (val mine = after[eventId]) {
+            is Outcome.Rejected -> return Played.Refused("that correction cannot stand: ${Visits.sentence(mine.reason, correction)}")
+            is Outcome.Accepted -> {
+                for ((id, was) in before) {
+                    val now = after[id]
+                    if (was is Outcome.Accepted && now is Outcome.Rejected) {
+                        val later = standing.first { it.id == id }.command
+                        return Played.Refused(
+                            "that correction would leave a later visit (${Visits.describe(later)}) impossible: " +
+                                Visits.sentence(now.reason, later),
+                        )
+                    }
+                }
+                return Played.Stands(Visits.effectName(mine.effect))
+            }
+            null -> return Played.Refused("that visit is not part of this match")
         }
     }
 }

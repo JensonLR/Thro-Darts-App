@@ -2,6 +2,7 @@ package thro.api
 
 import java.sql.Connection
 import java.util.UUID
+import thro.engine.BustRule
 import thro.engine.InRule
 import thro.engine.MatchFormat
 import thro.engine.OutRule
@@ -75,8 +76,8 @@ public class Matches(private val connection: Connection) {
             """
             INSERT INTO evidence.match
               (match_id, event_id, home_id, away_id, starting_score,
-               in_rule, out_rule, legs_mode, legs_target, throw_first, self_reported)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+               in_rule, out_rule, legs_mode, legs_target, throw_first, self_reported, bust_rule)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """.trimIndent(),
         ).use { ps ->
             ps.setObject(1, matchId)
@@ -92,6 +93,9 @@ public class Matches(private val connection: Connection) {
             // Set here rather than by a later UPDATE: `app_match` may append to the evidence schema
             // and may not rewrite it, which is the rule that makes the schema worth trusting.
             ps.setBoolean(11, selfReported)
+            // What a bust keeps is part of the rules the match is played under (OD-023, V059), so it is
+            // fixed here with the rest of them and read back by every replay.
+            ps.setString(12, format.bustRule.name.lowercase())
             ps.executeUpdate()
         }
     }
@@ -100,7 +104,7 @@ public class Matches(private val connection: Connection) {
         connection.prepareStatement(
             """
             SELECT match_id, event_id, home_id, away_id, starting_score,
-                   in_rule, out_rule, legs_mode, legs_target, throw_first
+                   in_rule, out_rule, legs_mode, legs_target, throw_first, bust_rule
               FROM evidence.match WHERE match_id = ?
             """.trimIndent(),
         ).use { ps ->
@@ -123,6 +127,7 @@ public class Matches(private val connection: Connection) {
                             rs.getInt("legs_target"),
                         ),
                         throwFirst = if (first == homeId) Seat.home else Seat.away,
+                        bustRule = BustRule.valueOf(rs.getString("bust_rule").uppercase()),
                     ),
                 )
             }

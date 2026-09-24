@@ -241,6 +241,29 @@ class StandingsTest {
         }
     }
 
+    /**
+     * The numbers go out beside the sentence. The organiser's page sets rules as a whole; without the numbers in
+     * force it had nothing to send back for a walkover, and changing a tie-break reset one to the win value.
+     */
+    @Test
+    fun `the table carries every number the rules hold, so setting them again changes only what was meant`() {
+        if (!configured) return
+        migrated().use { c ->
+            val orgs = Organisations(c)
+            val admin = orgs.createPlayer()
+            val s = season(orgs, admin)
+            assertTrue(LeagueTable(c).json(table(c, s)).contains(""""points":{"win":2,"draw":1,"loss":0,"awarded":2,"pointsPerLegWon":0"""),
+                       "THRØ's standard, in numbers")
+            val policy = orgs.draftPolicy(
+                "league_season", s.seasonId, "points", 1, LocalDate.of(2026, 9, 1),
+                body = """{"win":3,"draw":1,"awarded":1,"points_per_leg_won":1}""", by = admin,
+            )
+            orgs.approvePolicy(policy, by = admin)
+            val json = LeagueTable(c).json(table(c, s))
+            assertTrue(json.contains(""""points":{"win":3,"draw":1,"loss":0,"awarded":1,"pointsPerLegWon":1"""), json)
+        }
+    }
+
     @Test
     fun `rules THRO cannot apply refuse the table rather than quietly ordering it another way`() {
         if (!configured) return

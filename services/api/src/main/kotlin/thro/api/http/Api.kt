@@ -36,12 +36,13 @@ public object Contract {
         {"type":"object","required":["type","commandId"],
          "description":"One command. `type` selects the shape; the caller's identity is the authenticated principal and is never read from the body; the device is the X-Thro-Device header.",
          "properties":{
-           "type":{"type":"string","enum":["RecordVisit","RenameTeam","RearrangeFixture","SetAvailability","NameLineup"]},
+           "type":{"type":"string","enum":["RecordVisit","RecordDarts","RenameTeam","RearrangeFixture","SetAvailability","NameLineup"]},
            "commandId":{"type":"string","format":"uuid","description":"Idempotency key per device: a replay returns the stored response verbatim."},
            "matchId":{"type":"string","format":"uuid"},
-           "deviceSeq":{"type":"integer","description":"RecordVisit: the device's gapless sequence for this match."},
-           "player":{"type":"string","enum":["home","away"],"description":"RecordVisit: the seat that threw."},
-           "visitTotal":{"type":"integer"},"dartsUsed":{"type":["integer","null"]},"dartsAtDouble":{"type":["integer","null"]},
+           "deviceSeq":{"type":"integer","description":"RecordVisit, RecordDarts: the device's gapless sequence for this match."},
+           "player":{"type":"string","enum":["home","away"],"description":"RecordVisit, RecordDarts: the seat that threw."},
+           "visitTotal":{"type":"integer","description":"RecordVisit only."},"dartsUsed":{"type":["integer","null"],"description":"RecordVisit only."},"dartsAtDouble":{"type":["integer","null"],"description":"RecordVisit only."},
+           "darts":{"type":"array","minItems":1,"maxItems":3,"items":{"type":"string","examples":["T20","D16","20","25","Bull","Miss"]},"description":"RecordDarts (OD-023): the darts in the order thrown, none after the one that finished or bust the visit. The server derives the total, where it bust, darts used and darts at a double; a name that is not a dart is a 400, and a dart not on the board is refused DART_INVALID. Under keepScoredDarts a visit that busts must be sent this way."},
            "occurredAt":{"type":"string","format":"date-time"},"occurredTz":{"type":"string"},
            "clientEffect":{"type":["string","null"]},"engineVersion":{"type":"string"},
            "teamId":{"type":"string","format":"uuid"},"to":{"type":"string","description":"RenameTeam: the new name. RearrangeFixture: the new date-time."},
@@ -402,8 +403,11 @@ public object Contract {
                 + "is the same rows, and a phone that lost signal half way sends the lot again. The other seat becomes a "
                 + "competitor THRØ holds no name for, claimable later by a code. The match is recorded self-reported: "
                 + "one player's word until the other confirms it (PD-011). A match that ended short (PD-016) is sent "
-                + "as it ended: its retirement or abandonment is the last row, and nothing is added after it (V034).",
-            request = Schema("""{"type":"object","required":["matchId","deviceId","seat","format","rows"],"properties":{"matchId":{"type":"string","format":"uuid"},"deviceId":{"type":"string","format":"uuid"},"seat":{"type":"string","enum":["home","away"],"description":"Which seat the caller sat in. The other is minted."},"format":{"type":"object","required":["startingScore","inRule","outRule","legsMode","legsTarget","throwFirst"],"properties":{"startingScore":{"type":"integer"},"inRule":{"type":"string"},"outRule":{"type":"string"},"legsMode":{"type":"string"},"legsTarget":{"type":"integer"},"throwFirst":{"type":"string","enum":["home","away"]}}},"rows":{"type":"array","items":{"type":"object","required":["deviceSeq","kind","occurredAt"],"properties":{"deviceSeq":{"type":"integer"},"kind":{"type":"string","enum":["visit","retraction","retirement","abandonment"],"description":"An ending — retirement or abandonment — is the last row when there is one."},"seat":{"type":"string","enum":["home","away"],"description":"The seat that threw; for a retirement, the seat that retired. An abandonment names nobody and may leave it out."},"visitTotal":{"type":["integer","null"]},"correctsSeq":{"type":["integer","null"]},"occurredAt":{"type":"string"},"occurredTz":{"type":"string"}}}}}}"""),
+                + "as it ended: its retirement or abandonment is the last row, and nothing is added after it (V034). "
+                + "The journal is replayed through the engine before it is kept (OD-023): every visit still standing after its "
+                + "retractions, in order, under the match's format and bust rule; a standing visit the engine refuses refuses "
+                + "the upload with a sentence naming its row, and what is stored is the engine's effect.",
+            request = Schema("""{"type":"object","required":["matchId","deviceId","seat","format","rows"],"properties":{"matchId":{"type":"string","format":"uuid"},"deviceId":{"type":"string","format":"uuid"},"seat":{"type":"string","enum":["home","away"],"description":"Which seat the caller sat in. The other is minted."},"format":{"type":"object","required":["startingScore","inRule","outRule","legsMode","legsTarget","throwFirst"],"properties":{"startingScore":{"type":"integer"},"inRule":{"type":"string"},"outRule":{"type":"string"},"legsMode":{"type":"string"},"legsTarget":{"type":"integer"},"throwFirst":{"type":"string","enum":["home","away"]},"bustRule":{"type":"string","enum":["restoreVisit","keepScoredDarts"],"description":"OD-023: what a bust does to the score. Absent means restoreVisit."}}},"rows":{"type":"array","items":{"type":"object","required":["deviceSeq","kind","occurredAt"],"properties":{"deviceSeq":{"type":"integer"},"kind":{"type":"string","enum":["visit","retraction","retirement","abandonment"],"description":"An ending — retirement or abandonment — is the last row when there is one."},"seat":{"type":"string","enum":["home","away"],"description":"The seat that threw; for a retirement, the seat that retired. An abandonment names nobody and may leave it out."},"visitTotal":{"type":["integer","null"],"description":"May be left out of a visit sent with darts; when both are sent they must agree."},"darts":{"type":"array","minItems":1,"maxItems":3,"items":{"type":"string"},"description":"OD-023: a visit recorded dart by dart, by name (T20, D16, 20, 25, Bull, Miss). The row is then replayed as its darts."},"correctsSeq":{"type":["integer","null"]},"occurredAt":{"type":"string"},"occurredTz":{"type":"string"}}}}}}"""),
             responses = mapOf(200 to "what was stored, and what was already held", 400 to "malformed",
                               401 to "no principal", 413 to "body over 64 KiB", 422 to "refused, in words"),
         ),
@@ -434,7 +438,8 @@ public object Contract {
             description = "Both seats — a name only where identity.player_may_be_disclosed allows — the legs as the engine replays "
                 + "the record with struck visits left out, how it ended, who won, which seat sent it, each seat's answer where it still stands, "
                 + "and its standing: self-reported, confirmed, disputed, or recorded for a match scored on THRØ as it was "
-                + "played. Derived from the log on every read and stored nowhere. Anyone not in the match is answered 404.",
+                + "played. Derived from the log on every read and stored nowhere. Its format carries bustRule, restoreVisit or "
+                + "keepScoredDarts (OD-023). Anyone not in the match is answered 404.",
             responses = mapOf(200 to "the match", 400 to "not a UUID", 401 to "no principal", 404 to "not a match the caller played in"),
         ),
         Endpoint(

@@ -3,7 +3,15 @@ package thro.api
 import java.sql.Connection
 import java.time.Instant
 import java.util.UUID
+import thro.engine.Command
+import thro.engine.Dart
+import thro.engine.Darts
+import thro.engine.Engine
 import thro.engine.MatchFormat
+import thro.engine.MatchState
+import thro.engine.Outcome
+import thro.engine.PlayerId
+import thro.engine.VisitReading
 
 /**
  * Sending a match to THRØ (PD-040).
@@ -30,6 +38,13 @@ import thro.engine.MatchFormat
  * **A match that ended short arrives as it ended (PD-016, V034).** The journal's retirement or
  * abandonment row becomes a `MatchEndedShort` event, last in the stream, and nothing is added after
  * it — so THRØ never holds a record saying a match is still going when the people in it stopped.
+ *
+ * **And it is played again before it is kept (OD-023).** Self-reported is one player's word about what
+ * happened, not licence to store what cannot have happened. The journal is replayed through the engine
+ * the phone ran — every visit still standing after its retractions, in order — and a visit the engine
+ * refuses is refused here, in a sentence naming its row. What is stored is what the engine said: the
+ * effect, and for a visit sent as darts, the total and dart counts it derived. A visit the scorer struck
+ * need not stand, and is kept whatever the engine made of it, because the board showed it.
  */
 public class Uploads(private val connection: Connection, private val now: () -> Instant = { Instant.now() }) {
 
@@ -40,12 +55,17 @@ public class Uploads(private val connection: Connection, private val now: () -> 
         val kind: String,
         /** The seat that threw: `home` or `away`. */
         val seat: String,
-        /** The visit's total. Null on a retraction, which scores nothing. */
+        /**
+         * The visit's total. Null on a retraction, which scores nothing, and may be null on a visit sent as
+         * [darts], whose total the engine derives. When both are sent they must agree.
+         */
         val visitTotal: Int?,
         /** On a retraction, the `deviceSeq` of the visit it strikes. */
         val correctsSeq: Long?,
         val occurredAt: Instant,
         val occurredTz: String,
+        /** The darts of a visit, in order, when the phone recorded them (OD-023). The row is then a RecordDarts. */
+        val darts: List<Dart>? = null,
     )
 
     public sealed interface Result {
@@ -95,8 +115,13 @@ public class Uploads(private val connection: Connection, private val now: () -> 
             if (ended) return Result.Refused("nothing comes after the end of a match")
             when (row.kind) {
                 "visit" -> {
-                    val total = row.visitTotal ?: return Result.Refused("a visit with no total is not a visit")
-                    if (total < 0 || total > 180) return Result.Refused("no three darts score $total")
+                    val darts = row.darts
+                    if (darts == null) {
+                        val total = row.visitTotal ?: return Result.Refused("a visit with no total is not a visit")
+                        if (total < 0 || total > 180) return Result.Refused("no three darts score $total")
+                    } else if (darts.isEmpty() || darts.size > Darts.HAND) {
+                        return Result.Refused("a visit is one to three darts, and row ${row.deviceSeq} has ${darts.size}")
+                    }
                     if (row.seat != "home" && row.seat != "away") return Result.Refused("a visit is thrown from a seat, home or away")
                 }
                 "retraction" -> {
@@ -150,6 +175,14 @@ public class Uploads(private val connection: Connection, private val now: () -> 
                 }
             }
 
+            // The journal as it will stand once this upload lands, played through the engine under the
+            // match's own rules — the stored ones when it is already here, since those are what it was
+            // opened under and what every other replay reads.
+            val judged = when (val j = judge(existing?.format ?: format, matchId, deviceId, rows)) {
+                is Judgement.Refused -> { connection.rollback(); return Result.Refused(j.why) }
+                is Judgement.Stands -> j
+            }
+
             val correlation = UUID.randomUUID()
             val bySeq = HashMap<Long, UUID>()     // device_seq -> event id, for a retraction to point at
             var visits = 0; var retractions = 0; var already = 0; var ending: String? = null
@@ -160,7 +193,7 @@ public class Uploads(private val connection: Connection, private val now: () -> 
                     connection.rollback()
                     return Result.Refused("a retraction strikes a visit THRØ does not hold")
                 }
-                val wrote = append(eventId, matchId, deviceId, row, uploaderPlayerId, correlation, corrects)
+                val wrote = append(eventId, matchId, deviceId, row, uploaderPlayerId, correlation, corrects, judged.said[row.deviceSeq])
                 if (wrote) {
                     when (row.kind) {
                         "visit" -> visits++
@@ -217,7 +250,7 @@ public class Uploads(private val connection: Connection, private val now: () -> 
     /** Appends one row. False when that place in the device's sequence is already filled — a resend. */
     private fun append(
         eventId: UUID, matchId: UUID, deviceId: UUID, row: Row,
-        actor: UUID, correlation: UUID, corrects: UUID?,
+        actor: UUID, correlation: UUID, corrects: UUID?, said: Said?,
     ): Boolean {
         val type = when (row.kind) {
             "visit" -> "VisitRecorded"
@@ -225,7 +258,15 @@ public class Uploads(private val connection: Connection, private val now: () -> 
             else -> "MatchEndedShort"
         }
         val payload = when (row.kind) {
-            "visit" -> """{"player":"${row.seat}","visitTotal":${row.visitTotal},"dartsUsed":null,"dartsAtDouble":null,"effect":"uploaded"}"""
+            // What the engine said, not "uploaded": the effect, and for a visit sent as darts what they
+            // came to. A struck visit the engine refused keeps the refusal's reason beside it.
+            "visit" -> {
+                // Only a row whose place is already held goes unjudged, and the insert below would land it
+                // as nothing; saying so here keeps a resend from being judged against what it claims.
+                val s = said ?: return false
+                Visits.payload(row.seat, s.command, s.reading, s.effect,
+                               extra = s.refused?.let { "\"refused\":\"$it\"," } ?: "")
+            }
             "retraction" -> """{"player":"${row.seat}","retracts":${row.correctsSeq}}"""
             // The seat that retired. The winner is the other one, and is not stored twice (V034).
             "retirement" -> """{"ending":"retired","seat":"${row.seat}"}"""
@@ -237,16 +278,137 @@ public class Uploads(private val connection: Connection, private val now: () -> 
               (event_id, match_id, device_id, device_seq, event_type, schema_version,
                correlation_id, actor_id, actor_role, occurred_at, occurred_tz, payload,
                authority, corrects_event_id)
-            VALUES (?, ?, ?, ?, ?, 1, ?, ?, 'participant', ?, ?, ?::jsonb, 'ungranted', ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'participant', ?, ?, ?::jsonb, 'ungranted', ?)
             ON CONFLICT (match_id, device_id, device_seq) DO NOTHING
             """.trimIndent(),
         ).use { ps ->
             ps.setObject(1, eventId); ps.setObject(2, matchId); ps.setObject(3, deviceId)
             ps.setLong(4, row.deviceSeq); ps.setString(5, type)
-            ps.setObject(6, correlation); ps.setObject(7, actor)
-            ps.setObject(8, java.sql.Timestamp.from(row.occurredAt)); ps.setString(9, row.occurredTz)
-            ps.setString(10, payload); ps.setObject(11, corrects)
+            ps.setInt(6, said?.let { Visits.schemaOf(it.command) } ?: Visits.TOTAL_SCHEMA)
+            ps.setObject(7, correlation); ps.setObject(8, actor)
+            ps.setObject(9, java.sql.Timestamp.from(row.occurredAt)); ps.setString(10, row.occurredTz)
+            ps.setString(11, payload); ps.setObject(12, corrects)
             ps.executeUpdate() == 1
         }
+    }
+
+    // --- the replay ------------------------------------------------------------------------------
+
+    /** What the engine said about one visit row: the command it was, and the effect it had. */
+    private class Said(val command: Command, val effect: String, val reading: VisitReading?, val refused: String? = null)
+
+    private sealed interface Judgement {
+        class Stands(val said: Map<Long, Said>) : Judgement
+        class Refused(val why: String) : Judgement
+    }
+
+    /** One row of the device's journal as it will stand: held already, or arriving now. */
+    private class Entry(val seq: Long, val kind: String, val command: Command?, val strikes: Long?, val arriving: Boolean,
+                        val sentTotal: Int? = null)
+
+    private fun commandOf(row: Row): Command =
+        row.darts?.let { Command.RecordDarts(PlayerId(row.seat), it) }
+            ?: Command.RecordVisit(PlayerId(row.seat), row.visitTotal!!, null, null)
+
+    /**
+     * Plays the journal through the engine, as it will stand once [rows] land beside what this device has
+     * already sent. A row already held wins its place, exactly as the insert's ON CONFLICT does, so a resend
+     * is judged against what is here and not against what it claims.
+     *
+     * Two walks. The first is the night as the board showed it, row by row, a retraction putting the board
+     * back to the visits still standing: that is the effect a visit had when it was thrown, and the one a
+     * struck visit keeps. The second is the record — every visit not struck, in order — and it is the one
+     * that has to hold: a standing visit arriving now that the engine refuses refuses the upload. One that
+     * is already held and does not replay is left as it is (THRØ held uploads before it replayed them), and
+     * counts for nothing, as every reader already treats it.
+     */
+    private fun judge(format: MatchFormat, matchId: UUID, deviceId: UUID, rows: List<Row>): Judgement {
+        val journal = sortedMapOf<Long, Entry>()
+        for (row in rows) {
+            journal[row.deviceSeq] = when (row.kind) {
+                "visit" -> Entry(row.deviceSeq, "visit", commandOf(row), null, arriving = true, sentTotal = row.visitTotal)
+                "retraction" -> Entry(row.deviceSeq, "retraction", null, row.correctsSeq, arriving = true)
+                else -> Entry(row.deviceSeq, "ending", null, null, arriving = true)
+            }
+        }
+        connection.prepareStatement(
+            "SELECT device_seq, event_type, payload::text FROM evidence.event WHERE match_id = ? AND device_id = ? ORDER BY device_seq",
+        ).use { ps ->
+            ps.setObject(1, matchId); ps.setObject(2, deviceId)
+            ps.executeQuery().use { rs ->
+                while (rs.next()) {
+                    val seq = rs.getLong(1)
+                    val payload = Json.parseObject(rs.getString(3))
+                    journal[seq] = when (rs.getString(2)) {
+                        "VisitRecorded" -> Entry(seq, "visit", Visits.commandOf(payload), null, arriving = false)
+                        "VisitRetracted" -> Entry(seq, "retraction", null, (payload["retracts"] as? Number)?.toLong(), arriving = false)
+                        else -> Entry(seq, "other", null, null, arriving = false)
+                    }
+                }
+            }
+        }
+        val struck = journal.values.mapNotNull { it.strikes }.toSet()
+        val said = HashMap<Long, Said>()
+        fun start() = MatchState.start(format, Seat.home, Seat.away)
+        fun replay(visits: List<Entry>): MatchState = visits.fold(start()) { st, v ->
+            (Engine.apply(st, v.command!!) as? Outcome.Accepted)?.state ?: st
+        }
+
+        // The night as the board showed it.
+        var state = start()
+        val standing = mutableListOf<Entry>()
+        for (e in journal.values) {
+            when (e.kind) {
+                "visit" -> {
+                    val cmd = e.command ?: continue
+                    when (val out = Engine.apply(state, cmd)) {
+                        is Outcome.Accepted -> {
+                            state = out.state; standing += e
+                            if (e.arriving) {
+                                contradicts(e, cmd, out.reading)?.let { return Judgement.Refused(it) }
+                                said[e.seq] = Said(cmd, Visits.effectName(out.effect), out.reading)
+                            }
+                        }
+                        is Outcome.Rejected ->
+                            if (e.arriving) said[e.seq] = Said(cmd, "refused", null, refused = out.reason.name)
+                    }
+                }
+                "retraction" -> {
+                    standing.removeAll { it.seq == e.strikes }
+                    state = replay(standing)
+                }
+            }
+        }
+
+        // The record, which has to hold.
+        state = start()
+        for (e in journal.values) {
+            if (e.kind != "visit" || e.seq in struck) continue
+            val cmd = e.command ?: continue
+            when (val out = Engine.apply(state, cmd)) {
+                is Outcome.Rejected -> if (e.arriving) {
+                    return Judgement.Refused("the visit at row ${e.seq} cannot have happened: ${Visits.sentence(out.reason, cmd)}")
+                }
+                is Outcome.Accepted -> {
+                    state = out.state
+                    if (!e.arriving) continue
+                    contradicts(e, cmd, out.reading)?.let { return Judgement.Refused(it) }
+                    said[e.seq] = Said(cmd, Visits.effectName(out.effect), out.reading)
+                }
+            }
+        }
+        return Judgement.Stands(said)
+    }
+
+    /**
+     * A row that sent both a total and its darts, where the two disagree. The phone's total is a claim about the
+     * darts, and the engine has the darts: a disagreement is a journal that contradicts itself, and THRØ does not
+     * pick one of its two accounts to believe.
+     */
+    private fun contradicts(e: Entry, cmd: Command, reading: VisitReading?): String? {
+        if (cmd !is Command.RecordDarts || e.sentTotal == null) return null
+        val derived = reading?.visitTotal ?: return null
+        return if (derived == e.sentTotal) null
+        else "the visit at row ${e.seq} says ${e.sentTotal}, but ${Visits.describe(cmd)} scores $derived"
     }
 }
