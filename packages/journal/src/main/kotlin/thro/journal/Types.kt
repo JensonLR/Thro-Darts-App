@@ -1,5 +1,8 @@
 package thro.journal
 
+import thro.engine.BustRule
+import thro.engine.Dart
+
 import thro.engine.InRule
 import thro.engine.MatchFormat
 import thro.engine.MatchState
@@ -145,6 +148,8 @@ public data class NewMatch(
      */
     val homePlayerId: String? = null,
     val awayPlayerId: String? = null,
+    /** What a bust does (OD-023). The standard rule unless the players say their league plays otherwise. */
+    val bustRule: BustRule = BustRule.RESTORE_VISIT,
 )
 
 public data class MatchRecord(
@@ -162,6 +167,16 @@ public data class MatchRecord(
     val awayPlayerId: String?,
     /** When this match was put away (PD-026), or null while it is on Home. */
     val archivedAt: Instant?,
+    /**
+     * What a bust does in this match (OD-023). Every match written before the rule could be chosen
+     * reads back as the standard rule, which is what the engine applied to all of them.
+     */
+    val bustRule: BustRule = BustRule.RESTORE_VISIT,
+    /**
+     * A bust rule this build cannot read, as stored. Replay refuses such a match rather than playing
+     * it under the standard rule, which would put different scores on the board than were agreed.
+     */
+    val unknownBustRule: String? = null,
 ) {
     public val isArchived: Boolean get() = archivedAt != null
 
@@ -175,6 +190,7 @@ public data class MatchRecord(
         outRule = outRule,
         legs = Structure(mode = legsMode, target = legsTarget),
         throwFirst = throwFirst.playerId,
+        bustRule = bustRule,
     )
 
     public val initialState: MatchState get() =
@@ -199,6 +215,12 @@ public data class JournalEntry(
     /** For a retraction: the `deviceSeq` of the visit it strikes. */
     val correctsSeq: Long?,
     val occurredAt: Instant,
+    /**
+     * The darts, when the visit was entered dart by dart (OD-023). The visit then replays as the
+     * darts, so the engine decides it again from what was thrown; `visitTotal` and the two counts
+     * beside it are what the engine derived, kept so a reader that predates darts still reads it.
+     */
+    val darts: List<Dart>? = null,
 ) {
     /**
      * What a row is.
@@ -241,6 +263,8 @@ public data class JournalEntry(
     public val command: thro.engine.Command?
         get() = if (!kind.isScoring) {
             null
+        } else if (darts != null) {
+            thro.engine.Command.RecordDarts(player = seat.playerId, darts = darts)
         } else {
             thro.engine.Command.RecordVisit(
                 player = seat.playerId,
@@ -302,10 +326,31 @@ public data class ReplayedVisit(
     val dartsUsed: Int?,
     val dartsAtDouble: Int?,
     val remainingBefore: Int,
+    /** Zero on the visit that won the leg — the score it left — never the next leg's starting score. */
     val remainingAfter: Int,
     val bust: Boolean,
     val wonLeg: Boolean,
+    /** Points the visit took off the score, as the engine reported it (OD-023). */
+    val scored: Int? = null,
+    /** The darts, when the visit was entered dart by dart. */
+    val darts: List<Dart>? = null,
+    /** Which dart bust the visit, when the darts say. */
+    val bustAt: Int? = null,
 )
+
+/** The darts as the journal stores them: their names, comma-separated — `T20,T20,D20`. */
+internal fun storedDarts(darts: List<Dart>): String = darts.joinToString(",") { it.name }
+
+/**
+ * Darts read back from their stored names. A value that does not read as darts becomes an empty hand,
+ * which the engine refuses at replay — so a damaged row stops the match being read rather than being
+ * read as the total beside it.
+ */
+internal fun readDarts(stored: String?): List<Dart>? {
+    if (stored == null) return null
+    val parsed = stored.split(',').map { Dart.parse(it) }
+    return if (parsed.isNotEmpty() && parsed.all { it != null }) parsed.filterNotNull() else emptyList()
+}
 
 /** Who stands behind the result as it is recorded right now (PD-011). */
 public data class Standing(

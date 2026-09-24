@@ -649,4 +649,89 @@ class JournalTest {
             assertNotNull(j.match(anonymous.id).startedAt)
         }
     }
+
+    // ---------------------------------------------------------------- OD-023: the dart and the bust rule
+
+    private fun applied(j: Journal, id: MatchId, cmd: Command) {
+        val state = j.replay(id)
+        val outcome = thro.engine.Engine.apply(state, cmd)
+        assertTrue(outcome is thro.engine.Outcome.Accepted, "refused: $outcome")
+        j.append(cmd, id, reading = outcome.reading)
+    }
+
+    private fun darts(vararg names: String) = names.map { thro.engine.Dart.parse(it)!! }
+
+    @Test fun aVisitOfDartsIsStoredAsTheDartsAndReplaysAsThem() {
+        open().use { j ->
+            val m = j.createMatch(NewMatch("A", "B"))
+            applied(j, m.id, Command.RecordDarts(Seat.HOME.playerId, darts("T20", "T20", "T20")))
+            val row = j.entries(m.id).single()
+            assertEquals(darts("T20", "T20", "T20"), row.darts)
+            assertEquals(180, row.visitTotal, "the engine's total is kept beside the darts")
+            assertEquals(3, row.dartsUsed)
+            assertEquals(0, row.dartsAtDouble)
+            assertEquals(321, j.replay(m.id).remaining.getValue(Seat.HOME.playerId))
+        }
+    }
+
+    @Test fun aBustOnlyTheDartsCanSeeReplaysAsABust() {
+        open().use { j ->
+            val m = j.createMatch(NewMatch("A", "B", startingScore = 60))
+            applied(j, m.id, Command.RecordDarts(Seat.HOME.playerId, darts("T20")))
+            val (state, visits) = j.replayVisits(m.id)
+            assertEquals(60, state.remaining.getValue(Seat.HOME.playerId))
+            assertTrue(visits.single().bust)
+            assertEquals(0, visits.single().bustAt)
+            assertEquals(0, state.legsWonTotal.getValue(Seat.HOME.playerId), "nobody won a leg on a treble")
+        }
+    }
+
+    @Test fun theBustRuleIsTheMatchsAndSurvivesAReopen() {
+        val id: MatchId
+        open().use { j ->
+            val m = j.createMatch(NewMatch("A", "B", startingScore = 40, bustRule = thro.engine.BustRule.KEEP_SCORED_DARTS))
+            id = m.id
+            applied(j, m.id, Command.RecordDarts(Seat.HOME.playerId, darts("20", "D15")))
+        }
+        open().use { j ->
+            assertEquals(thro.engine.BustRule.KEEP_SCORED_DARTS, j.match(id).bustRule)
+            val (state, visits) = j.replayVisits(id)
+            assertEquals(20, state.remaining.getValue(Seat.HOME.playerId), "the 20 before the bust stands")
+            assertEquals(20, visits.single().scored)
+        }
+    }
+
+    @Test fun aLegWonLeavesZeroNotTheNextLegsStartingScore() {
+        open().use { j ->
+            val m = j.createMatch(NewMatch("A", "B", startingScore = 40))
+            applied(j, m.id, Command.RecordDarts(Seat.HOME.playerId, darts("D20")))
+            val won = j.replayVisits(m.id).second.single()
+            assertTrue(won.wonLeg)
+            assertEquals(0, won.remainingAfter)
+        }
+    }
+
+    /** An Android phone that scored before OD-023 has a file with neither column. It must open and take darts. */
+    @Test fun aJournalWrittenBeforeTheDartOpensAndTakesDarts() {
+        DriverManager.getConnection("jdbc:sqlite:$path").use { c ->
+            c.createStatement().use { st ->
+                st.execute("""CREATE TABLE local_match (match_id TEXT PRIMARY KEY, home_name TEXT NOT NULL,
+                    away_name TEXT NOT NULL, starting_score INTEGER NOT NULL, out_rule TEXT NOT NULL,
+                    legs_mode TEXT NOT NULL, legs_target INTEGER NOT NULL, throw_first TEXT NOT NULL,
+                    started_at TEXT NOT NULL, device_id TEXT NOT NULL, in_rule TEXT NOT NULL DEFAULT 'straight',
+                    home_player_id TEXT, away_player_id TEXT, archived_at TEXT);""")
+                st.execute("""CREATE TABLE journal (match_id TEXT NOT NULL REFERENCES local_match(match_id),
+                    device_id TEXT NOT NULL, device_seq INTEGER NOT NULL, command_id TEXT NOT NULL UNIQUE,
+                    kind TEXT NOT NULL DEFAULT 'visit', seat TEXT NOT NULL, visit_total INTEGER NOT NULL,
+                    darts_used INTEGER, darts_at_double INTEGER, corrects_seq INTEGER, occurred_at TEXT NOT NULL,
+                    PRIMARY KEY (match_id, device_id, device_seq));""")
+            }
+        }
+        open().use { j ->
+            val m = j.createMatch(NewMatch("A", "B"))
+            assertEquals(thro.engine.BustRule.RESTORE_VISIT, m.bustRule)
+            applied(j, m.id, Command.RecordDarts(Seat.HOME.playerId, darts("T20", "T19", "Miss")))
+            assertEquals(384, j.replay(m.id).remaining.getValue(Seat.HOME.playerId))
+        }
+    }
 }

@@ -1,5 +1,8 @@
 package thro.journal
 
+import thro.engine.BustRule
+import thro.engine.Dart
+
 import thro.engine.Effect
 import thro.engine.Engine
 import thro.engine.InRule
@@ -164,7 +167,8 @@ public class Journal private constructor(
                   in_rule        TEXT NOT NULL DEFAULT 'straight',
                   home_player_id TEXT,
                   away_player_id TEXT,
-                  archived_at    TEXT
+                  archived_at    TEXT,
+                  bust_rule      TEXT NOT NULL DEFAULT 'restoreVisit'
                 );
                 """.trimIndent(),
             )
@@ -195,10 +199,22 @@ public class Journal private constructor(
                   darts_at_double INTEGER,
                   corrects_seq    INTEGER,
                   occurred_at     TEXT NOT NULL,
+                  darts           TEXT,
                   PRIMARY KEY (match_id, device_id, device_seq)
                 );
                 """.trimIndent(),
             )
+            // A file written before OD-023 has neither column, and CREATE TABLE IF NOT EXISTS does not
+            // add one to a table that exists — the first insert on an Android phone that had already
+            // scored would have failed. ADD COLUMN is the one change SQLite makes without rewriting a
+            // row, so the append-only triggers below are undisturbed. The defaults are what those rows
+            // were: the standard bust rule (the only one there was) and no darts (they were totals).
+            if ("bust_rule" !in columnNames(c, "local_match")) {
+                exec(c, "ALTER TABLE local_match ADD COLUMN bust_rule TEXT NOT NULL DEFAULT 'restoreVisit';")
+            }
+            if ("darts" !in columnNames(c, "journal")) {
+                exec(c, "ALTER TABLE journal ADD COLUMN darts TEXT;")
+            }
             // Append-only, enforced by the database rather than by discipline.
             //
             // **Nothing may ever edit a row.** That is the whole of the journal's trustworthiness
@@ -225,6 +241,13 @@ public class Journal private constructor(
                 """.trimIndent(),
             )
         }
+
+        private fun columnNames(c: Connection, table: String): Set<String> =
+            c.createStatement().use { st ->
+                st.executeQuery("PRAGMA table_info($table);").use { r ->
+                    buildSet { while (r.next()) add(r.getString("name")) }
+                }
+            }
 
         internal fun settleDeviceId(c: Connection, asked: DeviceId): Pair<DeviceId, DeviceId?> {
             val existing = c.prepareStatement("SELECT value FROM meta WHERE key = 'device_id';").use { s ->
@@ -341,8 +364,8 @@ public class Journal private constructor(
             """
             INSERT INTO local_match (match_id, home_name, away_name, starting_score, out_rule, legs_mode,
                                      legs_target, throw_first, started_at, device_id, in_rule,
-                                     home_player_id, away_player_id)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+                                     home_player_id, away_player_id, bust_rule)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
             """.trimIndent(),
         ).use { s ->
             s.setString(1, id.value)
@@ -358,6 +381,7 @@ public class Journal private constructor(
             s.setString(11, m.inRule.name.lowercase())
             s.setString(12, m.homePlayerId)
             s.setString(13, m.awayPlayerId)
+            s.setString(14, bustRuleStored(m.bustRule))
             s.executeUpdate()
         }
         return match(id)
@@ -462,10 +486,23 @@ public class Journal private constructor(
         matchId: MatchId,
         occurredAt: Instant = Instant.now(),
         commandId: String = UUID.randomUUID().toString(),
+        /**
+         * What the engine made of the command. Required for darts: a visit of darts is stored as the
+         * darts AND as the engine's reading of them, and the journal does not re-derive that answer.
+         */
+        reading: thro.engine.VisitReading? = null,
     ): JournalEntry {
         val at = stamped(occurredAt)
-        val visit = command as? thro.engine.Command.RecordVisit
-            ?: throw JournalException.Sqlite("unsupported command")
+        val visit: thro.engine.Command.RecordVisit
+        val darts: List<Dart>?
+        when (command) {
+            is thro.engine.Command.RecordVisit -> { visit = command; darts = null }
+            is thro.engine.Command.RecordDarts -> {
+                val r = reading ?: throw JournalException.Sqlite("a visit of darts is stored with the engine's reading of it")
+                visit = thro.engine.Command.RecordVisit(command.player, r.visitTotal, r.dartsUsed, r.dartsAtDouble)
+                darts = command.darts
+            }
+        }
         val seat = Seat.of(visit.player)
             ?: throw JournalException.Sqlite("player ${visit.player.value} is not a seat in a local match")
 
@@ -478,7 +515,7 @@ public class Journal private constructor(
             replayed(commandId, "visit ${visit.visitTotal} for ${seat.stored}") {
                 it.kind == JournalEntry.Kind.VISIT && it.matchId == matchId && it.seat == seat &&
                     it.visitTotal == visit.visitTotal && it.dartsUsed == visit.dartsUsed &&
-                    it.dartsAtDouble == visit.dartsAtDouble
+                    it.dartsAtDouble == visit.dartsAtDouble && it.darts == darts
             }?.let { exec(connection, "COMMIT;"); return it }
             // A retired or abandoned match takes no more darts (PD-016). Inside the transaction, so
             // the check and the insert cannot be separated by another writer.
@@ -487,8 +524,8 @@ public class Journal private constructor(
             connection.prepareStatement(
                 """
                 INSERT INTO journal (match_id, device_id, device_seq, command_id, seat, visit_total,
-                                     darts_used, darts_at_double, occurred_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?);
+                                     darts_used, darts_at_double, occurred_at, darts)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
                 """.trimIndent(),
             ).use { s ->
                 s.setString(1, matchId.value)
@@ -504,13 +541,14 @@ public class Journal private constructor(
                     s.setNull(8, java.sql.Types.INTEGER)
                 }
                 s.setString(9, iso.format(at))
+                if (darts != null) s.setString(10, storedDarts(darts)) else s.setNull(10, java.sql.Types.VARCHAR)
                 s.executeUpdate()
             }
             // COMMIT is where the barrier happens.
             exec(connection, "COMMIT;")
             return JournalEntry(
                 matchId, deviceId, next, commandId, JournalEntry.Kind.VISIT, seat,
-                visit.visitTotal, visit.dartsUsed, visit.dartsAtDouble, null, at,
+                visit.visitTotal, visit.dartsUsed, visit.dartsAtDouble, null, at, darts,
             )
         } catch (e: Throwable) {
             runCatching { exec(connection, "ROLLBACK;") }
@@ -644,7 +682,7 @@ public class Journal private constructor(
         connection.prepareStatement(
             """
             SELECT match_id, device_id, device_seq, command_id, seat, visit_total, darts_used,
-                   darts_at_double, occurred_at, kind, corrects_seq
+                   darts_at_double, occurred_at, kind, corrects_seq, darts
             FROM journal WHERE command_id = ?;
             """.trimIndent(),
         ).use { s ->
@@ -683,7 +721,7 @@ public class Journal private constructor(
         connection.prepareStatement(
             """
             SELECT match_id, device_id, device_seq, command_id, seat, visit_total, darts_used,
-                   darts_at_double, occurred_at, kind, corrects_seq
+                   darts_at_double, occurred_at, kind, corrects_seq, darts
             FROM journal WHERE match_id = ? ORDER BY rowid;
             """.trimIndent(),
         ).use { s ->
@@ -708,6 +746,7 @@ public class Journal private constructor(
         dartsAtDouble = optionalInt(r, 8),
         correctsSeq = optionalLong(r, 11),
         occurredAt = instant(r.getString(9)),
+        darts = readDarts(r.getString(12)),
     )
 
     /**
@@ -716,6 +755,7 @@ public class Journal private constructor(
      */
     public fun replayVisits(id: MatchId): Pair<MatchState, List<ReplayedVisit>> {
         val record = match(id)
+        record.unknownBustRule?.let { throw JournalException.ReplayRejected(0, "UNKNOWN_BUST_RULE $it") }
         var state = record.initialState
         val visits = mutableListOf<ReplayedVisit>()
         val ordinal = mutableMapOf<Pair<Seat, Int>, Int>()
@@ -747,9 +787,15 @@ public class Journal private constructor(
                             dartsUsed = e.dartsUsed,
                             dartsAtDouble = e.dartsAtDouble,
                             remainingBefore = before,
-                            remainingAfter = outcome.state.remaining[e.seat.playerId] ?: 0,
+                            // Zero when the visit won the leg: the engine's state has already moved to
+                            // the next leg's starting score, and iOS has always recorded 0 here — a
+                            // statistic reading the change in remaining would otherwise see -501.
+                            remainingAfter = if (wonLeg) 0 else outcome.state.remaining[e.seat.playerId] ?: 0,
                             bust = bust,
                             wonLeg = wonLeg,
+                            scored = outcome.reading?.scored,
+                            darts = e.darts,
+                            bustAt = outcome.reading?.bustAt,
                         ),
                     )
                     state = outcome.state
@@ -815,8 +861,18 @@ public class Journal private constructor(
         homePlayerId = r.getString(11),
         awayPlayerId = r.getString(12),
         archivedAt = r.getString(13)?.let { instant(it) },
+        bustRule = bustRuleOf(r.getString(14)) ?: BustRule.RESTORE_VISIT,
+        unknownBustRule = r.getString(14).takeIf { bustRuleOf(it) == null },
     )
 }
+
+/** The words both journals store for a bust rule — the Swift enum's raw values. */
+private fun bustRuleStored(rule: BustRule): String = when (rule) {
+    BustRule.RESTORE_VISIT -> "restoreVisit"
+    BustRule.KEEP_SCORED_DARTS -> "keepScoredDarts"
+}
+
+private fun bustRuleOf(stored: String?): BustRule? = BustRule.entries.firstOrNull { bustRuleStored(it) == stored }
 
 /**
  * Named, in this order, so a column added by ALTER cannot silently shift the ones below it.
@@ -825,4 +881,4 @@ public class Journal private constructor(
  */
 private const val MATCH_COLUMNS =
     "match_id, home_name, away_name, starting_score, out_rule, legs_mode, legs_target, " +
-        "throw_first, started_at, in_rule, home_player_id, away_player_id, archived_at"
+        "throw_first, started_at, in_rule, home_player_id, away_player_id, archived_at, bust_rule"

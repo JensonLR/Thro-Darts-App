@@ -408,4 +408,40 @@ final class StatisticsTests: XCTestCase {
                        Statistics.recentForm(plusUnfinished).average.value,
                        "an in-flight leg must not move the figure between visits")
     }
+
+    // MARK: - OD-023: what a visit scored
+
+    func testAKeepScoredBustCountsTheDartsThatStood() {
+        let standard = [v(1, 1, 50, 3, 40, 40, bust: true)]
+        let local = [VisitRecord(legOrdinal: 1, visitOrdinal: 1, visitTotal: 50, dartsUsed: 3, bust: true,
+                                 remainingBefore: 40, remainingAfter: 20, wonLeg: false, scored: 20)]
+        XCTAssertEqual(Statistics.threeDartAverage(standard).value, 0)
+        XCTAssertEqual(Statistics.threeDartAverage(local).value, 20)
+        XCTAssertEqual(standard[0].points, 0)
+        XCTAssertEqual(v(1, 1, 60, 3, 501, 441).points, 60)
+    }
+
+    func testALegWonOnTheEighthDartHasAFirstNineOfEight() {
+        let leg = [v(1, 1, 180, 3, 301, 121), v(1, 2, 60, 3, 121, 61), v(1, 3, 61, 2, 61, 0, won: true)]
+        let f9 = Statistics.firstNineAverage(leg)
+        XCTAssertEqual(f9.basis, .exact)
+        XCTAssertEqual(f9.value!, 301.0 * 3 / 8, accuracy: 1e-9)
+        let unknown = Statistics.firstNineAverage(Array(leg.dropLast()) + [v(1, 3, 61, nil, 61, 0, won: true)])
+        XCTAssertEqual(unknown.basis, .bounded)
+        XCTAssertEqual(unknown.lower!, 301.0 * 3 / 9, accuracy: 1e-9)
+        XCTAssertEqual(unknown.upper!, 301.0 * 3 / 7, accuracy: 1e-9)
+    }
+
+    func testFormCountsTheLegsAPlayerLostWhenTheCallerKnowsWhichWereFinished() {
+        func won(_ leg: Int) -> [VisitRecord] {
+            [v(leg, 1, 100, 3, 301, 201), v(leg, 2, 100, 3, 201, 101), v(leg, 3, 101, 3, 101, 0, won: true)]
+        }
+        func lost(_ leg: Int) -> [VisitRecord] { [v(leg, 1, 20, 3, 301, 281), v(leg, 2, 20, 3, 281, 261)] }
+        let visits = won(1) + lost(2) + won(3) + lost(4)
+        XCTAssertEqual(Statistics.recentForm(visits).legs, 2, "without the finished legs only the wins are seen")
+        let honest = Statistics.recentForm(visits, completedLegs: [1, 2, 3, 4])
+        XCTAssertEqual(honest.legs, 4)
+        XCTAssertEqual(honest.average.value!, 682.0 * 3 / 30, accuracy: 1e-9)
+        XCTAssertLessThan(honest.average.value!, Statistics.recentForm(visits, minimum: 2).average.value!)
+    }
 }

@@ -73,7 +73,17 @@ public data class VisitRecord(
     val remainingAfter: Int,
     val wonLeg: Boolean,
     val dartsAtDouble: Int? = null,
-)
+    /**
+     * Points the visit took off the score, as the engine reported it (`VisitReading.scored`). Null for
+     * a record written before the engine said: then a bust scored nothing and anything else scored its
+     * total, which was the only rule there was. Under a keep-scored-darts league a bust scores the darts
+     * before the busting one, and only this field can say how many.
+     */
+    val scored: Int? = null,
+) {
+    /** What this visit contributes to an average. */
+    public val points: Int get() = scored ?: if (bust) 0 else visitTotal
+}
 
 /**
  * A player's recent scoring, and how much of it there was.
@@ -141,7 +151,7 @@ public object Statistics {
      */
     public fun threeDartAverage(visits: List<VisitRecord>): Stat {
         if (visits.isEmpty()) return Stat.unavailable("No visits have been recorded for this match yet.")
-        val scored = visits.sumOf { if (it.bust) 0 else it.visitTotal }
+        val scored = visits.sumOf { it.points }
         val wins = visits.filter { it.wonLeg }
         val unknownWins = wins.count { it.dartsUsed == null }
 
@@ -176,19 +186,34 @@ public object Statistics {
         if (qualifying.isEmpty()) {
             return Stat.unavailable("No leg has yet reached nine darts, so there is no first nine.")
         }
-        val scored = qualifying.values.sumOf { legVisits ->
-            legVisits.sortedBy { it.visitOrdinal }.take(3).sumOf { if (it.bust) 0 else it.visitTotal }
+        val firstThree = qualifying.values.map { legVisits -> legVisits.sortedBy { it.visitOrdinal }.take(3) }
+        val scored = firstThree.sumOf { visits3 -> visits3.sumOf { it.points } }
+        val excluded = if (qualifying.size < byLeg.size) {
+            "${byLeg.size - qualifying.size} leg(s) ended before nine darts and are excluded."
+        } else {
+            null
         }
-        val darts = qualifying.size * 9
+        // Nine darts, except where the third visit won the leg with fewer — a leg won on the seventh
+        // dart has a first nine of seven. Assuming nine there understated exactly the best legs.
+        val unknown = firstThree.sumOf { v3 -> v3.count { it.wonLeg && it.dartsUsed == null } }
+        val known = firstThree.sumOf { v3 -> v3.sumOf { if (it.wonLeg && it.dartsUsed == null) 0 else it.dartsUsed ?: 3 } }
+        if (unknown > 0) {
+            return Stat.bounded(
+                lower = scored.toDouble() * 3 / (known + unknown * 3),
+                upper = scored.toDouble() * 3 / (known + unknown),
+                n = qualifying.size,
+                note = listOfNotNull(
+                    "$unknown leg(s) were won inside the first nine without recording how many darts, " +
+                        "so the exact figure lies in this range.",
+                    excluded,
+                ).joinToString(" "),
+            )
+        }
         return Stat(
             basis = Basis.EXACT,
-            value = scored.toDouble() * 3 / darts,
+            value = scored.toDouble() * 3 / known,
             sampleSize = qualifying.size,
-            note = if (qualifying.size < byLeg.size) {
-                "${byLeg.size - qualifying.size} leg(s) ended before nine darts and are excluded."
-            } else {
-                null
-            },
+            note = excluded,
         )
     }
 
@@ -324,8 +349,13 @@ public object Statistics {
         visits: List<VisitRecord>,
         window: Int = FORM_WINDOW_LEGS,
         minimum: Int = MINIMUM_FORM_LEGS,
+        completedLegs: Set<Int>? = null,
     ): Form {
-        val completed = visits.filter { it.wonLeg }.map { it.legOrdinal }.toSet()
+        // `completedLegs` is every leg somebody won, which only a caller holding BOTH players' visits
+        // can know. Without it a leg counts as complete only when this player won it — so a history of
+        // one player's visits saw none of the legs they lost, and form was the average of their wins.
+        val completed = (completedLegs ?: visits.filter { it.wonLeg }.map { it.legOrdinal }.toSet())
+            .intersect(visits.map { it.legOrdinal }.toSet())
         // Highest ordinals are the most recent: the pooled history numbers legs oldest-first.
         val recent = completed.sortedDescending().take(window).toSet()
         val sample = visits.filter { it.legOrdinal in recent }

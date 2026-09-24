@@ -14,7 +14,9 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent))
 from generate import (ACHIEVABLE_3, IMPOSSIBLE_3, CHECKOUTS, ONE_DART, SEGMENTS,
                       DOUBLE_SEGMENTS, classify, bogeys, bust_on_exact, min_darts, rule_tables,
-                      OPENING, OPENERS, unopenable, FINISHERS, THROW_SCORE, routes, route)
+                      OPENING, OPENERS, unopenable, FINISHERS, THROW_SCORE, routes, route,
+                      simulate, classify_darts, DART_NAMES, DART_VALUE, ring_of, FINISHING_RINGS,
+                      OPENING_RINGS, checkout_set)
 
 OUT = Path(__file__).parent
 fails, checks = [], 0
@@ -134,6 +136,15 @@ for fname, meta in manifest["files"].items():
         set_starter = leg_starter
         per_set = c["setup"]["format"].get("alternateStart") == "perSet"
         thrower = leg_starter; done = False
+        if any(cmd["type"] == "RecordDarts" for cmd in c["commands"]) \
+                or c["setup"]["format"].get("bustRule"):
+            # The darts family is replayed through `simulate` itself (it owns opening and the bust
+            # rule, which this loop does not model). What makes that more than a tautology is
+            # section 6 below: the per-dart rule is held to the visit rule everywhere they overlap.
+            check(f"{c['id']} replays to its committed expectation",
+                  simulate(c["commands"], c["setup"]["format"]) == c["expect"])
+            vec_checked += 1
+            continue
         for cmd, exp in zip(c["commands"], c["expect"]["outcomes"]):
             if done:
                 check(f"{c['id']} rejects after completion", exp["result"] == "rejected"); continue
@@ -217,6 +228,94 @@ KNOWN = {170: "T20 T20 Bull", 167: "T20 T19 Bull", 164: "T20 T18 Bull", 161: "T2
 for _rem, _want in KNOWN.items():
     check(f"double-out {_rem} is the conventional route", " ".join(route(_rem, "double")) == _want,
           " ".join(route(_rem, "double")))
+
+
+# ---- 6. The dart (OD-023) ---------------------------------------------------------
+#
+# The per-dart rule is stated by RING and the visit rule by VALUE. These hold them to each other, so
+# neither can drift: they must agree everywhere except the one place the darts know more — reaching
+# zero on a dart that may not finish, which a total cannot see.
+for _r in ("double", "master", "straight"):
+    check(f"{_r}: the finishing rings produce exactly the finishing segments",
+          {DART_VALUE[d] for d in DART_NAMES if ring_of(d) in FINISHING_RINGS[_r]} == FINISHERS[_r])
+    check(f"{_r}: the opening rings produce exactly the opening segments",
+          {DART_VALUE[d] for d in DART_NAMES if ring_of(d) in OPENING_RINGS[_r]} == OPENERS[_r])
+check("every dart is a segment on the board", {DART_VALUE[d] for d in DART_NAMES} == SEGMENTS)
+check("63 distinct darts: miss, 20 singles, 20 doubles, 20 trebles, 25, bull", len(set(DART_NAMES)) == 63)
+
+# The founder's example, by hand. 40: 20 leaves 20; D15 scores 30 and goes below zero.
+_e = classify_darts(40, ["20", "D15"], "double")
+check("40, 20 then D15 busts below zero and restores 40", _e[:3] == ("bust", "BELOW_ZERO", 40), str(_e))
+_e = classify_darts(40, ["20", "D15"], "double", bust_rule="keepScoredDarts")
+check("…and under keep-scored darts the next visit starts on 20", _e[:3] == ("bust", "BELOW_ZERO", 20), str(_e))
+check("T20 from 60 is a bust under double-out", classify_darts(60, ["T20"], "double")[0] == "bust")
+check("a single 20 from 20 is a bust under double-out, although 20 is D10",
+      classify_darts(20, ["20"], "double")[0] == "bust")
+check("the bull finishes 50", classify_darts(50, ["Bull"], "double")[0] == "leg_won")
+check("the outer bull does not finish 25", classify_darts(25, ["25"], "double")[0] == "bust")
+
+def _sequences(max_len):
+    """Every hand of one to `max_len` darts."""
+    hands = [[]]
+    for _ in range(max_len):
+        hands = [h + [d] for h in hands for d in DART_NAMES]
+        yield from hands
+
+_disagree = _keep_bad = _dad_bad = _checked = 0
+def _hold(rem, hand, out_rule):
+    """One hand from one remaining, under both bust rules, against the visit rule."""
+    global _disagree, _keep_bad, _dad_bad, _checked
+    eff, reason, new, _, reading = classify_darts(rem, hand, out_rule)
+    if eff == "rejected":
+        return
+    _checked += 1
+    total = reading["scored"] if eff != "bust" else sum(DART_VALUE[d] for d in hand)
+    v_eff, v_reason, v_new = classify(rem, total, out_rule)
+    last = hand[-1]
+    zero_on_a_non_finisher = rem - total == 0 and ring_of(last) not in FINISHING_RINGS[out_rule]
+    if zero_on_a_non_finisher:
+        ok = (eff, reason, new) == ("bust", "NOT_A_FINISHING_DART", rem)
+    else:
+        ok = (eff, reason, new) == (v_eff, v_reason, v_new)
+    if not ok:
+        _disagree += 1
+    # keep-scored: what stands is exactly the darts before the busting one, and never an illegal score
+    k_eff, _, k_new, _, k_reading = classify_darts(rem, hand, out_rule, bust_rule="keepScoredDarts")
+    if eff == "bust":
+        before_bust = sum(DART_VALUE[d] for d in hand[:reading["bustAt"]])
+        if k_new != rem - before_bust or k_new <= 0 or (out_rule == "double" and k_new == 1):
+            _keep_bad += 1
+    elif (k_eff, k_new) != (eff, new):
+        _keep_bad += 1
+    # darts at a double: never more than were thrown, and only ever from a remaining with a finish
+    if reading["dartsAtDouble"] > len(hand) or (reading["dartsAtDouble"] > 0 and rem not in CHECKOUTS[out_rule]):
+        _dad_bad += 1
+
+for _rule in ("double", "master", "straight"):
+    # From 2 under double-out: a visit never starts on 1 there (section 2 proves it), and from 1 every
+    # hand is a bust that "keeps" the 1 — true, and about a state no leg can be in.
+    for _rem in range(2 if _rule == "double" else 1, 183):
+        for _hand in _sequences(2):
+            _hold(_rem, _hand, _rule)
+    for _rem in (2, 3, 20, 21, 32, 40, 41, 50, 60, 61, 100, 101, 141, 159, 170, 171):
+        for _hand in _sequences(3):
+            if len(_hand) == 3:
+                _hold(_rem, _hand, _rule)
+check("per-dart and per-visit rules agree everywhere the darts do not know more",
+      _disagree == 0, f"{_disagree} of {_checked}")
+check("keep-scored darts keeps exactly the darts before the bust, and never 0, 1 or less",
+      _keep_bad == 0, f"{_keep_bad} of {_checked}")
+check("darts at a double never exceed the darts thrown, and only come from a checkout",
+      _dad_bad == 0, f"{_dad_bad} of {_checked}")
+
+# Darts left. The route table picks the fewest darts, so a route no longer than the darts in hand is
+# a finish that exists, and there is no finish in hand without one. Both directions, every rule.
+for _rule in ("double", "master", "straight"):
+    _table = routes(_rule)
+    for _n in (1, 2, 3):
+        _by_route = {v for v, r in _table.items() if r and len(r) <= _n}
+        check(f"{_rule}: a route of at most {_n} darts exists exactly where {_n} darts can finish",
+              _by_route == checkout_set(_rule, _n), str(sorted(_by_route ^ checkout_set(_rule, _n))[:8]))
 
 print(f"{checks} property checks, {vec_checked} vectors replayed")
 if fails:

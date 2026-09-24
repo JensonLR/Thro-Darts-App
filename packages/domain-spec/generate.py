@@ -19,7 +19,9 @@ import json, os, sys, itertools, hashlib
 from pathlib import Path
 
 OUT = Path(__file__).parent
-SPEC_VERSION = "1.3.0"
+# 1.4.0 adds the dart (OD-023): a visit may be recorded as the darts that were thrown, the engine
+# decides the bust at the dart that caused it, and a match carries its bust rule.
+SPEC_VERSION = "1.4.0"
 
 # ---------------------------------------------------------------- the dartboard
 SINGLES  = set(range(1, 21))
@@ -246,6 +248,107 @@ def classify(remaining, visit_total, out_rule):
         return ("bust", "NOT_CHECKOUT_POSSIBLE", remaining)
     return ("scored", None, left)
 
+# ---------------------------------------------------------------- the dart (OD-023)
+#
+# A visit total cannot say which dart ended a visit, and that is not a detail: a player on 60 who
+# throws T20 reaches zero on a treble, which under double-out is a BUST, and a total of 60 from 60
+# reads as a checkout. Nor can a total say what was scored before the busting dart, which is the
+# whole of the local rule some pub leagues play (keep the darts before the bust). Both need the
+# darts, so the engine may now be given them.
+#
+# A dart is decided by the RING it landed in, never by its value: a single 20 and a double 10 both
+# score 20, and only one of them finishes a double-out leg. That is the entire difference between
+# this section and `classify`, and the validator holds the two to agreement everywhere else.
+#
+# Names are the ones a scorer says and the route table already uses — T20, D16, 20, 25, Bull — plus
+# Miss. A name that parses but is not on the board (T25, D0) is a dart that cannot have been thrown.
+DART_NAMES = (["Miss"] + [named("S", n) for n in range(1, 21)] + [named("D", n) for n in range(1, 21)]
+              + [named("T", n) for n in range(1, 21)] + ["25", "Bull"])
+DART_VALUE = dict(THROW_SCORE, Miss=0)
+
+def ring_of(name):
+    if name == "Miss": return "miss"
+    if name == "Bull" or name.startswith("D"): return "double"
+    if name.startswith("T"): return "treble"
+    return "single"
+
+# Which rings may end a leg, or open one. Stated by ring; the validator proves the VALUES they produce
+# are exactly FINISHERS and OPENERS, so the two statements of the rule cannot drift apart.
+FINISHING_RINGS = {"double": {"double"}, "master": {"double", "treble"},
+                   "straight": {"single", "double", "treble"}}
+OPENING_RINGS = FINISHING_RINGS
+
+# The bust rule a match is played under. Standard darts restores the score the visit started from.
+# Some local leagues keep the darts scored before the busting dart (40: 20 then D15 leaves 20, not 40).
+BUST_RULES = ("restoreVisit", "keepScoredDarts")
+
+def read_darts(before, darts, out_rule, in_rule="straight", opened=True):
+    """Walk the darts of one visit, dart by dart, and say how the visit ends.
+
+    Returns a dict:
+      settled      None while the visit is still open, else "scored" | "bust" | "leg_won"
+      at           index of the dart that settled it (bust or finish), else None
+      reason       the bust reason, else None
+      scoredBefore points counted before the settling dart (what a keep-scored bust keeps)
+      left         the remaining after every counted dart (before any bust is applied)
+      opened       whether the player is in after these darts
+      atDouble     darts thrown while the remaining in front of them was a one-dart finish
+      thrown       darts up to and including the settling one (the rest were never thrown)
+
+    A dart AT A DOUBLE is one thrown while the score in front of it is one a single dart can finish.
+    That is observable from the darts and is what a scorer writes down; what the player aimed at is
+    not observable, and THRØ does not pretend it is. It is counted before the in-rule is consulted:
+    a player not yet in who stands on a one-dart finish can only open with the dart that finishes.
+    """
+    left, counted, at_double, is_open = before, 0, 0, opened
+    for i, d in enumerate(darts):
+        if left in ONE_DART_SET[out_rule]:
+            at_double += 1
+        if not is_open:
+            if ring_of(d) not in OPENING_RINGS[in_rule]:
+                continue                       # scores nothing: the player is not in
+            is_open = True
+        new = left - DART_VALUE[d]
+        reason = None
+        if new < 0: reason = "BELOW_ZERO"
+        elif new == 1 and out_rule == "double": reason = "REMAINDER_ONE"
+        elif new == 0 and ring_of(d) not in FINISHING_RINGS[out_rule]: reason = "NOT_A_FINISHING_DART"
+        if reason:
+            return {"settled": "bust", "at": i, "reason": reason, "scoredBefore": counted,
+                    "left": left, "opened": is_open, "atDouble": at_double, "thrown": i + 1}
+        if new == 0:
+            return {"settled": "leg_won", "at": i, "reason": None, "scoredBefore": counted,
+                    "left": 0, "opened": is_open, "atDouble": at_double, "thrown": i + 1}
+        left, counted = new, counted + DART_VALUE[d]
+    settled = "scored" if len(darts) == 3 else None
+    return {"settled": settled, "at": None, "reason": None, "scoredBefore": counted, "left": left,
+            "opened": is_open, "atDouble": at_double, "thrown": len(darts)}
+
+ONE_DART_SET = {r: set(v) for r, v in ONE_DART.items()}
+
+def classify_darts(before, darts, out_rule, in_rule="straight", opened=True, bust_rule="restoreVisit"):
+    """The per-dart transition. Returns (effect, reason, new_remaining, opened_after, reading).
+
+    Refusals, in order: a hand that is not one to three darts; a dart that is not on the board; a dart
+    entered after the visit was already decided; fewer than three darts on a visit nothing decided.
+    Every one is a claim about darts that cannot have been thrown, so none of them is a bust."""
+    if not (1 <= len(darts) <= 3):
+        return ("rejected", "DARTS_USED_INVALID", before, opened, None)
+    if any(d not in DART_VALUE for d in darts):
+        return ("rejected", "DART_INVALID", before, opened, None)
+    r = read_darts(before, darts, out_rule, in_rule, opened)
+    if r["thrown"] < len(darts) or r["settled"] is None:
+        return ("rejected", "DARTS_USED_INVALID", before, opened, None)
+    if r["settled"] == "bust":
+        kept = r["scoredBefore"] if bust_rule == "keepScoredDarts" else 0
+        reading = {"scored": kept, "dartsUsed": 3, "dartsAtDouble": r["atDouble"], "bustAt": r["at"]}
+        return ("bust", r["reason"], before - kept, r["opened"], reading)
+    if r["settled"] == "leg_won":
+        reading = {"scored": before, "dartsUsed": r["thrown"], "dartsAtDouble": r["atDouble"], "bustAt": None}
+        return ("leg_won", None, 0, r["opened"], reading)
+    reading = {"scored": before - r["left"], "dartsUsed": 3, "dartsAtDouble": r["atDouble"], "bustAt": None}
+    return ("scored", None, r["left"], r["opened"], reading)
+
 # ---------------------------------------------------------------- rule tables
 def rule_tables():
     return {
@@ -283,15 +386,19 @@ def rule_tables():
 
 # ---------------------------------------------------------------- vectors
 def fmt(out_rule="double", start=501, first_to=5, sets=None, legs_per_set=None,
-        alternate="perLeg"):
+        alternate="perLeg", in_rule="straight", bust_rule=None):
     """A match format. `sets` promotes it to set play: `first_to` then means legs per set.
 
     The shape was here from the beginning and no vector used it, which is how set play came to be
     implemented in two engines and exercised by nothing at all.
     """
-    f = {"game": "X01", "startingScore": start, "inRule": "straight", "outRule": out_rule,
+    f = {"game": "X01", "startingScore": start, "inRule": in_rule, "outRule": out_rule,
          "structure": {"kind": "legs", "firstTo": first_to},
          "throwFirst": "A", "alternateStart": alternate}
+    # Absent means the standard rule, so every vector written before 1.4.0 still means what it meant.
+    if bust_rule:
+        assert bust_rule in BUST_RULES, bust_rule
+        f["bustRule"] = bust_rule
     if sets:
         f["structure"] = {"kind": "sets", "firstTo": sets,
                           "legsPerSet": {"firstTo": legs_per_set or first_to}}
@@ -308,6 +415,11 @@ def visit(seq, player, total, darts=None, at_double=None):
     if darts is not None: c["dartsUsed"] = darts
     if at_double is not None: c["dartsAtDouble"] = at_double
     return c
+
+def throw(seq, player, *darts):
+    """A visit recorded as the darts that were thrown (OD-023). The engine derives everything else."""
+    return {"seq": seq, "id": f"01J{seq:029d}", "type": "RecordDarts", "player": player,
+            "darts": list(darts)}
 
 def simulate(commands, format_):
     """Reference outcome, computed from `classify` alone — so expected values are derived,
@@ -336,6 +448,10 @@ def simulate(commands, format_):
     sets_won = {"A": 0, "B": 0}
     set_no, set_starter = 1, format_["throwFirst"]
     per_set = format_.get("alternateStart") == "perSet"
+    in_rule = format_.get("inRule", "straight")
+    bust_rule = format_.get("bustRule", "restoreVisit")
+    fresh_opening = lambda: {"A": in_rule == "straight", "B": in_rule == "straight"}
+    opened = fresh_opening()
     for c in commands:
         if winner:
             outcomes.append({"seq": c["seq"], "result": "rejected", "reason": "MATCH_COMPLETE"}); continue
@@ -343,11 +459,28 @@ def simulate(commands, format_):
         if p != thrower:
             outcomes.append({"seq": c["seq"], "result": "rejected", "reason": "NOT_YOUR_TURN"}); continue
         before = rem[p]
-        eff, reason, new = classify(before, c["visitTotal"], out_rule)
-        if eff == "rejected":
-            outcomes.append({"seq": c["seq"], "result": "rejected", "reason": reason}); continue
-        dad = c.get("dartsAtDouble")
-        du = c.get("dartsUsed")
+        reading = None
+        if c["type"] == "RecordDarts":
+            eff, reason, new, now_open, reading = classify_darts(
+                before, c["darts"], out_rule, in_rule, opened[p], bust_rule)
+            if eff == "rejected":
+                outcomes.append({"seq": c["seq"], "result": "rejected", "reason": reason}); continue
+            opened[p] = now_open
+            dad = du = None                    # the engine derived both; nothing to cross-check
+        else:
+            # The visit path's reference knows nothing about opening (PD-008 is proved by the engines'
+            # own tests), so a vector that mixes it with double-in would be expected wrongly. Refuse
+            # to build one rather than emit an expectation this function cannot stand behind.
+            assert in_rule == "straight" or not c.get("visitTotal"), "visit vectors are straight-in"
+            eff, reason, new = classify(before, c["visitTotal"], out_rule)
+            if eff == "rejected":
+                outcomes.append({"seq": c["seq"], "result": "rejected", "reason": reason}); continue
+            # Keep-scored darts needs to know what counted before the busting dart, and a total does
+            # not say. Refused, so the scorer enters the darts — not busted on a guess.
+            if eff == "bust" and bust_rule == "keepScoredDarts":
+                outcomes.append({"seq": c["seq"], "result": "rejected", "reason": "DARTS_REQUIRED"}); continue
+            dad = c.get("dartsAtDouble")
+            du = c.get("dartsUsed")
         bad_dad = None
         if dad is not None:
             if not (0 <= dad <= 3): bad_dad = "DARTS_AT_DOUBLE_INVALID"
@@ -365,6 +498,7 @@ def simulate(commands, format_):
             legs[p] += 1
             legs_in_set[p] += 1
             took_leg_unit = (legs_in_set[p] if playing_sets else legs[p]) >= target
+            opened = fresh_opening()           # opening is a fact about a leg
             if not took_leg_unit:
                 leg_no += 1
                 leg_starter = set_starter if per_set else ("B" if leg_starter == "A" else "A")
@@ -393,6 +527,7 @@ def simulate(commands, format_):
             thrower = "B" if p == "A" else "A"
         o = {"seq": c["seq"], "result": "accepted", "effect": eff}
         if reason: o["reason"] = reason
+        if reading: o["reading"] = reading
         outcomes.append(o)
     state = {"matchState": "complete" if winner else "in_progress",
              "currentLeg": leg_no, "throwerId": None if winner else thrower,
@@ -688,6 +823,103 @@ def build_double_attempt_vectors():
                           cmds, simulate(cmds, f), f))
     return cases
 
+def build_darts_vectors():
+    """Visits recorded as darts (OD-023), under both bust rules.
+
+    Each case sets up with ordinary visit totals — the part of the corpus that is already proved —
+    and then throws the darts under test, so a failure here is about the dart and nothing else."""
+    cases = []
+
+    def on(target, *throws, f=None, cid, desc):
+        f = f or fmt()
+        cmds, seq = setup_cmds(target)
+        assert cmds is not None, target
+        for t in throws:
+            cmds.append(throw(seq, "A", *t)); seq += 1
+        cases.append(case(cid, desc, cmds, simulate(cmds, f), f))
+
+    keep = fmt(bust_rule="keepScoredDarts")
+    # The founder's example, both ways. 40: a single 20 leaves 20, then D15 scores 30 — below zero.
+    on(40, ("20", "D15", ), cid="darts.bust.restore.forty-twenty-d15",
+       desc="On 40: 20 then D15 goes below zero. The standard rule puts the score back to 40.")
+    on(40, ("20", "D15"), f=keep, cid="darts.bust.keep.forty-twenty-d15",
+       desc="On 40 under keep-scored darts: the 20 stands, D15 busts, and the next visit starts on 20.")
+    # Reaching zero on a dart that cannot finish: the bust a visit total cannot see.
+    on(60, ("T20",), cid="darts.bust.zero-on-a-treble",
+       desc="On 60, T20 reaches zero on a treble. Under double-out that is a bust, not a checkout.")
+    on(20, ("20",), cid="darts.bust.zero-on-a-single",
+       desc="On 20, a single 20 reaches zero but is not a double: bust, although 20 is D10.")
+    on(32, ("16", "16"), cid="darts.bust.zero-on-a-single-second-dart",
+       desc="On 32, 16 then 16: the second dart reaches zero on a single, so the visit busts.")
+    on(32, ("16", "16"), f=keep, cid="darts.bust.keep.zero-on-a-single-second-dart",
+       desc="Keep-scored darts: the first 16 stands and the next visit starts on 16.")
+    on(41, ("20", "20"), cid="darts.bust.remainder-one",
+       desc="On 41, 20 and 20 leave 1, which cannot be finished on a double: bust back to 41.")
+    on(41, ("20", "20"), f=keep, cid="darts.bust.keep.remainder-one",
+       desc="Keep-scored darts: the first 20 stands; the one that left 1 does not. Next visit on 21.")
+    on(40, ("T20",), f=keep, cid="darts.bust.keep.first-dart",
+       desc="Keep-scored darts with the first dart busting keeps nothing: back to 40.")
+    on(32, ("D10", "D8"), f=keep, cid="darts.bust.keep.two-darts-at-a-double",
+       desc="On 32: D10 leaves 12, D8 overshoots. Two darts at a double; keep-scored leaves 12.")
+    # Finishes.
+    on(50, ("Bull",), cid="darts.finish.bull",
+       desc="On 50, the bull is a double and finishes in one dart.")
+    on(170, ("T20", "T20", "Bull"), cid="darts.finish.170",
+       desc="170: T20 T20 Bull. Three darts, one of them at a double (from 50).")
+    on(32, ("Miss", "Miss", "D16"), cid="darts.finish.third-dart",
+       desc="On 32, two misses then D16: three darts, three at a double.")
+    on(100, ("T20", "D20"), cid="darts.finish.two-darts",
+       desc="On 100, T20 leaves 40 and D20 finishes: two darts, one at a double.")
+    on(60, ("20", "Miss", "5"), cid="darts.scored.from-a-finish",
+       desc="On 60, 20 leaves 40; the next two darts are thrown at a double and miss. 35 left.")
+    on(141, ("T20", "T19", "D12"), cid="darts.finish.141",
+       desc="141 in three: only the last dart is thrown at a double.")
+    # Refusals: darts that cannot have been thrown.
+    on(40, ("D20", "Miss"), cid="darts.refused.after-the-finish",
+       desc="A dart entered after the leg was won was never thrown: refused, not scored.")
+    on(40, ("T20", "20"), cid="darts.refused.after-the-bust",
+       desc="A dart entered after the visit bust was never thrown: refused.")
+    on(100, ("T20", "20"), cid="darts.refused.two-darts-unsettled",
+       desc="Two darts that neither finish nor bust are not a whole visit: refused.")
+    on(100, ("T25",), cid="darts.refused.no-such-dart",
+       desc="There is no treble bull: a dart that is not on the board is refused.")
+    on(100, ("T20", "T20", "T20", "T20"), cid="darts.refused.four-darts",
+       desc="A visit is at most three darts.")
+    # Keep-scored darts cannot take a bust as a total: it does not say what came before the bust.
+    cmds, seq = setup_cmds(40)
+    cmds = cmds + [visit(seq, "A", 50, 3)]
+    cases.append(case("darts.keep.total-bust-refused",
+                      "Under keep-scored darts a total that busts is refused: only the darts can say "
+                      "what was scored before the busting one.", cmds, simulate(cmds, keep), keep))
+    cmds, seq = setup_cmds(100)
+    cmds = cmds + [visit(seq, "A", 60, 3)]
+    cases.append(case("darts.keep.total-scored-accepted",
+                      "Under keep-scored darts a total that does not bust means what it always meant.",
+                      cmds, simulate(cmds, keep), keep))
+    # Other out-rules: the ring decides, not the value.
+    on(60, ("T20",), f=fmt(out_rule="master"), cid="darts.finish.master-out-treble",
+       desc="Master-out: T20 from 60 finishes, because a treble may end the leg.")
+    on(20, ("20",), f=fmt(out_rule="straight"), cid="darts.finish.straight-out-single",
+       desc="Straight-out: a single 20 from 20 finishes.")
+    # Double-in, entered as darts from the first dart of the leg. Nothing counts until the double.
+    din = fmt(in_rule="double")
+    cmds = [throw(1, "A", "20", "D10", "T20"), throw(2, "B", "20", "20", "20"),
+            throw(3, "A", "T20", "T20", "T20"), throw(4, "B", "T20", "Bull", "20")]
+    cases.append(case("darts.double-in.opening",
+                      "Double-in: A's 20 does not count, D10 opens, T20 counts (80). B throws three "
+                      "singles and is not in. B then opens on the bull: T20 does not count, Bull and 20 do.",
+                      cmds, simulate(cmds, din), din))
+    # A whole short leg in darts, crossing into the next leg, so opening resets with the leg.
+    din301 = fmt(in_rule="double", start=40, first_to=2)
+    cmds = [throw(1, "A", "D20"), throw(2, "B", "20", "D10", "Miss"), throw(3, "A", "20", "20", "20"),
+            throw(4, "B", "20")]
+    cases.append(case("darts.double-in.leg-resets-opening",
+                      "From 40, double-in double-out: D20 opens and finishes at once. In the next leg B "
+                      "opens with D10 after a 20 that does not count and is left on 20; A, opened last leg, "
+                      "is not in this one and scores nothing; B then busts with a single 20 that reaches "
+                      "zero.", cmds, simulate(cmds, din301), din301))
+    return cases
+
 def build_adversarial_vectors():
     cases, f = [], fmt()
     cmds = [visit(1, "A", 501, 3)]
@@ -731,6 +963,18 @@ def emit_kotlin(tables, path):
         L.append("    private const val MAX_%s: Int = %d" % (name, t["maxCheckout"]))
     L.append("")
     L.append("    public val ONE_DART_FINISHES_DOUBLE: Set<Int> = setOf(%s)" % ints(d["oneDartFinishes"]))
+    L.append("    private val ONE_DART_FINISHES_MASTER: Set<Int> = setOf(%s)" % ints(m["oneDartFinishes"]))
+    L.append("    private val ONE_DART_FINISHES_STRAIGHT: Set<Int> = setOf(%s)" % ints(st["oneDartFinishes"]))
+    L.append("")
+    L.append("    /**")
+    L.append("     * Remainders one dart can finish. A dart thrown from one of these is a dart AT A DOUBLE")
+    L.append("     * (OD-023): the score in front of it is one a single dart ends.")
+    L.append("     */")
+    L.append("    public fun oneDartFinishes(outRule: OutRule): Set<Int> = when (outRule) {")
+    L.append("        OutRule.DOUBLE -> ONE_DART_FINISHES_DOUBLE")
+    L.append("        OutRule.MASTER -> ONE_DART_FINISHES_MASTER")
+    L.append("        OutRule.STRAIGHT -> ONE_DART_FINISHES_STRAIGHT")
+    L.append("    }")
     L.append("")
     L.append("    /**")
     L.append("     * One route to each finish (PD-013). A POSITION, not a fact: most finishes have")
@@ -841,6 +1085,18 @@ def emit_swift(tables, path):
         L.append("    private static let max%s = %d" % (name.capitalize(), t["maxCheckout"]))
     L.append("")
     L.append("    public static let oneDartFinishesDouble: Set<Int> = [%s]" % ints(d["oneDartFinishes"]))
+    L.append("    private static let oneDartFinishesMaster: Set<Int> = [%s]" % ints(m["oneDartFinishes"]))
+    L.append("    private static let oneDartFinishesStraight: Set<Int> = [%s]" % ints(st["oneDartFinishes"]))
+    L.append("")
+    L.append("    /// Remainders one dart can finish. A dart thrown from one of these is a dart AT A DOUBLE")
+    L.append("    /// (OD-023): the score in front of it is one a single dart ends.")
+    L.append("    public static func oneDartFinishes(_ outRule: OutRule) -> Set<Int> {")
+    L.append("        switch outRule {")
+    L.append("        case .double: return oneDartFinishesDouble")
+    L.append("        case .master: return oneDartFinishesMaster")
+    L.append("        case .straight: return oneDartFinishesStraight")
+    L.append("        }")
+    L.append("    }")
     L.append("")
     L.append("    /// One route to each finish (PD-013). A POSITION, not a fact: most finishes have")
     L.append("    /// several legal routes and players disagree about which is best. The founder decided")
@@ -946,6 +1202,7 @@ def main():
                         ("match-completion.jsonl", build_match_vectors()),
                         ("sets-and-legs.jsonl", build_sets_vectors()),
                         ("double-attempts.jsonl", build_double_attempt_vectors()),
+                        ("darts.jsonl", build_darts_vectors()),
                         ("adversarial.jsonl", build_adversarial_vectors())):
         p, n = write_jsonl(name, cases); total += n
         files[name] = {"cases": n,

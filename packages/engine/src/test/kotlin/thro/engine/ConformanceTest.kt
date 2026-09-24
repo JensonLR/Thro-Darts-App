@@ -61,15 +61,24 @@ class ConformanceTest {
         for ((i, c) in cmds.withIndex()) {
             val cmd = c.obj()
             val exp = expected[i].obj()
-            val outcome = Engine.apply(
-                state,
-                Command.RecordVisit(
-                    player = PlayerId(cmd.getValue("player").str()),
+            val player = PlayerId(cmd.getValue("player").str())
+            val command = when (cmd.opt("type")?.str()) {
+                // Every dart goes through `Dart.parse`, so the corpus exercises the names as well as
+                // the rules: a name the engine cannot read fails here, not on a phone.
+                "RecordDarts" -> Command.RecordDarts(
+                    player,
+                    cmd.getValue("darts").arr().map { d ->
+                        Dart.parse(d.str()) ?: error("$id: '${d.str()}' is not a dart's name")
+                    },
+                )
+                else -> Command.RecordVisit(
+                    player = player,
                     visitTotal = cmd.getValue("visitTotal").int(),
                     dartsUsed = cmd.opt("dartsUsed")?.int(),
                     dartsAtDouble = cmd.opt("dartsAtDouble")?.int(),
-                ),
-            )
+                )
+            }
+            val outcome = Engine.apply(state, command)
             val seq = cmd.getValue("seq").int()
             when (outcome) {
                 is Outcome.Rejected -> {
@@ -95,6 +104,18 @@ class ConformanceTest {
                         val wantReason = exp.opt("reason")?.str()
                         if (wantReason != null && wantReason != outcome.bustReason?.name) {
                             failures += "$id seq$seq: bust reason ${outcome.bustReason} != $wantReason"
+                        }
+                        exp.opt("reading")?.obj()?.let { want ->
+                            val got = outcome.reading
+                            val wantBustAt = want.opt("bustAt")?.int()
+                            if (got == null ||
+                                got.scored != want.getValue("scored").int() ||
+                                got.dartsUsed != want.getValue("dartsUsed").int() ||
+                                got.dartsAtDouble != want.getValue("dartsAtDouble").int() ||
+                                got.bustAt != wantBustAt
+                            ) {
+                                failures += "$id seq$seq: reading $got != $want"
+                            }
                         }
                     }
                     state = outcome.state
@@ -173,6 +194,11 @@ class ConformanceTest {
             throwFirst = PlayerId(f.getValue("throwFirst").str()),
             alternation = if (f.opt("alternateStart")?.str() == "perSet") Alternation.PER_SET
                           else Alternation.PER_LEG,
+            bustRule = when (f.opt("bustRule")?.str()) {
+                null, "restoreVisit" -> BustRule.RESTORE_VISIT
+                "keepScoredDarts" -> BustRule.KEEP_SCORED_DARTS
+                else -> error("unknown bust rule ${f.getValue("bustRule").str()}")
+            },
         )
     }
 
@@ -257,8 +283,9 @@ class ConformanceTest {
 
     @Test
     fun `rule tables match the generated spec version`() {
-        // 1.3.0 added the opening tables, which is what made double-in scorable (PD-008).
-        assertEquals("1.3.0", RuleTables.SPEC_VERSION)
+        // 1.3.0 added the opening tables, which is what made double-in scorable (PD-008); 1.4.0 the
+        // dart and the bust rule (OD-023).
+        assertEquals("1.4.0", RuleTables.SPEC_VERSION)
         assertEquals(180, RuleTables.MAX_VISIT_TOTAL)
         assertEquals(170, RuleTables.checkouts(OutRule.DOUBLE).max())
         assertEquals(180, RuleTables.checkouts(OutRule.MASTER).max())

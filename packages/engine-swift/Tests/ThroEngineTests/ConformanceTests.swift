@@ -120,7 +120,7 @@ final class ConformanceTests: XCTestCase {
                 if wantEffect != "rejected" || wantReason != reason.rawValue {
                     failures.append("rem=\(remaining) vt=\(visitTotal): rejected \(reason.rawValue) != \(wantEffect)/\(wantReason ?? "nil")")
                 }
-            case let .accepted(newState, effect, bustReason):
+            case let .accepted(newState, effect, bustReason, _):
                 let got = effect.rawValue
                 let gotRemaining = newState.remaining[a] ?? -1
                 // A leg win at firstTo-5 with one leg already banked is a match win in the engine's
@@ -167,12 +167,27 @@ final class ConformanceTests: XCTestCase {
             guard i < expected.count else { break }
             let exp = expected[i]
             let seq = c["seq"] as? Int ?? i + 1
-            let outcome = Engine.apply(state, .recordVisit(
-                player: PlayerId(c["player"] as? String ?? ""),
-                visitTotal: c["visitTotal"] as? Int ?? -1,
-                dartsUsed: c["dartsUsed"] as? Int,
-                dartsAtDouble: c["dartsAtDouble"] as? Int
-            ))
+            let player = PlayerId(c["player"] as? String ?? "")
+            let command: Command
+            if (c["type"] as? String) == "RecordDarts" {
+                // Every dart goes through `Dart.parse`, so the corpus exercises the names as well as
+                // the rules: a name this engine cannot read fails here, not on a phone.
+                let names = c["darts"] as? [String] ?? []
+                let darts = names.compactMap(Dart.parse)
+                guard darts.count == names.count else {
+                    failures.append("\(id) seq\(seq): a dart's name did not parse: \(names)")
+                    continue
+                }
+                command = .recordDarts(player: player, darts: darts)
+            } else {
+                command = .recordVisit(
+                    player: player,
+                    visitTotal: c["visitTotal"] as? Int ?? -1,
+                    dartsUsed: c["dartsUsed"] as? Int,
+                    dartsAtDouble: c["dartsAtDouble"] as? Int
+                )
+            }
+            let outcome = Engine.apply(state, command)
 
             let want = exp["result"] as? String
             switch outcome {
@@ -182,7 +197,7 @@ final class ConformanceTests: XCTestCase {
                 } else if let wantReason = exp["reason"] as? String, wantReason != reason.rawValue {
                     failures.append("\(id) seq\(seq): rejection reason \(reason.rawValue) != \(wantReason)")
                 }
-            case let .accepted(newState, effect, bustReason):
+            case let .accepted(newState, effect, bustReason, reading):
                 if want != "accepted" {
                     failures.append("\(id) seq\(seq): engine accepted (\(effect.rawValue)) but corpus expects \(want ?? "?")")
                 } else {
@@ -191,6 +206,16 @@ final class ConformanceTests: XCTestCase {
                     }
                     if let wantReason = exp["reason"] as? String, wantReason != bustReason?.rawValue {
                         failures.append("\(id) seq\(seq): bust reason \(bustReason?.rawValue ?? "nil") != \(wantReason)")
+                    }
+                    if let want = exp["reading"] as? [String: Any] {
+                        let wantBustAt = want["bustAt"] as? Int
+                        if reading == nil
+                            || reading?.scored != want["scored"] as? Int
+                            || reading?.dartsUsed != want["dartsUsed"] as? Int
+                            || reading?.dartsAtDouble != want["dartsAtDouble"] as? Int
+                            || reading?.bustAt != wantBustAt {
+                            failures.append("\(id) seq\(seq): reading \(String(describing: reading)) != \(want)")
+                        }
                     }
                 }
                 state = newState
@@ -252,7 +277,8 @@ final class ConformanceTests: XCTestCase {
             legs: unit(legsFrom),
             sets: playingSets ? unit(structure) : nil,
             throwFirst: PlayerId(j["throwFirst"] as? String ?? "A"),
-            alternation: (j["alternateStart"] as? String) == "perSet" ? .perSet : .perLeg
+            alternation: (j["alternateStart"] as? String) == "perSet" ? .perSet : .perLeg,
+            bustRule: BustRule(rawValue: (j["bustRule"] as? String) ?? "restoreVisit") ?? .restoreVisit
         )
     }
 
@@ -288,7 +314,7 @@ final class ConformanceTests: XCTestCase {
             legs: Structure(mode: .firstTo, target: 2), throwFirst: a), home: a, away: b).opened[a], true)
 
         // A visit that does not open scores nothing and does not open the player.
-        guard case .accepted(let afterMiss, let effect, _) = Engine.apply(start, .visit(a, 0)) else {
+        guard case .accepted(let afterMiss, let effect, _, _) = Engine.apply(start, .visit(a, 0)) else {
             return XCTFail("a visit that did not open is still a visit")
         }
         XCTAssertEqual(effect, .scored)
@@ -323,7 +349,7 @@ final class ConformanceTests: XCTestCase {
         XCTAssertFalse(RuleTables.checkouts(.double).contains(1))
 
         // Opening is per player, and it survives to the end of the leg.
-        guard case .accepted(let bIn, _, _) = Engine.apply(afterMiss, .visit(b, 40)) else {
+        guard case .accepted(let bIn, _, _, _) = Engine.apply(afterMiss, .visit(b, 40)) else {
             return XCTFail("40 opens")
         }
         XCTAssertEqual(bIn.remaining[b], 461)
@@ -337,7 +363,7 @@ final class ConformanceTests: XCTestCase {
         // A new leg closes the door again; a bust reverts the score but never the opening.
         let short = MatchFormat(startingScore: 40, inRule: .double, outRule: .double,
                                 legs: Structure(mode: .firstTo, target: 2), throwFirst: a)
-        guard case .accepted(let won, let wonEffect, _) =
+        guard case .accepted(let won, let wonEffect, _, _) =
                 Engine.apply(MatchState.start(format: short, home: a, away: b),
                              .visit(a, 40, dartsUsed: 1, dartsAtDouble: 1)) else {
             return XCTFail("D20 from 40 wins the leg")
@@ -348,7 +374,7 @@ final class ConformanceTests: XCTestCase {
 
         let tight = MatchFormat(startingScore: 30, inRule: .double, outRule: .double,
                                 legs: Structure(mode: .firstTo, target: 2), throwFirst: a)
-        guard case .accepted(let bust, let bustEffect, _) =
+        guard case .accepted(let bust, let bustEffect, _, _) =
                 Engine.apply(MatchState.start(format: tight, home: a, away: b), .visit(a, 40)) else {
             return XCTFail("40 from 30 busts")
         }

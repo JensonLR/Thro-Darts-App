@@ -96,6 +96,12 @@ public struct VisitRecord: Equatable, Sendable {
     public let remainingAfter: Int
     public let wonLeg: Bool
     public let dartsAtDouble: Int?
+    /// Points the visit took off the score, as the engine reported it. Nil for a record written before
+    /// the engine said; see the Kotlin `VisitRecord.scored`.
+    public let scored: Int?
+
+    /// What this visit contributes to an average.
+    public var points: Int { scored ?? (bust ? 0 : visitTotal) }
 
     public init(
         legOrdinal: Int,
@@ -106,7 +112,8 @@ public struct VisitRecord: Equatable, Sendable {
         remainingBefore: Int,
         remainingAfter: Int,
         wonLeg: Bool,
-        dartsAtDouble: Int? = nil
+        dartsAtDouble: Int? = nil,
+        scored: Int? = nil
     ) {
         self.legOrdinal = legOrdinal
         self.visitOrdinal = visitOrdinal
@@ -117,13 +124,14 @@ public struct VisitRecord: Equatable, Sendable {
         self.remainingAfter = remainingAfter
         self.wonLeg = wonLeg
         self.dartsAtDouble = dartsAtDouble
+        self.scored = scored
     }
 
     /// The Kotlin `copy(dartsAtDouble = …)`, which the tests use to strip evidence.
     public func with(dartsAtDouble: Int?) -> VisitRecord {
         VisitRecord(legOrdinal: legOrdinal, visitOrdinal: visitOrdinal, visitTotal: visitTotal,
                     dartsUsed: dartsUsed, bust: bust, remainingBefore: remainingBefore,
-                    remainingAfter: remainingAfter, wonLeg: wonLeg, dartsAtDouble: dartsAtDouble)
+                    remainingAfter: remainingAfter, wonLeg: wonLeg, dartsAtDouble: dartsAtDouble, scored: scored)
     }
 }
 
@@ -196,7 +204,7 @@ public enum Statistics {
         if visits.isEmpty {
             return .unavailable("No visits have been recorded for this match yet.")
         }
-        let scored = visits.reduce(0) { $0 + ($1.bust ? 0 : $1.visitTotal) }
+        let scored = visits.reduce(0) { $0 + $1.points }
         let unknownWins = visits.filter { $0.wonLeg && $0.dartsUsed == nil }.count
 
         if unknownWins == 0 {
@@ -230,19 +238,31 @@ public enum Statistics {
         if qualifying.isEmpty {
             return .unavailable("No leg has yet reached nine darts, so there is no first nine.")
         }
-        let scored = qualifying.values.reduce(0) { acc, legVisits in
-            acc + legVisits
-                .sorted { $0.visitOrdinal < $1.visitOrdinal }
-                .prefix(3)
-                .reduce(0) { $0 + ($1.bust ? 0 : $1.visitTotal) }
+        let firstThree = qualifying.values.map { legVisits in
+            Array(legVisits.sorted { $0.visitOrdinal < $1.visitOrdinal }.prefix(3))
         }
-        let darts = qualifying.count * 9
-        let excluded = byLeg.count - qualifying.count
+        let scored = firstThree.reduce(0) { acc, v3 in acc + v3.reduce(0) { $0 + $1.points } }
+        let excludedCount = byLeg.count - qualifying.count
+        let excluded = excludedCount > 0 ? "\(excludedCount) leg(s) ended before nine darts and are excluded." : nil
+        // Nine darts, except where the third visit won the leg with fewer — see the Kotlin.
+        let unknown = firstThree.reduce(0) { acc, v3 in acc + v3.filter { $0.wonLeg && $0.dartsUsed == nil }.count }
+        let known = firstThree.reduce(0) { acc, v3 in
+            acc + v3.reduce(0) { $0 + (($1.wonLeg && $1.dartsUsed == nil) ? 0 : ($1.dartsUsed ?? 3)) }
+        }
+        if unknown > 0 {
+            return .bounded(
+                lower: Double(scored) * 3 / Double(known + unknown * 3),
+                upper: Double(scored) * 3 / Double(known + unknown),
+                n: qualifying.count,
+                note: (["\(unknown) leg(s) were won inside the first nine without recording how many darts, "
+                        + "so the exact figure lies in this range."] + [excluded].compactMap { $0 })
+                    .joined(separator: " "))
+        }
         return Stat(
             basis: .exact,
-            value: Double(scored) * 3 / Double(darts),
+            value: Double(scored) * 3 / Double(known),
             sampleSize: qualifying.count,
-            note: excluded > 0 ? "\(excluded) leg(s) ended before nine darts and are excluded." : nil
+            note: excluded
         )
     }
 
@@ -378,8 +398,13 @@ public enum Statistics {
     /// snapshot mid-flight, and including it would move the figure between visits of the same leg.
     public static func recentForm(_ visits: [VisitRecord],
                                   window: Int = Statistics.formWindowLegs,
-                                  minimum: Int = Statistics.minimumFormLegs) -> Form {
-        let completed = Set(visits.filter { $0.wonLeg }.map { $0.legOrdinal })
+                                  minimum: Int = Statistics.minimumFormLegs,
+                                  completedLegs: Set<Int>? = nil) -> Form {
+        // `completedLegs` is every leg somebody won, which only a caller holding both players' visits
+        // can know. Without it a leg counted as complete only when this player won it, so form was
+        // the average of their wins. See the Kotlin.
+        let completed = (completedLegs ?? Set(visits.filter { $0.wonLeg }.map { $0.legOrdinal }))
+            .intersection(Set(visits.map { $0.legOrdinal }))
         // Highest ordinals are the most recent: the pooled history numbers legs oldest-first.
         let recent = Set(completed.sorted(by: >).prefix(window))
         let sample = visits.filter { recent.contains($0.legOrdinal) }

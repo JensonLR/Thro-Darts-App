@@ -428,4 +428,48 @@ class StatisticsTest {
             "an in-flight leg must not move the figure between visits",
         )
     }
+
+    // ---------------------------------------------------------------- OD-023: what a visit scored
+
+    @Test
+    fun `a keep-scored bust counts the darts that stood, and a standard bust counts nothing`() {
+        // 40: 20 then D15. Standard: the visit scored nothing. Keep-scored darts: the 20 stood.
+        val standard = listOf(v(1, 1, 50, 3, 40, 40, bust = true))
+        val local = listOf(v(1, 1, 50, 3, 40, 20, bust = true).copy(scored = 20))
+        assertEquals(0.0, Statistics.threeDartAverage(standard).value)
+        assertEquals(20.0, Statistics.threeDartAverage(local).value)
+        // A record written before the engine said what a visit scored keeps meaning what it meant.
+        assertEquals(0, standard.single().points)
+        assertEquals(60, v(1, 1, 60, 3, 501, 441).points)
+    }
+
+    @Test
+    fun `a leg won on the seventh dart has a first nine of seven darts, not nine`() {
+        // 180, 180, then 141 in one dart is impossible; 180, 180, D… is not a leg. Use a 301 leg:
+        // 180, 81 (T19 D12 → two darts, a leg won on the eighth dart).
+        val leg = listOf(v(1, 1, 180, 3, 301, 121), v(1, 2, 60, 3, 121, 61), v(1, 3, 61, 2, 61, 0, won = true))
+        val f9 = Statistics.firstNineAverage(leg)
+        assertEquals(Basis.EXACT, f9.basis)
+        assertEquals(301.0 * 3 / 8, f9.value!!, 1e-9)
+        // Not knowing the winning visit's darts makes it a range, not a guess at nine.
+        val unknown = Statistics.firstNineAverage(leg.dropLast(1) + v(1, 3, 61, null, 61, 0, won = true))
+        assertEquals(Basis.BOUNDED, unknown.basis)
+        assertEquals(301.0 * 3 / 9, unknown.lower!!, 1e-9)
+        assertEquals(301.0 * 3 / 7, unknown.upper!!, 1e-9)
+    }
+
+    @Test
+    fun `form counts the legs a player lost, when the caller knows which legs were finished`() {
+        // Four legs. The player won legs 1 and 3 scoring 100 a visit, and lost legs 2 and 4 scoring 20.
+        val won = { leg: Int -> listOf(v(leg, 1, 100, 3, 301, 201), v(leg, 2, 100, 3, 201, 101), v(leg, 3, 101, 3, 101, 0, won = true)) }
+        val lost = { leg: Int -> listOf(v(leg, 1, 20, 3, 301, 281), v(leg, 2, 20, 3, 281, 261)) }
+        val visits = won(1) + lost(2) + won(3) + lost(4)
+        val biased = Statistics.recentForm(visits)
+        assertEquals(2, biased.legs, "without the finished legs only the wins are seen")
+        val honest = Statistics.recentForm(visits, completedLegs = setOf(1, 2, 3, 4))
+        assertEquals(4, honest.legs)
+        // 682 points in 30 darts against 602 in 18: the lost legs pull form down from 100.3 to 68.2.
+        assertEquals(682.0 * 3 / 30, honest.average.value!!, 1e-9)
+        assertTrue(honest.average.value!! < Statistics.recentForm(visits, minimum = 2).average.value!!)
+    }
 }

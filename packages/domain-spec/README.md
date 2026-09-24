@@ -53,6 +53,16 @@ enumerated rather than sampled. The eight values are 159, 162, 165, 168, 171, 17
 - CI fails if the committed corpus is stale, if any property check fails, or — once engines exist —
   if any platform diverges.
 
+## The dart (1.4.0, OD-023)
+
+A visit may be recorded as the darts that were thrown (`RecordDarts`). A dart is decided by its **ring**, never
+its value — a single 20 and a D10 both score 20, and only one finishes a double-out leg — so the per-dart rule is
+stated by ring and `validate.py` proves the values those rings produce are exactly the finishing and opening
+segments. It then holds the per-dart transition to the visit transition for every hand of up to two darts from
+every reachable score, under all three out-rules: they agree everywhere except where a hand reaches zero on a dart
+that may not finish, which only darts can see. A match may play `keepScoredDarts`, the local rule where the darts
+before the busting one stand; its invariants are checked over the same space.
+
 ## Deliberately absent
 
 Averages, checkout percentages and any other statistic. Those belong to a separately tested layer:

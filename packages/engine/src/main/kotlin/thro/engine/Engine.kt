@@ -14,7 +14,69 @@ public object Engine {
 
     public fun apply(state: MatchState, command: Command): Outcome = when (command) {
         is Command.RecordVisit -> recordVisit(state, command)
+        is Command.RecordDarts -> recordDarts(state, command)
     }
+
+    /**
+     * A visit given as darts (OD-023). Everything a total had to be told is derived here, from
+     * [Darts.read], so the screen that showed the darts and the record that keeps them agree.
+     *
+     * Refused, in order: a hand that is not one to three darts; a dart that is not on the board; a
+     * dart entered after the visit was already decided; fewer than three darts on a visit nothing
+     * decided. Each is a claim about darts that cannot have been thrown, so none of them is a bust.
+     */
+    private fun recordDarts(state: MatchState, cmd: Command.RecordDarts): Outcome {
+        if (state.isComplete) return Outcome.Rejected(RejectionReason.MATCH_COMPLETE)
+        if (cmd.player != state.thrower) return Outcome.Rejected(RejectionReason.NOT_YOUR_TURN)
+        if (cmd.darts.isEmpty() || cmd.darts.size > Darts.HAND) {
+            return Outcome.Rejected(RejectionReason.DARTS_USED_INVALID)
+        }
+        if (cmd.darts.any { !it.isOnTheBoard }) return Outcome.Rejected(RejectionReason.DART_INVALID)
+
+        val f = state.format
+        val before = state.remaining.getValue(cmd.player)
+        val r = Darts.read(before, cmd.darts, f.outRule, f.inRule, state.opened[cmd.player] ?: true)
+        if (r.thrown < cmd.darts.size || r.settled == null) {
+            return Outcome.Rejected(RejectionReason.DARTS_USED_INVALID)
+        }
+        val opened = state.opened + (cmd.player to r.opened)
+
+        return when (r.settled) {
+            Darts.Settled.BUST -> {
+                // The standard rule puts the whole visit back; the keep rule stands the darts before
+                // the busting one. Either way the busting dart and the rest of the hand count for
+                // nothing, and the hand is spent: three darts used.
+                val kept = if (f.bustRule == BustRule.KEEP_SCORED_DARTS) r.scoredBefore else 0
+                Outcome.Accepted(
+                    state = state.copy(
+                        remaining = state.remaining + (cmd.player to before - kept),
+                        thrower = state.opponentOf(cmd.player),
+                        visitsInLeg = state.visitsInLeg + 1,
+                        opened = opened,
+                    ),
+                    effect = Effect.BUST,
+                    bustReason = r.bustReason,
+                    reading = VisitReading(r.counted, kept, Darts.HAND, r.atDouble, r.at, cmd.darts),
+                )
+            }
+            Darts.Settled.LEG_WON ->
+                winLeg(state.copy(opened = opened), cmd.player)
+                    .withReading(VisitReading(r.counted, before, r.thrown, r.atDouble, null, cmd.darts))
+            Darts.Settled.SCORED -> Outcome.Accepted(
+                state = state.copy(
+                    remaining = state.remaining + (cmd.player to r.left),
+                    thrower = state.opponentOf(cmd.player),
+                    visitsInLeg = state.visitsInLeg + 1,
+                    opened = opened,
+                ),
+                effect = Effect.SCORED,
+                reading = VisitReading(r.counted, before - r.left, Darts.HAND, r.atDouble, null, cmd.darts),
+            )
+        }
+    }
+
+    private fun Outcome.withReading(reading: VisitReading): Outcome =
+        if (this is Outcome.Accepted) copy(reading = reading) else this
 
     private fun recordVisit(state: MatchState, cmd: Command.RecordVisit): Outcome {
         if (state.isComplete) return Outcome.Rejected(RejectionReason.MATCH_COMPLETE)
@@ -77,6 +139,11 @@ public object Engine {
         }
 
         if (bust != null) {
+            // Under keep-scored darts what stands depends on the darts before the busting one, and a
+            // total does not say which came first. Refused rather than guessed (OD-023).
+            if (state.format.bustRule == BustRule.KEEP_SCORED_DARTS) {
+                return Outcome.Rejected(RejectionReason.DARTS_REQUIRED)
+            }
             // The busted visit consumed three darts and contributed nothing. It is recorded, not
             // discarded: dropping it would inflate every average computed from the log.
             if (cmd.dartsUsed != null && cmd.dartsUsed != 3) {
@@ -93,6 +160,7 @@ public object Engine {
                 ),
                 effect = Effect.BUST,
                 bustReason = bust,
+                reading = VisitReading(cmd.visitTotal, 0, cmd.dartsUsed, cmd.dartsAtDouble),
             )
         }
 
@@ -109,6 +177,7 @@ public object Engine {
                     opened = opened,
                 ),
                 effect = Effect.SCORED,
+                reading = VisitReading(cmd.visitTotal, cmd.visitTotal, cmd.dartsUsed, cmd.dartsAtDouble),
             )
         }
 
@@ -119,7 +188,8 @@ public object Engine {
         ) {
             return Outcome.Rejected(RejectionReason.DARTS_AT_DOUBLE_INVALID)
         }
-        return winLeg(state, cmd.player)
+        return winLeg(state.copy(opened = opened), cmd.player)
+            .withReading(VisitReading(cmd.visitTotal, before, cmd.dartsUsed, cmd.dartsAtDouble))
     }
 
     private fun winLeg(state: MatchState, winner: PlayerId): Outcome {

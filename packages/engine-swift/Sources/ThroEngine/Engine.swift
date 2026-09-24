@@ -18,6 +18,53 @@ public enum Engine {
         switch command {
         case let .recordVisit(player, visitTotal, dartsUsed, dartsAtDouble):
             return recordVisit(state, player, visitTotal, dartsUsed, dartsAtDouble)
+        case let .recordDarts(player, darts):
+            return recordDarts(state, player, darts)
+        }
+    }
+
+    /// A visit given as darts (OD-023). Refusals in the Kotlin's order: a hand that is not one to three
+    /// darts; a dart not on the board; a dart after the visit was decided; fewer than three darts on a
+    /// visit nothing decided. Each is a claim about darts that cannot have been thrown.
+    private static func recordDarts(_ state: MatchState, _ player: PlayerId, _ darts: [Dart]) -> Outcome {
+        if state.isComplete { return .rejected(reason: .MATCH_COMPLETE) }
+        if player != state.thrower { return .rejected(reason: .NOT_YOUR_TURN) }
+        if darts.isEmpty || darts.count > Darts.hand { return .rejected(reason: .DARTS_USED_INVALID) }
+        if darts.contains(where: { !$0.isOnTheBoard }) { return .rejected(reason: .DART_INVALID) }
+
+        let f = state.format
+        guard let before = state.remaining[player] else { return .rejected(reason: .NOT_YOUR_TURN) }
+        let r = Darts.read(before: before, darts: darts, outRule: f.outRule, inRule: f.inRule,
+                           opened: state.opened[player] ?? true)
+        guard r.thrown == darts.count, let settled = r.settled else {
+            return .rejected(reason: .DARTS_USED_INVALID)
+        }
+        var next = state
+        next.opened[player] = r.opened
+
+        switch settled {
+        case .bust:
+            // The standard rule puts the whole visit back; the keep rule stands the darts before the
+            // busting one. Either way the hand is spent: three darts used.
+            let kept = f.bustRule == .keepScoredDarts ? r.scoredBefore : 0
+            next.remaining[player] = before - kept
+            next.thrower = state.opponentOf(player)
+            next.visitsInLeg = state.visitsInLeg + 1
+            return .accepted(state: next, effect: .bust, bustReason: r.bustReason,
+                             reading: VisitReading(visitTotal: r.counted, scored: kept, dartsUsed: Darts.hand,
+                                                   dartsAtDouble: r.atDouble, bustAt: r.at, darts: darts))
+        case .legWon:
+            return winLeg(next, player).withReading(
+                VisitReading(visitTotal: r.counted, scored: before, dartsUsed: r.thrown,
+                             dartsAtDouble: r.atDouble, bustAt: nil, darts: darts))
+        case .scored:
+            next.remaining[player] = r.left
+            next.thrower = state.opponentOf(player)
+            next.visitsInLeg = state.visitsInLeg + 1
+            return .accepted(state: next, effect: .scored, bustReason: nil,
+                             reading: VisitReading(visitTotal: r.counted, scored: before - r.left,
+                                                   dartsUsed: Darts.hand, dartsAtDouble: r.atDouble,
+                                                   bustAt: nil, darts: darts))
         }
     }
 
@@ -87,6 +134,9 @@ public enum Engine {
         }
 
         if let bustReason = bust {
+            // Under keep-scored darts what stands depends on the darts before the busting one, and a
+            // total does not say which came first. Refused rather than guessed (OD-023).
+            if state.format.bustRule == .keepScoredDarts { return .rejected(reason: .DARTS_REQUIRED) }
             // The busted visit consumed three darts and contributed nothing. It is recorded, not
             // discarded: dropping it would inflate every average computed from the log.
             if let d = dartsUsed, d != 3 { return .rejected(reason: .DARTS_USED_INVALID) }
@@ -96,7 +146,9 @@ public enum Engine {
             next.visitsInLeg = state.visitsInLeg + 1
             // A bust reverts the score, never the opening: the double was thrown and it landed.
             next.opened[player] = nowOpen
-            return .accepted(state: next, effect: .bust, bustReason: bustReason)
+            return .accepted(state: next, effect: .bust, bustReason: bustReason,
+                             reading: VisitReading(visitTotal: visitTotal, scored: 0, dartsUsed: dartsUsed,
+                                                   dartsAtDouble: dartsAtDouble))
         }
 
         if left > 0 {
@@ -107,7 +159,9 @@ public enum Engine {
             next.thrower = state.opponentOf(player)
             next.visitsInLeg = state.visitsInLeg + 1
             next.opened[player] = nowOpen
-            return .accepted(state: next, effect: .scored, bustReason: nil)
+            return .accepted(state: next, effect: .scored, bustReason: nil,
+                             reading: VisitReading(visitTotal: visitTotal, scored: visitTotal,
+                                                   dartsUsed: dartsUsed, dartsAtDouble: dartsAtDouble))
         }
 
         // Under double-out the winning dart is by definition a double, so a finish that claims no
@@ -115,7 +169,10 @@ public enum Engine {
         if state.format.outRule == .double, let a = dartsAtDouble, a < 1 {
             return .rejected(reason: .DARTS_AT_DOUBLE_INVALID)
         }
-        return winLeg(state, player)
+        var opening = state
+        opening.opened[player] = nowOpen
+        return winLeg(opening, player).withReading(
+            VisitReading(visitTotal: visitTotal, scored: before, dartsUsed: dartsUsed, dartsAtDouble: dartsAtDouble))
     }
 
     private static func winLeg(_ state: MatchState, _ winner: PlayerId) -> Outcome {
@@ -136,7 +193,8 @@ public enum Engine {
             return .accepted(
                 state: nextLeg(state, legsInSet, state.setsWon, legsTotal),
                 effect: .leg_won,
-                bustReason: nil
+                bustReason: nil,
+                reading: nil
             )
         }
 
@@ -144,7 +202,8 @@ public enum Engine {
             return .accepted(
                 state: nextLeg(state, legsInSet, state.setsWon, legsTotal),
                 effect: .leg_won,
-                bustReason: nil
+                bustReason: nil,
+                reading: nil
             )
         }
 
@@ -153,7 +212,7 @@ public enum Engine {
         if unitTaken(f.sets!, setsWon[winner] ?? 0, setsWon[opponent] ?? 0) {
             return complete(state, winner, legsInSet, setsWon, legsTotal, .match_won)
         }
-        return .accepted(state: nextSet(state, setsWon, legsTotal), effect: .set_won, bustReason: nil)
+        return .accepted(state: nextSet(state, setsWon, legsTotal), effect: .set_won, bustReason: nil, reading: nil)
     }
 
     /// A competitor takes the unit on reaching the required wins with the required margin, or on
@@ -239,6 +298,22 @@ public enum Engine {
         next.thrower = nil
         next.winner = winner
         next.visitsInLeg = state.visitsInLeg + 1
-        return .accepted(state: next, effect: effect, bustReason: nil)
+        return .accepted(state: next, effect: effect, bustReason: nil, reading: nil)
+    }
+}
+
+extension Outcome {
+    /// The same outcome, carrying what the visit amounted to.
+    func withReading(_ reading: VisitReading) -> Outcome {
+        if case let .accepted(state, effect, bustReason, _) = self {
+            return .accepted(state: state, effect: effect, bustReason: bustReason, reading: reading)
+        }
+        return self
+    }
+
+    /// What the visit amounted to, when it was accepted.
+    public var reading: VisitReading? {
+        if case let .accepted(_, _, _, reading) = self { return reading }
+        return nil
     }
 }
