@@ -40,15 +40,26 @@ public struct DartKeypad: View {
     /// Whether the entry may be committed. Decided by the caller, because it is a rules question —
     /// three darts, or a visit already settled — and this layer holds no darts rules.
     private let ready: Bool
+    /// The visit is already finished or bust, so no further dart was thrown (OD-023). Decided by the
+    /// caller for the same reason `ready` is: whether a visit is over is the engine's answer.
+    private let decided: Bool
     private let onDart: (ThroDart) -> Void
     private let onEnter: () -> Void
 
-    public init(entry: ThroDartEntry, disabled: Bool = false, ready: Bool,
+    /// How tall a key is, as the stage worked it out for this screen. The stage counts the tray at
+    /// this height with its own gap and padding; a keypad drawn at a size of its own was 22 points taller
+    /// than the arithmetic, and on a finish that pushed the bottom row off the phone.
+    private let keyHeight: CGFloat
+
+    public init(entry: ThroDartEntry, disabled: Bool = false, ready: Bool, decided: Bool = false,
+                keyHeight: CGFloat = ChalkKeyStyle.defaultHeight,
                 onDart: @escaping (ThroDart) -> Void,
                 onEnter: @escaping () -> Void) {
+        self.keyHeight = keyHeight
         self.entry = entry
         self.disabled = disabled
         self.ready = ready
+        self.decided = decided
         self.onDart = onDart
         self.onEnter = onEnter
     }
@@ -100,10 +111,15 @@ public struct DartKeypad: View {
 
     /// A sector or centre key is out of the light once the hand is spent. Three darts is three
     /// darts: the fourth tap is refused by being unavailable rather than by a buzz after the fact.
-    private var spent: Bool { disabled || entry.handIsSpent }
+    ///
+    /// **And once the visit is decided.** On 40, D20 is in and the leg is won with two darts still in
+    /// hand; a thumb that lands on 20 before Enter would have turned the checkout into a bust. The
+    /// sectors go out of the light the moment the engine says the visit is over, and only Enter —
+    /// now reading the total that won it — stays lit.
+    private var spent: Bool { disabled || entry.handIsSpent || decided }
 
     public var body: some View {
-        VStack(spacing: ThroSpacing.spacing2) {
+        VStack(spacing: ThroStage.trayGap) {
             HStack(spacing: ThroSpacing.spacing2) {
                 ForEach(Array(DartKeypad.rings.enumerated()), id: \.element) { option in
                     Button(action: { hold(option.element) }) {
@@ -115,6 +131,7 @@ public struct DartKeypad: View {
                     }
                     .buttonStyle(ChalkKeyStyle(DartKeypad.ringLighting(option.element, held: ring,
                                                                       disabled: spent),
+                                               minHeight: keyHeight,
                                                seedAngle: Double(option.offset) * 83 + 29))
                     .disabled(spent)
                     .accessibilityLabel(DartKeypad.ringLabel(option.element).lowercased())
@@ -149,7 +166,9 @@ public struct DartKeypad: View {
                         .accessibilityLabel(centre.element.spoken)
                     }
                 }
-                Button(action: { ThroHaptics.play(.commit, enabled: haptics); onEnter() }) {
+                // No haptic of its own: the chalk mark that lands for the visit plays the commit, and
+                // two buzzes for one visit told a player nothing the first one had not.
+                Button(action: onEnter) {
                     Text(DartKeypad.enterLabel(entry, ready: ready))
                         .thro(ThroTypography.bodyLarge.weight(.bold).uppercase(true).tracking(em: 0.04))
                         .lineLimit(1)
@@ -157,11 +176,11 @@ public struct DartKeypad: View {
                         .foregroundStyle(ScoreKeypad.ink(ready: ready, disabled: disabled))
                 }
                 .buttonStyle(ChalkKeyStyle(ScoreKeypad.enterLighting(ready: ready, disabled: disabled),
-                                           seedAngle: 631))
+                                           minHeight: keyHeight, seedAngle: 631))
                 .disabled(!ready || disabled)
             }
         }
-        .padding(.vertical, ThroSpacing.spacing4)
+        .padding(.vertical, ThroStage.trayPadding / 2)
         .padding(.horizontal, ThroSpacing.spaceScreenGutter)
         // The entry is announced as darts and then the running total, so a player who switches
         // between the two keypads is not told two different kinds of thing about the same visit.
@@ -186,9 +205,11 @@ public struct DartKeypad: View {
         return option == held ? .lit : .field
     }
 
+    /// Hold a ring — or let go of it. Tapping DOUBLE again returns to single, which is what a player
+    /// who pressed it by mistake reaches for; before, the only way out was to press SINGLE.
     private func hold(_ option: ThroDart.Ring) {
         ThroHaptics.play(.key, enabled: haptics)
-        ring = option
+        ring = (ring == option && option != .single) ? .single : option
     }
 
     /// A dart lands. **The ring falls back to single afterwards.** Holding TREBLE across one dart is
@@ -207,7 +228,7 @@ public struct DartKeypad: View {
         Button(action: action) {
             label().foregroundStyle(ScoreKeypad.keyInk(disabled: spent))
         }
-        .buttonStyle(ChalkKeyStyle(ScoreKeypad.keyLighting(disabled: spent), seedAngle: seedAngle))
+        .buttonStyle(ChalkKeyStyle(ScoreKeypad.keyLighting(disabled: spent), minHeight: keyHeight, seedAngle: seedAngle))
         .disabled(spent)
     }
 }
@@ -219,10 +240,15 @@ public struct DartKeypad: View {
 public struct ThroDartLine: View {
     private let entry: ThroDartEntry
     private let onTakeBackTo: (Int) -> Void
+    /// The undo key the dart keypad has no room for (PD-004). With darts entered it takes the last one
+    /// back; with none, it offers to undo the last visit — the same two-step key the visit keypad has,
+    /// so a scorer on darts is not made to switch notation to correct the previous visit.
+    private let onUndo: (() -> Void)?
 
-    public init(entry: ThroDartEntry, onTakeBackTo: @escaping (Int) -> Void) {
+    public init(entry: ThroDartEntry, onTakeBackTo: @escaping (Int) -> Void, onUndo: (() -> Void)? = nil) {
         self.entry = entry
         self.onTakeBackTo = onTakeBackTo
+        self.onUndo = onUndo
     }
 
     /// The three slots, filled and empty. An empty slot is drawn and not hidden, so the line does
@@ -252,7 +278,22 @@ public struct ThroDartLine: View {
                 .accessibilityLabel(slot.element.map { "\($0.spoken), take back from here" }
                                     ?? "no dart yet")
             }
+            if let onUndo {
+                Button(action: onUndo) {
+                    Icon(.undo2, size: 20)
+                        .foregroundStyle(ThroColor.colorTextOnBoard)
+                        .frame(width: ThroSpacing.touchTargetMinimum)
+                        // As tall as the slots beside it, which grow with the text in them.
+                        .frame(maxHeight: .infinity)
+                }
+                .buttonStyle(ChalkKeyStyle(.field, minHeight: ThroSpacing.touchTargetMinimum, seedAngle: 211))
+                .fixedSize(horizontal: true, vertical: false)
+                .accessibilityLabel("Undo")
+                .accessibilityHint(entry.isEmpty ? "Offers to undo the last visit" : "Takes back the last dart")
+            }
         }
+        // The row takes the height of its tallest slot and no more, so the undo key can match it.
+        .fixedSize(horizontal: false, vertical: true)
         .accessibilityElement(children: .contain)
     }
 

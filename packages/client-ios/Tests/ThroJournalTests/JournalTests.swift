@@ -253,7 +253,7 @@ final class JournalTests: XCTestCase {
         ]
         for (seat, total, darts, atDouble) in script {
             let cmd = Command.visit(seat.playerId, total, dartsUsed: darts, dartsAtDouble: atDouble)
-            guard case let .accepted(next, _, _) = Engine.apply(live, cmd) else { return XCTFail("script rejected") }
+            guard case let .accepted(next, _, _, _) = Engine.apply(live, cmd) else { return XCTFail("script rejected") }
             try j.append(cmd, to: m.id)   // flush before acknowledging …
             live = next                   // … then apply
         }
@@ -282,7 +282,7 @@ final class JournalTests: XCTestCase {
         ]
         for (seat, total, darts, atDouble) in script {
             let cmd = Command.visit(seat.playerId, total, dartsUsed: darts, dartsAtDouble: atDouble)
-            guard case let .accepted(next, _, _) = Engine.apply(live, cmd) else { return XCTFail("script rejected at \(total)") }
+            guard case let .accepted(next, _, _, _) = Engine.apply(live, cmd) else { return XCTFail("script rejected at \(total)") }
             try j.append(cmd, to: m.id)
             live = next
         }
@@ -310,7 +310,7 @@ final class JournalTests: XCTestCase {
         for (seat, total) in [(Seat.home, 180), (.away, 60), (.home, 180), (.away, 60), (.home, 180)] as [(Seat, Int)] {
             // home: 501 → 321 → 141 → 180 would bust (141 - 180 < 0)
             let cmd = Command.visit(seat.playerId, total)
-            guard case let .accepted(next, _, _) = Engine.apply(live, cmd) else { return XCTFail("rejected \(total)") }
+            guard case let .accepted(next, _, _, _) = Engine.apply(live, cmd) else { return XCTFail("rejected \(total)") }
             try j.append(cmd, to: m.id)
             live = next
         }

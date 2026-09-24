@@ -45,9 +45,9 @@ class MatchListTest {
         var guard = 0
         while (!session.state.isComplete && guard++ < 100) {
             val throwing = session.state.thrower ?: break
-            if (throwing != session.state.home) { session.enter(0); continue }
+            if (throwing != session.state.home) { session.total(0); continue }
             // 501 − 180 − 180 = 141, which is a legal double-out finish (T20 T19 D12).
-            session.enter(if ((session.state.remaining[throwing] ?: 0) == 141) 141 else 180)
+            session.total(if ((session.state.remaining[throwing] ?: 0) == 141) 141 else 180)
         }
     }
 
@@ -96,7 +96,7 @@ class MatchListTest {
     fun `an abandoned match is finished and is not a result`() {
         journal().use { j ->
             val session = ThroSession.start(j, "Ann", "Bob")
-            session.enter(60)
+            session.total(60)
             j.end(session.matchId, Ending.Abandoned)
 
             val row = ThroMatchList.rows(j).single()
@@ -112,7 +112,7 @@ class MatchListTest {
     fun `retiring is losing, so the row names the other player`() {
         journal().use { j ->
             val session = ThroSession.start(j, "Ann", "Bob")
-            session.enter(60)
+            session.total(60)
             j.end(session.matchId, Ending.Retired(by = Seat.HOME))
 
             val row = ThroMatchList.rows(j).single()
@@ -127,7 +127,7 @@ class MatchListTest {
     fun `a match written by a newer version of the app stays on the list and says so`() {
         val j = journal()
         val session = ThroSession.start(j, "Ann", "Bob")
-        session.enter(60)
+        session.total(60)
         val id = session.matchId
         j.close()
 

@@ -206,7 +206,7 @@ public enum ThroReadiness {
         let ready = surfaces.filter { $0.state == .waiting }.count
         var sentence = working == 1 ? "1 of these is working on this phone right now"
                                     : "\(working) of these are working on this phone right now"
-        sentence += ready > 0 ? ", \(ready) are waiting on you" : ""
+        sentence += ready == 1 ? ", 1 is waiting on you" : ready > 1 ? ", \(ready) are waiting on you" : ""
         sentence += stuck > 0 ? ", and \(stuck) cannot run on this build" : ""
         return sentence + ". Nothing on this screen is a demonstration — every line is read from "
              + "this phone, so a row that says it has nothing means it has nothing."
@@ -334,7 +334,8 @@ public enum ThroReadiness {
                                  + "Leave this screen and come back.")
         }
         return Surface(id: "widgets", name: name, state: .on,
-                       detail: "Last written at \(clock.string(from: written)). Long-press the "
+                       // A time alone made last week's write read as today's.
+                       detail: "Last written \(Calendar.current.isDateInToday(written) ? "at" : "on \(written.formatted(.dateTime.day().month(.abbreviated))) at") \(clock.string(from: written)). Long-press the "
                              + "Home Screen → **+** → THRØ. There is a Lock Screen one too, under "
                              + "the clock.")
     }

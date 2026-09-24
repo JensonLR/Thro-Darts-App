@@ -33,7 +33,7 @@ class SessionTest {
 
     @Test fun `a visit the engine accepts is written and then shown`() {
         val session = match()
-        session.enter(180)
+        session.total(180)
         assertEquals(321, session.remaining(Seat.HOME))
         assertEquals(1, journal.entries(session.matchId).size, "and it is in the journal, not only on screen")
     }
@@ -42,7 +42,7 @@ class SessionTest {
         // 179 is not three darts. The screen says why and the record stays clean — a refusal that still
         // wrote a row would be a record of something nobody threw.
         val session = match()
-        session.enter(179)
+        session.total(179)
         assertEquals(501, session.remaining(Seat.HOME))
         assertTrue(session.mark is ThroMark.Refused)
         assertEquals(0, journal.entries(session.matchId).size)
@@ -50,7 +50,7 @@ class SessionTest {
 
     @Test fun `undo is a retraction and the board is rebuilt by replaying`() {
         val session = match()
-        session.enter(180)
+        session.total(180)
         session.undo()
         assertEquals(501, session.remaining(Seat.HOME), "the score goes back")
         assertEquals(2, journal.entries(session.matchId).size,
@@ -59,8 +59,8 @@ class SessionTest {
 
     @Test fun `a match in progress is offered back and comes back by replay`() {
         val session = match()
-        session.enter(180)
-        session.enter(140)
+        session.total(180)
+        session.total(140)
 
         val offered = ThroSession.resumable(journal)
         assertNotNull(offered)
@@ -79,8 +79,8 @@ class SessionTest {
         // came out 3-2, which is why it is written as a sequence rather than as a loop with a condition.
         repeat(5) {
             if (session.state.winner == null) {
-                repeat(4) { session.enter(180) }
-                session.enter(141)
+                repeat(4) { session.total(180) }
+                session.total(141)
             }
         }
         assertNotNull(session.state.winner, "the match should be won")
@@ -105,7 +105,7 @@ class SessionTest {
     private fun wonMatch(): ThroSession {
         val session = match()
         repeat(5) {
-            if (session.state.winner == null) { repeat(4) { session.enter(180) }; session.enter(141) }
+            if (session.state.winner == null) { repeat(4) { session.total(180) }; session.total(141) }
         }
         return session
     }

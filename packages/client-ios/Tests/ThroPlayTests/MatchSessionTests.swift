@@ -845,9 +845,10 @@ final class MatchSessionTests: XCTestCase {
         XCTAssertEqual(s.visits[0].dartsUsed, 3)
     }
 
-    func testABustAfterOneDartMayBeEnteredAndRecordsNoDartCount() throws {
-        // On 20 a double 20 goes below zero. The player stops; the record does not claim one dart,
-        // because the engine's convention is that a bust consumed the whole hand.
+    func testABustAfterOneDartMayBeEnteredAndRecordsTheDartThatBustIt() throws {
+        // On 20 a double 20 goes below zero. The player stops. The record keeps both facts, which it
+        // could not while it held only a total: the one dart that was thrown and bust it, and the
+        // convention that a bust forfeits the rest of the hand — three darts used (OD-023).
         let s = try session()
         s.quick(180); s.quick(60)
         s.quick(180); s.quick(60)
@@ -860,7 +861,9 @@ final class MatchSessionTests: XCTestCase {
         s.enterDarts()
         XCTAssertEqual(s.remaining(.home), 20, "the score is restored")
         XCTAssertTrue(s.visits.last?.bust ?? false)
-        XCTAssertNil(s.visits.last?.dartsUsed)
+        XCTAssertEqual(s.visits.last?.dartsUsed, 3, "a bust forfeits the hand")
+        XCTAssertEqual(s.visits.last?.bustAt, 0, "the first dart bust it")
+        XCTAssertEqual(s.visits.last?.darts, [Dart(20, .double)])
     }
 
     func testUndoTakesBackOneDartBeforeItTakesBackTheRecord() throws {
@@ -982,9 +985,12 @@ final class MatchSessionTests: XCTestCase {
         let s = try session()
         bringHomeToAFinish(s)
         let entry = ThroDartEntry([ThroDart.treble(20)!, ThroDart.treble(19)!, ThroDart.double(12)!])
-        let carried = DartVisit.evidence(entry, from: s.remaining(.home), outRule: s.record.outRule)
-        XCTAssertEqual(carried.dartsUsed, 3)
-        XCTAssertEqual(carried.dartsAtDouble, 1)
+        guard case let .accepted(_, _, _, reading?) =
+                Engine.apply(s.state, DartVisit.command(entry, player: Seat.home.playerId)) else {
+            return XCTFail("141 on T20 T19 D12 was refused")
+        }
+        XCTAssertEqual(reading.dartsUsed, 3)
+        XCTAssertEqual(reading.dartsAtDouble, 1)
         // And the prompt a typed total raises offers exactly that answer.
         s.quick(141)
         guard case .dartsUsed? = s.prompt else { return XCTFail("no darts-used prompt") }
@@ -999,10 +1005,12 @@ final class MatchSessionTests: XCTestCase {
     }
 
 
-    func testADartThatCannotEndTheLegIsRefusedOnTheBoardAndWritesNothing() throws {
-        // The runbook tells the founder this happens, in these words, so something has to hold it:
-        // on 60 a `T20` reaches zero on a treble, which under double-out is a bust and not a
-        // checkout. The engine would call it a leg won (see OD-023), so the entry layer refuses it.
+    func testADartThatCannotEndTheLegIsRecordedAsTheBustItIs() throws {
+        // The runbook tells the founder this happens, so something has to hold it: on 60 a `T20`
+        // reaches zero on a treble, which under double-out is a bust and not a checkout. It used to be
+        // refused — the engine scored visits and would have called it a leg won — which left a player
+        // no way to record what happened at the board. The engine takes darts now (OD-023) and decides
+        // it as the bust it is.
         let s = try session()
         s.quick(180); s.quick(60)
         s.quick(180); s.quick(60)
@@ -1017,23 +1025,110 @@ final class MatchSessionTests: XCTestCase {
         XCTAssertTrue(s.dartsMayBeEntered, "it settles the visit, so Enter is offered")
         s.enterDarts()
 
-        XCTAssertEqual(s.visits.count, written, "nothing was written")
-        XCTAssertEqual(s.remaining(.home), 60, "and nothing moved")
-        XCTAssertFalse(s.visits.last?.wonLeg ?? false)
-        XCTAssertEqual(s.notice?.tone, .error)
-        XCTAssertTrue(s.notice?.text.contains("T20") ?? false, s.notice?.text ?? "no notice")
-        XCTAssertTrue(s.notice?.text.contains("a double") ?? false, s.notice?.text ?? "no notice")
-        XCTAssertEqual(s.darts.written, "T20", "the dart is still there to be taken back")
+        XCTAssertEqual(s.visits.count, written + 1, "the bust is written")
+        XCTAssertEqual(s.visits.last?.bust, true)
+        XCTAssertEqual(s.visits.last?.wonLeg, false, "and nobody won a leg on a treble")
+        XCTAssertEqual(s.remaining(.home), 60, "the standard rule puts the score back")
+        XCTAssertEqual(s.thrower, .away)
+        guard case let .bust(_, restored, reason, _)? = s.announcement else { return XCTFail("no bust announced") }
+        XCTAssertEqual(restored, 60)
+        XCTAssertTrue(reason?.contains("T20") ?? false, reason ?? "no reason")
+        // And it replays as the same bust: the darts are in the journal, not only the total.
+        let reopened = try MatchSession.open(s.record.id, in: journal)
+        XCTAssertEqual(reopened.remaining(.home), 60)
+        XCTAssertEqual(reopened.visits.last?.darts, [Dart(20, .treble)])
     }
 
-    func testTheSameDartIsAcceptedWhereTheOutRuleAllowsIt() throws {
-        // The refusal is the out rule's, not a rule of its own: under master-out a treble ends a
-        // leg, and 60 is `T20`. If this ever starts refusing it, the check has stopped reading the
-        // match's rule and started asserting double-out everywhere.
-        XCTAssertNil(DartVisit.illegalFinish(ThroDartEntry([ThroDart.treble(20)!]),
-                                             from: 60, outRule: .master))
-        XCTAssertEqual(DartVisit.illegalFinish(ThroDartEntry([ThroDart.treble(20)!]),
-                                               from: 60, outRule: .double)?.written, "T20")
+    func testTheSameDartFinishesWhereTheOutRuleAllowsIt() throws {
+        // The rule is the out rule's: under master-out a treble ends a leg, and 60 is `T20`.
+        XCTAssertTrue(DartVisit.mayFinish(.treble(20)!, outRule: .master))
+        XCTAssertFalse(DartVisit.mayFinish(.treble(20)!, outRule: .double))
+        XCTAssertTrue(DartVisit.mayFinish(.bull, outRule: .double), "the bull is a double")
+        XCTAssertFalse(DartVisit.mayFinish(.outerBull, outRule: .double), "the 25 is not")
+    }
+
+    func testAStrayDartAfterACheckoutIsNotTakenAndTheCheckoutStands() throws {
+        // The costliest mis-key on the board: on 40, D20 is in, and a thumb lands on 20 before Enter.
+        // Taken, it would have turned a won leg into a bust.
+        let s = try session()
+        s.quick(180); s.quick(60)
+        s.quick(180); s.quick(60)
+        s.quick(101)                                 // home 141 → 40
+        s.answer(0)
+        s.quick(60)
+        XCTAssertEqual(s.remaining(.home), 40)
+        s.dart(.double(20)!)
+        XCTAssertTrue(s.visitDecided)
+        s.dart(.single(20)!)
+        XCTAssertEqual(s.darts.written, "D20", "the stray dart was not taken")
+        XCTAssertEqual(s.notice?.tone, .neutral)
+        s.enterDarts()
+        XCTAssertEqual(s.legsWon(.home), 1)
+    }
+
+    func testTheRouteFollowsTheDartsAndNeverOffersMoreDartsThanAreLeft() throws {
+        let s = try session()
+        s.quick(180); s.quick(60)
+        s.quick(180); s.quick(60)
+        s.quick(41)                                  // home 141 → 100
+        s.answer(0)
+        s.quick(60)
+        XCTAssertEqual(s.remaining(.home), 100)
+        XCTAssertEqual(s.throwerRoute, ["T20", "D20"])
+        s.dart(.treble(20)!)                         // 40 left, two darts
+        XCTAssertEqual(s.throwerLeft, 40)
+        XCTAssertEqual(s.throwerRoute, ["D20"])
+        s.takeBackDarts(from: 0)
+        s.dart(.single(20)!)                         // 80 left, two darts: T16 D16
+        XCTAssertEqual(s.throwerRoute, ["T16", "D16"])
+        s.dart(.single(20)!)                         // 60 left, ONE dart: no single dart finishes 60
+        XCTAssertEqual(s.throwerLeft, 60)
+        XCTAssertFalse(s.throwerOnAFinish, "60 needs two darts and one is left")
+        XCTAssertEqual(s.throwerRoute, [])
+    }
+
+    func testUnderDoubleInTheDartsBeforeTheOpeningDoubleDoNotCount() throws {
+        // The defect this replaced: the entry sent the raw sum of the darts, so `20 D20 20` from a
+        // player not yet in scored 80, and three singles counted as having opened.
+        let s = try MatchSession.start(NewMatch(homeName: "Jenson", awayName: "Alex", inRule: .double), in: journal)
+        s.dart(.single(20)!); s.dart(.double(20)!); s.dart(.single(20)!)
+        s.enterDarts()
+        XCTAssertEqual(s.remaining(.home), 441, "20 does not count; D20 and 20 do")
+        s.dart(.single(20)!); s.dart(.single(20)!); s.dart(.single(20)!)
+        s.enterDarts()
+        XCTAssertEqual(s.remaining(.away), 501, "three singles do not open a double-in leg")
+        XCTAssertTrue(s.throwerMustOpen == false, "home is in")
+    }
+
+    func testKeepScoredDartsLeavesTheDartsBeforeTheBustOnTheBoard() throws {
+        // The founder's example, under the local rule. 40: 20 then D15 goes below zero; the 20 stands.
+        let s = try MatchSession.start(
+            NewMatch(homeName: "Jenson", awayName: "Alex", bustRule: .keepScoredDarts), in: journal)
+        XCTAssertEqual(s.bustRuleLabel, "Keep darts before a bust")
+        s.quick(180); s.quick(60)
+        s.quick(180); s.quick(60)
+        s.quick(101)                                 // home 141 → 40
+        s.answer(0)
+        s.quick(60)
+        XCTAssertEqual(s.remaining(.home), 40)
+        s.dart(.single(20)!); s.dart(.double(15)!)
+        XCTAssertTrue(s.dartsMayBeEntered, "the D15 settles the visit")
+        s.enterDarts()
+        XCTAssertEqual(s.remaining(.home), 20)
+        guard case let .bust(_, restored, reason, _)? = s.announcement else { return XCTFail("no bust announced") }
+        XCTAssertEqual(restored, 20)
+        XCTAssertTrue(reason?.contains("20 before it stands") ?? false, reason ?? "no reason")
+        s.acknowledge()
+        // A busting TOTAL cannot say which darts came first, so it is refused with the way forward.
+        s.quick(60)                                  // away
+        s.quick(26)                                  // home on 20: 26 busts
+        s.answer(nil)
+        XCTAssertEqual(s.remaining(.home), 20, "nothing moved")
+        XCTAssertTrue(s.notice?.text.contains("dart by dart") ?? false, s.notice?.text ?? "no notice")
+        // The rule is the match's and survives a reopen.
+        let reopened = try MatchSession.open(s.record.id, in: journal)
+        XCTAssertEqual(reopened.record.bustRule, .keepScoredDarts)
+        XCTAssertEqual(reopened.remaining(.home), 20)
     }
 
     // MARK: - What a player is told when a visit will not save (PD-186)
@@ -1080,5 +1175,24 @@ final class MatchSessionTests: XCTestCase {
         XCTAssertNotEqual(retry, hopeless)
         XCTAssertTrue(retry.lowercased().contains("again"), retry)
         XCTAssertFalse(hopeless.lowercased().contains("again"), hopeless)
+    }
+
+    // MARK: - A percentage says what it is out of
+
+    func testAnExactCheckoutPercentageSaysHowManyDartsItIsOutOf() {
+        let one = StatPresentation.line("Checkout %", Stat(basis: .exact, value: 100, sampleSize: 1), kind: .percent,
+                                        sampleUnit: "darts at a double")
+        XCTAssertEqual(one.value, "100%")
+        XCTAssertEqual(one.note, "1 of 1 darts at a double", "100% from one dart is not 100% from forty")
+        let many = StatPresentation.line("Checkout %", Stat(basis: .exact, value: 25, sampleSize: 40), kind: .percent,
+                                         sampleUnit: "darts at a double")
+        XCTAssertEqual(many.note, "10 of 40 darts at a double")
+    }
+
+    func testARangeOnTheShareCardSaysItIsARange() {
+        let range = StatLine(label: "Checkout %", value: "33%–100%", note: nil, confidence: .range)
+        let exact = StatLine(label: "Checkout %", value: "40%", note: nil, confidence: .exact)
+        let figures = ThroShareCard.figures(home: [range], away: [exact])
+        XCTAssertEqual(figures.first?.label, "Checkout % · range")
     }
 }

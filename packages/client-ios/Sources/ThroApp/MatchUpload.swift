@@ -65,7 +65,8 @@ public enum MatchUpload {
                     visitTotal: entry.kind == .visit ? entry.visitTotal : nil,
                     correctsSeq: entry.kind == .retraction ? entry.correctsSeq : nil,
                     occurredAt: MatchUpload.instant.string(from: entry.occurredAt),
-                    occurredTz: zone.identifier)
+                    occurredTz: zone.identifier,
+                    darts: entry.kind == .visit ? entry.darts?.map(\.name) : nil)
             }
         guard !rows.isEmpty else { return .notYet(nothingToSend) }
         // A retraction whose visit was filtered out would be refused by the server, and the reason
@@ -107,7 +108,8 @@ public enum MatchUpload {
             outRule: record.outRule.rawValue,
             legsMode: record.legsMode == .bestOf ? "best_of" : "first_to",
             legsTarget: record.legsTarget,
-            throwFirst: record.throwFirst == .home ? "home" : "away")
+            throwFirst: record.throwFirst == .home ? "home" : "away",
+            bustRule: record.bustRule.rawValue)
     }
 
     /// Which seat is the signed-in person's: the one whose name, typed at the oche, is the name on

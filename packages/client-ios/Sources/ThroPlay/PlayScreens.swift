@@ -73,7 +73,8 @@ public struct PlayFlow: View {
         NewMatch(homeName: new.homeName, awayName: new.awayName, startingScore: new.startingScore,
                  inRule: new.inRule, outRule: new.outRule, legsMode: new.legsMode,
                  legsTarget: new.legsTarget, throwFirst: new.throwFirst,
-                 homePlayerId: resolvePerson(new.homeName), awayPlayerId: resolvePerson(new.awayName))
+                 homePlayerId: resolvePerson(new.homeName), awayPlayerId: resolvePerson(new.awayName),
+                 bustRule: new.bustRule)
     }
 
     public var body: some View {
@@ -117,6 +118,10 @@ public struct MatchSetupScreen: View {
     /// Straight or double in. The engine also scores master-in, which competitions define and this
     /// screen does not offer, because no one asks for it at a pub board.
     @State private var inRule: InRule = .straight
+    /// What a bust does (OD-023). Standard unless the players say their league plays it otherwise —
+    /// some pub leagues keep the darts scored before the busting one, and THRØ scores that league's
+    /// match the way that league plays it rather than the way a broadcast does.
+    @State private var bustRule: BustRule = .restoreVisit
     @FocusState private var focused: NameField?
     private let problem: String?
     private let onBack: () -> Void
@@ -164,6 +169,19 @@ public struct MatchSetupScreen: View {
                 .padding(.top, ThroSpacing.spacing5)
                 .padding(.bottom, ThroSpacing.spacing4)
                 .padding(.horizontal, ThroSpacing.spaceScreenGutter)
+                // The same, with the slate drawn tighter: a match with a rule beyond the usual has a
+                // second row of tags, and this keeps the fixture on the screen for it rather than
+                // leaving the space empty.
+                VStack(alignment: .leading, spacing: ThroSpacing.spacing3) {
+                    form
+                    ThroFixtureSlate(home: homeName, away: awayName, tags: previewTags, compact: true)
+                        .frame(maxHeight: .infinity)
+                        .padding(.top, ThroSpacing.spacing2)
+                        .accessibilityHidden(true)
+                }
+                .padding(.top, ThroSpacing.spacing5)
+                .padding(.bottom, ThroSpacing.spacing4)
+                .padding(.horizontal, ThroSpacing.spaceScreenGutter)
                 ScrollView {
                     form
                         .padding(.top, ThroSpacing.spacing5)
@@ -177,7 +195,8 @@ public struct MatchSetupScreen: View {
                 ThroButton("Continue", variant: .primary, size: .large, fullWidth: true) {
                     onStart(NewMatch(homeName: homeName, awayName: awayName, startingScore: game,
                                      inRule: inRule, outRule: .double,
-                                     legsMode: .bestOf, legsTarget: length, throwFirst: first))
+                                     legsMode: .bestOf, legsTarget: length, throwFirst: first,
+                                     bustRule: bustRule))
                 }
             }
         }
@@ -192,6 +211,7 @@ public struct MatchSetupScreen: View {
     private var previewTags: [String] {
         var t = ["\(game)", "Best of \(length)", "Double out"]
         if inRule == .double { t.append("Double in") }
+        if bustRule == .keepScoredDarts { t.append("Keep darts on a bust") }
         return t
     }
 
@@ -221,6 +241,14 @@ public struct MatchSetupScreen: View {
                     ThroChoiceRow("Legs") { SegmentedControl([(3, "Bo3"), (5, "Bo5"), (7, "Bo7"), (9, "Bo9")], selection: $length) }
                     ThroChoiceRow("Start on") { SegmentedControl([(InRule.straight, "Any"), (InRule.double, "Double in")], selection: $inRule) }
                     ThroChoiceRow("Throws") { SegmentedControl([(Seat.home, homeName), (Seat.away, awayName)], selection: $first) }
+                    // "Standard" first and selected: it is what every player expects and what a
+                    // first match should be. "Keep darts" is the pub-league rule — on 40, a 20 then a
+                    // D15 leaves 20 rather than 40 — and its spoken label says so.
+                    ThroChoiceRow("On a bust") {
+                        SegmentedControl([(BustRule.restoreVisit, "Score back"), (BustRule.keepScoredDarts, "Keep darts")],
+                                         selection: $bustRule)
+                    }
+                    .accessibilityHint("Score back is the standard rule. Keep darts leaves the darts scored before the bust on the board, as some pub leagues play.")
                 }
     }
 
@@ -271,15 +299,15 @@ public struct MatchSetupScreen: View {
 /// smallest phone without scrolling — the same discipline `ThroStage` applies to the board.
 public enum MatchSetupLayout {
     /// Top bar, the two seats side by side (one field's height), the row of known names, the rule,
-    /// four choice rows and the gaps between them; then the pinned action. Measured off the
+    /// five choice rows (game, legs, start, throws, bust) and the gaps between them; then the pinned action. Measured off the
     /// components' own constants.
     public static func height(knownPeople: Bool) -> CGFloat {
         let topBar: CGFloat = 60
         let field: CGFloat = 18 + ThroSpacing.spacing2 + 52          // label, gap, field
         let names: CGFloat = knownPeople ? ThroSpacing.touchTargetMinimum : 0
         let rule: CGFloat = 1 + 2 * ThroSpacing.spacing1
-        let rows: CGFloat = 4 * ThroSpacing.touchTargetMinimum
-        let blocks: CGFloat = 1 + (knownPeople ? 1 : 0) + 1 + 4
+        let rows: CGFloat = 5 * ThroSpacing.touchTargetMinimum
+        let blocks: CGFloat = 1 + (knownPeople ? 1 : 0) + 1 + 5
         let gaps: CGFloat = (blocks - 1) * ThroSpacing.spacing3
         let padding: CGFloat = ThroSpacing.spacing5 + ThroSpacing.spacing4
         let action: CGFloat = 1 + ThroSpacing.spacing4 + 56 + ThroSpacing.spacing3
@@ -321,33 +349,14 @@ public struct MatchReadyScreen: View {
     public var body: some View {
         VStack(spacing: 0) {
             TopBar("Match ready", eyebrow: "Local match", onBack: onBack)
-            // The fixture, written on a slate, holding the screen: no scroll, no field of paper
-            // under one button. The legs so far sit on the slate when there are any.
-            VStack(spacing: ThroSpacing.spacing4) {
-                ThroFixtureSlate(home: session.name(.home), away: session.name(.away),
-                                 tags: tags, footnote: footnote, expanded: true)
-                if !session.visits.isEmpty {
-                    HStack {
-                        Text("Legs so far").thro(ThroTypography.label).foregroundStyle(ThroColor.colorTextSecondary)
-                        Spacer()
-                        Text("\(session.legsWon(.home))–\(session.legsWon(.away))")
-                            .thro(ThroTypography.heading3.family(.sport).weight(.bold))
-                            .foregroundStyle(ThroColor.colorTextPrimary)
-                    }
-                    .accessibilityElement(children: .combine)
-                }
+            // The fixture, written on a slate, holding the screen: no scroll, no field of paper under one
+            // button — where it fits. At the largest text sizes it did not, and with nothing to scroll the
+            // screen spilled past both ends, the title under the status bar. The same slate then scrolls.
+            ViewThatFits(in: .vertical) {
+                fixture(expanded: true)
+                ScrollView { fixture(expanded: false) }
+                    .scrollBounceBehavior(.basedOnSize)
             }
-            .padding(.top, ThroSpacing.spacing5)
-            .padding(.bottom, ThroSpacing.spacing4)
-            .padding(.horizontal, ThroSpacing.spaceScreenGutter)
-            // **Wider than the reading measure, on purpose** (PD-070). The slate holds the screen, which is
-            // right — but held to 560 points it held a tablet's *height* at a phone's *width*, and drew a
-            // portrait-phone-shaped green box with three lines floating in the middle of it. A slate's
-            // subject is two names either side of a mark, which is width; PD-052 allows exactly this, for
-            // a screen whose subject is the width, by not using the measure. Capped so it does not become
-            // a wall on a 13-inch tablet.
-            .frame(maxWidth: ThroSpread.measure)
-            .frame(maxWidth: .infinity)
             ThroBottomAction {
                 ThroButton(session.visits.isEmpty ? "Start scoring" : "Continue scoring",
                            variant: .primary, size: .large, fullWidth: true, action: onStart)
@@ -360,9 +369,41 @@ public struct MatchReadyScreen: View {
         .throAppearance(Appearance(stored: appearanceRaw))
     }
 
+
+    /// The slate and the legs so far. The legs sit on the slate when there are any.
+    @ViewBuilder private func fixture(expanded: Bool) -> some View {
+        VStack(spacing: ThroSpacing.spacing4) {
+            ThroFixtureSlate(home: session.name(.home), away: session.name(.away),
+                             tags: tags, footnote: footnote, expanded: expanded)
+            if !session.visits.isEmpty {
+                HStack {
+                    Text("Legs so far").thro(ThroTypography.label).foregroundStyle(ThroColor.colorTextSecondary)
+                    Spacer()
+                    Text("\(session.legsWon(.home))–\(session.legsWon(.away))")
+                        .thro(ThroTypography.heading3.family(.sport).weight(.bold))
+                        .foregroundStyle(ThroColor.colorTextPrimary)
+                }
+                .accessibilityElement(children: .combine)
+            }
+        }
+        .padding(.top, ThroSpacing.spacing5)
+        .padding(.bottom, ThroSpacing.spacing4)
+        .padding(.horizontal, ThroSpacing.spaceScreenGutter)
+        // **Wider than the reading measure, on purpose** (PD-070). The slate holds the screen, which is
+        // right — but held to 560 points it held a tablet's *height* at a phone's *width*, and drew a
+        // portrait-phone-shaped green box with three lines floating in the middle of it. A slate's
+        // subject is two names either side of a mark, which is width; PD-052 allows exactly this, for
+        // a screen whose subject is the width, by not using the measure. Capped so it does not become
+        // a wall on a 13-inch tablet.
+        .frame(maxWidth: ThroSpread.measure)
+        .frame(maxWidth: .infinity)
+    }
+
     private var tags: [String] {
         var t = ["\(session.record.startingScore)", session.lengthLabel, session.outRuleLabel]
         if let inRule = session.inRuleLabel { t.append(inRule) }
+        // The rule most likely to surprise somebody who did not choose it, said before the first dart.
+        if session.record.bustRule == .keepScoredDarts { t.append("Keep darts on a bust") }
         return t
     }
 
@@ -386,6 +427,10 @@ public struct ScoringScreen: View {
     @AppStorage(ScoringPreferences.entryModeKey) private var entryModeRaw: String
         = ScoringEntryMode.default.rawValue
     private let board = LiveBoard()
+    /// This match's notation, once the scorer has switched it here. Until then the device's preference
+    /// — except under keep-scored darts, where a bust can only be recorded as darts and the match
+    /// opens on the dart keypad rather than letting a scorer find that out at the first bust.
+    @State private var matchEntryMode: ScoringEntryMode?
     /// What the board is currently saying back about the last entry. Set when a visit lands, a bust
     /// happens or an entry is refused; cleared after `ThroChalkMark.dwell`.
     @State private var mark: ThroChalkMark?
@@ -429,12 +474,12 @@ public struct ScoringScreen: View {
                     if stage.arrangement == .beside {
                         HStack(spacing: 0) {
                             board(stage, reflowing: reflowing)
-                            lower.frame(width: proxy.size.width * stage.trayFraction)
+                            lower(stage).frame(width: proxy.size.width * stage.trayFraction)
                         }
                     } else {
                         VStack(spacing: 0) {
                             board(stage, reflowing: reflowing)
-                            lower
+                            lower(stage)
                         }
                     }
                     if let announcement = session.announcement {
@@ -545,7 +590,7 @@ public struct ScoringScreen: View {
     /// key under a thumb is the same size and in the same place whatever the player's setting. The
     /// cards do not — they carry the PD-001 question and a retraction's explanation, which are things
     /// to be read, so they grow with everything else above them.
-    @ViewBuilder private var lower: some View {
+    @ViewBuilder private func lower(_ stage: ThroStage) -> some View {
         // PD-027. A card taking the keypad's place lands in it; **the keypad coming back does not**,
         // because a player waiting to throw wants their keys, not a flourish.
         if let flow = session.endFlow {
@@ -569,10 +614,13 @@ public struct ScoringScreen: View {
             DartKeypad(entry: session.darts,
                        disabled: session.isComplete || session.announcement != nil,
                        ready: session.dartsMayBeEntered,
+                       decided: session.visitDecided,
+                       keyHeight: stage.keyHeight,
                        onDart: session.dart, onEnter: session.enterDarts)
                 .throPinnedKeypadTypeCeiling()
         } else {
             ScoreKeypad(value: session.entry, disabled: session.isComplete || session.announcement != nil,
+                        keyHeight: stage.keyHeight,
                         onDigit: session.digit, onQuick: session.quick,
                         onMiss: session.miss, onClear: session.undoKey, onEnter: session.enter)
                 .throPinnedKeypadTypeCeiling()
@@ -641,8 +689,8 @@ public struct ScoringScreen: View {
                 // `stage.checkout` and not `session.throwerOnAFinish`: the route is drawn only where
                 // the board can hold it. It is the second thing to give way after the ledger, and
                 // `ThroStage` is where that order is decided rather than here.
-                CheckoutCard(required: session.remaining(seat), route: session.throwerRoute,
-                             compact: true, hideValue: true)
+                ThroRouteLine(required: session.throwerLeft ?? session.remaining(seat), route: session.throwerRoute)
+                    .padding(.horizontal, ThroStage.gutter)
                     .padding(.top, ThroSpacing.spacing2)
             }
             // **The three darts, under the head.** Two comments in the keypad slice said this row
@@ -656,7 +704,7 @@ public struct ScoringScreen: View {
             // is never a row that clips: on the smallest phone the score steps down the ladder to
             // make room for it, which is the cost of the notation and is the player's to choose.
             if entryMode == .perDart {
-                ThroDartLine(entry: session.darts, onTakeBackTo: session.takeBackDarts)
+                ThroDartLine(entry: session.darts, onTakeBackTo: session.takeBackDarts, onUndo: session.undoKey)
                     .padding(.horizontal, ThroStage.gutter)
                     .padding(.top, ThroSpacing.spacing2)
             }
@@ -717,7 +765,11 @@ public struct ScoringScreen: View {
     /// a finish is only news for the person about to take it.
     static func column(_ session: MatchSession, _ seat: Seat) -> ThroBoardColumn {
         let throwing = session.thrower == seat
-        let onAFinish = session.checkable.contains(session.remaining(seat))
+        // The thrower's number follows their darts (OD-023): after T20 from 100 the head says 40, the
+        // number the next dart is thrown at, and it is called out only when a finish is on with the
+        // darts still in hand. The other column is the score it was left on.
+        let remaining = throwing ? (session.throwerLeft ?? session.remaining(seat)) : session.remaining(seat)
+        let onAFinish = throwing ? session.throwerOnAFinish : session.checkable.contains(remaining)
         let basis: ThroBasis
         if session.bust != nil, throwing {
             basis = .struck
@@ -728,7 +780,7 @@ public struct ScoringScreen: View {
         } else {
             basis = .exact
         }
-        return ThroBoardColumn(name: session.name(seat), remaining: session.remaining(seat),
+        return ThroBoardColumn(name: session.name(seat), remaining: remaining,
                                basis: basis, throwing: throwing)
     }
 
@@ -771,7 +823,11 @@ public struct ScoringScreen: View {
     //    double rule under their column, the 45° marker beside their name, and the name's own ink.
     //    They come back the day per-dart entry gives them something true to show.
 
-    var entryMode: ScoringEntryMode { ScoringEntryMode(stored: entryModeRaw) }
+    var entryMode: ScoringEntryMode {
+        if let matchEntryMode { return matchEntryMode }
+        if session.record.bustRule == .keepScoredDarts { return .perDart }
+        return ScoringEntryMode(stored: entryModeRaw)
+    }
 
     /// Change notation. **The part-entered visit is cleared**, because the two keypads hold the same
     /// entry in different notations and carrying one across is guesswork: three darts have a total,
@@ -780,7 +836,9 @@ public struct ScoringScreen: View {
     private func switchEntryMode() {
         ThroHaptics.play(.key, enabled: haptics)
         session.clearEntry()
-        entryModeRaw = entryMode.other.rawValue
+        let chosen = entryMode.other
+        matchEntryMode = chosen
+        entryModeRaw = chosen.rawValue
     }
 
     /// Put a mark on the board and take it off again after its dwell. The haptic comes from the
@@ -861,7 +919,11 @@ struct AnnouncementOverlay: View {
         switch announcement {
         case let .bust(seat, restored, reason, next):
             Eyebrow("Bust", color: ThroColor.colorStatusError)
-            Text("\(session.name(seat)) stays on")
+            // "Stays on" is only true under the standard rule, or when the first dart bust. Under
+            // keep-scored darts the darts before the bust stood, so the score moved — 40 to 20 — and
+            // saying it stayed would contradict the number printed under it.
+            let moved = session.visits.last(where: { $0.seat == seat }).map { $0.remainingBefore != restored } ?? false
+            Text("\(session.name(seat)) \(moved ? "is now on" : "stays on")")
                 .thro(ThroTypography.heading3)
                 .foregroundStyle(ThroColor.colorTextSecondary)
             Text("\(restored)")

@@ -636,10 +636,14 @@ public struct MatchOnRecord: Decodable, Sendable, Equatable, Identifiable {
         /// Who threw first, which a replay of the match needs. Optional, so a server from before it
         /// was sent still decodes; a match that cannot be replayed is shown without its board.
         public let throwFirst: String?
+        /// `restoreVisit` or `keepScoredDarts` (OD-023). Absent from a server that predates it, which
+        /// only ever played the standard rule.
+        public let bustRule: String?
         public init(startingScore: Int, inRule: String, outRule: String, legsMode: String, legsTarget: Int,
-                    throwFirst: String? = nil) {
+                    throwFirst: String? = nil, bustRule: String? = nil) {
             self.startingScore = startingScore; self.inRule = inRule; self.outRule = outRule
             self.legsMode = legsMode; self.legsTarget = legsTarget; self.throwFirst = throwFirst
+            self.bustRule = bustRule
         }
     }
 
@@ -960,12 +964,17 @@ public actor ThroAPI {
         public let correctsSeq: Int64?
         public let occurredAt: String
         public let occurredTz: String
+        /// The darts, for a visit entered dart by dart (OD-023): `["T20","T20","D20"]`. The server
+        /// replays them as darts, so a bust only the darts show is the bust it was. Omitted, not null,
+        /// for a visit entered as a total.
+        public let darts: [String]?
 
         public init(deviceSeq: Int64, kind: String, seat: String, visitTotal: Int?,
-                    correctsSeq: Int64?, occurredAt: String, occurredTz: String) {
+                    correctsSeq: Int64?, occurredAt: String, occurredTz: String, darts: [String]? = nil) {
             self.deviceSeq = deviceSeq; self.kind = kind; self.seat = seat
             self.visitTotal = visitTotal; self.correctsSeq = correctsSeq
             self.occurredAt = occurredAt; self.occurredTz = occurredTz
+            self.darts = darts
         }
     }
 
@@ -977,11 +986,14 @@ public actor ThroAPI {
         public let legsMode: String
         public let legsTarget: Int
         public let throwFirst: String
+        /// `restoreVisit` or `keepScoredDarts` (OD-023).
+        public let bustRule: String
 
         public init(startingScore: Int, inRule: String, outRule: String,
-                    legsMode: String, legsTarget: Int, throwFirst: String) {
+                    legsMode: String, legsTarget: Int, throwFirst: String, bustRule: String = "restoreVisit") {
             self.startingScore = startingScore; self.inRule = inRule; self.outRule = outRule
             self.legsMode = legsMode; self.legsTarget = legsTarget; self.throwFirst = throwFirst
+            self.bustRule = bustRule
         }
     }
 

@@ -2,187 +2,82 @@ import Foundation
 import ThroDesign
 import ThroEngine
 
-/// Turning three entered darts into the evidence a visit carries.
+/// Three entered darts, handed to the engine as darts (OD-023).
 ///
-/// `ThroDart` and `ThroDartEntry` live in `ThroDesign` and hold no darts rules — checkability, out
-/// rules and busts are the engine's. This is where the two meet, in the one layer that may know
-/// both, exactly as `MatchSession` is where the engine and the journal meet.
+/// `ThroDart` and `ThroDartEntry` live in `ThroDesign` and are the keypad's vocabulary: what a dart
+/// is called and what three of them add up to. **Every rule question goes to the engine** — whether
+/// a dart busts the visit, whether it may finish the leg, how many darts were thrown at a double,
+/// what is left and what route is still on. This file is the one translation between the two, and it
+/// holds no darts arithmetic of its own.
 ///
-/// **The engine's input does not change.** A visit entered as three darts produces the same
-/// `recordVisit` command a visit entered as a total does, with the same `visitTotal` — the sum. What
-/// it adds is `dartsUsed` and `dartsAtDouble`, which are today **always nil** unless PD-001 stops
-/// the player and asks. Those two columns already exist in the journal, are already validated by the
-/// engine, and are already what the statistics layer is missing.
+/// **What it replaced.** This file used to answer those questions itself, because the engine scored
+/// visits and not darts. It summed the darts into a total, walked them for darts at a double, and
+/// refused an entry that reached zero on a treble or a single — because the engine, seeing only the
+/// total, would have called it a checkout. Two defects came of that, and both are gone with it:
+///
+///  - **A bust the darts could see was refused rather than recorded.** A player on 20 who threw a
+///    single 20 had busted; the app told them to take the dart back, leaving them no way to record
+///    what happened at the board. The engine now decides it from the darts, as the bust it is.
+///  - **Double-in was scored from the wrong darts.** The entry sent the raw sum of the three darts, so
+///    under double-in the darts thrown before the opening double counted: `20 D20 20` from a player
+///    not yet in scored 80 instead of 60, and three singles counted as having opened. The engine now
+///    reads the darts in order and counts from the opening dart.
 public enum DartVisit {
 
-    /// The remainders one dart can finish, under each out rule.
-    ///
-    /// Derived from the engine's own route table — a route of length one **is** a one-dart finish —
-    /// rather than transcribed, so it cannot drift from the rules it is supposed to describe. The
-    /// engine already carries `oneDartFinishesDouble` as a literal for the double-out case; the
-    /// tests hold this against it, which is what makes the literal worth having.
-    static let oneDartFinishes: [OutRule: Set<Int>] = {
-        var table: [OutRule: Set<Int>] = [:]
-        for rule in [OutRule.double, .master, .straight] {
-            table[rule] = Set((1...RuleTables.maxVisitTotal).filter { RuleTables.route($0, rule)?.count == 1 })
+    /// The engine's dart for one the keypad entered. Total: every keypad dart is on the board.
+    public static func engineDart(_ dart: ThroDart) -> Dart {
+        switch dart.ring {
+        case .miss: return .miss
+        case .single: return Dart(dart.sector, .single)
+        case .double: return Dart(dart.sector, .double)
+        case .treble: return Dart(dart.sector, .treble)
+        case .outerBull: return .outerBull
+        case .bull: return .bull
         }
-        return table
-    }()
-
-    /// How many of the entry's darts were thrown at a double.
-    ///
-    /// **The definition, and what it is not.** A dart is *at a double* when the score standing in
-    /// front of it is one a single dart can finish — 32, 16, 50 under double-out. It is **not**
-    /// every dart thrown from a checkable number: a player on 141 throwing `T20 T19 D12` threw one
-    /// dart at a double, not three, and that is also the answer they would give if PD-001 stopped
-    /// and asked them.
-    ///
-    /// This is worth stating plainly because the first version of this function counted the second
-    /// thing. It compiled, it passed its tests, and it would have quietly tripled the denominator of
-    /// every checkout percentage in the app — `Statistics.checkoutPercentage` divides leg wins by
-    /// the sum of this column, so a wrong count here does not fail, it just makes every player look
-    /// worse than they are. Two definitions in one column is worse still: the same match would carry
-    /// human answers under one and computed answers under the other.
-    ///
-    /// **The limit that remains.** The ring a dart lands in does not say what it was aimed at. A
-    /// player on 32 who throws a single 16 has, on this count, thrown one dart at a double and is
-    /// then on 16 with another. That is what a scorer writes down, and it is observable; what the
-    /// player intended is not.
-    ///
-    /// Darts entered after the visit was already decided do not count: once the remaining reaches
-    /// zero or goes below what the out rule allows, the visit is over and nothing further was thrown.
-    public static func dartsAtDouble(_ entry: ThroDartEntry, from remaining: Int,
-                                     outRule: OutRule) -> Int? {
-        guard !entry.darts.isEmpty else { return nil }
-        let atADouble = DartVisit.oneDartFinishes[outRule] ?? []
-        var left = remaining
-        var count = 0
-        for dart in entry.darts {
-            if atADouble.contains(left) { count += 1 }
-            left -= dart.value
-            // Below this the visit is settled — finished or bust — and a further dart was not thrown.
-            if left <= (outRule == .straight ? 0 : 1) { break }
-        }
-        return count
     }
 
-    /// Whether the entry, thrown from `remaining`, ends the leg.
-    public static func finishes(_ entry: ThroDartEntry, from remaining: Int, outRule: OutRule) -> Bool {
-        remaining - entry.total == 0 && RuleTables.checkouts(outRule).contains(remaining)
+    /// The keypad's dart for one the engine holds — how a stored visit's darts are drawn again.
+    public static func keypadDart(_ dart: Dart) -> ThroDart? {
+        switch (dart.ring, dart.number) {
+        case (.miss, _): return .miss
+        case (.single, Dart.bullNumber): return .outerBull
+        case (.double, Dart.bullNumber): return .bull
+        case (.single, let n): return .single(n)
+        case (.double, let n): return .double(n)
+        case (.treble, let n): return .treble(n)
+        }
     }
 
-    /// Whether a dart may be the one that ends a leg, under this out rule.
+    public static func engineDarts(_ entry: ThroDartEntry) -> [Dart] { entry.darts.map(engineDart) }
+
+    /// What the darts so far have done, read by the engine from where the visit began.
+    public static func read(_ entry: ThroDartEntry, from remaining: Int, format: MatchFormat,
+                            opened: Bool = true) -> Darts.Reading {
+        Darts.read(before: remaining, darts: engineDarts(entry), outRule: format.outRule,
+                   inRule: format.inRule, opened: opened)
+    }
+
+    /// The command an entered visit produces: the darts themselves. The engine derives the total, the
+    /// bust and where it happened, the darts used and the darts at a double.
+    public static func command(_ entry: ThroDartEntry, player: PlayerId) -> Command {
+        .recordDarts(player: player, darts: engineDarts(entry))
+    }
+
+    /// Darts at a double in `entry` from `remaining`, as the engine counts them: darts thrown while the
+    /// score in front of them was a one-dart finish. Nil for an empty entry — zero darts at a double is
+    /// a claim about a visit that happened, and no visit happened.
+    public static func dartsAtDouble(_ entry: ThroDartEntry, from remaining: Int, outRule: OutRule) -> Int? {
+        guard !entry.isEmpty else { return nil }
+        return Darts.read(before: remaining, darts: engineDarts(entry), outRule: outRule).atDouble
+    }
+
+    /// Whether a dart may end a leg under `outRule`. The engine's answer, by ring.
     public static func mayFinish(_ dart: ThroDart, outRule: OutRule) -> Bool {
-        switch outRule {
-        case .double: return dart.isDouble
-        case .master: return dart.isDouble || dart.ring == .treble
-        case .straight: return dart.value > 0
-        }
-    }
-
-    /// The dart in the entry that reaches zero but is not allowed to, if there is one.
-    ///
-    /// **This is the thing per-dart entry can see and a visit total cannot**, and it turned up as a
-    /// row of red in CI rather than as a thought. A player on 60 who throws `T20` reaches zero on a
-    /// treble: under double-out that is a bust, not a checkout. The engine scores a visit
-    /// (`ThroEngine/Types.swift:26`), so all it can ask is whether the score the visit STARTED from
-    /// was finishable — 60 is — and it has no way to know the last dart was not a double.
-    ///
-    /// Left to itself the engine then answers two ways for one situation, which is worse than
-    /// either answer alone: `T20` from 60 produces `dartsAtDouble: 0`, which it rejects as
-    /// `DARTS_AT_DOUBLE_INVALID` — a true refusal with a reason no player can act on — while `20`
-    /// from 20 produces `dartsAtDouble: 1`, because 20 is `D10` and the dart was thrown from a
-    /// one-dart finish, and it accepts it as a leg won that never happened.
-    ///
-    /// So the entry layer refuses **both**, before either reaches the engine, and says which dart
-    /// and why. That is not a second authority on what a bust is: nothing here decides the visit,
-    /// and nothing pretends to record the bust. It refuses to submit darts that cannot have been
-    /// thrown, exactly as the keypad refuses a fourth dart.
-    ///
-    /// **What is still not built** is recording that bust. It needs an engine that scores darts, in
-    /// Swift and Kotlin together behind ADR-002's conformance corpus, and that is the founder's
-    /// call — OD-023.
-    public static func illegalFinish(_ entry: ThroDartEntry, from remaining: Int,
-                                     outRule: OutRule) -> ThroDart? {
-        // `finishes` and not merely "reaches zero": from a bogey — 159 under double-out — reaching
-        // zero is a bust the engine sees for itself (`NOT_CHECKOUT_POSSIBLE`), and refusing it here
-        // would take away a bust the app records correctly today. This only speaks where the engine
-        // would otherwise call it a leg won.
-        guard finishes(entry, from: remaining, outRule: outRule), let last = entry.darts.last,
-              !mayFinish(last, outRule: outRule) else { return nil }
-        return last
-    }
-
-    /// Whether the entry has settled the visit — finished it, or busted it — so there is nothing
-    /// further to throw. A bust after one dart is a real thing: on 20, a double 20 is a bust and the
-    /// player stops.
-    public static func settles(_ entry: ThroDartEntry, from remaining: Int, outRule: OutRule) -> Bool {
-        let left = remaining - entry.total
-        if left < 0 { return true }
-        if left == 1 && outRule == .double { return true }
-        return left == 0
-    }
-
-    /// The evidence a visit carries, from what was entered.
-    ///
-    /// **Three clamps, each of them a rule the engine already enforces.** A refusal a player cannot
-    /// act on is a dead end rather than a correction, so evidence that the engine would refuse is
-    /// carried as *unknown* rather than as a number it will throw back.
-    ///
-    ///  - `dartsUsed` is only recorded on a leg-winning visit unless it is three. `Engine` rejects
-    ///    `DARTS_USED_INVALID` for any other visit that claims fewer, because a visit that did not
-    ///    end the leg used the whole hand — and a bust, by its convention, consumed three darts
-    ///    whatever the player had thrown when it happened. A bust after one dart therefore records
-    ///    nil: one is the observed count, three is the convention, and nil is the only one of the
-    ///    three that does not assert something the record cannot stand behind.
-    ///  - `dartsAtDouble` is clamped to `dartsUsed`, which the engine also refuses to see exceeded.
-    ///  - `dartsAtDouble` is zero from a remaining no three darts can finish. The engine calls that
-    ///    "evidence that cannot have happened", and it is right: the walk below cannot produce it
-    ///    (a one-dart finish is unreachable from a non-checkout), so this is a floor under a defect
-    ///    rather than a licence — and `DartVisitTests` proves the floor is never load-bearing.
-    public static func evidence(_ entry: ThroDartEntry, from remaining: Int,
-                               outRule: OutRule) -> (dartsUsed: Int?, dartsAtDouble: Int?) {
-        guard let used = entry.dartsUsed else { return (nil, nil) }
-        let carried = (used == ThroDartEntry.perVisit
-                       || finishes(entry, from: remaining, outRule: outRule)) ? used : nil
-        guard RuleTables.checkouts(outRule).contains(remaining) else { return (carried, 0) }
-        let atDouble = DartVisit.dartsAtDouble(entry, from: remaining, outRule: outRule)
-        return (carried, atDouble.map { min($0, carried ?? ThroDartEntry.perVisit) })
-    }
-
-    /// The command an entered visit produces. Identical in every field to the one a typed total
-    /// produces, apart from the two pieces of evidence a typed total cannot supply.
-    public static func command(_ entry: ThroDartEntry, player: PlayerId, from remaining: Int,
-                              outRule: OutRule) -> Command {
-        let carried = DartVisit.evidence(entry, from: remaining, outRule: outRule)
-        return .recordVisit(player: player, visitTotal: entry.total,
-                            dartsUsed: carried.dartsUsed, dartsAtDouble: carried.dartsAtDouble)
+        engineDart(dart).mayFinish(outRule)
     }
 
     /// Whether entering darts answers PD-001's questions outright, so the player is not stopped and
-    /// asked something they have already told the app.
-    ///
-    /// Both, or neither: a half-answered prompt is a prompt.
+    /// asked something they have already told the app. Both, or neither: a half-answered prompt is a
+    /// prompt.
     public static func answersThePrompts(_ entry: ThroDartEntry) -> Bool { entry.dartsUsed != nil }
 }
-
-// **A gap per-dart entry can see and this slice does not close.**
-//
-// Under double-out the winning dart must be a double. The engine scores a visit, not a dart
-// (`ThroEngine/Types.swift`), so it can only ask whether the score *before* the visit was
-// finishable — which means a player on 6 who records a total of 6 wins the leg, whether the last
-// dart was D3 or S6. That is true of the app today and is why PD-001 asks about doubles at all.
-//
-// Entering three darts makes the last dart's ring visible for the first time, and `illegalFinish`
-// above now catches it — so the app refuses such an entry rather than recording a leg nobody won.
-//
-// **What this comment got wrong when it was first written.** It said the engine's own rules would
-// not catch any of it. They catch about half: a finish whose last dart is not itself a one-dart
-// finish produces `dartsAtDouble: 0`, which the engine rejects under double-out. The other half —
-// a single 20 thrown from 20 — produces 1, because 20 is `D10`, and is accepted as a leg won. Two
-// behaviours for one situation, and the more common one was the wrong one. That is what made this
-// worth acting on rather than only recording.
-//
-// **What is still not built is recording the bust**, and that has not changed: it needs an engine
-// that scores darts, in Swift and Kotlin together behind ADR-002's conformance corpus, and it
-// reopens PD-008's reasoning about what a visit is. OD-023, and the founder's.

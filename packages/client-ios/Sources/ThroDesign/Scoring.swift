@@ -146,7 +146,66 @@ public struct CheckoutCard: View {
         .padding(compact ? ThroSpacing.spacing3 : ThroSpacing.spacing4)
         .background(RoundedRectangle(cornerRadius: ThroSpacing.radiusCard).fill(ThroColor.colorBackgroundBrandSubtle))
         .overlay(RoundedRectangle(cornerRadius: ThroSpacing.radiusCard).strokeBorder(ThroColor.colorBorderBrand, lineWidth: 2))
-        .accessibilityElement(children: .combine)
+        // Spoken, not combined: combining read the chips as written — "T twenty, D twenty" letter by
+        // letter on some voices — and a route is the one thing on this card a player needs to hear right.
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(CheckoutCard.spoken(required: required, route: route))
+    }
+
+    /// "Checkout available, 100: treble 20, double 20."
+    static func spoken(required: Int, route: [String]) -> String {
+        let steps = route.map(CheckoutCard.spokenStep).joined(separator: ", ")
+        return steps.isEmpty ? "Checkout available, \(required)" : "Checkout available, \(required): \(steps)"
+    }
+
+    /// One route step as a scorer would say it. The route table's names are `T20`, `D16`, `20`, `25`, `Bull`.
+    static func spokenStep(_ step: String) -> String {
+        switch step {
+        case "Bull": return "bullseye"
+        case "25": return "twenty five"
+        default:
+            if step.hasPrefix("T") { return "treble \(step.dropFirst())" }
+            if step.hasPrefix("D") { return "double \(step.dropFirst())" }
+            return "single \(step)"
+        }
+    }
+}
+
+/// The route, written on the board: one line of chalk under the head (OD-023).
+///
+/// `CheckoutCard` is a paper card, and on the board it was the one light object on the green field —
+/// edge to edge, twice the height `ThroStage` counts for a route (`checkoutRow`, 39 points), so on a
+/// finish it pushed the bottom row of keys off the phone. This is the same route in the board's own
+/// language, the chalk boxes the fixture slate writes its tags in, drawn inside the room the stage
+/// allows for it. The route itself is the engine's, for the darts still in hand; this only writes it.
+public struct ThroRouteLine: View {
+    private let route: [String]
+    private let required: Int
+
+    public init(required: Int, route: [String]) {
+        self.required = required
+        self.route = route
+    }
+
+    public var body: some View {
+        HStack(spacing: ThroSpacing.spacing2) {
+            Text("Checkout")
+                .thro(ThroTypography.label.uppercase(true).tracking(em: 0.08))
+                .foregroundStyle(ThroColor.colorTextOnBoardSecondary)
+                .lineLimit(1)
+            ForEach(Array(route.enumerated()), id: \.offset) { step in
+                Text(step.element)
+                    .thro(ThroTypography.label.family(.sport).weight(.semibold).tracking(em: 0.04))
+                    .foregroundStyle(ThroColor.colorTextOnBoard)
+                    .lineLimit(1)
+                    .padding(.vertical, ThroSpacing.spacing1 + 2)
+                    .padding(.horizontal, ThroSpacing.spacing3)
+                    .overlay(ChalkBox(weight: 2).fill(ThroColor.colorMarkOnBoard))
+            }
+        }
+        .frame(maxWidth: .infinity)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(CheckoutCard.spoken(required: required, route: route))
     }
 }
 
@@ -367,9 +426,13 @@ public struct ScoreKeypad: View {
     private let onClear: () -> Void
     private let onEnter: () -> Void
 
-    public init(value: String, disabled: Bool = false,
+    /// How tall a key is, as the stage worked it out. See `DartKeypad.keyHeight`.
+    private let keyHeight: CGFloat
+
+    public init(value: String, disabled: Bool = false, keyHeight: CGFloat = ChalkKeyStyle.defaultHeight,
                 onDigit: @escaping (String) -> Void, onQuick: @escaping (Int) -> Void,
                 onMiss: @escaping () -> Void, onClear: @escaping () -> Void, onEnter: @escaping () -> Void) {
+        self.keyHeight = keyHeight
         self.value = value
         self.disabled = disabled
         self.onDigit = onDigit
@@ -380,7 +443,7 @@ public struct ScoreKeypad: View {
     }
 
     public var body: some View {
-        VStack(spacing: ThroSpacing.spacing2) {
+        VStack(spacing: ThroStage.trayGap) {
             HStack(spacing: ThroSpacing.spacing2) {
                 ForEach(Array(ScoreKeypad.quick.enumerated()), id: \.element) { total in
                     key(action: { onQuick(total.element) },
@@ -411,6 +474,7 @@ public struct ScoreKeypad: View {
                     Icon(.undo2, size: 24)
                 }
                 .accessibilityLabel("Undo")
+                .accessibilityHint(value.isEmpty ? "Offers to undo the last visit" : "Clears the score being entered")
             }
             Button(action: { ThroHaptics.play(.commit, enabled: haptics); onEnter() }) {
                 Text(value.isEmpty ? "Enter score" : "Enter \(value)")
@@ -418,7 +482,7 @@ public struct ScoreKeypad: View {
                     .foregroundStyle(ScoreKeypad.ink(ready: !value.isEmpty, disabled: disabled))
             }
             .buttonStyle(ChalkKeyStyle(ScoreKeypad.enterLighting(ready: !value.isEmpty, disabled: disabled),
-                                       seedAngle: 577))
+                                       minHeight: keyHeight, seedAngle: 577))
             .disabled(value.isEmpty)
         }
         .padding(.vertical, ThroSpacing.spacing4)
@@ -484,7 +548,7 @@ public struct ScoreKeypad: View {
         // its own, so the pressed fill was never visible. Sixty taps a leg on a control whose only
         // acknowledgement was a 2% scale. `ChalkKeyStyle` owns the face, the boundary and the press
         // together, because `isPressed` exists inside a `ButtonStyle` and nowhere else.
-        .buttonStyle(ChalkKeyStyle(ScoreKeypad.keyLighting(disabled: disabled), seedAngle: seedAngle))
+        .buttonStyle(ChalkKeyStyle(ScoreKeypad.keyLighting(disabled: disabled), minHeight: keyHeight, seedAngle: seedAngle))
     }
 }
 

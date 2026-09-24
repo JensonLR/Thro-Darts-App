@@ -23,7 +23,18 @@ const LIVE_REFRESH = 10_000;
 const DWELL = 20_000;
 // A wall says how old it is, and stops asserting a table after this long without an answer.
 const STALE = 15 * 60_000;
+// A game in play is a score that changes every visit, so it goes stale in a minute rather than a quarter of an hour.
+// Past this without an answer from the live read, "Playing now" is taken down rather than left up with old scores:
+// a leg that finished twenty minutes ago, still on the wall as though it were being thrown, is worse than no board.
+// Long enough that one dropped request among the ten-second reads does not make the games blink off and on.
+const LIVE_STALE = 45_000;
+// How long a read is waited for. A request left hanging on a pub's Wi-Fi would stop its loop for good — the loop
+// awaits it — and the wall would never ask again.
+const PATIENCE = 10_000;
 
+// The most rows a page holds. What a page actually holds is measured on the screen it is on (see fit): twelve rows
+// of a table at the sizes below are taller than a 16:9 television, and the bottom four were cut off by the edge of
+// the screen, on every television, with nothing to say they were there.
 const TABLE_ROWS = 12;
 const FIXTURE_ROWS = 8;
 const LIVE_ROWS = 4;
@@ -31,7 +42,14 @@ const RECENT_RESULTS = 16;
 
 const REMEMBERED = 'thro.wall.season';
 
-const state = { standings: null, fixtures: null, live: [], heardAt: null, trouble: null, started: Date.now() };
+// Two feeds, each with its own last answer. They shared one "last heard" and one fault, so a live read that
+// succeeded every ten seconds cleared the error of a table read that had been failing for an hour, and the wall
+// said "Just now" over a table nobody had fetched since the first darts.
+const state = {
+  standings: null, fixtures: null, live: [], started: Date.now(),
+  table: { at: null, trouble: null, version: 0 },
+  games: { at: null, trouble: null, version: 0 },
+};
 
 const el = (tag, cls, text) => {
   const n = document.createElement(tag);
@@ -41,7 +59,14 @@ const el = (tag, cls, text) => {
 };
 
 async function read(path) {
-  const res = await fetch(`${API}${path}`, { headers: { Accept: 'application/json' } });
+  const signal = typeof AbortSignal !== 'undefined' && AbortSignal.timeout ? AbortSignal.timeout(PATIENCE) : undefined;
+  let res;
+  try {
+    res = await fetch(`${API}${path}`, { headers: { Accept: 'application/json' }, ...(signal ? { signal } : {}) });
+  } catch (e) {
+    if (e && (e.name === 'TimeoutError' || e.name === 'AbortError')) throw new Error('THRØ is taking longer than usual to answer');
+    throw e;
+  }
   if (!res.ok) {
     const e = new Error(`THRØ answered ${res.status}`);
     e.status = res.status;
@@ -65,24 +90,35 @@ function paginate(items, per) {
  * because there is no way to share code between Swift and a page with no build step. `wall.test.js` holds
  * the same properties the Swift tests hold, so the two cannot drift silently.
  */
-function panels() {
+function panels(now = Date.now()) {
   const out = [];
-  for (const division of state.standings?.divisions ?? []) {
-    if (!division.rows?.length) continue;
-    const pages = paginate(division.rows, TABLE_ROWS);
-    pages.forEach((rows, i) => out.push({ kind: 'table', division: division.name, page: i + 1, of: pages.length, rows }));
+  if (tableStale(now)) {
+    // What the comment at the top promises: past the limit the wall stops asserting the table. One panel says so,
+    // in the heading's size, and the table, the fixtures and the results come back by themselves on the next answer.
+    out.push({ kind: 'stale', page: 1, of: 1 });
+  } else {
+    for (const division of state.standings?.divisions ?? []) {
+      if (!division.rows?.length) continue;
+      const pages = paginate(division.rows, rowsPer('table'));
+      pages.forEach((rows, i) => out.push({ kind: 'table', division: division.name, page: i + 1, of: pages.length, rows }));
+    }
+    const toPlay = (state.fixtures?.fixtures ?? []).filter(f => !f.decided);
+    paginate(toPlay, rowsPer('fixtures')).forEach((rows, i, all) =>
+      out.push({ kind: 'toPlay', page: i + 1, of: all.length, rows }));
+    const done = (state.fixtures?.fixtures ?? []).filter(f => f.decided).slice(0, RECENT_RESULTS);
+    paginate(done, rowsPer('fixtures')).forEach((rows, i, all) =>
+      out.push({ kind: 'results', page: i + 1, of: all.length, rows }));
   }
-  const toPlay = (state.fixtures?.fixtures ?? []).filter(f => !f.decided);
-  paginate(toPlay, FIXTURE_ROWS).forEach((rows, i, all) =>
-    out.push({ kind: 'toPlay', page: i + 1, of: all.length, rows }));
-  const done = (state.fixtures?.fixtures ?? []).filter(f => f.decided).slice(0, RECENT_RESULTS);
-  paginate(done, FIXTURE_ROWS).forEach((rows, i, all) =>
-    out.push({ kind: 'results', page: i + 1, of: all.length, rows }));
 
-  const livePages = paginate(state.live, LIVE_ROWS)
-    .map((games, i, all) => ({ kind: 'live', page: i + 1, of: all.length, games }));
+  const livePages = gamesCurrent(now) ? paginate(state.live, LIVE_ROWS)
+    .map((games, i, all) => ({ kind: 'live', page: i + 1, of: all.length, games })) : [];
   return interleave(livePages, out);
 }
+
+/** The table has had no answer for longer than a wall may go on showing it. */
+const tableStale = now => !!state.table.at && now - state.table.at > STALE;
+/** The games in play were read recently enough to be called "now". */
+const gamesCurrent = now => !!state.games.at && now - state.games.at <= LIVE_STALE;
 
 /** Live first and again between each of the others, so a game is never more than one panel away. */
 function interleave(live, rest) {
@@ -127,21 +163,92 @@ function outcome(f) {
   return d.legsHome === null || d.legsHome === undefined ? 'Played' : `${d.legsHome}–${d.legsAway}`;
 }
 
-const day = iso => new Date(iso).toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' });
+/**
+ * The day, and for a fixture still to play the time: "Thu 8 Oct 19:30". It was the day alone, so a wall showing
+ * tonight's fixtures could not say which board started first. London's time, whatever the television's clock is set
+ * to, because a pub television's clock is set to whatever it was set to in the shop. An instant at exactly midnight
+ * is a date with no time in it, and says the day alone.
+ */
+const day = (iso, withTime) => {
+  const d = new Date(iso);
+  if (!iso || Number.isNaN(d.getTime())) return '';
+  const date = d.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'Europe/London' });
+  if (!withTime || !/T\d/.test(iso)) return date;
+  const time = d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', hourCycle: 'h23', timeZone: 'Europe/London' });
+  return time === '00:00' ? date : `${date} ${time}`;
+};
 
-function heard(now) {
-  if (!state.heardAt) return 'Waiting for THRØ';
-  const mins = Math.floor((now - state.heardAt) / 60_000);
+/** How long ago [at] was, in words a room reads at a glance. The table's answer unless another is named. */
+function heard(now, at = state.table.at) {
+  if (!at) return 'Waiting for THRØ';
+  const mins = Math.floor((now - at) / 60_000);
   if (mins < 1) return 'Just now';
   return mins === 1 ? '1 minute ago' : `${mins} minutes ago`;
 }
 
+// --- how much fits ------------------------------------------------------------------------------------------------
+
+// Rows per page, measured on this screen. Everything on the wall scales off the viewport's width, so how many rows fit
+// its height depends on the television's shape and nothing else: a 16:9 set holds about seven rows of the table, a
+// 4:3 monitor behind a bar more. Measured rather than worked out from the stylesheet's numbers, because the numbers
+// are font sizes and a row is as tall as the face that loaded draws it.
+const fitted = {};
+
+function rowsPer(kind) {
+  return fitted[kind] || (kind === 'table' ? TABLE_ROWS : FIXTURE_ROWS);
+}
+
+function fit() {
+  const root = document.getElementById('wall');
+  if (!root || !root.clientHeight) return;
+  const sample = new Date().toISOString();
+  const probes = {
+    table: drawTable({ kind: 'table', division: 'Division', page: 1, of: 2,
+                       rows: [{ position: 10, name: 'Team', played: 10, won: 10, legDifference: 10, points: 10 }] }, 'Rules'),
+    fixtures: drawFixtures({ kind: 'toPlay', page: 1, of: 2,
+                             rows: [{ home: 'Team', away: 'Team', venue: 'Venue', scheduledAt: sample }] }, 'Still to play'),
+  };
+  for (const [kind, probe] of Object.entries(probes)) {
+    probe.style.cssText = 'position:absolute;left:0;right:0;top:0;height:auto;visibility:hidden';
+    root.append(probe);
+    const row = probe.querySelector('tbody tr');
+    const rowHeight = row ? row.getBoundingClientRect().height : 0;
+    const chrome = probe.getBoundingClientRect().height - rowHeight;
+    probe.remove();
+    if (rowHeight > 0) {
+      fitted[kind] = Math.max(3, Math.min(kind === 'table' ? TABLE_ROWS : FIXTURE_ROWS,
+                                           Math.floor((root.clientHeight - chrome) / rowHeight)));
+    }
+  }
+  fitted.done = true;
+}
+
+/** A new shape of screen, or the brand's face arriving after the fallback's, is measured again. */
+function refit() {
+  for (const k of Object.keys(fitted)) delete fitted[k];
+  const root = document.getElementById('wall');
+  if (root) delete root.dataset.showing;
+}
+
 // --- drawing ------------------------------------------------------------------------------------
 
-function drawTable(panel) {
+function drawTable(panel, says = state.standings?.rules?.says) {
   const wrap = el('div', 'panel');
   wrap.append(head(panel.division, panel.page, panel.of));
-  const table = el('table', 'wall-table');
+  const table = el('table', 'wall-table standings');
+  // The columns say what they are. Four bare columns of numbers under a team's name were a puzzle from the bar —
+  // which is played, which is won — and a regular who knew the app's table still had to guess this one's order.
+  const thead = el('thead');
+  const hr = el('tr');
+  for (const [cls, label, title] of [['pos', '', 'Position'], ['team', 'Team', 'Team'], ['num', 'P', 'Played'],
+                                     ['num', 'W', 'Won'], ['num', '+/−', 'Leg difference'], ['points', 'Pts', 'Points']]) {
+    const th = el('th', cls, label);
+    th.scope = 'col';
+    if (!label) { th.setAttribute('aria-label', title); } else th.title = title;
+    hr.append(th);
+  }
+  thead.append(hr);
+  const body = el('tbody');
   for (const row of panel.rows) {
     const tr = el('tr');
     tr.append(el('td', 'pos', String(row.position)));
@@ -150,25 +257,38 @@ function drawTable(panel) {
     tr.append(el('td', 'num', String(row.won)));
     tr.append(el('td', 'num', row.legDifference > 0 ? `+${row.legDifference}` : String(row.legDifference)));
     tr.append(el('td', 'points', String(row.points)));
-    table.append(tr);
+    body.append(tr);
   }
+  table.append(thead, body);
   wrap.append(table);
-  if (state.standings?.rules?.says) wrap.append(el('p', 'foot', state.standings.rules.says));
+  if (says) wrap.append(el('p', 'foot', says));
   return wrap;
 }
 
 function drawFixtures(panel, title) {
   const wrap = el('div', 'panel');
   wrap.append(head(title, panel.page, panel.of));
-  const table = el('table', 'wall-table');
+  const table = el('table', 'wall-table fixtures');
+  const body = el('tbody');
   for (const f of panel.rows) {
     const tr = el('tr');
     tr.append(el('td', 'team', sides(f)));
-    tr.append(el('td', 'aside', panel.kind === 'results' ? outcome(f) : (f.venue ?? '')));
-    tr.append(el('td', 'aside', day(f.scheduledAt)));
-    table.append(tr);
+    tr.append(el('td', 'aside what', panel.kind === 'results' ? outcome(f) : (f.venue ?? '')));
+    tr.append(el('td', 'aside when', day(f.scheduledAt, panel.kind !== 'results')));
+    body.append(tr);
   }
+  table.append(body);
   wrap.append(table);
+  return wrap;
+}
+
+/** Past the limit: the table is taken down, and the wall says why in words the far end of the room can read. */
+function drawStale(now) {
+  const wrap = el('div', 'panel stale');
+  wrap.append(head('The table is not up to date', 1, 1));
+  const mins = Math.floor((now - state.table.at) / 60_000);
+  wrap.append(el('p', 'saying', `THRØ has not answered for ${mins} minutes, so the table and fixtures are off the `
+    + 'screen in case they have changed. This screen keeps asking, and they come back by themselves.'));
   return wrap;
 }
 
@@ -214,31 +334,54 @@ function head(title, page, of) {
 function draw() {
   const now = Date.now();
   const root = document.getElementById('wall');
-  const all = panels();
-  const panel = showing(all, now);
 
   // Blank rather than the brand's name: the mark is already in the corner, and a heading reading
   // "THRØ" over a board that says THRØ is the app talking about itself on somebody's wall.
   document.getElementById('league').textContent = state.standings?.league ?? '';
-  const stale = state.heardAt && now - state.heardAt > STALE;
   const foot = document.getElementById('foot');
-  foot.textContent = state.trouble ? `${heard(now)} · ${state.trouble}` : heard(now);
-  foot.className = state.trouble || stale ? 'trouble' : '';
+  // Each feed says its own age and its own fault. The table's is always said; the games' only when something is
+  // wrong with them, because "games: just now" every ten seconds is noise on a wall with no game on.
+  const said = [`Table ${state.table.at ? heard(now).toLowerCase() : 'not read yet'}`];
+  if (state.table.trouble) said.push(state.table.trouble);
+  const gamesLost = state.games.trouble && !gamesCurrent(now);
+  if (gamesLost) {
+    const mins = state.games.at ? Math.max(1, Math.round((now - state.games.at) / 60_000)) : 0;
+    said.push(mins ? `Games in play not read for ${mins === 1 ? 'a minute' : `${mins} minutes`}, so none are shown`
+                   : 'Games in play could not be read');
+  }
+  foot.textContent = said.join(' · ');
+  foot.className = state.table.trouble || tableStale(now) || gamesLost ? 'trouble' : '';
 
-  const next = panel ? panel.kind + (panel.division ?? '') + panel.page : 'nothing';
-  if (root.dataset.showing === next && !panel?.kind.startsWith('live')) return;
+  if (!fitted.done) fit();
+  const all = panels(now);
+  const panel = showing(all, now);
+
+  // Drawn again when a different panel is due, or when the feed behind the one showing has answered since: a wall
+  // whose league fits on one panel showed the same panel for ever, and so it never drew a result that came in.
+  const feed = panel?.kind === 'live' ? state.games : state.table;
+  const next = panel
+    ? [panel.kind, panel.division ?? '', panel.page, feed.version, panel.kind === 'stale' ? Math.floor(now / 60_000) : ''].join('|')
+    : `nothing|${state.table.version}|${state.table.trouble ?? ''}`;
+  if (root.dataset.showing === next) return;
   root.dataset.showing = next;
   root.replaceChildren();
 
   if (!panel) {
     const wrap = el('div', 'panel');
-    wrap.append(el('h2', null, 'Nothing to show yet'));
-    wrap.append(el('p', 'saying', 'When this league has a table or a fixture list, it appears here.'));
+    if (state.table.trouble && !state.table.at) {
+      // A read that failed is not a league with nothing in it.
+      wrap.append(el('h2', null, 'Waiting for THRØ'));
+      wrap.append(el('p', 'saying', 'THRØ has not answered yet. This screen keeps asking; leave it on.'));
+    } else {
+      wrap.append(el('h2', null, 'Nothing to show yet'));
+      wrap.append(el('p', 'saying', 'When this league has a table or a fixture list, it appears here.'));
+    }
     root.append(wrap);
     return;
   }
   if (panel.kind === 'table') root.append(drawTable(panel));
   else if (panel.kind === 'live') root.append(drawLive(panel));
+  else if (panel.kind === 'stale') root.append(drawStale(now));
   else root.append(drawFixtures(panel, panel.kind === 'toPlay' ? 'Still to play' : 'Results'));
 }
 
@@ -252,28 +395,31 @@ async function readSeason(season) {
     ]);
     state.standings = standings;
     state.fixtures = fixtures;
-    state.heardAt = Date.now();
-    state.trouble = null;
+    state.table.at = Date.now();
+    state.table.trouble = null;
+    state.table.version += 1;
   } catch (e) {
     // What is on screen stays on screen. A dropped request is not news that the league has no table,
-    // and blanking a wall on a flaky pub connection turns one bad minute into an empty evening.
-    state.trouble = e.message;
+    // and blanking a wall on a flaky pub connection turns one bad minute into an empty evening. Past STALE it is
+    // taken down, and said so (see panels).
+    state.table.trouble = e.message;
   }
 }
 
 async function readLive(season) {
   try {
     state.live = (await read(`/v1/seasons/${season}/live`)).games ?? [];
-    state.heardAt = Date.now();
-    state.trouble = null;
+    state.games.at = Date.now();
+    state.games.trouble = null;
+    state.games.version += 1;
   } catch (e) {
     // **A 404 is a server without the route, not a fault.** This page is a URL, so it will be pointed
     // at servers of every vintage — a venue's bookmark outlives a deployment. An older THRØ has no
     // live route, which means there are no live games to show and nothing is wrong; saying "404" on a
     // pub wall all evening would be the newer page complaining about the older server, in front of the
-    // customers. Anything else leaves the last games up and says when they were last heard.
-    if (e.status === 404) { state.live = []; return; }
-    state.trouble = e.message;
+    // customers. Anything else leaves the last games up for LIVE_STALE, then takes them down and says so.
+    if (e.status === 404) { state.live = []; state.games.at = Date.now(); state.games.trouble = null; state.games.version += 1; return; }
+    state.games.trouble = e.message;
   }
 }
 
@@ -296,6 +442,10 @@ async function mountWall(season) {
   document.body.classList.add('wall-on');
   localStorage.setItem(REMEMBERED, season);
   stayAwake();
+  // A television's browser is resized when the set changes input or the overscan is changed, and the brand's face
+  // arrives a moment after the fallback's: either changes how many rows fit, so the rows are measured again.
+  addEventListener('resize', refit);
+  if (document.fonts && document.fonts.ready) document.fonts.ready.then(refit).catch(() => {});
   draw();
   setInterval(draw, 1000);
   (async function tableLoop() {
@@ -374,5 +524,5 @@ function start() {
   mountChooser(root);
 }
 
-window.THRO_WALL = { panels, interleave, side, sides, outcome, heard, state, paginate };
+window.THRO_WALL = { panels, interleave, side, sides, outcome, heard, state, paginate, day };
 if (typeof document !== 'undefined' && document.getElementById('wall')) start();

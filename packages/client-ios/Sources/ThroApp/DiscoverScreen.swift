@@ -48,6 +48,7 @@ struct DiscoverTrouble: View {
 }
 
 public struct DiscoverScreen: View {
+    @Environment(\.openURL) private var openURL
     @ObservedObject private var nearby: Nearby
     @ObservedObject private var teams: TeamsModel
     private let signedIn: Bool
@@ -167,10 +168,12 @@ public struct DiscoverScreen: View {
                     .accessibilityLabel("\(sign). Double tap Stop to turn it off.")
                 }
                 if DiscoverScreen.offersLocation(nearby.place) {
-                    Button(action: onUseLocation) {
+                    // Denied is not a dead end: iOS lets an app open its own page in Settings, where the
+                    // switch is. It was a disabled button saying the location was off, with nowhere to go.
+                    Button(action: { nearby.place == .denied ? openPhoneSettings() : onUseLocation() }) {
                         HStack(spacing: ThroSpacing.spacing2) {
                             Icon(.compass, size: 16)
-                            Text(nearby.place == .denied ? "Location is off for THRØ" : "Use my location")
+                            Text(nearby.place == .denied ? "Location is off — open Settings" : "Use my location")
                                 .thro(ThroTypography.labelStrong.uppercase(true).tracking(em: 0.06))
                         }
                         .foregroundStyle(ThroColor.colorTextOnBoard)
@@ -180,7 +183,6 @@ public struct DiscoverScreen: View {
                     }
                     .buttonStyle(ChalkKeyStyle(.field, minHeight: ThroSpacing.touchTargetMinimum, seedAngle: 19))
                     .fixedSize()
-                    .disabled(nearby.place == .denied)
                     .padding(.top, ThroSpacing.spacing1)
                 }
             }
@@ -188,9 +190,16 @@ public struct DiscoverScreen: View {
         }
     }
 
+    /// THRØ's own page in iPhone Settings, where the location switch is.
+    private func openPhoneSettings() {
+        #if os(iOS)
+        if let url = ThroReadiness.phoneSettings { openURL(url) }
+        #endif
+    }
+
     /// The location button is offered until the phone has said where it is. When permission was
-    /// refused it stays, disabled, saying so — a control that vanished would leave the player
-    /// wondering why the distances never came.
+    /// refused it stays, saying so and opening THRØ's page in Settings — a control that vanished would
+    /// leave the player wondering why the distances never came, and a disabled one left them nowhere.
     static func offersLocation(_ place: NearbyLogic.Place) -> Bool {
         switch place {
         case .located: return false

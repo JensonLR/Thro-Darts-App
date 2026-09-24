@@ -23,21 +23,55 @@ const API = new URLSearchParams(location.search).get('api') || window.THRO_API |
  */
 const PATIENCE = 10000;
 
-async function read(path) {
-  let res;
+/**
+ * A write is given longer than a read before the page stops waiting for it, and says something different when it
+ * does. A read abandoned at ten seconds costs nothing: ask again. A write abandoned mid-flight may still land once
+ * the server has finished waking, so the page cannot say it failed — only that it does not know, and that the
+ * person should look before sending it again, or a result goes in twice.
+ */
+const WRITE_PATIENCE = 2 * PATIENCE;
+
+/**
+ * Every request this file makes, with a limit on how long it is waited for.
+ *
+ * Only `read` had one. The signed-in requests — every read and write on the organiser's desk, the reports queue and
+ * the knockout pages — were bare `fetch`es, so a sleeping server left those pages on "One moment…" with no way out,
+ * which is the exact wait the limit was written for, on the pages a person is most likely to be using at night.
+ * A browser too old for `AbortSignal.timeout` still gets its request, just without the limit, rather than an error.
+ */
+async function patiently(url, init, writing) {
+  const ms = writing ? WRITE_PATIENCE : PATIENCE;
+  const signal = typeof AbortSignal !== 'undefined' && AbortSignal.timeout ? AbortSignal.timeout(ms) : undefined;
   try {
-    res = await fetch(`${API}${path}`, { headers: { Accept: 'application/json' }, signal: AbortSignal.timeout(PATIENCE) });
+    return await fetch(url, { ...init, ...(signal ? { signal } : {}) });
   } catch (e) {
     // A timeout is not a fault, and saying so wrongly is worse than saying nothing: THRØ is asleep
     // and being woken. Anything else — no network, a refused connection — reads as it always did.
-    if (e && (e.name === 'TimeoutError' || e.name === 'AbortError')) throw new Error('THRØ is taking longer than usual to answer.');
+    if (e && (e.name === 'TimeoutError' || e.name === 'AbortError')) {
+      const late = new Error(writing
+        ? 'THRØ is taking longer than usual to answer, so this may or may not have been saved. Look before sending it again.'
+        : 'THRØ is taking longer than usual to answer.');
+      late.timedOut = true;
+      throw late;
+    }
     throw e;
   }
+}
+
+/** An error that carries the status THRØ answered with, so a caller can tell a refusal from a dropped line. */
+function refusal(parsed, status) {
+  const e = new Error((parsed && parsed.error) || `THRØ answered ${status}.`);
+  e.status = status;
+  return e;
+}
+
+async function read(path) {
+  const res = await patiently(`${API}${path}`, { headers: { Accept: 'application/json' } }, false);
   if (!res.ok) {
     const body = await res.text();
-    let said = '';
-    try { said = JSON.parse(body).error || ''; } catch { /* not JSON: the status is all there is */ }
-    throw new Error(said || `THRØ answered ${res.status}.`);
+    let parsed = null;
+    try { parsed = JSON.parse(body); } catch { /* not JSON: the status is all there is */ }
+    throw refusal(parsed, res.status);
   }
   return res.json();
 }
@@ -120,6 +154,115 @@ function skeleton(where, rows = 4) {
   return box;
 }
 
+// --- a page drawn again keeps what is being typed into it ----------------------------------------------------------
+//
+// The signed-in pages draw themselves again, whole, after every save. That is how the fixture a result has just left
+// and the table it has just moved come out right without this file keeping a second copy of the season. The cost was
+// everything else on the page: a secretary typing the next score while the last one saved had it wiped under their
+// fingers nine hundred milliseconds later, cursor and all, and a pasted sheet went the same way.
+//
+// So a redraw carries across what a person had touched and not yet sent: each field's value, the sub-forms they had
+// opened, and where the cursor was. A field is matched to its successor by what it is called (its label) inside the
+// thing it belongs to (the nearest `data-key` — a fixture's, a report's, a tie's id), so a list that gained or lost a
+// row still puts each value back in the right box. What was just saved is the exception, and it is recognised by its
+// button: a save holds its button disabled once it succeeds and gives it back when it fails, so a form whose button
+// is still held down at the redraw is the one that has been answered. Its boxes come back as THRØ now has them.
+
+const FIELDS = 'input, select, textarea';
+
+/** The words a label says itself, not the options of a select inside it. */
+const ownWords = label => [...label.childNodes].filter(n => n.nodeType === 3).map(n => n.textContent).join('').trim();
+
+/** A name for each of [els] that the same control will have again after the page is drawn again. */
+function controlKeys(root, els) {
+  const seen = new Map();
+  return els.map(el => {
+    const scope = [];
+    for (let n = el.parentElement; n && n !== root; n = n.parentElement) if (n.dataset.key) scope.unshift(n.dataset.key);
+    const label = el.closest('label');
+    const name = el.dataset.toggle ? `toggle:${el.dataset.toggle}`
+      : el.getAttribute('aria-label') || el.placeholder || (label ? ownWords(label) : '') || el.name || '';
+    const base = `${scope.join('/')}|${el.tagName}.${el.type || ''}|${name}`;
+    const n = seen.get(base) || 0;
+    seen.set(base, n + 1);
+    return `${base}#${n}`;
+  });
+}
+
+/** True when the form [field] sits in has just been sent: the button that sent it is still held down. */
+function justSent(field) {
+  const near = field.closest('.entry-form, .paste, [data-form]');
+  const box = near && near.querySelector('button') ? near : field.closest('.entry, .paste, [data-form]');
+  return !!box && !!box.querySelector('button:disabled');
+}
+
+/**
+ * Draws [parts] into [root] in place of what was there, keeping what the person had typed but not sent.
+ * A select marked `data-shapes` changes the form around it and saves nothing, so its change is replayed as the value
+ * is put back — the scheduler's division list refills the team lists that way — and no other change is.
+ */
+function drawKeeping(root, parts) {
+  if (!('watched' in root.dataset)) {
+    root.dataset.watched = '';
+    const touched = e => { if (e.target.matches && e.target.matches(FIELDS)) e.target.dataset.touched = ''; };
+    root.addEventListener('input', touched);
+    root.addEventListener('change', touched);
+  }
+  const oldFields = [...root.querySelectorAll(FIELDS)];
+  const oldKeys = controlKeys(root, oldFields);
+  const kept = new Map();
+  oldFields.forEach((el, i) => {
+    if (!('touched' in el.dataset) || justSent(el)) return;
+    kept.set(oldKeys[i], el.type === 'checkbox' || el.type === 'radio' ? { checked: el.checked } : { value: el.value });
+  });
+  const oldToggles = [...root.querySelectorAll('button[data-toggle][aria-expanded="true"]')];
+  const opened = new Set(controlKeys(root, oldToggles).filter((key, i) => {
+    const owner = oldToggles[i].closest('[data-key]');
+    return !(owner && owner.querySelector('button:disabled'));
+  }));
+  let focus = null;
+  const active = document.activeElement;
+  const at = active ? oldFields.indexOf(active) : -1;
+  if (at >= 0) {
+    focus = { key: oldKeys[at] };
+    try { focus.start = active.selectionStart; focus.end = active.selectionEnd; } catch { /* a date or a number has no selection */ }
+  }
+
+  root.replaceChildren(...parts);
+
+  // Sub-forms first: the fields inside them do not exist until they are opened again.
+  const toggles = [...root.querySelectorAll('button[data-toggle]')];
+  controlKeys(root, toggles).forEach((key, i) => {
+    if (opened.has(key) && toggles[i].getAttribute('aria-expanded') !== 'true') toggles[i].click();
+  });
+  const fields = [...root.querySelectorAll(FIELDS)];
+  const keys = controlKeys(root, fields);
+  fields.forEach((el, i) => {
+    const was = kept.get(keys[i]);
+    if (!was) return;
+    if ('checked' in was) el.checked = was.checked;
+    else if (el.tagName === 'SELECT' && ![...el.options].some(o => o.value === was.value)) return;
+    else el.value = was.value;
+    el.dataset.touched = '';
+    if ('shapes' in el.dataset) el.dispatchEvent(new Event('change'));
+  });
+  if (focus) {
+    const el = fields[keys.indexOf(focus.key)];
+    if (el) {
+      el.focus();
+      try { if (focus.start != null) el.setSelectionRange(focus.start, focus.end); } catch { /* not a text field */ }
+    }
+  }
+}
+
+/**
+ * A calendar day as the reader's own clock has it, yyyy-mm-dd. `toISOString().slice(0, 10)` is the day in UTC, which
+ * between midnight and one in the morning of British Summer Time is yesterday — so a registration accepted, or a
+ * player transferred, just after midnight was dated the day before.
+ */
+const localDay = (d = new Date()) =>
+  `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+
 // --- the leagues -------------------------------------------------------------------------------
 
 /** The season a league's row and page show: the one running today, else the newest. The app picks the same. */
@@ -160,12 +303,26 @@ function heldWords(league) {
 }
 
 async function mountLeagues(listEl, searchEl, countEl) {
+  // The list is a <ul>, so what it says while it waits, and when the read fails, is said in a row of it: a bare
+  // <div> dropped into a list is a list a screen reader counts wrongly, and the empty list this was before said
+  // nothing at all for the seconds a sleeping server takes to wake.
+  const waiting = make('li', 'more');
+  waiting.append(make('p', 'quiet', 'Reading the leagues…'));
+  listEl.replaceChildren(waiting);
+  listEl.setAttribute('aria-busy', 'true');
   let leagues = [];
   try {
     // The read is an envelope — {"leagues": [...]} — and taking the object for the array is how the
     // first version of this page came to report "undefined leagues" over an empty list.
     leagues = (await read('/v1/leagues')).leagues || [];
-  } catch (e) { fail(listEl, e, () => mountLeagues(listEl, searchEl, countEl)); return; }
+  } catch (e) {
+    const row = make('li', 'more');
+    listEl.replaceChildren(row);
+    listEl.removeAttribute('aria-busy');
+    fail(row, e, () => mountLeagues(listEl, searchEl, countEl));
+    return;
+  }
+  listEl.removeAttribute('aria-busy');
   // What THRØ holds most of comes first: a league run here, then one with its teams, then the map's pins.
   const order = { run: 0, teams: 1, placed: 2 };
   leagues = leagues.map((l, i) => [l, i]).sort((a, b) => (order[heldAs(a[0])] - order[heldAs(b[0])]) || (a[1] - b[1])).map(x => x[0]);
@@ -232,6 +389,21 @@ function openInApp(what, id, words) {
   return box;
 }
 
+/**
+ * A league's website as a link, or null. The address was read off the league's own pages by a scraper, so it is
+ * somebody else's text: an `href` takes it at its word, and a `javascript:` address there would run on thro.uk when
+ * somebody tapped "Go to its website". Only http and https are links; a bare "www.example.org", which is how a lot
+ * of league pages write it, is taken to mean https.
+ */
+function webAddress(raw) {
+  const s = String(raw || '').trim();
+  if (!s) return null;
+  try {
+    const url = new URL(/^[a-z][a-z0-9+.-]*:/i.test(s) ? s : `https://${s}`);
+    return url.protocol === 'http:' || url.protocol === 'https:' ? url.href : null;
+  } catch { return null; }
+}
+
 const idFromPath = what => decodeURIComponent((location.pathname.match(new RegExp(`/${what}/([^/?#]+)`)) || [])[1]
   || new URLSearchParams(location.search).get(what) || '');
 
@@ -258,12 +430,19 @@ async function mountLeague(where, titleEl, eyebrowEl) {
   const parts = [make('p', 'lede-line', heldWords(league))];
 
   const go = make('div', 'cards');
-  const card = (href, title, words, cta) => { const a = make('a', 'card'); a.href = href; a.append(make('h3', null, title), make('p', null, words), make('span', 'go', cta)); return a; };
+  // An h2, not the h3 the front page's cards use: here the cards come before the page's first section heading, and
+  // a third-level heading straight under the title is a level skipped for anybody moving through by headings.
+  const card = (href, title, words, cta) => { const a = make('a', 'card'); a.href = href; a.append(make('h2', null, title), make('p', null, words), make('span', 'go', cta)); return a; };
   if (season && season.fixtures) {
     go.append(card(`table.html?season=${encodeURIComponent(season.leagueSeasonId)}`, 'Table', 'Worked out from the results beneath it.', 'See the table →'),
               card(`fixtures.html?season=${encodeURIComponent(season.leagueSeasonId)}`, 'Fixtures and results', `${plural(season.fixtures, 'fixture')} this season.`, 'See the fixtures →'));
   }
-  if (league.website) go.append(card(league.website, 'Its own website', heldAs(league) === 'run' ? 'What the league publishes itself.' : 'Its fixtures, results and table are kept there.', 'Go to its website →'));
+  const website = webAddress(league.website);
+  if (website) {
+    const site = card(website, 'Its own website', heldAs(league) === 'run' ? 'What the league publishes itself.' : 'Its fixtures, results and table are kept there.', 'Go to its website →');
+    site.rel = 'noopener nofollow';
+    go.append(site);
+  }
   if (go.children.length) parts.push(go);
 
   if (season && teamsIn(season)) {
@@ -405,7 +584,13 @@ function tableFor(division) {
     body.append(tr);
   }
   table.append(head, body);
+  // A box that scrolls sideways has to be reachable without a mouse: on a phone the nine columns are wider than the
+  // screen, and a keyboard user could not otherwise move the table to see the points. Focusable, and named, so what
+  // they have landed in is said.
   const scroll = make('div', 'table-scroll');
+  scroll.tabIndex = 0;
+  scroll.setAttribute('role', 'region');
+  scroll.setAttribute('aria-label', `${division.name ? `${division.name}: ` : ''}the table`);
   scroll.append(table);
   return scroll;
 }
@@ -454,7 +639,23 @@ function decided(d) {
   return { score: null, tag: d.awardedToHome ? 'Awarded, home' : 'Awarded, away', how: 'awarded' };
 }
 
-const when = iso => new Date(iso).toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' });
+/**
+ * A moment in words, in the league's own time: "Thu 8 Oct, 19:30". It printed the day alone, so a fixture, a
+ * knockout's start, the close of entries and a report's deadline all said which day and never when — and a
+ * knockout that starts at 11:00 is a different evening from one at 19:30. The time is London's whatever the reader's
+ * machine says, because the leagues are here. A value that is a day and nothing more ("2026-10-08"), or an instant
+ * at exactly midnight — which is how a date with no time in it arrives once it has been through a timestamp — says
+ * the day alone rather than a "00:00" nobody meant.
+ */
+const LONDON = 'Europe/London';
+const when = iso => {
+  const d = new Date(iso);
+  if (!iso || Number.isNaN(d.getTime())) return iso || '';
+  if (!/T\d/.test(iso)) return d.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'UTC' });
+  const date = d.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', timeZone: LONDON });
+  const time = d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', hourCycle: 'h23', timeZone: LONDON });
+  return time === '00:00' ? date : `${date}, ${time}`;
+};
 
 async function mountFixtures(where, titleEl, eyebrowEl) {
   const season = new URLSearchParams(location.search).get('season');
@@ -548,41 +749,70 @@ const session = {
   clear() { sessionStorage.removeItem('thro.session'); },
 };
 
+/** The signing-in requests. Each is a question about a session rather than a record, so it waits as a read does. */
 async function post(path, body, bearer) {
-  const res = await fetch(`${API}${path}`, {
+  const res = await patiently(`${API}${path}`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...(bearer ? { Authorization: `Bearer ${bearer}` } : {}) },
     body: JSON.stringify(body),
-  });
+  }, false);
   const text = await res.text();
   let parsed = null;
   try { parsed = text ? JSON.parse(text) : null; } catch { /* the status is all there is */ }
-  if (!res.ok) throw new Error((parsed && parsed.error) || `THRØ answered ${res.status}.`);
+  if (!res.ok) throw refusal(parsed, res.status);
   return parsed;
 }
 
 /** A request that needs a session: one refresh on a 401, then it gives up and says so — as the phone does. */
 async function authorised(method, path, body) {
   let s = session.get();
-  if (!s) throw new Error('You are not signed in.');
-  const send = token => fetch(`${API}${path}`, {
+  if (!s) { const e = new Error('You are not signed in.'); e.expired = true; throw e; }
+  const writing = method !== 'GET';
+  const send = token => patiently(`${API}${path}`, {
     method,
     headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
     body: body === undefined ? undefined : JSON.stringify(body),
-  });
+  }, writing);
   let res = await send(s.accessToken);
   if (res.status === 401) {
     let renewed;
     try { renewed = await post('/v1/auth/refresh', { refreshToken: s.refreshToken }); }
-    catch { session.clear(); throw new Error('Your sign-in has expired. Sign in again.'); }
+    catch (e) {
+      // Only THRØ's own refusal ends a sign-in. A refresh that timed out, or never reached a server that is still
+      // waking, says nothing about the session — and clearing it then signed a secretary out mid-evening because
+      // the API had been asleep, with every typed result on the page lost to the sign-in panel.
+      if (!e.status) throw e;
+      session.clear();
+      const expired = new Error('Your sign-in has expired. Sign in again.');
+      expired.status = 401; expired.expired = true;
+      throw expired;
+    }
     session.set(renewed);
     res = await send(renewed.accessToken);
   }
   const text = await res.text();
   let parsed = null;
   try { parsed = text ? JSON.parse(text) : null; } catch { /* nothing to read */ }
-  if (!res.ok) throw new Error((parsed && parsed.error) || `THRØ answered ${res.status}.`);
+  if (!res.ok) throw refusal(parsed, res.status);
   return parsed;
+}
+
+/**
+ * Moving a fixture goes through the command route, not a REST one, so it has its own call — the same limit and the
+ * same words as every other write. It names the version it read so two officials moving one fixture do not silently
+ * overwrite each other; the second is told to reload.
+ */
+async function rearrange(f, to) {
+  const res = await patiently(`${API}/v1/commands`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.get().accessToken}`, 'X-Thro-Device': deviceId() },
+    body: JSON.stringify({ type: 'RearrangeFixture', commandId: crypto.randomUUID(), fixtureId: f.fixtureId,
+                           to, expectedVersion: f.version }),
+  }, true);
+  const body = await res.json().catch(() => ({}));
+  if (res.status === 409) throw new Error('This fixture changed while you were looking at it. Reload, and move the one that is standing now.');
+  if (!res.ok) throw new Error(body.error || body.reason || `THRØ answered ${res.status}.`);
+  return body;
 }
 
 /** True when this browser can do the ceremony at all — an old one, or an insecure origin, cannot. */
@@ -695,7 +925,9 @@ function signInPanel(redraw) {
     if (!current) return;
     tick();
     try {
-      const res = await fetch(`${API}/v1/auth/link/${encodeURIComponent(current.linkId)}?deviceId=${encodeURIComponent(deviceId())}`, { headers: { Accept: 'application/json' } });
+      // Limited like every other request: a poll left hanging on a sleeping server would otherwise stack a new
+      // one behind it every two and a half seconds.
+      const res = await patiently(`${API}/v1/auth/link/${encodeURIComponent(current.linkId)}?deviceId=${encodeURIComponent(deviceId())}`, { headers: { Accept: 'application/json' } }, false);
       if (res.status === 200) {
         clearInterval(linkPolling); current = null;
         session.set(await res.json());
@@ -840,16 +1072,16 @@ async function mountModeration(where, signInEl) {
         + 'reporting the account.'),
       make('h2', null, open.length ? `${open.length} to answer` : 'Nothing waiting'),
     ];
-    for (const r of open) parts.push(card(r, draw));
-    if (answered.length) {
-      parts.push(make('h2', null, `${answered.length} answered`));
-      for (const r of answered) parts.push(card(r, draw));
-    }
-    where.replaceChildren(...parts);
+    // On a wide screen the reports sit two to a row: each is the same kind of card, read and answered on its own.
+    const cards = list => { const grid = make('div', 'desk-cards'); grid.append(...list.map(r => card(r, draw))); return grid; };
+    if (open.length) parts.push(cards(open));
+    if (answered.length) parts.push(make('h2', null, `${answered.length} answered`), cards(answered));
+    drawKeeping(where, parts);
   };
 
   function card(r, redraw) {
     const box = make('div', 'entry');
+    box.dataset.key = `report:${r.reportId}`;
     const kind = { account: 'Account', team: 'Team', venue: 'Venue', league: 'League', match: 'Match' }[r.subjectKind] || r.subjectKind;
     box.append(
       make('div', 'row-name', `${r.urgent ? 'URGENT · ' : ''}${kind}: ${r.subject}`),
@@ -875,6 +1107,7 @@ async function mountModeration(where, signInEl) {
     note.style.flex = '1 1 16rem';
     note.setAttribute('aria-label', 'Why you decided this');
     const save = make('button', 'primary', r.decisions ? 'Answer again' : 'Record');
+    save.setAttribute('aria-label', `${r.decisions ? 'Answer again' : 'Record your answer'}: ${kind}, ${r.subject}`);
     const said = make('p', 'note'); said.hidden = true;
     save.onclick = async () => {
       if (note.value.trim().length < 3) { said.hidden = false; said.textContent = 'Say why, so the decision can be read back.'; return; }
@@ -890,6 +1123,7 @@ async function mountModeration(where, signInEl) {
     return box;
   }
 
+  if (session.get()) skeleton(where, 5);
   await draw();
 }
 
@@ -906,35 +1140,47 @@ async function mountLobby(where, signInEl) {
 
     let mine;
     try { mine = await authorised('GET', '/v1/me/seasons'); } catch (e) { fail(where, e, draw); return; }
-    const parts = [make('h2', null, 'Seasons you run')];
+    const runs = make('section', 'desk-part');
+    runs.append(make('h2', null, 'Seasons you run'));
     if (!mine.seasons.length) {
-      parts.push(make('p', 'quiet', 'None yet. Start a league below.'));
+      runs.append(make('p', 'quiet', 'None yet. Start a league below.'));
     } else {
       const list = make('ul', 'rows');
       for (const s of mine.seasons) {
         const li = make('li');
         const link = make('a', 'row-name', `${s.league} · ${s.label}`);
         link.href = `organiser.html?season=${encodeURIComponent(s.leagueSeasonId)}`;
-        li.append(link, make('div', 'row-meta', `${s.startsOn} to ${s.endsOn}`));
+        li.append(link, make('div', 'row-meta', `${day(s.startsOn)} to ${day(s.endsOn)}`));
         list.append(li);
       }
-      parts.push(list);
+      runs.append(list);
     }
-    parts.push(starter());
-    where.replaceChildren(...parts);
+    const start = make('section', 'desk-part');
+    start.append(starter());
+    // Side by side on a wide screen: what you run, and the form that starts another.
+    const grid = make('div', 'desk-grid');
+    grid.append(runs, start);
+    drawKeeping(where, [grid]);
   };
 
   function starter() {
     const box = make('div', 'entry');
+    box.dataset.key = 'start';
     box.append(make('h2', null, 'Start a league'),
       make('p', 'quiet', 'A league you start here is yours to run: its seasons, its teams, its fixtures and results.'));
     const field = (text, input) => { const l = make('label', 'quiet', text + ' '); l.append(input); return l; };
-    const input = (type, placeholder) => { const i = make('input'); i.type = type; if (placeholder) i.placeholder = placeholder; return i; };
-    const name = input('text', 'League name'); name.maxLength = 80;
-    const locality = input('text', 'Town, optional');
-    const label = input('text', 'Season, e.g. 2026-27'); label.maxLength = 40;
+    // A placeholder is not a label: it goes the moment somebody types, and a screen reader may not say it at all.
+    // Each box is named for what it holds, and the placeholder is left as the example it is.
+    const input = (type, placeholder, named) => {
+      const i = make('input'); i.type = type; if (placeholder) i.placeholder = placeholder;
+      if (named) i.setAttribute('aria-label', named);
+      return i;
+    };
+    const name = input('text', 'League name', 'The league’s name'); name.maxLength = 80;
+    const locality = input('text', 'Town, optional', 'Its town, optional');
+    const label = input('text', 'Season, e.g. 2026-27', 'The first season’s label, e.g. 2026-27'); label.maxLength = 40;
     const starts = input('date'); const ends = input('date');
-    const divisions = input('text', 'Divisions, comma-separated, optional');
+    const divisions = input('text', 'Divisions, comma-separated, optional', 'Divisions, separated by commas, optional');
     const quiet = input('checkbox'); quiet.checked = true;
     const go = make('button', 'primary', 'Start it');
     const said = make('p', 'note'); said.hidden = true;
@@ -965,6 +1211,7 @@ async function mountLobby(where, signInEl) {
     return box;
   }
 
+  if (session.get()) skeleton(where, 4);
   await draw();
 }
 //
@@ -1003,7 +1250,17 @@ async function mountOrganiser(where, signInEl) {
     const title = document.getElementById('title'); if (title) title.textContent = plan.league.name;
     const eyebrow = document.getElementById('eyebrow'); if (eyebrow) eyebrow.textContent = `Run this league · ${plan.label}`;
     document.title = `${plan.league.name} — THRØ`;
-    const parts = [...(offers && offers.reads ? [tellSection(plan, data, draw)] : []), ...leagueSection(plan, draw), ...pointsSection(plan, standings, draw), ...teamsSection(plan, draw), ...registrationsSection(plan, policy, registrations, draw), ...registeredSection(plan, registered, draw), ...requestsSection(plan, proposals, draw)];
+    // The season's settings, each a section of its own so that on a laptop they sit two to a row — the season beside
+    // its points, its teams beside their registrations — rather than in a phone's column down a wide screen. In the
+    // order they always had, so on a phone, and to a screen reader, nothing has moved.
+    const section = els => { const s = make('section', 'desk-part'); s.append(...els); return s; };
+    const settings = make('div', 'desk-grid');
+    for (const els of [leagueSection(plan, draw), pointsSection(plan, standings, draw), teamsSection(plan, draw),
+                       registrationsSection(plan, policy, registrations, draw), registeredSection(plan, registered, draw),
+                       requestsSection(plan, proposals, draw)]) {
+      if (els.length) settings.append(section(els));
+    }
+    const parts = [...(offers && offers.reads ? [tellSection(plan, data, standings, draw)] : []), settings];
 
     if (!(data.fixtures || []).length) {
       parts.push(make('h2', null, 'Fixtures'),
@@ -1015,7 +1272,11 @@ async function mountOrganiser(where, signInEl) {
       // PD-159: the whole week at once, before the one-at-a-time boxes. A secretary with twenty fixtures has the
       // sheet already typed somewhere; twenty forms is the work THRØ was supposed to take off them.
       parts.push(pasteResults(plan, draw));
-      for (const f of todo) parts.push(entry(f, draw));
+      // Two to a row on a laptop: each fixture's boxes are the same small form, and a week of them in one column was
+      // a long scroll down a screen with room beside it.
+      const boxes = make('div', 'desk-cards');
+      for (const f of todo) boxes.append(entry(f, draw));
+      parts.push(boxes);
     }
     if (done.length) {
       parts.push(make('h2', null, `${done.length} already in`));
@@ -1026,7 +1287,7 @@ async function mountOrganiser(where, signInEl) {
     }
     parts.push(scheduler(plan, draw, !!(offers && offers.reads)));
     parts.push(historySection(plan));
-    where.replaceChildren(...parts);
+    drawKeeping(where, parts);
   };
 
   /**
@@ -1061,8 +1322,9 @@ async function mountOrganiser(where, signInEl) {
    * card — a result, an award, an annulment, a new fixture — that the secretary confirms. THRØ reads; the person
    * records. Whatever the model was unsure of is the one thing the card asks about, with the choice already made.
    */
-  function tellSection(plan, data, redraw) {
+  function tellSection(plan, data, standings, redraw) {
     const box = make('div', 'entry tell');
+    box.dataset.key = 'tell';
     box.append(make('h2', null, 'Tell THRØ'),
                make('p', 'quiet', 'Say what happened and THRØ fills in the card; you confirm it. Try “Grange A beat Dolphin 5–3 last night”, “Walkover to Riverside, Grange didn’t turn up”, “Move Riverside v Grange to next Thursday”, or “Add Riverside A v Dolphin next Thursday at 8”.'));
     const form = make('div', 'entry-form');
@@ -1147,11 +1409,18 @@ async function mountOrganiser(where, signInEl) {
       }
       let pts = null;
       if (u.act === 'points') {
-        // The parts the sentence stated are filled; a part left blank is left as the league has it now.
+        // The parts the sentence stated are filled, and every one must be before the button does anything. This
+        // used to say a part left blank "is left as the league has it now", and it is not: THRØ writes a whole new
+        // version of the rules, and a number missing from it is THRØ's standard, not the league's old one. So a
+        // league on three points a win that said "a draw is worth one" was put back to two a win without a word.
         pts = {};
         for (const [key, text] of [['win', 'a win'], ['draw', 'a draw'], ['loss', 'a loss'], ['pointsPerLegWon', 'per leg won']]) {
           const box = make('input'); box.type = 'number'; box.min = '0'; box.max = '20'; box.inputMode = 'numeric';
+          // What the sentence said, else what is in force now — so "a draw is worth one" changes the draw and
+          // leaves a three-points-a-win league on three.
+          const inForce = standings && standings.rules && standings.rules.points;
           if (u.points && u.points[key] !== null && u.points[key] !== undefined) box.value = u.points[key];
+          else if (inForce && inForce[key] !== undefined) box.value = inForce[key];
           const l = make('label', 'spec', text + ' '); l.append(box); fields.append(l); pts[key] = box;
         }
       }
@@ -1184,22 +1453,24 @@ async function mountOrganiser(where, signInEl) {
           } else if (u.act === 'points') {
             const body = {};
             for (const [key, box] of Object.entries(pts)) if (box.value !== '') body[key] = Number(box.value);
-            if (!Object.keys(body).length) throw new Error('Say at least how many points a win is worth.');
+            if (Object.keys(body).length < Object.keys(pts).length) {
+              throw new Error('Fill in every number. One left empty would go back to THRØ’s standard, not stay as the league has it.');
+            }
+            // The tie-breaks were not in the sentence, so the ones in force go with it rather than being reset.
+            const rules = (standings && standings.rules) || {};
+            if (rules.whose === 'league' && (rules.orderedBy || []).length) body.tieBreak = rules.orderedBy;
+            // Nor was what a walkover is worth: it goes as it stands, not back to the win value by omission.
+            if (rules.points) {
+              body.awarded = rules.points.awarded;
+              body.awardsCountAsPlayed = rules.points.awardsCountAsPlayed;
+            }
             await authorised('POST', `/v1/seasons/${encodeURIComponent(plan.leagueSeasonId)}/points`, body);
           } else if (u.act === 'move') {
             if (!on.value || !at.value) throw new Error('A rearrangement is a day and a time.');
             const f = (data.fixtures || []).find(x => x.fixtureId === fixture.value);
             if (!f) throw new Error('Choose the fixture to move.');
             // The same command the fixture's own Move form sends, so its history reads the same either way.
-            const res = await fetch(`${API}/v1/commands`, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.get().accessToken}`, 'X-Thro-Device': deviceId() },
-              body: JSON.stringify({ type: 'RearrangeFixture', commandId: crypto.randomUUID(), fixtureId: f.fixtureId,
-                                     to: new Date(`${on.value}T${at.value}`).toISOString(), expectedVersion: f.version }),
-            });
-            const body = await res.json().catch(() => ({}));
-            if (res.status === 409) throw new Error('This fixture changed while you were looking at it. Reload, and move the one that is standing now.');
-            if (!res.ok) throw new Error(body.error || body.reason || `THRØ answered ${res.status}.`);
+            await rearrange(f, new Date(`${on.value}T${at.value}`).toISOString());
           } else if (u.act === 'schedule') {
             if (homeTeam.value === awayTeam.value) throw new Error('A fixture is between two different teams.');
             if (!on.value || !at.value) throw new Error('A fixture has a date and a time.');
@@ -1227,6 +1498,7 @@ async function mountOrganiser(where, signInEl) {
     const out = [make('h2', null, 'The season'), make('p', 'quiet', `${plan.label} · ${day(plan.startsOn)} to ${day(plan.endsOn)} · the league is ${standing}.`)];
     if (!l.startedHere || l.endedAt) return out;
     const box = make('div', 'entry');
+    box.dataset.key = 'league';
     const said = make('p', 'note'); said.hidden = true;
     const change = async (body, button) => {
       button.disabled = true;
@@ -1242,7 +1514,13 @@ async function mountOrganiser(where, signInEl) {
     toggle.onclick = () => change({ visibility: l.visibility === 'private' ? 'public' : 'private' }, toggle);
     const end = make('button', 'quiet-button', 'End this league');
     end.onclick = () => {
-      if (end.textContent !== 'End it — this cannot be undone') { end.textContent = 'End it — this cannot be undone'; return; }
+      if (end.textContent !== 'End it — this cannot be undone') {
+        end.textContent = 'End it — this cannot be undone';
+        // The button's new words are the warning, and a screen reader does not say a button's text again because it
+        // changed. The note beside it is a live region, so the second step is heard as well as seen.
+        said.hidden = false; said.textContent = 'Press “End it” again to end the league. This cannot be undone.';
+        return;
+      }
       change({ ended: true }, end);
     };
     form.append(name, rename, toggle, end);
@@ -1254,6 +1532,7 @@ async function mountOrganiser(where, signInEl) {
   /** The league's next season (PD-100): a label, its dates, its divisions — opened by the starter, run by them. */
   function nextSeason(l, redraw) {
     const box = make('div', 'entry');
+    box.dataset.key = 'next-season';
     box.append(make('h2', null, 'Open the next season'));
     const form = make('div', 'entry-form');
     const label = make('input'); label.type = 'text'; label.placeholder = 'Season, e.g. 2027-28'; label.maxLength = 40;
@@ -1298,6 +1577,7 @@ async function mountOrganiser(where, signInEl) {
       const division = plan.divisions.find(d => d.divisionId === t.divisionId);
       head.append(make('div', 'row-name', t.name + (division ? ` · ${division.name}` : '')));
       const let_in = make('button', 'primary', 'Let in');
+      let_in.setAttribute('aria-label', `Let ${t.name} in`);
       const said = make('p', 'note'); said.hidden = true;
       let_in.onclick = async () => {
         let_in.disabled = true;
@@ -1323,6 +1603,7 @@ async function mountOrganiser(where, signInEl) {
   function registrationsSection(plan, policy, registrations, redraw) {
     const out = [make('h2', null, 'Registrations')];
     const box = make('div', 'entry');
+    box.dataset.key = 'policy';
     const said = make('p', 'note'); said.hidden = true;
     const say = text => { said.hidden = false; said.textContent = text; };
     const facts = [['name', 'a name'], ['age_band', 'an age band'], ['account_claimed', 'a claimed THRØ account'], ['consent', 'consent to be listed']];
@@ -1381,11 +1662,12 @@ async function mountOrganiser(where, signInEl) {
   /** One registration waiting for the league: accepted from a date, or rejected with a reason. */
   function registrationRow(r, redraw) {
     const li = make('li');
+    li.dataset.key = `registration:${r.submissionId}`;
     const head = make('div', 'row-head');
     head.append(make('div', 'row-name', `${r.player || 'A player THRØ may not name'} · ${r.team}`),
                 make('span', 'quiet', `sent ${when(r.sentAt)}`));
     const form = make('div', 'entry-form');
-    const from = make('input'); from.type = 'date'; from.value = new Date().toISOString().slice(0, 10);
+    const from = make('input'); from.type = 'date'; from.value = localDay();
     from.setAttribute('aria-label', 'Registered from');
     const note = make('input'); note.type = 'text'; note.placeholder = 'Reason, if rejecting'; note.maxLength = 200;
     note.setAttribute('aria-label', 'A note, required for a rejection');
@@ -1398,8 +1680,10 @@ async function mountOrganiser(where, signInEl) {
       } catch (e) { said.hidden = false; said.textContent = e.message; button.disabled = false; }
     };
     const accept = make('button', 'primary', 'Accept from');
+    accept.setAttribute('aria-label', `Accept ${r.player || 'this player'} for ${r.team}, from the date beside it`);
     accept.onclick = () => answer({ answer: 'accepted', registeredFrom: from.value, note: note.value.trim() || undefined }, accept);
     const reject = make('button', 'quiet-button', 'Reject');
+    reject.setAttribute('aria-label', `Reject ${r.player || 'this player'} for ${r.team}`);
     reject.onclick = () => {
       if (!note.value.trim()) { said.hidden = false; said.textContent = 'A rejection says why: write the reason first.'; return; }
       answer({ answer: 'rejected', note: note.value.trim() }, reject);
@@ -1451,10 +1735,12 @@ async function mountOrganiser(where, signInEl) {
    */
   function divisionMover(plan, accepted, redraw) {
     const box = make('div', 'entry');
+    box.dataset.key = 'divisions';
     box.append(make('h2', null, 'Divisions'));
     const list = make('ul', 'rows');
     for (const t of accepted) {
       const li = make('li');
+      li.dataset.key = `team:${t.teamId}`;
       const head = make('div', 'row-head');
       head.append(make('div', 'row-name', t.name));
       const pick = make('select'); pick.setAttribute('aria-label', `${t.name}’s division`);
@@ -1496,13 +1782,14 @@ async function mountOrganiser(where, signInEl) {
     const teams = plan.teams.filter(t => t.status === 'accepted');
     if (current.length && teams.length > 1) {
       const box = make('div', 'entry');
+      box.dataset.key = 'transfer';
       box.append(make('h2', null, 'Transfer a player'));
       const form = make('div', 'entry-form');
       const who = make('select'); who.setAttribute('aria-label', 'The player');
       for (const r of current) who.append(new Option(`${r.player || 'A player'} (${r.team || 'no team'})`, r.playerId));
       const to = make('select'); to.setAttribute('aria-label', 'To which team');
       for (const t of teams) to.append(new Option(t.name, t.teamId));
-      const from = make('input'); from.type = 'date'; from.value = new Date().toISOString().slice(0, 10); from.setAttribute('aria-label', 'From');
+      const from = make('input'); from.type = 'date'; from.value = localDay(); from.setAttribute('aria-label', 'From');
       const why = make('input'); why.type = 'text'; why.placeholder = 'Why, e.g. moved house'; why.maxLength = 200; why.setAttribute('aria-label', 'Why');
       const said = make('p', 'note'); said.hidden = true;
       const go = make('button', 'primary', 'Transfer');
@@ -1526,27 +1813,58 @@ async function mountOrganiser(where, signInEl) {
   function pointsSection(plan, standings, redraw) {
     const rules = standings.rules || {};
     const box = make('div', 'entry');
+    box.dataset.key = 'points';
     box.append(make('h2', null, 'Points'), make('p', 'quiet', rules.says || 'Ordered by THRØ’s standard until the league sets its own.'));
+    // What the boxes start with: the numbers in force, which the table's answer now carries beside its sentence.
+    // Setting the rules writes a whole new version, so every box starts from what the league has — a secretary who
+    // came to change a tie-break must not put a three-points-a-win league back to two, or a walkover back to the
+    // win value, by pressing the button. An older API without the numbers gets empty boxes that must be filled.
+    const standard = rules.whose !== 'league';
+    const p = rules.points;
+    const known = p ? { win: p.win, draw: p.draw, loss: p.loss, leg: p.pointsPerLegWon, awarded: p.awarded }
+      : standard ? { win: 2, draw: 1, loss: 0, leg: 0, awarded: 2 } : {};
     const form = make('div', 'entry-form');
-    const num = (label, value) => { const i = make('input'); i.type = 'number'; i.min = 0; i.max = 20; i.value = value; i.setAttribute('aria-label', label); const l = make('label', 'spec', label + ' '); l.append(i); return [i, l]; };
-    const [win, winL] = num('a win', 2), [draw, drawL] = num('a draw', 1), [loss, lossL] = num('a loss', 0), [leg, legL] = num('per leg won', 0);
+    const num = (label, value) => {
+      const i = make('input'); i.type = 'number'; i.min = 0; i.max = 20; i.required = true;
+      if (value !== undefined) i.value = value; else i.placeholder = '?';
+      i.setAttribute('aria-label', label.startsWith('per ') ? `Points ${label}` : `Points for ${label}`);
+      const l = make('label', 'spec', label + ' '); l.append(i); return [i, l];
+    };
+    const [win, winL] = num('a win', known.win), [draw, drawL] = num('a draw', known.draw), [loss, lossL] = num('a loss', known.loss), [leg, legL] = num('per leg won', known.leg);
+    const [awarded, awardedL] = num('a walkover or award', known.awarded);
     const order = make('input'); order.type = 'text'; order.value = (rules.orderedBy || ['points', 'leg_difference', 'legs_for', 'head_to_head']).join(', '); order.maxLength = 80;
     order.setAttribute('aria-label', 'Tie-breaks, in order: points, leg_difference, legs_for, head_to_head, played');
     const said = make('p', 'note'); said.hidden = true;
     const set = make('button', 'primary', 'Set the rules');
     set.onclick = async () => {
+      const boxes = [win, draw, loss, leg, awarded];
+      const empty = boxes.find(b => b.value.trim() === '' || !Number.isInteger(Number(b.value)) || Number(b.value) < 0);
+      if (empty) {
+        said.hidden = false;
+        said.textContent = 'Fill in all five numbers — a win, a draw, a loss, per leg won and a walkover or award. The rules are set as a whole, and one left empty would not stay as it is.';
+        empty.focus();
+        return;
+      }
       set.disabled = true;
       try {
         const made = await authorised('POST', `/v1/seasons/${encodeURIComponent(plan.leagueSeasonId)}/points`, {
           win: Number(win.value), draw: Number(draw.value), loss: Number(loss.value), pointsPerLegWon: Number(leg.value),
+          awarded: Number(awarded.value),
+          // Not a box on this form, so it is sent back exactly as it is rather than reset by omission.
+          ...(p && typeof p.awardsCountAsPlayed === 'boolean' ? { awardsCountAsPlayed: p.awardsCountAsPlayed } : {}),
           tieBreak: order.value.split(',').map(x => x.trim().toLowerCase().replace(/ /g, '_')).filter(Boolean),
         });
         said.hidden = false; said.textContent = `Version ${made.points.version}: ${made.points.says}`;
         setTimeout(redraw, 900);
       } catch (e) { said.hidden = false; said.textContent = e.message; set.disabled = false; }
     };
-    form.append(winL, drawL, lossL, legL, order, set);
-    box.append(form, said, make('p', 'quiet', 'Tie-breaks in order, from: points, leg_difference, legs_for, head_to_head, played.'));
+    form.append(winL, drawL, lossL, legL, awardedL, order, set);
+    box.append(form, said,
+      make('p', 'quiet', standard
+        ? 'The boxes hold THRØ’s standard, which orders this table now. Change what you want and set them.'
+        : p ? 'The boxes hold the league’s rules in force. Change what you want and set them.'
+          : 'Enter all five numbers each time: THRØ keeps the league’s rules as a whole, so the ones in force are in the sentence above.'),
+      make('p', 'quiet', 'Tie-breaks in order, from: points, leg_difference, legs_for, head_to_head, played.'));
     return [box];
   }
 
@@ -1567,6 +1885,7 @@ async function mountOrganiser(where, signInEl) {
     }
     const add = make('button', 'quiet-button', 'Add a team');
     const said = make('p', 'note'); said.hidden = true;
+    form.dataset.key = 'add-team';
     add.onclick = async () => {
       if (name.value.trim().length < 2) { said.hidden = false; said.textContent = 'A team’s name is at least two characters.'; return; }
       add.disabled = true;
@@ -1613,6 +1932,7 @@ async function mountOrganiser(where, signInEl) {
    */
   function scheduler(plan, redraw, reads) {
     const box = make('div', 'entry');
+    box.dataset.key = 'scheduler';
     box.append(make('h2', null, 'Add fixtures'));
     const accepted = plan.teams.filter(t => t.status === 'accepted');
     if (accepted.length < 2) {
@@ -1634,6 +1954,8 @@ async function mountOrganiser(where, signInEl) {
       ? plan.divisions.map(d => [d.divisionId, d.name])
       : [['', 'All teams']];
     const pool = select(pools);
+    // Choosing a division refills the team lists and saves nothing, so a redraw replays it (see drawKeeping).
+    pool.dataset.shapes = '';
     const inPool = () => accepted.filter(t => (t.divisionId || '') === pool.value);
     const said = make('p', 'note'); said.hidden = true;
     const say = text => { said.hidden = false; said.textContent = text; };
@@ -1649,9 +1971,13 @@ async function mountOrganiser(where, signInEl) {
 
     // One fixture.
     const one = make('div', 'entry-form');
+    one.dataset.key = 'one';
+    // "Home" and "Away" are the lists' first options, which a screen reader says only once one is open; the lists
+    // themselves are named, as is the time box that had no words at all.
     const home = select([], 'Home'), away = select([], 'Away');
+    home.setAttribute('aria-label', 'Home team'); away.setAttribute('aria-label', 'Away team');
     const onDay = make('input'); onDay.type = 'date'; onDay.min = plan.startsOn; onDay.max = plan.endsOn; onDay.setAttribute('aria-label', 'The day');
-    const time = make('input'); time.type = 'time'; time.value = '19:30';
+    const time = make('input'); time.type = 'time'; time.value = '19:30'; time.setAttribute('aria-label', 'The time');
     const add = make('button', 'primary', 'Add');
     const refill = () => {
       for (const s of [home, away]) {
@@ -1668,11 +1994,14 @@ async function mountOrganiser(where, signInEl) {
 
     // A whole division.
     const whole = make('div', 'entry-form');
+    whole.dataset.key = 'whole';
     const first = make('input'); first.type = 'date'; first.min = plan.startsOn; first.max = plan.endsOn;
     const wholeTime = make('input'); wholeTime.type = 'time'; wholeTime.value = '19:30';
+    wholeTime.setAttribute('aria-label', 'The time every round starts');
     const [twice, twiceL] = check('Home and away', true);
     const draw_up = make('button', 'quiet-button', 'Draw it up');
     const preview = make('div');
+    preview.dataset.form = '';
     draw_up.onclick = () => {
       const teams = inPool();
       if (teams.length < 2) { say('This division has fewer than two teams in the season.'); return; }
@@ -1709,6 +2038,7 @@ async function mountOrganiser(where, signInEl) {
      */
     function pasteList() {
       const wrap = make('div', 'paste');
+      wrap.dataset.key = 'paste-list';
       wrap.append(make('p', 'quiet', 'Or paste the league’s own list, as it is written — a date on its own line carries down to the fixtures under it.'));
       const area = make('textarea'); area.rows = 6; area.setAttribute('aria-label', 'The fixture list');
       area.placeholder = 'Thursday 8 October\nRiverside A v Grange A 7.30pm\nDolphin v Bell B\n15 Oct - Grange A v Dolphin 8pm';
@@ -1741,11 +2071,12 @@ async function mountOrganiser(where, signInEl) {
           const tick = make('input'); tick.type = 'checkbox'; tick.checked = !r.doubt || r.doubt === 'time';
           tick.setAttribute('aria-label', `Add ${r.home || 'a team'} v ${r.away || 'a team'}`);
           const homeSel = select(accepted.map(t => [t.teamId, t.name]), 'Home'); const awaySel = select(accepted.map(t => [t.teamId, t.name]), 'Away');
+          homeSel.setAttribute('aria-label', `Home team for “${r.text}”`); awaySel.setAttribute('aria-label', `Away team for “${r.text}”`);
           if (r.homeTeamId) homeSel.value = r.homeTeamId; if (r.awayTeamId) awaySel.value = r.awayTeamId;
           const on = make('input'); on.type = 'date'; on.min = plan.startsOn; on.max = plan.endsOn; if (r.on) on.value = r.on;
-          on.setAttribute('aria-label', 'The day');
+          on.setAttribute('aria-label', `The day for “${r.text}”`);
           const at = make('input'); at.type = 'time'; if (r.time) at.value = r.time.slice(0, 5);
-          at.setAttribute('aria-label', 'The time');
+          at.setAttribute('aria-label', `The time for “${r.text}”`);
           const form = make('div', 'entry-form'); form.append(tick, homeSel, make('span', 'v', 'v'), awaySel, on, at);
           const doubt = { teams: 'check the teams', date: 'check the date', time: null }[r.doubt];
           li.append(make('div', 'row-meta', `“${r.text}”` + (doubt ? ` · ${doubt}` : '')), form);
@@ -1788,15 +2119,25 @@ async function mountOrganiser(where, signInEl) {
    */
   function standing(f, redraw) {
     const li = make('li');
+    li.dataset.key = `result:${f.fixtureId}`;
     const row = make('div');
     row.style.padding = '12px 0';
     const d = f.decided;
     const score = d.legsHome === null ? (d.kind === 'walkover' ? 'walkover' : 'awarded') : `${d.legsHome}–${d.legsAway}`;
     const head = make('div', 'row-head');
     head.append(make('div', 'row-name', `${f.home || 'A team'} ${score} ${f.away || 'A team'}`));
+    // A column of "Correct" and "Annul" buttons is, to a screen reader moving through buttons, twenty identical
+    // words. Each is named for the result it acts on; the words on screen stay short, and aria-expanded carries
+    // whether its form is open, so "Leave it" needs no name of its own.
+    const which = `${f.home || 'A team'} ${score} ${f.away || 'A team'}, ${when(f.scheduledAt)}`;
     const fix = make('button', 'quiet-button', 'Correct');
     fix.setAttribute('aria-expanded', 'false');
+    fix.setAttribute('aria-label', `Correct the result: ${which}`);
+    fix.dataset.toggle = 'correct';
     const annul = make('button', 'quiet-button', 'Annul');
+    annul.setAttribute('aria-expanded', 'false');
+    annul.setAttribute('aria-label', `Annul the result: ${which}`);
+    annul.dataset.toggle = 'annul';
     head.append(fix, annul);
     row.append(head, make('div', 'row-meta', when(f.scheduledAt)));
 
@@ -1838,6 +2179,7 @@ async function mountOrganiser(where, signInEl) {
    */
   function pasteResults(plan, redraw) {
     const wrap = make('div', 'paste');
+    wrap.dataset.key = 'paste-results';
     wrap.append(make('h3', null, 'Paste the week\u2019s results'),
                 make('p', 'quiet', 'As the sheet is written. A date on its own line says which week the results under it belong to, '
                   + 'which is how THRØ tells two meetings of the same pair apart.'));
@@ -1994,6 +2336,7 @@ async function mountOrganiser(where, signInEl) {
    */
   function entry(f, redraw, replacing) {
     const box = make('div', 'entry');
+    box.dataset.key = `fixture:${f.fixtureId}`;
     if (!replacing) {
       box.append(make('div', 'row-name', `${f.home || 'A team'} v ${f.away || 'A team'}`),
                  make('div', 'row-meta', when(f.scheduledAt) + (f.venue ? ` · ${f.venue}` : '')
@@ -2045,8 +2388,11 @@ async function mountOrganiser(where, signInEl) {
    */
   function otherwise(f, redraw, said) {
     const row = make('div', 'row-meta');
+    const which = `${f.home || 'A team'} v ${f.away || 'A team'}, ${when(f.scheduledAt)}`;
     const award = make('button', 'quiet-button', 'Award'); award.setAttribute('aria-expanded', 'false');
+    award.setAttribute('aria-label', `Award ${which}`); award.dataset.toggle = 'award';
     const move = make('button', 'quiet-button', 'Rearrange'); move.setAttribute('aria-expanded', 'false');
+    move.setAttribute('aria-label', `Rearrange ${which}`); move.dataset.toggle = 'move';
     const acts = make('div', 'acts'); acts.append(award, move);
     row.append(acts);
     const wrap = make('div');
@@ -2098,7 +2444,9 @@ async function mountOrganiser(where, signInEl) {
     box.append(make('p', 'quiet', 'Moves the fixture to another day and time. The change is recorded against the fixture; nothing about the teams changes.'));
     const form = make('div', 'entry-form');
     const was = new Date(f.scheduledAt);
-    const day = make('input'); day.type = 'date'; day.value = was.toISOString().slice(0, 10);
+    // The day as the reader's clock has it, like the time beside it: in UTC a fixture at half past midnight in
+    // summer came up as the day before, and moving it "to the same day, a new time" moved it a day as well.
+    const day = make('input'); day.type = 'date'; day.value = localDay(was);
     day.setAttribute('aria-label', 'The new day');
     const time = make('input'); time.type = 'time';
     time.value = `${String(was.getHours()).padStart(2, '0')}:${String(was.getMinutes()).padStart(2, '0')}`;
@@ -2109,15 +2457,7 @@ async function mountOrganiser(where, signInEl) {
       if (!day.value || !time.value) { said.hidden = false; said.textContent = 'A rearrangement is a day and a time.'; return; }
       go.disabled = true;
       try {
-        const res = await fetch(`${API}/v1/commands`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.get().accessToken}`, 'X-Thro-Device': deviceId() },
-          body: JSON.stringify({ type: 'RearrangeFixture', commandId: crypto.randomUUID(), fixtureId: f.fixtureId,
-                                 to: new Date(`${day.value}T${time.value}`).toISOString(), expectedVersion: f.version }),
-        });
-        const body = await res.json().catch(() => ({}));
-        if (res.status === 409) throw new Error('This fixture changed while you were looking at it. Reload, and move the one that is standing now.');
-        if (!res.ok) throw new Error(body.error || body.reason || `THRØ answered ${res.status}.`);
+        await rearrange(f, new Date(`${day.value}T${time.value}`).toISOString());
         said.hidden = false; said.textContent = 'Moved.';
         setTimeout(redraw, 900);
       } catch (e) { said.hidden = false; said.textContent = e.message; go.disabled = false; }
@@ -2127,6 +2467,7 @@ async function mountOrganiser(where, signInEl) {
     return box;
   }
 
+  if (session.get()) skeleton(where, 8);
   await draw();
 }
 
@@ -2234,14 +2575,16 @@ async function mountEvents(where, signInEl) {
       parts.push(list);
     }
     parts.push(eventOpener(draw));
-    where.replaceChildren(...parts);
+    drawKeeping(where, parts);
   };
+  if (session.get()) skeleton(where, 4);
   await draw();
 }
 
 /** Opening an edition: a name, a day and time, when the session ends, a venue on THRØ or a label, places, and when entries close. */
 function eventOpener(redraw) {
   const box = make('div', 'entry');
+  box.dataset.key = 'open-event';
   box.append(make('h2', null, 'Open a knockout'));
   const form = make('div', 'entry-form');
   const name = make('input'); name.type = 'text'; name.placeholder = 'Sun Inn Open'; name.maxLength = 80; name.setAttribute('aria-label', 'The event’s name');
@@ -2304,6 +2647,7 @@ function entrantsSection(e, redraw) {
   const before = e.state === 'open' || e.state === 'entries_closed';
   for (const p of e.entrants) {
     const li = make('li');
+    li.dataset.key = `entrant:${p.playerId}`;
     const head = make('div', 'row-head');
     head.append(make('div', 'row-name', p.name || 'A player THRØ may not name'),
                 make('span', 'quiet', p.kind === 'guest' ? 'walk-up · here' : p.checkedIn ? 'checked in' : 'not yet checked in'));
@@ -2317,6 +2661,7 @@ function entrantsSection(e, redraw) {
         catch (err) { said.hidden = false; said.textContent = err.message; seed.value = p.seed || ''; }
       };
       const remove = make('button', 'quiet-button', 'Remove');
+      remove.setAttribute('aria-label', `Remove ${p.name || 'this entrant'}`);
       remove.onclick = async () => {
         remove.disabled = true;
         try { await authorised('POST', `/v1/events/${encodeURIComponent(e.eventId)}/entries/${encodeURIComponent(p.playerId)}/remove`, {}); redraw(); }
@@ -2333,6 +2678,7 @@ function entrantsSection(e, redraw) {
   out.push(list);
   if (before) {
     const box = make('div', 'entry');
+    box.dataset.key = 'enter';
     const verb = e.access === 'invitational' ? 'Invite' : 'Enter';
     box.append(make('h2', null, e.entrantKind === 'pair' ? `${verb} a pair` : e.entrantKind === 'team' ? `${verb} a team` : `${verb} a player`));
     const form = make('div', 'entry-form');
@@ -2377,6 +2723,7 @@ function entrantsSection(e, redraw) {
     if (e.entrantKind === 'player' || e.entrantKind === 'pair') {
       const pairs = e.entrantKind === 'pair';
       const walk = make('div', 'entry');
+      walk.dataset.key = 'walk-up';
       walk.append(make('h2', null, pairs ? 'Add a pair with a walk-up' : 'Add a walk-up'),
                   make('p', 'quiet', pairs
                     ? 'Somebody here tonight with no THRØ account, and who they are throwing with: another walk-up, or somebody on THRØ. The pair goes in the draw like any other, and you decide its ties by hand.'
@@ -2428,6 +2775,7 @@ function entrantsSection(e, redraw) {
     }
     // The boards: named once, then each tie is sent to one.
     const boards = make('div', 'entry');
+    boards.dataset.key = 'boards';
     boards.append(make('h2', null, 'Boards'), make('p', 'quiet', e.boards.length ? `${e.boards.join(', ')}.` : 'Name the boards and each tie can be sent to one.'));
     const bform = make('div', 'entry-form');
     const labels = make('input'); labels.type = 'text'; labels.placeholder = 'Board 1, Board 2, Back room'; labels.maxLength = 200; labels.setAttribute('aria-label', 'Board names, separated by commas');
@@ -2449,19 +2797,41 @@ async function mountEvent(where, signInEl, eventId) {
   skeleton(where, 6);
   const draw = async () => {
     // The page reads without a session; the organiser's acts appear with one.
+    //
+    // A session is only a better answer, never a condition of one. A sign-in that had expired on this browser used
+    // to turn the public page of the night — the address posted in the pub's group chat — into "That could not be
+    // read just now" for the one person holding a stale session. When THRØ refuses the session, the page is read as
+    // anybody would read it, and says why the organiser's parts are not on it.
     let e;
-    try { e = session.get() ? await authorised('GET', `/v1/events/${encodeURIComponent(eventId)}`) : await read(`/v1/events/${encodeURIComponent(eventId)}`); }
-    catch (err) { fail(where, err, draw); return; }
+    let lapsed = false;
+    try {
+      if (session.get()) {
+        try { e = await authorised('GET', `/v1/events/${encodeURIComponent(eventId)}`); }
+        catch (err) {
+          if (!(err.expired || err.status === 401 || err.status === 403)) throw err;
+          lapsed = true;
+          e = await read(`/v1/events/${encodeURIComponent(eventId)}`);
+        }
+      } else {
+        e = await read(`/v1/events/${encodeURIComponent(eventId)}`);
+      }
+    } catch (err) { fail(where, err, draw); return; }
     signInEl.replaceChildren();
     if (session.get()) {
       const out = make('button', 'quiet-button', 'Sign out'); out.onclick = () => { signOut(); draw(); }; signInEl.append(out);
     }
+    // Who runs the night is the server's to say, and it says it one way: `entrants` is sent to the organiser and to
+    // nobody else (an empty list for an organiser with no entries yet, null for everybody). The organiser's controls
+    // used to appear for anybody signed in, so a player who opened the night saw "Make the draw" and "Decide it by
+    // hand" on every tie, and learned they were not theirs only by pressing one and being refused.
+    const organiser = Array.isArray(e.entrants);
     const whereAt = e.venue ? `${e.venue}${e.locality ? `, ${e.locality}` : ''}` : (e.venueLabel || 'venue to be announced');
     const title = document.getElementById('title'); if (title) title.textContent = e.name;
     const eyebrow = document.getElementById('eyebrow'); if (eyebrow) eyebrow.textContent = `${when(e.startsAt)} · ${whereAt}`;
     document.title = `${e.name} — THRØ`;
     const places = e.capacity == null ? 'places not stated' : (e.spotsRemaining === 0 ? 'full' : `${e.spotsRemaining} of ${e.capacity} places left`);
     const parts = [
+      ...(lapsed ? [make('p', 'note', 'Your sign-in on this browser has expired, so this is the page as anybody sees it. Sign in again to run the night.')] : []),
       make('h2', null, 'The day'),
       make('p', 'quiet', `${when(e.startsAt)} · ${whereAt} · ${e.entries} entered · ${places} · ${e.state.replace('_', ' ')}`
         + (e.entriesCloseAt ? ` · entries close ${when(e.entriesCloseAt)}` : '')),
@@ -2473,7 +2843,7 @@ async function mountEvent(where, signInEl, eventId) {
     // One address for the night (PD-127). Whoever runs it is given it to post; everybody else is given the way into the app,
     // because entering, checking in and scoring are done there.
     const address = `${location.origin}/event/${encodeURIComponent(eventId)}`;
-    if (e.entrants) {
+    if (organiser) {
       const share = make('div', 'entry');
       const line = make('p', 'address', address.replace(/^https?:\/\//, ''));
       const copy = make('button', 'quiet-button', 'Copy the address');
@@ -2487,12 +2857,21 @@ async function mountEvent(where, signInEl, eventId) {
         screen: 'Point your phone\u2019s camera here. With THRØ on it, this night opens in the app: enter, check in on the day, and find your tie in the draw.',
       }));
     }
-    if (e.entrants) parts.push(...entrantsSection(e, draw));
+    if (organiser) parts.push(...entrantsSection(e, draw));
     if (e.draw.length) {
       // The bracket, round by round. A decided tie says how; a bye says it is one; the final says who won the day.
       const rounds = [...new Set(e.draw.map(t => t.round))].sort((a, b) => a - b);
       const last = rounds[rounds.length - 1];
-      const roundName = (r, ties) => ties.length === 1 && e.state === 'complete' ? 'Final' : (ties.length === 1 ? 'Final' : ties.length === 2 ? 'Semi-finals' : ties.length === 4 ? 'Quarter-finals' : `Round ${r}`);
+      // A round is named by how many places it has, two to a tie with a bye's included: the server's draw pads the
+      // field to a power of two and stores each bye as a tie of its own, and every later round is the winners paired.
+      // So three entrants make a first round of four places — one game and one bye — and that round is the
+      // semi-finals: the winner of the game meets the seed who sat it out. Counted by games played instead, it would
+      // be called the final.
+      const roundName = (r, ties) => {
+        const places = ties.length * 2;
+        return places === 2 ? 'Final' : places === 4 ? 'Semi-finals' : places === 8 ? 'Quarter-finals'
+          : places === 16 ? 'Last 16' : `Round ${r}`;
+      };
       if (e.winnerId) {
         const champion = e.draw.filter(t => t.round === last).map(t => t.winnerId === t.homeId ? t.home : t.away)[0];
         parts.push(make('p', 'wordmark', `${champion || 'A player'} won it`));
@@ -2503,6 +2882,7 @@ async function mountEvent(where, signInEl, eventId) {
         const list = make('ul', 'rows');
         for (const t of ties) {
           const li = make('li');
+          li.dataset.key = `tie:${t.tieId}`;
           const head = make('div', 'row-head');
           const name = who => who || 'A player';
           const line = t.isBye ? `${name(t.home)} — bye` : `${name(t.home)} v ${name(t.away)}`;
@@ -2512,8 +2892,8 @@ async function mountEvent(where, signInEl, eventId) {
           head.append(make('div', 'row-name', line), make('span', 'quiet', standing));
           li.append(head);
           // The organiser sends an unplayed tie to a board it named.
-          if (session.get() && e.entrants && e.boards && e.boards.length && !t.isBye && !t.winnerId) {
-            const board = make('select'); board.setAttribute('aria-label', 'Which board');
+          if (organiser && e.boards && e.boards.length && !t.isBye && !t.winnerId) {
+            const board = make('select'); board.setAttribute('aria-label', `Which board for ${line}`);
             board.append(new Option(t.board ? `On ${t.board}` : 'Send to a board…', ''));
             for (const b of e.boards) if (b !== t.board) board.append(new Option(b, b));
             board.onchange = async () => {
@@ -2525,7 +2905,7 @@ async function mountEvent(where, signInEl, eventId) {
           }
           // The organiser decides an undecided tie here: a walkover or an award, with a reason. A played tie is
           // cited from the app by somebody who played it; the winner is the record's, never typed here.
-          if (session.get() && !t.isBye && !t.winnerId && (e.state === 'drawn' || e.state === 'in_progress')) {
+          if (organiser && !t.isBye && !t.winnerId && (e.state === 'drawn' || e.state === 'in_progress')) {
             const form = make('div', 'entry-form'); form.hidden = true;
             const winner = make('select'); winner.append(new Option('Who goes through', ''), new Option(name(t.home), t.homeId), new Option(name(t.away), t.awayId));
             winner.setAttribute('aria-label', 'Who goes through');
@@ -2534,6 +2914,7 @@ async function mountEvent(where, signInEl, eventId) {
             const why = make('input'); why.type = 'text'; why.placeholder = 'Why, e.g. did not arrive'; why.maxLength = 280; why.setAttribute('aria-label', 'Why');
             const said = make('p', 'note'); said.hidden = true;
             const reveal = make('button', 'quiet-button', 'Decide it by hand'); reveal.setAttribute('aria-expanded', 'false');
+            reveal.setAttribute('aria-label', `Decide ${line} by hand`); reveal.dataset.toggle = 'decide';
             reveal.onclick = () => { form.hidden = !form.hidden; reveal.setAttribute('aria-expanded', String(!form.hidden)); reveal.textContent = form.hidden ? 'Decide it by hand' : 'Leave it to the board'; };
             const decide = make('button', 'primary', 'Record it');
             decide.onclick = async () => {
@@ -2551,9 +2932,10 @@ async function mountEvent(where, signInEl, eventId) {
         parts.push(list);
       }
     }
-    // The organiser's acts: shown to a signed-in person and refused by the server for anybody who is not the organiser.
-    if (session.get() && (e.state === 'open' || e.state === 'entries_closed' || e.state === 'drawn' || e.state === 'in_progress')) {
+    // The organiser's acts: shown to the organiser alone, as the server has said who that is.
+    if (organiser && (e.state === 'open' || e.state === 'entries_closed' || e.state === 'drawn' || e.state === 'in_progress')) {
       const box = make('div', 'entry');
+      box.dataset.key = 'organiser';
       const said = make('p', 'note'); said.hidden = true;
       const act = async (path, button) => {
         button.disabled = true;
@@ -2564,7 +2946,15 @@ async function mountEvent(where, signInEl, eventId) {
       if (e.state === 'open') { const close = make('button', 'quiet-button', 'Close entries'); close.onclick = () => act('close', close); form.append(close); }
       if (e.state === 'open' || e.state === 'entries_closed') {
         const drawIt = make('button', 'primary', 'Make the draw');
-        drawIt.onclick = () => { if (drawIt.textContent !== 'Draw it — this cannot be undone') { drawIt.textContent = 'Draw it — this cannot be undone'; return; } act('draw', drawIt); };
+        drawIt.onclick = () => {
+          if (drawIt.textContent !== 'Draw it — this cannot be undone') {
+            drawIt.textContent = 'Draw it — this cannot be undone';
+            // Said in the live note as well: a screen reader does not repeat a button's words because they changed.
+            said.hidden = false; said.textContent = 'Press “Draw it” again to make the draw. It is made once and cannot be undone.';
+            return;
+          }
+          act('draw', drawIt);
+        };
         form.append(drawIt);
         box.append(make('h2', null, 'As the organiser'), form, said,
                    make('p', 'quiet', 'The draw is made once, from the entries as they stand: byes to the highest seeds, the rest paired. A bye is not a win.'));
@@ -2584,7 +2974,7 @@ async function mountEvent(where, signInEl, eventId) {
       fold.addEventListener('toggle', () => { if (fold.open && fold.children.length === 1) fold.append(signInPanel(draw)); });
       parts.push(fold);
     }
-    where.replaceChildren(...parts);
+    drawKeeping(where, parts);
   };
   await draw();
 }

@@ -6,8 +6,13 @@
 <title>THRØ on a pub screen</title>
 <meta name="robots" content="noindex">
 <!-- The address to type on a television: thro.uk/tv. It goes straight to the wall (PD-090), which needs no
-     Apple TV, no adapter and no phone in the room: the set's own browser, or a £30 Fire or Google TV stick. -->
-<meta http-equiv="refresh" content="0; url=wall.html">
+     Apple TV, no adapter and no phone in the room: the set's own browser, or a £30 Fire or Google TV stick.
+     It goes there with whatever was after the address: a meta refresh names a fixed URL, so thro.uk/tv?season=…
+     — the finished address a landlord writes on a beer mat — arrived at the wall with the season dropped and the
+     chooser asking again. The script carries the query and the fragment across; the refresh is kept for a browser
+     that runs no script, which is the one case where there is nothing to carry. -->
+<script>location.replace('wall.html' + location.search + location.hash);</script>
+<noscript><meta http-equiv="refresh" content="0; url=wall.html"></noscript>
 <link rel="stylesheet" href="tokens.css">
 <link rel="stylesheet" href="thro.css">
 </head>
@@ -16,12 +21,14 @@
   <div class="measure">
     <a class="brand-link" href="index.html"><img class="brand" src="wordmark.svg" alt="THRØ" width="428" height="134"></a>
     <p class="eyebrow">On a pub screen</p>
+    <h1 class="wordmark">The pub screen</h1>
   </div>
 </header>
 <main class="measure">
-  <p>Taking you to <a href="wall.html">THRØ on the wall</a>. Type <strong>thro.uk/tv</strong> into a television's browser
+  <p>Taking you to <a id="wall" href="wall.html">THRØ on the wall</a>. Type <strong>thro.uk/tv</strong> into a television's browser
      — or a Fire TV or Google TV stick — and pick your league. No Apple TV, no adapter, no phone needed.</p>
   <p class="quiet"><a href="index.html">All leagues</a> · <a href="under-18.html">If you're under 18</a></p>
 </main>
+<script>document.getElementById('wall').href = 'wall.html' + location.search + location.hash;</script>
 </body>
 </html>

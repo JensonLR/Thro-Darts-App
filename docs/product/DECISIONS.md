@@ -7809,3 +7809,122 @@ column sits with the numbers it explains. One change, both faults, and no new co
 
 **Evidence.** 947 tests. Looked at on iPhone 17 Pro with a two-visit leg: `100 401` and `140 361` sit
 directly under the scores, and the board below them is clear.
+
+## PD-191 — The engine takes darts, and a match says what a bust keeps (OD-023 closed)
+
+**Taken on the founder's brief of 24 September 2026**, which asked for exactly what OD-023 left open: *"where
+exact per-dart information is required … the underlying model must represent the individual darts"*, and a
+configurable rule for the pub leagues that keep the darts scored before the busting one.
+
+### Decided
+
+1. **The engine takes darts** (spec 1.4.0). `RecordDarts(player, darts)` beside `RecordVisit`, in Kotlin and
+   Swift, held to one corpus. The engine derives everything a total had to be told: the counted total, the bust
+   and **which dart** caused it, darts used, and darts at a double. `RecordVisit` is unchanged and still valid.
+2. **A dart is decided by its ring, never its value.** A single 20 and a D10 both score 20; only one finishes a
+   double-out leg. So T20 from 60, or a single 20 from 20, is now **recorded as the bust it is**
+   (`NOT_A_FINISHING_DART`) instead of being refused (the old entry layer) or scored as a checkout (a total).
+3. **Bust rule is part of the match format**: `RESTORE_VISIT` (standard, default) or `KEEP_SCORED_DARTS` (40: 20
+   then D15 leaves 20). Chosen at set-up, stored in both journals and on the server (V059), fixed for the match.
+   Under the keep rule a busting **total** is refused as `DARTS_REQUIRED`: a total cannot say what came first.
+4. **A dart at a double** is one thrown while the score in front of it is a one-dart finish under the match's
+   out-rule — observable, and what a scorer writes. Intent is not observable and is not claimed. A bust forfeits
+   the rest of the hand (three darts used); the dart that bust it is kept (`bustAt`).
+5. **Checkouts are a function of the darts in hand.** `Checkout.isPossible/route(remaining, dartsLeft, rule)`.
+   The route follows each dart and is never longer than the hand: 100 → T20 → `D20`; two darts leaving 60 →
+   nothing, because no single dart finishes 60. Whether a finish exists is arithmetic; which route is a position
+   (PD-013, unchanged).
+6. **Screens ask the engine** (`Darts.read`) what the darts so far have done. The iOS `DartVisit` walk, its
+   `illegalFinish` refusal and its `settles` rule are deleted; Android gained per-dart entry on the same engine.
+
+### What it fixed that was live
+
+- **Double-in was scored wrong in per-dart mode on iOS**: the raw sum of the darts was sent, so `20 D20 20` from a
+  player not yet in scored 80, and three singles counted as opening.
+- **A stray tap after a checkout turned it into a bust** — the sector keys stayed live until three darts were in.
+- **The route did not follow the darts** and could show a three-dart route with one dart left.
+
+### Evidence
+
+`validate.py`: 3,118 property checks, including every hand of up to two darts from every reachable score under
+all three out-rules (and three-dart hands from sixteen scores) held to the visit rule, and the keep rule's
+invariants over the same space. Kotlin engine: 7.6 million hands against totals; a brute-force proof that a
+checkout is offered exactly when one exists with that many darts. Swift: the same claims, written separately.
+Looked at in the simulator: a keep-rule match opens on the dart keypad, the route follows each dart, and 40 → 20,
+D15 announces *"Home is now on 20 — D15 goes below zero. The 20 before it stands."*
+
+## PD-192 — The live board was never live
+
+`GET /v1/seasons/{id}/live` answered **500 for every season** since PD-088: it selected `evidence.match.home_name`
+and `away_name`, which V018 had removed before the board was written. Beneath that, it read `read.visit` and
+`read.leg`, projections **nothing in production writes** — so even a parsing query would have shown no game.
+The pub screen's "Playing now" has never drawn one. `LiveBoardTest` tested the consent function and never ran
+the query.
+
+**Decided.** The board replays each live match's evidence through the engine (the replay a match record already
+uses), so its scores are the engine's — darts, keep rule and all — and a leg just won shows the new leg rather
+than each player's last visit. Names cross the read role's boundary through `identity.live_name` (V060), a
+SECURITY DEFINER function that answers only where `player_may_be_shown_live` does. A game is "in play" when a
+dart has been thrown in the last three hours, the match is neither won nor ended short, and no result is
+recorded — the old rule kept finished and abandoned games on the wall until a secretary typed the result.
+
+**Evidence.** `LiveBoardQueryTest` (5) drives a real season, fixture and visits through the command path.
+`/live` answers 200 as `app_read` on a V060 database.
+
+## PD-193 — What looking found, and the web desk
+
+- **The scoring screen's arithmetic and drawing disagreed.** `ThroStage` counts a 6-point key gap and 20 points
+  of tray padding and 39 points for the route; the keypads drew 8, 32 and a paper card of about 75 edge to edge.
+  On a finish in dart mode the bottom row went off the phone. The keypads now draw at the stage's key height,
+  gap and padding, and the route is one line of chalk (`ThroRouteLine`) in the board's own language.
+- **The set-up slate vanished** when a rule beyond the usual was chosen: one row of tags did not fit, so
+  `ViewThatFits` dropped the slate and left a hole. Tags wrap (`ThroTagFlow`), a compact slate is the middle
+  option, and the ready screen names the bust rule before the first dart.
+- **Web** (`apps/web`): the organiser desk no longer wipes what is being typed when another save redraws it;
+  every request has a time limit and a timed-out write says it may or may not have gone; the Points form no
+  longer resets a league's own points to 2/1/0/0; the wall tracks the table and the games separately, clears
+  games after 45 seconds without an answer and replaces a table older than fifteen minutes with the reason;
+  organiser controls show only to the organiser; `tv?season=` survives the redirect; the wall table has headers
+  and measures its rows; times are London times; every page has an `h1` and labelled controls; the organiser
+  and moderation desks use a wide two-column layout from 900 pixels.
+- **Uploads and corrections now go through the engine** (they were stored unchecked), and **iOS `recentForm`
+  counts the legs a player lost** — it saw only their own visits, so form was the average of their wins.
+- **A league's points go out as numbers** beside the sentence (`rules.points`), and both web points forms start
+  from them and send the walkover value back, so setting the rules changes only what the secretary changed.
+  The playtest harness compiles again (`playtestFormat` was internal to another compilation unit).
+
+## PD-194 — The journeys nobody had walked this month
+
+A read-only audit of onboarding, search, tournaments, leagues, clubs and profiles found thirteen defects;
+these were fixed:
+
+- **A checkout percentage says what it is out of**: *100%* with *1 of 1 darts at a double* under it, because
+  100% from one dart and 100% from forty looked the same. A range on the share card is marked *range*.
+- **Home's weekly average** counted a keep-rule bust as nothing (the week's records dropped `scored`).
+- **Stop using my location lasts**: Discover builds a fresh `Nearby` per visit, and each re-read iOS's
+  still-granted permission and started again. The choice is kept until the player presses *Use my location*.
+- **Two spinners that never ended** (friends, naming a fixture's match) now end in the reason and a retry.
+- **The map and Discover gave one league two distances**; both measure to the league's nearest pub.
+- **"Waiting on a result"** no longer lists postponed fixtures or games still being played (three hours' grace).
+- **Location denied is not a dead end**: Discover's button and the map's coin open THRØ's page in Settings.
+- **Words that were wrong about the present**: a drawn event said round 1 was *being played*; the widget row
+  gave a time with no date and said *1 are waiting*; naming a tournament match matched opponents by name, so
+  a hidden name never matched; a matches list whose refresh failed looked current.
+- **Largest text sizes**: the ready screen spilled under the status bar (it scrolls now), a long rule tag ran
+  off both sides of the slate (tags wrap within the line), the legs score broke as *0–* over *0*, and the dart
+  line's undo key sat lower than the slots.
+
+The audit's three tournament defects and two fixture defects are recorded with their fix below.
+
+**Tournaments and fixtures (same audit).** Two tournament defects could advance the wrong player or never
+finish, and one could never draw its knockout: a result now names its winner by the fixture's own two teams
+(a result about teams no longer in that place advances nobody, visibly); entrants cannot be added or removed
+once the draw exists, and the Teams screen stops offering to, saying why; a rename that would move a drawn
+entrant's place in the alphabetical seeding is refused, while one that fixes a typo in place is not; a
+bye-against-bye match in a double-elimination losers' round passes on a bye, so five, six and seven entrants
+play through to a champion; a groups setup asking for more qualifiers than the smallest group holds is refused
+at setup. Reminders are cancelled when a fixture stops being scheduled, a postponed fixture can be put back,
+and the Teams screen no longer says the seeding is "the order they were entered" — it is by name, and says so.
+
+**Android asks PD-001's two questions** in Total mode, as iOS does, so a checkout percentage from an Android
+match is computable; "Not sure" is recorded as unknown, never zero.

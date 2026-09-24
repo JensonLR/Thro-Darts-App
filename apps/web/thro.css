@@ -64,10 +64,14 @@ body {
 .field .brand { opacity: 0.92; }
 /* The front page wears it at size: it is the only page whose subject is the product itself. */
 .brand-hero { height: 56px; margin-bottom: 14px; }
+/* ...and there the mark is the page's <h1>, so the heading has to take up no room of its own around the image. */
+.brand-title { margin: 0; line-height: 0; }
 
 /* The page's own title. Every page but the front one used to carry `style="font-size:28px"` on this,
    overriding the 34px below — two raw numbers arguing, neither of them a token. It is heading-1 now, in
-   one place, and the pages say nothing about their own size. */
+   one place, and the pages say nothing about their own size. It is the page's <h1> as well: it was a <p>, so
+   no page on the site had a first-level heading and a screen reader's list of headings began at the second. The
+   class is more specific than the h1 rule below, so the look is this one and the margin is none. */
 .wordmark {
   font-family: var(--font-sport);
   font-weight: var(--font-weight-extrabold);
@@ -92,8 +96,8 @@ main { padding-block: 28px 56px; }
 
 h1, h2, h3 { font-family: var(--font-ui); font-weight: var(--font-weight-bold); }
 /* h1 had a family and a weight and no size, so an <h1> would have set at body size — a heading that is
-   only bolder than the paragraph under it. No page carries one today, which is why it was never seen;
-   the rule is here so the first page to want one does not have to discover that. */
+   only bolder than the paragraph under it. Every page's title is an <h1 class="wordmark"> now, which sets its
+   own look; this is what a bare <h1> gets. */
 h1 { font-size: var(--typography-heading-1-size); line-height: var(--typography-heading-1-line); margin: var(--spacing-7) 0 var(--spacing-3); }
 h2 { font-size: var(--typography-heading-3-size); line-height: var(--typography-heading-3-line); margin: var(--spacing-7) 0 var(--spacing-2); }
 /* h3 sets at body size, which is what its raw 17px asked for. The scale has no step between 18 and 21,
@@ -131,8 +135,10 @@ ul.rows a:hover, ul.rows a:focus-visible { background: var(--color-background-se
 /* The form a correction opens belongs to the row above it, not beside it. */
 .row-head + .row-meta + .entry { margin-top: 10px; }
 
-/* A table is not prose, so it may scroll inside its own box rather than force the page sideways. */
+/* A table is not prose, so it may scroll inside its own box rather than force the page sideways. The box takes
+   keyboard focus (thro.js gives it a tabindex and a name), so it needs a ring like any other stop. */
 .table-scroll { overflow-x: auto; margin-top: var(--spacing-2); }
+.table-scroll:focus-visible { outline: var(--focus-ring-width) solid var(--color-border-focus); outline-offset: var(--focus-ring-offset); }
 table { border-collapse: collapse; width: 100%; font-variant-numeric: tabular-nums; }
 caption { text-align: left; color: var(--color-text-secondary); font-size: var(--typography-label-strong-size); line-height: var(--typography-label-strong-line); padding-bottom: var(--spacing-2); }
 th, td { padding: 10px 6px; border-bottom: var(--border-width-hairline) solid var(--color-border-default); text-align: right; }
@@ -180,6 +186,9 @@ a.primary { display: inline-block; text-decoration: none; text-align: center; li
 /* PD-127: the same place in the app. On a phone a button; on a bigger screen this page's own address as a QR, for the
    phone in the reader's pocket. Sits at the foot of a league's, a night's or a team's page. */
 .app-link { display: flex; gap: 18px; align-items: center; margin-top: 28px; }
+/* The QR's ground is the raw chalk, not a semantic surface, and on purpose: every semantic surface turns dark in the
+   dark theme, and a camera reads an inverted code badly if at all. The code's own two colours (thro.js) are the
+   same pair, for the same reason. */
 .app-link .qr { flex: 0 0 132px; width: 132px; height: 132px; padding: var(--spacing-2); box-sizing: border-box;
                 background: var(--thro-chalk-raised); border-radius: var(--radius-control); }
 .app-link .qr svg { width: 100%; height: 100%; display: block; }
@@ -188,8 +197,10 @@ a.primary { display: inline-block; text-decoration: none; text-align: center; li
 .app-link a.primary { flex: 0 0 auto; }
 @media (max-width: 560px) { .app-link { flex-direction: column; align-items: stretch; } .app-link .qr { align-self: center; } }
 .lede-line { font-size: var(--typography-body-large-size); line-height: var(--typography-body-large-line); margin: 0 0 18px; }
-/* There is no mono token in the generated scale; the stack falls through to the system's own. */
-.address { font-family: var(--font-family-mono, ui-monospace, monospace); font-size: var(--typography-body-default-size); line-height: var(--typography-body-default-line); margin: var(--spacing-1) 0; overflow-wrap: anywhere; user-select: all; }
+/* The night's address, to be read out and copied. It named `--font-family-mono`, a token that does not exist, so it
+   only ever drew in its fallback — the reader's system monospace, a face outside the brand's. The brand's own face
+   with its tabular figures (the numeric feature token) keeps the characters from shifting as they are read. */
+.address { font-family: var(--font-ui); font-feature-settings: var(--typography-numeric-feature); font-size: var(--typography-body-default-size); line-height: var(--typography-body-default-line); margin: var(--spacing-1) 0; overflow-wrap: anywhere; user-select: all; }
 button.primary:disabled { opacity: 1; background: var(--color-text-tertiary); cursor: default; }
 button.quiet-button { font: inherit; padding: var(--spacing-2) 0; color: var(--color-text-brand);
                       background: none; border: 0; cursor: pointer; text-decoration: underline; }
@@ -255,7 +266,7 @@ ul.rows li .row-head + .row-meta { margin-top: -6px; }
 /* A seed beside its entrant: the same field as any other, a number's width. */
 .acts input[type="number"] { width: 5.5rem; text-align: center; box-sizing: border-box; }
 .entry label.check { margin-top: var(--spacing-3); }
-p.eyebrow + p.wordmark { margin-top: 2px; }
+.eyebrow + .wordmark { margin-top: 2px; }
 
 /* --- The site's places, and the way in (PD-114) --------------------------------------------------------------- */
 .nav { display: flex; flex-wrap: wrap; gap: var(--spacing-1) 22px; align-items: center; margin-top: var(--spacing-5); }
@@ -280,7 +291,7 @@ p.eyebrow + p.wordmark { margin-top: 2px; }
 .card { display: block; border: var(--border-width-hairline) solid var(--color-border-default); border-radius: var(--radius-card); padding: 18px;
         background: var(--color-background-raised); color: inherit; text-decoration: none; }
 .card:hover { border-color: var(--color-text-brand); }
-.card h3 { margin: 0 0 6px; font-size: var(--typography-body-large-size); line-height: var(--typography-body-large-line); }
+.card h2, .card h3 { margin: 0 0 6px; font-size: var(--typography-body-large-size); line-height: var(--typography-body-large-line); }
 .card p { margin: 0; color: var(--color-text-secondary); font-size: var(--typography-label-strong-size); line-height: var(--typography-label-strong-line); }
 .card .go { display: inline-block; margin-top: 10px; color: var(--color-text-brand); font-weight: var(--font-weight-semibold); }
 ul.rows li.more { padding: var(--spacing-3) 0; }
@@ -317,3 +328,29 @@ details.fold > summary:focus-visible { outline: 3px solid var(--color-border-foc
    in the DOM, the right size, and could not be seen. Measured from the rendered pixels, not by eye. */
 @keyframes skeleton-pulse { from { opacity: 0.72; } to { opacity: 1; } }
 @media (prefers-reduced-motion: reduce) { .skeleton-bar { animation: none; opacity: 0.9; } }
+
+/* --- The desk on a laptop ------------------------------------------------------------------------------------------
+   The organiser's desk and the reports queue are worked at a table, on a laptop, in one sitting — and they were held
+   to the same 560-point column as a page read on a phone, so a secretary's screen was a phone's width of forms down
+   the middle of a wide one. Those two pages (body.desk) take up to 1040 on a screen that has it, and the things that
+   are alike sit two to a row: the season's settings, one section beside the next; a week's fixtures, one entry box
+   beside the next; the reports, one card beside the next. Below 900 it is the single column it always was, in the
+   same order, which is also the order a screen reader reads it in at any width. */
+.desk-cards > .entry { margin-bottom: var(--spacing-3); }
+@media (min-width: 900px) {
+  body.desk .measure { max-width: 1040px; }
+  .desk-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: var(--spacing-7); align-items: start; }
+  /* Each section's first thing is sometimes a heading and sometimes a box with its heading inside; both start at a
+     heading's distance from what is above, so the two columns' tops line up. */
+  .desk-grid > .desk-part > :first-child { margin-top: var(--spacing-7); }
+  .desk-cards { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--spacing-3); align-items: start; }
+  .desk-cards > .entry { margin: 0; }
+}
+
+/* A league table on a phone. Nine columns in 343 points left the team's name about a hundred points and broke it over
+   three lines. The name keeps a width it can be read at, the number columns close up to the smallest step of the
+   scale, and the table scrolls sideways inside its own box — which a keyboard can reach, and which says what it is. */
+@media (max-width: 420px) {
+  th, td { padding-inline: var(--spacing-1); }
+  td.team { min-width: 8.5rem; }
+}

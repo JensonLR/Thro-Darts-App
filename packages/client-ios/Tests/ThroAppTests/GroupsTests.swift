@@ -265,4 +265,39 @@ final class GroupsTests: XCTestCase {
             XCTAssertTrue(note.contains("THRØ asks"), "every reader is told why it is being asked")
         }
     }
+
+    // MARK: - the setup the groups can fill
+
+    /// **No more through from each group than the smallest group holds.** Asking for more is a setup
+    /// whose knockout can never be drawn, and nothing would say so — the groups would be played out
+    /// and the next stage would simply never come. So it is named where the numbers are typed.
+    func testASetupAskingForMoreQualifiersThanTheSmallestGroupHoldsIsRefused() {
+        // Seven over two groups is four and three: the smallest holds three.
+        XCTAssertNil(Groups.setupProblem(entrants: 7, groups: 2, qualifiers: 3))
+        let tooMany = Groups.setupProblem(entrants: 7, groups: 2, qualifiers: 4)
+        XCTAssertNotNil(tooMany)
+        XCTAssertTrue(tooMany?.contains("at most 3") == true, tooMany ?? "")
+
+        // More groups than entrants leaves a group with nobody in it at all.
+        let empty = Groups.setupProblem(entrants: 3, groups: 4, qualifiers: 1)
+        XCTAssertTrue(empty?.contains("at least 4 entrants") == true, empty ?? "")
+        XCTAssertNotNil(Groups.setupProblem(entrants: 0, groups: 1, qualifiers: 1),
+                        "a tournament with no field yet cannot be shaped around one")
+
+        // And the rule is the right one: at the limit, every setup reaches its knockout.
+        for n in 4...12 {
+            for count in 1...(n / 2) {
+                let most = n / count
+                XCTAssertNil(Groups.setupProblem(entrants: n, groups: count, qualifiers: most))
+                let fixtures = playTheGroups(entrants(n), count: count, qualifiers: most)
+                let stage = groups(entrants(n), count: count, qualifiers: most, fixtures: fixtures)
+                XCTAssertNotNil(stage.knockout, "\(n) in \(count) groups, top \(most) through")
+                XCTAssertNotNil(Groups.setupProblem(entrants: n, groups: count, qualifiers: most + 1),
+                                "\(n) in \(count) groups cannot send \(most + 1) through")
+                XCTAssertNil(groups(entrants(n), count: count, qualifiers: most + 1,
+                                    fixtures: fixtures).knockout,
+                             "which is exactly the setup whose knockout never arrives")
+            }
+        }
+    }
 }

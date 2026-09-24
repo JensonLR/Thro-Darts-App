@@ -23,9 +23,10 @@ final class DoubleEliminationTests: XCTestCase {
                 round: round, slot: slot, bracket: bracket.rawValue)
     }
 
-    /// Plays every drawable match to a decision, always letting the **home** side win, until nothing
-    /// is left to draw. Returns the fixtures created, so the structure can be interrogated after.
-    private func playItOut(_ field: [Team]) -> (DoubleElimination, [Fixture]) {
+    /// Plays every drawable match to a decision, always letting the **home** side win (or always the
+    /// away side, when asked), until nothing is left to draw. Returns the fixtures created, so the
+    /// structure can be interrogated after.
+    private func playItOut(_ field: [Team], homeWins: Bool = true) -> (DoubleElimination, [Fixture]) {
         var fixtures: [Fixture] = []
         var draw = DoubleElimination.of(entrants: field, fixtures: fixtures)
         // A generous bound: the format needs 2n − 1 matches, so this can only spin if the draw
@@ -45,7 +46,7 @@ final class DoubleEliminationTests: XCTestCase {
             }
             guard let match = next, let sides = match.playable else { break }
             fixtures.append(fixture(match.bracket ?? .winners, match.round, match.slot,
-                                    sides.home, sides.away, 5, 3))
+                                    sides.home, sides.away, homeWins ? 5 : 3, homeWins ? 3 : 5))
             draw = DoubleElimination.of(entrants: field, fixtures: fixtures)
         }
         return (draw, fixtures)
@@ -220,5 +221,47 @@ final class DoubleEliminationTests: XCTestCase {
         let draw = DoubleElimination.of(entrants: field, fixtures: [level])
         XCTAssertEqual(draw.problems.count, 1)
         XCTAssertTrue(draw.problems[0].contains("Nobody goes out on a draw"))
+    }
+
+    /// **Five, six and seven entrants, played all the way to a champion.** Five is the one that
+    /// broke: three winners' walkovers drop nobody, one losers' first-round match is a bye against a
+    /// bye, and holding its "winner" as a place to be filled stalled the losers' side and the grand
+    /// final forever. Counting byes never caught it, so this plays every one out — letting the home
+    /// side win and then the away side, so both paths through the grand final are walked.
+    func testOddFieldsPlayAllTheWayToAChampion() {
+        for n in [5, 6, 7] {
+            for homeWins in [true, false] {
+                let field = entrants(n)
+                let (draw, fixtures) = playItOut(field, homeWins: homeWins)
+                let how = "\(n) entrants, \(homeWins ? "home" : "away") side winning"
+                XCTAssertNotNil(draw.champion, "\(how) must resolve to a champion")
+                XCTAssertNotNil(draw.grandFinal?.fixture, "\(how): the grand final was drawn")
+
+                // Every match with anybody in it is decided. A bye against a bye has nobody to
+                // decide, and sends nobody on.
+                for match in draw.allMatches where !(match.home.isBye && match.away.isBye) {
+                    XCTAssertNotNil(match.winner, "\(how): \(match.id) was left undecided")
+                }
+                for match in draw.allMatches {
+                    for side in [match.home, match.away] {
+                        if case .winnerOf = side { XCTFail("\(how): \(match.id) still waits on \(side)") }
+                        if case .loserOf = side { XCTFail("\(how): \(match.id) still waits on \(side)") }
+                    }
+                }
+
+                // And the property the format is defined by holds for an odd field too.
+                var losses: [String: Int] = [:]
+                for f in fixtures {
+                    guard let result = f.result, let home = f.homeTeamId, let away = f.awayTeamId else { continue }
+                    losses[result.home > result.away ? away : home, default: 0] += 1
+                }
+                for entrant in field where entrant.id != draw.champion?.id {
+                    XCTAssertEqual(losses[entrant.id], 2, "\(how): \(entrant.name) went out with "
+                                   + "\(losses[entrant.id] ?? 0) losses")
+                }
+                XCTAssertGreaterThanOrEqual(fixtures.count, 2 * n - 2, how)
+                XCTAssertLessThanOrEqual(fixtures.count, 2 * n - 1, how)
+            }
+        }
     }
 }

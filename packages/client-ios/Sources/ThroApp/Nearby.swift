@@ -175,15 +175,28 @@ public final class Nearby: NSObject, ObservableObject, CLLocationManagerDelegate
 
     private var manager: CLLocationManager?
     private let makeManager: () -> CLLocationManager
+    private let defaults: UserDefaults
 
-    public init(makeManager: @escaping () -> CLLocationManager = { CLLocationManager() }) {
+    /// Where "Stop" is remembered. The Discover tab makes a new `Nearby` on every visit and each one
+    /// read iOS's permission afresh — which was still granted — so a player who pressed Stop found their
+    /// location in use again the next time they looked, without asking. Stop now lasts until they press
+    /// "Use my location" themselves.
+    public static let stoppedKey = "thro.nearby.stopped"
+
+    public init(makeManager: @escaping () -> CLLocationManager = { CLLocationManager() },
+                defaults: UserDefaults = .standard) {
         self.makeManager = makeManager
+        self.defaults = defaults
         super.init()
     }
+
+    /// Whether the player has said to stop, and not since said to start.
+    public var stoppedByPlayer: Bool { defaults.bool(forKey: Nearby.stoppedKey) }
 
     /// For a test or a preview: knowledge handed in rather than fetched.
     public init(leagues: Loading<[PublicLeague]>, events: Loading<[PublicEvent]> = .loaded([]), place: NearbyLogic.Place = .unknown) {
         self.makeManager = { CLLocationManager() }
+        self.defaults = .standard
         super.init()
         self.leagues = leagues; self.events = events; self.place = place
     }
@@ -213,12 +226,13 @@ public final class Nearby: NSObject, ObservableObject, CLLocationManagerDelegate
                 if trouble == nil { trouble = t.cause }
             }
         }
-        if place == .unknown { adopt(status: (manager ?? makeManager()).authorizationStatus) }
+        if place == .unknown, !stoppedByPlayer { adopt(status: (manager ?? makeManager()).authorizationStatus) }
     }
 
     /// The player asks. Permission is requested here and nowhere else, so it is never asked for
     /// on a screen that has not explained what it is for.
     public func useMyLocation() {
+        defaults.set(false, forKey: Nearby.stoppedKey)
         let m = manager ?? makeManager()
         manager = m
         m.delegate = self
@@ -233,9 +247,11 @@ public final class Nearby: NSObject, ObservableObject, CLLocationManagerDelegate
     ///
     /// **In the app, not only in Settings.** Standard 10 again: a child has to be able to turn it off where
     /// they turned it on. Sending them to iOS Settings to undo something they did on this screen is the
-    /// kind of asymmetry the code exists to stop. Nothing was stored, so forgetting it is the whole of it —
-    /// the list simply goes back to the order it had before.
+    /// kind of asymmetry the code exists to stop. No location was stored, so forgetting the fix is the whole
+    /// of that — the list goes back to the order it had before. What IS kept is the choice, so the next visit
+    /// to Discover does not quietly start again (`stoppedKey`).
     public func stopUsingLocation() {
+        defaults.set(true, forKey: Nearby.stoppedKey)
         manager?.stopUpdatingLocation()
         place = .unknown
     }
@@ -252,7 +268,7 @@ public final class Nearby: NSObject, ObservableObject, CLLocationManagerDelegate
 
     nonisolated public func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) {
         let status = manager.authorizationStatus
-        Task { @MainActor in self.adopt(status: status) }
+        Task { @MainActor in if !self.stoppedByPlayer { self.adopt(status: status) } }
     }
 
     nonisolated public func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {

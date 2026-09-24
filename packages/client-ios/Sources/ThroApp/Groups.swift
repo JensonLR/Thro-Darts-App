@@ -50,6 +50,29 @@ public struct Groups: Equatable, Sendable {
         return row % 2 == 0 ? within + 1 : groups - within
     }
 
+    /// What is wrong with a group setup for this many entrants, as the sentence the admin reads. Nil
+    /// when nothing is.
+    ///
+    /// **The knockout waits until every group can fill its qualifying places**, and a group can
+    /// never fill more places than it has people. The snake deals the field as evenly as it can, so
+    /// the smallest group has `entrants / groups` in it, rounded down — and asking for more than
+    /// that through from each is a setup whose knockout can never be drawn. Nothing would say so;
+    /// the groups would be played out and the next stage would simply never arrive. So it is
+    /// refused here, where the numbers are typed, rather than discovered at the end.
+    public static func setupProblem(entrants: Int, groups: Int, qualifiers: Int) -> String? {
+        guard groups >= 1, qualifiers >= 1 else { return nil }   // the screen's own check says so
+        let smallest = entrants / groups
+        if smallest == 0 {
+            return "\(groups) groups need at least \(groups) entrants, one in each, and this "
+                 + "tournament has \(entrants). Enter the field first, or ask for fewer groups."
+        }
+        guard qualifiers > smallest else { return nil }
+        return "With \(entrants) entrants in \(groups) group\(groups == 1 ? "" : "s"), the smallest "
+             + "group has \(smallest), so at most \(smallest) can go through from each. Top "
+             + "\(qualifiers) would leave a group short of qualifiers, and the knockout could never "
+             + "be drawn."
+    }
+
     /// Every pairing in a round robin of `n`, in the order a group would play them.
     static func roundRobin(_ n: Int) -> [(Int, Int)] {
         guard n >= 2 else { return [] }

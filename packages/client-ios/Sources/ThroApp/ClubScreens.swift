@@ -537,9 +537,22 @@ public struct FixturesScreen: View {
 
     /// The moves a fixture has left. `played` and `cancelled` are not offered back out of, because
     /// the domain refuses them and an app that offers a refusal is an app that lies.
+    ///
+    /// **A postponed fixture can be put back.** Postponing is the one move that is meant to be
+    /// undone — the match is off this week, not off — and without *Reschedule* on it a postponed
+    /// fixture could only ever end up played or cancelled, with its reminder gone for good. The
+    /// book has always allowed it; the screen never offered it.
+    static func moves(from state: FixtureState) -> [FixtureState] {
+        switch state {
+        case .scheduled: return [.postponed, .played, .cancelled]
+        case .postponed: return [.scheduled, .played, .cancelled]
+        case .played, .cancelled: return []
+        }
+    }
+
     private func moves(_ f: Fixture, _ move: @escaping (String, FixtureState) -> Void) -> some View {
         HStack(spacing: ThroSpacing.spacing2) {
-            ForEach([FixtureState.postponed, .played, .cancelled].filter { $0 != f.state }, id: \.rawValue) { to in
+            ForEach(FixturesScreen.moves(from: f.state), id: \.rawValue) { to in
                 ThroButton(label(to), variant: to == .cancelled ? .destructive : .ghost,
                            size: .small) { move(f.id, to) }
             }

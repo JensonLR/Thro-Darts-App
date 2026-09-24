@@ -28,6 +28,10 @@ public enum ClubBookError: Error, Equatable, CustomStringConvertible {
     case notATeamFixture(String)
     case negativeScore
     case unitIsSettled(Int)
+    /// The draw has been made, so who is in it is settled.
+    case entrantsAreDrawn
+    /// A rename that would move a team's place in a draw already made.
+    case renameMovesADraw(String)
     case sqlite(String)
 
     public var description: String {
@@ -55,6 +59,16 @@ public enum ClubBookError: Error, Equatable, CustomStringConvertible {
         case .unitIsSettled(let results):
             return "this league already has \(results) result\(results == 1 ? "" : "s") in it, and "
                  + "changing what they are counted in would reinterpret every one of them"
+        case .entrantsAreDrawn:
+            // Shown to the admin as it stands, so it is written as the sentence they read.
+            return "The draw has been made, so the entrants are fixed. Adding or removing one now "
+                 + "would move everybody's place in it, and results already in would end up under "
+                 + "pairings nobody played."
+        case .renameMovesADraw(let tournament):
+            // A draw is seeded in the order of the entrants' names, so a new name can move a team to a
+            // different place — and results already in would sit under pairings nobody played.
+            return "\(tournament) has been drawn, and that name would move this team to a different place in "
+                 + "its draw. Keep a name that sorts in the same place until the tournament is over."
         case .pictureRefused(let band):
             return band == "minor"
                 ? "a member recorded as under 18 has no picture"
@@ -445,6 +459,7 @@ public final class ClubBook {
         let clean = try ClubBook.checkedName(name)
         let accent = try ClubBook.checkedAccent(accentHex)
         try requireClub(id)
+        try requireRenameKeepsDraws(teamId: id, to: clean)
         try run("UPDATE club SET name = ?, accent_hex = ? WHERE club_id = ?;",
                 [.text(clean), accent.map { Journal.Param.text($0) } ?? .null, .text(id)])
     }
@@ -690,6 +705,7 @@ public final class ClubBook {
                         addedAt: Date = Date()) throws -> StoredTeam {
         let clean = try ClubBook.checkedName(name)
         try requireClub(clubId)
+        try requireUndrawn(clubId)
         try run("""
             INSERT INTO club (club_id, name, kind, created_at)
             SELECT ?, ?, 'team', ? WHERE NOT EXISTS (SELECT 1 FROM club WHERE club_id = ?);
@@ -707,7 +723,13 @@ public final class ClubBook {
     /// longer exists is a row the table would have to guess about. A season that has started is a
     /// reason not to remove a team, which is a decision for whoever is holding the phone, and the
     /// screen says what will go.
+    ///
+    /// **Refused once a draw exists**, and adding is refused for the same reason. A tournament's
+    /// pairings are worked out from its entrants every time, and its results are filed by round and
+    /// slot — so one entrant more or fewer moves everybody's place, and a result already in ends up
+    /// under two people who never played each other. A league has no draw, so a league is unaffected.
     public func removeTeam(_ teamId: String, from clubId: String) throws {
+        try requireUndrawn(clubId)
         try run("""
             DELETE FROM fixture_result WHERE club_id = ? AND fixture_id IN
               (SELECT fixture_id FROM club_fixture
@@ -750,6 +772,43 @@ public final class ClubBook {
                 addedAt: Journal.iso.date(from: Journal.text(s, 3)) ?? Date(timeIntervalSince1970: 0)))
         }
         return out
+    }
+
+    /// Whether any fixture in this club sits in a draw — a knockout round, either side of a double
+    /// elimination, or a group. Once one does, who is entered is no longer the admin's to change.
+    public func hasDrawnFixtures(in clubId: String) throws -> Bool {
+        var drawn = false
+        try run("SELECT 1 FROM club_fixture WHERE club_id = ? AND round IS NOT NULL LIMIT 1;",
+                [.text(clubId)]) { _ in drawn = true }
+        return drawn
+    }
+
+    /// A draw is seeded from its entrants in name order, so renaming an entrant after the draw can move it
+    /// to another place — a bye can pass to somebody else, and results sit under pairings nobody played.
+    /// A rename that leaves every drawn tournament's order as it was is a typo fixed, and is allowed.
+    private func requireRenameKeepsDraws(teamId: String, to name: String) throws {
+        var tournaments: [String] = []
+        try run("SELECT club_id FROM club_team WHERE team_id = ?;", [.text(teamId)]) { s in
+            tournaments.append(Journal.text(s, 0))
+        }
+        for clubId in tournaments where try hasDrawnFixtures(in: clubId) {
+            let now = try teams(of: clubId)
+            let renamed = now.map { $0.id == teamId ? (id: $0.id, name: name) : (id: $0.id, name: $0.name) }
+            // SQLite's NOCASE folds ASCII case; so does this, with the old order breaking ties as the query does.
+            let after = renamed.enumerated().sorted { a, b in
+                let x = a.element.name.lowercased(), y = b.element.name.lowercased()
+                return x == y ? a.offset < b.offset : x < y
+            }.map(\.element.id)
+            if after != now.map(\.id) {
+                var title = "This tournament"
+                try run("SELECT name FROM club WHERE club_id = ?;", [.text(clubId)]) { s in title = Journal.text(s, 0) }
+                throw ClubBookError.renameMovesADraw(title)
+            }
+        }
+    }
+
+    private func requireUndrawn(_ clubId: String) throws {
+        if try hasDrawnFixtures(in: clubId) { throw ClubBookError.entrantsAreDrawn }
     }
 
     private func requireTeam(_ teamId: String, in clubId: String) throws {

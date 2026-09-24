@@ -52,12 +52,29 @@ public struct DrawMatch: Identifiable, Equatable, Sendable {
     public var isWalkover: Bool { home.isBye || away.isBye }
 
     /// Who goes through, when that is known. Nil while it is still to be played.
+    ///
+    /// **Read from the fixture's own two teams, not from the sides this position has now.** A result
+    /// is filed under a round and a slot, and the sides are re-derived from the entry order every
+    /// time — so if the entrants ever changed under a draw, the same slot would hold a different
+    /// pairing, and "home won" would put through whoever happens to be home *now*. The fixture
+    /// remembers who actually played. A result about two teams who are not both in this position
+    /// any more advances nobody, which is a stall somebody can see rather than a wrong name in the
+    /// next round.
     public var winner: Team? {
         if case let .entrant(t) = home, away.isBye { return t }
         if case let .entrant(t) = away, home.isBye { return t }
-        guard let result = fixture?.result else { return nil }
+        guard let fixture, let result = fixture.result else { return nil }
         if result.isDraw { return nil }   // a knockout match cannot end level; see `Draw.problems`
-        return result.home > result.away ? home.team : away.team
+        let homeWon = result.home > result.away
+        guard let homeId = fixture.homeTeamId, let awayId = fixture.awayTeamId else {
+            // A fixture with no teams on it was never written by a draw; the position is all there is.
+            return homeWon ? home.team : away.team
+        }
+        let sides = [home.team, away.team].compactMap { $0 }
+        guard sides.contains(where: { $0.id == homeId }), sides.contains(where: { $0.id == awayId })
+        else { return nil }
+        let wonBy = homeWon ? homeId : awayId
+        return sides.first { $0.id == wonBy }
     }
 
     /// Everything needed to draw this as a fixture, or nil when it is not a match anybody plays.

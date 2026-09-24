@@ -83,7 +83,9 @@ MEMBER = re.compile(
 
 BLOCK_COMMENT = re.compile(r"/\*.*?\*/", re.DOTALL)
 LINE_COMMENT = re.compile(r"//[^\n]*")
-STRING = re.compile(r'"""(?:.|\n)*?"""|"(?:\\.|[^"\\\n])*"')
+# Raw strings first: `#"{"name":"Darts League"}"#` holds quotes of its own, so the plain pattern ends it
+# at the first inner quote and reads the rest — a league's name, here — as code naming a type.
+STRING = re.compile(r'(#+)"""(?:.|\n)*?"""\1|(#+)"[^\n]*?"\2|"""(?:.|\n)*?"""|"(?:\\.|[^"\\\n])*"')
 
 
 def code_only(text: str) -> str:

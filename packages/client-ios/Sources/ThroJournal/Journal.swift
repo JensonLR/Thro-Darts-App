@@ -131,10 +131,14 @@ public struct NewMatch: Sendable {
     /// a match without them is a match that cannot be claimed until its players are named.
     public let homePlayerId: String?
     public let awayPlayerId: String?
+    /// What a bust does (OD-023). The standard rule unless the players say their league plays otherwise.
+    public let bustRule: BustRule
 
     public init(homeName: String, awayName: String, startingScore: Int = 501, inRule: InRule = .straight,
                 outRule: OutRule = .double, legsMode: StructureMode = .bestOf, legsTarget: Int = 5,
-                throwFirst: Seat = .home, homePlayerId: String? = nil, awayPlayerId: String? = nil) {
+                throwFirst: Seat = .home, homePlayerId: String? = nil, awayPlayerId: String? = nil,
+                bustRule: BustRule = .restoreVisit) {
+        self.bustRule = bustRule
         self.homePlayerId = homePlayerId
         self.awayPlayerId = awayPlayerId
         self.homeName = homeName
@@ -165,6 +169,12 @@ public struct MatchRecord: Equatable, Sendable {
     /// When this match was put away (PD-026), or nil while it is on Home. Archiving takes nothing
     /// out of the journal and nothing out of the export: it is a shelf, not a bin.
     public let archivedAt: Date?
+    /// What a bust does in this match (OD-023). Every match written before the rule could be chosen
+    /// reads back as the standard rule, which is what the engine applied to all of them.
+    public var bustRule: BustRule = .restoreVisit
+    /// A bust rule this build cannot read, as stored. Replay refuses such a match rather than playing
+    /// it under the standard rule, which would put different scores on the board than were agreed.
+    public var unknownBustRule: String? = nil
 
     public var isArchived: Bool { archivedAt != nil }
 
@@ -172,7 +182,8 @@ public struct MatchRecord: Equatable, Sendable {
 
     public var format: MatchFormat {
         MatchFormat(startingScore: startingScore, inRule: inRule, outRule: outRule,
-                    legs: Structure(mode: legsMode, target: legsTarget), throwFirst: throwFirst.playerId)
+                    legs: Structure(mode: legsMode, target: legsTarget), throwFirst: throwFirst.playerId,
+                    bustRule: bustRule)
     }
 
     public var initialState: MatchState {
@@ -218,11 +229,27 @@ public struct JournalEntry: Equatable, Sendable {
     /// For a retraction: the `deviceSeq` of the visit it strikes.
     public let correctsSeq: Int64?
     public let occurredAt: Date
+    /// The darts, when the visit was entered dart by dart (OD-023). The visit then replays as the darts,
+    /// so the engine decides it again from what was thrown; `visitTotal` and the two counts beside it
+    /// are what the engine derived, kept so a reader that predates darts still reads the right visit.
+    public var darts: [Dart]? = nil
 
     /// The engine command a visit carries. Nothing else carries one; replay skips them.
     public var command: Command? {
         guard kind.isScoring else { return nil }
+        if let darts { return .recordDarts(player: seat.playerId, darts: darts) }
         return .recordVisit(player: seat.playerId, visitTotal: visitTotal, dartsUsed: dartsUsed, dartsAtDouble: dartsAtDouble)
+    }
+
+    /// The darts as the journal stores them: their names, comma-separated — `T20,T20,D20`.
+    static func stored(_ darts: [Dart]) -> String { darts.map(\.name).joined(separator: ",") }
+
+    /// Darts read back from their stored names. Nil when any name does not parse: a row this build
+    /// cannot read as darts is not quietly read as a total instead.
+    static func darts(_ stored: String) -> [Dart]? {
+        let parsed = stored.split(separator: ",").map { Dart.parse(String($0)) }
+        guard !parsed.isEmpty, parsed.allSatisfy({ $0 != nil }) else { return nil }
+        return parsed.compactMap { $0 }
     }
 }
 
@@ -307,9 +334,20 @@ public struct ReplayedVisit: Equatable, Sendable {
     public let remainingAfter: Int
     public let bust: Bool
     public let wonLeg: Bool
+    /// Points the visit took off the score, as the engine reported it. Differs from the total on a
+    /// bust: nothing under the standard rule, the darts before the busting one under keep-scored darts.
+    public let scored: Int?
+    /// The darts, when the visit was entered dart by dart.
+    public let darts: [Dart]?
+    /// Which dart bust the visit, when the darts say.
+    public let bustAt: Int?
 
     public init(seat: Seat, legOrdinal: Int, visitOrdinal: Int, visitTotal: Int, dartsUsed: Int?, dartsAtDouble: Int?,
-                remainingBefore: Int, remainingAfter: Int, bust: Bool, wonLeg: Bool) {
+                remainingBefore: Int, remainingAfter: Int, bust: Bool, wonLeg: Bool,
+                scored: Int? = nil, darts: [Dart]? = nil, bustAt: Int? = nil) {
+        self.scored = scored
+        self.darts = darts
+        self.bustAt = bustAt
         self.seat = seat
         self.legOrdinal = legOrdinal
         self.visitOrdinal = visitOrdinal
@@ -531,6 +569,16 @@ public final class Journal {
         if !matchColumnNames.contains("archived_at") {
             try exec(h, "ALTER TABLE local_match ADD COLUMN archived_at TEXT;")
         }
+        // The bust rule (OD-023). Every match before it was played under the standard rule — the only
+        // one the engine had — so the default is what those matches were, not a guess about them.
+        if !matchColumnNames.contains("bust_rule") {
+            try exec(h, "ALTER TABLE local_match ADD COLUMN bust_rule TEXT NOT NULL DEFAULT 'restoreVisit';")
+        }
+        // The darts of a visit entered dart by dart. Null for every visit entered as a total, which is
+        // every visit before this column — they are totals, and nothing here pretends otherwise.
+        if try !columnNames(h, table: "journal").contains("darts") {
+            try exec(h, "ALTER TABLE journal ADD COLUMN darts TEXT;")
+        }
         // Append-only, enforced by the database rather than by discipline — the same property the
         // server's grants give evidence.event. Corrections, when they come, are new events.
         //
@@ -571,8 +619,9 @@ public final class Journal {
     public func createMatch(_ m: NewMatch, id: MatchId = MatchId(UUID().uuidString), startedAt: Date = Date()) throws -> MatchRecord {
         try run("""
             INSERT INTO local_match (match_id, home_name, away_name, starting_score, out_rule, legs_mode, legs_target,
-                               throw_first, started_at, device_id, in_rule, home_player_id, away_player_id)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+                               throw_first, started_at, device_id, in_rule, home_player_id, away_player_id,
+                               bust_rule)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
             """, [
                 .text(id.value), .text(m.homeName), .text(m.awayName), .int(Int64(m.startingScore)),
                 .text(m.outRule.rawValue), .text(m.legsMode == .bestOf ? "bestOf" : "firstTo"),
@@ -580,6 +629,7 @@ public final class Journal {
                 .text(Journal.iso.string(from: startedAt)), .text(deviceId.value), .text(m.inRule.rawValue),
                 m.homePlayerId.map { Param.text($0) } ?? .null,
                 m.awayPlayerId.map { Param.text($0) } ?? .null,
+                .text(m.bustRule.rawValue),
             ])
         return try match(id)
     }
@@ -664,11 +714,11 @@ public final class Journal {
     /// `SELECT *` was doing exactly that, and adding in_rule was the change that would have found it.
     static let matchColumns = """
         match_id, home_name, away_name, starting_score, out_rule, legs_mode, legs_target, \
-        throw_first, started_at, in_rule, home_player_id, away_player_id, archived_at
+        throw_first, started_at, in_rule, home_player_id, away_player_id, archived_at, bust_rule
         """
 
     private static func record(from s: OpaquePointer) -> MatchRecord {
-        MatchRecord(
+        var record = MatchRecord(
             id: MatchId(text(s, 0)),
             homeName: text(s, 1),
             awayName: text(s, 2),
@@ -683,6 +733,12 @@ public final class Journal {
             awayPlayerId: sqlite3_column_type(s, 11) == SQLITE_NULL ? nil : text(s, 11),
             archivedAt: sqlite3_column_type(s, 12) == SQLITE_NULL ? nil : iso.date(from: text(s, 12))
         )
+        // A rule this build does not know is refused at replay rather than read as the standard one:
+        // replaying a keep-scored league under the standard rule would put different scores on the board.
+        let rule = text(s, 13)
+        record.bustRule = BustRule(rawValue: rule) ?? .restoreVisit
+        record.unknownBustRule = BustRule(rawValue: rule) == nil ? rule : nil
+        return record
     }
 
     // MARK: - the journal
@@ -690,11 +746,21 @@ public final class Journal {
     /// Appends one command the engine has already accepted. Returns only after the transaction has
     /// committed under the measured configuration — that is the durability rule, and it is why the
     /// screen must not update until this returns.
+    ///
+    /// A visit given as darts is stored as the darts **and** as what the engine made of them — its
+    /// `reading` — so `reading` is required for one: the journal does not re-derive the engine's answer.
     @discardableResult
     public func append(_ command: Command, to matchId: MatchId,
-                       occurredAt: Date = Date(), commandId: String = UUID().uuidString) throws -> JournalEntry {
-        guard case let .recordVisit(player, visitTotal, dartsUsed, dartsAtDouble) = command else {
-            throw JournalError.sqlite("unsupported command")
+                       occurredAt: Date = Date(), commandId: String = UUID().uuidString,
+                       reading: VisitReading? = nil) throws -> JournalEntry {
+        let player: PlayerId, visitTotal: Int, dartsUsed: Int?, dartsAtDouble: Int?, darts: [Dart]?
+        switch command {
+        case let .recordVisit(p, total, used, atDouble):
+            (player, visitTotal, dartsUsed, dartsAtDouble, darts) = (p, total, used, atDouble, nil)
+        case let .recordDarts(p, thrown):
+            guard let reading else { throw JournalError.sqlite("a visit of darts is stored with the engine's reading of it") }
+            (player, visitTotal, dartsUsed, dartsAtDouble, darts) =
+                (p, reading.visitTotal, reading.dartsUsed, reading.dartsAtDouble, thrown)
         }
         guard let seat = Seat(playerId: player) else {
             throw JournalError.sqlite("player \(player.value) is not a seat in a local match")
@@ -709,7 +775,8 @@ public final class Journal {
             // shipped.
             if let stored = try replayed(commandId, describe: "visit \(visitTotal) for \(seat.rawValue)", matches: {
                 $0.kind == .visit && $0.matchId == matchId && $0.seat == seat &&
-                    $0.visitTotal == visitTotal && $0.dartsUsed == dartsUsed && $0.dartsAtDouble == dartsAtDouble
+                    $0.visitTotal == visitTotal && $0.dartsUsed == dartsUsed && $0.dartsAtDouble == dartsAtDouble &&
+                    $0.darts == darts
             }) {
                 try Journal.exec(handle, "COMMIT;")
                 return stored
@@ -726,20 +793,21 @@ public final class Journal {
             }
             try run("""
                 INSERT INTO journal (match_id, device_id, device_seq, command_id, seat, visit_total,
-                                     darts_used, darts_at_double, occurred_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?);
+                                     darts_used, darts_at_double, occurred_at, darts)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
                 """, [
                     .text(matchId.value), .text(deviceId.value), .int(next), .text(commandId),
                     .text(seat.rawValue), .int(Int64(visitTotal)),
                     dartsUsed.map { Param.int(Int64($0)) } ?? Param.null,
                     dartsAtDouble.map { Param.int(Int64($0)) } ?? Param.null,
                     .text(Journal.iso.string(from: at)),
+                    darts.map { Param.text(JournalEntry.stored($0)) } ?? Param.null,
                 ])
             // COMMIT is where the barrier happens.
             try Journal.exec(handle, "COMMIT;")
             return JournalEntry(matchId: matchId, deviceId: deviceId, deviceSeq: next, commandId: commandId,
                                 kind: .visit, seat: seat, visitTotal: visitTotal, dartsUsed: dartsUsed,
-                                dartsAtDouble: dartsAtDouble, correctsSeq: nil, occurredAt: at)
+                                dartsAtDouble: dartsAtDouble, correctsSeq: nil, occurredAt: at, darts: darts)
         } catch {
             try? Journal.exec(handle, "ROLLBACK;")
             throw error
@@ -1016,7 +1084,7 @@ public final class Journal {
         var out: [JournalEntry] = []
         try run("""
             SELECT match_id, device_id, device_seq, command_id, seat, visit_total, darts_used, darts_at_double, occurred_at,
-                   kind, corrects_seq
+                   kind, corrects_seq, darts
             FROM journal WHERE match_id = ? ORDER BY rowid;
             """, [.text(matchId.value)]) { s in
             out.append(Journal.row(from: s))
@@ -1039,8 +1107,17 @@ public final class Journal {
             dartsUsed: Journal.optionalInt(s, 6),
             dartsAtDouble: Journal.optionalInt(s, 7),
             correctsSeq: sqlite3_column_type(s, 10) == SQLITE_NULL ? nil : sqlite3_column_int64(s, 10),
-            occurredAt: Journal.iso.date(from: Journal.text(s, 8)) ?? Date(timeIntervalSince1970: 0)
+            occurredAt: Journal.iso.date(from: Journal.text(s, 8)) ?? Date(timeIntervalSince1970: 0),
+            darts: Journal.optionalDarts(s, 11)
         )
+    }
+
+    /// The darts column. A stored value that does not read as darts becomes an empty hand, which the
+    /// engine refuses at replay — so a damaged row stops the match being read rather than being read
+    /// as the total beside it.
+    private static func optionalDarts(_ s: OpaquePointer, _ i: Int32) -> [Dart]? {
+        guard sqlite3_column_type(s, i) != SQLITE_NULL else { return nil }
+        return JournalEntry.darts(text(s, i)) ?? []
     }
 
     /// Folds the journal through the engine and returns the state it rebuilds. A rejection during
@@ -1052,6 +1129,7 @@ public final class Journal {
     /// Replay that also yields each visit as the engine saw it, for the statistics layer.
     public func replayVisits(_ id: MatchId) throws -> (state: MatchState, visits: [ReplayedVisit]) {
         let record = try match(id)
+        if let rule = record.unknownBustRule { throw JournalError.replayRejected(seq: 0, reason: "UNKNOWN_BUST_RULE \(rule)") }
         var state = record.initialState
         var visits: [ReplayedVisit] = []
         var ordinal: [Seat: [Int: Int]] = [.home: [:], .away: [:]]   // seat -> leg -> visits so far
@@ -1067,7 +1145,7 @@ public final class Journal {
             let leg = state.currentLeg
             let before = state.remaining[e.seat.playerId] ?? 0
             switch Engine.apply(state, command) {
-            case let .accepted(next, effect, _):
+            case let .accepted(next, effect, _, reading):
                 let n = (ordinal[e.seat]?[leg] ?? 0) + 1
                 ordinal[e.seat]?[leg] = n
                 let won = effect == .leg_won || effect == .set_won || effect == .match_won
@@ -1076,7 +1154,8 @@ public final class Journal {
                     visitTotal: e.visitTotal, dartsUsed: e.dartsUsed, dartsAtDouble: e.dartsAtDouble,
                     remainingBefore: before,
                     remainingAfter: won ? 0 : (next.remaining[e.seat.playerId] ?? before),
-                    bust: effect == .bust, wonLeg: won
+                    bust: effect == .bust, wonLeg: won,
+                    scored: reading?.scored, darts: e.darts, bustAt: reading?.bustAt
                 ))
                 state = next
             case let .rejected(reason):
@@ -1104,6 +1183,7 @@ public final class Journal {
     /// moment it was written, reproduced by applying it and then not keeping the result.
     public func ledger(_ id: MatchId) throws -> [LedgerEntry] {
         let record = try match(id)
+        if let rule = record.unknownBustRule { throw JournalError.replayRejected(seq: 0, reason: "UNKNOWN_BUST_RULE \(rule)") }
         var state = record.initialState
         var rows: [LedgerEntry] = []
         var ordinal: [Seat: [Int: Int]] = [.home: [:], .away: [:]]
@@ -1123,7 +1203,7 @@ public final class Journal {
             let struck = superseded.contains(e.deviceSeq)
             let n = (ordinal[e.seat]?[leg] ?? 0) + 1
             switch Engine.apply(state, command) {
-            case let .accepted(next, effect, _):
+            case let .accepted(next, effect, _, _):
                 let won = effect == .leg_won || effect == .set_won || effect == .match_won
                 rows.append(LedgerEntry(
                     seat: e.seat, legOrdinal: leg, visitOrdinal: n, visitTotal: e.visitTotal,
@@ -1165,6 +1245,9 @@ public final class Journal {
         /// thrown and are as real as any other — but the match produced no result, so it is counted
         /// separately rather than folded into a record of matches played out.
         public let abandoned: Int
+        /// Every leg, in `visits`' numbering, that somebody won — theirs or their opponent's. Only the
+        /// journal knows the legs they lost, because it holds both seats; form needs them (PD-018).
+        public var completedLegs: Set<Int> = []
         /// Matches of theirs that ended in a retirement, by either player. A result, and counted as
         /// one; named separately because a season with six of them is worth being able to see.
         public let retired: Int
@@ -1188,6 +1271,7 @@ public final class Journal {
         var legOffset = 0
         var matches = 0, legsWon = 0, unreadable = 0, abandoned = 0, retired = 0
         var outRules: Set<String> = []
+        var completed: Set<Int> = []
 
         for record in try self.matches().reversed() {
             let seats = Seat.allCases.filter { record.playerId($0) == personId }
@@ -1202,6 +1286,7 @@ public final class Journal {
                 }
                 let replayed = try replayVisits(record.id)
                 let legsHere = replayed.visits.map(\.legOrdinal).max() ?? 0
+                for v in replayed.visits where v.wonLeg { completed.insert(legOffset + v.legOrdinal) }
                 for seat in seats {
                     legsWon += replayed.state.legsWonTotal[seat.playerId] ?? 0
                     for v in replayed.visits where v.seat == seat {
@@ -1209,7 +1294,7 @@ public final class Journal {
                             seat: v.seat, legOrdinal: legOffset + v.legOrdinal, visitOrdinal: v.visitOrdinal,
                             visitTotal: v.visitTotal, dartsUsed: v.dartsUsed, dartsAtDouble: v.dartsAtDouble,
                             remainingBefore: v.remainingBefore, remainingAfter: v.remainingAfter,
-                            bust: v.bust, wonLeg: v.wonLeg))
+                            bust: v.bust, wonLeg: v.wonLeg, scored: v.scored, darts: v.darts, bustAt: v.bustAt))
                     }
                 }
                 legOffset += legsHere
@@ -1217,9 +1302,11 @@ public final class Journal {
                 unreadable += 1
             }
         }
-        return PersonHistory(visits: pooled, matches: matches, legsWon: legsWon,
-                             unreadable: unreadable, outRules: outRules,
-                             abandoned: abandoned, retired: retired)
+        var history = PersonHistory(visits: pooled, matches: matches, legsWon: legsWon,
+                                    unreadable: unreadable, outRules: outRules,
+                                    abandoned: abandoned, retired: retired)
+        history.completedLegs = completed
+        return history
     }
 
     // MARK: - plumbing

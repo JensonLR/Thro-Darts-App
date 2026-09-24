@@ -33,6 +33,15 @@ public final class ClubStore: ObservableObject {
     /// Why the last write did not happen. Cleared when the next one succeeds.
     @Published public var writeProblem: String?
 
+    /// Takes back the reminders this phone is holding for these fixtures.
+    ///
+    /// A reminder is set against a scheduled fixture, and the control that set it is gone the moment
+    /// the fixture is anything else — so a fixture postponed, cancelled, played or deleted would
+    /// otherwise still buzz on the night, about a match that is not happening, with no button left
+    /// to stop it. A closure rather than a direct call, because the notification centre traps
+    /// outside a real app bundle (see `FixtureReminders`), and a test needs to see what was asked.
+    let forgetReminders: ([String]) -> Void
+
     public init() {
         do {
             book = try ClubStore.open()
@@ -42,14 +51,18 @@ public final class ClubStore: ObservableObject {
             openProblem = "\(error)"
         }
         images = try? ClubStore.openImages()
+        forgetReminders = { FixtureReminders.cancel(fixtureIds: $0) }
         refresh()
     }
 
-    /// For previews and tests: a store over a book the caller made.
-    public init(book: ClubBook, images: ImageStore? = nil) {
+    /// For previews and tests: a store over a book the caller made. Reminders are left alone unless
+    /// the caller says what to do with them, because there is no notification centre to ask.
+    public init(book: ClubBook, images: ImageStore? = nil,
+                forgetReminders: @escaping ([String]) -> Void = { _ in }) {
         self.book = book
         self.images = images
         self.openProblem = nil
+        self.forgetReminders = forgetReminders
         refresh()
     }
 
@@ -188,9 +201,19 @@ public final class ClubStore: ObservableObject {
 
     /// How a groups tournament is shaped (PD-021). Refused by the book once a group match has a
     /// result, because changing how many qualify then changes what those matches were for.
+    ///
+    /// Refused here too when the groups could not fill their qualifying places — see
+    /// `Groups.setupProblem`. The edit screen says the same thing as the numbers are typed; this is
+    /// the store agreeing with it rather than trusting it.
     @discardableResult
     public func setGroups(count: Int, qualifiers: Int, on clubId: String) -> Bool {
-        write { try $0.setGroups(count: count, qualifiers: qualifiers, on: clubId) }
+        if let club = club(clubId),
+           let problem = Groups.setupProblem(entrants: club.teams.count, groups: count,
+                                             qualifiers: qualifiers) {
+            writeProblem = problem
+            return false
+        }
+        return write { try $0.setGroups(count: count, qualifiers: qualifiers, on: clubId) }
     }
 
     /// Creates the fixtures for one group's round robin (PD-021).
@@ -198,6 +221,14 @@ public final class ClubStore: ObservableObject {
     public func drawGroup(_ number: Int, in clubId: String, when: Date, venue: String) -> Bool {
         guard let club = club(clubId), let groups = club.groups else {
             writeProblem = "this tournament has no groups to draw"
+            return false
+        }
+        // Checked again at the draw, because the field can shrink between setting the groups and
+        // drawing them — and once the first group is drawn the entrants are fixed, so this is the
+        // last point at which a setup that can never reach its knockout can be caught.
+        if let problem = Groups.setupProblem(entrants: club.teams.count, groups: groups.groups.count,
+                                             qualifiers: groups.qualifiersPerGroup) {
+            writeProblem = problem
             return false
         }
         let ready = groups.readyToDraw(group: number)
@@ -222,16 +253,28 @@ public final class ClubStore: ObservableObject {
         write { try $0.updateClub(id: clubId, name: name, accentHex: accentHex) }
     }
 
+    /// Deletes a club, and takes back any reminder for a fixture that went with it.
     @discardableResult
     public func delete(_ clubId: String) -> Bool {
-        write { try $0.deleteClub(id: clubId) }
+        let fixtures = club(clubId)?.fixtures.map(\.id) ?? []
+        guard write({ try $0.deleteClub(id: clubId) }) else { return false }
+        forget(fixtures)
+        return true
     }
 
     /// Everything on the Discover tab, gone in one confirmed act: every team, league and
     /// tournament with its roster, fixtures and results. Matches and people stay.
     @discardableResult
     public func deleteAllOrganisations() -> Bool {
-        write { _ = try $0.deleteAllOrganisations() }
+        let fixtures = clubs.flatMap { $0.fixtures.map(\.id) }
+        guard write({ _ = try $0.deleteAllOrganisations() }) else { return false }
+        forget(fixtures)
+        return true
+    }
+
+    private func forget(_ fixtureIds: [String]) {
+        guard !fixtureIds.isEmpty else { return }
+        forgetReminders(fixtureIds)
     }
 
     @discardableResult
@@ -298,10 +341,18 @@ public final class ClubStore: ObservableObject {
     }
 
     /// Removes a team **and the fixtures it was in**. `fixturesLost` says how many that is, so the
-    /// screen can say the number before it happens rather than the admin finding out after.
+    /// screen can say the number before it happens rather than the admin finding out after. The
+    /// reminders for those fixtures go with them.
+    ///
+    /// Refused by the book once a tournament's draw exists (`ClubBookError.entrantsAreDrawn`), and
+    /// the refusal is the sentence the admin sees.
     @discardableResult
     public func removeTeam(_ teamId: String, from clubId: String) -> Bool {
-        write { try $0.removeTeam(teamId, from: clubId) }
+        let fixtures = club(clubId)?.fixtures
+            .filter { $0.homeTeamId == teamId || $0.awayTeamId == teamId }.map(\.id) ?? []
+        guard write({ try $0.removeTeam(teamId, from: clubId) }) else { return false }
+        forget(fixtures)
+        return true
     }
 
     public func fixturesLost(removing teamId: String, from clubId: String) -> Int {
@@ -310,11 +361,18 @@ public final class ClubStore: ObservableObject {
     }
 
     /// Records an official's word about a fixture (PD-020). Marked as theirs everywhere it is shown.
+    ///
+    /// A result puts the fixture in `played`, which is a move away from scheduled like any other,
+    /// so its reminder goes too — a result entered early, for a concession, must not be followed by
+    /// a buzz about the match on the night.
     @discardableResult
     public func recordResult(fixture: String, in clubId: String, home: Int, away: Int,
                              by official: String) -> Bool {
-        write { try $0.recordResult(fixture: fixture, in: clubId, home: home, away: away,
-                                    source: "recorded", recordedBy: official) }
+        guard write({ try $0.recordResult(fixture: fixture, in: clubId, home: home, away: away,
+                                          source: "recorded", recordedBy: official) })
+        else { return false }
+        forget([fixture])
+        return true
     }
 
     /// Attaches a match scored in THRØ to a fixture. **This is the strong source**, and the client
@@ -322,8 +380,11 @@ public final class ClubStore: ObservableObject {
     @discardableResult
     public func linkResult(fixture: String, in clubId: String, home: Int, away: Int,
                            matchId: String) -> Bool {
-        write { try $0.recordResult(fixture: fixture, in: clubId, home: home, away: away,
-                                    source: "scored", matchId: matchId) }
+        guard write({ try $0.recordResult(fixture: fixture, in: clubId, home: home, away: away,
+                                          source: "scored", matchId: matchId) })
+        else { return false }
+        forget([fixture])
+        return true
     }
 
     @discardableResult
@@ -336,9 +397,14 @@ public final class ClubStore: ObservableObject {
         write { try $0.setPoints(win: win, draw: draw, on: clubId) }
     }
 
+    /// Moves a fixture. **Any move away from scheduled takes its reminder back**: postponed has no
+    /// date to be reminded of, and cancelled and played have no match. Moving it back to scheduled
+    /// sets nothing — the player chooses again, with the control that has come back.
     @discardableResult
     public func move(_ fixtureId: String, in clubId: String, to state: FixtureState) -> Bool {
-        write { try $0.moveFixture(fixtureId, in: clubId, to: state.rawValue) }
+        guard write({ try $0.moveFixture(fixtureId, in: clubId, to: state.rawValue) }) else { return false }
+        if state != .scheduled { forget([fixtureId]) }
+        return true
     }
 
     // MARK: - people (ADR-016)
@@ -739,8 +805,8 @@ public struct ClubsFlow: View {
             if let c = club(id) {
                 TeamsScreen(club: c,
                             onBack: { route = .club(id) },
-                            onAdd: c.mayManageTeams ? { route = .newTeam(id) } : nil,
-                            onRemove: removeTeamAction(id, if: c.mayManageTeams),
+                            onAdd: c.entrantsAreDrawn ? nil : addTeamAction(c),
+                            onRemove: c.entrantsAreDrawn ? nil : removeTeamAction(id, if: c.mayManageTeams),
                             fixturesLost: { store.fixturesLost(removing: $0.id, from: id) })
             } else { gone }
 
@@ -921,6 +987,22 @@ public struct ClubsFlow: View {
 
     private func removeTeamAction(_ id: String, if allowed: Bool) -> ((Team) -> Void)? {
         allowed ? { store.removeTeam($0.id, from: id) } : nil
+    }
+
+    /// Adding an entrant, for someone who may. Once a draw exists the book refuses it — so the
+    /// refusal is said **on the tap**, before anybody types a name, rather than after they have
+    /// filled in a screen whose only outcome is no. Removing gets the same sentence from the book,
+    /// after the confirmation that says what would go.
+    private func addTeamAction(_ c: Club) -> (() -> Void)? {
+        guard c.mayManageTeams else { return nil }
+        let id = c.id
+        return {
+            if c.fixtures.contains(where: { $0.round != nil }) {
+                store.writeProblem = ClubBookError.entrantsAreDrawn.description
+            } else {
+                route = .newTeam(id)
+            }
+        }
     }
 
     /// Making the draw creates fixtures, so it is an official's, like every other fixture write.
@@ -1474,6 +1556,14 @@ public struct EditClubScreen: View {
         return (c, q)
     }
 
+    /// Why these two numbers cannot work for the entrants this tournament has, said while they are
+    /// being typed. The store refuses the same setup on save, so this is the screen agreeing with it.
+    private var groupSetupProblem: String? {
+        guard let groupSetup else { return nil }
+        return Groups.setupProblem(entrants: club.teams.count, groups: groupSetup.count,
+                                   qualifiers: groupSetup.qualifiers)
+    }
+
     private var points: (win: Int, draw: Int)? {
         guard let w = Int(win.trimmingCharacters(in: .whitespaces)),
               let d = Int(draw.trimmingCharacters(in: .whitespaces)), w >= 0, d >= 0 else { return nil }
@@ -1586,6 +1676,11 @@ public struct EditClubScreen: View {
                     Text("Both are whole numbers, and both are at least one.")
                         .thro(ThroTypography.metadata)
                         .foregroundStyle(ThroColor.colorStatusError)
+                } else if let groupSetupProblem {
+                    Text(groupSetupProblem)
+                        .thro(ThroTypography.metadata)
+                        .foregroundStyle(ThroColor.colorStatusError)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
                 Note("Entrants are dealt into the groups snake-wise over the order they were "
                      + "entered. **You can change this until the first result goes in, and not "

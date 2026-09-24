@@ -316,4 +316,61 @@ extension ClubBookTests {
         XCTAssertEqual(try book.members(of: team.id).count, 0)
         XCTAssertEqual(try book.people().map(\.name), ["Sam"], "people are not organisations")
     }
+
+    /// **A rename that would move a drawn entrant is refused; a typo fixed in place is not.** The draw is
+    /// seeded in name order, so "A side" becoming "Z side" would move it — and a bye with it.
+    func testARenameThatMovesADrawnEntrantIsRefused() throws {
+        let book = try open()
+        let cup = try book.createClub(name: "The Feathers Open", kind: "tournament", shape: "knockout")
+        let a = try book.addTeam(to: cup.id, name: "A side")
+        _ = try book.addTeam(to: cup.id, name: "B side")
+        let c = try book.addTeam(to: cup.id, name: "C side")
+        _ = try book.addFixture(to: cup.id, title: "A side v C side",
+                                when: Date(timeIntervalSince1970: 1_800_000_000), venue: "",
+                                homeTeam: a.id, awayTeam: c.id, round: 1, slot: 2)
+        XCTAssertThrowsError(try book.updateClub(id: a.id, name: "Z side", accentHex: nil)) { error in
+            XCTAssertEqual(error as? ClubBookError, .renameMovesADraw("The Feathers Open"))
+            XCTAssertTrue("\(error)".hasPrefix("The Feathers Open has been drawn"), "\(error)")
+        }
+        XCTAssertNoThrow(try book.updateClub(id: a.id, name: "A Side", accentHex: nil), "same place, allowed")
+        XCTAssertEqual(try book.teams(of: cup.id).map(\.name), ["A Side", "B side", "C side"])
+    }
+
+    /// **Once a draw exists, the entrants are fixed.** Pairings are worked out from the entry order
+    /// every time and results are filed by round and slot, so an entrant added or removed after the
+    /// draw moves everybody's place and leaves results under pairings nobody played. Both are
+    /// refused, with a sentence the admin can read, and nothing is taken on the way to the refusal.
+    func testTheEntrantsAreFixedOnceTheDrawIsMade() throws {
+        let book = try open()
+        let cup = try book.createClub(name: "The Feathers Open", kind: "tournament", shape: "knockout")
+        let a = try book.addTeam(to: cup.id, name: "A side")
+        let b = try book.addTeam(to: cup.id, name: "B side")
+        let c = try book.addTeam(to: cup.id, name: "C side")
+        XCTAssertFalse(try book.hasDrawnFixtures(in: cup.id), "before the draw, the field is open")
+        _ = try book.addFixture(to: cup.id, title: "A side v C side",
+                                when: Date(timeIntervalSince1970: 1_800_000_000), venue: "",
+                                homeTeam: a.id, awayTeam: c.id, round: 1, slot: 2)
+        XCTAssertTrue(try book.hasDrawnFixtures(in: cup.id))
+
+        XCTAssertThrowsError(try book.addTeam(to: cup.id, name: "D side")) { error in
+            XCTAssertEqual(error as? ClubBookError, .entrantsAreDrawn)
+            XCTAssertTrue("\(error)".hasPrefix("The draw has been made"), "a sentence, not a code")
+            XCTAssertTrue("\(error)".hasSuffix("."))
+        }
+        XCTAssertThrowsError(try book.removeTeam(b.id, from: cup.id)) { error in
+            XCTAssertEqual(error as? ClubBookError, .entrantsAreDrawn)
+        }
+        XCTAssertEqual(try book.teams(of: cup.id).count, 3, "nobody was added or taken")
+        XCTAssertEqual(try book.fixtures(of: cup.id).count, 1, "and the drawn match is still there")
+
+        // A league has no draw, so its teams stay the admin's to change mid-season.
+        let league = try book.createClub(name: "Tuesday League", kind: "league", unit: "legs")
+        let x = try book.addTeam(to: league.id, name: "X side")
+        let y = try book.addTeam(to: league.id, name: "Y side")
+        _ = try book.addFixture(to: league.id, title: "X side v Y side",
+                                when: Date(timeIntervalSince1970: 1_800_000_000), venue: "",
+                                homeTeam: x.id, awayTeam: y.id)
+        XCTAssertNoThrow(try book.addTeam(to: league.id, name: "Z side"))
+        XCTAssertNoThrow(try book.removeTeam(y.id, from: league.id))
+    }
 }

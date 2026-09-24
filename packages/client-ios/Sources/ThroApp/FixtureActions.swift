@@ -218,8 +218,17 @@ public enum FixtureReminders {
     }
 
     public static func cancel(fixtureId: String) {
+        cancel(fixtureIds: [fixtureId])
+    }
+
+    /// Takes back every reminder for these fixtures in one call. Used when a fixture stops being
+    /// scheduled or stops existing — `ClubStore` does that, because the control that set a reminder
+    /// disappears with the scheduled state and could not take it back afterwards. Removing one that
+    /// was never set is not an error, so nobody has to ask first.
+    public static func cancel(fixtureIds: [String]) {
+        guard !fixtureIds.isEmpty else { return }
         UNUserNotificationCenter.current()
-            .removePendingNotificationRequests(withIdentifiers: [identifier(fixtureId)])
+            .removePendingNotificationRequests(withIdentifiers: fixtureIds.map(identifier))
     }
 
     /// The fixtures this phone is currently holding a reminder for.

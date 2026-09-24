@@ -54,8 +54,21 @@
   .page { font-size: 1.2vw; opacity: 0.5; }
   h2 { font-size: 2.8vw; font-weight: 800; margin: 0 0 1vw; }
 
-  .wall-table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
-  .wall-table td { padding: 0.75vw 0; border-bottom: 1px solid rgba(247,246,242,0.08); }
+  /* Chalk on the board at a fraction of its strength, for the rules and the buttons' ground. Each is written twice:
+     first as the literal, which a 2016 television browser understands, then derived from the token, which a newer
+     one takes instead — so the value follows --color-text-on-board when the brand moves, and an old set still draws
+     a line. There is no token for "chalk at 8%" and this does not invent one. */
+  /* Fixed layout, so a long team name is cut with an ellipsis rather than wrapping to a second line: a row that
+     doubles in height pushes the bottom of the table off the screen, and rows per page are measured from one line. */
+  .wall-table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; table-layout: fixed; }
+  .wall-table td, .wall-table th { padding: 0.75vw 0; border-bottom: 1px solid rgba(247,246,242,0.08);
+    border-bottom-color: color-mix(in srgb, var(--color-text-on-board) 8%, transparent); }
+  .wall-table .team, .wall-table .aside { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  /* The column heads: small, spaced capitals at the weight of the numbers, so from the bar they read as labels and
+     not as another row. */
+  .wall-table th { font-size: 1.4vw; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; opacity: 0.6;
+                   text-align: right; padding: 0 0 0.6vw; }
+  .wall-table th.pos, .wall-table th.team { text-align: left; }
   .pos { width: 4vw; font-size: 2vw; opacity: 0.5; }
   /* The team's name is the largest thing after the heading, because it is what somebody looks up to
      find. An earlier build of the app had it smaller than the number beside it, which answers the
@@ -64,6 +77,8 @@
   .num { width: 5vw; text-align: right; font-size: 2vw; opacity: 0.7; }
   .points { width: 7vw; text-align: right; font-size: 2.8vw; font-weight: 800; }
   .aside { text-align: right; font-size: 1.7vw; opacity: 0.65; padding-left: 2vw; white-space: nowrap; }
+  .aside.what { width: 24vw; }
+  .aside.when { width: 17vw; }
 
   .games { flex: 1; display: flex; flex-direction: column; justify-content: space-evenly; }
   .game { display: flex; align-items: center; gap: 2vw; }
@@ -79,17 +94,25 @@
   .saying { font-size: 1.8vw; opacity: 0.7; max-width: 60ch; }
   .foot { font-size: 1.2vw; opacity: 0.45; margin-top: auto; }
   footer { font-size: 1.2vw; opacity: 0.45; padding-top: 1.2vw; }
-  footer.trouble { color: var(--thro-bronze-onink, #C9975C); opacity: 0.9; }
+  /* Something is wrong with what the wall is showing. It used to recolour the same small line at the foot, at nearly
+     half strength, which nobody at the bar could read; it is now full strength, bigger, and in the board's warning
+     colour. It does not flash: it is on a wall all night, and a flashing corner is a thing people complain about. */
+  footer.trouble { color: var(--color-status-warning-on-board); opacity: 1; font-size: 1.6vw; font-weight: 700; }
+  /* Past the limit the table is taken down, and the panel that replaces it says so at the size of a heading. */
+  .stale .panel-head h2 { color: var(--color-status-warning-on-board); }
+  .stale .saying { font-size: 2.4vw; opacity: 1; }
 
   .choices { display: flex; flex-direction: column; gap: 1vw; margin-top: 2vw; max-width: 70ch; }
   .choice {
     display: flex; flex-direction: column; align-items: flex-start; gap: 0.3vw;
-    background: rgba(247,246,242,0.10); color: inherit; border: 0; border-radius: 0.8vw;
+    background: rgba(247,246,242,0.10); background: color-mix(in srgb, var(--color-text-on-board) 10%, transparent);
+    color: inherit; border: 0; border-radius: 0.8vw;
     padding: 1.4vw 1.8vw; font: inherit; text-align: left; cursor: pointer;
   }
   /* A television is driven by a remote, which moves focus rather than a pointer. Without a visible
      focus ring the chooser is unusable on the exact device this page is for. */
-  .choice:focus-visible, .choice:hover { background: rgba(247,246,242,0.20); outline: 0.2vw solid var(--thro-green-onink, #57A385); }
+  .choice:focus-visible, .choice:hover { background: rgba(247,246,242,0.20); background: color-mix(in srgb, var(--color-text-on-board) 20%, transparent);
+    outline: 0.2vw solid var(--color-focus-ring); }
   .choice-name { font-size: 2.2vw; font-weight: 700; }
   .choice-season { font-size: 1.4vw; opacity: 0.6; }
 
@@ -100,7 +123,8 @@
 <body>
 <div class="screen">
   <header>
-    <p id="league">&nbsp;</p>
+    <!-- The league's name is the page's heading: it is what the screen is about, and the mark beside it says whose. -->
+    <h1 id="league">&nbsp;</h1>
     <img class="mark" src="wordmark.svg" alt="THRØ" width="428" height="134">
   </header>
   <main id="wall"><p class="saying">Reading…</p></main>

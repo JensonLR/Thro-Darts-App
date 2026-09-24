@@ -41,7 +41,10 @@ enum EventWords {
         switch page.state {
         case "open": return "Taking entries"
         case "entries_closed": return "Entries are closed. The draw is next."
-        case "drawn", "in_progress":
+        // Drawn is not playing: the event is drawn before anybody throws, and "Round 1 is being played" at
+        // that point told entrants their night had started without them.
+        case "drawn": return "The draw is made. Round 1 is next."
+        case "in_progress":
             return page.draw.map(\.round).max().map { "Round \($0) is being played" } ?? "The draw is made"
         case "complete":
             guard let champion = page.winnerId, let tie = page.draw.first(where: { $0.winnerId == champion }) else { return "Over." }

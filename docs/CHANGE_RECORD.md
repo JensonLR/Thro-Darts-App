@@ -6735,3 +6735,29 @@ available figure on an empty phone is a count of zero. Tests +1 (947).
 `PlayScreens.swift`: the ledger moves out from under a `Spacer` to directly under the head, with the `Spacer`
 beneath it. That closes the band of empty board between the scores and their working, and takes the ledger out
 from under the chalk mark, which lands at the foot of the board and was being drawn across the rows it confirms.
+
+## The engine takes darts, and a match says what a bust keeps (PD-191, OD-023 closed)
+
+Spec 1.4.0 (`packages/domain-spec`): `read_darts`/`classify_darts` and a `darts.jsonl` family of 27 vectors,
+including the founder's 40 → 20, D15 under both bust rules; `validate.py` holds the per-dart rule to the visit rule
+over every reachable score. Engines (Kotlin and Swift): `Dart`, `Ring`, `BustRule`, `Command.RecordDarts`,
+`VisitReading` on every accepted outcome, `Darts.read`, `Checkout`, and the reasons `DART_INVALID`,
+`DARTS_REQUIRED` and `NOT_A_FINISHING_DART`; new property suites in both. Journals (both): `local_match.bust_rule`
+and `journal.darts`, added by ALTER on files that exist (the Kotlin journal had no such path, so an existing Android
+file would have failed its first insert), and a won leg's `remainingAfter` is 0 on Android as on iOS. Statistics
+(both): `VisitRecord.scored`, first nine counts the darts a leg actually took, `recentForm(completedLegs:)`. iOS:
+`DartVisit` becomes a bridge to the engine; `MatchSession` submits darts, follows them with the route, closes the
+keypad once a visit is decided, and announces the dart that bust; set-up and ready screens carry the bust rule;
+uploads send darts and the rule; the live watcher replays darts. Android: per-dart entry, set-up, leave
+confirmation, accessibility. Server: V059, `Visits.kt`, darts on the command and upload paths, uploads and
+corrections replayed through the engine, OpenAPI regenerated.
+
+## The live board was never live (PD-192)
+
+V060 `identity.live_name`; `Live.kt` replays each live match's evidence instead of reading two projections nothing
+writes, and drops the two columns V018 removed. `LiveBoardQueryTest`.
+
+## What looking found, and the web desk (PD-193)
+
+`DartKeypad`/`ScoreKeypad` draw at `ThroStage`'s key height, gap and padding; `ThroRouteLine`; `ThroTagFlow` and a
+compact fixture slate; the web fixes listed in PD-193. `tools/check_module_imports.py` strips Swift raw strings.

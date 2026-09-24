@@ -182,13 +182,23 @@ extension NearbyTests {
 
     @MainActor func testStoppingForgetsTheFixSoTheListGoesBack() {
         // In the app, not only in iOS Settings: a child has to be able to turn it off where they turned it
-        // on. Nothing was stored, so forgetting it is the whole of it.
+        // on. No location was stored, so forgetting the fix is the whole of that.
         let nearby = Nearby(leagues: .loaded([]), place: .located(lat: 54.5, lon: -1.2))
         XCTAssertTrue(NearbyLogic.usingLocation(nearby.place))
         nearby.stopUsingLocation()
         XCTAssertEqual(nearby.place, .unknown)
         XCTAssertFalse(NearbyLogic.usingLocation(nearby.place))
         XCTAssertTrue(DiscoverScreen.offersLocation(nearby.place), "and it can be turned back on")
+    }
+
+    @MainActor func testStopLastsBeyondTheScreenThatHeardIt() {
+        // Discover makes a new `Nearby` on every visit. Each used to read iOS's permission afresh and, finding
+        // it still granted, start using the location again — so Stop lasted until the player looked away.
+        let defaults = UserDefaults(suiteName: "thro-nearby-\(UUID().uuidString)")!
+        let first = Nearby(defaults: defaults)
+        XCTAssertFalse(first.stoppedByPlayer)
+        first.stopUsingLocation()
+        XCTAssertTrue(Nearby(defaults: defaults).stoppedByPlayer, "the next visit remembers")
     }
 
     /// **The slate says it is still reading a list that failed to arrive** (PD-184).

@@ -340,4 +340,84 @@ final class ClubStoreTests: XCTestCase {
         XCTAssertNil(ClubsFlow.route(for: .init(club: "missing", wanted: .fixtures), in: [league]),
                      "a club that has gone has no fixture list either")
     }
+
+    // MARK: - what a draw fixes, and what a move takes back
+
+    /// **Once the draw is made, the entrants are fixed**, and the admin is told so in a sentence —
+    /// on the tap that would add one, and from the book on a remove.
+    func testAddingOrRemovingAnEntrantAfterTheDrawIsRefusedInWords() throws {
+        let s = try store()
+        XCTAssertTrue(s.createClub(name: "The Feathers Open", kind: .tournament, accentHex: nil,
+                                   shape: .knockout))
+        let id = s.clubs[0].id
+        for name in ["A side", "B side", "C side", "D side"] {
+            XCTAssertTrue(s.addTeam(to: id, name: name))
+        }
+        let cup = try XCTUnwrap(s.club(id))
+        XCTAssertTrue(s.drawRound(1, in: id, when: Date(timeIntervalSince1970: 1_800_000_000), venue: ""))
+        XCTAssertEqual(s.club(id)?.fixtures.count, 2)
+
+        XCTAssertFalse(s.addTeam(to: id, name: "E side"))
+        XCTAssertEqual(s.writeProblem, ClubBookError.entrantsAreDrawn.description)
+        XCTAssertFalse(s.removeTeam(cup.teams[1].id, from: id))
+        XCTAssertEqual(s.writeProblem, ClubBookError.entrantsAreDrawn.description)
+        XCTAssertEqual(s.club(id)?.teams.count, 4)
+        XCTAssertEqual(s.club(id)?.fixtures.count, 2, "and the drawn round is untouched")
+    }
+
+    /// **Any move away from scheduled takes the reminder back**, because the control that set it
+    /// disappears with the scheduled state. Putting it back to scheduled sets nothing — the player
+    /// chooses again — and a move the book refuses takes nothing.
+    func testMovingAFixtureAwayFromScheduledForgetsItsReminder() throws {
+        var forgotten: [String] = []
+        let s = ClubStore(book: try ClubBook(path: path), forgetReminders: { forgotten += $0 })
+        _ = s.createClub(name: "The Feathers", kind: .team, accentHex: nil)
+        let id = s.clubs[0].id
+        _ = s.addFixture(to: id, title: "Home to The Bell",
+                         when: Date(timeIntervalSince1970: 1_800_000_000), venue: "The Feathers")
+        let fixture = s.clubs[0].fixtures[0].id
+
+        XCTAssertTrue(s.move(fixture, in: id, to: .postponed))
+        XCTAssertEqual(forgotten, [fixture], "postponed has no date to be reminded of")
+        XCTAssertTrue(s.move(fixture, in: id, to: .scheduled))
+        XCTAssertEqual(forgotten, [fixture], "rescheduling sets nothing on the player's behalf")
+        XCTAssertTrue(s.move(fixture, in: id, to: .cancelled))
+        XCTAssertEqual(forgotten, [fixture, fixture])
+        XCTAssertFalse(s.move(fixture, in: id, to: .played), "cancelled is terminal")
+        XCTAssertEqual(forgotten.count, 2, "and a refused move takes nothing back")
+    }
+
+    /// Deleting a club takes back the reminder for every fixture that went with it. Nothing is left
+    /// on the phone to buzz about a club that no longer exists.
+    func testDeletingAClubForgetsTheRemindersForItsFixtures() throws {
+        var forgotten: [String] = []
+        let s = ClubStore(book: try ClubBook(path: path), forgetReminders: { forgotten += $0 })
+        _ = s.createClub(name: "The Feathers", kind: .team, accentHex: nil)
+        let id = s.clubs[0].id
+        let when = Date(timeIntervalSince1970: 1_800_000_000)
+        _ = s.addFixture(to: id, title: "Home to The Bell", when: when, venue: "")
+        _ = s.addFixture(to: id, title: "Away at The Crown", when: when + 86_400, venue: "")
+        let ids = Set(s.clubs[0].fixtures.map(\.id))
+
+        XCTAssertTrue(s.delete(id))
+        XCTAssertEqual(Set(forgotten), ids)
+    }
+
+    /// A groups setup the field cannot fill is refused by the store, in the words the edit screen
+    /// shows, and a setup it can fill goes through.
+    func testAGroupsSetupTheFieldCannotFillIsRefused() throws {
+        let s = try store()
+        XCTAssertTrue(s.createClub(name: "The Feathers Cup", kind: .tournament, accentHex: nil,
+                                   shape: .groups))
+        let id = s.clubs[0].id
+        for n in 1...5 { XCTAssertTrue(s.addTeam(to: id, name: "Side \(n)")) }
+
+        XCTAssertFalse(s.setGroups(count: 2, qualifiers: 3, on: id))
+        XCTAssertEqual(s.writeProblem, Groups.setupProblem(entrants: 5, groups: 2, qualifiers: 3))
+        XCTAssertNil(s.club(id)?.groupCount, "nothing was set")
+
+        XCTAssertTrue(s.setGroups(count: 2, qualifiers: 2, on: id))
+        XCTAssertEqual(s.club(id)?.groupCount, 2)
+        XCTAssertEqual(s.club(id)?.qualifiersPerGroup, 2)
+    }
 }

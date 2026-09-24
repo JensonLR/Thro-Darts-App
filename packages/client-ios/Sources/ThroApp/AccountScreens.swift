@@ -712,7 +712,11 @@ struct EventActions: View {
                 Text("Round \(t.round): v \(opponent) · to be played").thro(ThroTypography.body).foregroundStyle(ThroColor.colorTextPrimary)
                 if citing {
                     if let matches {
-                        let ours = matches.filter { m in m.winner != nil && m.seats.contains { !$0.you && $0.name == opponent } }
+                        // By name where the opponent's name is shown; where it is hidden, every finished match of
+                        // theirs, because "a player" is never a name on a seat and the list was always empty. The
+                        // server checks the citation either way.
+                        let named = (t.homeId == me ? t.away : t.home)
+                        let ours = matches.filter { m in m.winner != nil && (named == nil || m.seats.contains { !$0.you && $0.name == named }) }
                         if ours.isEmpty { Text("No finished match of yours against \(opponent) on THRØ yet.").thro(ThroTypography.metadata).foregroundStyle(ThroColor.colorTextSecondary) }
                         ForEach(ours.prefix(5)) { m in
                             Button { Task { await cite(t, m.matchId) } } label: {
@@ -859,6 +863,12 @@ public struct FriendsScreen: View {
                                 .padding(.vertical, ThroSpacing.spacing2)
                                 ThroDivider()
                             }
+                        }
+                    } else if account.friendsNote != nil {
+                        // The read failed and the reason is said just above. A spinner here claimed it was
+                        // still reading, for ever; this is the one thing the player can do about it.
+                        ThroButton("Try again", variant: .secondary, size: .medium) {
+                            Task { await account.loadFriends() }
                         }
                     } else {
                         HStack { ProgressView(); Text("Reading").thro(ThroTypography.body).foregroundStyle(ThroColor.colorTextSecondary) }

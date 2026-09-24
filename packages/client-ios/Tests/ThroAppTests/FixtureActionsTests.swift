@@ -157,4 +157,17 @@ private extension Result {
         if case let .failure(error) = self { return error }
         return nil
     }
+
+    /// **A postponed fixture can be put back.** Without *Reschedule*, postponing was a one-way door
+    /// to played or cancelled. Played and cancelled offer nothing, because the book refuses a move
+    /// out of either.
+    func testAPostponedFixtureCanBeRescheduledAndAFinishedOneCannotMove() {
+        XCTAssertEqual(FixturesScreen.moves(from: .scheduled), [.postponed, .played, .cancelled])
+        XCTAssertEqual(FixturesScreen.moves(from: .postponed), [.scheduled, .played, .cancelled])
+        XCTAssertEqual(FixturesScreen.moves(from: .played), [])
+        XCTAssertEqual(FixturesScreen.moves(from: .cancelled), [])
+        for state in [FixtureState.scheduled, .postponed] {
+            XCTAssertFalse(FixturesScreen.moves(from: state).contains(state), "a move goes somewhere")
+        }
+    }
 }

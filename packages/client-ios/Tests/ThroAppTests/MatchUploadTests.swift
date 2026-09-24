@@ -2,6 +2,7 @@ import XCTest
 @testable import ThroApp
 @testable import ThroJournal
 import ThroNet
+import ThroEngine
 
 /// Sending a match this phone scored (PD-040): the journal as it was written, or a reason it cannot go.
 final class MatchUploadTests: XCTestCase {
@@ -124,5 +125,26 @@ final class MatchUploadTests: XCTestCase {
         // The server does `Instant.parse`, which wants a Z-terminated ISO-8601 instant.
         XCTAssertTrue(sent[0].occurredAt.hasSuffix("Z"), sent[0].occurredAt)
         XCTAssertEqual(sent[0].occurredTz, "Europe/London", "and the zone travels beside it, never inside it")
+    }
+
+    // MARK: - OD-023
+
+    func testAVisitOfDartsGoesAsTheDartsAndATotalGoesWithout() throws {
+        var darts = entry(1, .visit, .home, total: 60)
+        darts.darts = [.init(20, .treble)]
+        let sent = rows([darts, entry(2, .visit, .away, total: 45)])
+        XCTAssertEqual(sent[0].darts, ["T20"], "the bust a total cannot see goes as the dart that shows it")
+        XCTAssertNil(sent[1].darts)
+        // Omitted, not null, for a total: an older server reads the row exactly as it always did.
+        let json = String(data: try JSONEncoder().encode(sent[1]), encoding: .utf8) ?? ""
+        XCTAssertFalse(json.contains("darts"), json)
+    }
+
+    func testTheBustRuleGoesWithTheFormat() throws {
+        let path = NSTemporaryDirectory() + "thro-upload-\(UUID().uuidString).sqlite"
+        defer { for s in ["", "-wal", "-shm"] { try? FileManager.default.removeItem(atPath: path + s) } }
+        let journal = try Journal(path: path, deviceId: device)
+        let record = try journal.createMatch(NewMatch(homeName: "A", awayName: "B", bustRule: .keepScoredDarts))
+        XCTAssertEqual(MatchUpload.format(for: record).bustRule, "keepScoredDarts")
     }
 }

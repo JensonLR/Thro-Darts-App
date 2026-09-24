@@ -502,6 +502,10 @@ public struct Club: Identifiable, Equatable, Sendable {
     /// the only person who can fix it is looking at it.
     public var fixturesAwaitingResults: [Fixture] { fixtures.filter(\.awaitsResult) }
 
+    /// Whether a draw has been made — any fixture with a place in one. The entrants are fixed from then on,
+    /// and the screens stop offering to change them rather than refusing after the tap.
+    public var entrantsAreDrawn: Bool { fixtures.contains { $0.round != nil } }
+
     /// The knockout draw, for a tournament that has one (PD-021).
     ///
     /// Derived on every read from the entry order and the fixtures that exist — like the table, and

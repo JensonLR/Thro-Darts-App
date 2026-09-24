@@ -585,6 +585,11 @@ public struct LeaguesScreen: View {
             withAnimation(.easeInOut(duration: ThroMotion.motionDurationEmphasis)) {
                 camera = .region(LeaguesPlot.region(b.pins, place: nearby.place))
             }
+        } else if nearby.place == .denied {
+            // The coin did nothing here once location was denied. The switch is in THRØ's page in Settings.
+            #if os(iOS)
+            if let url = ThroReadiness.phoneSettings { openURL(url) }
+            #endif
         } else {
             askedWhereIAm = true
             nearby.useMyLocation()
@@ -612,9 +617,13 @@ public struct LeaguesScreen: View {
         return NearbyLogic.miles(NearbyLogic.distanceKm(fromLat: lat, lon: lon, toLat: p.latitude, lon: p.longitude))
     }
 
+    /// The same distance Discover gives for this league — to its nearest pub, or its own point where it has
+    /// no placed pub. The card measured to the league's point alone, so one league had two distances on two
+    /// screens, and none at all here when only its pubs were placed.
     private func miles(to league: PublicLeague) -> String? {
-        guard case .located(let lat, let lon) = nearby.place, let la = league.latitude, let lo = league.longitude else { return nil }
-        return NearbyLogic.miles(NearbyLogic.distanceKm(fromLat: lat, lon: lon, toLat: la, lon: lo))
+        guard case .located(let lat, let lon) = nearby.place,
+              let km = NearbyLogic.distanceKm(to: league, fromLat: lat, lon: lon) else { return nil }
+        return NearbyLogic.miles(km)
     }
 
     static func directions(to venue: PublicLeague.Venue) {

@@ -1067,9 +1067,15 @@ public struct TeamsScreen: View {
                     }
                     if club.teams.isEmpty { empty }
                     if club.kind == .tournament {
-                        Note("The order here is the order they were entered. In a knockout that is "
-                             + "the seeding: the byes go to the top. THRØ has no rating, so it has "
-                             + "nothing else to seed on and does not pretend otherwise.")
+                        // Name order, because that is what the list and the draw both use: this used to say
+                        // "the order they were entered", which neither of them is.
+                        Note((club.entrantsAreDrawn
+                              ? "**The draw has been made, so the entrants are fixed.** Adding or removing one "
+                                + "now would move everybody's place and put results under pairings nobody played. "
+                              : "")
+                             + "The order here is by name, and in a knockout that is the seeding: the byes go to "
+                             + "the top. THRØ has no rating, so it has nothing else to seed on and does not "
+                             + "pretend otherwise.")
                             .padding(.top, ThroSpacing.spacing5)
                     } else {
                         Note("A league's competitors are its **teams**. The people who play for them "
@@ -1141,7 +1147,7 @@ public struct TeamsScreen: View {
         if let onAdd {
             EmptyState(title: club.kind == .tournament ? "Nobody entered yet" : "No teams yet",
                        message: club.kind == .tournament
-                           ? "Add everybody who is playing. The order they go in is the order the byes are given out."
+                           ? "Add everybody who is playing. They are seeded by name, and the byes go to the top."
                            : "A league is its teams. Add them, then the fixtures between them.",
                        actionLabel: "Add a \(club.competitorNoun.one)", onAction: onAdd)
                 .padding(.top, ThroSpacing.spacing6)

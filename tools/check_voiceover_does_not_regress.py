@@ -25,8 +25,12 @@ SOURCES = ROOT / "packages" / "client-ios" / "Sources"
 # ThroVenueKit is a television nobody holds, and ThroPlay composes ThroDesign's controls rather than
 # rolling its own, so both are honestly zero and are recorded as such rather than left out.
 FLOORS = {
-    "ThroDesign":   {"accessibilityLabel": 26, "accessibilityValue": 4, "accessibilityElement": 23},
-    "ThroApp":      {"accessibilityLabel": 36, "accessibilityValue": 1, "accessibilityElement": 22},
+    # 24 Sep 2026: PD-189 lifted Home's headline figure out of ThroApp into ThroDesign's `StatHeadline`,
+    # and its one accessibilityValue and one accessibilityElement went with it — moved, not lost. The
+    # floors move with them, and ThroDesign's rise to what it holds now (PD-191/193 added the spoken route
+    # and the dart line's undo), so the ratchet keeps both halves.
+    "ThroDesign":   {"accessibilityLabel": 30, "accessibilityValue": 5, "accessibilityElement": 25},
+    "ThroApp":      {"accessibilityLabel": 36, "accessibilityValue": 0, "accessibilityElement": 21},
     "ThroPlay":     {"accessibilityLabel": 0,  "accessibilityValue": 0, "accessibilityElement": 3},
     "ThroLiveKit":  {"accessibilityLabel": 2,  "accessibilityValue": 1, "accessibilityElement": 2},
     "ThroWatchKit": {"accessibilityLabel": 3,  "accessibilityValue": 0, "accessibilityElement": 1},

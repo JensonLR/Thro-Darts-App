@@ -158,7 +158,10 @@ public enum ThroShareCard {
             guard let h = home.first(where: { $0.label == label }),
                   let a = away.first(where: { $0.label == label }),
                   h.confidence != .unavailable, a.confidence != .unavailable else { continue }
-            out.append(Figure(label: label, home: h.value, away: a.value))
+            // A range says it is one on the card too: the app marks it **Range**, and an image travels
+            // without the app around it, so "33%–100%" on its own reads as two players' figures.
+            let ranged = h.confidence == .range || a.confidence == .range
+            out.append(Figure(label: ranged ? "\(label) · range" : label, home: h.value, away: a.value))
         }
         return out
     }

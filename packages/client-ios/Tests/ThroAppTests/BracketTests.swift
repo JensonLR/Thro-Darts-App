@@ -194,4 +194,29 @@ final class BracketTests: XCTestCase {
         XCTAssertEqual(TournamentScreen.roundName(1, of: 5), "Round 1")
         XCTAssertEqual(TournamentScreen.roundName(1, of: 1), "Final", "a two-entrant draw is a final")
     }
+
+    /// **Who goes through is read from the fixture's own two teams**, never from whoever this
+    /// position holds now. The sides are re-derived from the entry order every time; the fixture
+    /// remembers who played. So a result recorded "home 5, away 1" goes to the team that was home in
+    /// that match, even where the position has them the other way round.
+    func testTheWinnerIsWhoeverTheFixtureSaysPlayedNotWhoeverSitsThereNow() {
+        let field = entrants(4)
+        // Slot 1 of round one is 1 v 4. Filed with 4 at home, and 4 winning.
+        let upset = played(round: 1, slot: 1, field[3], field[0], 5, 1)
+        let draw = Draw.of(entrants: field, fixtures: [upset])
+        XCTAssertEqual(draw.rounds[0][0].home.team?.id, "t1", "the position has seed 1 at home")
+        XCTAssertEqual(draw.rounds[0][0].winner?.id, "t4", "and seed 4 still won, because the fixture says so")
+        XCTAssertEqual(draw.rounds[1][0].home.team?.id, "t4", "so seed 4 is the one who goes through")
+    }
+
+    /// A result about two teams who are not both in this position any more advances **nobody**. It
+    /// is a stall somebody can see, rather than the wrong name drawn into the next round.
+    func testAResultAboutSomebodyElsesPairingAdvancesNobody() {
+        let field = entrants(4)
+        // Filed at round 1 slot 1 (which is 1 v 4), but between 1 and 2 — a pairing that is not there.
+        let stray = played(round: 1, slot: 1, field[0], field[1], 5, 1)
+        let draw = Draw.of(entrants: field, fixtures: [stray])
+        XCTAssertNil(draw.rounds[0][0].winner)
+        XCTAssertEqual(draw.rounds[1][0].home, .winnerOf(round: 1, slot: 1), "held, not filled in wrongly")
+    }
 }

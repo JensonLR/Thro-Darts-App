@@ -111,13 +111,18 @@ public struct ThroFixtureSlate: View {
     /// Whether the slate takes all the height it is offered and writes the names at display size:
     /// the ready screen, where the fixture IS the screen. Off, it takes the height of its lines.
     private let expanded: Bool
+    /// Less chalk around the writing, for a screen short of room: a second row of tags costs about
+    /// what the tighter padding saves, so a match with an unusual rule keeps its slate.
+    private let compact: Bool
 
-    public init(home: String, away: String, tags: [String] = [], footnote: String? = nil, expanded: Bool = false) {
+    public init(home: String, away: String, tags: [String] = [], footnote: String? = nil, expanded: Bool = false,
+                compact: Bool = false) {
         self.home = home
         self.away = away
         self.tags = tags
         self.footnote = footnote
         self.expanded = expanded
+        self.compact = compact
     }
 
     /// The names' role. Held once so the row's height and the text agree. Both names take ONE
@@ -155,7 +160,7 @@ public struct ThroFixtureSlate: View {
         let role = nameRole
         let rowHeight = Self.nameRowHeight(role)
         ThroSlate {
-            VStack(spacing: expanded ? ThroSpacing.spacing6 : ThroSpacing.spacing5) {
+            VStack(spacing: expanded ? ThroSpacing.spacing6 : (compact ? ThroSpacing.spacing3 : ThroSpacing.spacing5)) {
                 HStack(alignment: .center, spacing: ThroSpacing.spacing4) {
                     name(home, alignment: .trailing, role: role, height: rowHeight)
                     ThroMark()
@@ -166,9 +171,14 @@ public struct ThroFixtureSlate: View {
                 }
                 .frame(height: rowHeight)
                 if !tags.isEmpty {
-                    HStack(spacing: ThroSpacing.spacing2) {
+                    // Wrapping, not one row. A match with a rule beyond the usual — double in, or the
+                    // pub rule that keeps the darts before a bust — has four or five tags, and one row
+                    // of them did not fit: `ViewThatFits` on the set-up screen then dropped the whole
+                    // slate and left a hole where the fixture had been. Found by looking at it.
+                    ThroTagFlow(spacing: ThroSpacing.spacing2) {
                         ForEach(tags, id: \.self) { tag in
                             Text(tag)
+                                .multilineTextAlignment(.center)
                                 .thro(ThroTypography.label.family(.sport).uppercase(true).tracking(em: 0.06))
                                 .foregroundStyle(ThroColor.colorTextOnBoard)
                                 .padding(.vertical, ThroSpacing.spacing2)
@@ -185,7 +195,7 @@ public struct ThroFixtureSlate: View {
                         .fixedSize(horizontal: false, vertical: true)
                 }
             }
-            .padding(.vertical, ThroSpacing.spacing7)
+            .padding(.vertical, compact ? ThroSpacing.spacing4 : ThroSpacing.spacing7)
             .padding(.horizontal, ThroSpacing.spacing5)
             .frame(maxWidth: .infinity, maxHeight: expanded ? .infinity : nil)
         }
@@ -263,5 +273,61 @@ public struct ThroChoiceRow<Control: View>: View {
             control
         }
         .accessibilityElement(children: .contain)
+    }
+}
+
+
+/// Tags laid out in centred rows that wrap, so a slate carries as many as a match has.
+public struct ThroTagFlow: Layout {
+    public var spacing: CGFloat
+
+    public init(spacing: CGFloat) { self.spacing = spacing }
+
+    public func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        let rows = arrange(width: proposal.width ?? .infinity, subviews: subviews)
+        let height = rows.map(\.height).reduce(0, +) + spacing * CGFloat(max(0, rows.count - 1))
+        let width = rows.map(\.width).max() ?? 0
+        return CGSize(width: proposal.width.map { min($0, width) } ?? width, height: height)
+    }
+
+    public func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        var y = bounds.minY
+        for row in arrange(width: bounds.width, subviews: subviews) {
+            var x = bounds.midX - row.width / 2
+            for index in row.items {
+                let size = measure(subviews[index], within: bounds.width)
+                subviews[index].place(at: CGPoint(x: x, y: y + (row.height - size.height) / 2),
+                                      proposal: ProposedViewSize(size))
+                x += size.width + spacing
+            }
+            y += row.height + spacing
+        }
+    }
+
+    /// A tag at its natural width, unless that is wider than the line — then at the line's width, so its
+    /// words wrap inside the box rather than the box running off both sides at the largest text sizes.
+    private func measure(_ view: LayoutSubview, within width: CGFloat) -> CGSize {
+        let natural = view.sizeThatFits(.unspecified)
+        guard width.isFinite, natural.width > width else { return natural }
+        return view.sizeThatFits(ProposedViewSize(width: width, height: nil))
+    }
+
+    private struct Row { var items: [Int] = []; var width: CGFloat = 0; var height: CGFloat = 0 }
+
+    /// Greedy rows: each tag goes on the current row if it fits, else starts the next one.
+    private func arrange(width: CGFloat, subviews: Subviews) -> [Row] {
+        var rows: [Row] = [Row()]
+        for index in subviews.indices {
+            let size = measure(subviews[index], within: width)
+            let needed = rows[rows.count - 1].items.isEmpty ? size.width : rows[rows.count - 1].width + spacing + size.width
+            if needed > width, !rows[rows.count - 1].items.isEmpty {
+                rows.append(Row())
+            }
+            let last = rows.count - 1
+            rows[last].width = rows[last].items.isEmpty ? size.width : rows[last].width + spacing + size.width
+            rows[last].height = max(rows[last].height, size.height)
+            rows[last].items.append(index)
+        }
+        return rows.filter { !$0.items.isEmpty }
     }
 }

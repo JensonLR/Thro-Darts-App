@@ -21,6 +21,9 @@ public struct WatchedEvent: Decodable, Equatable, Sendable {
         public let visitTotal: Int?
         public let dartsUsed: Int?
         public let dartsAtDouble: Int?
+        /// The darts, for a visit entered dart by dart (OD-023): replayed as darts, so a bust only the
+        /// darts can show — or one under keep-scored darts — comes out as it did at the oche.
+        public let darts: [String]?
         public let ending: String?
         public let seat: String?
     }
@@ -91,10 +94,11 @@ public enum MatchReplay {
         guard let first = f.throwFirst, first == "home" || first == "away",
               yours == "home" || yours == "away",
               let inRule = InRule(rawValue: f.inRule), let outRule = OutRule(rawValue: f.outRule),
+              let bustRule = BustRule(rawValue: f.bustRule ?? BustRule.restoreVisit.rawValue),
               f.startingScore > 1, f.legsTarget > 0 else { return nil }
         let format = MatchFormat(startingScore: f.startingScore, inRule: inRule, outRule: outRule,
                                  legs: Structure(mode: f.legsMode == "best_of" ? .bestOf : .firstTo, target: f.legsTarget),
-                                 throwFirst: PlayerId(first))
+                                 throwFirst: PlayerId(first), bustRule: bustRule)
         var state = MatchState.start(format: format, home: PlayerId("home"), away: PlayerId("away"))
         // A retraction names the visit it struck by its event id, which every event now carries.
         let struck = Set(events.filter { $0.type == "VisitRetracted" }.compactMap(\.correctsEventId))
@@ -107,8 +111,17 @@ public enum MatchReplay {
                 guard let id = e.eventId, !struck.contains(id),
                       let seat = e.payload.player, seat == "home" || seat == "away",
                       let total = e.payload.visitTotal else { continue }
-                let visit = Command.visit(PlayerId(seat), total, dartsUsed: e.payload.dartsUsed, dartsAtDouble: e.payload.dartsAtDouble)
-                if case .accepted(let next, _, _) = Engine.apply(state, visit) {
+                let visit: Command
+                if let names = e.payload.darts {
+                    // A name this build cannot read is a visit it cannot replay: it counts for nothing
+                    // here, as a refused visit does, rather than being read as the total beside it.
+                    let darts = names.compactMap(Dart.parse)
+                    guard darts.count == names.count else { continue }
+                    visit = .recordDarts(player: PlayerId(seat), darts: darts)
+                } else {
+                    visit = Command.visit(PlayerId(seat), total, dartsUsed: e.payload.dartsUsed, dartsAtDouble: e.payload.dartsAtDouble)
+                }
+                if case .accepted(let next, _, _, _) = Engine.apply(state, visit) {
                     state = next
                     visits += 1
                     last = WatchBoard.LastVisit(seat: seat, total: total, at: e.thrownAt)

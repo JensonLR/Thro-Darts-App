@@ -60,9 +60,13 @@ public struct ThroBoardHead: View {
         HStack(alignment: .top, spacing: ThroStage.columnGap) {
             column(home, alignment: .leading)
             VStack(spacing: 2) {
+                // One line, shrinking to the column: at the largest text sizes "0–0" broke after the dash and
+                // read as a score of "0–" over a stray "0".
                 Text(legs)
                     .thro(ThroTypography.heading1.family(.sport).weight(.bold).tracking(em: 0))
                     .foregroundStyle(ThroColor.colorTextOnBoard)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.5)
                 if let format {
                     Text(format)
                         .thro(ThroTypography.eyebrow)

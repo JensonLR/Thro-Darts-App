@@ -149,7 +149,38 @@ public final class MatchSession: ObservableObject {
     public func remaining(_ seat: Seat) -> Int { state.remaining[seat.playerId] ?? record.startingScore }
     public func legsWon(_ seat: Seat) -> Int { state.legsWonTotal[seat.playerId] ?? 0 }
     public var checkable: Set<Int> { RuleTables.checkouts(record.outRule) }
-    public var throwerOnAFinish: Bool { thrower.map { checkable.contains(remaining($0)) } ?? false }
+
+    /// What the darts entered so far have done, read by the engine (OD-023). Nil with nothing entered.
+    ///
+    /// Everything the screen says mid-visit — what is left, whether the visit is already decided,
+    /// which route is still on — comes from this one reading, so it cannot disagree with what the
+    /// engine will record when the visit is entered.
+    public var throwerReading: Darts.Reading? {
+        guard let seat = thrower, !darts.isEmpty else { return nil }
+        return DartVisit.read(darts, from: remaining(seat), format: record.format,
+                              opened: state.opened[seat.playerId] ?? true)
+    }
+
+    /// What the thrower has left after the darts entered so far — the number a player checks against
+    /// as each dart lands. The start of the visit when nothing is entered.
+    public var throwerLeft: Int? {
+        guard let seat = thrower else { return nil }
+        return throwerReading?.left ?? remaining(seat)
+    }
+
+    /// Darts still in hand this visit.
+    public var dartsLeftInHand: Int { throwerReading?.dartsLeft ?? Darts.hand }
+
+    /// Whether a finish is on with the darts in hand — not "whether the score is under 171". After
+    /// `T20` from 100 the thrower is on 40 with two darts; after `20` from 50 they are on 30 with two;
+    /// after two darts from 100 that leave 80, they are not on a finish at all, because 80 needs two.
+    public var throwerOnAFinish: Bool {
+        guard let left = throwerLeft, !throwerMustOpen, throwerReading?.settled == nil else { return false }
+        return Checkout.isPossible(left, dartsLeft: dartsLeftInHand, record.outRule)
+    }
+
+    /// Whether the visit in hand is already decided — finished or bust — so no further dart was thrown.
+    public var visitDecided: Bool { throwerReading?.settled.map { $0 != .scored } ?? false }
 
     // MARK: - ending a match short (PD-016)
 
@@ -295,9 +326,13 @@ public final class MatchSession: ObservableObject {
     /// this match's out-rule — which is the part that would be a defect to get wrong.
     ///
     /// The export's `CheckoutCard` already draws a route; it had simply never been given one.
+    ///
+    /// **With the darts in hand** (OD-023). It follows the darts: after `T20` from 100 it is `D20`, with
+    /// two darts left; after two darts that leave a number one dart cannot finish, it is empty rather
+    /// than a three-dart route nobody can throw. It never claims a finish that is not on.
     public var throwerRoute: [String] {
-        guard let seat = thrower else { return [] }
-        return RuleTables.route(remaining(seat), record.outRule) ?? []
+        guard throwerOnAFinish, let left = throwerLeft else { return [] }
+        return Checkout.route(left, dartsLeft: dartsLeftInHand, record.outRule) ?? []
     }
 
     /// Whether the thrower still has to open (PD-008). Nothing they score counts until they do, and
@@ -305,7 +340,7 @@ public final class MatchSession: ObservableObject {
     /// why is the worst thing a scoring app can do.
     public var throwerMustOpen: Bool {
         guard let seat = thrower else { return false }
-        return record.inRule.requiresOpening && !(state.opened[seat.playerId] ?? true)
+        return record.inRule.requiresOpening && !(throwerReading?.opened ?? state.opened[seat.playerId] ?? true)
     }
     public var inRuleLabel: String? {
         switch record.inRule {
@@ -328,6 +363,12 @@ public final class MatchSession: ObservableObject {
         case .master: return "Master out"
         case .straight: return "Straight out"
         }
+    }
+
+    /// The local bust rule, named where it applies and silent where it does not: the standard rule
+    /// is what everybody expects and needs no label.
+    public var bustRuleLabel: String? {
+        record.bustRule == .keepScoredDarts ? "Keep darts before a bust" : nil
     }
 
     // MARK: - keypad
@@ -378,6 +419,13 @@ public final class MatchSession: ObservableObject {
     public func dart(_ dart: ThroDart) {
         guard prompt == nil, retraction == nil, announcement == nil, !isComplete else { return }
         bust = nil
+        // A dart after the visit was decided was never thrown. Taking it would turn a checkout into a
+        // bust on a stray tap, which is the costliest mis-key there is; the keypad closes its sectors
+        // too, and this is the rule behind that.
+        if visitDecided {
+            notice = Notice(text: Copy.visitAlreadyDecided, tone: .neutral)
+            return
+        }
         notice = nil
         darts.add(dart)
     }
@@ -401,35 +449,21 @@ public final class MatchSession: ObservableObject {
     /// and the player has nothing left to enter. Anything else and Enter stays out of the light,
     /// because a two-dart entry that neither finishes nor busts is a visit the engine refuses
     /// (`DARTS_USED_INVALID`), and a refusal a player cannot act on is a dead end.
-    public var dartsMayBeEntered: Bool {
-        guard !darts.isEmpty, let seat = thrower else { return false }
-        return darts.handIsSpent
-            || DartVisit.settles(darts, from: remaining(seat), outRule: record.outRule)
-    }
+    public var dartsMayBeEntered: Bool { throwerReading?.settled != nil }
 
     /// Commit what was thrown.
     ///
-    /// **This is where per-dart entry pays for itself.** Three darts answer PD-001's two questions —
-    /// how many darts were used, and how many were thrown at a double — so the player is not stopped
-    /// and asked what they have already told the app. The command is otherwise identical to the one
-    /// a typed total produces: same `visitTotal`, same engine, same journal columns.
+    /// **This is where per-dart entry pays for itself.** The darts go to the engine as darts, and it
+    /// answers PD-001's two questions — how many darts were used, and how many were thrown at a double
+    /// — from what was thrown, so the player is never stopped and asked. It also decides the bust a
+    /// total cannot see: a single 20 from 20 is recorded as the bust it is, not refused (OD-023).
     public func enterDarts() {
         guard prompt == nil, retraction == nil, announcement == nil, !isComplete else { return }
         guard !darts.isEmpty, let seat = thrower, dartsMayBeEntered else { return }
         bust = nil
         notice = nil
-        // Darts that cannot have finished the leg are refused here, with the dart named, rather
-        // than reaching an engine that would reject some of them for a reason a player cannot act
-        // on and accept the rest as a leg won. See `DartVisit.illegalFinish`.
-        if let offending = DartVisit.illegalFinish(darts, from: remaining(seat), outRule: record.outRule) {
-            notice = Notice(text: Copy.finishNotAllowed(offending.written, outRule: record.outRule),
-                            tone: .error)
-            return
-        }
-        let carried = DartVisit.evidence(darts, from: remaining(seat), outRule: record.outRule)
-        let total = darts.total
-        darts = ThroDartEntry()
-        submit(total, dartsUsed: carried.dartsUsed, dartsAtDouble: carried.dartsAtDouble)
+        let entered = darts
+        submit(DartVisit.command(entered, player: seat.playerId), shown: entered.total)
     }
 
     /// Dismisses the bust or leg announcement; scoring resumes.
@@ -523,19 +557,25 @@ Copy.log(error)
 
     func submit(_ total: Int, dartsUsed: Int?, dartsAtDouble: Int?) {
         guard let seat = thrower else { return }
+        submit(Command.visit(seat.playerId, total, dartsUsed: dartsUsed, dartsAtDouble: dartsAtDouble), shown: total)
+    }
+
+    /// One visit, as a total or as darts. `shown` is what the player entered — the total they typed,
+    /// or what their darts add up to — for the words on a refusal.
+    func submit(_ command: Command, shown: Int) {
+        guard let seat = thrower else { return }
         let before = remaining(seat)
         let leg = state.currentLeg
-        let command = Command.visit(seat.playerId, total, dartsUsed: dartsUsed, dartsAtDouble: dartsAtDouble)
 
         switch Engine.apply(state, command) {
         case .rejected(let reason):
             // The entry stays on screen so the player can see what was refused and fix it.
-            notice = Notice(text: Copy.rejected(reason, total: total), tone: .error)
+            notice = Notice(text: Copy.rejected(reason, total: shown), tone: .error)
 
-        case let .accepted(next, effect, bustReason):
+        case let .accepted(next, effect, bustReason, reading):
             let written: JournalEntry
             do {
-                written = try journal.append(command, to: record.id)   // flush …
+                written = try journal.append(command, to: record.id, reading: reading)   // flush …
             } catch {
     Copy.log(error)
             notice = Notice(text: Copy.notSaved(error), tone: .error)
@@ -543,20 +583,22 @@ Copy.log(error)
             }
             let ordinal = visits.filter { $0.seat == seat && $0.legOrdinal == leg }.count + 1
             let won = effect == .leg_won || effect == .set_won || effect == .match_won
+            let after = won ? 0 : (next.remaining[seat.playerId] ?? before)
             visits.append(ReplayedVisit(
                 seat: seat, legOrdinal: leg, visitOrdinal: ordinal,
-                visitTotal: total, dartsUsed: dartsUsed, dartsAtDouble: dartsAtDouble,
+                visitTotal: written.visitTotal, dartsUsed: written.dartsUsed, dartsAtDouble: written.dartsAtDouble,
                 remainingBefore: before,
-                remainingAfter: won ? 0 : (next.remaining[seat.playerId] ?? before),
-                bust: effect == .bust, wonLeg: won
+                remainingAfter: after,
+                bust: effect == .bust, wonLeg: won,
+                scored: reading?.scored, darts: written.darts, bustAt: reading?.bustAt
             ))
             // And on the board, in the same breath. Appended rather than re-read for the same
             // reason `visits` is: a full replay on every visit is work a player waits for, sixty
             // times a leg. `deviceSeq` comes from the row that was actually written, so the board's
             // identity for this line is the journal's own.
             ledger.append(LedgerEntry(
-                seat: seat, legOrdinal: leg, visitOrdinal: ordinal, visitTotal: total,
-                remainingAfter: won ? 0 : (next.remaining[seat.playerId] ?? before),
+                seat: seat, legOrdinal: leg, visitOrdinal: ordinal, visitTotal: written.visitTotal,
+                remainingAfter: after,
                 struck: false, deviceSeq: written.deviceSeq))
             // A visit written after an agreement makes that agreement stale (PD-011). It is read
             // back rather than reasoned about, so the screen and the journal cannot disagree.
@@ -569,9 +611,14 @@ Copy.log(error)
             switch effect {
             case .bust:
                 // The restored score stays red on the hero until the next key; the card over it is
-                // for the opponent to see (PD-005).
-                bust = BustDisplay(seat: seat, restored: before)
-                announcement = .bust(seat: seat, restored: before, reason: Copy.bustReason(bustReason, total: total), next: thrower)
+                // for the opponent to see (PD-005). It is the ENGINE's remaining, not the score the
+                // visit began on: under keep-scored darts the darts before the bust stand (OD-023).
+                bust = BustDisplay(seat: seat, restored: after)
+                announcement = .bust(seat: seat, restored: after,
+                                     reason: Copy.bustReason(bustReason, total: written.visitTotal,
+                                                             bustAt: reading?.bustAt, darts: written.darts,
+                                                             kept: record.bustRule == .keepScoredDarts ? reading?.scored : nil),
+                                     next: thrower)
             case .leg_won, .set_won:
                 announcement = .legWon(leg: leg, winner: seat, legsHome: legsWon(.home), legsAway: legsWon(.away), next: thrower)
             case .scored, .match_won:
@@ -587,12 +634,14 @@ Copy.log(error)
         let records = visits.filter { $0.seat == seat }.map {
             VisitRecord(legOrdinal: $0.legOrdinal, visitOrdinal: $0.visitOrdinal, visitTotal: $0.visitTotal,
                         dartsUsed: $0.dartsUsed, bust: $0.bust, remainingBefore: $0.remainingBefore,
-                        remainingAfter: $0.remainingAfter, wonLeg: $0.wonLeg, dartsAtDouble: $0.dartsAtDouble)
+                        remainingAfter: $0.remainingAfter, wonLeg: $0.wonLeg, dartsAtDouble: $0.dartsAtDouble,
+                        scored: $0.scored)
         }
         return [
             StatPresentation.line("3-dart average", Statistics.threeDartAverage(records), kind: .average),
             StatPresentation.line("First 9", Statistics.firstNineAverage(records), kind: .average),
-            StatPresentation.line("Checkout %", Statistics.checkoutPercentage(records, checkable: checkable), kind: .percent),
+            StatPresentation.line("Checkout %", Statistics.checkoutPercentage(records, checkable: checkable), kind: .percent,
+                                  sampleUnit: "darts at a double"),
             StatPresentation.line("180s", Statistics.maximums(records), kind: .count),
             StatPresentation.line("Highest checkout", Statistics.highestCheckout(records), kind: .count),
             StatPresentation.line("140+", Statistics.scoresAtLeast(records, threshold: 140), kind: .count),
@@ -623,7 +672,8 @@ public enum PersonSummary {
         let records = history.visits.map {
             VisitRecord(legOrdinal: $0.legOrdinal, visitOrdinal: $0.visitOrdinal, visitTotal: $0.visitTotal,
                         dartsUsed: $0.dartsUsed, bust: $0.bust, remainingBefore: $0.remainingBefore,
-                        remainingAfter: $0.remainingAfter, wonLeg: $0.wonLeg, dartsAtDouble: $0.dartsAtDouble)
+                        remainingAfter: $0.remainingAfter, wonLeg: $0.wonLeg, dartsAtDouble: $0.dartsAtDouble,
+                        scored: $0.scored)
         }
         let checkout: Stat
         if let only = history.outRules.first, history.outRules.count == 1,
@@ -641,7 +691,7 @@ public enum PersonSummary {
         // the difference between "what you have been scoring" and "how good you are" is the whole
         // reason this is allowed to ship while that stays open. The window is in the label, because
         // a number without its sample is a claim rather than a description.
-        let form = Statistics.recentForm(records)
+        let form = Statistics.recentForm(records, completedLegs: history.completedLegs)
         var formLine = StatPresentation.line(PersonSummary.formLabel, form.average, kind: .average)
         if form.isAvailable {
             formLine = StatLine(label: formLine.label, value: formLine.value,
@@ -657,7 +707,7 @@ public enum PersonSummary {
             StatLine(label: "Legs won", value: "\(history.legsWon)", note: nil),
             formLine,
             StatPresentation.line("3-dart average", Statistics.threeDartAverage(records), kind: .average),
-            StatPresentation.line("Checkout %", checkout, kind: .percent),
+            StatPresentation.line("Checkout %", checkout, kind: .percent, sampleUnit: "darts at a double"),
             StatPresentation.line("180s", Statistics.maximums(records), kind: .count),
             StatPresentation.line("Highest checkout", Statistics.highestCheckout(records), kind: .count),
         ]
@@ -758,7 +808,7 @@ public enum DeviceSummary {
                         VisitRecord(legOrdinal: $0.legOrdinal + legOffset, visitOrdinal: $0.visitOrdinal,
                                     visitTotal: $0.visitTotal, dartsUsed: $0.dartsUsed, bust: $0.bust,
                                     remainingBefore: $0.remainingBefore, remainingAfter: $0.remainingAfter,
-                                    wonLeg: $0.wonLeg, dartsAtDouble: $0.dartsAtDouble)
+                                    wonLeg: $0.wonLeg, dartsAtDouble: $0.dartsAtDouble, scored: $0.scored)
                     })
                     legOffset += mine.map(\.legOrdinal).max() ?? 0
                 }
@@ -837,11 +887,20 @@ public struct StatLine: Identifiable, Equatable, Sendable {
 public enum StatPresentation {
     public enum Kind: Sendable { case average, percent, count }
 
-    public static func line(_ label: String, _ stat: Stat, kind: Kind) -> StatLine {
+    /// - Parameter sampleUnit: what the sample counts, for a percentage — "darts at a double". An exact
+    ///   percentage then says what it is out of: "100%" from one dart is a different claim from "100%" from
+    ///   forty, and the figure alone made them look the same.
+    public static func line(_ label: String, _ stat: Stat, kind: Kind, sampleUnit: String? = nil) -> StatLine {
         switch stat.basis {
         case .exact:
             // Exact can still carry a disclosure — a first nine that excludes legs ended before nine darts.
-            return StatLine(label: label, value: format(stat.value ?? 0, kind), note: stat.note,
+            var note = stat.note
+            if kind == .percent, let unit = sampleUnit, let v = stat.value, stat.sampleSize > 0 {
+                let n = stat.sampleSize
+                let of = "\(Int((v * Double(n) / 100).rounded())) of \(n) \(unit)"
+                note = [of, note].compactMap { $0 }.joined(separator: ". ")
+            }
+            return StatLine(label: label, value: format(stat.value ?? 0, kind), note: note,
                             confidence: .exact)
         case .bounded:
             let lower = format(stat.lower ?? 0, kind), upper = format(stat.upper ?? 0, kind)
@@ -879,17 +938,40 @@ public enum Copy {
         // total no sequence starting with a double can make did not happen. 180 is three trebles.
         case .IMPOSSIBLE_OPENING_TOTAL:
             return "\(total) cannot be scored starting on a double. Enter only what counted, from the double."
+        // Keypad darts are always on the board, so this is a defect rather than a mis-key; it is still
+        // a sentence, because a refusal a player cannot read is a dead end.
+        case .DART_INVALID: return "One of those darts is not on the board."
+        // Keep-scored darts (OD-023): what stands after a bust depends on which darts came first.
+        case .DARTS_REQUIRED:
+            return "That is a bust, and this match keeps the darts before a bust. Enter this visit dart by dart."
         }
     }
 
-    /// The engine's reason for a bust when it is more than "below zero", in the harness's words.
-    public static func bustReason(_ reason: BustReason?, total: Int) -> String? {
-        switch reason {
-        case .REMAINDER_ONE: return "That leaves 1."
-        case .NOT_CHECKOUT_POSSIBLE: return "\(total) cannot be finished on a double."
-        case .BELOW_ZERO, .none: return nil
+    /// The engine's reason for a bust, in words a player at the board can check.
+    ///
+    /// With darts it names the dart that bust (OD-023) — the one a player needs, because "bust" alone
+    /// does not say which of three darts did it. Under keep-scored darts it says what stood, because
+    /// that is the number that differs from what most players expect.
+    public static func bustReason(_ reason: BustReason?, total: Int, bustAt: Int? = nil,
+                                  darts: [Dart]? = nil, kept: Int? = nil) -> String? {
+        let which: String? = bustAt.flatMap { i in
+            darts.flatMap { i < $0.count ? DartVisit.keypadDart($0[i])?.written : nil }
         }
+        let cause: String?
+        switch reason {
+        case .REMAINDER_ONE: cause = which.map { "\($0) leaves 1." } ?? "That leaves 1."
+        case .NOT_CHECKOUT_POSSIBLE: cause = "\(total) cannot be finished on a double."
+        case .NOT_A_FINISHING_DART: cause = which.map { "\($0) reaches zero, and this leg has to end on a double." }
+                                         ?? "That reaches zero on a dart that cannot finish."
+        case .BELOW_ZERO: cause = which.map { "\($0) goes below zero." }
+        case .none: cause = nil
+        }
+        guard let kept, kept > 0 else { return cause }
+        return [cause, "The \(kept) before it stands."].compactMap { $0 }.joined(separator: " ")
     }
+
+    /// A dart keyed after the visit was already finished or bust.
+    public static let visitAlreadyDecided = "That visit is already decided — press Enter to record it."
 
     /// What the board says when a visit would not go into the journal.
     ///
@@ -931,23 +1013,6 @@ public enum Copy {
     }
 
     public static let nothingToUndo = "Nothing to undo."
-
-    /// What the board says when the darts entered reach zero on a dart that cannot end a leg.
-    ///
-    /// It names the dart, names the rule, and gives the one thing the player can do. It does **not**
-    /// say the visit was a bust, because THRØ cannot record that today and a sentence claiming
-    /// otherwise would be the app describing something it did not do (OD-023).
-    public static func finishNotAllowed(_ dart: String, outRule: OutRule) -> String {
-        let ending: String
-        switch outRule {
-        case .double: ending = "a double"
-        case .master: ending = "a double or a treble"
-        case .straight: ending = "a scoring dart"
-        }
-        return "That reaches zero on \(dart), and this leg has to end on \(ending). Take that dart "
-             + "back. THRØ records a visit rather than three darts, so it cannot yet score the bust "
-             + "this actually is."
-    }
 
     public static func undone(_ player: String, _ total: Int, next: String) -> String {
         next.isEmpty ? "Undone: \(player)'s \(total)." : "Undone: \(player)'s \(total). \(next) to throw."

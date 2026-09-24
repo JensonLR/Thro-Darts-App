@@ -6,6 +6,10 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.ui.semantics.Role
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawingPadding
@@ -62,7 +66,7 @@ public fun ThroResultScreen(session: ThroSession, onAgain: () -> Unit) {
             Box(
                 Modifier.fillMaxWidth().padding(top = 18.dp)
                     .background(colors.throChalk.copy(alpha = 0.16f), RoundedCornerShape(10.dp))
-                    .clickable { onAgain() }
+                    .clickable(role = Role.Button) { onAgain() }
                     .padding(vertical = 16.dp),
                 contentAlignment = Alignment.Center,
             ) {
@@ -93,12 +97,17 @@ private fun Attestation(session: ThroSession, seat: Seat) {
 @Composable
 private fun Choice(label: String, lit: Boolean, colour: androidx.compose.ui.graphics.Color, onPress: () -> Unit) {
     val colors = LocalThroColors.current
+    // At least 48dp each way: this is pressed once, by somebody who has just finished a match, and a target a
+    // thumb can miss is a result nobody meant to agree to.
     Box(
         Modifier
+            .heightIn(min = 48.dp)
+            .widthIn(min = 48.dp)
             .background(if (lit) colour.copy(alpha = 0.24f) else colors.throChalk.copy(alpha = 0.08f),
                         RoundedCornerShape(8.dp))
-            .clickable { onPress() }
-            .padding(horizontal = 14.dp, vertical = 10.dp),
+            .selectable(selected = lit, role = Role.Button) { onPress() }
+            .padding(horizontal = 14.dp),
+        contentAlignment = Alignment.Center,
     ) {
         ThroText(label, ThroTypography.labelStrong.weight(if (lit) FontWeight.Bold else FontWeight.Normal),
                  if (lit) colour else colors.throChalk.copy(alpha = 0.7f))

@@ -25,6 +25,9 @@ public final class ThroMatchesModel: ObservableObject {
     @Published public private(set) var codeFor: UUID?
     /// The last refusal or failure, in the server's own words where it gave some.
     @Published public private(set) var note: String?
+    /// Why the list on screen is not the latest, when a refresh failed with a list already showing. Kept
+    /// apart from `note`, which other acts set: this one is about the list, and is said beside it.
+    @Published public private(set) var stale: String?
     @Published public private(set) var working = false
 
     public init() {}
@@ -38,9 +41,9 @@ public final class ThroMatchesModel: ObservableObject {
     public func load(_ api: ThroAPI?, signedIn: Bool) async {
         guard let api, signedIn else { list = .idle; return }
         if case .loaded = list {} else { list = .loading }
-        do { list = .loaded(try await api.myMatches()) } catch {
+        do { list = .loaded(try await api.myMatches()); stale = nil } catch {
             let why = ThroAPI.refusal(error) ?? LeaguesModel.explain(error, what: "your matches on THRØ")
-            if case .loaded = list { note = why } else { list = .failed(why) }
+            if case .loaded = list { stale = why } else { list = .failed(why) }
         }
     }
 
@@ -247,6 +250,10 @@ struct ThroMatchesBlock: View {
             case .failed(let why):
                 Note(why, icon: .info)
             case .loaded(let records):
+                // A list that could not be refreshed says so where it is, rather than passing for current.
+                if let stale = model.stale {
+                    Note("Not the latest — \(stale)", icon: .info)
+                }
                 if records.isEmpty {
                     Note("**A match you send shows here**, with where it stands: your word, or agreed by you both once the other player confirms it.")
                 } else {

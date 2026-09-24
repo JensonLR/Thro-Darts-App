@@ -153,8 +153,15 @@ public struct DoubleElimination: Equatable, Sendable {
     }
 
     /// Whoever came through a losers' match, held as a reference while it is unplayed.
+    ///
+    /// **A match with nobody on either side sends nobody through.** With five entrants, three
+    /// winners' walkovers drop nobody, and one losers' first-round match is a bye against a bye. It
+    /// has no winner and never will, so holding it as *winner of* that match would wait forever on
+    /// a place nothing fills — and the losers' side, and the grand final behind it, could never be
+    /// drawn. It is an empty position, which is what a bye is.
     private static func through(_ match: DrawMatch) -> Side {
-        match.winner.map(Side.entrant) ?? .winnerOf(round: match.round, slot: match.slot)
+        if match.home.isBye && match.away.isBye { return .bye }
+        return match.winner.map(Side.entrant) ?? .winnerOf(round: match.round, slot: match.slot)
     }
 
     private static func key(_ bracket: Bracket, _ round: Int, _ slot: Int) -> String {

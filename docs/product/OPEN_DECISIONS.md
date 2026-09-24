@@ -486,7 +486,9 @@ then they will not remember.
 because a screen needed one, not because they were chosen.
 
 ## OD-023 — What THRØ does about a bust only the darts can show
-**Status: OPEN.** Raised 2026-09-09, by per-dart entry making it visible for the first time.
+**Status: DECIDED** — closed by PD-191 (2026-09-24): the engine takes darts, in Swift and Kotlin together behind the corpus (spec 1.4.0), and records the bust. The original text is kept below.
+
+Raised 2026-09-09, by per-dart entry making it visible for the first time.
 
 **Impact:** every leg scored dart by dart, under double-out and master-out
 

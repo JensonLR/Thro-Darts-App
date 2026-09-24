@@ -52,8 +52,14 @@ public struct TeamFixturesScreen: View {
                         // under its own heading rather than buried in date order among games months away.
                         let now = Date()
                         let undecided = ours.filter { $0.decided == nil }
-                        let overdue = undecided.filter { $0.scheduledAt < now }.sorted { $0.scheduledAt > $1.scheduledAt }
-                        let toPlay = undecided.filter { $0.scheduledAt >= now }.sorted { $0.scheduledAt < $1.scheduledAt }
+                        // Waiting on a result: the night is over, not merely started — a game an hour in is
+                        // being played — and the fixture was not put off. A postponed fixture has no result to
+                        // wait for; it stays with the ones to play, so nothing falls out of both lists.
+                        let overdue = undecided
+                            .filter { $0.state != "postponed" && $0.scheduledAt < now.addingTimeInterval(-3 * 3600) }
+                            .sorted { $0.scheduledAt > $1.scheduledAt }
+                        let overdueIds = Set(overdue.map(\.fixtureId))
+                        let toPlay = undecided.filter { !overdueIds.contains($0.fixtureId) }.sorted { $0.scheduledAt < $1.scheduledAt }
                         let played = ours.filter { $0.decided != nil }.reversed()
                         if ours.isEmpty {
                             Text(season.accepted == false
@@ -441,7 +447,12 @@ public struct TeamFixtureScreen: View {
     }
 
     private func loadMatches() async {
-        do { matches = try await api.myMatches() } catch { note = ThroAPI.refusal(error) ?? "Your matches could not be read just now." }
+        do { matches = try await api.myMatches() } catch {
+            note = ThroAPI.refusal(error) ?? "Your matches could not be read just now."
+            // Back to the button, which is the retry: left citing with no list, the section said "One moment…"
+            // for ever under a note saying the read had failed.
+            citing = false
+        }
     }
 
     private func say(_ status: String, for mine: TeamFixtureView.Member, in v: TeamFixtureView) async {

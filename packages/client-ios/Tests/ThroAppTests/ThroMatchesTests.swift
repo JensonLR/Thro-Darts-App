@@ -105,7 +105,8 @@ final class ThroMatchesTests: XCTestCase {
         await model.load(server, signedIn: true)
         await model.load(server, signedIn: true)
         XCTAssertEqual(model.records.count, 1, "a list already shown is not swapped for an error")
-        XCTAssertEqual(model.note, "THRØ is resting.")
+        // Said beside the list, which the block draws — the shared note was set and shown nowhere near it.
+        XCTAssertEqual(model.stale, "THRØ is resting.")
     }
 
     // MARK: - the words
