@@ -241,6 +241,16 @@ class SeedTest {
             assertNotNull(blueBell.venue); assertEquals("TS16 0JF", blueBell.venue!!.postcode)
             assertTrue(blueBell.venue!!.basis!!.startsWith("inferred"))
             assertEquals("LeagueRepublic", thursday.sources.single().source)
+            // Sources are read for every league at once (PD-195); each league still carries exactly its own.
+            for (l in all) {
+                val urls = c.createStatement().use { st ->
+                    st.executeQuery("SELECT DISTINCT source_url FROM competition.source_record WHERE subject_kind = 'league' AND subject_id = '${l.leagueId}'")
+                        .use { rs -> buildSet { while (rs.next()) add(rs.getString(1)) } }
+                }
+                assertTrue(urls.isNotEmpty(), "${l.name} was imported with a source")
+                assertEquals(urls, l.sources.map { it.url }.toSet(), "${l.name} carries its own sources and no other league's")
+                assertEquals(l.sources, Leagues(c).one(l.leagueId)!!.sources, "and the single read agrees with the list")
+            }
 
             assertEquals(1, Leagues(c).all(locality = "redcar").size)
             assertEquals(0, Leagues(c).all(locality = "Carlisle").size)

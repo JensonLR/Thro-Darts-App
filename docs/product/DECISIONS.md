@@ -7928,3 +7928,25 @@ and the Teams screen no longer says the seeding is "the order they were entered"
 
 **Android asks PD-001's two questions** in Total mode, as iOS does, so a checkout percentage from an Android
 match is computable; "Not sure" is recorded as unknown, never zero.
+
+## PD-195 — Discover waited five seconds for 329 questions
+
+Back after five weeks, the first thing measured: `GET /v1/leagues`, which Discover and the web's league list read,
+took 5.1–5.9 s with the server warm (`/healthz` 0.46 s), for 152 KB. `Leagues.all` asked for each league's sources
+one league at a time, from inside the loop over the main query: 329 round trips. The API runs in Render's Frankfurt
+region and the database in Neon's London one (`aws-eu-west-2`), about 15 ms apart, and 329 × 15 ms is the five
+seconds. Each lookup was indexed and cheap; the network was the whole cost, which is why a local run never showed it.
+
+The sources are now one grouped read, keyed by league, the way `runHere()` and `counts()` already were. `SeedTest`
+holds that each league carries exactly its own sources and that the single-league read agrees with the list.
+
+**Two tests that expired on the calendar.** `EventHttpTest` and `EntrantsHttpTest` fixed their events in October
+2026. A scoring grant's `issued_at` and a check-in's `checked_in_at` are stamped by the database's clock, not the
+test's, so once October passed each grant expired before it was issued and the suite went red with no code
+changed. The events now happen next year whenever the suite runs; the team's membership starts on a fixed past
+date, because the check-in trigger reads it against the same real clock.
+
+**Not changed, recorded:** every query on every request still crosses Frankfurt–London. The other per-request
+paths are not known to loop like this one did, but each one pays the 15 ms per statement. Putting the API and the
+database in one region is the larger fix and is the founder's to decide (Render has no London region; Neon has
+Frankfurt).

@@ -178,6 +178,12 @@ site's dashboard (`/league/*` → `/league.html`, `/event/*` → `/event.html`, 
 a team of walk-ups, and a walk-up claiming their player (both deliberately left: PD-130 says why; pairs with a walk-up are PD-130, done). (The captain's *say it* is PD-129, done the same evening: held-out about two in three first time, misses failing safe.) (A proposed
 venue on a rearrangement is PD-128, done the same evening.) (The single-league read, `GET /v1/leagues/{id}`, followed the same evening.)
 
+## 30 October: back after five weeks (PD-195)
+
+Production was healthy (V060, 688da2a, CI green, TestFlight build 22). `/v1/leagues` took ~5 s warm: 329 per-league
+source queries across Frankfurt (Render) to London (Neon). Now one read. Two event tests had dates fixed in October
+2026 and went red when the month passed; they run next year now. Open: one region for API and database (PD-195).
+
 ## Frontier (what is next, in order)
 
 1. ~~Secretary HTTP surface (PD-107, PD-108), points rules / division moves / transfers (PD-112), withdrawing a

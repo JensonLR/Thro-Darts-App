@@ -8,6 +8,8 @@ import io.ktor.client.statement.HttpResponse
 import io.ktor.client.statement.bodyAsText
 import io.ktor.server.testing.testApplication
 import java.time.Instant
+import java.time.LocalDate
+import java.time.ZoneOffset
 import java.util.UUID
 import kotlin.test.Test
 import kotlin.test.assertTrue
@@ -17,6 +19,10 @@ import thro.api.http.thro
 import thro.authz.ObjectRef
 import thro.authz.ObjectType
 import thro.competition.MembershipRole
+
+// The scenario runs next year, whenever the suite runs: a scoring grant is issued on the database's own clock,
+// so an event fixed in a calendar year expires before it is issued once that year has passed (PD-195).
+private val nextYear = LocalDate.now(ZoneOffset.UTC).year + 1
 
 /**
  * The knockout's other shapes (PD-115): pairs and teams as entrants, seeds the draw honours, and boards a tie is
@@ -41,7 +47,8 @@ class EntrantsHttpTest {
             println("  PASS  $name")
             passed++
         }
-        val t0 = Instant.parse("2026-09-01T18:00:00Z")
+        // Membership is read at check-in against the database's clock, so the side was formed in the past.
+        val t0 = Instant.parse("2025-09-01T18:00:00Z")
         val device = UUID.randomUUID()
         fun person(sub: String, name: String): UUID {
             val s = accounts.signIn("apple", sub, device)
@@ -58,7 +65,7 @@ class EntrantsHttpTest {
         orgs.addMember(riverside, ade, MembershipRole.ADMIN, from = t0); orgs.addMember(riverside, sam, MembershipRole.PLAYER, from = t0)
         orgs.addMember(grange, gil, MembershipRole.ADMIN, from = t0)
         rel.grant(ade, "admin", ObjectRef(ObjectType.TEAM, riverside.toString())); rel.grant(gil, "admin", ObjectRef(ObjectType.TEAM, grange.toString()))
-        var clock = Instant.parse("2026-09-16T12:00:00Z")
+        var clock = Instant.parse("${nextYear}-09-16T12:00:00Z")
 
         testApplication {
             application { thro(Deps(connect = { TestDatabase.connect() }, authenticator = Authenticator.Dev(), now = { clock })) }
@@ -69,7 +76,7 @@ class EntrantsHttpTest {
             fun idOf(text: String, key: String) = Regex("\"$key\":\"([0-9a-f-]{36})\"").find(text)?.groupValues?.get(1)
 
             // --- seeds (a singles event) -----------------------------------------------------------------------------
-            val singles = idOf(post("/v1/events", """{"name":"Seeded Singles","startsAt":"2026-10-10T11:00:00Z","sessionEndsAt":"2026-10-10T22:00:00Z","venueLabel":"upstairs"}""", lee).bodyAsText(), "eventId")!!
+            val singles = idOf(post("/v1/events", """{"name":"Seeded Singles","startsAt":"${nextYear}-10-10T11:00:00Z","sessionEndsAt":"${nextYear}-10-10T22:00:00Z","venueLabel":"upstairs"}""", lee).bodyAsText(), "eventId")!!
             for (p in listOf(alice, bob, cara, dave)) post("/v1/events/$singles/entries", "{}", p)
             check("seeding is the organiser's", post("/v1/events/$singles/entries/$dave/seed", """{"seed":1}""", alice).status.value == 403)
             check("a seed is a positive number", post("/v1/events/$singles/entries/$dave/seed", """{"seed":0}""", lee).status.value == 400)
@@ -90,8 +97,8 @@ class EntrantsHttpTest {
             check("the organiser sends the tie to Board 1, and the page says so", post("/v1/events/$singles/ties/$tie/board", """{"label":"Board 1"}""", lee).status.value == 200 && get("/v1/events/$singles", null).bodyAsText().contains("\"tieId\":\"$tie\"[^}]*\"board\":\"Board 1\"".toRegex()))
 
             // --- pairs ---------------------------------------------------------------------------------------------
-            val doubles = idOf(post("/v1/events", """{"name":"Friday Doubles","startsAt":"2026-10-16T19:00:00Z","sessionEndsAt":"2026-10-16T23:00:00Z","venueLabel":"upstairs","entrantKind":"pair"}""", lee).bodyAsText(), "eventId")!!
-            check("a kind THRØ does not run is refused", post("/v1/events", """{"name":"Odd","startsAt":"2026-10-16T19:00:00Z","sessionEndsAt":"2026-10-16T23:00:00Z","entrantKind":"trio"}""", lee).status.value == 400)
+            val doubles = idOf(post("/v1/events", """{"name":"Friday Doubles","startsAt":"${nextYear}-10-16T19:00:00Z","sessionEndsAt":"${nextYear}-10-16T23:00:00Z","venueLabel":"upstairs","entrantKind":"pair"}""", lee).bodyAsText(), "eventId")!!
+            check("a kind THRØ does not run is refused", post("/v1/events", """{"name":"Odd","startsAt":"${nextYear}-10-16T19:00:00Z","sessionEndsAt":"${nextYear}-10-16T23:00:00Z","entrantKind":"trio"}""", lee).status.value == 400)
             check("a pair event is not entered alone", post("/v1/events/$doubles/entries", "{}", alice).status.value == 400)
             check("a partner who is yourself is refused", post("/v1/events/$doubles/entries", """{"partnerId":"$alice"}""", alice).status.value == 400)
             check("Alice enters with Bob", post("/v1/events/$doubles/entries", """{"partnerId":"$bob"}""", alice).status.value == 200)
@@ -102,12 +109,12 @@ class EntrantsHttpTest {
             // PD-133: a pair reads in the order it was entered — Alice named Bob, and the organiser typed Cara then Dave.
             check("the draw names the pairs in the order they were entered",
                   pairsDrawn.contains("Alice Aims & Bob Board") && pairsDrawn.contains("Cara Checkout & Dave Drifter"))
-            clock = Instant.parse("2026-10-16T18:30:00Z")
+            clock = Instant.parse("${nextYear}-10-16T18:30:00Z")
             check("either of a pair checks the pair in", post("/v1/events/$doubles/check-in", "{}", bob).status.value == 200 && get("/v1/events/$doubles", alice).bodyAsText().contains("\"checkedIn\":true"))
-            clock = Instant.parse("2026-09-16T12:00:00Z")
+            clock = Instant.parse("${nextYear}-09-16T12:00:00Z")
 
             // --- teams ---------------------------------------------------------------------------------------------
-            val teams = idOf(post("/v1/events", """{"name":"Teams Cup","startsAt":"2026-10-23T19:00:00Z","sessionEndsAt":"2026-10-23T23:00:00Z","venueLabel":"upstairs","entrantKind":"team"}""", lee).bodyAsText(), "eventId")!!
+            val teams = idOf(post("/v1/events", """{"name":"Teams Cup","startsAt":"${nextYear}-10-23T19:00:00Z","sessionEndsAt":"${nextYear}-10-23T23:00:00Z","venueLabel":"upstairs","entrantKind":"team"}""", lee).bodyAsText(), "eventId")!!
             check("a team event is not entered as a person", post("/v1/events/$teams/entries", "{}", ade).status.value == 400)
             check("entering a team is for whoever runs it", post("/v1/events/$teams/entries", """{"teamId":"$riverside"}""", sam).status.value == 403)
             check("Ade enters Riverside", post("/v1/events/$teams/entries", """{"teamId":"$riverside"}""", ade).status.value == 200)
@@ -117,7 +124,7 @@ class EntrantsHttpTest {
             check("withdrawing a team is for whoever runs it", post("/v1/events/$teams/withdraw", "{}", sam).status.value == 403)
             val teamsDrawn = post("/v1/events/$teams/draw", "{}", lee).bodyAsText()
             check("the draw names the teams", teamsDrawn.contains("Riverside A") && teamsDrawn.contains("Grange A"))
-            clock = Instant.parse("2026-10-23T18:30:00Z")
+            clock = Instant.parse("${nextYear}-10-23T18:30:00Z")
             check("a member checks the team in", post("/v1/events/$teams/check-in", "{}", sam).status.value == 200)
             check("somebody in no entered team cannot", post("/v1/events/$teams/check-in", "{}", alice).status.value == 409)
         }

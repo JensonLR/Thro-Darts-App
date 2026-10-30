@@ -61,6 +61,7 @@ public class Leagues(private val connection: Connection) {
         val seasons = linkedMapOf<UUID, MutableList<Season>>()
         val divisions = linkedMapOf<UUID, MutableList<Division>>()
         val teams = linkedMapOf<UUID, MutableList<Team>>()
+        val sources = sources(only)
         connection.prepareStatement(
             """
             SELECT l.league_id, l.name, l.short_name, l.plays_on, l.locality,
@@ -97,7 +98,7 @@ public class Leagues(private val connection: Connection) {
                     leagues.getOrPut(leagueId) {
                         League(leagueId, rs.getString(2), rs.getString(3), rs.getString(4), rs.getString(5),
                                rs.getBigDecimal(22)?.toDouble(), rs.getBigDecimal(23)?.toDouble(), rs.getString(24),
-                               sourcesOf(leagueId), emptyList())
+                               sources[leagueId].orEmpty(), emptyList())
                     }
                     // A league the directory placed and nobody has filled in yet: listed, with no season.
                     val seasonId = rs.getObject(6) as UUID? ?: continue
@@ -188,14 +189,22 @@ public class Leagues(private val connection: Connection) {
             }
         }
 
-    private fun sourcesOf(leagueId: UUID): List<Source> =
+    /**
+     * Every league's sources in one read. Asked league by league this was 329 round trips to the database
+     * on every Discover load — about five seconds on production with the server warm (PD-195).
+     */
+    private fun sources(only: UUID?): Map<UUID, List<Source>> =
         connection.prepareStatement(
-            """SELECT source, source_url, max(retrieved_on) FROM competition.source_record
-                WHERE subject_kind = 'league' AND subject_id = ? GROUP BY source, source_url ORDER BY source""",
+            """SELECT subject_id, source, source_url, max(retrieved_on) FROM competition.source_record
+                WHERE subject_kind = 'league' AND (?::uuid IS NULL OR subject_id = ?::uuid)
+                GROUP BY subject_id, source, source_url ORDER BY subject_id, source""",
         ).use { ps ->
-            ps.setObject(1, leagueId)
+            ps.setString(1, only?.toString()); ps.setString(2, only?.toString())
             ps.executeQuery().use { rs ->
-                generateSequence { if (rs.next()) Source(rs.getString(1), rs.getString(2), rs.getObject(3, LocalDate::class.java)) else null }.toList()
+                val bySubject = HashMap<UUID, MutableList<Source>>()
+                while (rs.next()) bySubject.getOrPut(rs.getObject(1) as UUID) { mutableListOf() } +=
+                    Source(rs.getString(2), rs.getString(3), rs.getObject(4, LocalDate::class.java))
+                bySubject
             }
         }
 

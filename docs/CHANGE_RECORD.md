@@ -6761,3 +6761,10 @@ writes, and drops the two columns V018 removed. `LiveBoardQueryTest`.
 
 `DartKeypad`/`ScoreKeypad` draw at `ThroStage`'s key height, gap and padding; `ThroRouteLine`; `ThroTagFlow` and a
 compact fixture slate; the web fixes listed in PD-193. `tools/check_module_imports.py` strips Swift raw strings.
+
+## Discover in one read, and two tests off the calendar (PD-195)
+
+`Leagues.sources(only)` replaces the per-league `sourcesOf`: one grouped query instead of one per league (329 on
+production). `SeedTest` checks every league's sources against the table and the single read. `EventHttpTest` and
+`EntrantsHttpTest` run their scenario in next year (`nextYear`), and the team's membership starts in 2025, because
+grants and check-ins are stamped with the database's own clock.

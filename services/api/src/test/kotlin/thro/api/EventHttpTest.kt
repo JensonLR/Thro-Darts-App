@@ -8,12 +8,18 @@ import io.ktor.client.statement.HttpResponse
 import io.ktor.client.statement.bodyAsText
 import io.ktor.server.testing.testApplication
 import java.time.Instant
+import java.time.LocalDate
+import java.time.ZoneOffset
 import java.util.UUID
 import kotlin.test.Test
 import kotlin.test.assertTrue
 import thro.api.http.Authenticator
 import thro.api.http.Deps
 import thro.api.http.thro
+
+// The scenario runs next year, whenever the suite runs: a scoring grant is issued on the database's own clock,
+// so an event fixed in a calendar year expires before it is issued once that year has passed (PD-195).
+private val nextYear = LocalDate.now(ZoneOffset.UTC).year + 1
 
 /**
  * A knockout run on THRØ (PD-109), over the wire: an organiser opens an edition, players enter and withdraw, the
@@ -54,7 +60,7 @@ class EventHttpTest {
         val dave = person("003.dave", "Dave Drifter")
         val zed = person("003.zed", "Zed Nobody")
         val pub = orgs.createVenue("The Sun Inn", "Stockton-on-Tees")
-        var clock = Instant.parse("2026-09-16T12:00:00Z")
+        var clock = Instant.parse("${nextYear}-09-16T12:00:00Z")
 
         testApplication {
             application { thro(Deps(connect = { TestDatabase.connect() }, authenticator = Authenticator.Dev(), now = { clock })) }
@@ -65,10 +71,10 @@ class EventHttpTest {
             fun idOf(text: String, key: String) = Regex("\"$key\":\"([0-9a-f-]{36})\"").find(text)?.groupValues?.get(1)
 
             // --- opening an edition is an organiser's act, and the one that makes them its organiser ------------------
-            val open = """{"name":"Sun Inn Open","startsAt":"2026-10-03T11:00:00Z","sessionEndsAt":"2026-10-03T22:00:00Z","venueId":"$pub","capacity":2,"entriesCloseAt":"2026-10-02T20:00:00Z"}"""
+            val open = """{"name":"Sun Inn Open","startsAt":"${nextYear}-10-03T11:00:00Z","sessionEndsAt":"${nextYear}-10-03T22:00:00Z","venueId":"$pub","capacity":2,"entriesCloseAt":"${nextYear}-10-02T20:00:00Z"}"""
             check("opening an event needs a principal", post("/v1/events", open, null).status.value == 401)
-            check("a session that ends before it starts is refused", post("/v1/events", """{"name":"Backwards","startsAt":"2026-10-03T11:00:00Z","sessionEndsAt":"2026-10-03T10:00:00Z"}""", lee).status.value == 400)
-            check("a nameless event is refused", post("/v1/events", """{"name":" ","startsAt":"2026-10-03T11:00:00Z","sessionEndsAt":"2026-10-03T22:00:00Z"}""", lee).status.value == 400)
+            check("a session that ends before it starts is refused", post("/v1/events", """{"name":"Backwards","startsAt":"${nextYear}-10-03T11:00:00Z","sessionEndsAt":"${nextYear}-10-03T10:00:00Z"}""", lee).status.value == 400)
+            check("a nameless event is refused", post("/v1/events", """{"name":" ","startsAt":"${nextYear}-10-03T11:00:00Z","sessionEndsAt":"${nextYear}-10-03T22:00:00Z"}""", lee).status.value == 400)
             val made = post("/v1/events", open, lee)
             val event = idOf(made.bodyAsText(), "eventId")
             check("the organiser opens it, open for entries", made.status.value == 200 && event != null && made.bodyAsText().contains("\"state\":\"open\""))
@@ -93,12 +99,12 @@ class EventHttpTest {
 
             // --- the day: check-in is the entrant's, from their own phone, when the event is near ------------------------
             check("checking in weeks early is refused in words", post("/v1/events/$event/check-in", "{}", alice).status.value == 409)
-            clock = Instant.parse("2026-10-02T21:00:00Z")
+            clock = Instant.parse("${nextYear}-10-02T21:00:00Z")
             check("after entries close nobody enters", post("/v1/events/$event/entries", "{}", dave).status.value == 409)
-            clock = Instant.parse("2026-10-03T10:30:00Z")
+            clock = Instant.parse("${nextYear}-10-03T10:30:00Z")
             check("somebody not entered cannot check in", post("/v1/events/$event/check-in", "{}", dave).status.value == 409)
             val checked = post("/v1/events/$event/check-in", "{}", alice)
-            check("Alice checks in and holds a grant that outlives the session", checked.status.value == 200 && idOf(checked.bodyAsText(), "grantId") != null && checked.bodyAsText().contains("\"expiresAt\":\"2026-10-04T22:00:00Z\""))
+            check("Alice checks in and holds a grant that outlives the session", checked.status.value == 200 && idOf(checked.bodyAsText(), "grantId") != null && checked.bodyAsText().contains("\"expiresAt\":\"${nextYear}-10-04T22:00:00Z\""))
             check("her page says so", get("/v1/events/$event", alice).bodyAsText().contains("\"you\":{\"entered\":true,\"checkedIn\":true}"))
             check("checking in again from the same phone is the same answer, not a second entry", post("/v1/events/$event/check-in", "{}", alice).status.value == 200 && get("/v1/events/$event", null).bodyAsText().contains("\"entries\":2"))
 
@@ -113,8 +119,8 @@ class EventHttpTest {
             check("a drawn event is off the notice on the door", !get("/v1/events", null).bodyAsText().contains("\"eventId\":\"$event\""))
 
             // --- an event with one entrant cannot be drawn; closing entries is a state of its own ----------------------
-            clock = Instant.parse("2026-09-16T12:00:00Z")
-            val second = idOf(post("/v1/events", """{"name":"Tuesday Singles","startsAt":"2026-10-06T19:00:00Z","sessionEndsAt":"2026-10-06T23:00:00Z","venueLabel":"ask at the bar"}""", lee).bodyAsText(), "eventId")!!
+            clock = Instant.parse("${nextYear}-09-16T12:00:00Z")
+            val second = idOf(post("/v1/events", """{"name":"Tuesday Singles","startsAt":"${nextYear}-10-06T19:00:00Z","sessionEndsAt":"${nextYear}-10-06T23:00:00Z","venueLabel":"ask at the bar"}""", lee).bodyAsText(), "eventId")!!
             post("/v1/events/$second/entries", "{}", alice)
             check("closing entries is the organiser's", post("/v1/events/$second/close", "{}", alice).status.value == 403)
             check("the organiser closes entries", post("/v1/events/$second/close", "{}", lee).bodyAsText().contains("\"state\":\"entries_closed\""))
@@ -122,7 +128,7 @@ class EventHttpTest {
             check("one entrant is no draw", post("/v1/events/$second/draw", "{}", lee).status.value == 409)
 
             // --- rounds (PD-111): four entrants, two rounds, one decided by a match and one by the organiser's word ------
-            val third = idOf(post("/v1/events", """{"name":"Friday Fours","startsAt":"2026-10-09T19:00:00Z","sessionEndsAt":"2026-10-09T23:00:00Z","venueLabel":"the back room"}""", lee).bodyAsText(), "eventId")!!
+            val third = idOf(post("/v1/events", """{"name":"Friday Fours","startsAt":"${nextYear}-10-09T19:00:00Z","sessionEndsAt":"${nextYear}-10-09T23:00:00Z","venueLabel":"the back room"}""", lee).bodyAsText(), "eventId")!!
             for (p in listOf(alice, bob, cara, dave)) post("/v1/events/$third/entries", "{}", p)
             check("advancing before the draw is a 409", post("/v1/events/$third/advance", "{}", lee).status.value == 409)
             val drawnFours = post("/v1/events/$third/draw", "{}", lee).bodyAsText()
@@ -142,7 +148,7 @@ class EventHttpTest {
             Matches(c).open(played, homeB, awayB, thro.engine.MatchFormat(startingScore = 501, inRule = thro.engine.InRule.STRAIGHT, outRule = thro.engine.OutRule.DOUBLE, legs = thro.engine.Structure(thro.engine.StructureMode.FIRST_TO, 1), throwFirst = Seat.home))
             var seq = 0L
             for ((seat, total) in listOf("home" to 180, "away" to 60, "home" to 180, "away" to 60, "home" to 141)) {
-                post("/v1/commands", """{"type":"RecordVisit","commandId":"${UUID.randomUUID()}","matchId":"$played","deviceSeq":${++seq},"player":"$seat","visitTotal":$total,"occurredAt":"2026-10-09T19:${30 + seq}:00Z"}""", homeB)
+                post("/v1/commands", """{"type":"RecordVisit","commandId":"${UUID.randomUUID()}","matchId":"$played","deviceSeq":${++seq},"player":"$seat","visitTotal":$total,"occurredAt":"${nextYear}-10-09T19:${30 + seq}:00Z"}""", homeB)
             }
             check("a stranger cannot cite a match to a tie", post("/v1/events/$third/ties/$tieB/match", """{"matchId":"$played"}""", zed).status.value == 403)
             val wrong = UUID.randomUUID()
@@ -161,8 +167,8 @@ class EventHttpTest {
             check("a complete event does not advance", post("/v1/events/$third/advance", "{}", lee).status.value == 409)
 
             // --- an invitational (PD-113): the organiser names who plays; nobody enters themselves ------------------------
-            val invite = idOf(post("/v1/events", """{"name":"Champions' Night","startsAt":"2026-10-16T19:00:00Z","sessionEndsAt":"2026-10-16T23:00:00Z","venueLabel":"upstairs","access":"invitational"}""", lee).bodyAsText(), "eventId")!!
-            check("an access THRØ does not run is refused", post("/v1/events", """{"name":"Odd","startsAt":"2026-10-16T19:00:00Z","sessionEndsAt":"2026-10-16T23:00:00Z","access":"members_and_guests"}""", lee).status.value == 400)
+            val invite = idOf(post("/v1/events", """{"name":"Champions' Night","startsAt":"${nextYear}-10-16T19:00:00Z","sessionEndsAt":"${nextYear}-10-16T23:00:00Z","venueLabel":"upstairs","access":"invitational"}""", lee).bodyAsText(), "eventId")!!
+            check("an access THRØ does not run is refused", post("/v1/events", """{"name":"Odd","startsAt":"${nextYear}-10-16T19:00:00Z","sessionEndsAt":"${nextYear}-10-16T23:00:00Z","access":"members_and_guests"}""", lee).status.value == 400)
             check("an invitational is not on the notice on the door", !get("/v1/events", null).bodyAsText().contains("\"eventId\":\"$invite\""))
             check("nobody enters themselves", post("/v1/events/$invite/entries", "{}", alice).status.value == 403)
             check("the organiser invites a player by id", post("/v1/events/$invite/entries", """{"playerId":"$alice"}""", lee).status.value == 200 && get("/v1/events/$invite", alice).bodyAsText().contains("\"you\":{\"entered\":true,\"checkedIn\":false}"))
