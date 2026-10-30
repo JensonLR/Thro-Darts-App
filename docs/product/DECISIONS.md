@@ -7976,3 +7976,10 @@ and so sees nothing when the pool is used — the narrowing it audits is the sam
 
 Neon's `-pooler` host (PgBouncer) is still not used, for the reason `DEPLOY.md` gives; this pool is inside the API.
 The data stays in London (founder, 30 Oct: no change to the privacy notice).
+
+**Measured after the deploy (30 Oct, 68c3dda, fifteen samples, median):** `/v1/events` 0.336 → 0.248 s, a team's
+page 0.376 → 0.281 s, the league list 0.67–1.0 → 0.40 s. The two routes that never touch the database moved
++20 and +50 ms in the same window, which is the noise floor of a measurement taken from here. About 90 ms a
+request, not the 170 ms estimated: the 170 included the request's own first query and its `SET ROLE`, and a
+borrowed connection still pays a validity check when idle and the reset on return. `/healthz` is unchanged, as
+it should be, since it still opens its own.
