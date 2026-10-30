@@ -129,6 +129,12 @@ public class Deps(
     public val reader: Reader? = null,
     /** The same model, asked general questions (PD-119: Tell THRØ). Null means the desk cannot read a sentence. */
     public val systemOne: SystemOne? = null,
+    /**
+     * Where requests borrow their connection (PD-196). Null — every test's default — opens one per request through
+     * [connect]; the server passes one. Streams, the live listener and /healthz open their own regardless: the health
+     * check is there to prove a new connection can still be made.
+     */
+    public val pool: thro.api.Db.Pool? = null,
 )
 
 private class Http(val status: Int, val body: String)
@@ -148,14 +154,14 @@ private class Req(val call: ApplicationCall, val body: String, private val deps:
     private var conn: Connection? = null
     private var applied: DbRole? = null
     fun connection(): Connection {
-        val c = conn ?: deps.connect().also { conn = it }
+        val c = conn ?: (deps.pool?.borrow() ?: deps.connect()).also { conn = it }
         if (applied != role) {
             c.createStatement().use { it.execute("SET ROLE " + role.sql) }
             applied = role
         }
         return c
     }
-    fun close() { conn?.close() }
+    fun close() { conn?.let { c -> deps.pool?.giveBack(c) ?: c.close() } }
 }
 
 public fun Application.thro(deps: Deps) {

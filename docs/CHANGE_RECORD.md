@@ -6768,3 +6768,10 @@ compact fixture slate; the web fixes listed in PD-193. `tools/check_module_impor
 production). `SeedTest` checks every league's sources against the table and the single read. `EventHttpTest` and
 `EntrantsHttpTest` run their scenario in next year (`nextYear`), and the team's membership starts in 2025, because
 grants and check-ins are stamped with the database's own clock.
+
+## Requests borrow their connection (PD-196)
+
+`Db.Pool` (HikariCP 6.2.1, the API's one new dependency): `borrow`, and `giveBack`, which rolls back, returns to
+autocommit and runs `RESET ROLE; RESET ALL`, evicting a connection it cannot clean. `Deps.pool` (null in every test
+but `PoolTest`); `Req` borrows from it and gives back in its `finally`. `Main` builds one pool of eight. Streams,
+the notifier, the retention sweep and `/healthz` are unchanged.

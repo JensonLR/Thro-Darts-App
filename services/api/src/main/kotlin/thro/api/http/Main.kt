@@ -77,5 +77,6 @@ public fun main() {
     else System.err.println("reader: TypeSafe ${reader.modelName} reads reports and names as they arrive, and sentences on the desk (PD-119)")
 
     val port = env("PORT")?.toIntOrNull() ?: 8080
-    embeddedServer(CIO, port = port) { thro(Deps(connect, authenticator, providers = providers, webProviders = webProviders, keys = HttpJwkSource(), relyingParty = rp, appleAppIds = appleAppIds, moderators = moderators, reader = reader, systemOne = reader)) }.start(wait = true)
+    val pool = Db.Pool(target)
+    embeddedServer(CIO, port = port) { thro(Deps(connect, authenticator, providers = providers, webProviders = webProviders, keys = HttpJwkSource(), relyingParty = rp, appleAppIds = appleAppIds, moderators = moderators, reader = reader, systemOne = reader, pool = pool)) }.start(wait = true)
 }

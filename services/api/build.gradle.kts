@@ -11,6 +11,8 @@ dependencies {
     implementation("thro-competition:thro-competition")
     implementation("thro-rating:thro-rating")
     implementation("org.postgresql:postgresql:42.7.4")
+    // PD-196: requests borrow connections instead of opening one each.
+    implementation("com.zaxxer:HikariCP:6.2.1")
     // ADR-001: Ktor. The HTTP layer is thin — routes over the existing handlers — and the contract
     // it serves at /openapi.json is emitted from the same registry the routes are built from.
     implementation("io.ktor:ktor-server-core:3.0.3")

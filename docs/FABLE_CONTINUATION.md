@@ -183,6 +183,8 @@ venue on a rearrangement is PD-128, done the same evening.) (The single-league r
 Production was healthy (V060, 688da2a, CI green, TestFlight build 22). `/v1/leagues` took ~5 s warm: 329 per-league
 source queries across Frankfurt (Render) to London (Neon). Now one read. Two event tests had dates fixed in October
 2026 and went red when the month passed; they run next year now. Open: one region for API and database (PD-195).
+Founder chose to keep the data in London. PD-196: every database request spent ~170 ms opening its connection
+(`/v1/events` 0.336 s against a 0.156 s network floor); requests now borrow from a pool reset on return.
 
 ## Frontier (what is next, in order)
 

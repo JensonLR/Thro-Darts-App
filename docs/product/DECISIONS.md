@@ -7950,3 +7950,29 @@ date, because the check-in trigger reads it against the same real clock.
 paths are not known to loop like this one did, but each one pays the 15 ms per statement. Putting the API and the
 database in one region is the larger fix and is the founder's to decide (Render has no London region; Neon has
 Frankfurt).
+
+## PD-196 — A connection per request cost more than the request
+
+With the league list fixed (PD-195), the floor of every database request was measured on production, fifteen
+samples each: `/v1/venues` without a search term never opens a connection and answers in 0.156 s (the network from
+here to Frankfurt and back); `/v1/events`, which opens one connection and asks one question of an empty list,
+answers in 0.336 s. About 170 ms of every request that touched the database went on opening the connection —
+TCP, TLS and Postgres's password exchange, Frankfurt to London — before its first query. Every screen behind
+sign-in paid it on each call.
+
+Requests now borrow from a pool (HikariCP, eight connections, none kept idle past four minutes, so neither Neon's
+five-minute suspend nor Render's fifteen-minute one is held off). What does not borrow: the live-match listener,
+each stream, and the daily retention sweep keep their own connections, because they hold state (`LISTEN`, a long
+session) that must never reach another request; and `/healthz` still opens a new connection every time, because
+its job is to prove that a new one can be made.
+
+**A connection given back must be as a new one would be.** Two pieces of session state matter: the module role
+each request narrows itself to (ADR-011), and `thro.actor`, which V016 and V055 read to name who made a change. A
+connection is given back out of any transaction, then `RESET ROLE; RESET ALL`; one that cannot be reset is thrown
+away, not lent. `PoolTest` holds it with a pool of one, so the second borrower gets the very connection the first
+dirtied, and it failed (`expected jensonlr but was app_read`) with the reset taken out. The whole API suite was also
+run once with every request pooled: everything held except `HttpTest`'s role audit, which watches `deps.connect`
+and so sees nothing when the pool is used — the narrowing it audits is the same code on both paths.
+
+Neon's `-pooler` host (PgBouncer) is still not used, for the reason `DEPLOY.md` gives; this pool is inside the API.
+The data stays in London (founder, 30 Oct: no change to the privacy notice).
